@@ -1,0 +1,15 @@
+{
+  "name": "bot",
+  "version": "1.0.0",
+  "description": "telegram bot test",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "Ly",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^6.2.0",
+    "telegraf": "^3.25.5"
+  }
+}
