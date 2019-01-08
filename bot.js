@@ -36,11 +36,13 @@ bot.command('new_banan', (ctx) => {
     var userStatus = getChatMember.status
     if (userStatus === 'creator' || userStatus === 'administrator') {
       if (ctx.message.reply_to_message) {
-        var banTimeArr = { 'm': 60, 'h': 3600, 'd': 86400 }
         if (arg[1] === null) {
           var banUser = ctx.from
         } else {
-          var banTime = parseInt(arg[1])
+          var banTimeArr = { 'm': 60, 'h': 3600, 'd': 86400 }
+          var banType = banTimeArr[arg[1].slice(-1)]
+          if (banType === undefined) var banType = 60
+          var banTime = parseInt(arg[1])*banType
           var banUser = ctx.message.reply_to_message.from
         }
       } else {
@@ -57,6 +59,8 @@ bot.command('new_banan', (ctx) => {
       
       bot.telegram.restrictChatMember(ctx.chat.id, banUser.id, { until_date: unixBanTime }).then(() => {
         ctx.replyWithHTML(`${userLogin(banUser, true)} получает 🍌 на <b>${banDuration}</b>`)
+      }).catch((err) => {
+        ctx.replyWithHTML(`<b>У меня не получилось выдать 🍌</b>\n<pre>${err}</pre>`)
       })
     }else{
       ctx.replyWithHTML(`${userLogin(banUser, true)} показал(а) 🍌`)
