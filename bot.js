@@ -58,7 +58,7 @@ bot.command('new_banan', (ctx) => {
       var banDuration = humanizeDuration(banTime * 1000, { language: 'ru' })
       
       bot.telegram.restrictChatMember(ctx.chat.id, banUser.id, { until_date: unixBanTime }).then(() => {
-        ctx.replyWithHTML(`${userLogin(banUser, true)} получает 🍌 на <b>${banDuration}</b>`)
+        ctx.replyWithHTML(`${userLogin(banUser, true)} получает 🍌\n<b>Срок:</b> ${banDuration}`)
       }).catch((err) => {
         ctx.replyWithHTML(`<b>У меня не получилось выдать 🍌</b>\n<pre>${err}</pre>`)
       })
