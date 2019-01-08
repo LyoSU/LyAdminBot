@@ -39,6 +39,8 @@ bot.command('new_banan', (ctx) => {
     if(userStatus == 'creator' || userStatus == 'administrator') {
       ctx.replyWithHTML(`${userLogin(ctx.from, true)} показал(а) 🍌`)
     }else{
+      banTimeArr = {'m': 60, 'h': 3600, 'd': 86400}
+
       banTime = getRandomInt(60, 600)
       unixBanTime = Math.floor(new Date()/1000)+banTime
       banDuration = humanizeDuration(banTime*1000, { language: 'ru' })
