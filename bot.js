@@ -1,5 +1,6 @@
 const Telegraf = require('telegraf')
 const session = require('telegraf/session')
+const humanizeDuration = require('humanize-duration')
 
 const bot = new Telegraf(process.env.BOT_TOKEN)
 
@@ -16,6 +17,10 @@ function userLogin(from, url = false){
   return login
 }
 
+function getRandomInt(min, max) {
+  return Math.floor(Math.random() * (max - min)) + min;
+}
+
 bot.command('help', (ctx) => {
   return ctx.replyWithHTML(`<b>${userLogin(ctx.from)}</b> пидор дня`)
 })
@@ -30,10 +35,13 @@ bot.command('new_banan', (ctx) => {
     if(userStatus == 'creator' || userStatus == 'administrator') {
       ctx.replyWithHTML(`${userLogin(ctx.from, true)} показал(а) 🍌`)
     }else{
-      banTime = Math.floor(new Date()/1000)+60
 
-      bot.telegram.restrictChatMember(ctx.chat.id, ctx.from.id, {until_date: banTime}).then(() => {
-        ctx.replyWithHTML(`${userLogin(ctx.from, true)} получает бан`)
+      banTime = getRandomInt(60, 600)
+      unixBanTime = Math.floor(new Date()/1000)+banTime
+      banDuration = humanizeDuration(banTime*1000, { language: 'ru' })
+
+      bot.telegram.restrictChatMember(ctx.chat.id, ctx.from.id, {until_date: unixBanTime}).then(() => {
+        ctx.replyWithHTML(`${userLogin(ctx.from, true)} получает 🍌 на <b>${banDuration}</b>`)
       })
     }
   })

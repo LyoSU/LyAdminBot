@@ -10,6 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "dotenv": "^6.2.0",
+    "humanize-duration": "^3.17.0",
     "telegraf": "^3.25.5"
   }
 }
