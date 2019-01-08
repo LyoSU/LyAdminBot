@@ -32,12 +32,16 @@ bot.command('type', (ctx) => {
 bot.command('new_banan', (ctx) => {
 
   arg = ctx.message.text.split(/ +/)
-  console.log(arg)
+  console.log(ctx)
   
   bot.telegram.getChatMember(ctx.chat.id, ctx.from.id).then((getChatMember) => {
     userStatus = getChatMember.status;
     if(userStatus == 'creator' || userStatus == 'administrator') {
-      ctx.replyWithHTML(`${userLogin(ctx.from, true)} показал(а) 🍌`)
+      if(ctx.message.reply_to_message){
+        ctx.replyWithHTML(`${userLogin(ctx.from, true)} показал(а) 🍌 ${userLogin(ctx.message.reply_to_message.from, true)}`)
+      }else{
+        ctx.replyWithHTML(`${userLogin(ctx.from, true)} показал(а) 🍌`)
+      }
     }else{
       banTimeArr = {'m': 60, 'h': 3600, 'd': 86400}
 
