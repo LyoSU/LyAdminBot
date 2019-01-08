@@ -36,7 +36,6 @@ bot.command('new_banan', (ctx) => {
     var userStatus = getChatMember.status
     if (userStatus === 'creator' || userStatus === 'administrator') {
       if (ctx.message.reply_to_message) {
-        var replyLogin = userLogin(ctx.message.reply_to_message.from, true)
         var banTimeArr = { 'm': 60, 'h': 3600, 'd': 86400 }
         if (arg[1] === null) {
           var banUser = ctx.from
@@ -55,7 +54,7 @@ bot.command('new_banan', (ctx) => {
     if (banTime) {
       var unixBanTime = Math.floor(new Date() / 1000) + banTime
       var banDuration = humanizeDuration(banTime * 1000, { language: 'ru' })
-
+      
       bot.telegram.restrictChatMember(ctx.chat.id, banUser.id, { until_date: unixBanTime }).then(() => {
         ctx.replyWithHTML(`${userLogin(banUser, true)} получает 🍌 на <b>${banDuration}</b>`)
       })
