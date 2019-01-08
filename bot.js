@@ -30,12 +30,15 @@ bot.command('type', (ctx) => {
 })
 
 bot.command('new_banan', (ctx) => {
+
+  arg = ctx.message.text.split(/ +/)
+  console.log(arg)
+  
   bot.telegram.getChatMember(ctx.chat.id, ctx.from.id).then((getChatMember) => {
     userStatus = getChatMember.status;
     if(userStatus == 'creator' || userStatus == 'administrator') {
       ctx.replyWithHTML(`${userLogin(ctx.from, true)} показал(а) 🍌`)
     }else{
-
       banTime = getRandomInt(60, 600)
       unixBanTime = Math.floor(new Date()/1000)+banTime
       banDuration = humanizeDuration(banTime*1000, { language: 'ru' })
