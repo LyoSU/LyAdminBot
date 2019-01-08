@@ -11,7 +11,7 @@ bot.use(session())
 
 function userLogin(from){
   login = from.first_name
-  if(from.last_name) login += " " + from.last_name
+  if(from.last_name) login += ' ' + from.last_name
   return login
 }
 
@@ -21,6 +21,17 @@ bot.command('help', (ctx) => {
 
 bot.command('type', (ctx) => {
   return ctx.replyWithHTML(`<b>Chat type:</b> <pre>${ctx.chat.type}</pre>`)
+})
+
+bot.command('banan', (ctx) => {
+  bot.telegram.getChatMember(ctx.chat.id, ctx.from.id).then((getChatMember) => {
+    console.log(getChatMember.status)
+    if(getChatMember.status == ('creator' || 'administrator')) {
+      return ctx.replyWithHTML('ты не пидор')
+    }else{
+      return ctx.replyWithHTML('ты пидор')
+    }
+  })
 })
 
 bot.command('test', (ctx) => {
@@ -35,6 +46,10 @@ bot.on('message', (ctx) => {
   } else {
 
   }
+})
+
+bot.catch((err) => {
+  console.log('Ooops', err)
 })
 
 bot.startPolling()
