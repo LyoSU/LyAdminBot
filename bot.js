@@ -69,7 +69,3 @@ bot.catch((err) => {
 })
 
 bot.startPolling()
-
-function newFunction() {
-  return '';
-}
