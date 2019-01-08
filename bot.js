@@ -9,9 +9,10 @@ bot.telegram.getMe().then((botInfo) => {
 
 bot.use(session())
 
-function userLogin(from){
+function userLogin(from, url = false){
   login = from.first_name
   if(from.last_name) login += ' ' + from.last_name
+  if(url == true) login = `<a href="tg://user?id=${from.id}">${login}</a>`
   return login
 }
 
@@ -23,13 +24,17 @@ bot.command('type', (ctx) => {
   return ctx.replyWithHTML(`<b>Chat type:</b> <pre>${ctx.chat.type}</pre>`)
 })
 
-bot.command('banan', (ctx) => {
+bot.command('new_banan', (ctx) => {
   bot.telegram.getChatMember(ctx.chat.id, ctx.from.id).then((getChatMember) => {
-    console.log(getChatMember.status)
-    if(getChatMember.status == ('creator' || 'administrator')) {
-      return ctx.replyWithHTML('ты не пидор')
+    userStatus = getChatMember.status;
+    if(userStatus == 'creator' || userStatus == 'administrator') {
+      ctx.replyWithHTML(`${userLogin(ctx.from, true)} показал(а) 🍌`)
     }else{
-      return ctx.replyWithHTML('ты пидор')
+      banTime = Math.floor(new Date()/1000)+60
+
+      bot.telegram.restrictChatMember(ctx.chat.id, ctx.from.id, {until_date: banTime}).then(() => {
+        ctx.replyWithHTML(`${userLogin(ctx.from, true)} получает бан`)
+      })
     }
   })
 })
@@ -53,3 +58,7 @@ bot.catch((err) => {
 })
 
 bot.startPolling()
+
+function newFunction() {
+  return '';
+}
