@@ -1,9 +1,38 @@
+var mongoose = require('mongoose')
 const Telegraf = require('telegraf')
 const path = require('path')
 const I18n = require('telegraf-i18n')
-
 const session = require('telegraf/session')
 const humanizeDuration = require('humanize-duration')
+
+mongoose.connect('mongodb://localhost/testmongoose', { useNewUrlParser: true })
+const db = mongoose.connection
+db.on('error', err => {
+  console.log('error', err)
+})
+db.once('open', () => {
+  console.log('we are connected')
+})
+
+function saveUser () {
+  const userSchema = mongoose.Schema({
+    name: String
+  })
+
+  const User = mongoose.model('User', userSchema)
+
+  module.exports = User
+
+  const user = new User({ name: 'Alex' })
+  console.log('user', user)
+
+  user.save((err, user) => {
+    if (err) {
+      console.log('err', err)
+    }
+    console.log('saved user', user)
+  })
+}
 
 const i18n = new I18n({
   directory: path.resolve(__dirname, 'locales'),
@@ -82,12 +111,12 @@ bot.command('nbanan', async (ctx) => {
     if (banTime > 0) {
       var unixBanTime = Math.floor(new Date() / 1000) + banTime
       var banDuration = humanizeDuration(banTime * 1000, { language: ctx.i18n.locale() })
-      
+
       bot.telegram.restrictChatMember(ctx.chat.id, banUser.id, { until_date: unixBanTime }).then(() => {
         ctx.replyWithHTML(
           ctx.i18n.t('banan.suc', {
             login: userLogin(banUser, true),
-            duration: banDuration,
+            duration: banDuration
           })
         )
       }).catch((err) => {
@@ -112,7 +141,7 @@ bot.command('nbanan', async (ctx) => {
         )
       })
     }
-  }else{
+  } else {
     ctx.replyWithHTML(
       ctx.i18n.t('banan.show', {
         login: userLogin(banUser, true)
@@ -150,12 +179,12 @@ bot.command('nkick', async (ctx) => {
 })
 
 bot.command('test', (ctx) => {
-  return ctx.replyWithHTML(ctx.i18n.t('cmd.test', {userLogin: userLogin(ctx.from, true)}))
+  return ctx.replyWithHTML(ctx.i18n.t('cmd.test', { userLogin: userLogin(ctx.from, true) }))
 })
 
 bot.on('new_chat_members', (ctx) => {
   ctx.replyWithHTML(
-    "Привет пидарас"
+    'Привет пидарас'
   )
 })
 
