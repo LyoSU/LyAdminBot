@@ -5,34 +5,33 @@ const I18n = require('telegraf-i18n')
 const session = require('telegraf/session')
 const humanizeDuration = require('humanize-duration')
 
-mongoose.connect('mongodb://localhost/testmongoose', { useNewUrlParser: true })
+const userScheme = mongoose.Schema({
+  id: { type: Number, index: true, unique: true },
+  first_name: String,
+  last_name: String
+})
+
+mongoose.connect("mongodb://localhost:27017/usersdb", { 
+  useCreateIndex: true,
+  useNewUrlParser: true 
+})
+
 const db = mongoose.connection
 db.on('error', err => {
   console.log('error', err)
 })
-db.once('open', () => {
-  console.log('we are connected')
-})
 
 function saveUser () {
-  const userSchema = mongoose.Schema({
-    name: String
+  const User = mongoose.model("User", userScheme)
+  const user = new User({
+    id: 1,
+    first_name: "Yuri",
+    last_name: "Ly"
   })
-
-  const User = mongoose.model('User', userSchema)
-
-  module.exports = User
-
-  const user = new User({ name: 'Alex' })
-  console.log('user', user)
-
-  user.save((err, user) => {
-    if (err) {
-      console.log('err', err)
-    }
-    console.log('saved user', user)
-  })
+  user.save()
 }
+
+saveUser()
 
 const i18n = new I18n({
   directory: path.resolve(__dirname, 'locales'),
