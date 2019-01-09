@@ -7,7 +7,7 @@ const humanizeDuration = require('humanize-duration')
 
 const i18n = new I18n({
   directory: path.resolve(__dirname, 'locales'),
-  defaultLanguage: 'en',
+  defaultLanguage: 'ru',
   sessionName: 'session',
   useSession: true
 })
@@ -40,33 +40,48 @@ bot.command('type', (ctx) => {
   return ctx.replyWithHTML(`<b>Chat type:</b> <pre>${ctx.chat.type}</pre>`)
 })
 
-bot.command('new_banan', (ctx) => {
+bot.command('nbanan', async (ctx) => {
   var arg = ctx.message.text.split(/ +/)
-  console.log(ctx)
-  bot.telegram.getChatMember(ctx.chat.id, ctx.from.id).then((getChatMember) => {
-    var userStatus = getChatMember.status
-    if (userStatus === 'creator' || userStatus === 'administrator') {
-      if (ctx.message.reply_to_message) {
+  await bot.telegram.getChatMember(ctx.chat.id, ctx.from.id).then((result) => {
+    chatStatus = result.status
+  })
+
+  if (chatStatus === 'creator' || chatStatus === 'administrator') {
+    if (ctx.message.reply_to_message) {
+      await bot.telegram.getChatMember(ctx.chat.id, ctx.message.reply_to_message.from.id).then((result) => {
+        replyStatus = result.status
+      })
+
+      if (replyStatus === 'restricted') {
+        var banUser = ctx.message.reply_to_message.from
+        var banTime = -1
+      } else {
         if (arg[1] === null) {
           var banUser = ctx.from
+          var banTime = 300
         } else {
-          var banTimeArr = { 'm': 60, 'h': 3600, 'd': 86400 }
-          if(arg[1]) var banType = banTimeArr[arg[1].slice(-1)]
-          if (banType === undefined) var banType = 60
-          var banTime = parseInt(arg[1]) * banType
           var banUser = ctx.message.reply_to_message.from
+          if (arg[1]) {
+            var banTimeArr = { 'm': 60, 'h': 3600, 'd': 86400 }
+            var banType = banTimeArr[arg[1].slice(-1)]
+            var banTime = parseInt(arg[1]) * banType
+          } else {
+            var banTime = 300
+          }
         }
-      } else {
-        var banUser = ctx.from
       }
     } else {
-      var banTime = getRandomInt(60, 600)
       var banUser = ctx.from
     }
+  } else {
+    var banUser = ctx.from
+    var banTime = getRandomInt(60, 600)
+  }
 
-    if (banTime) {
+  if (banTime) {
+    if (banTime > 0) {
       var unixBanTime = Math.floor(new Date() / 1000) + banTime
-      var banDuration = humanizeDuration(banTime * 1000, { language: 'ru' })
+      var banDuration = humanizeDuration(banTime * 1000, { language: ctx.i18n.locale() })
       
       bot.telegram.restrictChatMember(ctx.chat.id, banUser.id, { until_date: unixBanTime }).then(() => {
         ctx.replyWithHTML(
@@ -77,19 +92,39 @@ bot.command('new_banan', (ctx) => {
         )
       }).catch((err) => {
         ctx.replyWithHTML(
-          ctx.i18n.t('banan.error', {
+          ctx.i18n.t('banan.error.take', {
             err: err
           })
         )
       })
-    }else{
-      ctx.replyWithHTML(
-        ctx.i18n.t('banan.show', {
-          login: userLogin(banUser, true)
-        })
-      )
+    } else {
+      bot.telegram.restrictChatMember(ctx.chat.id, banUser.id, {
+          'until_date': 0,
+          'can_send_messages': true,
+          'can_send_other_messages': true,
+          'can_send_media_messages': true,
+          'can_add_web_page_previews': true
+        }).then(() => {
+        ctx.replyWithHTML(
+          ctx.i18n.t('banan.pick', {
+            login: userLogin(banUser, true)
+          })
+        )
+      }).catch((err) => {
+        ctx.replyWithHTML(
+          ctx.i18n.t('banan.error.pick', {
+            err: err
+          })
+        )
+      })
     }
-  })
+  }else{
+    ctx.replyWithHTML(
+      ctx.i18n.t('banan.show', {
+        login: userLogin(banUser, true)
+      })
+    )
+  }
 })
 
 bot.command('test', (ctx) => {
