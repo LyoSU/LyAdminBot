@@ -115,7 +115,7 @@ bot.command('nbanan', async (ctx) => {
   }
 })
 
-bot.command('nkick', async (ctx) => {
+bot.command('kick', async (ctx) => {
   await bot.telegram.getChatMember(ctx.chat.id, ctx.from.id).then((result) => {
     chatStatus = result.status
   })
@@ -146,6 +146,12 @@ bot.command('nkick', async (ctx) => {
 
 bot.command('test', (ctx) => {
   return ctx.replyWithHTML(ctx.i18n.t('cmd.test', {userLogin: userLogin(ctx.from, true)}))
+})
+
+bot.on('new_chat_members', (ctx) => {
+  ctx.replyWithHTML(
+    "Привет пидарас"
+  )
 })
 
 bot.on('message', (ctx) => {
