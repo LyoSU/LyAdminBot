@@ -1,6 +1,16 @@
 const Telegraf = require('telegraf')
+const path = require('path')
+const I18n = require('telegraf-i18n')
+
 const session = require('telegraf/session')
 const humanizeDuration = require('humanize-duration')
+
+const i18n = new I18n({
+  directory: path.resolve(__dirname, 'locales'),
+  defaultLanguage: 'en',
+  sessionName: 'session',
+  useSession: true
+})
 
 const bot = new Telegraf(process.env.BOT_TOKEN)
 
@@ -9,6 +19,7 @@ bot.telegram.getMe().then((botInfo) => {
 })
 
 bot.use(session())
+bot.use(i18n.middleware())
 
 function userLogin (user, url = false) {
   var login = user.first_name
@@ -30,7 +41,7 @@ bot.command('type', (ctx) => {
 })
 
 bot.command('new_banan', (ctx) => {
-  var arg = ctx.message.text.split(/ +/)
+  const arg = ctx.message.text.split(/ +/)
   console.log(ctx)
   bot.telegram.getChatMember(ctx.chat.id, ctx.from.id).then((getChatMember) => {
     var userStatus = getChatMember.status
@@ -42,7 +53,7 @@ bot.command('new_banan', (ctx) => {
           var banTimeArr = { 'm': 60, 'h': 3600, 'd': 86400 }
           var banType = banTimeArr[arg[1].slice(-1)]
           if (banType === undefined) var banType = 60
-          var banTime = parseInt(arg[1])*banType
+          var banTime = parseInt(arg[1]) * banType
           var banUser = ctx.message.reply_to_message.from
         }
       } else {
@@ -69,7 +80,7 @@ bot.command('new_banan', (ctx) => {
 })
 
 bot.command('test', (ctx) => {
-  return ctx.replyWithHTML(`name: ${userLogin(ctx.from)}`)
+  return ctx.replyWithHTML(ctx.i18n.t('cmd.test', {userLogin: ctx.from.username}))
 })
 
 bot.on('message', (ctx) => {
