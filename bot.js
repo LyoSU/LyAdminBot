@@ -92,7 +92,7 @@ bot.command('nbanan', async (ctx) => {
         )
       }).catch((err) => {
         ctx.replyWithHTML(
-          ctx.i18n.t('banan.error.take', {
+          ctx.i18n.t('banan.error', {
             err: err
           })
         )
@@ -102,12 +102,6 @@ bot.command('nbanan', async (ctx) => {
         ctx.replyWithHTML(
           ctx.i18n.t('banan.pick', {
             login: userLogin(banUser, true)
-          })
-        )
-      }).catch((error) => {
-        ctx.replyWithHTML(
-          ctx.i18n.t('banan.error.pick', {
-            error: error
           })
         )
       })
