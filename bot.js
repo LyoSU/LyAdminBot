@@ -98,22 +98,16 @@ bot.command('nbanan', async (ctx) => {
         )
       })
     } else {
-      bot.telegram.restrictChatMember(ctx.chat.id, banUser.id, {
-          'until_date': 0,
-          'can_send_messages': true,
-          'can_send_other_messages': true,
-          'can_send_media_messages': true,
-          'can_add_web_page_previews': true
-        }).then(() => {
+      bot.telegram.unbanChatMember(ctx.chat.id, banUser.id).then(() => {
         ctx.replyWithHTML(
           ctx.i18n.t('banan.pick', {
             login: userLogin(banUser, true)
           })
         )
-      }).catch((err) => {
+      }).catch((error) => {
         ctx.replyWithHTML(
           ctx.i18n.t('banan.error.pick', {
-            err: err
+            error: error
           })
         )
       })
@@ -124,6 +118,32 @@ bot.command('nbanan', async (ctx) => {
         login: userLogin(banUser, true)
       })
     )
+  }
+})
+
+bot.command('nkick', async (ctx) => {
+  await bot.telegram.getChatMember(ctx.chat.id, ctx.from.id).then((result) => {
+    chatStatus = result.status
+  })
+
+  if (chatStatus === 'creator' || chatStatus === 'administrator') {
+    kickUser = ctx.message.reply_to_message.from
+    bot.telegram.kickChatMember(ctx.chat.id, kickUser.id).then(() => {
+      ctx.replyWithHTML(
+        ctx.i18n.t('kick.suc', {
+          login: userLogin(kickUser, true)
+        })
+      )
+      bot.telegram.unbanChatMember(ctx.chat.id, kickUser.id)
+    }).catch((error) => {
+      ctx.replyWithHTML(
+        ctx.i18n.t('kick.error', {
+          error: error
+        })
+      )
+    })
+  }else{
+
   }
 })
 
