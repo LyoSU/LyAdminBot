@@ -41,7 +41,7 @@ bot.command('type', (ctx) => {
 })
 
 bot.command('new_banan', (ctx) => {
-  const arg = ctx.message.text.split(/ +/)
+  var arg = ctx.message.text.split(/ +/)
   console.log(ctx)
   bot.telegram.getChatMember(ctx.chat.id, ctx.from.id).then((getChatMember) => {
     var userStatus = getChatMember.status
@@ -51,7 +51,7 @@ bot.command('new_banan', (ctx) => {
           var banUser = ctx.from
         } else {
           var banTimeArr = { 'm': 60, 'h': 3600, 'd': 86400 }
-          var banType = banTimeArr[arg[1].slice(-1)]
+          if(arg[1]) var banType = banTimeArr[arg[1].slice(-1)]
           if (banType === undefined) var banType = 60
           var banTime = parseInt(arg[1]) * banType
           var banUser = ctx.message.reply_to_message.from
@@ -69,25 +69,42 @@ bot.command('new_banan', (ctx) => {
       var banDuration = humanizeDuration(banTime * 1000, { language: 'ru' })
       
       bot.telegram.restrictChatMember(ctx.chat.id, banUser.id, { until_date: unixBanTime }).then(() => {
-        ctx.replyWithHTML(`${userLogin(banUser, true)} получает 🍌\n<b>Срок:</b> ${banDuration}`)
+        ctx.replyWithHTML(
+          ctx.i18n.t('banan.suc', {
+            login: userLogin(banUser, true),
+            duration: banDuration,
+          })
+        )
       }).catch((err) => {
-        ctx.replyWithHTML(`<b>У меня не получилось выдать 🍌</b>\n<pre>${err}</pre>`)
+        ctx.replyWithHTML(
+          ctx.i18n.t('banan.error', {
+            err: err
+          })
+        )
       })
     }else{
-      ctx.replyWithHTML(`${userLogin(banUser, true)} показал(а) 🍌`)
+      ctx.replyWithHTML(
+        ctx.i18n.t('banan.show', {
+          login: userLogin(banUser, true)
+        })
+      )
     }
   })
 })
 
 bot.command('test', (ctx) => {
-  return ctx.replyWithHTML(ctx.i18n.t('cmd.test', {userLogin: ctx.from.username}))
+  return ctx.replyWithHTML(ctx.i18n.t('cmd.test', {userLogin: userLogin(ctx.from, true)}))
 })
 
 bot.on('message', (ctx) => {
   console.log(ctx.message)
 
   if (ctx.chat.id > 0) {
-    ctx.reply(`Я работаю только в группах`)
+    ctx.replyWithHTML(
+      ctx.i18n.t('private.start', {
+        login: userLogin(ctx.from)
+      })
+    )
   } else {
 
   }
