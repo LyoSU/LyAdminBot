@@ -6,7 +6,7 @@ const session = require('telegraf/session')
 const humanizeDuration = require('humanize-duration')
 
 const userScheme = mongoose.Schema({
-  id: { type: Number, index: true, unique: true },
+  telegram_id: { type: Number, index: true, unique: true },
   first_name: String,
   last_name: String
 })
@@ -24,7 +24,7 @@ db.on('error', err => {
 function saveUser () {
   const User = mongoose.model("User", userScheme)
   const user = new User({
-    id: 1,
+    telegram_id: 1,
     first_name: "Yuri",
     last_name: "Ly"
   })
