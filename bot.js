@@ -121,7 +121,18 @@ bot.command('nkick', async (ctx) => {
   })
 
   if (chatStatus === 'creator' || chatStatus === 'administrator') {
-    kickUser = ctx.message.reply_to_message.from
+    if (ctx.message.reply_to_message) {
+      var kickUser = ctx.message.reply_to_message.from
+    } else {
+      ctx.replyWithHTML(
+        ctx.i18n.t('kick.who')
+      )
+    }
+  } else {
+    var kickUser = ctx.from
+  }
+
+  if (kickUser) {
     bot.telegram.kickChatMember(ctx.chat.id, kickUser.id).then(() => {
       ctx.replyWithHTML(
         ctx.i18n.t('kick.suc', {
@@ -129,15 +140,7 @@ bot.command('nkick', async (ctx) => {
         })
       )
       bot.telegram.unbanChatMember(ctx.chat.id, kickUser.id)
-    }).catch((error) => {
-      ctx.replyWithHTML(
-        ctx.i18n.t('kick.error', {
-          error: error
-        })
-      )
     })
-  }else{
-
   }
 })
 
