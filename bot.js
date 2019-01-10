@@ -6,7 +6,7 @@ const session = require('telegraf/session')
 const humanizeDuration = require('humanize-duration')
 const User = require('./models/user')
 
-mongoose.connect('mongodb://localhost:27017/usersdb', {
+mongoose.connect('mongodb://localhost:27017/LyAdminBot', {
   useCreateIndex: true,
   useNewUrlParser: true
 })
@@ -91,7 +91,7 @@ bot.command('nbanan', async (ctx) => {
 
   if (banTime) {
     if (banTime > 0) {
-      var unixBanTime = Math.floor(new Date() / 1000) + banTime
+      var unixBanTime = ctx.message.date + banTime
       var banDuration = humanizeDuration(banTime * 1000, { language: ctx.i18n.locale() })
 
       bot.telegram.restrictChatMember(ctx.chat.id, banUser.id, { until_date: unixBanTime }).then(() => {
@@ -110,7 +110,7 @@ bot.command('nbanan', async (ctx) => {
       })
     } else {
       bot.telegram.restrictChatMember(ctx.chat.id, banUser.id, {
-        'until_date': 0,
+        'until_date': ctx.date,
         'can_send_messages': true,
         'can_send_other_messages': true,
         'can_send_media_messages': true,
@@ -171,8 +171,6 @@ bot.on('new_chat_members', (ctx) => {
 })
 
 bot.on('message', (ctx) => {
-  console.log(ctx.message)
-
   if (ctx.chat.id > 0) {
     ctx.replyWithHTML(
       ctx.i18n.t('private.start', {
@@ -180,18 +178,20 @@ bot.on('message', (ctx) => {
       })
     )
   } else {
-    User.findOne({ telegram_id: ctx.from.id }, (err, data) => {
-      if (!data) {
-        const user = new User({
-          telegram_id: ctx.from.id,
-          first_name: ctx.from.first_name,
-          last_name: ctx.from.last_name
-        })
-        user.save()
-        console.log(`new user: ${ctx.from.id}`)
-      }
-    })
+    
   }
+
+  User.findOneAndUpdate({
+    telegram_id: ctx.from.id
+  }, {
+    first_name: ctx.from.first_name,
+    last_name: ctx.from.last_name,
+    username: ctx.from.username,
+    last_act: ctx.message.date
+  }, { new: true, upsert: true }, function(err, doc) {
+    if(err) return console.log(err)
+    console.log(doc)
+  })
 })
 
 bot.catch((err) => {
