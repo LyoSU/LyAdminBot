@@ -6,9 +6,9 @@ const session = require('telegraf/session')
 const humanizeDuration = require('humanize-duration')
 const User = require('./models/user')
 
-mongoose.connect("mongodb://localhost:27017/usersdb", { 
+mongoose.connect('mongodb://localhost:27017/usersdb', {
   useCreateIndex: true,
-  useNewUrlParser: true 
+  useNewUrlParser: true
 })
 
 const db = mongoose.connection
@@ -180,14 +180,15 @@ bot.on('message', (ctx) => {
       })
     )
   } else {
-    User.findOne({ telegram_id: ctx.from.id}, (err, data) => {
+    User.findOne({ telegram_id: ctx.from.id }, (err, data) => {
       if (!data) {
         const user = new User({
           telegram_id: ctx.from.id,
           first_name: ctx.from.first_name,
-          last_name:  ctx.from.last_name
+          last_name: ctx.from.last_name
         })
-        user.save ()
+        user.save()
+        console.log(`new user: ${ctx.from.id}`)
       }
     })
   }
