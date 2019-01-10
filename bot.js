@@ -4,12 +4,7 @@ const path = require('path')
 const I18n = require('telegraf-i18n')
 const session = require('telegraf/session')
 const humanizeDuration = require('humanize-duration')
-
-const userScheme = mongoose.Schema({
-  telegram_id: { type: Number, index: true, unique: true },
-  first_name: String,
-  last_name: String
-})
+const User = require('./models/user')
 
 mongoose.connect("mongodb://localhost:27017/usersdb", { 
   useCreateIndex: true,
@@ -20,18 +15,6 @@ const db = mongoose.connection
 db.on('error', err => {
   console.log('error', err)
 })
-
-function saveUser () {
-  const User = mongoose.model("User", userScheme)
-  const user = new User({
-    telegram_id: 1,
-    first_name: "Yuri",
-    last_name: "Ly"
-  })
-  user.save()
-}
-
-saveUser()
 
 const i18n = new I18n({
   directory: path.resolve(__dirname, 'locales'),
@@ -182,9 +165,9 @@ bot.command('test', (ctx) => {
 })
 
 bot.on('new_chat_members', (ctx) => {
-  ctx.replyWithHTML(
-    'Привет пидарас'
-  )
+  // ctx.replyWithHTML(
+  //   'Привет пидарас'
+  // )
 })
 
 bot.on('message', (ctx) => {
@@ -197,7 +180,16 @@ bot.on('message', (ctx) => {
       })
     )
   } else {
-
+    User.findOne({ telegram_id: ctx.from.id}, (err, data) => {
+      if (!data) {
+        const user = new User({
+          telegram_id: ctx.from.id,
+          first_name: ctx.from.first_name,
+          last_name:  ctx.from.last_name
+        })
+        user.save ()
+      }
+    })
   }
 })
 
