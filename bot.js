@@ -1,4 +1,4 @@
-var mongoose = require('mongoose')
+const mongoose = require('mongoose')
 const Telegraf = require('telegraf')
 const TelegrafMixpanel = require('telegraf-mixpanel')
 const path = require('path')
@@ -6,6 +6,7 @@ const I18n = require('telegraf-i18n')
 const session = require('telegraf/session')
 const humanizeDuration = require('humanize-duration')
 const User = require('./models/user')
+const Group = require('./models/group')
 
 mongoose.connect('mongodb://localhost:27017/LyAdminBot', {
   useCreateIndex: true,
@@ -37,6 +38,7 @@ bot.use(i18n.middleware())
 
 bot.use((ctx, next) => {
   console.log(ctx)
+
   User.findOneAndUpdate({
     telegram_id: ctx.from.id
   }, {
@@ -44,14 +46,28 @@ bot.use((ctx, next) => {
     last_name: ctx.from.last_name,
     username: ctx.from.username,
     last_act: ctx.message.date
-  }, { new: true, upsert: true }, function(err, doc) {
-    if(err) return console.log(err)
+  }, { new: true, upsert: true }, function (err, doc) {
+    if (err) return console.log(err)
     console.log(doc)
   })
   ctx.mixpanel.people.set()
-  ctx.mixpanel.people.setOnce ({
+  ctx.mixpanel.people.setOnce({
     $created: new Date().toISOString()
   })
+
+  if (ctx.chat.id > 0) {
+
+  } else {
+    Group.findOneAndUpdate({
+      group_id: ctx.chat.id
+    }, {
+      settings: { welcome: true, welcome_text: ['test'] }
+    }, { new: true, upsert: true }, function (err, doc) {
+      if (err) return console.log(err)
+      console.log(doc)
+    })
+  }
+
   return next(ctx)
 })
 
