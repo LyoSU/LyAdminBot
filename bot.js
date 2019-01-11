@@ -1,7 +1,7 @@
 const mongoose = require('mongoose')
+const path = require('path')
 const Telegraf = require('telegraf')
 const TelegrafMixpanel = require('telegraf-mixpanel')
-const path = require('path')
 const I18n = require('telegraf-i18n')
 const session = require('telegraf/session')
 const humanizeDuration = require('humanize-duration')
@@ -283,16 +283,19 @@ bot.command('test', (ctx) => {
   return ctx.replyWithHTML(ctx.i18n.t('cmd.test', { userLogin: userLogin(ctx.from, true) }))
 })
 
-bot.on('new_chat_members', (ctx) => {
+bot.on('new_chat_members', async (ctx) => {
   ctx.mixpanel.track('new member')
   var gifs = ctx.groupInfo.settings.gifs
   var randomGif = gifs[Math.floor(Math.random()*gifs.length)]
   var captions = ctx.groupInfo.settings.captions
   var randomCaption = captions[Math.floor(Math.random()*captions.length)]
-  ctx.replyWithDocument(
+  const message = await ctx.replyWithDocument(
     randomGif,
     {'caption': randomCaption.replace('%login%', userLogin(ctx.from))}
   )
+  setTimeout(() => {
+    ctx.deleteMessage(message.message_id)
+  }, 5000)
 })
 
 bot.on('message', (ctx) => {
