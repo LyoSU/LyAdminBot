@@ -5,7 +5,8 @@ const groupSchema = mongoose.Schema({
   title: String,
   settings: {
       welcome: Boolean,
-      gifs: Object
+      gifs: Object,
+      captions: Object,
   }
 })
 
