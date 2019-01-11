@@ -13,6 +13,7 @@
     "humanize-duration": "^3.17.0",
     "mongoose": "^5.4.3",
     "telegraf": "^3.25.5",
-    "telegraf-i18n": "^6.4.0"
+    "telegraf-i18n": "^6.4.0",
+    "telegraf-mixpanel": "^1.0.0"
   }
 }

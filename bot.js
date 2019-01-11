@@ -1,5 +1,6 @@
 var mongoose = require('mongoose')
 const Telegraf = require('telegraf')
+const TelegrafMixpanel = require('telegraf-mixpanel')
 const path = require('path')
 const I18n = require('telegraf-i18n')
 const session = require('telegraf/session')
@@ -24,13 +25,35 @@ const i18n = new I18n({
 })
 
 const bot = new Telegraf(process.env.BOT_TOKEN)
+const mixpanel = new TelegrafMixpanel(process.env.MIXPANEL_TOKEN)
 
 bot.telegram.getMe().then((botInfo) => {
   bot.options.username = botInfo.username
 })
 
+bot.use(mixpanel.middleware())
 bot.use(session())
 bot.use(i18n.middleware())
+
+bot.use((ctx, next) => {
+  console.log(ctx)
+  User.findOneAndUpdate({
+    telegram_id: ctx.from.id
+  }, {
+    first_name: ctx.from.first_name,
+    last_name: ctx.from.last_name,
+    username: ctx.from.username,
+    last_act: ctx.message.date
+  }, { new: true, upsert: true }, function(err, doc) {
+    if(err) return console.log(err)
+    console.log(doc)
+  })
+  ctx.mixpanel.people.set()
+  ctx.mixpanel.people.setOnce ({
+    $created: new Date().toISOString()
+  })
+  return next(ctx)
+})
 
 function userLogin (user, url = false) {
   var login = user.first_name
@@ -52,16 +75,13 @@ bot.command('type', (ctx) => {
 })
 
 bot.command('nbanan', async (ctx) => {
+  ctx.mixpanel.track('banan')
   var arg = ctx.message.text.split(/ +/)
-  await bot.telegram.getChatMember(ctx.chat.id, ctx.from.id).then((result) => {
-    chatStatus = result.status
-  })
+  await bot.telegram.getChatMember(ctx.chat.id, ctx.from.id).then((result) => chatStatus = result.status)
 
   if (chatStatus === 'creator' || chatStatus === 'administrator') {
     if (ctx.message.reply_to_message) {
-      await bot.telegram.getChatMember(ctx.chat.id, ctx.message.reply_to_message.from.id).then((result) => {
-        replyStatus = result.status
-      })
+      await bot.telegram.getChatMember(ctx.chat.id, ctx.message.reply_to_message.from.id).then((result) => replyStatus = result.status)
 
       if (replyStatus === 'restricted') {
         var banUser = ctx.message.reply_to_message.from
@@ -101,10 +121,10 @@ bot.command('nbanan', async (ctx) => {
             duration: banDuration
           })
         )
-      }).catch((err) => {
+      }).catch((error) => {
         ctx.replyWithHTML(
           ctx.i18n.t('banan.error', {
-            err: err
+            error: error
           })
         )
       })
@@ -133,9 +153,8 @@ bot.command('nbanan', async (ctx) => {
 })
 
 bot.command('nkick', async (ctx) => {
-  await bot.telegram.getChatMember(ctx.chat.id, ctx.from.id).then((result) => {
-    chatStatus = result.status
-  })
+  ctx.mixpanel.track('kick')
+  await bot.telegram.getChatMember(ctx.chat.id, ctx.from.id).then((result) => chatStatus = result.status)
 
   if (chatStatus === 'creator' || chatStatus === 'administrator') {
     if (ctx.message.reply_to_message) {
@@ -160,14 +179,27 @@ bot.command('nkick', async (ctx) => {
   }
 })
 
+bot.command('del', async (ctx) => {
+  ctx.mixpanel.track('del')
+  await bot.telegram.getChatMember(ctx.chat.id, ctx.from.id).then((result) => chatStatus = result.status)
+
+  if (chatStatus === 'creator' || chatStatus === 'administrator') {
+    bot.telegram.deleteMessage(ctx.chat.id, ctx.message.message_id)
+    if (ctx.message.reply_to_message.message_id) bot.telegram.deleteMessage(ctx.chat.id, ctx.message.reply_to_message.message_id)
+  } else {
+    bot.telegram.deleteMessage(ctx.chat.id, ctx.message.message_id)
+  }
+})
+
 bot.command('test', (ctx) => {
   return ctx.replyWithHTML(ctx.i18n.t('cmd.test', { userLogin: userLogin(ctx.from, true) }))
 })
 
 bot.on('new_chat_members', (ctx) => {
-  // ctx.replyWithHTML(
-  //   'Привет пидарас'
-  // )
+  ctx.mixpanel.track('new member')
+  ctx.replyWithHTML(
+    ctx.i18n.t('welcome.test')
+  )
 })
 
 bot.on('message', (ctx) => {
@@ -177,21 +209,10 @@ bot.on('message', (ctx) => {
         login: userLogin(ctx.from)
       })
     )
+    ctx.mixpanel.track('private message')
   } else {
-    
+    ctx.mixpanel.track('group message', { group: ctx.chat.id })
   }
-
-  User.findOneAndUpdate({
-    telegram_id: ctx.from.id
-  }, {
-    first_name: ctx.from.first_name,
-    last_name: ctx.from.last_name,
-    username: ctx.from.username,
-    last_act: ctx.message.date
-  }, { new: true, upsert: true }, function(err, doc) {
-    if(err) return console.log(err)
-    console.log(doc)
-  })
 })
 
 bot.catch((err) => {

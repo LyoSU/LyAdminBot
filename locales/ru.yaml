@@ -13,3 +13,5 @@ banan:
 kick:
   suc: ${login} получает пинок
   who: Кого пнуть?😡
+welcome:
+  test: Привет, ${from.first_name}!
