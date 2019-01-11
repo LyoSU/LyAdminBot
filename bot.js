@@ -36,9 +36,8 @@ bot.use(mixpanel.middleware())
 bot.use(session())
 bot.use(i18n.middleware())
 
-bot.use((ctx, next) => {
-  console.log(ctx)
-
+bot.use( async (ctx, next) => {
+  const start = new Date()
   User.findOneAndUpdate({
     telegram_id: ctx.from.id
   }, {
@@ -48,7 +47,6 @@ bot.use((ctx, next) => {
     last_act: ctx.message.date
   }, { new: true, upsert: true }, function (err, doc) {
     if (err) return console.log(err)
-    console.log(doc)
   })
   ctx.mixpanel.people.set()
   ctx.mixpanel.people.setOnce({
@@ -58,17 +56,18 @@ bot.use((ctx, next) => {
   if (ctx.chat.id > 0) {
 
   } else {
-    Group.findOneAndUpdate({
+    await Group.findOneAndUpdate({
       group_id: ctx.chat.id
     }, {
-      settings: { welcome: true, welcome_text: ['test'] }
+      title: ctx.chat.title
     }, { new: true, upsert: true }, function (err, doc) {
       if (err) return console.log(err)
-      console.log(doc)
+      ctx.groupInfo = doc
     })
   }
-
-  return next(ctx)
+  await next(ctx)
+  const ms = new Date() - start
+  console.log('Response time %sms', ms)
 })
 
 function userLogin (user, url = false) {
@@ -146,7 +145,7 @@ bot.command('nbanan', async (ctx) => {
       })
     } else {
       bot.telegram.restrictChatMember(ctx.chat.id, banUser.id, {
-        'until_date': ctx.date,
+        'until_date': ctx.message.date,
         'can_send_messages': true,
         'can_send_other_messages': true,
         'can_send_media_messages': true,
@@ -207,14 +206,54 @@ bot.command('del', async (ctx) => {
   }
 })
 
+bot.command('gif', async (ctx) => {
+  await bot.telegram.getChatMember(ctx.chat.id, ctx.from.id).then((result) => chatStatus = result.status)
+
+  if (chatStatus === 'creator' || chatStatus === 'administrator') {
+    if (ctx.message.reply_to_message.animation) {
+      var gifId = ctx.message.reply_to_message.animation.file_id
+
+      Group.findOne({
+        'group_id': ctx.chat.id,
+        'settings.gifs': { $in: [gifId] }
+      }, function(err, doc){
+          if(doc){
+            Group.update(
+              { group_id: ctx.chat.id }, 
+              { $pull: { 'settings.gifs': gifId } }, (err, doc) => {
+                if(err) return console.log(err)
+                ctx.replyWithHTML(
+                  ctx.i18n.t('welcome.gif.pull')
+                )
+              }
+            )
+          }else{
+            Group.update(
+              { group_id: ctx.chat.id }, 
+              { $push: { 'settings.gifs': gifId } }, (err, doc) => {
+                if(err) return console.log(err)
+                ctx.replyWithHTML(
+                  ctx.i18n.t('welcome.gif.push')
+                )
+              }
+            )
+          }
+      })
+    }
+  }
+})
+
 bot.command('test', (ctx) => {
   return ctx.replyWithHTML(ctx.i18n.t('cmd.test', { userLogin: userLogin(ctx.from, true) }))
 })
 
 bot.on('new_chat_members', (ctx) => {
   ctx.mixpanel.track('new member')
-  ctx.replyWithHTML(
-    ctx.i18n.t('welcome.test')
+  var gifs = ctx.groupInfo.settings.gifs
+  var randomGif = gifs[Math.floor(Math.random()*gifs.length)]
+  ctx.replyWithDocument(
+    randomGif,
+    {'caption': ctx.i18n.t('welcome.text')}
   )
 })
 
