@@ -4,9 +4,9 @@ const groupSchema = mongoose.Schema({
   group_id: { type: Number, index: true, unique: true },
   title: String,
   settings: {
-      welcome: Boolean,
-      gifs: Object,
-      captions: Object,
+    welcome: Boolean,
+    gifs: Object,
+    captions: Object
   }
 })
 

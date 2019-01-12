@@ -3,6 +3,9 @@ private:
     Привет, <b>${login}</b>!
     Добавь меня в группу.
 cmd:
+  help: |
+    <b>Список команд бота:</b>
+    /banan - выдать бан
   test: 
     "name: ${userLogin}"
 banan:

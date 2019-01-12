@@ -4,9 +4,11 @@ const Telegraf = require('telegraf')
 const TelegrafMixpanel = require('telegraf-mixpanel')
 const I18n = require('telegraf-i18n')
 const session = require('telegraf/session')
-const humanizeDuration = require('humanize-duration')
+const onlyAdmin = require('./middlewares/only-admin')
 const User = require('./models/user')
 const Group = require('./models/group')
+const { handleHelp, handleBanan, handleKick, handleDelete, handleGif } = require('./handlers')
+const { userLogin } = require('./lib')
 
 mongoose.connect('mongodb://localhost:27017/LyAdminBot', {
   useCreateIndex: true,
@@ -28,7 +30,7 @@ const i18n = new I18n({
 const bot = new Telegraf(process.env.BOT_TOKEN)
 const mixpanel = new TelegrafMixpanel(process.env.MIXPANEL_TOKEN)
 
-const gifs = ["CgADAgADqAEAAmJG2Uglzd9EwW55bwI","CgADBAADyx4AAhQYZAetvXlEFn5cswI","CgADBAAD2p8AAnsaZAcJm0k7V_kXNAI","CgADAgADNQADS_BhSDpVCwqAH-ApAg","CgADAgADHwEAAvB2IUlCVQ-SgmWrHgI","CgADAgADowADW7g4StIu7SVZ0yipAg","CgADBAAD6XQAAhIZZAeTavEu0igaiAI","CgADAgADvQAD4AUwSQS5MUl_EGsyAg","CgADAgAD4AEAAlvyUgd71fE8N2Hk_QI","CgADBAADqaEAAlcZZAfGeJGIyZqlewI","CgADBAAD5IkBAAEVGGQH0W-_EJ5srcIC","CgADAgADLAADqsgYSR_BdlF8KTJMAg","CgADBAADa6AAAtIcZActYXkQawyAOgI","CgADBAADHdcAAswdZAcu3MWguaCW-AI","CgADBAADpRYAAswdZAcpeGLhy5LTGQI","CgADBAADxhoAAsUaZAfJ7wp8FdS2xQI","CgADAgAD7gEAAkil-UjXyAw0cwaZWgI","CgADBAADAgEAAh-cYVNbj7BOYD9JtgI"]
+const gifs = ['CgADAgADqAEAAmJG2Uglzd9EwW55bwI', 'CgADBAADyx4AAhQYZAetvXlEFn5cswI', 'CgADBAAD2p8AAnsaZAcJm0k7V_kXNAI', 'CgADAgADNQADS_BhSDpVCwqAH-ApAg', 'CgADAgADHwEAAvB2IUlCVQ-SgmWrHgI', 'CgADAgADowADW7g4StIu7SVZ0yipAg', 'CgADBAAD6XQAAhIZZAeTavEu0igaiAI', 'CgADAgADvQAD4AUwSQS5MUl_EGsyAg', 'CgADAgAD4AEAAlvyUgd71fE8N2Hk_QI', 'CgADBAADqaEAAlcZZAfGeJGIyZqlewI', 'CgADBAAD5IkBAAEVGGQH0W-_EJ5srcIC', 'CgADAgADLAADqsgYSR_BdlF8KTJMAg', 'CgADBAADa6AAAtIcZActYXkQawyAOgI', 'CgADBAADHdcAAswdZAcu3MWguaCW-AI', 'CgADBAADpRYAAswdZAcpeGLhy5LTGQI', 'CgADBAADxhoAAsUaZAfJ7wp8FdS2xQI', 'CgADAgAD7gEAAkil-UjXyAw0cwaZWgI', 'CgADBAADAgEAAh-cYVNbj7BOYD9JtgI']
 
 const captions = [
   'Hi, %login%',
@@ -49,7 +51,7 @@ const captions = [
   'Поприветствуйте %login% 🙋🏼‍♂️',
   '%login%, а кто это такой к нам пришел? 😲',
   '%login%, мяу😽',
-  '👏🏻 AYAYA %login% 😝',
+  '👏🏻 AYAYA %login% 😝'
 ]
 
 bot.telegram.getMe().then((botInfo) => {
@@ -60,7 +62,7 @@ bot.use(mixpanel.middleware())
 bot.use(session())
 bot.use(i18n.middleware())
 
-bot.use( async (ctx, next) => {
+bot.use(async (ctx, next) => {
   const start = new Date()
   User.findOneAndUpdate({
     telegram_id: ctx.from.id
@@ -86,7 +88,7 @@ bot.use( async (ctx, next) => {
       title: ctx.chat.title
     }, { new: true, upsert: true }, function (err, doc) {
       if (err) return console.log(err)
-      if(!doc.settings.gifs || !doc.settings.captions){
+      if (!doc.settings.gifs || !doc.settings.captions) {
         doc.settings = {
           welcome: true,
           gifs: gifs,
@@ -102,184 +104,22 @@ bot.use( async (ctx, next) => {
   console.log('Response time %sms', ms)
 })
 
-function userLogin (user, url = false) {
-  var login = user.first_name
-  if (user.last_name) login += ' ' + user.last_name
-  if (url === true) login = `<a href="tg://user?id=${user.id}">${login}</a>`
-  return login
-}
-
-function getRandomInt (min, max) {
-  return Math.floor(Math.random() * (max - min)) + min
-}
-
-bot.command('help', (ctx) => {
-  return ctx.replyWithHTML(`<b>${userLogin(ctx.from)}</b> пидор дня`)
-})
+bot.command('help', handleHelp)
 
 bot.command('type', (ctx) => {
   return ctx.replyWithHTML(`<b>Chat type:</b> <pre>${ctx.chat.type}</pre>`)
 })
 
-bot.command('nbanan', async (ctx) => {
-  ctx.mixpanel.track('banan')
-  var arg = ctx.message.text.split(/ +/)
-  await bot.telegram.getChatMember(ctx.chat.id, ctx.from.id).then((result) => chatStatus = result.status)
-
-  if (chatStatus === 'creator' || chatStatus === 'administrator') {
-    if (ctx.message.reply_to_message) {
-      await bot.telegram.getChatMember(ctx.chat.id, ctx.message.reply_to_message.from.id).then((result) => replyStatus = result.status)
-
-      if (replyStatus === 'restricted') {
-        var banUser = ctx.message.reply_to_message.from
-        var banTime = -1
-      } else {
-        if (arg[1] === null) {
-          var banUser = ctx.from
-          var banTime = 300
-        } else {
-          var banUser = ctx.message.reply_to_message.from
-          if (arg[1]) {
-            var banTimeArr = { 'm': 60, 'h': 3600, 'd': 86400 }
-            var banType = banTimeArr[arg[1].slice(-1)]
-            var banTime = parseInt(arg[1]) * banType
-          } else {
-            var banTime = 300
-          }
-        }
-      }
-    } else {
-      var banUser = ctx.from
-    }
-  } else {
-    var banUser = ctx.from
-    var banTime = getRandomInt(60, 600)
-  }
-
-  if (banTime) {
-    if (banTime > 0) {
-      var unixBanTime = ctx.message.date + banTime
-      var banDuration = humanizeDuration(banTime * 1000, { language: ctx.i18n.locale() })
-
-      bot.telegram.restrictChatMember(ctx.chat.id, banUser.id, { until_date: unixBanTime }).then(() => {
-        ctx.replyWithHTML(
-          ctx.i18n.t('banan.suc', {
-            login: userLogin(banUser, true),
-            duration: banDuration
-          })
-        )
-      }).catch((error) => {
-        ctx.replyWithHTML(
-          ctx.i18n.t('banan.error', {
-            error: error
-          })
-        )
-      })
-    } else {
-      bot.telegram.restrictChatMember(ctx.chat.id, banUser.id, {
-        'until_date': ctx.message.date,
-        'can_send_messages': true,
-        'can_send_other_messages': true,
-        'can_send_media_messages': true,
-        'can_add_web_page_previews': true
-      }).then(() => {
-        ctx.replyWithHTML(
-          ctx.i18n.t('banan.pick', {
-            login: userLogin(banUser, true)
-          })
-        )
-      })
-    }
-  } else {
-    ctx.replyWithHTML(
-      ctx.i18n.t('banan.show', {
-        login: userLogin(banUser, true)
-      })
-    )
-  }
-})
-
-bot.command('nkick', async (ctx) => {
-  ctx.mixpanel.track('kick')
-  await bot.telegram.getChatMember(ctx.chat.id, ctx.from.id).then((result) => chatStatus = result.status)
-
-  if (chatStatus === 'creator' || chatStatus === 'administrator') {
-    if (ctx.message.reply_to_message) {
-      var kickUser = ctx.message.reply_to_message.from
-    } else {
-      ctx.replyWithHTML(
-        ctx.i18n.t('kick.who')
-      )
-    }
-  } else {
-    var kickUser = ctx.from
-  }
-
-  if (kickUser) {
-    bot.telegram.unbanChatMember(ctx.chat.id, kickUser.id).then(() => {
-      ctx.replyWithHTML(
-        ctx.i18n.t('kick.suc', {
-          login: userLogin(kickUser, true)
-        })
-      )
-    })
-  }
-})
-
-bot.command('del', async (ctx) => {
-  ctx.mixpanel.track('del')
-  await bot.telegram.getChatMember(ctx.chat.id, ctx.from.id).then((result) => chatStatus = result.status)
-
-  if (chatStatus === 'creator' || chatStatus === 'administrator') {
-    bot.telegram.deleteMessage(ctx.chat.id, ctx.message.message_id)
-    if (ctx.message.reply_to_message.message_id) bot.telegram.deleteMessage(ctx.chat.id, ctx.message.reply_to_message.message_id)
-  } else {
-    bot.telegram.deleteMessage(ctx.chat.id, ctx.message.message_id)
-  }
-})
-
-bot.command('gif', async (ctx) => {
-  await bot.telegram.getChatMember(ctx.chat.id, ctx.from.id).then((result) => chatStatus = result.status)
-
-  if (chatStatus === 'creator' || chatStatus === 'administrator') {
-    if (ctx.message.reply_to_message.animation) {
-      var gifId = ctx.message.reply_to_message.animation.file_id
-
-      Group.findOne({
-        'group_id': ctx.chat.id,
-        'settings.gifs': { $in: [gifId] }
-      }, function(err, doc){
-          if(doc){
-            Group.update(
-              { group_id: ctx.chat.id }, 
-              { $pull: { 'settings.gifs': gifId } }, (err, doc) => {
-                if(err) return console.log(err)
-                ctx.replyWithHTML(
-                  ctx.i18n.t('welcome.gif.pull')
-                )
-              }
-            )
-          }else{
-            Group.update(
-              { group_id: ctx.chat.id }, 
-              { $push: { 'settings.gifs': gifId } }, (err, doc) => {
-                if(err) return console.log(err)
-                ctx.replyWithHTML(
-                  ctx.i18n.t('welcome.gif.push')
-                )
-              }
-            )
-          }
-      })
-    }
-  }
-})
+bot.command('nbanan', handleBanan)
+bot.command('nkick', handleKick)
+bot.command('del', handleDelete)
+bot.command('gif', onlyAdmin, handleGif)
 
 bot.command('welcome_reset', (ctx) => {
   Group.update(
-    { group_id: ctx.chat.id }, 
+    { group_id: ctx.chat.id },
     { 'settings.gifs': gifs, 'settings.captions': captions }, (err, doc) => {
-      if(err) return console.log(err)
+      if (err) return console.log(err)
       ctx.replyWithHTML(
         ctx.i18n.t('welcome.reset')
       )
@@ -294,12 +134,12 @@ bot.command('test', (ctx) => {
 bot.on('new_chat_members', async (ctx) => {
   ctx.mixpanel.track('new member')
   var gifs = ctx.groupInfo.settings.gifs
-  var randomGif = gifs[Math.floor(Math.random()*gifs.length)]
+  var randomGif = gifs[Math.floor(Math.random() * gifs.length)]
   var captions = ctx.groupInfo.settings.captions
-  var randomCaption = captions[Math.floor(Math.random()*captions.length)]
+  var randomCaption = captions[Math.floor(Math.random() * captions.length)]
   const message = await ctx.replyWithDocument(
     randomGif,
-    {'caption': randomCaption.replace('%login%', userLogin(ctx.from))}
+    { 'caption': randomCaption.replace('%login%', userLogin(ctx.from)) }
   )
   setTimeout(() => {
     ctx.deleteMessage(message.message_id)
