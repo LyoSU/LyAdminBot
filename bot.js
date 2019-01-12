@@ -121,7 +121,7 @@ bot.command('type', (ctx) => {
   return ctx.replyWithHTML(`<b>Chat type:</b> <pre>${ctx.chat.type}</pre>`)
 })
 
-bot.command('banan', async (ctx) => {
+bot.command('nbanan', async (ctx) => {
   ctx.mixpanel.track('banan')
   var arg = ctx.message.text.split(/ +/)
   await bot.telegram.getChatMember(ctx.chat.id, ctx.from.id).then((result) => chatStatus = result.status)
@@ -199,7 +199,7 @@ bot.command('banan', async (ctx) => {
   }
 })
 
-bot.command('kick', async (ctx) => {
+bot.command('nkick', async (ctx) => {
   ctx.mixpanel.track('kick')
   await bot.telegram.getChatMember(ctx.chat.id, ctx.from.id).then((result) => chatStatus = result.status)
 
