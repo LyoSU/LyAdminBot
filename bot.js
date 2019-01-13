@@ -17,7 +17,7 @@ const {
   handleKick,
   handleDelete,
   handleGif,
-  handleWelcomeReset
+  handleReset
 } = require('./handlers')
 
 mongoose.connect('mongodb://localhost:27017/LyAdminBot', {
@@ -63,7 +63,7 @@ bot.command('nkick', handleKick)
 bot.command('del', handleDelete)
 bot.command('gif', onlyAdmin, handleGif)
 bot.on('new_chat_members', handleWelcome)
-bot.command('welcome_reset', handleWelcomeReset)
+bot.command('reset', handleReset)
 bot.on('message', handleMessage)
 
 bot.catch((err) => {

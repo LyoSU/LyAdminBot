@@ -1,19 +1,21 @@
 const Group = require('../models/group')
-const welcomeReset = require('../common/welcome-reset')
 
 module.exports = async (ctx, next) => {
   if (ctx.chat.id > 0) {
 
   } else {
-    await Group.findOneAndUpdate({
+    await Group.findOne({
       group_id: ctx.chat.id
-    }, {
-      title: ctx.chat.title
-    }, { new: true, upsert: true }, function (err, doc) {
+    }, { new: true, upsert: true }, async (err, doc) => {
       if (err) return console.log(err)
-      if (!doc.settings.gifs || !doc.settings.texts) {
-        welcomeReset(ctx.chat.id)
+      if (!doc) {
+        var doc = new Group()
+        doc.group_id = ctx.chat.id
+        doc.first_act = ctx.message.date
       }
+      doc.title = ctx.chat.title
+      doc.last_act = ctx.message.date
+      doc.save()
       ctx.groupInfo = doc
     })
   }

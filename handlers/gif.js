@@ -1,3 +1,5 @@
+const Group = require('../models/group')
+
 module.exports = async (ctx) => {
   if (ctx.message.reply_to_message.animation) {
     var gifId = ctx.message.reply_to_message.animation.file_id

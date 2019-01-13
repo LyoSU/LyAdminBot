@@ -6,5 +6,5 @@ module.exports = {
   handleKick: require('./kick'),
   handleDelete: require('./delete'),
   handleGif: require('./gif'),
-  handleWelcomeReset: require('./welcome-reset')
+  handleReset: require('./reset')
 }
