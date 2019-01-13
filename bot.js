@@ -61,9 +61,9 @@ bot.command('help', handleHelp)
 bot.command('nbanan', handleBanan)
 bot.command('nkick', handleKick)
 bot.command('del', handleDelete)
-bot.command('gif', onlyAdmin, handleGif)
+bot.hears('!gif', onlyAdmin, handleGif)
+bot.hears('!reset', onlyAdmin, handleReset)
 bot.on('new_chat_members', handleWelcome)
-bot.command('reset', handleReset)
 bot.on('message', handleMessage)
 
 bot.catch((err) => {
