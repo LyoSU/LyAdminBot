@@ -32,6 +32,10 @@ const groupSchema = mongoose.Schema({
       type: Boolean,
       default: true
     },
+    welcome_timer: {
+      type: Number,
+      default: 180
+    },
     gifs: {
       type: Array,
       default: gifs
