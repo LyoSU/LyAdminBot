@@ -8,13 +8,14 @@ module.exports = async (ctx, next) => {
       group_id: ctx.chat.id
     }, { new: true, upsert: true }, async (err, doc) => {
       if (err) return console.log(err)
+      const now = Math.floor(new Date().getTime() / 1000)
       if (!doc) {
         var doc = new Group()
         doc.group_id = ctx.chat.id
-        doc.first_act = ctx.message.date
+        doc.first_act = now
       }
       doc.title = ctx.chat.title
-      doc.last_act = ctx.message.date
+      doc.last_act = now
       doc.save()
       ctx.groupInfo = doc
     })

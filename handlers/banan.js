@@ -8,28 +8,20 @@ module.exports = async (ctx) => {
 
   if (chatMember.status === 'creator' || chatMember.status === 'administrator') {
     if (ctx.message.reply_to_message) {
-      const replyMember = await ctx.telegram.getChatMember(ctx.message.chat.id, ctx.message.reply_to_message.from.id)
-
-      if (replyMember.status === 'restricted') {
-        var banUser = ctx.message.reply_to_message.from
-        var banTime = -1
+      var banUser = ctx.message.reply_to_message.from
+      if (arg[1]) {
+        const banTimeArr = { 'm': 60, 'h': 3600, 'd': 86400 }
+        var banType = arg[1].slice(-1)
+        if (!banTimeArr[banType]) var banType = 'm'
+        var banTime = parseInt(arg[1]) * banTimeArr[banType]
       } else {
-        if (arg[1] === null) {
-          var banUser = ctx.from
-          var banTime = 300
+        const replyMember = await ctx.telegram.getChatMember(ctx.message.chat.id, ctx.message.reply_to_message.from.id)
+        if (replyMember.status === 'restricted') {
+          var banTime = -1
         } else {
-          var banUser = ctx.message.reply_to_message.from
-          if (arg[1]) {
-            const banTimeArr = { 'm': 60, 'h': 3600, 'd': 86400 }
-            var banType = banTimeArr[arg[1].slice(-1)]
-            var banTime = parseInt(arg[1]) * banType
-          } else {
-            var banTime = 300
-          }
+          var banTime = 300
         }
       }
-    } else {
-      var banUser = ctx.from
     }
   } else {
     var banUser = ctx.from
@@ -73,7 +65,7 @@ module.exports = async (ctx) => {
   } else {
     ctx.replyWithHTML(
       ctx.i18n.t('banan.show', {
-        login: userLogin(banUser, true)
+        login: userLogin(ctx.from, true)
       })
     )
   }
