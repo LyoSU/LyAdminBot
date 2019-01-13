@@ -5,6 +5,7 @@ module.exports = {
   handleBanan: require('./banan'),
   handleKick: require('./kick'),
   handleDelete: require('./delete'),
-  handleGif: require('./gif'),
+  handleWelcomeGif: require('./welcome-gif'),
+  handleWelcomeText: require('./welcome-text'),
   handleReset: require('./reset')
 }

@@ -16,7 +16,8 @@ const {
   handleBanan,
   handleKick,
   handleDelete,
-  handleGif,
+  handleWelcomeGif,
+  handleWelcomeText,
   handleReset
 } = require('./handlers')
 
@@ -61,7 +62,8 @@ bot.command('help', handleHelp)
 bot.command('nbanan', handleBanan)
 bot.command('nkick', handleKick)
 bot.command('del', handleDelete)
-bot.hears('!gif', onlyAdmin, handleGif)
+bot.hears('!gif', onlyAdmin, handleWelcomeGif)
+bot.hears('!text', onlyAdmin, handleWelcomeText)
 bot.hears('!reset', onlyAdmin, handleReset)
 bot.on('new_chat_members', handleWelcome)
 bot.on('message', handleMessage)

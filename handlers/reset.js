@@ -1,9 +1,13 @@
-const groupSettingsReset = require('../common/group-settings-reset')
+const Group = require('../models/group')
 
 module.exports = async (ctx) => {
-  groupSettingsReset(ctx.chat.id, () => {
-    ctx.replyWithHTML(
-      ctx.i18n.t('cmd.reset')
-    )
-  })
+  await Group.update(
+    { group_id: ctx.chat.id },
+    { 'settings': new Group().settings }, (err, doc) => {
+      if (err) return console.log(err)
+      ctx.replyWithHTML(
+        ctx.i18n.t('cmd.reset')
+      )
+    }
+  )
 }

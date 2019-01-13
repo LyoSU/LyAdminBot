@@ -1,30 +1,30 @@
 const Group = require('../models/group')
 
 module.exports = async (ctx) => {
-  if (ctx.message.reply_to_message.animation) {
-    var gifId = ctx.message.reply_to_message.animation.file_id
+  if (ctx.message.reply_to_message.text) {
+    var text = ctx.message.reply_to_message.text
 
     Group.findOne({
       'group_id': ctx.chat.id,
-      'settings.gifs': { $in: [gifId] }
+      'settings.texts': { $in: [text] }
     }, function (err, doc) {
       if (doc) {
         Group.update(
           { group_id: ctx.chat.id },
-          { $pull: { 'settings.gifs': gifId } }, (err, doc) => {
+          { $pull: { 'settings.texts': text } }, (err, doc) => {
             if (err) return console.log(err)
             ctx.replyWithHTML(
-              ctx.i18n.t('welcome.gif.pull')
+              ctx.i18n.t('cmd.text.pull')
             )
           }
         )
       } else {
         Group.update(
           { group_id: ctx.chat.id },
-          { $push: { 'settings.gifs': gifId } }, (err, doc) => {
+          { $push: { 'settings.texts': text } }, (err, doc) => {
             if (err) return console.log(err)
             ctx.replyWithHTML(
-              ctx.i18n.t('welcome.gif.push')
+              ctx.i18n.t('cmd.text.push')
             )
           }
         )
