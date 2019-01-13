@@ -6,7 +6,7 @@ module.exports = async (ctx, next) => {
   } else {
     await Group.findOne({
       group_id: ctx.chat.id
-    }, { new: true, upsert: true }, async (err, doc) => {
+    }, async (err, doc) => {
       if (err) return console.log(err)
       const now = Math.floor(new Date().getTime() / 1000)
       if (!doc) {
@@ -15,9 +15,18 @@ module.exports = async (ctx, next) => {
         doc.first_act = now
       }
       doc.title = ctx.chat.title
+
+      doc.members = [
+        {
+          telegram_id: ctx.from.id,
+          first_act: now
+        }
+      ]
+
       doc.last_act = now
       doc.save()
       ctx.groupInfo = doc
+      console.log(doc)
     })
   }
   return next()

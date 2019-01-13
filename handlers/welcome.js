@@ -1,3 +1,5 @@
+const { userLogin } = require('../lib')
+
 module.exports = async (ctx) => {
   ctx.mixpanel.track('new member')
   var gifs = ctx.groupInfo.settings.gifs
@@ -10,5 +12,5 @@ module.exports = async (ctx) => {
   )
   setTimeout(() => {
     ctx.deleteMessage(message.message_id)
-  }, 60000)
+  }, ctx.groupInfo.settings.welcome_timer)
 }

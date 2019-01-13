@@ -3,7 +3,7 @@ const User = require('../models/user')
 module.exports = async (ctx, next) => {
   await User.findOne({
     telegram_id: ctx.from.id
-  }, { new: true, setDefaultsOnInsert: true, upsert: true }, function (err, doc) {
+  }, function (err, doc) {
     if (err) return console.log(err)
     const now = Math.floor(new Date().getTime() / 1000)
     if (!doc) {
