@@ -15,14 +15,6 @@ module.exports = async (ctx, next) => {
         doc.first_act = now
       }
       doc.title = ctx.chat.title
-
-      doc.members = [
-        {
-          telegram_id: ctx.from.id,
-          first_act: now
-        }
-      ]
-
       doc.last_act = now
       doc.save()
       ctx.groupInfo = doc
