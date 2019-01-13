@@ -24,9 +24,9 @@ const texts = [
   '👏🏻 AYAYA %login% 😝'
 ]
 
-module.exports = async (group_id, callback) => {
+module.exports = async (groupId, callback) => {
   Group.update(
-    { group_id: group_id },
+    { group_id: groupId },
     { 'settings.gifs': gifs, 'settings.texts': texts }, (err, doc) => {
       if (err) return console.log(err)
       if (callback && typeof callback === 'function') callback()

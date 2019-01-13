@@ -4,13 +4,13 @@ const { userLogin, getRandomInt } = require('../lib')
 module.exports = async (ctx) => {
   ctx.mixpanel.track('banan')
   var arg = ctx.message.text.split(/ +/)
-  await ctx.telegram.getChatMember(ctx.chat.id, ctx.from.id).then((result) => chatStatus = result.status)
+  const chatMember = await ctx.telegram.getChatMember(ctx.message.chat.id, ctx.message.from.id)
 
-  if (chatStatus === 'creator' || chatStatus === 'administrator') {
+  if (chatMember.status === 'creator' || chatMember.status === 'administrator') {
     if (ctx.message.reply_to_message) {
-      await ctx.telegram.getChatMember(ctx.chat.id, ctx.message.reply_to_message.from.id).then((result) => replyStatus = result.status)
+      const replyMember = await ctx.telegram.getChatMember(ctx.message.chat.id, ctx.message.reply_to_message.from.id)
 
-      if (replyStatus === 'restricted') {
+      if (replyMember.status === 'restricted') {
         var banUser = ctx.message.reply_to_message.from
         var banTime = -1
       } else {
@@ -20,7 +20,7 @@ module.exports = async (ctx) => {
         } else {
           var banUser = ctx.message.reply_to_message.from
           if (arg[1]) {
-            var banTimeArr = { 'm': 60, 'h': 3600, 'd': 86400 }
+            const banTimeArr = { 'm': 60, 'h': 3600, 'd': 86400 }
             var banType = banTimeArr[arg[1].slice(-1)]
             var banTime = parseInt(arg[1]) * banType
           } else {

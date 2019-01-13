@@ -9,7 +9,7 @@ const {
   userUpdate,
   groupUpdate
 } = require('./middlewares')
-const { 
+const {
   handleMessage,
   handleHelp,
   handleWelcome,
