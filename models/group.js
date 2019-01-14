@@ -50,17 +50,6 @@ const groupSchema = mongoose.Schema({
       default: texts
     }
   },
-  members: [
-    {
-      telegram_id: {
-        type: Number,
-        index: true,
-        unique: true
-      },
-      first_act: Number,
-      last_act: Number
-    }
-  ],
   first_act: Number,
   last_act: Number
 })
