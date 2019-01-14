@@ -12,7 +12,7 @@ module.exports = (ctx, next) => {
         doc.group_id = ctx.chat.id
         doc.first_act = now
       }
-
+      if (doc.settings === undefined) doc.settings = new Group().undefined
       doc.title = ctx.chat.title
       doc.last_act = now
       doc.save()
