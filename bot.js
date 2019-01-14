@@ -50,7 +50,7 @@ bot.use(session())
 bot.use(i18n.middleware())
 bot.use(async (ctx, next) => {
   const start = new Date()
-  await userUpdate(ctx)
+  userUpdate(ctx)
   await groupUpdate(ctx)
   await next(ctx)
   const ms = new Date() - start
