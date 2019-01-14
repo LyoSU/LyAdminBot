@@ -4,7 +4,7 @@ module.exports = async (ctx) => {
   if (ctx.message.reply_to_message.text) {
     var text = ctx.message.reply_to_message.text
 
-    if (text.indexOf('%login%')) {
+    if (text.indexOf('%login%') != -1) {
       Group.findOne({
         'group_id': ctx.chat.id,
         'settings.texts': { $in: [text] }
