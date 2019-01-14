@@ -58,12 +58,6 @@ bot.use(async (ctx, next) => {
   console.log('Response time %sms', ms)
 })
 
-bot.on('channel_post', (ctx) => {
-  if (ctx.channelPost.animation) {
-    console.log(ctx.channelPost.animation.file_id)
-  }
-})
-
 bot.command('help', handleHelp)
 bot.command('banan', handleBanan)
 bot.command('kick', handleKick)
