@@ -23,6 +23,12 @@ module.exports = async (ctx) => {
           login: userLogin(kickUser, true)
         })
       )
+    }).catch((error) => {
+      ctx.replyWithHTML(
+        ctx.i18n.t('kick.error', {
+          error: error
+        })
+      )
     })
   }
 }
