@@ -1,6 +1,6 @@
 const User = require('../models/user')
 
-module.exports = async (ctx, next) => {
+module.exports = async (ctx) => {
   if (ctx.chat.type !== 'channel') {
     await User.findOne({
       telegram_id: ctx.from.id
@@ -23,5 +23,4 @@ module.exports = async (ctx, next) => {
       $created: new Date().toISOString()
     })
   }
-  return next()
 }
