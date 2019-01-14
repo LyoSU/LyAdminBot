@@ -1,6 +1,7 @@
 module.exports = {
   handleMessage: require('./message'),
   handleHelp: require('./help'),
+  handlePing: require('./ping'),
   handleWelcome: require('./welcome'),
   handleBanan: require('./banan'),
   handleKick: require('./kick'),
