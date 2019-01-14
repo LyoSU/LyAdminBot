@@ -25,7 +25,7 @@ const texts = [
 ]
 
 const groupSchema = mongoose.Schema({
-  group_id: { 
+  group_id: {
     type: Number,
     index: true,
     unique: true,
@@ -52,7 +52,7 @@ const groupSchema = mongoose.Schema({
   },
   members: [
     {
-      telegram_id: { 
+      telegram_id: {
         type: Number,
         index: true,
         unique: true

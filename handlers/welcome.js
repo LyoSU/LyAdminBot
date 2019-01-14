@@ -12,5 +12,5 @@ module.exports = async (ctx) => {
   )
   setTimeout(() => {
     ctx.deleteMessage(message.message_id)
-  }, ctx.groupInfo.settings.welcome_timer)
+  }, ctx.groupInfo.settings.welcome_timer * 1000)
 }

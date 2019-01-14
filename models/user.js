@@ -1,7 +1,7 @@
 const mongoose = require('mongoose')
 
 const userSchema = mongoose.Schema({
-  telegram_id: { 
+  telegram_id: {
     type: Number,
     index: true,
     unique: true,
