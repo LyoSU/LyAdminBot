@@ -12,6 +12,7 @@ const {
 const {
   handleMessage,
   handleHelp,
+  handlePing,
   handleWelcome,
   handleBanan,
   handleKick,
@@ -45,19 +46,23 @@ bot.telegram.getMe().then((botInfo) => {
   bot.options.username = botInfo.username
 })
 
+bot.use((ctx, next) => {
+  ctx.msStart = new Date()
+  next()
+})
 bot.use(mixpanel.middleware())
 bot.use(session())
 bot.use(i18n.middleware())
 bot.use(async (ctx, next) => {
-  const start = new Date()
   userUpdate(ctx)
   await groupUpdate(ctx)
   await next(ctx)
-  const ms = new Date() - start
+  const ms = new Date() - ctx.msStart
   console.log('Response time %sms', ms)
 })
 
 bot.command('help', handleHelp)
+bot.command('ping', handlePing)
 bot.command('banan', handleBanan)
 bot.command('kick', handleKick)
 bot.command('del', handleDelete)
