@@ -58,6 +58,10 @@ bot.use(async (ctx, next) => {
   console.log('Response time %sms', ms)
 })
 
+bot.on('channel_post', (ctx) => {
+  console.log(ctx)
+})
+
 bot.command('help', handleHelp)
 bot.command('banan', handleBanan)
 bot.command('kick', handleKick)
