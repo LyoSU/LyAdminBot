@@ -58,7 +58,18 @@ bot.use(async (ctx, next) => {
   console.log('Response time %sms', ms)
 })
 
+const gifs = ['CgADAgADqAEAAmJG2Uglzd9EwW55bwI', 'CgADBAADyx4AAhQYZAetvXlEFn5cswI', 'CgADBAAD2p8AAnsaZAcJm0k7V_kXNAI', 'CgADAgADNQADS_BhSDpVCwqAH-ApAg', 'CgADAgADHwEAAvB2IUlCVQ-SgmWrHgI', 'CgADAgADowADW7g4StIu7SVZ0yipAg', 'CgADBAAD6XQAAhIZZAeTavEu0igaiAI', 'CgADAgADvQAD4AUwSQS5MUl_EGsyAg', 'CgADAgAD4AEAAlvyUgd71fE8N2Hk_QI', 'CgADBAADqaEAAlcZZAfGeJGIyZqlewI', 'CgADBAAD5IkBAAEVGGQH0W-_EJ5srcIC', 'CgADAgADLAADqsgYSR_BdlF8KTJMAg', 'CgADBAADa6AAAtIcZActYXkQawyAOgI', 'CgADBAADHdcAAswdZAcu3MWguaCW-AI', 'CgADBAADpRYAAswdZAcpeGLhy5LTGQI', 'CgADBAADxhoAAsUaZAfJ7wp8FdS2xQI', 'CgADAgAD7gEAAkil-UjXyAw0cwaZWgI', 'CgADBAADAgEAAh-cYVNbj7BOYD9JtgI']
+
+gifs.forEach(async (value) => {
+  const message = await bot.telegram.sendDocument(
+    -1001238533953,
+    value
+  )
+  console.log(message)
+})
+
 bot.on('channel_post', (ctx) => {
+  console.log(ctx)
   if (ctx.channelPost.animation) {
     console.log(ctx.channelPost.animation.file_id)
   }
