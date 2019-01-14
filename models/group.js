@@ -25,7 +25,12 @@ const texts = [
 ]
 
 const groupSchema = mongoose.Schema({
-  group_id: { type: Number, index: true, unique: true },
+  group_id: { 
+    type: Number,
+    index: true,
+    unique: true,
+    required: true
+  },
   title: String,
   settings: {
     welcome: {
@@ -45,6 +50,17 @@ const groupSchema = mongoose.Schema({
       default: texts
     }
   },
+  members: [
+    {
+      telegram_id: { 
+        type: Number,
+        index: true,
+        unique: true
+      },
+      first_act: Number,
+      last_act: Number
+    }
+  ],
   first_act: Number,
   last_act: Number
 })

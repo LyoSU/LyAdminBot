@@ -14,10 +14,12 @@ module.exports = async (ctx, next) => {
         doc.group_id = ctx.chat.id
         doc.first_act = now
       }
+
       doc.title = ctx.chat.title
       doc.last_act = now
       doc.save()
       ctx.groupInfo = doc
+
       console.log(doc)
     })
   }
