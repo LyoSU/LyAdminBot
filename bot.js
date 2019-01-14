@@ -48,11 +48,10 @@ bot.telegram.getMe().then((botInfo) => {
 bot.use(mixpanel.middleware())
 bot.use(session())
 bot.use(i18n.middleware())
-bot.use(userUpdate)
-bot.use(groupUpdate)
-
 bot.use(async (ctx, next) => {
   const start = new Date()
+  await userUpdate(ctx)
+  await groupUpdate(ctx)
   await next(ctx)
   const ms = new Date() - start
   console.log('Response time %sms', ms)
