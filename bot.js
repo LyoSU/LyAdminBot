@@ -59,8 +59,8 @@ bot.use(async (ctx, next) => {
 })
 
 bot.command('help', handleHelp)
-bot.command('nbanan', handleBanan)
-bot.command('nkick', handleKick)
+bot.command('banan', handleBanan)
+bot.command('kick', handleKick)
 bot.command('del', handleDelete)
 bot.hears('!gif', onlyAdmin, handleAddWelcomeGif)
 bot.hears('!text', onlyAdmin, handleAddWelcomeText)
