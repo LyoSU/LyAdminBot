@@ -1,10 +1,10 @@
 const Group = require('../models/group')
 
-module.exports = async (ctx, next) => {
+module.exports = (ctx, next) => {
   if (ctx.chat.type === 'supergroup' || ctx.chat.type === 'group') {
-    await Group.findOne({
+    Group.findOne({
       group_id: ctx.chat.id
-    }, async (err, doc) => {
+    }, (err, doc) => {
       if (err) return console.log(err)
       const now = Math.floor(new Date().getTime() / 1000)
       if (!doc) {
