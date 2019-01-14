@@ -1,9 +1,7 @@
 const Group = require('../models/group')
 
 module.exports = async (ctx, next) => {
-  if (ctx.chat.id > 0) {
-
-  } else {
+  if (ctx.chat.type === 'supergroup' || ctx.chat.type === 'group') {
     await Group.findOne({
       group_id: ctx.chat.id
     }, async (err, doc) => {
