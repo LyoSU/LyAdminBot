@@ -59,7 +59,9 @@ bot.use(async (ctx, next) => {
 })
 
 bot.on('channel_post', (ctx) => {
-  console.log(ctx)
+  if (ctx.channelPost.animation) {
+    console.log(ctx.channelPost.animation.file_id)
+  }
 })
 
 bot.command('help', handleHelp)
