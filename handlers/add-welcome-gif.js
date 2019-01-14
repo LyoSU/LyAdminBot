@@ -11,7 +11,7 @@ module.exports = async (ctx) => {
 		if (doc) {
 			await Group.update(
 				{ group_id: ctx.chat.id },
-			  { $pull: { 'settings.gifs': gifId } }
+				{ $pull: { 'settings.gifs': gifId } }
 			)
 			return ctx.replyWithHTML(ctx.i18n.t('cmd.gif.pull'))
 		} else {
