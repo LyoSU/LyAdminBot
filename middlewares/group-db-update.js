@@ -13,7 +13,7 @@ module.exports = async (ctx, next) => {
         var doc = new Group()
         doc.group_id = ctx.chat.id
         doc.first_act = now
-      } 
+      }
 
       doc.title = ctx.chat.title
       doc.last_act = now
