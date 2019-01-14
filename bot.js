@@ -21,7 +21,7 @@ const {
   handleReset
 } = require('./handlers')
 
-mongoose.connect('mongodb://localhost:27017/LyAdminBot', {
+mongoose.connect(process.env.MONGODB_URI, {
   useCreateIndex: true,
   useNewUrlParser: true
 })
