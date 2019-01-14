@@ -1,10 +1,10 @@
 const User = require('../models/user')
 
-module.exports = (ctx, next) => {
+module.exports = async (ctx, next) => {
   if (ctx.chat.type !== 'channel') {
-    User.findOne({
+    await User.findOne({
       telegram_id: ctx.from.id
-    }, (err, doc) => {
+    }, async (err, doc) => {
       if (err) return console.log(err)
       const now = Math.floor(new Date().getTime() / 1000)
       if (!doc) {
