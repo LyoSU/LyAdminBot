@@ -47,7 +47,7 @@ bot.telegram.getMe().then((botInfo) => {
 })
 
 bot.use((ctx, next) => {
-  ctx.msStart = new Date()
+  ctx.ms = new Date()
   next()
 })
 bot.use(mixpanel.middleware())
@@ -57,7 +57,7 @@ bot.use(async (ctx, next) => {
   userUpdate(ctx)
   await groupUpdate(ctx)
   await next(ctx)
-  const ms = new Date() - ctx.msStart
+  const ms = new Date() - ctx.ms
   console.log('Response time %sms', ms)
 })
 
