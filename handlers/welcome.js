@@ -8,8 +8,7 @@ module.exports = async (ctx) => {
   var randomCaption = texts[Math.floor(Math.random() * texts.length)]
   const message = await ctx.replyWithDocument(
     randomGif,
-    { 'caption': randomCaption.replace('%login%', `<b>${userLogin(ctx.from)}</b>`) },
-    { parse_mode: 'HTML' }
+    { 'caption': randomCaption.replace('%login%', `<b>${userLogin(ctx.from)}</b>`), parse_mode: 'HTML' },
   )
   setTimeout(() => {
     ctx.deleteMessage(message.message_id)
