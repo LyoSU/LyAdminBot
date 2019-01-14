@@ -4,7 +4,7 @@ module.exports = async (ctx, next) => {
   if (ctx.chat.type !== 'channel') {
     await User.findOne({
       telegram_id: ctx.from.id
-    }, function (err, doc) {
+    }, async (err, doc) => {
       if (err) return console.log(err)
       const now = Math.floor(new Date().getTime() / 1000)
       if (!doc) {
