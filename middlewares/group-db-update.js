@@ -17,8 +17,6 @@ module.exports = async (ctx, next) => {
       doc.last_act = now
       doc.save()
       ctx.groupInfo = doc
-
-      console.log(doc.settings)
     })
   }
   return next()
