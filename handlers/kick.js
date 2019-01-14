@@ -1,3 +1,5 @@
+const { userLogin } = require('../lib')
+
 module.exports = async (ctx) => {
   ctx.mixpanel.track('kick')
   const chatMember = await ctx.telegram.getChatMember(ctx.message.chat.id, ctx.message.from.id)

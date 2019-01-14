@@ -2,6 +2,7 @@ const { userLogin } = require('../lib')
 
 module.exports = async (ctx) => {
   ctx.mixpanel.track('new member')
+  console.log(ctx.groupInfo.settings)
   var gifs = ctx.groupInfo.settings.gifs
   var randomGif = gifs[Math.floor(Math.random() * gifs.length)]
   var texts = ctx.groupInfo.settings.texts
