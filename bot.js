@@ -22,6 +22,8 @@ const {
   handleReset
 } = require('./handlers')
 
+global.botStart = new Date()
+
 mongoose.connect(process.env.MONGODB_URI, {
   useCreateIndex: true,
   useNewUrlParser: true
