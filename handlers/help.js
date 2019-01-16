@@ -1,3 +1,1 @@
-module.exports = async (ctx) => {
-  return ctx.replyWithHTML(ctx.i18n.t('cmd.help'))
-}
+module.exports = async (ctx) => ctx.replyWithHTML(ctx.i18n.t('cmd.help'))
