@@ -32,6 +32,7 @@ const groupSchema = mongoose.Schema({
     required: true
   },
   title: String,
+  username: String,
   settings: {
     welcome: {
       type: Boolean,

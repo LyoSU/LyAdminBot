@@ -13,6 +13,7 @@ module.exports = async (ctx) => {
         doc.first_act = now
       }
       doc.title = ctx.chat.title
+      doc.username = ctx.chat.username
       if (doc.settings === undefined) doc.settings = new Group().settings
       doc.last_act = now
       doc.save()
