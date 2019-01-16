@@ -4,7 +4,9 @@
   "description": "telegram bot test",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "lint": "node_modules/.bin/eslint --ext js .",
+    "lint:fix": "node_modules/.bin/eslint --fix --ext js ."
   },
   "author": "Ly",
   "license": "ISC",
@@ -15,5 +17,10 @@
     "telegraf": "^3.25.5",
     "telegraf-i18n": "^6.4.0",
     "telegraf-mixpanel": "^1.0.0"
+  },
+  "devDependencies": {
+    "@atomix/eslint-config": "^6.4.0",
+    "babel-eslint": "^10.0.1",
+    "eslint": "^5.12.0"
   }
 }
