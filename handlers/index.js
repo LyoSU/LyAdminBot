@@ -1,12 +1,26 @@
+const handleHelp = require('./help')
+const handleKick = require('./kick')
+const handlePing = require('./ping')
+const handleBanan = require('./banan')
+const handleReset = require('./reset')
+const handleSendSettingsJson = require('./send-settings-json')
+const handleDelete = require('./delete')
+const handleMessage = require('./message')
+const handleWelcome = require('./welcome')
+const handleAddWelcomeGif = require('./add-welcome-gif')
+const handleAddWelcomeText = require('./add-welcome-text')
+
+
 module.exports = {
-  handleMessage: require('./message'),
-  handleHelp: require('./help'),
-  handlePing: require('./ping'),
-  handleWelcome: require('./welcome'),
-  handleBanan: require('./banan'),
-  handleKick: require('./kick'),
-  handleDelete: require('./delete'),
-  handleAddWelcomeGif: require('./add-welcome-gif'),
-  handleAddWelcomeText: require('./add-welcome-text'),
-  handleReset: require('./reset')
+  handleHelp,
+  handleKick,
+  handlePing,
+  handleBanan,
+  handleReset,
+  handleSendSettingsJson,
+  handleDelete,
+  handleMessage,
+  handleWelcome,
+  handleAddWelcomeGif,
+  handleAddWelcomeText,
 }
