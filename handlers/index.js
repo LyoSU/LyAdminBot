@@ -3,6 +3,7 @@ const handleKick = require('./kick')
 const handlePing = require('./ping')
 const handleBanan = require('./banan')
 const handleReset = require('./reset')
+const handleSendSettingsJson = require('./send-settings-json')
 const handleDelete = require('./delete')
 const handleMessage = require('./message')
 const handleWelcome = require('./welcome')
@@ -16,6 +17,7 @@ module.exports = {
   handlePing,
   handleBanan,
   handleReset,
+  handleSendSettingsJson,
   handleDelete,
   handleMessage,
   handleWelcome,

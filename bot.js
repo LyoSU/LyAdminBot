@@ -20,6 +20,7 @@ const {
   handleAddWelcomeGif,
   handleAddWelcomeText,
   handleReset,
+  handleSendSettingsJson,
 } = require('./handlers')
 
 
@@ -74,6 +75,7 @@ bot.command('del', handleDelete)
 bot.hears('!gif', onlyAdmin, handleAddWelcomeGif)
 bot.hears('!text', onlyAdmin, handleAddWelcomeText)
 bot.hears('!reset', onlyAdmin, handleReset)
+bot.hears('!json', onlyAdmin, handleSendSettingsJson)
 bot.on('new_chat_members', handleWelcome)
 bot.on('message', handleMessage)
 

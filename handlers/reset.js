@@ -6,9 +6,9 @@ module.exports = async (ctx) => {
     { group_id: ctx.chat.id },
     { settings: new Group().settings }, (err) => {
       if (err) {
-        return console.log(err)
+        console.log(err)
       }
-      return ctx.replyWithHTML(ctx.i18n.t('cmd.reset'))
+      ctx.replyWithHTML(ctx.i18n.t('cmd.reset'))
     }
   )
 }
