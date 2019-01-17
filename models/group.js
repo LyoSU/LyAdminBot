@@ -77,7 +77,7 @@ const groupSchema = mongoose.Schema({
 
 const Group = mongoose.model('Group', groupSchema)
 
-Group.prototype.dbUpdate = (ctx) => new Promise((resolve, reject) => {
+Group.dbUpdate = (ctx) => new Promise((resolve, reject) => {
   Group.findOne({ group_id: ctx.chat.id }, (err, doc) => {
     if (err) {
       reject(err)

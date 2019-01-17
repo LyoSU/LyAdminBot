@@ -17,7 +17,7 @@ const userSchema = mongoose.Schema({
 
 const User = mongoose.model('User', userSchema)
 
-User.prototype.dbUpdate = (ctx) => new Promise((resolve, reject) => {
+User.dbUpdate = (ctx) => new Promise((resolve, reject) => {
   User.findOne({ telegram_id: ctx.from.id }, (err, doc) => {
     if (err) {
       reject(err)
