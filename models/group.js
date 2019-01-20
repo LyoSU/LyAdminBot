@@ -155,6 +155,10 @@ const groupSchema = mongoose.Schema({
         default: 300,
       },
     },
+    extras: [{
+      name: String,
+      content: String,
+    }],
   },
   members: [memberSchema],
   first_act: Number,

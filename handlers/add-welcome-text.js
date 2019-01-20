@@ -6,34 +6,25 @@ module.exports = async (ctx) => {
     const { text } = ctx.message.reply_to_message
 
     if (text.indexOf('%name%') !== -1) {
-      Group.findOne({
+      const group = await Group.findOne({
         group_id: ctx.chat.id,
         'settings.welcome.texts': { $in: [text] },
-      }, (err, doc) => {
-        if (doc) {
-          Group.update(
-            { group_id: ctx.chat.id },
-            { $pull: { 'settings.welcome.texts': text } },
-            (err1) => {
-              if (err1) {
-                return console.log(err1)
-              }
-              return ctx.replyWithHTML(ctx.i18n.t('cmd.text.pull'))
-            }
-          )
-        }
-        else {
-          Group.update(
-            { group_id: ctx.chat.id },
-            { $push: { 'settings.welcome.texts': text } }, (err1) => {
-              if (err1) {
-                return console.log(err1)
-              }
-              return ctx.replyWithHTML(ctx.i18n.t('cmd.text.push'))
-            }
-          )
-        }
-      })
+      }).catch(console.log)
+
+      if (group) {
+        await Group.update(
+          { group_id: ctx.chat.id },
+          { $pull: { 'settings.welcome.texts': text } }
+        ).catch(console.log)
+        ctx.replyWithHTML(ctx.i18n.t('cmd.text.pull'))
+        return
+      }
+
+      await Group.update(
+        { group_id: ctx.chat.id },
+        { $push: { 'settings.welcome.texts': text } }
+      ).catch(console.log)
+      ctx.replyWithHTML(ctx.i18n.t('cmd.text.push'))
     }
     else {
       ctx.replyWithHTML(ctx.i18n.t('cmd.text.error'))
