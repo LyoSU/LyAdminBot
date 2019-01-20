@@ -44,6 +44,22 @@ const texts = [
   '👏🏻 AYAYA %login% 😝',
 ]
 
+const memberSchema = mongoose.Schema({
+  _id: {
+    type: Number,
+    index: true,
+    unique: true,
+    required: true,
+  },
+  banan: {
+    num: Number,
+    sum: Number,
+    last: Number,
+  },
+  first_act: Number,
+  last_act: Number,
+}, { _id: false })
+
 const groupSchema = mongoose.Schema({
   group_id: {
     type: Number,
@@ -71,38 +87,49 @@ const groupSchema = mongoose.Schema({
       default: texts,
     },
   },
+  members: [memberSchema],
   first_act: Number,
   last_act: Number,
 })
 
 const Group = mongoose.model('Group', groupSchema)
 
-Group.dbUpdate = (ctx) => new Promise((resolve, reject) => {
-  Group.findOne({ group_id: ctx.chat.id }, (err, doc) => {
-    if (err) {
-      reject(err)
-    }
+Group.dbUpdate = (ctx) => new Promise(async (resolve, reject) => {
+  let group = await Group.findOne({
+    group_id: ctx.chat.id,
+  }).catch(reject)
 
-    // eslint-disable-next-line no-magic-numbers
-    const now = Math.floor(new Date().getTime() / 1000)
-    let group = doc
+  const now = Math.floor(new Date().getTime() / 1000)
 
-    if (!group) {
-      group = new Group()
+  if (!group) {
+    group = new Group()
+    group.group_id = ctx.chat.id
+    group.first_act = now
+  }
 
-      group.group_id = ctx.chat.id
-      group.first_act = now
-    }
-    group.title = ctx.chat.title
-    group.username = ctx.chat.username
-    group.settings = group.settings || new Group().settings
-    group.last_act = now
-    group.save()
+  group.title = ctx.chat.title
+  group.username = ctx.chat.username
+  group.settings = group.settings || new Group().settings
+  group.last_act = now
 
-    ctx.groupInfo = group
+  let member = await group.members.id(ctx.from.id)
 
-    resolve(group)
-  })
+  if (!member) {
+    await group.members.push({
+      _id: ctx.from.id,
+      last_act: now,
+      first_act: now,
+    })
+    member = group.members.id(ctx.from.id)
+  }
+
+  member.last_act = now
+
+  group.save()
+
+  ctx.groupInfo = group
+
+  resolve(group)
 })
 
 

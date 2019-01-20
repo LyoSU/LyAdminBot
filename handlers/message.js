@@ -13,7 +13,7 @@ module.exports = async (ctx) => {
       Extra.HTML().markup((m) => m.inlineKeyboard([
         m.urlButton(
           ctx.i18n.t('private.btn_add'),
-          `https://t.me/${ctx.options.username}?startgroup=test`
+          `https://t.me/${ctx.options.username}?startgroup=add`
         ),
       ]))
     )
