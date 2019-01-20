@@ -1,5 +1,5 @@
 const humanizeDuration = require('humanize-duration')
-const { userLogin, getRandomInt } = require('../lib')
+const { userName, getRandomInt } = require('../lib')
 
 
 module.exports = async (ctx) => {
@@ -30,7 +30,18 @@ module.exports = async (ctx) => {
           ctx.message.reply_to_message.from.id
         )
 
-        banTime = replyMember.status === 'restricted' ? -1 : 300
+        if (replyMember.status === 'restricted') {
+          banTime = -1
+          ctx.groupMemberInfo.banan.sum -= (
+            ctx.groupMemberInfo.banan.last.how - (
+              ctx.message.date - ctx.groupMemberInfo.banan.last.time
+            )
+          )
+        }
+        else {
+          banTime = 300 * (ctx.groupMemberInfo.banan.stack + 1)
+          ctx.groupMemberInfo.banan.stack += 1
+        }
       }
     }
   }
@@ -47,16 +58,23 @@ module.exports = async (ctx) => {
         { language: ctx.i18n.locale() }
       )
 
-      ctx.telegram.restrictChatMember(
+      await ctx.telegram.restrictChatMember(
         ctx.chat.id,
         banUser.id,
         { until_date: unixBanTime }
       )
         .then(() => {
           ctx.replyWithHTML(ctx.i18n.t('banan.suc', {
-            login: userLogin(banUser, true),
+            name: userName(banUser, true),
             duration: banDuration,
           }))
+          ctx.groupMemberInfo.banan.num += 1
+          ctx.groupMemberInfo.banan.sum += banTime
+          ctx.groupMemberInfo.banan.last = {
+            who: ctx.from.id,
+            how: banTime,
+            time: ctx.message.date,
+          }
         })
         .catch((error) => {
           ctx.replyWithHTML(ctx.i18n.t('banan.error', {
@@ -65,7 +83,7 @@ module.exports = async (ctx) => {
         })
     }
     else {
-      ctx.telegram.restrictChatMember(ctx.chat.id, banUser.id, {
+      await ctx.telegram.restrictChatMember(ctx.chat.id, banUser.id, {
         until_date: ctx.message.date,
         can_send_messages: true,
         can_send_other_messages: true,
@@ -73,14 +91,15 @@ module.exports = async (ctx) => {
         can_add_web_page_previews: true,
       }).then(() => {
         ctx.replyWithHTML(ctx.i18n.t('banan.pick', {
-          login: userLogin(banUser, true),
+          name: userName(banUser, true),
         }))
       })
     }
+    ctx.groupInfo.save()
   }
   else {
     ctx.replyWithHTML(ctx.i18n.t('banan.show', {
-      login: userLogin(ctx.from, true),
+      name: userName(ctx.from, true),
     }))
   }
 }

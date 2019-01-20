@@ -5,15 +5,15 @@ module.exports = async (ctx) => {
   if (ctx.message.reply_to_message.text) {
     const { text } = ctx.message.reply_to_message
 
-    if (text.indexOf('%login%') !== -1) {
+    if (text.indexOf('%name%') !== -1) {
       Group.findOne({
         group_id: ctx.chat.id,
-        'settings.texts': { $in: [text] },
+        'settings.welcome.texts': { $in: [text] },
       }, (err, doc) => {
         if (doc) {
           Group.update(
             { group_id: ctx.chat.id },
-            { $pull: { 'settings.texts': text } },
+            { $pull: { 'settings.welcome.texts': text } },
             (err1) => {
               if (err1) {
                 return console.log(err1)
@@ -25,7 +25,7 @@ module.exports = async (ctx) => {
         else {
           Group.update(
             { group_id: ctx.chat.id },
-            { $push: { 'settings.texts': text } }, (err1) => {
+            { $push: { 'settings.welcome.texts': text } }, (err1) => {
               if (err1) {
                 return console.log(err1)
               }

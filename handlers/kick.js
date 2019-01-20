@@ -1,4 +1,4 @@
-const { userLogin } = require('../lib')
+const { userName } = require('../lib')
 
 
 module.exports = async (ctx) => {
@@ -21,7 +21,7 @@ module.exports = async (ctx) => {
   if (kickUser) {
     ctx.telegram.unbanChatMember(ctx.chat.id, kickUser.id).then(() => {
       ctx.replyWithHTML(ctx.i18n.t('kick.suc', {
-        login: userLogin(kickUser, true),
+        name: userName(kickUser, true),
       }))
     }).catch((error) => {
       ctx.replyWithHTML(ctx.i18n.t('kick.error', {
