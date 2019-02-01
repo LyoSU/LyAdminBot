@@ -1,0 +1,66 @@
+private:
+  start: |
+    Merhaba, <b>${name}</b>!
+    Grubu yönetmene yardım edeceğim.
+     Beni gruba ekle.
+
+    /help - yardım
+
+    <b>👨🏻‍💻 Daha fazla bilgi için buraya bakın:</b> @LyBlog
+  btn_add: Gruba Ekle
+cmd:
+  help: |
+    Grupları yönetmeye yardım ediyorum.
+
+    <b>Komut listesi:</b>
+    /banan - Banı kaldır
+    /kick - gruptan at
+    /del - mesajı sil
+    /ping - botun çalışıp çalışmadığını test et
+
+    <code>!gif</code> - karşılama listesine gif ekle / kaldır
+    <code>!text</code> - karşılama listesine metin ekle / kaldır
+    <code>!reset</code> - grup ayarlarını sıfırla
+
+    <b>👨🏻‍💻 Daha fazla bilgi için buraya bakın:</b> @LyBlog
+    <b>GitHub:</b> github.com/LyoSU/LyAdminBot
+  ping:
+      pong: |
+        🏓 Pong
+        <b>sunucu cevabı:</b> ${sms} мс
+        <b>telegram cevabı:</b> ${tms} мс
+        <b>Bu zamandan beri çalışıyor:</b> ${workTime}
+
+        ${delay}
+      delay: |
+        ❗️ <b>Bot çalışmıyor:</b> ${delayTime}
+  welcome:
+    disable: Karşılama mesajı kapalı
+    enable: Karşılama mesajı açık
+  gif:
+    push: Gif başarıyla karşılama listesine eklendi
+    pull: Gif başarıyla karşılama mesajından çıkarıldı
+  text:
+    push: Metin karşılama listesine başarıyla eklendi
+    pull: Metin karşılama listesinden başarıyla çıkarıldı
+    error: Hata, metin içermiyor <code>%name%</code>
+  extra:
+    push: \#${extraName} başarıyla kaydedildi
+    pull: \#${extraName} başarıyla silindi
+    error:
+      not_found: |
+        <b>Hata!</b>
+        \#${extraName} bulunamadı
+        Yeni bir tane oluşturmak için iletiye yanıt olarak komutu yeniden yanıtlayın.
+  reset: Ayarlar sıfırlandı
+banan:
+  show: ${name} banlanan 🍌
+  suc:  ${name} banlanacak 🍌\n<b>Zamanı:</b> ${duration}
+  pick: ${name} banlandı 🍌\n
+  error: <b>Banlayamadım</b>\n<pre>${error}</pre>
+kick:
+  suc: ${name} gruptan atıldı
+  who: Kim atılacak😡
+  error: <b>Atamadım</b>\n<pre>${error}</pre>
+del:
+  error: <b>Mesajı silemedim</b>\n<pre>${error}</pre>
