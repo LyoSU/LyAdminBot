@@ -1,7 +1,6 @@
 const mongoose = require('mongoose')
 const path = require('path')
 const Telegraf = require('telegraf')
-const TelegrafMixpanel = require('telegraf-mixpanel')
 const I18n = require('telegraf-i18n')
 const session = require('telegraf/session')
 const {
@@ -46,7 +45,6 @@ const i18n = new I18n({
 })
 
 const bot = new Telegraf(process.env.BOT_TOKEN)
-const mixpanel = new TelegrafMixpanel(process.env.MIXPANEL_TOKEN)
 
 bot.telegram.getMe().then((botInfo) => {
   bot.options.username = botInfo.username
@@ -56,7 +54,6 @@ bot.use((ctx, next) => {
   ctx.ms = new Date()
   next()
 })
-bot.use(mixpanel.middleware())
 bot.use(session())
 bot.use(i18n.middleware())
 bot.use(async (ctx, next) => {

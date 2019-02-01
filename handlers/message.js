@@ -17,10 +17,5 @@ module.exports = async (ctx) => {
         ),
       ]))
     )
-
-    ctx.mixpanel.track('private message')
-  }
-  else {
-    ctx.mixpanel.track('group message', { group: ctx.chat.id })
   }
 }

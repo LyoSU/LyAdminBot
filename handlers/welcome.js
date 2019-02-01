@@ -2,7 +2,6 @@ const { userName } = require('../lib')
 
 
 module.exports = async (ctx) => {
-  ctx.mixpanel.track('new member')
   if (ctx.groupInfo.settings.welcome.enable === true) {
     const { gifs, texts } = ctx.groupInfo.settings.welcome
     const randomGif = gifs[Math.floor(Math.random() * gifs.length)]
