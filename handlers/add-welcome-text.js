@@ -6,12 +6,12 @@ module.exports = async (ctx) => {
     const { text } = ctx.message.reply_to_message
 
     if (text.indexOf('%name%') !== -1) {
-      const group = await Group.findOne({
+      const groupText = await Group.findOne({
         group_id: ctx.chat.id,
         'settings.welcome.texts': { $in: [text] },
       }).catch(console.log)
 
-      if (group) {
+      if (groupText) {
         await Group.update(
           { group_id: ctx.chat.id },
           { $pull: { 'settings.welcome.texts': text } }

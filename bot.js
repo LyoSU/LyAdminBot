@@ -2,7 +2,6 @@ const mongoose = require('mongoose')
 const path = require('path')
 const Telegraf = require('telegraf')
 const I18n = require('telegraf-i18n')
-const session = require('telegraf/session')
 const {
   onlyAdmin,
   userUpdate,
@@ -21,6 +20,7 @@ const {
   handleAddExtra,
   handleReset,
   handleSendSettingsJson,
+  handleExtra,
 } = require('./handlers')
 
 
@@ -54,7 +54,6 @@ bot.use((ctx, next) => {
   ctx.ms = new Date()
   next()
 })
-bot.use(session())
 bot.use(i18n.middleware())
 bot.use(async (ctx, next) => {
   userUpdate(ctx)
@@ -75,6 +74,7 @@ bot.hears('!text', onlyAdmin, handleAddWelcomeText)
 bot.hears(/^!extra($|\s.*)/, onlyAdmin, handleAddExtra)
 bot.hears('!reset', onlyAdmin, handleReset)
 bot.hears('!json', onlyAdmin, handleSendSettingsJson)
+bot.hears(/^#/, handleExtra)
 bot.on('new_chat_members', handleWelcome)
 bot.on('message', handleMessage)
 

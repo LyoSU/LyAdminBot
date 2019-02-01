@@ -10,6 +10,7 @@ const handleWelcome = require('./welcome')
 const handleAddWelcomeGif = require('./add-welcome-gif')
 const handleAddWelcomeText = require('./add-welcome-text')
 const handleAddExtra = require('./add-extra')
+const handleExtra = require('./extra')
 
 
 module.exports = {
@@ -25,4 +26,5 @@ module.exports = {
   handleAddWelcomeGif,
   handleAddWelcomeText,
   handleAddExtra,
+  handleExtra,
 }
