@@ -15,9 +15,9 @@ const {
   handleBanan,
   handleKick,
   handleDelete,
-  handleAddWelcomeGif,
-  handleAddWelcomeText,
-  handleAddExtra,
+  handleAdminWelcomeGif,
+  handleAdminWelcomeText,
+  handleAdminExtra,
   handleReset,
   handleSendSettingsJson,
   handleExtra,
@@ -69,9 +69,9 @@ bot.command('ping', handlePing)
 bot.command('banan', handleBanan)
 bot.command('kick', handleKick)
 bot.command('del', handleDelete)
-bot.hears('!gif', onlyAdmin, handleAddWelcomeGif)
-bot.hears('!text', onlyAdmin, handleAddWelcomeText)
-bot.hears(/^!extra($|\s.*)/, onlyAdmin, handleAddExtra)
+bot.hears('!gif', onlyAdmin, handleAdminWelcomeGif)
+bot.hears('!text', onlyAdmin, handleAdminWelcomeText)
+bot.hears(/^!extra($|\s.*)/, onlyAdmin, handleAdminExtra)
 bot.hears('!reset', onlyAdmin, handleReset)
 bot.hears('!json', onlyAdmin, handleSendSettingsJson)
 bot.hears(/^#/, handleExtra)
