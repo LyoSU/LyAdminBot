@@ -7,6 +7,7 @@ const handleSendSettingsJson = require('./send-settings-json')
 const handleDelete = require('./delete')
 const handleMessage = require('./message')
 const handleWelcome = require('./welcome')
+const handleAdminWelcome = require('./admin-welcome')
 const handleAdminWelcomeGif = require('./admin-welcome-gif')
 const handleAdminWelcomeText = require('./admin-welcome-text')
 const handleAdminExtra = require('./admin-extra')
@@ -23,6 +24,7 @@ module.exports = {
   handleDelete,
   handleMessage,
   handleWelcome,
+  handleAdminWelcome,
   handleAdminWelcomeGif,
   handleAdminWelcomeText,
   handleAdminExtra,

@@ -34,6 +34,9 @@ cmd:
         ${delay}
       delay: |
         ❗️ <b>Бот не работал:</b> ${delayTime}
+  welcome:
+    disable: Приветствия выключены
+    enable: Приветствия включены
   gif:
     push: Gif успешно добавлен в список приветствий
     pull: Gif успешно удален из списка приветствий
@@ -43,7 +46,6 @@ cmd:
     error: Ошибка, текст не содержит <code>%name%</code>
   extra:
     push: \#${extraName} успешно сохранено
-    update: \#${extraName} успешно обновлено
     pull: \#${extraName} успешно удалено
     error:
       not_found: |

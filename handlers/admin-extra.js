@@ -28,8 +28,7 @@ module.exports = async (ctx) => {
           },
         }
       ).catch(console.log)
-      if (groupExtra) await ctx.replyWithHTML(ctx.i18n.t('cmd.extra.update', { extraName }))
-      else await ctx.replyWithHTML(ctx.i18n.t('cmd.extra.push', { extraName }))
+      await ctx.replyWithHTML(ctx.i18n.t('cmd.extra.push', { extraName }))
     }
     else if (groupExtra) ctx.replyWithHTML(ctx.i18n.t('cmd.extra.pull', { extraName }))
     else ctx.replyWithHTML(ctx.i18n.t('cmd.extra.error.not_found', { extraName }))
