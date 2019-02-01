@@ -1,15 +1,13 @@
 {
-  "name": "bot",
-  "version": "1.0.0",
-  "description": "telegram bot test",
+  "name": "lyadminbot",
+  "version": "1.1.0",
+  "description": "Бот для администрирования групп",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "lint": "node_modules/.bin/eslint --ext js .",
     "lint:fix": "node_modules/.bin/eslint --fix --ext js ."
   },
-  "author": "Ly",
-  "license": "ISC",
   "dependencies": {
     "dotenv": "^6.2.0",
     "eslint": "^5.12.0",
@@ -23,5 +21,15 @@
     "@atomix/eslint-config": "^6.4.0",
     "babel-eslint": "^10.0.1",
     "eslint": "^5.12.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LyoSU/LyAdminBot.git"
+  },
+  "author": "LyoSU",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/LyoSU/LyAdminBot/issues"
+  },
+  "homepage": "https://t.me/LyAdminBot"
 }

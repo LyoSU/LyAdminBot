@@ -1,9 +1,7 @@
 const mongoose = require('mongoose')
 const path = require('path')
 const Telegraf = require('telegraf')
-const TelegrafMixpanel = require('telegraf-mixpanel')
 const I18n = require('telegraf-i18n')
-const session = require('telegraf/session')
 const {
   onlyAdmin,
   userUpdate,
@@ -17,10 +15,12 @@ const {
   handleBanan,
   handleKick,
   handleDelete,
-  handleAddWelcomeGif,
-  handleAddWelcomeText,
+  handleAdminWelcomeGif,
+  handleAdminWelcomeText,
+  handleAdminExtra,
   handleReset,
   handleSendSettingsJson,
+  handleExtra,
 } = require('./handlers')
 
 
@@ -45,7 +45,6 @@ const i18n = new I18n({
 })
 
 const bot = new Telegraf(process.env.BOT_TOKEN)
-const mixpanel = new TelegrafMixpanel(process.env.MIXPANEL_TOKEN)
 
 bot.telegram.getMe().then((botInfo) => {
   bot.options.username = botInfo.username
@@ -55,8 +54,6 @@ bot.use((ctx, next) => {
   ctx.ms = new Date()
   next()
 })
-bot.use(mixpanel.middleware())
-bot.use(session())
 bot.use(i18n.middleware())
 bot.use(async (ctx, next) => {
   userUpdate(ctx)
@@ -72,10 +69,12 @@ bot.command('ping', handlePing)
 bot.command('banan', handleBanan)
 bot.command('kick', handleKick)
 bot.command('del', handleDelete)
-bot.hears('!gif', onlyAdmin, handleAddWelcomeGif)
-bot.hears('!text', onlyAdmin, handleAddWelcomeText)
+bot.hears('!gif', onlyAdmin, handleAdminWelcomeGif)
+bot.hears('!text', onlyAdmin, handleAdminWelcomeText)
+bot.hears(/^!extra($|\s.*)/, onlyAdmin, handleAdminExtra)
 bot.hears('!reset', onlyAdmin, handleReset)
 bot.hears('!json', onlyAdmin, handleSendSettingsJson)
+bot.hears(/^#/, handleExtra)
 bot.on('new_chat_members', handleWelcome)
 bot.on('message', handleMessage)
 

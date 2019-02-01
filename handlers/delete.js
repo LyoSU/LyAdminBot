@@ -1,5 +1,4 @@
 module.exports = async (ctx) => {
-  ctx.mixpanel.track('del')
   const chatMember = await ctx.telegram.getChatMember(ctx.message.chat.id, ctx.message.from.id)
 
   ctx.telegram.deleteMessage(ctx.chat.id, ctx.message.message_id).catch((error) => {

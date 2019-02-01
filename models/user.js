@@ -23,7 +23,6 @@ User.dbUpdate = (ctx) => new Promise((resolve, reject) => {
       reject(err)
     }
 
-    // eslint-disable-next-line no-magic-numbers
     const now = Math.floor(new Date().getTime() / 1000)
     let user = doc
 
