@@ -187,6 +187,8 @@ Group.dbUpdate = (ctx) => new Promise(async (resolve, reject) => {
 
   let member = await group.members.id(ctx.from.id)
 
+  console.log(member)
+
   if (!member) {
     await group.members.push({
       _id: ctx.from.id,
