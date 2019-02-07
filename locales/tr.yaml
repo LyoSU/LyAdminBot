@@ -2,7 +2,7 @@ private:
   start: |
     Merhaba, <b>${name}</b>!
     Grubu yönetmene yardım edeceğim.
-     Beni gruba ekle.
+    Beni gruba ekle.
 
     /help - yardım
 
