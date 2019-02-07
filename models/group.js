@@ -198,7 +198,7 @@ Group.dbUpdate = (ctx) => new Promise(async (resolve, reject) => {
 
   member.last_act = now
 
-  group.save()
+  await group.save()
 
   ctx.groupInfo = group
   ctx.groupMemberInfo = member
