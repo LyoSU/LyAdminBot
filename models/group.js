@@ -95,7 +95,9 @@ const memberSchema = mongoose.Schema({
   _id: {
     type: Number,
     index: true,
+    unique: true,
     required: true,
+    sparse: true,
   },
   banan: {
     num: {
