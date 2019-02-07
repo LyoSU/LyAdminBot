@@ -41,8 +41,7 @@ db.on('error', (err) => {
 const i18n = new I18n({
   directory: path.resolve(__dirname, 'locales'),
   defaultLanguage: 'ru',
-  sessionName: 'session',
-  useSession: true,
+  allowMissing: true,
 })
 
 const bot = new Telegraf(process.env.BOT_TOKEN)
