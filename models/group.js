@@ -95,7 +95,6 @@ const memberSchema = mongoose.Schema({
   _id: {
     type: Number,
     index: true,
-    unique: true,
     required: true,
   },
   banan: {
@@ -186,8 +185,6 @@ Group.dbUpdate = (ctx) => new Promise(async (resolve, reject) => {
   group.last_act = now
 
   let member = await group.members.id(ctx.from.id)
-
-  console.log(member)
 
   if (!member) {
     await group.members.push({
