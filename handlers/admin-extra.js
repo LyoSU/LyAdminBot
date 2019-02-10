@@ -1,3 +1,4 @@
+const replicators = require('telegraf/core/replicators')
 const Group = require('../models/group')
 
 
@@ -17,13 +18,18 @@ module.exports = async (ctx) => {
     }
 
     if (ctx.message.reply_to_message) {
+      const replyMessage = ctx.message.reply_to_message
+      const extraType = Object.keys(replicators.copyMethods).find((type) => replyMessage[type])
+      const extraMessage = replicators[extraType](replyMessage)
+
       await Group.update(
         { group_id: ctx.chat.id },
         {
           $push: {
             'settings.extras': {
               name: extraName,
-              content: ctx.message.reply_to_message.text,
+              type: extraType,
+              message: extraMessage,
             },
           },
         }

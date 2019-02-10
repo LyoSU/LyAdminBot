@@ -92,7 +92,7 @@ const texts = [
 ]
 
 const memberSchema = mongoose.Schema({
-  _id: {
+  user_id: {
     type: Number,
     index: true,
     unique: true,
@@ -120,7 +120,7 @@ const memberSchema = mongoose.Schema({
   },
   first_act: Number,
   last_act: Number,
-}, { _id: false })
+})
 
 const groupSchema = mongoose.Schema({
   group_id: {
@@ -158,7 +158,8 @@ const groupSchema = mongoose.Schema({
     },
     extras: [{
       name: String,
-      content: String,
+      type: { type: String },
+      message: Object,
     }],
   },
   members: [memberSchema],
@@ -169,9 +170,7 @@ const groupSchema = mongoose.Schema({
 const Group = mongoose.model('Group', groupSchema)
 
 Group.dbUpdate = (ctx) => new Promise(async (resolve, reject) => {
-  let group = await Group.findOne({
-    group_id: ctx.chat.id,
-  }).catch(reject)
+  let group = await Group.findOne({ group_id: ctx.chat.id }).catch(reject)
 
   const now = Math.floor(new Date().getTime() / 1000)
 
@@ -186,16 +185,30 @@ Group.dbUpdate = (ctx) => new Promise(async (resolve, reject) => {
   group.settings = group.settings || new Group().settings
   group.last_act = now
 
-  let member = await group.members.id(ctx.from.id)
+  let groupMemberId
 
-  if (!member) {
+  const groupMember = await Group.findOne({
+    group_id: ctx.chat.id,
+    'members.user_id': ctx.from.id,
+  }, { 'members.$': 1 }).catch(console.log)
+
+  if (groupMember) {
+    groupMemberId = groupMember.members[0].id
+  }
+  else {
+    groupMemberId = mongoose.Types.ObjectId()
+
     await group.members.push({
-      _id: ctx.from.id,
+      _id: groupMemberId,
+      user_id: ctx.from.id,
       last_act: now,
       first_act: now,
     })
-    member = group.members.id(ctx.from.id)
   }
+
+  const member = group.members.id(groupMemberId)
+
+  console.log(member)
 
   member.last_act = now
 
