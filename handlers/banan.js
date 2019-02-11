@@ -16,7 +16,7 @@ module.exports = async (ctx) => {
     if (ctx.message.reply_to_message) {
       banUser = ctx.message.reply_to_message.from
 
-      if (arg[1]) {
+      if (parseInt(arg[1], 10) > 0) {
         banType = arg[1].slice(-1)
 
         if (!banTimeArr[banType]) {

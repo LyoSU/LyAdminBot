@@ -27,6 +27,14 @@ cmd:
 
     <b>👨🏻‍💻 Блог разработчика:</b> @LyBlog
     <b>GitHub:</b> github.com/LyoSU/LyAdminBot
+  my_stats:
+    chat: |
+      📊 Статистика ${name} в чате <b>${chatName}</b>:
+
+      <b>Количество бананов:</b> ${banCount} 🍌
+      <b>Общее время бана:</b> ${banTime}
+
+      <b>Впервые был замечен:</b> ${firstAct}
   ping:
       pong: |
         🏓 Pong

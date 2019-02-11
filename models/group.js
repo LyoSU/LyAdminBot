@@ -95,7 +95,6 @@ const memberSchema = mongoose.Schema({
   user_id: {
     type: Number,
     index: true,
-    unique: true,
     required: true,
     sparse: true,
   },
@@ -207,8 +206,6 @@ Group.dbUpdate = (ctx) => new Promise(async (resolve, reject) => {
   }
 
   const member = group.members.id(groupMemberId)
-
-  console.log(member)
 
   member.last_act = now
 

@@ -27,8 +27,8 @@ cmd:
   ping:
       pong: |
         🏓 Pong
-        <b>sunucu cevabı:</b> ${sms} мс
-        <b>telegram cevabı:</b> ${tms} мс
+        <b>sunucu cevabı:</b> ${sms} ms
+        <b>telegram cevabı:</b> ${tms} ms
         <b>Bu zamandan beri çalışıyor:</b> ${workTime}
 
         ${delay}

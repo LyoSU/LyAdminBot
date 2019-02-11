@@ -15,6 +15,7 @@ const {
   handleBanan,
   handleKick,
   handleDelete,
+  handleMyStats,
   handleAdminWelcome,
   handleAdminWelcomeGif,
   handleAdminWelcomeText,
@@ -68,6 +69,7 @@ bot.command('ping', handlePing)
 bot.command('banan', handleBanan)
 bot.command('kick', handleKick)
 bot.command('del', handleDelete)
+bot.command('mystats', handleMyStats)
 bot.hears('!welcome', onlyAdmin, handleAdminWelcome)
 bot.hears('!gif', onlyAdmin, handleAdminWelcomeGif)
 bot.hears('!text', onlyAdmin, handleAdminWelcomeText)

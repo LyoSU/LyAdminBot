@@ -5,6 +5,7 @@ const handleBanan = require('./banan')
 const handleReset = require('./reset')
 const handleSendSettingsJson = require('./send-settings-json')
 const handleDelete = require('./delete')
+const handleMyStats = require('./my-stats')
 const handleMessage = require('./message')
 const handleWelcome = require('./welcome')
 const handleAdminWelcome = require('./admin-welcome')
@@ -22,6 +23,7 @@ module.exports = {
   handleReset,
   handleSendSettingsJson,
   handleDelete,
+  handleMyStats,
   handleMessage,
   handleWelcome,
   handleAdminWelcome,
