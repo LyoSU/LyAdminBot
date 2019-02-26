@@ -47,7 +47,7 @@ module.exports = async (ctx) => {
   if (banTime) {
     const groupBan = await Group.findOne({
       group_id: ctx.chat.id,
-      'members.user_id': banUser.id,
+      'members.telegram_id': banUser.id,
     }, { 'members.$': 1 }).catch(console.log)
 
     const banMember = ctx.groupInfo.members.id(groupBan.members[0].id)

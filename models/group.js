@@ -92,7 +92,7 @@ const texts = [
 ]
 
 const memberSchema = mongoose.Schema({
-  user_id: {
+  telegram_id: {
     type: Number,
     index: true,
     required: true,
@@ -117,8 +117,8 @@ const memberSchema = mongoose.Schema({
       time: Number,
     },
   },
-  first_act: Number,
-  last_act: Number,
+}, {
+  timestamps: true,
 })
 
 const groupSchema = mongoose.Schema({
@@ -162,8 +162,8 @@ const groupSchema = mongoose.Schema({
     }],
   },
   members: [memberSchema],
-  first_act: Number,
-  last_act: Number,
+}, {
+  timestamps: true,
 })
 
 const Group = mongoose.model('Group', groupSchema)
@@ -171,24 +171,20 @@ const Group = mongoose.model('Group', groupSchema)
 Group.dbUpdate = (ctx) => new Promise(async (resolve, reject) => {
   let group = await Group.findOne({ group_id: ctx.chat.id }).catch(reject)
 
-  const now = Math.floor(new Date().getTime() / 1000)
-
   if (!group) {
     group = new Group()
     group.group_id = ctx.chat.id
-    group.first_act = now
   }
 
   group.title = ctx.chat.title
   group.username = ctx.chat.username
   group.settings = group.settings || new Group().settings
-  group.last_act = now
 
   let groupMemberId
 
   const groupMember = await Group.findOne({
     group_id: ctx.chat.id,
-    'members.user_id': ctx.from.id,
+    'members.telegram_id': ctx.from.id,
   }, { 'members.$': 1 }).catch(console.log)
 
   if (groupMember) {
@@ -199,15 +195,13 @@ Group.dbUpdate = (ctx) => new Promise(async (resolve, reject) => {
 
     await group.members.push({
       _id: groupMemberId,
-      user_id: ctx.from.id,
-      last_act: now,
-      first_act: now,
+      telegram_id: ctx.from.id,
     })
   }
 
   const member = group.members.id(groupMemberId)
 
-  member.last_act = now
+  member.updatedAt = new Date()
 
   await group.save()
 
