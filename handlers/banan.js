@@ -1,21 +1,22 @@
 const humanizeDuration = require('humanize-duration')
 const { userName, getRandomInt } = require('../lib')
+const Group = require('../models/group')
 
 
 module.exports = async (ctx) => {
   const arg = ctx.message.text.split(/ +/)
   const chatMember = await ctx.telegram.getChatMember(ctx.message.chat.id, ctx.message.from.id)
-  let banTime
-  let banType
-  let banUser
-  let banTimeArr
+  const banTimeArr = { m: 60, h: 3600, d: 86400 }
+  let banTime = getRandomInt(60, 600)
+  let banType = 'm'
+  let banUser = ctx.from
+  let autoBan = false
 
   if (chatMember.status === 'creator' || chatMember.status === 'administrator') {
     if (ctx.message.reply_to_message) {
       banUser = ctx.message.reply_to_message.from
 
-      if (arg[1]) {
-        banTimeArr = { m: 60, h: 3600, d: 86400 }
+      if (parseInt(arg[1], 10) > 0) {
         banType = arg[1].slice(-1)
 
         if (!banTimeArr[banType]) {
@@ -31,25 +32,31 @@ module.exports = async (ctx) => {
 
         if (replyMember.status === 'restricted') {
           banTime = -1
-          ctx.groupMemberInfo.banan.sum -= (
-            ctx.groupMemberInfo.banan.last.how - (
-              ctx.message.date - ctx.groupMemberInfo.banan.last.time
-            )
-          )
         }
         else {
-          banTime = 300 * (ctx.groupMemberInfo.banan.stack + 1)
-          ctx.groupMemberInfo.banan.stack += 1
+          banTime = 300
+          autoBan = true
         }
       }
     }
-  }
-  else {
-    banUser = ctx.from
-    banTime = getRandomInt(60, 600)
+    else {
+      banTime = null
+    }
   }
 
   if (banTime) {
+    const groupBan = await Group.findOne({
+      group_id: ctx.chat.id,
+      'members.telegram_id': banUser.id,
+    }, { 'members.$': 1 }).catch(console.log)
+
+    const banMember = ctx.groupInfo.members.id(groupBan.members[0].id)
+
+    if (autoBan) {
+      banTime *= (banMember.banan.stack + 1)
+      banMember.banan.stack += 1
+    }
+
     if (banTime > 0) {
       const unixBanTime = ctx.message.date + banTime
       const banDuration = humanizeDuration(
@@ -67,9 +74,10 @@ module.exports = async (ctx) => {
             name: userName(banUser, true),
             duration: banDuration,
           }))
-          ctx.groupMemberInfo.banan.num += 1
-          ctx.groupMemberInfo.banan.sum += banTime
-          ctx.groupMemberInfo.banan.last = {
+
+          banMember.banan.num += 1
+          banMember.banan.sum += banTime
+          banMember.banan.last = {
             who: ctx.from.id,
             how: banTime,
             time: ctx.message.date,
@@ -92,8 +100,15 @@ module.exports = async (ctx) => {
         ctx.replyWithHTML(ctx.i18n.t('banan.pick', {
           name: userName(banUser, true),
         }))
+
+        banMember.banan.sum -= (
+          banMember.banan.last.how - (
+            ctx.message.date - banMember.banan.last.time
+          )
+        )
       })
     }
+
     ctx.groupInfo.save()
   }
   else {

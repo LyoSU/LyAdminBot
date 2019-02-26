@@ -11,8 +11,8 @@ const userSchema = mongoose.Schema({
   first_name: String,
   last_name: String,
   username: String,
-  first_act: Number,
-  last_act: Number,
+}, {
+  timestamps: true,
 })
 
 const User = mongoose.model('User', userSchema)
@@ -28,14 +28,13 @@ User.dbUpdate = (ctx) => new Promise((resolve, reject) => {
 
     if (!user) {
       user = new User()
-
       user.telegram_id = ctx.from.id
       user.first_act = now
     }
     user.first_name = ctx.from.first_name
     user.last_name = ctx.from.last_name
     user.username = ctx.from.username
-    user.last_act = now
+    user.updatedAt = new Date()
     user.save()
 
     resolve(user)

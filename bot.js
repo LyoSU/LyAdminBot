@@ -15,6 +15,7 @@ const {
   handleBanan,
   handleKick,
   handleDelete,
+  handleMyStats,
   handleAdminWelcome,
   handleAdminWelcomeGif,
   handleAdminWelcomeText,
@@ -41,7 +42,6 @@ db.on('error', (err) => {
 const i18n = new I18n({
   directory: path.resolve(__dirname, 'locales'),
   defaultLanguage: 'ru',
-  allowMissing: true,
 })
 
 const bot = new Telegraf(process.env.BOT_TOKEN)
@@ -69,6 +69,7 @@ bot.command('ping', handlePing)
 bot.command('banan', handleBanan)
 bot.command('kick', handleKick)
 bot.command('del', handleDelete)
+bot.command('mystats', handleMyStats)
 bot.hears('!welcome', onlyAdmin, handleAdminWelcome)
 bot.hears('!gif', onlyAdmin, handleAdminWelcomeGif)
 bot.hears('!text', onlyAdmin, handleAdminWelcomeText)
