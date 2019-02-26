@@ -1,5 +1,5 @@
 const humanizeDuration = require('humanize-duration')
-const { userName, getRandomInt } = require('../lib')
+const { userName, getRandomInt } = require('../utils')
 const Group = require('../models/group')
 
 

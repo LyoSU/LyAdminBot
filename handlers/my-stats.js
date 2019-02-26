@@ -1,6 +1,6 @@
 const humanizeDuration = require('humanize-duration')
 const dateFormat = require('dateformat')
-const { userName } = require('../lib')
+const { userName } = require('../utils')
 
 
 module.exports = async (ctx) => {
