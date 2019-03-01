@@ -1,6 +1,6 @@
 const humanizeDuration = require('humanize-duration')
 const dateFormat = require('dateformat')
-const { userName } = require('../lib')
+const { userName } = require('../utils')
 
 
 module.exports = async (ctx) => {
@@ -8,7 +8,7 @@ module.exports = async (ctx) => {
     name: userName(ctx.from, true),
     chatName: ctx.chat.title,
     banTime: humanizeDuration(
-      ctx.groupMemberInfo.banan.sum,
+      ctx.groupMemberInfo.banan.sum * 1000,
       { language: ctx.i18n.locale() }
     ),
     banCount: ctx.groupMemberInfo.banan.num,

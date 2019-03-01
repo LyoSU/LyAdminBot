@@ -1,6 +1,5 @@
 const Extra = require('telegraf/extra')
-
-const { userName } = require('../lib')
+const { userName } = require('../utils')
 
 
 module.exports = async (ctx) => {
