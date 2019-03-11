@@ -1,6 +1,7 @@
 const mongoose = require('mongoose')
 const path = require('path')
 const Telegraf = require('telegraf')
+const rateLimit = require('telegraf-ratelimit')
 const I18n = require('telegraf-i18n')
 const {
   onlyAdmin,
@@ -39,6 +40,11 @@ db.on('error', (err) => {
   console.log('error', err)
 })
 
+const limitConfig = {
+  window: 3000,
+  limit: 1,
+}
+
 const i18n = new I18n({
   directory: path.resolve(__dirname, 'locales'),
   defaultLanguage: 'ru',
@@ -49,6 +55,8 @@ const bot = new Telegraf(process.env.BOT_TOKEN)
 bot.telegram.getMe().then((botInfo) => {
   bot.options.username = botInfo.username
 })
+
+bot.use(rateLimit(limitConfig))
 
 bot.use((ctx, next) => {
   ctx.ms = new Date()

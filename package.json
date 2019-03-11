@@ -1,6 +1,6 @@
 {
   "name": "lyadminbot",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Бот для администрирования групп",
   "main": "index.js",
   "scripts": {
@@ -17,7 +17,8 @@
     "mongoose": "^5.4.3",
     "telegraf": "^3.25.5",
     "telegraf-i18n": "^6.4.0",
-    "telegraf-mixpanel": "^1.0.0"
+    "telegraf-mixpanel": "^1.0.0",
+    "telegraf-ratelimit": "^2.0.0"
   },
   "devDependencies": {
     "@atomix/eslint-config": "^6.4.0",
