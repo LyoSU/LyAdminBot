@@ -41,8 +41,9 @@ db.on('error', (err) => {
 })
 
 const limitConfig = {
-  window: 3000,
+  window: 1000,
   limit: 1,
+  keyGenerator: (ctx) => ctx.chat.id,
 }
 
 const i18n = new I18n({
