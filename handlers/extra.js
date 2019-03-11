@@ -7,7 +7,7 @@ module.exports = async (ctx) => {
 
   const groupExtra = await Group.findOne({
     group_id: ctx.chat.id,
-    'settings.extras.name': extraText,
+    'settings.extras.name': { $regex: new RegExp(extraText, 'i') },
   }, { 'settings.extras.$': 1 }).catch(console.log)
 
   const extra = groupExtra.settings.extras[0]
