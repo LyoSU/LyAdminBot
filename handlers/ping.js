@@ -6,7 +6,7 @@ module.exports = async (ctx) => {
   const dt = (new Date() / 1000) - ctx.message.date
   let delay = ''
 
-  if (dt > 1) {
+  if (dt > 2) {
     const delayTime = humanizeDuration(dt * 1000, { language: ctx.i18n.locale(), round: true })
 
     delay = ctx.i18n.t('cmd.ping.delay', { delayTime })
