@@ -43,12 +43,12 @@ db.on('error', (err) => {
 const limitConfig = {
   window: 1000,
   limit: 1,
-  keyGenerator: (ctx) => ctx.chat.id,
+  keyGenerator: (ctx) => ctx.from.id,
 }
 const bananLimitConfig = {
-  window: 60 * 1000,
+  window: 5 * 1000,
   limit: 1,
-  keyGenerator: (ctx) => ctx.chat.id,
+  keyGenerator: (ctx) => ctx.from.id,
 }
 
 const i18n = new I18n({
