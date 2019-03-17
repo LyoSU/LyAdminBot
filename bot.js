@@ -45,6 +45,11 @@ const limitConfig = {
   limit: 1,
   keyGenerator: (ctx) => ctx.chat.id,
 }
+const bananLimitConfig = {
+  window: 60 * 1000,
+  limit: 1,
+  keyGenerator: (ctx) => ctx.chat.id,
+}
 
 const i18n = new I18n({
   directory: path.resolve(__dirname, 'locales'),
@@ -75,7 +80,7 @@ bot.use(async (ctx, next) => {
 
 bot.command('help', handleHelp)
 bot.command('ping', handlePing)
-bot.command('banan', handleBanan)
+bot.command('banan', rateLimit(bananLimitConfig), handleBanan)
 bot.command('kick', handleKick)
 bot.command('del', handleDelete)
 bot.command('mystats', handleMyStats)
