@@ -17,6 +17,7 @@ const {
   handleKick,
   handleDelete,
   handleMyStats,
+  handleExtraList,
   handleAdminWelcome,
   handleAdminWelcomeGif,
   handleAdminWelcomeText,
@@ -46,7 +47,7 @@ const limitConfig = {
   keyGenerator: (ctx) => ctx.from.id,
 }
 const bananLimitConfig = {
-  window: 5 * 1000,
+  window: 3 * 1000,
   limit: 1,
   keyGenerator: (ctx) => ctx.from.id,
 }
@@ -84,6 +85,7 @@ bot.command('banan', rateLimit(bananLimitConfig), handleBanan)
 bot.command('kick', handleKick)
 bot.command('del', handleDelete)
 bot.command('mystats', handleMyStats)
+bot.command('extras', handleExtraList)
 bot.hears('!welcome', onlyAdmin, handleAdminWelcome)
 bot.hears('!gif', onlyAdmin, handleAdminWelcomeGif)
 bot.hears('!text', onlyAdmin, handleAdminWelcomeText)

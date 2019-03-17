@@ -35,6 +35,12 @@ cmd:
       <b>Общее время бана:</b> ${banTime}
 
       <b>Впервые был замечен:</b> ${createdAt}
+  extras:
+    list: |
+      <b>extra's чата:</b>
+      ${extras}
+    error: |
+      Нет
   ping:
       pong: |
         🏓 Pong
