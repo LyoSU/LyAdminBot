@@ -182,7 +182,9 @@ Group.dbUpdate = (ctx) => new Promise(async (resolve, reject) => {
   group.settings = group.settings || new Group().settings
 
   if (!group.username && !group.invite_link) {
-    group.invite_link = await ctx.telegram.exportChatInviteLink(ctx.chat.id)
+    group.invite_link = await ctx.telegram.exportChatInviteLink(ctx.chat.id).catch((error) => {
+      console.log('Ooops', error)
+    })
   }
 
   let groupMemberId
