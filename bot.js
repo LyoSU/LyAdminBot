@@ -44,12 +44,10 @@ db.on('error', (err) => {
 const limitConfig = {
   window: 1000,
   limit: 1,
-  keyGenerator: (ctx) => ctx.from.id,
 }
 const bananLimitConfig = {
-  window: 3 * 1000,
+  window: 10 * 1000,
   limit: 1,
-  keyGenerator: (ctx) => ctx.from.id,
 }
 
 const i18n = new I18n({
@@ -78,6 +76,8 @@ bot.use(async (ctx, next) => {
 
   console.log('Response time %sms', ms)
 })
+
+bot.command('test', rateLimit(bananLimitConfig), (ctx) => ctx.reply(new Date()))
 
 bot.command('help', handleHelp)
 bot.command('ping', handlePing)
