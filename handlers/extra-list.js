@@ -6,9 +6,13 @@ module.exports = async (ctx) => {
       extras += `#${extra.name} `
     })
 
-    ctx.replyWithHTML(ctx.i18n.t('cmd.extras.list', { extras }))
+    ctx.replyWithHTML(ctx.i18n.t('cmd.extras.list', { extras }), {
+      reply_to_message_id: ctx.message.message_id,
+    })
   }
   else {
-    ctx.replyWithHTML(ctx.i18n.t('cmd.extras.error.not_found'))
+    ctx.replyWithHTML(ctx.i18n.t('cmd.extras.error.not_found'), {
+      reply_to_message_id: ctx.message.message_id,
+    })
   }
 }
