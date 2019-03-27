@@ -9,6 +9,7 @@ module.exports = async (ctx) => {
     const message = await ctx.replyWithDocument(
       randomGif,
       {
+        reply_to_message_id: ctx.message.message_id,
         caption: randomCaption.replace(
           /%name%/g,
           `<b>${userName(ctx.message.new_chat_member)}</b>`

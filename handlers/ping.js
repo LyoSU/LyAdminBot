@@ -12,7 +12,9 @@ module.exports = async (ctx) => {
     delay = ctx.i18n.t('cmd.ping.delay', { delayTime })
   }
 
-  const message = await ctx.replyWithHTML('Pong')
+  const message = await ctx.replyWithHTML('Pong', {
+    reply_to_message_id: ctx.message.message_id,
+  })
   const tms = new Date() - ctx.ms - sms
   const workTime = humanizeDuration(
     new Date() - global.botStart,
