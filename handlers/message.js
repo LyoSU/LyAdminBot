@@ -1,4 +1,5 @@
 const Extra = require('telegraf/extra')
+const LanguageDetect = require('languagedetect')
 const { userName } = require('../utils')
 
 
@@ -16,5 +17,17 @@ module.exports = async (ctx) => {
         ),
       ]))
     )
+  }
+  else {
+    const lngDetector = new LanguageDetect()
+    const detect = lngDetector.detect(ctx.message.text)
+
+    if (detect.length > 0) {
+      console.log(ctx.groupInfo.settings.removeLng.indexOf(detect[0][0]))
+
+      if (detect[0][0] === 'ukrainian') {
+        ctx.deleteMessage()
+      }
+    }
   }
 }
