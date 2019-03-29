@@ -161,6 +161,7 @@ const groupSchema = mongoose.Schema({
       type: { type: String },
       message: Object,
     }],
+    removeLng: Array,
   },
   members: [memberSchema],
 }, {
