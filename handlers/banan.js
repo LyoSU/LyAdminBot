@@ -86,7 +86,7 @@ module.exports = async (ctx) => {
             setTimeout(() => {
               ctx.deleteMessage(message.message_id)
               ctx.deleteMessage()
-            }, 30 * 1000)
+            }, 15 * 1000)
           }
         })
         .catch((error) => {
