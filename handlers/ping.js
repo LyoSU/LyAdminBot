@@ -26,4 +26,9 @@ module.exports = async (ctx) => {
     ctx.i18n.t('cmd.ping.pong', { sms, tms, workTime, delay }),
     { parse_mode: 'HTML' }
   )
+
+  setTimeout(() => {
+    ctx.deleteMessage(message.message_id)
+    ctx.deleteMessage()
+  }, 3 * 1000)
 }
