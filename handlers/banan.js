@@ -69,8 +69,8 @@ module.exports = async (ctx) => {
         banUser.id,
         { until_date: unixBanTime }
       )
-        .then(() => {
-          ctx.replyWithHTML(ctx.i18n.t('banan.suc', {
+        .then(async () => {
+          const message = await ctx.replyWithHTML(ctx.i18n.t('banan.suc', {
             name: userName(banUser, true),
             duration: banDuration,
           }))
@@ -81,6 +81,12 @@ module.exports = async (ctx) => {
             who: ctx.from.id,
             how: banTime,
             time: ctx.message.date,
+          }
+          if (ctx.from.id === banUser.id) {
+            setTimeout(() => {
+              ctx.deleteMessage(message.message_id)
+              ctx.deleteMessage()
+            }, 30 * 1000)
           }
         })
         .catch((error) => {
