@@ -48,6 +48,7 @@ const limitConfig = {
 const bananLimitConfig = {
   window: 10 * 1000,
   limit: 1,
+  onLimitExceeded: (ctx) => ctx.deleteMessage(),
 }
 
 const i18n = new I18n({
