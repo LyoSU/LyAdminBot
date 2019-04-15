@@ -14,6 +14,7 @@ const handleAdminWelcomeGif = require('./admin-welcome-gif')
 const handleAdminWelcomeText = require('./admin-welcome-text')
 const handleAdminExtra = require('./admin-extra')
 const handleExtra = require('./extra')
+const handleTopBanan = require('./top-banan')
 
 
 module.exports = {
@@ -33,4 +34,5 @@ module.exports = {
   handleAdminWelcomeText,
   handleAdminExtra,
   handleExtra,
+  handleTopBanan,
 }
