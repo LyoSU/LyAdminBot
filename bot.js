@@ -25,6 +25,7 @@ const {
   handleReset,
   handleSendSettingsJson,
   handleExtra,
+  handleTopBanan,
 } = require('./handlers')
 
 
@@ -87,6 +88,7 @@ bot.command('kick', handleKick)
 bot.command('del', handleDelete)
 bot.command('mystats', handleMyStats)
 bot.command('extras', handleExtraList)
+bot.command('top_banan', handleTopBanan)
 bot.hears(/^#/, handleExtra)
 bot.hears(/^!extra($|\s.*)/, onlyAdmin, handleAdminExtra)
 bot.hears('!welcome', onlyAdmin, handleAdminWelcome)
