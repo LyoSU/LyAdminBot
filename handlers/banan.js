@@ -82,6 +82,7 @@ module.exports = async (ctx) => {
             how: banTime,
             time: ctx.message.date,
           }
+          banMember.banan.time = Date.now()
           if (ctx.from.id === banUser.id) {
             setTimeout(() => {
               ctx.deleteMessage(message.message_id)

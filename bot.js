@@ -20,10 +20,12 @@ const {
   handleExtraList,
   handleAdminWelcome,
   handleAdminWelcomeGif,
+  handleAdminWelcomeGifReset,
   handleAdminWelcomeText,
+  handleAdminWelcomeTextReset,
   handleAdminExtra,
-  handleReset,
   handleSendSettingsJson,
+  handleAdminReset,
   handleExtra,
   handleTopBanan,
 } = require('./handlers')
@@ -93,8 +95,10 @@ bot.hears(/^#/, handleExtra)
 bot.hears(/^!extra($|\s.*)/, onlyAdmin, handleAdminExtra)
 bot.hears('!welcome', onlyAdmin, handleAdminWelcome)
 bot.hears('!gif', onlyAdmin, handleAdminWelcomeGif)
+bot.hears('!gif-reset', onlyAdmin, handleAdminWelcomeGifReset)
 bot.hears('!text', onlyAdmin, handleAdminWelcomeText)
-bot.hears('!reset', onlyAdmin, handleReset)
+bot.hears('!text-reset', onlyAdmin, handleAdminWelcomeTextReset)
+bot.hears('!reset', onlyAdmin, handleAdminReset)
 bot.hears('!json', onlyAdmin, handleSendSettingsJson)
 bot.on('new_chat_members', handleWelcome)
 bot.on('message', handleMessage)
