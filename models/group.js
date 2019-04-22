@@ -175,6 +175,10 @@ const groupSchema = mongoose.Schema({
         default: 300,
       },
     },
+    maxExtra: {
+      type: Number,
+      default: 3,
+    },
     extras: [{
       name: String,
       type: { type: String },
