@@ -3,7 +3,14 @@ const Group = require('../models/group')
 
 
 module.exports = async (ctx, next) => {
-  ctx.message.entities.forEach(async (entity) => {
+  const { entities } = ctx.message
+  const { maxExtra } = ctx.groupInfo.settings
+  let num = entities.length
+
+  if (num > maxExtra) num = maxExtra
+  for (let index = 0; index < num; index++) {
+    const entity = entities[index]
+
     if (entity.type === 'hashtag') {
       const hashtag = ctx.message.text.substring(entity.offset, entity.offset + entity.length)
 
@@ -27,5 +34,5 @@ module.exports = async (ctx, next) => {
         next()
       }
     }
-  })
+  }
 }
