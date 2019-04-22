@@ -116,6 +116,10 @@ const memberSchema = mongoose.Schema({
       how: Number,
       time: Number,
     },
+    time: {
+      type: Date,
+      default: Date.now,
+    },
   },
 }, {
   timestamps: true,
@@ -208,6 +212,16 @@ Group.dbUpdate = (ctx) => new Promise(async (resolve, reject) => {
   }
 
   const member = group.members.id(groupMemberId)
+
+  const day = 86400
+  const now = new Date()
+
+  const delta = (now - member.banan.time) / 1000
+
+  if (delta > day) {
+    member.banan.stack -= 1
+    member.banan.time = now
+  }
 
   member.updatedAt = new Date()
 
