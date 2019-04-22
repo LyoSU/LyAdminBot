@@ -258,8 +258,6 @@ Group.dbUpdate = (ctx) => new Promise(async (resolve, reject) => {
   // eslint-disable-next-line max-len
   if (ctx.message.text) member.stats.textAvrg = (ctx.message.text.length + (member.stats.textAvrg * member.stats.messagesCount)) / (member.stats.messagesCount + 1)
 
-  console.log(member.stats.textAvrg - group.stats.textAvrg)
-
   member.updatedAt = new Date()
 
   await group.save()
