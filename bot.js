@@ -25,6 +25,7 @@ const {
   handleAdminWelcomeTextReset,
   handleAdminExtra,
   handleSendSettingsJson,
+  handleAdminJsonReset,
   handleAdminReset,
   handleExtra,
   handleTopBanan,
@@ -100,6 +101,7 @@ bot.hears('!text', onlyAdmin, handleAdminWelcomeText)
 bot.hears('!text-reset', onlyAdmin, handleAdminWelcomeTextReset)
 bot.hears('!reset', onlyAdmin, handleAdminReset)
 bot.hears('!json', onlyAdmin, handleSendSettingsJson)
+bot.on('document', onlyAdmin, handleAdminJsonReset)
 bot.on('new_chat_members', handleWelcome)
 bot.on('message', handleMessage)
 

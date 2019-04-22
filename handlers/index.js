@@ -14,6 +14,7 @@ const handleAdminWelcomeText = require('./admin-welcome-text')
 const handleAdminWelcomeTextReset = require('./admin-welcome-text-reset')
 const handleAdminExtra = require('./admin-extra')
 const handleSendSettingsJson = require('./send-settings-json')
+const handleAdminJsonReset = require('./admin-json-reset')
 const handleAdminReset = require('./admin-reset')
 const handleExtra = require('./extra')
 const handleTopBanan = require('./top-banan')
@@ -36,6 +37,7 @@ module.exports = {
   handleAdminWelcomeTextReset,
   handleAdminExtra,
   handleSendSettingsJson,
+  handleAdminJsonReset,
   handleAdminReset,
   handleExtra,
   handleTopBanan,

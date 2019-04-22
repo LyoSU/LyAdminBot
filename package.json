@@ -1,6 +1,6 @@
 {
   "name": "lyadminbot",
-  "version": "1.2.18",
+  "version": "1.2.19",
   "description": "Бот для администрирования групп",
   "main": "index.js",
   "scripts": {
@@ -15,6 +15,8 @@
     "humanize-duration": "^3.17.0",
     "languagedetect": "^1.2.0",
     "mongoose": "^5.4.3",
+    "request": "^2.88.0",
+    "request-promise": "^4.2.4",
     "telegraf": "^3.25.5",
     "telegraf-i18n": "^6.4.0",
     "telegraf-mixpanel": "^1.0.0",
