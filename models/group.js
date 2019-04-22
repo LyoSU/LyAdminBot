@@ -121,6 +121,21 @@ const memberSchema = mongoose.Schema({
       default: Date.now,
     },
   },
+  stats: {
+    messagesCount: {
+      type: Number,
+      default: 0,
+    },
+    messageType: Object,
+    textAvrg: {
+      type: Number,
+      default: 0,
+    },
+  },
+  score: {
+    type: Number,
+    default: 0,
+  },
 }, {
   timestamps: true,
 })
@@ -167,6 +182,16 @@ const groupSchema = mongoose.Schema({
     }],
     removeLng: Array,
   },
+  stats: {
+    messagesCount: {
+      type: Number,
+      default: 0,
+    },
+    textAvrg: {
+      type: Number,
+      default: 0,
+    },
+  },
   members: [memberSchema],
 }, {
   timestamps: true,
@@ -185,6 +210,11 @@ Group.dbUpdate = (ctx) => new Promise(async (resolve, reject) => {
   group.title = ctx.chat.title
   group.username = ctx.chat.username
   group.settings = group.settings || new Group().settings
+
+  group.stats.messagesCount += 1
+
+  // eslint-disable-next-line max-len
+  if (ctx.message.text) group.stats.textAvrg = (ctx.message.text.length + (group.stats.textAvrg * group.stats.messagesCount)) / (group.stats.messagesCount + 1)
 
   if (!group.username && !group.invite_link) {
     group.invite_link = await ctx.telegram.exportChatInviteLink(ctx.chat.id).catch((error) => {
@@ -222,6 +252,13 @@ Group.dbUpdate = (ctx) => new Promise(async (resolve, reject) => {
     member.banan.stack -= 1
     member.banan.time = now
   }
+
+  member.stats.messagesCount += 1
+
+  // eslint-disable-next-line max-len
+  if (ctx.message.text) member.stats.textAvrg = (ctx.message.text.length + (member.stats.textAvrg * member.stats.messagesCount)) / (member.stats.messagesCount + 1)
+
+  console.log(member.stats.textAvrg - group.stats.textAvrg)
 
   member.updatedAt = new Date()
 
