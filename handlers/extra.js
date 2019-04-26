@@ -22,6 +22,7 @@ module.exports = async (ctx, next) => {
       if (groupExtra) {
         const extra = groupExtra.settings.extras[0]
 
+        // eslint-disable-next-line max-len
         if (ctx.message.reply_to_message) extra.message.reply_to_message_id = ctx.message.reply_to_message.message_id
         else extra.message.reply_to_message_id = ctx.message.message_id
 

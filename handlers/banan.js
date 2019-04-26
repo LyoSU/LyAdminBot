@@ -68,33 +68,31 @@ module.exports = async (ctx) => {
         ctx.chat.id,
         banUser.id,
         { until_date: unixBanTime }
-      )
-        .then(async () => {
-          const message = await ctx.replyWithHTML(ctx.i18n.t('banan.suc', {
-            name: userName(banUser, true),
-            duration: banDuration,
-          }))
+      ).then(async () => {
+        const message = await ctx.replyWithHTML(ctx.i18n.t('banan.suc', {
+          name: userName(banUser, true),
+          duration: banDuration,
+        }))
 
-          banMember.banan.num += 1
-          banMember.banan.sum += banTime
-          banMember.banan.last = {
-            who: ctx.from.id,
-            how: banTime,
-            time: ctx.message.date,
-          }
-          banMember.banan.time = Date.now()
-          if (ctx.from.id === banUser.id) {
-            setTimeout(() => {
-              ctx.deleteMessage(message.message_id)
-              ctx.deleteMessage()
-            }, 15 * 1000)
-          }
-        })
-        .catch((error) => {
-          ctx.replyWithHTML(ctx.i18n.t('banan.error', {
-            error,
-          }))
-        })
+        banMember.banan.num += 1
+        banMember.banan.sum += banTime
+        banMember.banan.last = {
+          who: ctx.from.id,
+          how: banTime,
+          time: ctx.message.date,
+        }
+        banMember.banan.time = Date.now()
+        if (ctx.from.id === banUser.id) {
+          setTimeout(() => {
+            ctx.deleteMessage(message.message_id)
+            ctx.deleteMessage()
+          }, 15 * 1000)
+        }
+      }).catch((error) => {
+        ctx.replyWithHTML(ctx.i18n.t('banan.error', {
+          error,
+        }))
+      })
     }
     else {
       await ctx.telegram.restrictChatMember(ctx.chat.id, banUser.id, {
