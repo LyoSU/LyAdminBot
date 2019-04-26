@@ -19,6 +19,7 @@ module.exports = async (ctx) => {
         { language: ctx.i18n.locale() }
       ),
       banCount: ctx.groupMemberInfo.banan.num,
+      messages: ctx.groupMemberInfo.stats.messagesCount,
       flood,
       createdAt: dateFormat(ctx.groupMemberInfo.createdAt, 'dd.mm.yyyy H:MM:ss'),
     }), {
