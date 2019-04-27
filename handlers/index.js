@@ -3,6 +3,8 @@ const handleKick = require('./kick')
 const handlePing = require('./ping')
 const handleBanan = require('./banan')
 const handleDelete = require('./delete')
+const handleTop = require('./top')
+const handleTopBanan = require('./top-banan')
 const handleMyStats = require('./my-stats')
 const handleExtraList = require('./extra-list')
 const handleMessage = require('./message')
@@ -17,7 +19,6 @@ const handleSendSettingsJson = require('./send-settings-json')
 const handleAdminJsonReset = require('./admin-json-reset')
 const handleAdminReset = require('./admin-reset')
 const handleExtra = require('./extra')
-const handleTopBanan = require('./top-banan')
 
 
 module.exports = {
@@ -26,6 +27,8 @@ module.exports = {
   handlePing,
   handleBanan,
   handleDelete,
+  handleTop,
+  handleTopBanan,
   handleMyStats,
   handleExtraList,
   handleMessage,
@@ -40,5 +43,4 @@ module.exports = {
   handleAdminJsonReset,
   handleAdminReset,
   handleExtra,
-  handleTopBanan,
 }

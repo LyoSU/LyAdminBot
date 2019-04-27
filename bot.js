@@ -16,6 +16,8 @@ const {
   handleBanan,
   handleKick,
   handleDelete,
+  handleTop,
+  handleTopBanan,
   handleMyStats,
   handleExtraList,
   handleAdminWelcome,
@@ -28,7 +30,6 @@ const {
   handleAdminJsonReset,
   handleAdminReset,
   handleExtra,
-  handleTopBanan,
 } = require('./handlers')
 
 
@@ -89,9 +90,10 @@ bot.command('ping', handlePing)
 bot.command('banan', rateLimit(bananLimitConfig), handleBanan)
 bot.command('kick', handleKick)
 bot.command('del', handleDelete)
+bot.command('top', handleTop)
+bot.command('top_banan', handleTopBanan)
 bot.command('mystats', handleMyStats)
 bot.command('extras', handleExtraList)
-bot.command('top_banan', handleTopBanan)
 bot.hashtag(handleExtra)
 bot.hears(/^!extra($|\s.*)/, onlyAdmin, handleAdminExtra)
 bot.hears('!welcome', onlyAdmin, handleAdminWelcome)
