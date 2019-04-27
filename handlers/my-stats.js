@@ -9,8 +9,11 @@ module.exports = async (ctx) => {
       reply_to_message_id: ctx.message.message_id,
     })
 
+    const groupAvrg = ctx.groupInfo.stats.textTotal / ctx.groupInfo.stats.messagesCount
+    const memberAvrg = ctx.groupMemberInfo.stats.textTotal / ctx.groupMemberInfo.stats.messagesCount
+
     const active = ((ctx.groupMemberInfo.stats.textTotal * 100) / ctx.groupInfo.stats.textTotal).toFixed(2)
-    const flood = Math.abs(((ctx.groupMemberInfo.stats.textAvrg - ctx.groupInfo.stats.textAvrg) / ctx.groupInfo.stats.textAvrg) * 100).toFixed(2)
+    const flood = Math.abs(((memberAvrg - groupAvrg) / groupAvrg) * 100).toFixed(2)
 
     ctx.telegram.sendMessage(ctx.from.id, ctx.i18n.t('cmd.my_stats.chat', {
       name: userName(ctx.from, true),
