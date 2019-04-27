@@ -127,10 +127,6 @@ const memberSchema = mongoose.Schema({
       default: 0,
     },
     messageType: Object,
-    textAvrg: {
-      type: Number,
-      default: 0,
-    },
     textTotal: {
       type: Number,
       default: 0,
@@ -195,10 +191,6 @@ const groupSchema = mongoose.Schema({
       type: Number,
       default: 0,
     },
-    textAvrg: {
-      type: Number,
-      default: 0,
-    },
     textTotal: {
       type: Number,
       default: 0,
@@ -222,9 +214,6 @@ Group.dbUpdate = (ctx) => new Promise(async (resolve, reject) => {
   group.title = ctx.chat.title
   group.username = ctx.chat.username
   group.settings = group.settings || new Group().settings
-
-  group.stats.messagesCount += 1
-
 
   if (!group.username && !group.invite_link) {
     group.invite_link = await ctx.telegram.exportChatInviteLink(ctx.chat.id).catch((error) => {
@@ -253,24 +242,23 @@ Group.dbUpdate = (ctx) => new Promise(async (resolve, reject) => {
 
   const member = group.members.id(groupMemberId)
 
-  const day = 86400
-  const now = new Date()
+  if (member.banan.stack > 0) {
+    const day = 86400
+    const now = new Date()
 
-  const delta = (now - member.banan.time) / 1000
+    const delta = (now - member.banan.time) / 1000
 
-  if (member.banan.stack > 0 && delta > day) {
-    member.banan.stack -= 1
-    member.banan.time = now
+    if (delta > day) {
+      member.banan.stack -= 1
+      member.banan.time = now
+    }
   }
 
   member.stats.messagesCount += 1
+  group.stats.messagesCount += 1
 
   if (ctx.message.text && ctx.message.text.length > 0) {
-    // eslint-disable-next-line max-len
-    member.stats.textAvrg = (ctx.message.text.length + (member.stats.textAvrg * member.stats.messagesCount)) / (member.stats.messagesCount + 1)
     member.stats.textTotal += ctx.message.text.length
-    // eslint-disable-next-line max-len
-    group.stats.textAvrg = (ctx.message.text.length + (group.stats.textAvrg * group.stats.messagesCount)) / (group.stats.messagesCount + 1)
     group.stats.textTotal += ctx.message.text.length
   }
 
