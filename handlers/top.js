@@ -16,7 +16,7 @@ module.exports = async (ctx) => {
   })
 
   if (topMembers.length > 0) {
-    topMembers.sort((a, b) => b.capital - a.capital)
+    topMembers.sort((a, b) => b.active - a.active)
 
     let top = ''
 
