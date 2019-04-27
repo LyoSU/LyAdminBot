@@ -216,9 +216,7 @@ Group.dbUpdate = (ctx) => new Promise(async (resolve, reject) => {
   group.settings = group.settings || new Group().settings
 
   if (!group.username && !group.invite_link) {
-    group.invite_link = await ctx.telegram.exportChatInviteLink(ctx.chat.id).catch((error) => {
-      console.log('Ooops', error)
-    })
+    group.invite_link = await ctx.telegram.exportChatInviteLink(ctx.chat.id).catch(() => {})
   }
 
   let groupMemberId
@@ -257,7 +255,7 @@ Group.dbUpdate = (ctx) => new Promise(async (resolve, reject) => {
   member.stats.messagesCount += 1
   group.stats.messagesCount += 1
 
-  if (ctx.message.text && ctx.message.text.length > 0) {
+  if (ctx.message && ctx.message.text && ctx.message.text.length > 0) {
     member.stats.textTotal += ctx.message.text.length
     group.stats.textTotal += ctx.message.text.length
   }
