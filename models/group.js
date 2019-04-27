@@ -258,7 +258,7 @@ Group.dbUpdate = (ctx) => new Promise(async (resolve, reject) => {
 
   const delta = (now - member.banan.time) / 1000
 
-  if (delta > day) {
+  if (member.banan.stack > 0 && delta > day) {
     member.banan.stack -= 1
     member.banan.time = now
   }
