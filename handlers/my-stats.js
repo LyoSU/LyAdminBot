@@ -19,6 +19,10 @@ module.exports = async (ctx) => {
         ctx.groupMemberInfo.banan.sum * 1000,
         { language: ctx.i18n.locale() }
       ),
+      banAutoTime: humanizeDuration(
+        ctx.groupMemberInfo.banan.stack * ctx.groupInfo.settings.banan.default * 1000,
+        { language: ctx.i18n.locale() }
+      ),
       banCount: ctx.groupMemberInfo.banan.num,
       messages: ctx.groupMemberInfo.stats.messagesCount,
       active,

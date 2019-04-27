@@ -34,7 +34,7 @@ module.exports = async (ctx) => {
           banTime = -1
         }
         else {
-          banTime = 300
+          banTime = ctx.groupInfo.settings.banan.default
           autoBan = true
         }
       }
