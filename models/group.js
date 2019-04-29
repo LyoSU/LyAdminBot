@@ -241,6 +241,7 @@ Group.dbUpdate = (ctx) => new Promise(async (resolve, reject) => {
   const member = group.members.id(groupMemberId)
 
   if (member.banan.stack > 0) {
+    console.log(member.banan.stack)
     const day = 86400
     const now = new Date()
 
