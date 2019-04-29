@@ -53,6 +53,7 @@ const limitConfig = {
 const bananLimitConfig = {
   window: 10 * 1000,
   limit: 1,
+  keyGenerator: (ctx) => ctx.chat.id,
   onLimitExceeded: (ctx) => ctx.deleteMessage(),
 }
 
