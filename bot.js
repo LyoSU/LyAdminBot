@@ -4,6 +4,7 @@ const Telegraf = require('telegraf')
 const rateLimit = require('telegraf-ratelimit')
 const I18n = require('telegraf-i18n')
 const {
+  onlyGroup,
   onlyAdmin,
   userUpdate,
   groupUpdate,
@@ -50,8 +51,9 @@ const limitConfig = {
   window: 1000,
   limit: 1,
 }
+
 const bananLimitConfig = {
-  window: 10 * 1000,
+  window: 3 * 1000,
   limit: 1,
   keyGenerator: (ctx) => ctx.chat.id,
   onLimitExceeded: (ctx) => ctx.deleteMessage(),
@@ -88,13 +90,13 @@ bot.command('test', rateLimit(bananLimitConfig), (ctx) => ctx.reply(new Date()))
 
 bot.command('help', handleHelp)
 bot.command('ping', handlePing)
-bot.command('banan', rateLimit(bananLimitConfig), handleBanan)
-bot.command('kick', handleKick)
+bot.command('banan', onlyGroup, rateLimit(bananLimitConfig), handleBanan)
+bot.command('kick', onlyGroup, handleKick)
 bot.command('del', handleDelete)
-bot.command('top', handleTop)
-bot.command('top_banan', handleTopBanan)
-bot.command('mystats', handleMyStats)
-bot.command('extras', handleExtraList)
+bot.command('top', onlyGroup, handleTop)
+bot.command('top_banan', onlyGroup, handleTopBanan)
+bot.command('mystats', onlyGroup, handleMyStats)
+bot.command('extras', onlyGroup, handleExtraList)
 bot.hashtag(() => true, rateLimit({ window: 3 * 1000, limit: 1 }), handleExtra)
 bot.hears(/^!extra($|\s.*)/, onlyAdmin, handleAdminExtra)
 bot.hears('!welcome', onlyAdmin, handleAdminWelcome)
