@@ -27,7 +27,7 @@ const {
   handleAdminWelcomeText,
   handleAdminWelcomeTextReset,
   handleAdminExtra,
-  handleSendUsers,
+  handleSendMembers,
   handleSendSettingsJson,
   handleAdminJsonReset,
   handleAdminReset,
@@ -97,7 +97,7 @@ bot.hears('!gif-reset', onlyAdmin, handleAdminWelcomeGifReset)
 bot.hears('!text', onlyAdmin, handleAdminWelcomeText)
 bot.hears('!text-reset', onlyAdmin, handleAdminWelcomeTextReset)
 bot.hears('!reset', onlyAdmin, handleAdminReset)
-bot.hears('!users', onlyAdmin, handleSendUsers)
+bot.hears('!users', onlyAdmin, handleSendMembers)
 bot.hears('!json', onlyAdmin, handleSendSettingsJson)
 bot.on('document', onlyAdmin, handleAdminJsonReset)
 bot.on('new_chat_members', handleWelcome)

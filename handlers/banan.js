@@ -57,6 +57,9 @@ module.exports = async (ctx) => {
     }
 
     if (banTime > 0) {
+      const maxBanTime = 2592000 * 12
+
+      if (banTime > maxBanTime) banTime = maxBanTime
       const unixBanTime = ctx.message.date + banTime
       const banDuration = humanizeDuration(
         banTime * 1000,

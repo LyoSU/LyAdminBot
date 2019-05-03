@@ -103,6 +103,10 @@ cmd:
         <b>Ошибка!</b>
         extra c именем \#${extraName} не найдено.
         Для создания новой введите команду повторно в ответ на сообщение.
+  members:
+    member: |
+      <a href="tg://user?id=${telegram_id}">${telegram_id}</a>
+      ${banTime} | a: ${active} | f: ${flood}
   reset: Настройки были сброшены
 settings:
     json:
