@@ -77,6 +77,9 @@ db.Group.updateData = (ctx) => new Promise(async (resolve, reject) => {
 
     resolve(group)
   }
+  else {
+    resolve()
+  }
 })
 
 db.User.updateData = (ctx) => new Promise(async (resolve, reject) => {
