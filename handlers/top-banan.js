@@ -1,5 +1,4 @@
 const humanizeDuration = require('humanize-duration')
-const User = require('../models/user')
 const { userName } = require('../utils')
 
 
@@ -24,7 +23,7 @@ module.exports = async (ctx) => {
     topMembers = topMembers.slice(0, 10)
 
     for (let index = 0; index < topMembers.length; index++) {
-      const user = await User.findOne({ telegram_id: topMembers[index].telegram_id })
+      const user = await ctx.db.User.findOne({ telegram_id: topMembers[index].telegram_id })
       const banan = humanizeDuration(
         topMembers[index].banan * 1000,
         {

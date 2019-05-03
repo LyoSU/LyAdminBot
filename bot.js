@@ -1,13 +1,13 @@
-const mongoose = require('mongoose')
 const path = require('path')
 const Telegraf = require('telegraf')
 const rateLimit = require('telegraf-ratelimit')
 const I18n = require('telegraf-i18n')
 const {
+  db,
+} = require('./database')
+const {
   onlyGroup,
   onlyAdmin,
-  userUpdate,
-  groupUpdate,
 } = require('./middlewares')
 const {
   handleMessage,
@@ -27,6 +27,7 @@ const {
   handleAdminWelcomeText,
   handleAdminWelcomeTextReset,
   handleAdminExtra,
+  handleSendUsers,
   handleSendSettingsJson,
   handleAdminJsonReset,
   handleAdminReset,
@@ -36,16 +37,9 @@ const {
 
 global.botStart = new Date()
 
-mongoose.connect(process.env.MONGODB_URI, {
-  useCreateIndex: true,
-  useNewUrlParser: true,
-})
+const bot = new Telegraf(process.env.BOT_TOKEN)
 
-const db = mongoose.connection
-
-db.on('error', (err) => {
-  console.log('error', err)
-})
+bot.context.db = db
 
 const limitConfig = {
   window: 1000,
@@ -64,8 +58,6 @@ const i18n = new I18n({
   defaultLanguage: 'ru',
 })
 
-const bot = new Telegraf(process.env.BOT_TOKEN)
-
 bot.telegram.getMe().then((botInfo) => {
   bot.options.username = botInfo.username
 })
@@ -78,8 +70,8 @@ bot.use((ctx, next) => {
 })
 bot.use(i18n.middleware())
 bot.use(async (ctx, next) => {
-  userUpdate(ctx)
-  await groupUpdate(ctx)
+  db.User.updateData(ctx)
+  await ctx.db.Group.updateData(ctx)
   await next(ctx)
   const ms = new Date() - ctx.ms
 
@@ -105,6 +97,7 @@ bot.hears('!gif-reset', onlyAdmin, handleAdminWelcomeGifReset)
 bot.hears('!text', onlyAdmin, handleAdminWelcomeText)
 bot.hears('!text-reset', onlyAdmin, handleAdminWelcomeTextReset)
 bot.hears('!reset', onlyAdmin, handleAdminReset)
+bot.hears('!users', onlyAdmin, handleSendUsers)
 bot.hears('!json', onlyAdmin, handleSendSettingsJson)
 bot.on('document', onlyAdmin, handleAdminJsonReset)
 bot.on('new_chat_members', handleWelcome)
@@ -115,3 +108,5 @@ bot.catch((error) => {
 })
 
 bot.launch()
+
+console.log('bot start')

@@ -1,10 +1,7 @@
-const Group = require('../models/group')
-
-
 module.exports = async (ctx) => {
-  await Group.update(
+  await ctx.db.Group.update(
     { group_id: ctx.chat.id },
-    { settings: new Group().settings }, (err) => {
+    { settings: new ctx.db.Group().settings }, (err) => {
       if (err) {
         console.log(err)
       }

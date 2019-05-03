@@ -1,5 +1,4 @@
 const replicators = require('telegraf/core/replicators')
-const Group = require('../models/group')
 
 
 module.exports = async (ctx, next) => {
@@ -14,7 +13,7 @@ module.exports = async (ctx, next) => {
     if (entity.type === 'hashtag') {
       const hashtag = ctx.message.text.substring(entity.offset, entity.offset + entity.length)
 
-      const groupExtra = await Group.findOne({
+      const groupExtra = await ctx.db.Group.findOne({
         group_id: ctx.chat.id,
         'settings.extras.name': { $regex: `^${hashtag.slice(1)}$`, $options: 'i' },
       }, { 'settings.extras.$': 1 }).catch(console.log)
