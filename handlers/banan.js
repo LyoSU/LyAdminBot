@@ -1,6 +1,5 @@
 const humanizeDuration = require('humanize-duration')
 const { userName, getRandomInt } = require('../utils')
-const Group = require('../models/group')
 
 
 module.exports = async (ctx) => {
@@ -45,7 +44,7 @@ module.exports = async (ctx) => {
   }
 
   if (banTime) {
-    const groupBan = await Group.findOne({
+    const groupBan = await ctx.db.Group.findOne({
       group_id: ctx.chat.id,
       'members.telegram_id': banUser.id,
     }, { 'members.$': 1 }).catch(console.log)
