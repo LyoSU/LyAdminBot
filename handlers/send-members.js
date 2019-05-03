@@ -2,10 +2,15 @@ const humanizeDuration = require('humanize-duration')
 
 
 module.exports = async (ctx) => {
+  ctx.deleteMessage()
 
+  const { members } = ctx.groupInfo
   let memberList = ''
+  let messages = 1
 
-  ctx.groupInfo.members.forEach((member) => {
+  for (let index = 0; index < members.length; index++) {
+    const member = members[index]
+
     const groupAvrg = ctx.groupInfo.stats.textTotal / ctx.groupInfo.stats.messagesCount
     const memberAvrg = member.stats.textTotal / member.stats.messagesCount
 
@@ -36,11 +41,13 @@ module.exports = async (ctx) => {
       active,
       flood,
     })
-  })
 
-  ctx.deleteMessage()
-
-  ctx.telegram.sendMessage(ctx.from.id, memberList, {
-    parse_mode: 'HTML',
-  })
+    if (index > 30 * messages || members.length === index + 1) {
+      messages++
+      ctx.telegram.sendMessage(ctx.from.id, memberList, {
+        parse_mode: 'HTML',
+      })
+      memberList = ''
+    }
+  }
 }
