@@ -5,6 +5,7 @@ module.exports = async (ctx) => {
   ctx.deleteMessage()
 
   const { members } = ctx.groupInfo
+  const maxUser = 100
   let memberList = ''
   let messages = 1
 
@@ -20,7 +21,7 @@ module.exports = async (ctx) => {
     memberList += ctx.i18n.t('cmd.members.member', {
       telegram_id: member.telegram_id,
       banTime: humanizeDuration(
-        ctx.groupMemberInfo.banan.sum * 1000,
+        member.banan.sum * 1000,
         {
           language: 'shortEn',
           languages: {
@@ -42,7 +43,7 @@ module.exports = async (ctx) => {
       flood,
     })
 
-    if (index > 30 * messages || members.length === index + 1) {
+    if (index > maxUser * messages || members.length === index + 1) {
       messages++
       ctx.telegram.sendMessage(ctx.from.id, memberList, {
         parse_mode: 'HTML',
