@@ -1,5 +1,5 @@
 {
   "exec": "node index.js",
-  "watch": ["./**/*.js"],
-  "ext": "js"
+  "watch": ["./**/*.js", "./locales/*.yaml"],
+  "ext": "js,yaml"
 }
