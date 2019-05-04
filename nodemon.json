@@ -1,0 +1,5 @@
+{
+  "exec": "node index.js",
+  "watch": ["./**/*.js"],
+  "ext": "js"
+}
