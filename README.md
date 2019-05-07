@@ -1,7 +1,7 @@
 # LyAdminBot
 
 
-[![nyaa.si bot](https://img.shields.io/badge/LyAdmin-Bot-blueviolet.svg)](https://t.me/LyAdminBot)
+[![LyAdminBot bot](https://img.shields.io/badge/LyAdmin-Bot-blueviolet.svg)](https://t.me/LyAdminBot)
 
 Бот для администрирования чатов.
 
