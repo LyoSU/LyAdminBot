@@ -51,6 +51,8 @@ module.exports = async (ctx) => {
 
     const banMember = ctx.groupInfo.members.id(groupBan.members[0].id)
 
+    if (autoBan) banTime *= (banMember.banan.stack + 1)
+
     if (banTime > 0) {
       const maxBanTime = 2592000 * 12
 
@@ -71,11 +73,6 @@ module.exports = async (ctx) => {
           duration: banDuration,
         }))
 
-        if (autoBan) {
-          banTime *= (banMember.banan.stack + 1)
-          banMember.banan.stack += 1
-        }
-
         if ((banMember.banan.last.time + banMember.banan.last.how) > 0) {
           banMember.banan.sum -= (
             banMember.banan.last.how - (
@@ -91,6 +88,7 @@ module.exports = async (ctx) => {
           how: banTime,
           time: ctx.message.date,
         }
+        if (autoBan) banMember.banan.stack += 1
 
         if (ctx.from.id === banUser.id) {
           setTimeout(() => {
