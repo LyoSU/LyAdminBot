@@ -11,7 +11,7 @@ module.exports = async (ctx) => {
   let banUser = ctx.from
   let autoBan = false
 
-  if (chatMember.status === 'creator' || chatMember.status === 'administrator') {
+  if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
     if (ctx.message.reply_to_message) {
       banUser = ctx.message.reply_to_message.from
 
@@ -51,11 +51,6 @@ module.exports = async (ctx) => {
 
     const banMember = ctx.groupInfo.members.id(groupBan.members[0].id)
 
-    if (autoBan) {
-      banTime *= (banMember.banan.stack + 1)
-      banMember.banan.stack += 1
-    }
-
     if (banTime > 0) {
       const maxBanTime = 2592000 * 12
 
@@ -75,6 +70,19 @@ module.exports = async (ctx) => {
           name: userName(banUser, true),
           duration: banDuration,
         }))
+
+        if (autoBan) {
+          banTime *= (banMember.banan.stack + 1)
+          banMember.banan.stack += 1
+        }
+
+        if ((banMember.banan.last.time + banMember.banan.last.how) > 0) {
+          banMember.banan.sum -= (
+            banMember.banan.last.how - (
+              ctx.message.date - banMember.banan.last.time
+            )
+          )
+        }
 
         banMember.banan.num += 1
         banMember.banan.sum += banTime

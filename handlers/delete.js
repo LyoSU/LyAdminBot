@@ -6,7 +6,7 @@ module.exports = async (ctx) => {
       error,
     }))
   })
-  if (chatMember.status === 'creator' || chatMember.status === 'administrator') {
+  if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
     if (ctx.message.reply_to_message) {
       ctx.deleteMessage(ctx.message.reply_to_message.message_id)
     }
