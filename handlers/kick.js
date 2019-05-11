@@ -5,7 +5,7 @@ module.exports = async (ctx) => {
   const chatMember = await ctx.telegram.getChatMember(ctx.message.chat.id, ctx.message.from.id)
   let kickUser
 
-  if (chatMember.status === 'creator' || chatMember.status === 'administrator') {
+  if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
     if (ctx.message.reply_to_message) {
       kickUser = ctx.message.reply_to_message.from
     }

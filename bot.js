@@ -104,7 +104,7 @@ bot.on('new_chat_members', handleWelcome)
 bot.on('message', handleMessage)
 
 bot.catch((error) => {
-  console.log('Ooops', error)
+  console.log('Oops', error)
 })
 
 bot.launch()
