@@ -7,6 +7,7 @@ const handleTop = require('./top')
 const handleTopBanan = require('./top-banan')
 const handleMyStats = require('./my-stats')
 const handleExtraList = require('./extra-list')
+const handleWebAuth = require('./web-auth')
 const handleMessage = require('./message')
 const handleWelcome = require('./welcome')
 const handleAdminWelcome = require('./admin-welcome')
@@ -32,6 +33,7 @@ module.exports = {
   handleTopBanan,
   handleMyStats,
   handleExtraList,
+  handleWebAuth,
   handleMessage,
   handleWelcome,
   handleAdminWelcome,

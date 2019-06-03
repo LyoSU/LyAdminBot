@@ -21,6 +21,7 @@ const {
   handleTopBanan,
   handleMyStats,
   handleExtraList,
+  handleWebAuth,
   handleAdminWelcome,
   handleAdminWelcomeGif,
   handleAdminWelcomeGifReset,
@@ -89,6 +90,7 @@ bot.command('top', onlyGroup, handleTop)
 bot.command('top_banan', onlyGroup, handleTopBanan)
 bot.command('mystats', onlyGroup, handleMyStats)
 bot.command('extras', onlyGroup, handleExtraList)
+bot.command('web', onlyGroup, handleWebAuth)
 bot.hashtag(() => true, rateLimit({ window: 3 * 1000, limit: 1 }), handleExtra)
 bot.hears(/^!extra($|\s.*)/, onlyAdmin, handleAdminExtra)
 bot.hears('!welcome', onlyAdmin, handleAdminWelcome)
