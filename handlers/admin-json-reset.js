@@ -1,4 +1,4 @@
-const rp = require('request-promise')
+const https = require('https')
 
 
 module.exports = async (ctx) => {
@@ -9,14 +9,24 @@ module.exports = async (ctx) => {
     && ctx.message.document.mime_type === 'application/json'
   ) {
     const fileUrl = await ctx.telegram.getFileLink(ctx.message.document.file_id)
-    const json = await rp(fileUrl)
-    const settings = JSON.parse(json)
 
-    ctx.groupInfo.settings = settings
-    ctx.groupInfo.save()
+    https.get(fileUrl, (response) => {
+      let json = ''
 
-    ctx.replyWithHTML(ctx.i18n.t('settings.json.reset'), {
-      reply_to_message_id: ctx.message.message_id,
+      response.on('data', (chunk) => {
+        json += chunk
+      })
+
+      response.on('end', () => {
+        const settings = JSON.parse(json)
+
+        ctx.groupInfo.settings = settings
+        ctx.groupInfo.save()
+
+        ctx.replyWithHTML(ctx.i18n.t('settings.json.reset'), {
+          reply_to_message_id: ctx.message.message_id,
+        })
+      })
     })
   }
 }
