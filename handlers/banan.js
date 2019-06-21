@@ -54,7 +54,7 @@ module.exports = async (ctx) => {
     if (autoBan) banTime *= (banMember.banan.stack + 1)
 
     if (banTime > 0) {
-      const maxBanTime = 2592000 * 12
+      const maxBanTime = 364 * 24 * 60 * 60
 
       if (banTime > maxBanTime) banTime = maxBanTime
       const unixBanTime = ctx.message.date + banTime

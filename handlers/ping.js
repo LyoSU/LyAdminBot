@@ -17,7 +17,7 @@ module.exports = async (ctx) => {
   })
   const tms = new Date() - ctx.ms - sms
   const workTime = humanizeDuration(
-    new Date() - global.botStart,
+    new Date() - global.startDate,
     { language: ctx.i18n.locale(), round: true }
   )
 
