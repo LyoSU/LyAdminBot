@@ -1,18 +1,16 @@
+const Markup = require('telegraf/markup')
+
+
 module.exports = async (ctx) => {
+  let loginUrl = process.env.WEB_URL
+
+  if (['supergroup', 'group'].includes(ctx.chat.type)) loginUrl += `?group_id=${ctx.chat.id}`
+
   ctx.reply('web', {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          {
-            text: 'web',
-            login_url: {
-              url: 'https://admin.lyo.su/login',
-              forward_text: 'web',
-              request_write_access: true,
-            },
-          },
-        ],
-      ],
-    },
+    reply_markup: Markup.inlineKeyboard([
+      Markup.loginButton('Login', loginUrl, {
+        request_write_access: true,
+      }),
+    ]),
   })
 }

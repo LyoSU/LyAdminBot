@@ -36,7 +36,7 @@ const {
 } = require('./handlers')
 
 
-global.botStart = new Date()
+global.startDate = new Date()
 
 const bot = new Telegraf(process.env.BOT_TOKEN)
 
@@ -79,10 +79,9 @@ bot.use(async (ctx, next) => {
   console.log('Response time %sms', ms)
 })
 
-bot.command('test', rateLimit(bananLimitConfig), (ctx) => ctx.reply(new Date()))
-
 bot.command('help', handleHelp)
 bot.command('ping', handlePing)
+bot.command('web', handleWebAuth)
 bot.command('banan', onlyGroup, rateLimit(bananLimitConfig), handleBanan)
 bot.command('kick', onlyGroup, handleKick)
 bot.command('del', handleDelete)
@@ -90,7 +89,6 @@ bot.command('top', onlyGroup, handleTop)
 bot.command('top_banan', onlyGroup, handleTopBanan)
 bot.command('mystats', onlyGroup, handleMyStats)
 bot.command('extras', onlyGroup, handleExtraList)
-bot.command('web', onlyGroup, handleWebAuth)
 bot.hashtag(() => true, rateLimit({ window: 3 * 1000, limit: 1 }), handleExtra)
 bot.hears(/^!extra($|\s.*)/, onlyAdmin, handleAdminExtra)
 bot.hears('!welcome', onlyAdmin, handleAdminWelcome)
