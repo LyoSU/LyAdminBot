@@ -12,7 +12,7 @@ module.exports = async (ctx) => {
       if (['supergroup', 'group'].includes(ctx.chat.type)) {
         const chatMember = await ctx.tg.getChatMember(
           ctx.callbackQuery.message.chat.id,
-          ctx.callbackQuery.message.from.id
+          ctx.callbackQuery.from.id
         )
 
         if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
