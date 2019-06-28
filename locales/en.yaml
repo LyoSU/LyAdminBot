@@ -78,8 +78,8 @@ cmd:
   ping:
       pong: |
         🏓 Pong
-        <b>Server response</b> ${sms} мс
-        <b>Telegram response:</b> ${tms} мс
+        <b>Server response</b> ${sms} ms
+        <b>Telegram response:</b> ${tms} ms
         <b>Bot works:</b> ${workTime}
 
         ${delay}
