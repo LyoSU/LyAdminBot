@@ -22,6 +22,8 @@ cmd:
     /mystats - my statistics in the chat
     /extras - the list of extra the chat
 
+    /lang - change language
+
     <code>!welcome</code> - to enable/disable the greeting
     <code>!gif</code> - to add/remove the gif in the list of the greetings
     <code>!text</code> - to add/remove the text in the list of the greetings
