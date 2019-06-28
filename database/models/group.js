@@ -185,6 +185,7 @@ const groupSchema = mongoose.Schema({
       message: Object,
     }],
     removeLng: Array,
+    locale: String,
   },
   stats: {
     messagesCount: {

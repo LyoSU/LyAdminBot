@@ -1,6 +1,7 @@
 const handleHelp = require('./help')
 const handleKick = require('./kick')
 const handlePing = require('./ping')
+const handleSetLanguage = require('./language-set')
 const handleBanan = require('./banan')
 const handleDelete = require('./delete')
 const handleTop = require('./top')
@@ -27,6 +28,7 @@ module.exports = {
   handleHelp,
   handleKick,
   handlePing,
+  handleSetLanguage,
   handleBanan,
   handleDelete,
   handleTop,
