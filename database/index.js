@@ -98,7 +98,7 @@ db.User.updateData = (ctx) => new Promise(async (resolve, reject) => {
   user.last_name = ctx.from.last_name
   user.username = ctx.from.username
   user.updatedAt = new Date()
-  user.save()
+  await user.save()
 
   resolve(user)
 })

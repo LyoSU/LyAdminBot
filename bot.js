@@ -13,6 +13,7 @@ const {
   handleMessage,
   handleHelp,
   handlePing,
+  handleSetLanguage,
   handleWelcome,
   handleBanan,
   handleKick,
@@ -71,9 +72,14 @@ bot.use((ctx, next) => {
 })
 bot.use(i18n.middleware())
 bot.use(async (ctx, next) => {
-  db.User.updateData(ctx)
+  ctx.userInfo = await db.User.updateData(ctx)
   await ctx.db.Group.updateData(ctx)
+
+  if (ctx.groupInfo && ctx.groupInfo.settings.locale) ctx.i18n.locale(ctx.groupInfo.settings.locale)
+  else if (ctx.userInfo.locale) ctx.i18n.locale(ctx.userInfo.locale)
+
   await next(ctx)
+
   const ms = new Date() - ctx.ms
 
   console.log('Response time %sms', ms)
@@ -81,6 +87,7 @@ bot.use(async (ctx, next) => {
 
 bot.command('help', handleHelp)
 bot.command('ping', handlePing)
+bot.command('lang', handleSetLanguage)
 bot.command('web', handleWebAuth)
 bot.command('banan', onlyGroup, rateLimit(bananLimitConfig), handleBanan)
 bot.command('kick', onlyGroup, handleKick)
@@ -89,7 +96,9 @@ bot.command('top', onlyGroup, handleTop)
 bot.command('top_banan', onlyGroup, handleTopBanan)
 bot.command('mystats', onlyGroup, handleMyStats)
 bot.command('extras', onlyGroup, handleExtraList)
+
 bot.hashtag(() => true, rateLimit({ window: 3 * 1000, limit: 1 }), handleExtra)
+
 bot.hears(/^!extra($|\s.*)/, onlyAdmin, handleAdminExtra)
 bot.hears('!welcome', onlyAdmin, handleAdminWelcome)
 bot.hears('!gif', onlyAdmin, handleAdminWelcomeGif)
@@ -99,6 +108,9 @@ bot.hears('!text-reset', onlyAdmin, handleAdminWelcomeTextReset)
 bot.hears('!reset', onlyAdmin, handleAdminReset)
 bot.hears('!users', onlyAdmin, handleSendMembers)
 bot.hears('!json', onlyAdmin, handleSendSettingsJson)
+
+bot.action(/set_language:(.*)/, handleSetLanguage)
+
 bot.on('document', onlyAdmin, handleAdminJsonReset)
 bot.on('new_chat_members', handleWelcome)
 bot.on('message', handleMessage)
