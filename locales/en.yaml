@@ -31,7 +31,7 @@ cmd:
 
     <code>!json</code> - to send settings
 
-    <code>!text-reset</code> - to reset all texts of the greeting сбросить все тексты приветствий
+    <code>!text-reset</code> - to reset all texts of the greeting
     <code>!gif-reset</code> - to reset all the gifs of the greetings
     <code>!reset</code> - to reset settings of the group
 
