@@ -1,7 +1,7 @@
 # LyAdminBot
 
 
-[![nyaa.si bot](https://img.shields.io/badge/LyAdmin-Bot-blueviolet.svg)](https://t.me/LyAdminBot)
+[![LyAdminBot bot](https://img.shields.io/badge/LyAdmin-Bot-blueviolet.svg)](https://t.me/LyAdminBot)
 
 Бот для администрирования чатов.
 
@@ -19,6 +19,6 @@
 - `!text` - добавить/удалить текст в список приветствий
 - `!extra arg` - создать extra с названием #arg
 - `!json` - отправить настройки
-- `!reset-text` - сбросить все таексты приветствий
+- `!reset-text` - сбросить все тексты приветствий
 - `!reset-gif` - сбросить все gif приветствий
 - `!reset` - сбросить настройки группы
