@@ -3,6 +3,7 @@ const Markup = require('telegraf/markup')
 
 module.exports = async (ctx) => {
   const locales = {
+    en: '🇺🇸',
     ru: '🇷🇺',
     uk: '🇺🇦',
   }

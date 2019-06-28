@@ -1,0 +1,126 @@
+private:
+  start: |
+    Hello, <b>${name}</b>!
+    I can help you to manage a group
+    Add me to the group.
+
+    /help - help
+
+    <b>👨🏻‍💻 A russian blog of developer:</b> @LyBlog
+  btn_add: Add to the group
+cmd:
+  help: |
+    I can help you to manage the group
+
+    <b>The list of commands:</b>
+    /ping - to check the status of the bot
+    /banan - to ban
+    /kick - to kick
+    /del - to delete message
+    /top - to get list of participants by activity
+    /top_banan - to get list of participants by number of complaints
+    /mystats - my statistics in the chat
+    /extras - the list of extra the chat
+
+    /lang - change language
+
+    <code>!welcome</code> - to enable/disable the greeting
+    <code>!gif</code> - to add/remove the gif in the list of the greetings
+    <code>!text</code> - to add/remove the text in the list of the greetings
+    <code>!extra arg</code> - to create extr with title \#arg
+
+    <code>!json</code> - to send settings
+
+    <code>!text-reset</code> - to reset all texts of the greeting сбросить все тексты приветствий
+    <code>!gif-reset</code> - to reset all the gifs of the greetings
+    <code>!reset</code> - to reset settings of the group
+
+    <b>👨🏻‍💻 The russian blog of developer:</b> @LyBlog
+    <b>GitHub:</b> github.com/LyoSU/LyAdminBot
+
+    <pre>v${version}</pre>
+  my_stats:
+    send_pm: Stats sent in a PM
+    chat: |
+      📊 Stats ${name} in the chat <b>${chatName}</b>:
+
+      <b>Number of bananas:</b> ${banCount} 🍌
+      <b>Total ban time:</b> ${banTime}
+      <b>Autoban:</b> ${banAutoTime}
+
+      <b>Messages:</b> ${messages}
+      <b>Active:</b> ${active}%
+      <b>Flood:</b> ${flood}%
+
+      <b>It was first seen:</b> ${createdAt}
+    error:
+      blocked: |
+        <b>Error!</b>
+        I don't send to you in a PM, please, send me.
+  top:
+    info: |
+      Top chat activity <b>${chatName}</b>:
+      ${top}
+  top_banan:
+    info: |
+      Top 🍌 in the chat<b>${chatName}</b>:
+      ${top}
+    error:
+      empty: No one got the 🍌 in the group
+  extras:
+    list: |
+      <b>extra's the chat:</b>
+      ${extras}
+    error:
+      not_found: |
+        This group has no extra.
+        An administration should send <code>!extra</code>
+  ping:
+      pong: |
+        🏓 Pong
+        <b>Server response</b> ${sms} мс
+        <b>Telegram response:</b> ${tms} мс
+        <b>Bot works:</b> ${workTime}
+
+        ${delay}
+      delay: |
+        ❗️ <b>Bot didn't work:</b> ${delayTime}
+  welcome:
+    disable: Greetings are disabled
+    enable: Greetings are enabled
+  gif:
+    push: The gif is successfully added to the welcome list
+    pull: The gif is successfully removed from the welcome list
+    reset: The list of gifs has been cleaned
+  text:
+    push: The text is successfully added from the list of greetings
+    pull: The text is successfully deleted from the list of greetings
+    error: Error. The text doesn't contain <code>%name%</code>
+    reset: The list of texts has been cleaned
+  extra:
+    push: \#${extraName} is successfully saved
+    pull: \#${extraName} is successfully deleted
+    error:
+      not_found: |
+        <b>Error!</b>
+        The extra \#${extraName} doesn't found.
+        To create a new command you should input the command again in response to the message.
+  members:
+    member: |
+      <a href="tg://user?id=${telegram_id}">${telegram_id}</a>
+      ${banTime} | a: ${active} | f: ${flood}
+  reset: Settings have been reset
+settings:
+    json:
+      reset: The settings were successfully restored from the file
+banan:
+  show: ${name} shows the 🍌
+  suc:  ${name} receives the 🍌\n<b>The term:</b> ${duration}
+  pick: ${name} deprives the 🍌\n
+  error: <b>I couldn't to give out the 🍌</b>\n<pre>${error}</pre>
+kick:
+  suc: ${name} gets kicked
+  who: Who kick?😡
+  error: <b>I can't to kick</b>\n<pre>${error}</pre>
+del:
+  error: <b>I can't to delete the message</b>\n<pre>${error}</pre>
