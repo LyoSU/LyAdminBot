@@ -28,56 +28,48 @@ db.Group.updateData = (ctx) => new Promise(async (resolve, reject) => {
       group.invite_link = await ctx.telegram.exportChatInviteLink(ctx.chat.id).catch(() => {})
     }
 
-    let groupMemberId
+    let groupMember = await db.GroupMember.findOne({
+      group,
+      telegram_id: ctx.from.id,
+    })
 
-    const groupMember = await db.Group.findOne({
-      group_id: ctx.chat.id,
-      'members.telegram_id': ctx.from.id,
-    }, { 'members.$': 1 }).catch(console.log)
+    if (!groupMember) {
+      groupMember = new db.GroupMember()
 
-    if (groupMember) {
-      groupMemberId = groupMember.members[0].id
-    }
-    else {
-      groupMemberId = mongoose.Types.ObjectId()
-
-      await group.members.push({
-        _id: groupMemberId,
-        telegram_id: ctx.from.id,
-      })
+      groupMember.group = group
+      groupMember.telegram_id = ctx.from.id
     }
 
-    const member = group.members.id(groupMemberId)
-
-    if (member.banan.stack > 0) {
-      console.log(member.banan.stack)
+    if (groupMember.banan.stack > 0) {
       const day = 86400
       const now = new Date()
 
-      const delta = (now - member.banan.time) / 1000
+      const delta = (now - groupMember.banan.time) / 1000
 
       if (delta > day) {
-        member.banan.stack -= 1
-        member.banan.time = now
+        groupMember.banan.stack -= 1
+        groupMember.banan.time = now
       }
     }
 
-    member.stats.messagesCount += 1
+    groupMember.stats.messagesCount += 1
     group.stats.messagesCount += 1
 
     if (ctx.message && ctx.message.text && ctx.message.text.length > 0) {
-      member.stats.textTotal += ctx.message.text.length
+      groupMember.stats.textTotal += ctx.message.text.length
       group.stats.textTotal += ctx.message.text.length
     }
 
-    member.updatedAt = new Date()
+    groupMember.updatedAt = new Date()
+    group.updatedAt = new Date()
 
+    await groupMember.save()
     await group.save()
 
     ctx.groupInfo = group
-    ctx.groupMemberInfo = member
+    ctx.groupMemberInfo = groupMember
 
-    resolve(group)
+    resolve({ group, groupMember })
   }
   else {
     resolve()
