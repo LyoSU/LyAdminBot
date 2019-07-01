@@ -91,55 +91,6 @@ const texts = [
   'Я ненавижу реп и плохое настроение у %name%! Если на первый пункт мне уже плевать, то второй сейчас решим! Давай, подходи ко мне... ❤️',
 ]
 
-const memberSchema = mongoose.Schema({
-  telegram_id: {
-    type: Number,
-    index: true,
-    required: true,
-    sparse: true,
-  },
-  banan: {
-    num: {
-      type: Number,
-      default: 0,
-    },
-    sum: {
-      type: Number,
-      default: 0,
-    },
-    stack: {
-      type: Number,
-      default: 0,
-    },
-    last: {
-      who: Number,
-      how: Number,
-      time: Number,
-    },
-    time: {
-      type: Date,
-      default: Date.now,
-    },
-  },
-  stats: {
-    messagesCount: {
-      type: Number,
-      default: 0,
-    },
-    messageType: Object,
-    textTotal: {
-      type: Number,
-      default: 0,
-    },
-  },
-  score: {
-    type: Number,
-    default: 0,
-  },
-}, {
-  timestamps: true,
-})
-
 const groupSchema = mongoose.Schema({
   group_id: {
     type: Number,
@@ -197,7 +148,6 @@ const groupSchema = mongoose.Schema({
       default: 0,
     },
   },
-  members: [memberSchema],
 }, {
   timestamps: true,
 })

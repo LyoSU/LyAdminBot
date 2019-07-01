@@ -119,6 +119,9 @@ bot.catch((error) => {
   console.log('Oops', error)
 })
 
-bot.launch()
-
-console.log('bot start')
+db.connection.once('open', async () => {
+  console.log('Connected to MongoDB')
+  bot.launch().then(() => {
+    console.log('bot start')
+  })
+})
