@@ -5,7 +5,9 @@ module.exports = async (ctx) => {
 
   let topMembers = []
 
-  ctx.groupInfo.members.forEach((member) => {
+  const groupMembers = await ctx.db.GroupMember.find({ group: ctx.groupInfo })
+
+  groupMembers.forEach((member) => {
     const active = ((member.stats.textTotal * 100) / ctx.groupInfo.stats.textTotal).toFixed(2)
 
     topMembers.push({

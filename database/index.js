@@ -1,4 +1,3 @@
-const mongoose = require('mongoose')
 const collections = require('./models')
 const connection = require('./connection')
 
@@ -13,7 +12,7 @@ Object.keys(collections).forEach((collectionName) => {
 
 db.Group.updateData = (ctx) => new Promise(async (resolve, reject) => {
   if (['supergroup', 'group'].includes(ctx.chat.type)) {
-    let group = await db.Group.findOne({ group_id: ctx.chat.id }).catch(reject)
+    let group = await db.Group.findOne({ group_id: ctx.chat.id })
 
     if (!group) {
       group = new db.Group()
@@ -69,7 +68,7 @@ db.Group.updateData = (ctx) => new Promise(async (resolve, reject) => {
     ctx.groupInfo = group
     ctx.groupMemberInfo = groupMember
 
-    resolve({ group, groupMember })
+    resolve({ info: group, member: groupMember })
   }
   else {
     resolve()
