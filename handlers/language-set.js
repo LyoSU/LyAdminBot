@@ -28,8 +28,8 @@ module.exports = async (ctx) => {
       else {
         ctx.answerCbQuery(locales[ctx.match[1]])
 
-        ctx.userInfo.locale = ctx.match[1]
-        ctx.userInfo.save()
+        ctx.session.userInfo.locale = ctx.match[1]
+        ctx.session.userInfo.save()
       }
     }
   }

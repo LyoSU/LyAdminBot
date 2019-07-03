@@ -1,5 +1,6 @@
 const path = require('path')
 const Telegraf = require('telegraf')
+const session = require('telegraf/session')
 const rateLimit = require('telegraf-ratelimit')
 const I18n = require('telegraf-i18n')
 const {
@@ -64,19 +65,22 @@ bot.telegram.getMe().then((botInfo) => {
   bot.options.username = botInfo.username
 })
 
+
 bot.use(rateLimit(limitConfig))
 
 bot.use((ctx, next) => {
   ctx.ms = new Date()
   next()
 })
+
+bot.use(session())
 bot.use(i18n.middleware())
 bot.use(async (ctx, next) => {
-  ctx.userInfo = await db.User.updateData(ctx)
+  if (!ctx.session.userInfo) ctx.session.userInfo = await db.User.updateData(ctx)
   await ctx.db.Group.updateData(ctx)
 
   if (ctx.groupInfo && ctx.groupInfo.settings.locale) ctx.i18n.locale(ctx.groupInfo.settings.locale)
-  else if (ctx.userInfo.locale) ctx.i18n.locale(ctx.userInfo.locale)
+  else if (ctx.session.userInfo.locale) ctx.i18n.locale(ctx.session.userInfo.locale)
 
   await next(ctx)
 
