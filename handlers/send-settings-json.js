@@ -1,5 +1,5 @@
 module.exports = async (ctx) => {
-  const json = JSON.stringify(ctx.groupInfo.settings, null, 2)
+  const json = JSON.stringify(ctx.group.info.settings, null, 2)
 
   const file = Buffer.from(json)
 

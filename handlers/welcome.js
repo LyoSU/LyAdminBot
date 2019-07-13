@@ -2,8 +2,8 @@ const { userName } = require('../utils')
 
 
 module.exports = async (ctx) => {
-  if (ctx.groupInfo.settings.welcome.enable === true) {
-    const { gifs, texts } = ctx.groupInfo.settings.welcome
+  if (ctx.group.info.settings.welcome.enable === true) {
+    const { gifs, texts } = ctx.group.info.settings.welcome
     const randomGif = gifs[Math.floor(Math.random() * gifs.length)]
     const randomCaption = texts[Math.floor(Math.random() * texts.length)]
     const message = await ctx.replyWithDocument(
@@ -20,6 +20,6 @@ module.exports = async (ctx) => {
 
     setTimeout(() => {
       ctx.deleteMessage(message.message_id)
-    }, ctx.groupInfo.settings.welcome.timer * 1000)
+    }, ctx.group.info.settings.welcome.timer * 1000)
   }
 }

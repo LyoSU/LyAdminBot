@@ -33,7 +33,7 @@ module.exports = async (ctx) => {
           banTime = -1
         }
         else {
-          banTime = ctx.groupInfo.settings.banan.default
+          banTime = ctx.group.info.settings.banan.default
           autoBan = true
         }
       }
@@ -45,7 +45,7 @@ module.exports = async (ctx) => {
 
   if (banTime) {
     const banMember = await ctx.db.GroupMember.findOne({
-      group: ctx.groupInfo,
+      group: ctx.group.info,
       telegram_id: banUser.id,
     })
 
@@ -122,7 +122,7 @@ module.exports = async (ctx) => {
 
     banMember.banan.time = Date.now()
 
-    ctx.groupMemberInfo.save()
+    banMember.save()
   }
   else {
     ctx.replyWithHTML(ctx.i18n.t('banan.show', {

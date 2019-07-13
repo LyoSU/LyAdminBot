@@ -1,5 +1,5 @@
 module.exports = async (ctx) => {
-  ctx.groupInfo.settings.welcome.texts = []
-  ctx.groupInfo.save()
+  ctx.group.info.settings.welcome.texts = []
+  ctx.group.info.save()
   ctx.replyWithHTML(ctx.i18n.t('cmd.text.reset'))
 }

@@ -3,7 +3,7 @@ const replicators = require('telegraf/core/replicators')
 
 module.exports = async (ctx, next) => {
   const { entities } = ctx.message
-  const { maxExtra } = ctx.groupInfo.settings
+  const { maxExtra } = ctx.group.info.settings
   let num = entities.length
 
   if (num > maxExtra) num = maxExtra

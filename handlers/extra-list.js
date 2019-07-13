@@ -1,10 +1,10 @@
 module.exports = async (ctx) => {
   let result = ctx.i18n.t('cmd.extras.error.not_found')
 
-  if (ctx.groupInfo.settings.extras.length > 0) {
+  if (ctx.group.info.settings.extras.length > 0) {
     let extras = ''
 
-    ctx.groupInfo.settings.extras.forEach((extra) => {
+    ctx.group.info.settings.extras.forEach((extra) => {
       extras += `#${extra.name} `
     })
     result = ctx.i18n.t('cmd.extras.list', { extras })
