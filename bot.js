@@ -36,6 +36,11 @@ const {
   handleAdminReset,
   handleExtra,
 } = require('./handlers')
+const {
+  updateUser,
+  updateGroup,
+  updateGroupMember,
+} = require('./helpers')
 
 
 global.startDate = new Date()
@@ -74,13 +79,29 @@ bot.use((ctx, next) => {
 })
 
 bot.use(session())
+bot.use(session({
+  property: 'group',
+  getSessionKey: (ctx) => {
+    if (ctx.from && ctx.chat && ['supergroup', 'group'].includes(ctx.chat.type)) {
+      return `${ctx.chat.id}`
+    }
+    return null
+  },
+}))
+
 bot.use(i18n.middleware())
 bot.use(async (ctx, next) => {
-  if (!ctx.session.userInfo) ctx.session.userInfo = await db.User.updateData(ctx)
-  await ctx.db.Group.updateData(ctx)
+  ctx.session.userInfo = await updateUser(ctx)
+  if (ctx.session.userInfo.locale) ctx.i18n.locale(ctx.session.userInfo.locale)
 
-  if (ctx.groupInfo && ctx.groupInfo.settings.locale) ctx.i18n.locale(ctx.groupInfo.settings.locale)
-  else if (ctx.session.userInfo.locale) ctx.i18n.locale(ctx.session.userInfo.locale)
+  if (['supergroup', 'group'].includes(ctx.chat.type)) {
+    ctx.group.info = await updateGroup(ctx)
+    if (!ctx.group.members) ctx.group.members = {}
+    ctx.group.members[ctx.from.id] = await updateGroupMember(ctx)
+    if (ctx.group.info.settings.locale) ctx.i18n.locale(ctx.group.info.settings.locale)
+
+    ctx.group.member = ctx.group.members[ctx.from.id]
+  }
 
   await next(ctx)
 

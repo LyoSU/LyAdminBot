@@ -18,8 +18,8 @@ module.exports = async (ctx) => {
 
         if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
           ctx.answerCbQuery(locales[ctx.match[1]])
-          ctx.groupInfo.settings.locale = ctx.match[1]
-          ctx.groupInfo.save()
+          ctx.group.info.settings.locale = ctx.match[1]
+          ctx.group.info.save()
         }
         else {
           ctx.answerCbQuery()

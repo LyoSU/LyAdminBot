@@ -4,7 +4,7 @@ const humanizeDuration = require('humanize-duration')
 module.exports = async (ctx) => {
   ctx.deleteMessage()
 
-  const { members } = ctx.groupInfo
+  const { members } = ctx.group.info
   const maxUser = 100
   let memberList = ''
   let messages = 1
@@ -12,10 +12,10 @@ module.exports = async (ctx) => {
   for (let index = 0; index < members.length; index++) {
     const member = members[index]
 
-    const groupAvrg = ctx.groupInfo.stats.textTotal / ctx.groupInfo.stats.messagesCount
+    const groupAvrg = ctx.group.info.stats.textTotal / ctx.group.info.stats.messagesCount
     const memberAvrg = member.stats.textTotal / member.stats.messagesCount
 
-    const active = ((member.stats.textTotal * 100) / ctx.groupInfo.stats.textTotal).toFixed(2)
+    const active = ((member.stats.textTotal * 100) / ctx.group.info.stats.textTotal).toFixed(2)
     const flood = Math.abs(((memberAvrg - groupAvrg) / groupAvrg) * 100).toFixed(2)
 
     memberList += ctx.i18n.t('cmd.members.member', {

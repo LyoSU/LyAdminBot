@@ -20,8 +20,8 @@ module.exports = async (ctx) => {
       response.on('end', () => {
         const settings = JSON.parse(json)
 
-        ctx.groupInfo.settings = settings
-        ctx.groupInfo.save()
+        ctx.group.info.settings = settings
+        ctx.group.info.save()
 
         ctx.replyWithHTML(ctx.i18n.t('settings.json.reset'), {
           reply_to_message_id: ctx.message.message_id,

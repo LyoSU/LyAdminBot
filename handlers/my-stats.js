@@ -5,28 +5,28 @@ const { userName } = require('../utils')
 
 module.exports = async (ctx) => {
   if (['supergroup', 'group'].includes(ctx.chat.type)) {
-    const groupAvrg = ctx.groupInfo.stats.textTotal / ctx.groupInfo.stats.messagesCount
-    const memberAvrg = ctx.groupMemberInfo.stats.textTotal / ctx.groupMemberInfo.stats.messagesCount
+    const groupAvrg = ctx.group.info.stats.textTotal / ctx.group.info.stats.messagesCount
+    const memberAvrg = ctx.group.member.stats.textTotal / ctx.group.member.stats.messagesCount
 
-    const active = ((ctx.groupMemberInfo.stats.textTotal * 100) / ctx.groupInfo.stats.textTotal).toFixed(2)
+    const active = ((ctx.group.member.stats.textTotal * 100) / ctx.group.info.stats.textTotal).toFixed(2)
     const flood = Math.abs(((memberAvrg - groupAvrg) / groupAvrg) * 100).toFixed(2)
 
     const pMessage = await ctx.telegram.sendMessage(ctx.from.id, ctx.i18n.t('cmd.my_stats.chat', {
       name: userName(ctx.from, true),
       chatName: ctx.chat.title,
       banTime: humanizeDuration(
-        ctx.groupMemberInfo.banan.sum * 1000,
+        ctx.group.member.banan.sum * 1000,
         { language: ctx.i18n.locale() }
       ),
       banAutoTime: humanizeDuration(
-        ctx.groupMemberInfo.banan.stack * ctx.groupInfo.settings.banan.default * 1000,
+        ctx.group.member.banan.stack * ctx.group.info.settings.banan.default * 1000,
         { language: ctx.i18n.locale() }
       ),
-      banCount: ctx.groupMemberInfo.banan.num,
-      messages: ctx.groupMemberInfo.stats.messagesCount,
+      banCount: ctx.group.member.banan.num,
+      messages: ctx.group.member.stats.messagesCount,
       active,
       flood,
-      createdAt: dateFormat(ctx.groupMemberInfo.createdAt, 'dd.mm.yyyy H:MM:ss'),
+      createdAt: dateFormat(ctx.group.member.createdAt, 'dd.mm.yyyy H:MM:ss'),
     }), {
       parse_mode: 'HTML',
     }).catch(() => {})
