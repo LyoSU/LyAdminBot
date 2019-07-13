@@ -78,7 +78,7 @@ bot.use((ctx, next) => {
   next()
 })
 
-bot.use(session())
+bot.use(session({ ttl: 3600 }))
 bot.use(session({
   property: 'group',
   getSessionKey: (ctx) => {
@@ -87,6 +87,7 @@ bot.use(session({
     }
     return null
   },
+  ttl: 3600,
 }))
 
 bot.use(i18n.middleware())
