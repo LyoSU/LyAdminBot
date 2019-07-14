@@ -2,7 +2,6 @@ const { userName } = require('../utils')
 
 
 module.exports = async (ctx) => {
-
   let topMembers = []
 
   const groupMembers = await ctx.db.GroupMember.find({ group: ctx.group.info })

@@ -1,4 +1,4 @@
-module.exports = async (ctx) => new Promise(async (resolve, reject) => {
+module.exports = (ctx) => new Promise(async (resolve, reject) => {
   let groupMember
 
   if (!ctx.group.members[ctx.from.id]) {
