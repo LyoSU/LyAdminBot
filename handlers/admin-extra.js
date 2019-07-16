@@ -6,14 +6,13 @@ module.exports = async (ctx) => {
   const extraName = arg[1]
 
   if (extraName) {
-    const groupExtra = await ctx.db.Group.findOne({
-      group_id: ctx.chat.id,
-      'settings.extras.name': extraName,
-    }, { 'settings.extras.$': 1 }).catch(console.log)
+    const groupExtra = ctx.group.info.settings.extras.find((el) => {
+      if (el.name.match(new RegExp(`^${extraName}`, 'i'))) return el
+    })
 
     if (groupExtra) {
-      groupExtra.settings.extras[0].remove()
-      groupExtra.save()
+      ctx.group.info.settings.extras[groupExtra.__index].remove()
+      ctx.group.info = await ctx.group.info.save()
     }
 
     if (ctx.message.reply_to_message) {
@@ -21,18 +20,14 @@ module.exports = async (ctx) => {
       const extraType = Object.keys(replicators.copyMethods).find((type) => replyMessage[type])
       const extraMessage = replicators[extraType](replyMessage)
 
-      await ctx.db.Group.update(
-        { group_id: ctx.chat.id },
-        {
-          $push: {
-            'settings.extras': {
-              name: extraName,
-              type: extraType,
-              message: extraMessage,
-            },
-          },
-        }
-      ).catch(console.log)
+      ctx.group.info.settings.extras.push({
+        name: extraName,
+        type: extraType,
+        message: extraMessage,
+      })
+
+      ctx.group.info.save()
+
       await ctx.replyWithHTML(ctx.i18n.t('cmd.extra.push', { extraName }))
     }
     else if (groupExtra) ctx.replyWithHTML(ctx.i18n.t('cmd.extra.pull', { extraName }))
