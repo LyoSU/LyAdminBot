@@ -7,6 +7,7 @@ module.exports = (ctx) => new Promise(async (resolve, reject) => {
   if (!group) {
     group = new ctx.db.Group()
     group.group_id = ctx.chat.id
+    group.updatedAt = 0
   }
 
   group.title = ctx.chat.title

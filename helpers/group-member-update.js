@@ -14,6 +14,7 @@ module.exports = (ctx) => new Promise(async (resolve, reject) => {
 
     groupMember.group = ctx.group.info.id
     groupMember.telegram_id = ctx.from.id
+    groupMember.updatedAt = 0
   }
 
   if (groupMember.banan.stack > 0) {
