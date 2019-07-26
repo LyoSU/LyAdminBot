@@ -23,7 +23,7 @@ module.exports = async (ctx, next) => {
         const method = replicators.copyMethods[groupExtra.type]
         const opts = Object.assign({ chat_id: ctx.chat.id }, groupExtra.message)
 
-        ctx.telegram.callApi(method, opts)
+        await ctx.telegram.callApi(method, opts)
       }
       else {
         next()
