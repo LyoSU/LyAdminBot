@@ -14,8 +14,13 @@ module.exports = (ctx) => new Promise(async (resolve, reject) => {
   user.first_name = ctx.from.first_name
   user.last_name = ctx.from.last_name
   user.username = ctx.from.username
-  user.updatedAt = new Date()
-  user.save()
+
+  const updateInterval = 60 * 1000
+
+  if ((user.updatedAt.getTime() + updateInterval) < Date.now()) {
+    user.updatedAt = new Date()
+    await user.save()
+  }
 
   resolve(user)
 })
