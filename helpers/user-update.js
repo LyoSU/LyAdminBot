@@ -10,7 +10,9 @@ module.exports = (ctx) => new Promise(async (resolve, reject) => {
     user = new ctx.db.User()
     user.telegram_id = ctx.from.id
     user.first_act = now
+    user.updatedAt = 0
   }
+
   user.first_name = ctx.from.first_name
   user.last_name = ctx.from.last_name
   user.username = ctx.from.username
