@@ -34,8 +34,12 @@ module.exports = (ctx) => new Promise(async (resolve, reject) => {
     groupMember.stats.textTotal += ctx.message.text.length
   }
 
-  groupMember.updatedAt = new Date()
-  groupMember.save()
+  const updateInterval = 60 * 1000
+
+  if ((groupMember.updatedAt.getTime() + updateInterval) < Date.now()) {
+    groupMember.updatedAt = new Date()
+    await groupMember.save()
+  }
 
   resolve(groupMember)
 })
