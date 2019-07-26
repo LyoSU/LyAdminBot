@@ -1,12 +1,11 @@
 module.exports = async (ctx) => {
-  if (ctx.message.reply_to_message.text) {
+  if (ctx.message.reply_to_message && ctx.message.reply_to_message.text) {
     const { text } = ctx.message.reply_to_message
 
     if (text.indexOf('%name%') !== -1) {
-      const groupText = await ctx.db.Group.findOne({
-        group_id: ctx.chat.id,
-        'settings.welcome.texts': { $in: [text] },
-      }).catch(console.log)
+      const groupText = ctx.group.info.settings.welcome.texts.indexOf('%name% hi')
+
+      console.log(groupText)
 
       if (groupText) {
         await ctx.db.Group.update(

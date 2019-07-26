@@ -30,6 +30,7 @@ const {
   handleAdminWelcomeText,
   handleAdminWelcomeTextReset,
   handleAdminExtra,
+  handleAdminMaxExtra,
   handleSendMembers,
   handleSendSettingsJson,
   handleAdminJsonReset,
@@ -126,6 +127,7 @@ bot.command('extras', onlyGroup, handleExtraList)
 bot.hashtag(() => true, rateLimit({ window: 3 * 1000, limit: 1 }), handleExtra)
 
 bot.hears(/^!extra($|\s.*)/, onlyAdmin, handleAdminExtra)
+bot.hears(/^!extra-max (\d*)/, onlyAdmin, handleAdminMaxExtra)
 bot.hears('!welcome', onlyAdmin, handleAdminWelcome)
 bot.hears('!gif', onlyAdmin, handleAdminWelcomeGif)
 bot.hears('!gif-reset', onlyAdmin, handleAdminWelcomeGifReset)

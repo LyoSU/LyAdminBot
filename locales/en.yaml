@@ -100,6 +100,7 @@ cmd:
   extra:
     push: \#${extraName} is successfully saved
     pull: \#${extraName} is successfully deleted
+    max: The maximum number of extra in the message is set to <b>${maxExtra}</b>
     error:
       not_found: |
         <b>Error!</b>

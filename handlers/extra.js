@@ -12,9 +12,8 @@ module.exports = async (ctx, next) => {
 
     if (entity.type === 'hashtag') {
       const hashtag = ctx.message.text.substring(entity.offset, entity.offset + entity.length)
-
       const groupExtra = ctx.group.info.settings.extras.find((el) => {
-        if (el.name.match(new RegExp(`^${hashtag.slice(1)}`, 'i'))) return el
+        if (el.name.match(new RegExp(`^${hashtag.slice(1)}`, 'i'))) return true
       })
 
       if (groupExtra) {

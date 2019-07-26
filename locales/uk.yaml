@@ -99,6 +99,7 @@ cmd:
   extra:
     push: \#${extraName} успішно збережено
     pull: \#${extraName} успішно видалено
+    max: The maximum number of extra in the message is set to <b>${maxExtra}</b>
     error:
       not_found: |
         <b>Помилка!</b>

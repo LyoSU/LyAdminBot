@@ -11,16 +11,17 @@ const handleExtraList = require('./extra-list')
 const handleWebAuth = require('./web-auth')
 const handleMessage = require('./message')
 const handleWelcome = require('./welcome')
-const handleAdminWelcome = require('./admin-welcome')
-const handleAdminWelcomeGif = require('./admin-welcome-gif')
-const handleAdminWelcomeGifReset = require('./admin-welcome-gif-reset')
-const handleAdminWelcomeText = require('./admin-welcome-text')
-const handleAdminWelcomeTextReset = require('./admin-welcome-text-reset')
-const handleAdminExtra = require('./admin-extra')
+const handleAdminWelcome = require('./admin/welcome')
+const handleAdminWelcomeGif = require('./admin/welcome-gif')
+const handleAdminWelcomeGifReset = require('./admin/welcome-gif-reset')
+const handleAdminWelcomeText = require('./admin/welcome-text')
+const handleAdminWelcomeTextReset = require('./admin/welcome-text-reset')
+const handleAdminExtra = require('./admin/extra')
+const handleAdminMaxExtra = require('./admin/extra-max')
 const handleSendMembers = require('./send-members')
 const handleSendSettingsJson = require('./send-settings-json')
-const handleAdminJsonReset = require('./admin-json-reset')
-const handleAdminReset = require('./admin-reset')
+const handleAdminJsonReset = require('./admin/json-reset')
+const handleAdminReset = require('./admin/reset')
 const handleExtra = require('./extra')
 
 
@@ -44,6 +45,7 @@ module.exports = {
   handleAdminWelcomeText,
   handleAdminWelcomeTextReset,
   handleAdminExtra,
+  handleAdminMaxExtra,
   handleSendMembers,
   handleSendSettingsJson,
   handleAdminJsonReset,
