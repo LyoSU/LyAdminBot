@@ -6,6 +6,7 @@ module.exports = async (ctx) => {
     en: '🇺🇸',
     ru: '🇷🇺',
     uk: '🇺🇦',
+    by: '🇧🇾',
   }
 
   if (ctx.updateType === 'callback_query') {
@@ -19,7 +20,6 @@ module.exports = async (ctx) => {
         if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
           ctx.answerCbQuery(locales[ctx.match[1]])
           ctx.group.info.settings.locale = ctx.match[1]
-          ctx.group.info.save()
         }
         else {
           ctx.answerCbQuery()
@@ -29,7 +29,6 @@ module.exports = async (ctx) => {
         ctx.answerCbQuery(locales[ctx.match[1]])
 
         ctx.session.userInfo.locale = ctx.match[1]
-        ctx.session.userInfo.save()
       }
     }
   }
@@ -42,7 +41,7 @@ module.exports = async (ctx) => {
 
     ctx.reply('🇷🇺 Выберите язык\n🇺🇸 Choose language', {
       reply_markup: Markup.inlineKeyboard(button, {
-        columns: 3,
+        columns: 5,
       }),
     })
   }

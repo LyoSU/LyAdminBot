@@ -7,5 +7,4 @@ module.exports = async (ctx) => {
     ctx.group.info.settings.welcome.enable = true
     ctx.replyWithHTML(ctx.i18n.t('cmd.welcome.enable'))
   }
-  await ctx.group.info.save()
 }

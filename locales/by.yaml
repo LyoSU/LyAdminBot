@@ -87,6 +87,7 @@ cmd:
   extra:
     push: \#${extraName} паспяхова захавана
     pull: \#${extraName} паспяхова выдаленае
+    max: The maximum number of extra in the message is set to <b>${maxExtra}</b>
     error:
       not_found: |
         <b>Ошибка!</b>

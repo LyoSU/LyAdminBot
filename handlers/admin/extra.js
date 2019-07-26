@@ -7,12 +7,11 @@ module.exports = async (ctx) => {
 
   if (extraName) {
     const groupExtra = ctx.group.info.settings.extras.find((el) => {
-      if (el.name.match(new RegExp(`^${extraName}`, 'i'))) return el
+      if (el.name.match(new RegExp(`^${extraName}`, 'i'))) return true
     })
 
     if (groupExtra) {
       ctx.group.info.settings.extras[groupExtra.__index].remove()
-      ctx.group.info = await ctx.group.info.save()
     }
 
     if (ctx.message.reply_to_message) {
@@ -25,8 +24,6 @@ module.exports = async (ctx) => {
         type: extraType,
         message: extraMessage,
       })
-
-      ctx.group.info.save()
 
       await ctx.replyWithHTML(ctx.i18n.t('cmd.extra.push', { extraName }))
     }

@@ -25,9 +25,10 @@ cmd:
     /lang - изменить язык
 
     <code>!welcome</code> - включить/отключить приветствия
-    <code>!gif</code> - добавить/удалить гиф в список приветствий
+    <code>!gif</code> - добавить/удалить gif в список приветствий
     <code>!text</code> - добавить/удалить текст в список приветствий
     <code>!extra arg</code> - создать extra с названием \#arg
+    <code>!extra-max 3</code> - установить максимальное количество extra в сообщении
 
     <code>!json</code> - отправить настройки
 
@@ -100,11 +101,13 @@ cmd:
   extra:
     push: \#${extraName} успешно сохранено
     pull: \#${extraName} успешно удалено
+    max: Максимальное количество extra в сообщении установлено на <b>${maxExtra}</b>
     error:
       not_found: |
         <b>Ошибка!</b>
         extra c именем \#${extraName} не найдено.
         Для создания новой введите команду повторно в ответ на сообщение.
+    set:
   members:
     member: |
       <a href="tg://user?id=${telegram_id}">${telegram_id}</a>
