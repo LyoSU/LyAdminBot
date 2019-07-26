@@ -6,7 +6,9 @@ module.exports = async (ctx) => {
   let result = ''
   let topMembers = []
 
-  ctx.group.info.members.forEach((member) => {
+  const groupMembers = await ctx.db.GroupMember.find({ group: ctx.group.info })
+
+  groupMembers.forEach((member) => {
     if (member.banan.sum > 0) {
       topMembers.push({
         telegram_id: member.telegram_id,
