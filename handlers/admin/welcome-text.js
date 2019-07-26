@@ -3,24 +3,18 @@ module.exports = async (ctx) => {
     const { text } = ctx.message.reply_to_message
 
     if (text.indexOf('%name%') !== -1) {
-      const groupText = ctx.group.info.settings.welcome.texts.indexOf('%name% hi')
+      const groupText = ctx.group.info.settings.welcome.texts.findIndex((el) => {
+        if (el === text) return true
+      })
 
-      console.log(groupText)
-
-      if (groupText) {
-        await ctx.db.Group.update(
-          { group_id: ctx.chat.id },
-          { $pull: { 'settings.welcome.texts': text } }
-        ).catch(console.log)
-        ctx.replyWithHTML(ctx.i18n.t('cmd.text.pull'))
+      if (groupText < 0) {
+        ctx.group.info.settings.welcome.texts.push(text)
+        ctx.replyWithHTML(ctx.i18n.t('cmd.text.push'))
         return
       }
 
-      await ctx.db.Group.update(
-        { group_id: ctx.chat.id },
-        { $push: { 'settings.welcome.texts': text } }
-      ).catch(console.log)
-      ctx.replyWithHTML(ctx.i18n.t('cmd.text.push'))
+      delete ctx.group.info.settings.welcome.texts[groupText]
+      ctx.replyWithHTML(ctx.i18n.t('cmd.text.pull'))
     }
     else {
       ctx.replyWithHTML(ctx.i18n.t('cmd.text.error'))
