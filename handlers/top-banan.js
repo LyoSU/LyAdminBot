@@ -32,6 +32,7 @@ module.exports = async (ctx) => {
           round: true,
           largest: 2,
           language: ctx.i18n.locale(),
+          fallbacks: ['en'],
         }
       )
 

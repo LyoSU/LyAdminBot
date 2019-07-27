@@ -58,7 +58,7 @@ module.exports = async (ctx) => {
       const unixBanTime = ctx.message.date + banTime
       const banDuration = humanizeDuration(
         banTime * 1000,
-        { language: ctx.i18n.locale() }
+        { language: ctx.i18n.locale(), fallbacks: ['en'] }
       )
 
       await ctx.telegram.restrictChatMember(

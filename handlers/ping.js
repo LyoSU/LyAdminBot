@@ -7,7 +7,7 @@ module.exports = async (ctx) => {
   let delay = ''
 
   if (dt > 2) {
-    const delayTime = humanizeDuration(dt * 1000, { language: ctx.i18n.locale(), round: true })
+    const delayTime = humanizeDuration(dt * 1000, { language: ctx.i18n.locale(), fallbacks: ['en'], round: true })
 
     delay = ctx.i18n.t('cmd.ping.delay', { delayTime })
   }
@@ -18,7 +18,7 @@ module.exports = async (ctx) => {
   const tms = new Date() - ctx.ms - sms
   const workTime = humanizeDuration(
     new Date() - global.startDate,
-    { language: ctx.i18n.locale(), round: true }
+    { language: ctx.i18n.locale(), fallbacks: ['en'], round: true }
   )
 
   ctx.telegram.editMessageText(
