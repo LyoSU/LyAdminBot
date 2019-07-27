@@ -16,11 +16,11 @@ module.exports = async (ctx) => {
       chatName: ctx.chat.title,
       banTime: humanizeDuration(
         ctx.group.member.banan.sum * 1000,
-        { language: ctx.i18n.locale() }
+        { language: ctx.i18n.locale(), fallbacks: ['en'] }
       ),
       banAutoTime: humanizeDuration(
         ctx.group.member.banan.stack * ctx.group.info.settings.banan.default * 1000,
-        { language: ctx.i18n.locale() }
+        { language: ctx.i18n.locale(), fallbacks: ['en'] }
       ),
       banCount: ctx.group.member.banan.num,
       messages: ctx.group.member.stats.messagesCount,
