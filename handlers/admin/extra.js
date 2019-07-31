@@ -2,12 +2,11 @@ const replicators = require('telegraf/core/replicators')
 
 
 module.exports = async (ctx) => {
-  const arg = ctx.message.text.split(/ +/)
-  const extraName = arg[1]
+  const extraName = ctx.match[2]
 
   if (extraName) {
     const groupExtra = ctx.group.info.settings.extras.find((el) => {
-      if (el.name.match(new RegExp(`^${extraName}`, 'i'))) return true
+      if (el.name.match(new RegExp(`^${extraName}$`, 'i'))) return true
     })
 
     if (groupExtra) {
