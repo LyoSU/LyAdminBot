@@ -65,6 +65,7 @@ const bananLimitConfig = {
 const i18n = new I18n({
   directory: path.resolve(__dirname, 'locales'),
   defaultLanguage: 'ru',
+  defaultLanguageOnMissing: true,
 })
 
 bot.telegram.getMe().then((botInfo) => {
@@ -124,9 +125,7 @@ bot.command('top_banan', onlyGroup, handleTopBanan)
 bot.command('mystats', onlyGroup, handleMyStats)
 bot.command('extras', onlyGroup, handleExtraList)
 
-bot.hashtag(() => true, rateLimit({ window: 3 * 1000, limit: 1 }), handleExtra)
-
-bot.hears(/^!extra($|\s.*)/, onlyAdmin, handleAdminExtra)
+bot.hears(/^!extra\s(?:(#|))([^\s]+)/, onlyAdmin, handleAdminExtra)
 bot.hears(/^!extra-max (\d*)/, onlyAdmin, handleAdminMaxExtra)
 bot.hears('!welcome', onlyAdmin, handleAdminWelcome)
 bot.hears('!gif', onlyAdmin, handleAdminWelcomeGif)
@@ -138,6 +137,7 @@ bot.hears('!users', onlyAdmin, handleSendMembers)
 bot.hears('!json', onlyAdmin, handleSendSettingsJson)
 
 bot.action(/set_language:(.*)/, handleSetLanguage)
+bot.hashtag(() => true, rateLimit({ window: 3 * 1000, limit: 1 }), handleExtra)
 
 bot.on('document', onlyAdmin, handleAdminJsonReset)
 bot.on('new_chat_members', handleWelcome)
