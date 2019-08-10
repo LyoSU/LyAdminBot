@@ -1,6 +1,6 @@
 {
   "name": "lyadminbot",
-  "version": "1.6.10",
+  "version": "1.6.11",
   "description": "Бот для администрирования групп",
   "main": "index.js",
   "scripts": {
@@ -9,6 +9,8 @@
     "lint:fix": "node_modules/.bin/eslint --fix --ext js ."
   },
   "dependencies": {
+    "canvas": "^2.5.0",
+    "canvas-multiline-text": "^1.0.3",
     "dateformat": "^3.0.3",
     "dotenv": "^6.2.0",
     "humanize-duration": "^3.18.0",
