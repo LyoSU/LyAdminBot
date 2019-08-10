@@ -17,6 +17,7 @@ const {
   handleSetLanguage,
   handleWelcome,
   handleBanan,
+  handleScreen,
   handleKick,
   handleDelete,
   handleTop,
@@ -118,6 +119,7 @@ bot.command('ping', handlePing)
 bot.command('lang', handleSetLanguage)
 bot.command('web', handleWebAuth)
 bot.command('banan', onlyGroup, rateLimit(bananLimitConfig), handleBanan)
+bot.command('screen', onlyGroup, handleScreen)
 bot.command('kick', onlyGroup, handleKick)
 bot.command('del', handleDelete)
 bot.command('top', onlyGroup, handleTop)
