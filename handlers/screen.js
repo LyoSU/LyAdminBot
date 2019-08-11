@@ -110,15 +110,15 @@ module.exports = async (ctx) => {
 
     const canvasСtx = canvas.getContext('2d')
 
-    canvasСtx.font = '26px NotoSans-Bold, kochi-mincho-subst'
+    canvasСtx.font = '23px NotoSans-Bold, kochi-mincho-subst'
     canvasСtx.fillStyle = '#fff'
     canvasСtx.fillText(login, 110, 50)
 
-    canvasСtx.font = '28px NotoSans-Regular, kochi-mincho-subst'
+    canvasСtx.font = '30px NotoSans-Regular, kochi-mincho-subst'
     canvasСtx.fillStyle = '#c9efff'
     canvasСtx.fillText(`@${from.username}`, 110, 90)
 
-    canvasСtx.font = '23px NotoSans-Regular, kochi-mincho-subst'
+    canvasСtx.font = '28px NotoSans-Regular, kochi-mincho-subst'
     canvasСtx.fillStyle = '#fff'
 
     const textSize = drawMultilineText(canvasСtx, text, 25, 130, canvas.width - 40, 30)
