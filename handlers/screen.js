@@ -1,3 +1,4 @@
+const Markup = require('telegraf/markup')
 const https = require('https')
 const { createCanvas, Image, registerFont } = require('canvas')
 
@@ -103,8 +104,8 @@ function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
 
 module.exports = async (ctx) => {
   if (ctx.message.reply_to_message && ctx.message.reply_to_message.text) {
-    const { text, from } = ctx.message.reply_to_message
-    const login = `${from.first_name} ${from.last_name || ''}`
+    const replyMessage = ctx.message.reply_to_message
+    const login = `${replyMessage.from.first_name} ${replyMessage.from.last_name || ''}`
 
     const canvas = createCanvas(512, 512)
 
@@ -116,14 +117,15 @@ module.exports = async (ctx) => {
 
     canvasСtx.font = '30px NotoSans-Regular, kochi-mincho-subst'
     canvasСtx.fillStyle = '#c9efff'
-    canvasСtx.fillText(`@${from.username}`, 110, 90)
+    if (replyMessage.from.username) canvasСtx.fillText(`@${replyMessage.from.username}`, 110, 90)
+    else canvasСtx.fillText(`#${replyMessage.from.id}`, 110, 90)
 
     canvasСtx.font = '28px NotoSans-Regular, kochi-mincho-subst'
     canvasСtx.fillStyle = '#fff'
 
-    const textSize = drawMultilineText(canvasСtx, text, 25, 130, canvas.width - 40, 30)
+    const textSize = drawMultilineText(canvasСtx, replyMessage.text, 25, 140, canvas.width - 40, 30)
 
-    const userPhoto = await ctx.telegram.getUserProfilePhotos(from.id, 0, 1)
+    const userPhoto = await ctx.telegram.getUserProfilePhotos(replyMessage.from.id, 0, 1)
     const userPhotoUrl = await ctx.telegram.getFileLink(userPhoto.photos[0][0].file_id)
 
     const canvasAvatarСtx = canvas.getContext('2d')
@@ -152,6 +154,10 @@ module.exports = async (ctx) => {
 
     ctx.replyWithSticker({
       source: canvasSticker.toBuffer(),
+    }, {
+      reply_markup: Markup.inlineKeyboard([
+        Markup.callbackButton('add', 'add'),
+      ]),
     })
   }
 }
