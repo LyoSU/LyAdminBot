@@ -1,11 +1,9 @@
 const https = require('https')
-const { createCanvas, loadImage, Image, registerFont } = require('canvas')
-const drawMultilineText = require('canvas-multiline-text')
+const { createCanvas, Image, registerFont } = require('canvas')
 
 
 registerFont('assets/NotoSans-Regular.ttf', { family: 'NotoSans-Regular' })
 registerFont('assets/NotoSans-Bold.ttf', { family: 'NotoSans-Bold' })
-registerFont('assets/NotoColorEmoji.ttf', { family: 'NotoColorEmoji' })
 registerFont('assets/kochi-mincho-subst.ttf', { family: 'kochi-mincho-subst' })
 
 function loadImageFromUrl(url) {
@@ -31,6 +29,40 @@ function loadImageFromUrl(url) {
       })
     })
   })
+}
+
+function drawMultilineText(ctx, text, textX, textY, maxWidth, lineHeight) {
+  const words = text.replace(/\n|\r/g, ' <br> ').split(' ')
+
+  let line = ''
+
+  for (let index = 0; index < words.length; index++) {
+    if (words[index] === '<br>') {
+      ctx.fillText(line, textX, textY)
+      line = ''
+      textY += lineHeight
+    }
+    else {
+      const testLine = `${line + words[index]} `
+      const metrics = ctx.measureText(testLine)
+      const testWidth = metrics.width
+
+      if (testWidth > maxWidth && index > 0) {
+        ctx.fillText(line, textX, textY)
+        line = `${words[index]} `
+        textY += lineHeight
+      }
+      else {
+        line = testLine
+      }
+    }
+  }
+  ctx.fillText(line, textX, textY)
+
+  return {
+    height: textX,
+    width: textY,
+  }
 }
 
 function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
@@ -78,67 +110,18 @@ module.exports = async (ctx) => {
 
     const canvasСtx = canvas.getContext('2d')
 
-    canvasСtx.font = '26px NotoSans-Bold, NotoColorEmoji, kochi-mincho-subst'
+    canvasСtx.font = '26px NotoSans-Bold, kochi-mincho-subst'
     canvasСtx.fillStyle = '#fff'
     canvasСtx.fillText(login, 110, 50)
 
-    canvasСtx.font = '28px NotoSans-Regular, NotoColorEmoji, kochi-mincho-subst'
+    canvasСtx.font = '28px NotoSans-Regular, kochi-mincho-subst'
     canvasСtx.fillStyle = '#c9efff'
     canvasСtx.fillText(`@${from.username}`, 110, 90)
 
-    canvasСtx.font = '23px NotoSans-Regular, NotoColorEmoji, kochi-mincho-subst'
+    canvasСtx.font = '23px NotoSans-Regular, kochi-mincho-subst'
     canvasСtx.fillStyle = '#fff'
 
-    // drawMultilineText(
-    //   canvasСtx,
-    //   text,
-    //   {
-    //     rect: {
-    //       x: 25,
-    //       y: 110,
-    //       width: canvas.width - 40,
-    //       height: canvas.height - 50,
-    //     },
-    //     font: 'Impact',
-    //     verbose: false,
-    //     lineHeight: 1.2,
-    //     minFontSize: 12,
-    //     maxFontSize: 32,
-    //   }
-    // )
-
-    const textX = 25
-    let textY = 130
-    const maxWidth = canvas.width - 40
-    const lineHeight = 30
-
-    const words = text.replace(/\n|\r/g, ' <br> ').split(' ')
-
-    let line = ''
-
-    for (let index = 0; index < words.length; index++) {
-      if (words[index] === '<br>') {
-        canvasСtx.fillText(line, textX, textY)
-        line = ''
-        textY += lineHeight
-      }
-      else {
-        const testLine = `${line + words[index]} `
-        const metrics = canvasСtx.measureText(testLine)
-        const testWidth = metrics.width
-
-        if (testWidth > maxWidth && index > 0) {
-          canvasСtx.fillText(line, textX, textY)
-          line = `${words[index]} `
-          textY += lineHeight
-        }
-        else {
-          line = testLine
-        }
-      }
-    }
-    canvasСtx.fillText(line, textX, textY)
-
+    const textSize = drawMultilineText(canvasСtx, text, 25, 130, canvas.width - 40, 30)
 
     const userPhoto = await ctx.telegram.getUserProfilePhotos(from.id, 0, 1)
     const userPhotoUrl = await ctx.telegram.getFileLink(userPhoto.photos[0][0].file_id)
@@ -154,7 +137,7 @@ module.exports = async (ctx) => {
 
     let stickHeight = 512
 
-    if (textY < stickHeight) stickHeight = textY + 30
+    if (textSize.width < stickHeight) stickHeight = textSize.width + 30
 
     const canvasSticker = createCanvas(512, stickHeight)
 
