@@ -46,30 +46,30 @@ module.exports = async (ctx) => {
 
     canvasСtx.font = '28px NotoSans-Bold, NotoColorEmoji, kochi-mincho-subst'
     canvasСtx.fillStyle = '#fff'
-    canvasСtx.fillText(login, 140, 60)
+    canvasСtx.fillText(login, 110, 50)
 
     canvasСtx.font = '28px NotoSans-Regular, NotoColorEmoji, kochi-mincho-subst'
     canvasСtx.fillStyle = '#c9efff'
-    canvasСtx.fillText(`@${from.username}`, 140, 100)
+    canvasСtx.fillText(`@${from.username}`, 110, 90)
 
     canvasСtx.font = 'NotoSans-Regular, NotoColorEmoji, kochi-mincho-subst'
-    canvasСtx.fillStyle = '#e4e4e4'
+    canvasСtx.fillStyle = '#e0e0e0'
 
     drawMultilineText(
       canvasСtx,
       text,
       {
         rect: {
-          x: 30,
-          y: 150,
-          width: canvas.width - 45,
-          height: canvas.height - 70,
+          x: 25,
+          y: 110,
+          width: canvas.width - 40,
+          height: canvas.height - 50,
         },
         font: 'Impact',
         verbose: false,
-        lineHeight: 1.4,
+        lineHeight: 1.2,
         minFontSize: 12,
-        maxFontSize: 36,
+        maxFontSize: 32,
       }
     )
 
@@ -79,11 +79,11 @@ module.exports = async (ctx) => {
     const canvasAvatarСtx = canvas.getContext('2d')
 
     canvasAvatarСtx.beginPath()
-    canvasAvatarСtx.arc(70, 70, 50, 0, Math.PI * 2, true)
+    canvasAvatarСtx.arc(60, 60, 40, 0, Math.PI * 2, true)
     canvasAvatarСtx.clip()
     canvasAvatarСtx.closePath()
     canvasAvatarСtx.restore()
-    canvasAvatarСtx.drawImage(await loadImageFromUrl(userPhotoUrl), 20, 20, 100, 100)
+    canvasAvatarСtx.drawImage(await loadImageFromUrl(userPhotoUrl), 20, 20, 80, 80)
 
     // const textX = 120
     // let textY = 60
