@@ -45,15 +45,15 @@ module.exports = async (ctx) => {
     canvasСtx.drawImage(quoteTemplate, 0, 0)
 
     canvasСtx.font = '28px NotoSans-Bold, NotoColorEmoji, kochi-mincho-subst'
-    canvasСtx.fillStyle = '#65b9d6'
+    canvasСtx.fillStyle = '#fff'
     canvasСtx.fillText(login, 140, 60)
 
     canvasСtx.font = '28px NotoSans-Regular, NotoColorEmoji, kochi-mincho-subst'
-    canvasСtx.fillStyle = '#3d5872'
+    canvasСtx.fillStyle = '#c9efff'
     canvasСtx.fillText(`@${from.username}`, 140, 100)
 
     canvasСtx.font = 'NotoSans-Regular, NotoColorEmoji, kochi-mincho-subst'
-    canvasСtx.fillStyle = '#fff'
+    canvasСtx.fillStyle = '#e4e4e4'
 
     drawMultilineText(
       canvasСtx,
