@@ -12,7 +12,9 @@ function loadImageFromUrl(url) {
   return new Promise((resolve, reject) => {
     const img = new Image()
 
+    // eslint-disable-next-line unicorn/prefer-add-event-listener
     img.onload = () => resolve(img)
+    // eslint-disable-next-line unicorn/prefer-add-event-listener
     img.onerror = () => reject(new Error('Failed to load image'))
 
     https.get(url, (res) => {
@@ -31,20 +33,52 @@ function loadImageFromUrl(url) {
   })
 }
 
+function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
+  if (typeof stroke === 'undefined') {
+    stroke = true
+  }
+  if (typeof radius === 'undefined') {
+    radius = 5
+  }
+  if (typeof radius === 'number') {
+    radius = { tl: radius, tr: radius, br: radius, bl: radius }
+  }
+  else {
+    const defaultRadius = { tl: 0, tr: 0, br: 0, bl: 0 }
+
+    for (let side in defaultRadius) {
+      radius[side] = radius[side] || defaultRadius[side]
+    }
+  }
+  ctx.beginPath()
+  ctx.moveTo(x + radius.tl, y)
+  ctx.lineTo(x + width - radius.tr, y)
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius.tr)
+  ctx.lineTo(x + width, y + height - radius.br)
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius.br, y + height)
+  ctx.lineTo(x + radius.bl, y + height)
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius.bl)
+  ctx.lineTo(x, y + radius.tl)
+  ctx.quadraticCurveTo(x, y, x + radius.tl, y)
+  ctx.closePath()
+  if (fill) {
+    ctx.fill()
+  }
+  if (stroke) {
+    ctx.stroke()
+  }
+}
+
 module.exports = async (ctx) => {
   if (ctx.message.reply_to_message && ctx.message.reply_to_message.text) {
     const { text, from } = ctx.message.reply_to_message
     const login = `${from.first_name} ${from.last_name || ''}`
 
-    const canvas = createCanvas(512, 320)
-
-    const quoteTemplate = await loadImage('assets/quote-template.png')
+    const canvas = createCanvas(512, 512)
 
     const canvasСtx = canvas.getContext('2d')
 
-    canvasСtx.drawImage(quoteTemplate, 0, 0)
-
-    canvasСtx.font = '28px NotoSans-Bold, NotoColorEmoji, kochi-mincho-subst'
+    canvasСtx.font = '26px NotoSans-Bold, NotoColorEmoji, kochi-mincho-subst'
     canvasСtx.fillStyle = '#fff'
     canvasСtx.fillText(login, 110, 50)
 
@@ -52,26 +86,59 @@ module.exports = async (ctx) => {
     canvasСtx.fillStyle = '#c9efff'
     canvasСtx.fillText(`@${from.username}`, 110, 90)
 
-    canvasСtx.font = 'NotoSans-Regular, NotoColorEmoji, kochi-mincho-subst'
-    canvasСtx.fillStyle = '#e0e0e0'
+    canvasСtx.font = '23px NotoSans-Regular, NotoColorEmoji, kochi-mincho-subst'
+    canvasСtx.fillStyle = '#fff'
 
-    drawMultilineText(
-      canvasСtx,
-      text,
-      {
-        rect: {
-          x: 25,
-          y: 110,
-          width: canvas.width - 40,
-          height: canvas.height - 50,
-        },
-        font: 'Impact',
-        verbose: false,
-        lineHeight: 1.2,
-        minFontSize: 12,
-        maxFontSize: 32,
+    // drawMultilineText(
+    //   canvasСtx,
+    //   text,
+    //   {
+    //     rect: {
+    //       x: 25,
+    //       y: 110,
+    //       width: canvas.width - 40,
+    //       height: canvas.height - 50,
+    //     },
+    //     font: 'Impact',
+    //     verbose: false,
+    //     lineHeight: 1.2,
+    //     minFontSize: 12,
+    //     maxFontSize: 32,
+    //   }
+    // )
+
+    const textX = 25
+    let textY = 130
+    const maxWidth = canvas.width - 40
+    const lineHeight = 30
+
+    const words = text.replace(/\n|\r/g, ' <br> ').split(' ')
+
+    let line = ''
+
+    for (let index = 0; index < words.length; index++) {
+      if (words[index] === '<br>') {
+        canvasСtx.fillText(line, textX, textY)
+        line = ''
+        textY += lineHeight
       }
-    )
+      else {
+        const testLine = `${line + words[index]} `
+        const metrics = canvasСtx.measureText(testLine)
+        const testWidth = metrics.width
+
+        if (testWidth > maxWidth && index > 0) {
+          canvasСtx.fillText(line, textX, textY)
+          line = `${words[index]} `
+          textY += lineHeight
+        }
+        else {
+          line = testLine
+        }
+      }
+    }
+    canvasСtx.fillText(line, textX, textY)
+
 
     const userPhoto = await ctx.telegram.getUserProfilePhotos(from.id, 0, 1)
     const userPhotoUrl = await ctx.telegram.getFileLink(userPhoto.photos[0][0].file_id)
@@ -85,32 +152,23 @@ module.exports = async (ctx) => {
     canvasAvatarСtx.restore()
     canvasAvatarСtx.drawImage(await loadImageFromUrl(userPhotoUrl), 20, 20, 80, 80)
 
-    // const textX = 120
-    // let textY = 60
-    // const maxWidth = canvas.width - 130
-    // const lineHeight = 15
+    let stickHeight = 512
 
-    // const words = text.split(' ')
-    // let line = ''
+    if (textY < stickHeight) stickHeight = textY + 30
 
-    // for (let index = 0; index < words.length; index++) {
-    //   const testLine = `${line + words[index]} `
-    //   const metrics = canvasСtx.measureText(testLine)
-    //   const testWidth = metrics.width
+    const canvasSticker = createCanvas(512, stickHeight)
 
-    //   if (testWidth > maxWidth && index > 0) {
-    //     canvasСtx.fillText(line, textX, textY)
-    //     line = `${words[index]} `
-    //     textY += lineHeight
-    //   }
-    //   else {
-    //     line = testLine
-    //   }
-    // }
-    // canvasСtx.fillText(line, textX, textY)
+    const canvasBackСtx = canvasSticker.getContext('2d')
+
+    canvasBackСtx.fillStyle = '#7592a6'
+    roundRect(canvasBackСtx, 10, 10, 492, stickHeight - 10, 20, true)
+
+    const canvasStickerСtx = canvasSticker.getContext('2d')
+
+    canvasStickerСtx.drawImage(canvas, 0, 0)
 
     ctx.replyWithSticker({
-      source: canvas.toBuffer(),
+      source: canvasSticker.toBuffer(),
     })
   }
 }
