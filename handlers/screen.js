@@ -235,7 +235,7 @@ module.exports = async (ctx) => {
 
       canvasСtx.font = 'bold 55px OpenSans'
       canvasAvatarСtx.fillStyle = '#fff'
-      canvasСtx.fillText(replyMessage.from.first_name.split(/(?!$)/u, 1)[0], 30, 80)
+      canvasСtx.fillText(replyMessage.from.first_name.split(/(?!$)/u)[0], 30, 80)
 
     }
 
