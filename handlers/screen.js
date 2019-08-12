@@ -1,11 +1,14 @@
 const Markup = require('telegraf/markup')
 const https = require('https')
+const fs = require('fs')
 const { createCanvas, Image, registerFont } = require('canvas')
 
 
-registerFont('assets/OpenSans-Regular.ttf', { family: 'OpenSans-Regular' })
-registerFont('assets/OpenSans-Bold.ttf', { family: 'OpenSans-Bold' })
-registerFont('assets/kochi-mincho-subst.ttf', { family: 'kochi-mincho-subst' })
+const fontsDir = 'assets/fonts/'
+
+fs.readdirSync(fontsDir).forEach((file) => {
+  registerFont(`${fontsDir}/${file}`, { family: file })
+})
 
 function loadImageFromUrl(url) {
   return new Promise((resolve, reject) => {
@@ -111,7 +114,7 @@ module.exports = async (ctx) => {
 
     const canvasСtx = canvas.getContext('2d')
 
-    canvasСtx.font = '23px OpenSans-Bold'
+    canvasСtx.font = 'bold 23px OpenSans-Bold'
     canvasСtx.fillStyle = '#fff'
     canvasСtx.fillText(login, 110, 50)
 
