@@ -226,6 +226,7 @@ module.exports = async (ctx) => {
 
     canvasСtx.font = 'bold 23px OpenSans'
     canvasСtx.fillStyle = nickColor[nickMap[nickIndex]]
+
     canvasСtx.fillText(nick, 110, 50)
 
     canvasСtx.font = '30px OpenSans'
@@ -240,17 +241,22 @@ module.exports = async (ctx) => {
 
     const canvasAvatarСtx = canvas.getContext('2d')
 
+    let userPhotoUrl
+
     const userPhoto = await ctx.telegram.getUserProfilePhotos(replyMessage.from.id, 0, 1)
 
-    if (userPhoto.photos[0]) {
-      const userPhotoUrl = await ctx.telegram.getFileLink(userPhoto.photos[0][0].file_id)
+    if (userPhoto.photos[0]) userPhotoUrl = await ctx.telegram.getFileLink(userPhoto.photos[0][0].file_id)
+    if (!userPhotoUrl) userPhotoUrl = 'https://vk.com/images/contact_2x.png'
 
+    const avatar = await loadImageFromUrl(userPhotoUrl)
+
+    if (avatar) {
       canvasAvatarСtx.beginPath()
       canvasAvatarСtx.arc(60, 60, 40, 0, Math.PI * 2, true)
       canvasAvatarСtx.clip()
       canvasAvatarСtx.closePath()
       canvasAvatarСtx.restore()
-      canvasAvatarСtx.drawImage(await loadImageFromUrl(userPhotoUrl), 20, 20, 80, 80)
+      canvasAvatarСtx.drawImage(avatar, 20, 20, 80, 80)
     }
     else {
       canvasAvatarСtx.fillStyle = '#a4b7c4'
