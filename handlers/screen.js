@@ -6,8 +6,10 @@ const { createCanvas, Image, registerFont } = require('canvas')
 
 const fontsDir = 'assets/fonts/'
 
-fs.readdirSync(fontsDir).forEach((file) => {
-  registerFont(`${fontsDir}/${file}`, { family: file })
+fs.readdir(fontsDir, (err, files) => {
+  files.forEach((file) => {
+    registerFont(`${fontsDir}/${file}`, { family: file })
+  })
 })
 
 function loadImageFromUrl(url) {
@@ -35,37 +37,120 @@ function loadImageFromUrl(url) {
   })
 }
 
-function drawMultilineText(ctx, text, textX, textY, maxWidth, lineHeight) {
-  const words = text.replace(/\n|\r/g, ' <br> ').split(' ')
+function drawMultilineText(ctx, text, entities, fonstSize, textX, textY, maxWidth, lineHeight) {
+  const words = text.split(' ')
 
-  let line = ''
+  let chart = 0
+  const line = ''
+  let lineX = textX
+  let lineY = textY
 
   for (let index = 0; index < words.length; index++) {
-    if (words[index] === '<br>') {
-      ctx.fillText(line, textX, textY)
-      line = ''
-      textY += lineHeight
+    let word = `${words[index]} `
+
+    if (lineX + ctx.measureText(word).width > maxWidth) {
+      lineX = textX
+      lineY += lineHeight
+    }
+
+    const matchBoldStart = word.search(/<b>/)
+
+    if (matchBoldStart >= 0) {
+      const wordSplit = word.split(/<b>/)
+
+      for (let wsIndex = 0; wsIndex < wordSplit.length; wsIndex++) {
+        ctx.font = `bold ${fonstSize}px OpenSans`
+        ctx.fillText(wordSplit[wsIndex], lineX, lineY)
+        lineX += ctx.measureText(`${wordSplit[wsIndex]}`).width
+      }
+    }
+
+    const matchBreak = word.search(/<br>|\n|\r/)
+
+    if (matchBreak >= 0) {
+      const wordSplit = word.split(/<br>|\n|\r/)
+
+      for (let wsIndex = 0; wsIndex < wordSplit.length; wsIndex++) {
+        ctx.fillText(wordSplit[wsIndex], lineX, lineY)
+        if (wsIndex < wordSplit.length - 1) {
+          lineX = textX
+          lineY += lineHeight
+        }
+        else {
+          lineX += ctx.measureText(`${wordSplit[wsIndex]} `).width
+        }
+      }
     }
     else {
-      const testLine = `${line + words[index]} `
-      const metrics = ctx.measureText(testLine)
-      const testWidth = metrics.width
+      if (entities) {
+        const letters = word.split(/(?!$)/u)
 
-      if (testWidth > maxWidth && index > 0) {
-        ctx.fillText(line, textX, textY)
-        line = `${words[index]} `
-        textY += lineHeight
+        for (let lettersIndex = 0; lettersIndex < letters.length; lettersIndex++) {
+          const letter = letters[lettersIndex]
+
+          for (let entitieIndex = 0; entitieIndex < entities.length; entitieIndex++) {
+            const entity = entities[entitieIndex]
+
+            if (chart + letter.length > entity.offset && chart + letter.length < entity.offset + entity.length + 1) {
+              if (entity.type === 'bold') ctx.font = `bold ${ctx.font}`
+              if (entity.type === 'italic') ctx.font = `italic ${ctx.font}`
+            }
+          }
+
+          ctx.fillText(letter, lineX, lineY)
+          lineX += ctx.measureText(letter).width
+          ctx.font = `${fonstSize}px OpenSans`
+
+          chart += 1
+          word = word.substr(chart - lettersIndex)
+        }
+
+        for (let entitieIndex = 0; entitieIndex < entities.length; entitieIndex++) {
+          const entity = entities[entitieIndex]
+
+          if (chart + word.length > entity.offset && chart < entity.offset + entity.length + 1) {
+
+          }
+
+          // console.log(wordEntity)
+          // console.log(word.substr(chart + entity.length))
+        }
       }
-      else {
-        line = testLine
-      }
+
+      ctx.fillText(word, lineX, lineY)
+
+      lineX += ctx.measureText(word).width
     }
+
+    chart += word.length
+
+    // let word = words[index]
+
+    // if (word === '<br>') {
+    //   ctx.fillText(line, textX, textY)
+    //   line = ''
+    //   textY += lineHeight
+    // }
+    // else {
+    //   const testLine = `${line + word} `
+    //   const metrics = ctx.measureText(testLine)
+    //   const testWidth = metrics.width
+
+    //   if (testWidth > maxWidth && index > 0 && line !== '') {
+    //     ctx.fillText(line, textX, textY)
+    //     line = `${word} `
+    //     textY += lineHeight
+    //   }
+    //   else {
+    //     line = testLine
+    //   }
+    // }
   }
-  ctx.fillText(line, textX, textY)
+  // ctx.fillText(line, textX, textY)
 
   return {
     height: textX,
-    width: textY,
+    width: lineY,
   }
 }
 
@@ -82,7 +167,7 @@ function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
   else {
     const defaultRadius = { tl: 0, tr: 0, br: 0, bl: 0 }
 
-    for (let side in defaultRadius) {
+    for (const side in defaultRadius) {
       radius[side] = radius[side] || defaultRadius[side]
     }
   }
@@ -114,19 +199,19 @@ module.exports = async (ctx) => {
 
     const canvasСtx = canvas.getContext('2d')
 
-    canvasСtx.font = 'bold 23px OpenSans-Bold'
+    canvasСtx.font = 'bold 23px OpenSans'
     canvasСtx.fillStyle = '#fff'
     canvasСtx.fillText(login, 110, 50)
 
-    canvasСtx.font = '30px OpenSans-Regular'
+    canvasСtx.font = '30px OpenSans'
     canvasСtx.fillStyle = '#c9efff'
     if (replyMessage.from.username) canvasСtx.fillText(`@${replyMessage.from.username}`, 110, 90)
     else canvasСtx.fillText(`#${replyMessage.from.id}`, 110, 90)
 
-    canvasСtx.font = '28px OpenSans-Regular'
+    canvasСtx.font = '28px OpenSans'
     canvasСtx.fillStyle = '#fff'
 
-    const textSize = drawMultilineText(canvasСtx, replyMessage.text, 25, 140, canvas.width - 40, 30)
+    const textSize = drawMultilineText(canvasСtx, replyMessage.text, replyMessage.entities, 28, 25, 140, canvas.width - 40, 30)
 
     const userPhoto = await ctx.telegram.getUserProfilePhotos(replyMessage.from.id, 0, 1)
     const userPhotoUrl = await ctx.telegram.getFileLink(userPhoto.photos[0][0].file_id)
