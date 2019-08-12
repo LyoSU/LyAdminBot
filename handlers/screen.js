@@ -3,8 +3,8 @@ const https = require('https')
 const { createCanvas, Image, registerFont } = require('canvas')
 
 
-registerFont('assets/NotoSans-Regular.ttf', { family: 'NotoSans-Regular' })
-registerFont('assets/NotoSans-Bold.ttf', { family: 'NotoSans-Bold' })
+registerFont('assets/OpenSans-Regular.ttf', { family: 'OpenSans-Regular' })
+registerFont('assets/OpenSans-Bold.ttf', { family: 'OpenSans-Bold' })
 registerFont('assets/kochi-mincho-subst.ttf', { family: 'kochi-mincho-subst' })
 
 function loadImageFromUrl(url) {
@@ -111,16 +111,16 @@ module.exports = async (ctx) => {
 
     const canvasСtx = canvas.getContext('2d')
 
-    canvasСtx.font = '23px NotoSans-Bold, kochi-mincho-subst'
+    canvasСtx.font = '23px OpenSans-Bold'
     canvasСtx.fillStyle = '#fff'
     canvasСtx.fillText(login, 110, 50)
 
-    canvasСtx.font = '30px NotoSans-Regular, kochi-mincho-subst'
+    canvasСtx.font = '30px OpenSans-Regular'
     canvasСtx.fillStyle = '#c9efff'
     if (replyMessage.from.username) canvasСtx.fillText(`@${replyMessage.from.username}`, 110, 90)
     else canvasСtx.fillText(`#${replyMessage.from.id}`, 110, 90)
 
-    canvasСtx.font = '28px NotoSans-Regular, kochi-mincho-subst'
+    canvasСtx.font = '28px OpenSans-Regular'
     canvasСtx.fillStyle = '#fff'
 
     const textSize = drawMultilineText(canvasСtx, replyMessage.text, 25, 140, canvas.width - 40, 30)
