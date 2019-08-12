@@ -96,15 +96,11 @@ function drawMultilineText(ctx, text, entities, fonstSize, fillStyle, textX, tex
             if (chart + letter.length > entity.offset && chart + letter.length < entity.offset + entity.length + 1) {
               if (entity.type === 'bold') ctx.font = `bold ${ctx.font}`
               if (entity.type === 'italic') ctx.font = `italic ${ctx.font}`
-              if (['pre', 'code '].includes(entity.type)) {
+              if (['pre', 'code'].includes(entity.type)) {
                 ctx.font = `Monospace ${fonstSize * 0.8}px OpenSans`
                 ctx.fillStyle = '#5887a7'
               }
-              if (['mention', 'hashtag', 'email', 'phone_number', 'bot_command'].includes(entity.type)) ctx.fillStyle = '#6ab7ec'
-              if (['url', 'text_link '].includes(entity.type)) {
-                ctx.fillStyle = '#6ab7ec'
-                ctx.fillRect(lineX, lineY + 3, ctx.measureText(letter).width, 2)
-              }
+              if (['mention', 'hashtag', 'email', 'phone_number', 'bot_command', 'url', 'text_link'].includes(entity.type)) ctx.fillStyle = '#6ab7ec'
             }
           }
 
