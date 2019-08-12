@@ -193,15 +193,29 @@ function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
 module.exports = async (ctx) => {
   if (ctx.message.reply_to_message && ctx.message.reply_to_message.text) {
     const replyMessage = ctx.message.reply_to_message
-    const login = `${replyMessage.from.first_name} ${replyMessage.from.last_name || ''}`
+    const nick = `${replyMessage.from.first_name} ${replyMessage.from.last_name || ''}`
 
     const canvas = createCanvas(512, 512)
 
     const canvasСtx = canvas.getContext('2d')
 
+    const nickColor = [
+      '#fdacb0',
+      '#c1eec1',
+      '#f8d9a3',
+      '#acdbf9',
+      '#e0d0fa',
+      '#ffa3c4',
+      '#a3e6ef',
+      '#fccca1',
+    ]
+
+    const nickIndex = replyMessage.from.id % 7
+    const nickMap = [0, 7, 4, 1, 6, 3, 5]
+
     canvasСtx.font = 'bold 23px OpenSans'
-    canvasСtx.fillStyle = '#fff'
-    canvasСtx.fillText(login, 110, 50)
+    canvasСtx.fillStyle = nickColor[nickMap[nickIndex]]
+    canvasСtx.fillText(nick, 110, 50)
 
     canvasСtx.font = '30px OpenSans'
     canvasСtx.fillStyle = '#c9efff'
@@ -236,7 +250,6 @@ module.exports = async (ctx) => {
       canvasСtx.font = 'bold 55px OpenSans'
       canvasAvatarСtx.fillStyle = '#fff'
       canvasСtx.fillText(replyMessage.from.first_name.split(/(?!$)/u, 1)[0], 30, 80)
-
     }
 
     let stickHeight = 512
