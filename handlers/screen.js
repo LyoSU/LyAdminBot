@@ -210,6 +210,17 @@ module.exports = async (ctx) => {
       '#fccca1',
     ]
 
+    const usernameColor = [
+      '#fb6169',
+      '#85de85',
+      '#f3bc5c',
+      '#65bdf3',
+      '#b48bf2',
+      '#ff5694',
+      '#62d4e3',
+      '#faa357',
+    ]
+
     const nickIndex = replyMessage.from.id % 7
     const nickMap = [0, 7, 4, 1, 6, 3, 5]
 
@@ -218,7 +229,7 @@ module.exports = async (ctx) => {
     canvasСtx.fillText(nick, 110, 50)
 
     canvasСtx.font = '30px OpenSans'
-    canvasСtx.fillStyle = '#c9efff'
+    canvasСtx.fillStyle = usernameColor[nickMap[nickIndex]]
     if (replyMessage.from.username) canvasСtx.fillText(`@${replyMessage.from.username}`, 110, 90)
     else canvasСtx.fillText(`#${replyMessage.from.id}`, 110, 90)
 
@@ -260,7 +271,7 @@ module.exports = async (ctx) => {
 
     const canvasBackСtx = canvasSticker.getContext('2d')
 
-    canvasBackСtx.fillStyle = '#7592a6'
+    canvasBackСtx.fillStyle = '#1e2c3a'
     roundRect(canvasBackСtx, 10, 10, 492, stickHeight - 10, 20, true)
 
     const canvasStickerСtx = canvasSticker.getContext('2d')
