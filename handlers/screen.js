@@ -111,7 +111,7 @@ module.exports = async (ctx) => {
 
     const canvasСtx = canvas.getContext('2d')
 
-    canvasСtx.font = '23px OpenSans-Bold'
+    canvasСtx.font = 'bold 23px OpenSans-Bold'
     canvasСtx.fillStyle = '#fff'
     canvasСtx.fillText(login, 110, 50)
 
