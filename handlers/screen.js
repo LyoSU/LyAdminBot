@@ -37,11 +37,13 @@ function loadImageFromUrl(url) {
   })
 }
 
-function drawMultilineText(ctx, text, entities, fonstSize, textX, textY, maxWidth, lineHeight) {
+function drawMultilineText(ctx, text, entities, fonstSize, fillStyle, textX, textY, maxWidth, lineHeight) {
   const words = text.split(' ')
 
+  ctx.font = `${fonstSize}px OpenSans`
+  ctx.fillStyle = fillStyle
+
   let chart = 0
-  const line = ''
   let lineX = textX
   let lineY = textY
 
@@ -59,7 +61,7 @@ function drawMultilineText(ctx, text, entities, fonstSize, textX, textY, maxWidt
       const wordSplit = word.split(/<b>/)
 
       for (let wsIndex = 0; wsIndex < wordSplit.length; wsIndex++) {
-        ctx.font = `bold ${fonstSize}px OpenSans`
+        ctx.font = `bold ${fonstSize}px`
         ctx.fillText(wordSplit[wsIndex], lineX, lineY)
         lineX += ctx.measureText(`${wordSplit[wsIndex]}`).width
       }
@@ -94,12 +96,23 @@ function drawMultilineText(ctx, text, entities, fonstSize, textX, textY, maxWidt
             if (chart + letter.length > entity.offset && chart + letter.length < entity.offset + entity.length + 1) {
               if (entity.type === 'bold') ctx.font = `bold ${ctx.font}`
               if (entity.type === 'italic') ctx.font = `italic ${ctx.font}`
+              if (['pre', 'code '].includes(entity.type)) {
+                ctx.font = `Monospace ${fonstSize * 0.8}px OpenSans`
+                ctx.fillStyle = '#5887a7'
+              }
+              if (['mention', 'hashtag', 'email', 'phone_number', 'bot_command'].includes(entity.type)) ctx.fillStyle = '#6ab7ec'
+              if (['url', 'text_link '].includes(entity.type)) {
+                ctx.fillStyle = '#6ab7ec'
+                ctx.fillRect(lineX, lineY + 3, ctx.measureText(letter).width, 2)
+              }
             }
           }
 
           ctx.fillText(letter, lineX, lineY)
           lineX += ctx.measureText(letter).width
+
           ctx.font = `${fonstSize}px OpenSans`
+          ctx.fillStyle = fillStyle
 
           chart += 1
           word = word.substr(chart - lettersIndex)
@@ -234,10 +247,7 @@ module.exports = async (ctx) => {
     if (replyMessage.from.username) canvasСtx.fillText(`@${replyMessage.from.username}`, 110, 90)
     else canvasСtx.fillText(`#${replyMessage.from.id}`, 110, 90)
 
-    canvasСtx.font = '28px OpenSans'
-    canvasСtx.fillStyle = '#fff'
-
-    const textSize = drawMultilineText(canvasСtx, replyMessage.text, replyMessage.entities, 28, 25, 140, canvas.width - 40, 30)
+    const textSize = drawMultilineText(canvasСtx, replyMessage.text, replyMessage.entities, 28, '#fff', 25, 140, canvas.width - 40, 30)
 
     const canvasAvatarСtx = canvas.getContext('2d')
 
