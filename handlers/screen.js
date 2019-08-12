@@ -217,7 +217,7 @@ module.exports = async (ctx) => {
 
     const userPhoto = await ctx.telegram.getUserProfilePhotos(replyMessage.from.id, 0, 1)
 
-    if (!userPhoto.photos[0]) {
+    if (userPhoto.photos[0]) {
       const userPhotoUrl = await ctx.telegram.getFileLink(userPhoto.photos[0][0].file_id)
 
       canvasAvatarСtx.beginPath()
@@ -235,7 +235,7 @@ module.exports = async (ctx) => {
 
       canvasСtx.font = 'bold 55px OpenSans'
       canvasAvatarСtx.fillStyle = '#fff'
-      canvasСtx.fillText(replyMessage.from.first_name.split(/(?!$)/u)[0], 30, 80)
+      canvasСtx.fillText(replyMessage.from.first_name.split(/(?!$)/u, 1)[0], 30, 80)
 
     }
 
