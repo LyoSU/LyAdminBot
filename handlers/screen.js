@@ -213,17 +213,31 @@ module.exports = async (ctx) => {
 
     const textSize = drawMultilineText(canvasСtx, replyMessage.text, replyMessage.entities, 28, 25, 140, canvas.width - 40, 30)
 
-    const userPhoto = await ctx.telegram.getUserProfilePhotos(replyMessage.from.id, 0, 1)
-    const userPhotoUrl = await ctx.telegram.getFileLink(userPhoto.photos[0][0].file_id)
-
     const canvasAvatarСtx = canvas.getContext('2d')
 
-    canvasAvatarСtx.beginPath()
-    canvasAvatarСtx.arc(60, 60, 40, 0, Math.PI * 2, true)
-    canvasAvatarСtx.clip()
-    canvasAvatarСtx.closePath()
-    canvasAvatarСtx.restore()
-    canvasAvatarСtx.drawImage(await loadImageFromUrl(userPhotoUrl), 20, 20, 80, 80)
+    const userPhoto = await ctx.telegram.getUserProfilePhotos(replyMessage.from.id, 0, 1)
+
+    if (userPhoto.photos[0]) {
+      const userPhotoUrl = await ctx.telegram.getFileLink(userPhoto.photos[0][0].file_id)
+
+      canvasAvatarСtx.beginPath()
+      canvasAvatarСtx.arc(60, 60, 40, 0, Math.PI * 2, true)
+      canvasAvatarСtx.clip()
+      canvasAvatarСtx.closePath()
+      canvasAvatarСtx.restore()
+      canvasAvatarСtx.drawImage(await loadImageFromUrl(userPhotoUrl), 20, 20, 80, 80)
+    }
+    else {
+      canvasAvatarСtx.fillStyle = '#a4b7c4'
+      canvasAvatarСtx.beginPath()
+      canvasAvatarСtx.arc(60, 60, 40, 0, Math.PI * 2, false)
+      canvasAvatarСtx.fill()
+
+      canvasСtx.font = 'bold 55px OpenSans'
+      canvasAvatarСtx.fillStyle = '#fff'
+      canvasСtx.fillText(replyMessage.from.first_name[0], 35, 80)
+
+    }
 
     let stickHeight = 512
 
@@ -243,6 +257,7 @@ module.exports = async (ctx) => {
     ctx.replyWithSticker({
       source: canvasSticker.toBuffer(),
     }, {
+      reply_to_message_id: replyMessage.message_id,
       reply_markup: Markup.inlineKeyboard([
         Markup.callbackButton('add', 'add'),
       ]),
