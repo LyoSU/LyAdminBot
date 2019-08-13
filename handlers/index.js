@@ -3,7 +3,7 @@ const handleKick = require('./kick')
 const handlePing = require('./ping')
 const handleSetLanguage = require('./language-set')
 const handleBanan = require('./banan')
-const handleScreen = require('./screen')
+const handleQuote = require('./quote')
 const handleDelete = require('./delete')
 const handleTop = require('./top')
 const handleTopBanan = require('./top-banan')
@@ -32,7 +32,7 @@ module.exports = {
   handlePing,
   handleSetLanguage,
   handleBanan,
-  handleScreen,
+  handleQuote,
   handleDelete,
   handleTop,
   handleTopBanan,

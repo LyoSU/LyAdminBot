@@ -202,13 +202,14 @@ function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
 
 module.exports = async (ctx) => {
   if (ctx.message.reply_to_message && ctx.message.reply_to_message.text) {
+    const maxHeight = 1024
     const replyMessage = ctx.message.reply_to_message
     let messageFrom = replyMessage.from
 
     if (replyMessage.forward_from) messageFrom = replyMessage.forward_from
     const nick = `${messageFrom.first_name} ${messageFrom.last_name || ''}`
 
-    const canvas = createCanvas(512, 1024)
+    const canvas = createCanvas(512, maxHeight)
 
     const canvasСtx = canvas.getContext('2d')
 
@@ -240,12 +241,12 @@ module.exports = async (ctx) => {
     canvasСtx.font = 'bold 21px OpenSans'
     canvasСtx.fillStyle = nickColor[nickMap[nickIndex]]
 
-    canvasСtx.fillText(nick, 90, 30)
+    canvasСtx.fillText(nick, 90, 35)
 
     canvasСtx.font = '28px OpenSans'
     canvasСtx.fillStyle = usernameColor[nickMap[nickIndex]]
-    if (messageFrom.username) canvasСtx.fillText(`@${messageFrom.username}`, 90, 65)
-    else canvasСtx.fillText(`#${messageFrom.id}`, 90, 65)
+    if (messageFrom.username) canvasСtx.fillText(`@${messageFrom.username}`, 90, 70)
+    else canvasСtx.fillText(`#${messageFrom.id}`, 90, 70)
 
     const textSize = drawMultilineText(canvasСtx, replyMessage.text, replyMessage.entities, 26, '#fff', 10, 115, canvas.width - 10, 30)
 
@@ -278,7 +279,10 @@ module.exports = async (ctx) => {
       canvasСtx.fillText(messageFrom.first_name.split(/(?!$)/u, 1)[0], 30, 80)
     }
 
-    const stickHeight = textSize.width + 30
+    let stickHeight = textSize.width + 30
+
+    if (stickHeight > maxHeight) stickHeight = maxHeight
+
     const canvasSticker = createCanvas(512, stickHeight)
     const canvasBackСtx = canvasSticker.getContext('2d')
 
