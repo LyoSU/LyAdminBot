@@ -2,6 +2,7 @@ const Markup = require('telegraf/markup')
 const https = require('https')
 const fs = require('fs')
 const { createCanvas, Image, registerFont } = require('canvas')
+const sharp = require('sharp')
 
 
 const fontsDir = 'assets/fonts/'
@@ -114,16 +115,16 @@ function drawMultilineText(ctx, text, entities, fonstSize, fillStyle, textX, tex
           word = word.substr(chart - lettersIndex)
         }
 
-        for (let entitieIndex = 0; entitieIndex < entities.length; entitieIndex++) {
-          const entity = entities[entitieIndex]
+        // for (let entitieIndex = 0; entitieIndex < entities.length; entitieIndex++) {
+        //   const entity = entities[entitieIndex]
 
-          if (chart + word.length > entity.offset && chart < entity.offset + entity.length + 1) {
+        //   if (chart + word.length > entity.offset && chart < entity.offset + entity.length + 1) {
 
-          }
+        //   }
 
-          // console.log(wordEntity)
-          // console.log(word.substr(chart + entity.length))
-        }
+        //   // console.log(wordEntity)
+        //   // console.log(word.substr(chart + entity.length))
+        // }
       }
 
       ctx.fillText(word, lineX, lineY)
@@ -202,9 +203,12 @@ function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
 module.exports = async (ctx) => {
   if (ctx.message.reply_to_message && ctx.message.reply_to_message.text) {
     const replyMessage = ctx.message.reply_to_message
-    const nick = `${replyMessage.from.first_name} ${replyMessage.from.last_name || ''}`
+    let messageFrom = replyMessage.from
 
-    const canvas = createCanvas(512, 512)
+    if (replyMessage.forward_from) messageFrom = replyMessage.forward_from
+    const nick = `${messageFrom.first_name} ${messageFrom.last_name || ''}`
+
+    const canvas = createCanvas(512, 1024)
 
     const canvasСtx = canvas.getContext('2d')
 
@@ -230,39 +234,38 @@ module.exports = async (ctx) => {
       '#faa357',
     ]
 
-    const nickIndex = replyMessage.from.id % 7
+    const nickIndex = messageFrom.id % 7
     const nickMap = [0, 7, 4, 1, 6, 3, 5]
 
-    canvasСtx.font = 'bold 23px OpenSans'
+    canvasСtx.font = 'bold 21px OpenSans'
     canvasСtx.fillStyle = nickColor[nickMap[nickIndex]]
 
-    canvasСtx.fillText(nick, 110, 50)
+    canvasСtx.fillText(nick, 90, 30)
 
-    canvasСtx.font = '30px OpenSans'
+    canvasСtx.font = '28px OpenSans'
     canvasСtx.fillStyle = usernameColor[nickMap[nickIndex]]
-    if (replyMessage.from.username) canvasСtx.fillText(`@${replyMessage.from.username}`, 110, 90)
-    else canvasСtx.fillText(`#${replyMessage.from.id}`, 110, 90)
+    if (messageFrom.username) canvasСtx.fillText(`@${messageFrom.username}`, 90, 65)
+    else canvasСtx.fillText(`#${messageFrom.id}`, 90, 65)
 
-    const textSize = drawMultilineText(canvasСtx, replyMessage.text, replyMessage.entities, 28, '#fff', 25, 140, canvas.width - 40, 30)
+    const textSize = drawMultilineText(canvasСtx, replyMessage.text, replyMessage.entities, 26, '#fff', 10, 115, canvas.width - 10, 30)
 
     const canvasAvatarСtx = canvas.getContext('2d')
 
-    let userPhotoUrl
+    let userPhotoUrl = 'https://vk.com/images/contact_2x.png'
 
-    const userPhoto = await ctx.telegram.getUserProfilePhotos(replyMessage.from.id, 0, 1)
+    const userPhoto = await ctx.telegram.getUserProfilePhotos(messageFrom.id, 0, 1)
 
     if (userPhoto.photos[0]) userPhotoUrl = await ctx.telegram.getFileLink(userPhoto.photos[0][0].file_id)
-    if (!userPhotoUrl) userPhotoUrl = 'https://vk.com/images/contact_2x.png'
 
     const avatar = await loadImageFromUrl(userPhotoUrl)
 
     if (avatar) {
       canvasAvatarСtx.beginPath()
-      canvasAvatarСtx.arc(60, 60, 40, 0, Math.PI * 2, true)
+      canvasAvatarСtx.arc(45, 45, 35, 0, Math.PI * 2, true)
       canvasAvatarСtx.clip()
       canvasAvatarСtx.closePath()
       canvasAvatarСtx.restore()
-      canvasAvatarСtx.drawImage(avatar, 20, 20, 80, 80)
+      canvasAvatarСtx.drawImage(avatar, 10, 10, 70, 70)
     }
     else {
       canvasAvatarСtx.fillStyle = '#a4b7c4'
@@ -272,26 +275,29 @@ module.exports = async (ctx) => {
 
       canvasСtx.font = 'bold 55px OpenSans'
       canvasAvatarСtx.fillStyle = '#fff'
-      canvasСtx.fillText(replyMessage.from.first_name.split(/(?!$)/u, 1)[0], 30, 80)
+      canvasСtx.fillText(messageFrom.first_name.split(/(?!$)/u, 1)[0], 30, 80)
     }
 
-    let stickHeight = 512
-
-    if (textSize.width < stickHeight) stickHeight = textSize.width + 30
-
+    const stickHeight = textSize.width + 30
     const canvasSticker = createCanvas(512, stickHeight)
-
     const canvasBackСtx = canvasSticker.getContext('2d')
 
     canvasBackСtx.fillStyle = '#1e2c3a'
-    roundRect(canvasBackСtx, 10, 10, 492, stickHeight - 10, 20, true)
+    roundRect(canvasBackСtx, 0, 0, 512, stickHeight, 20, true)
 
     const canvasStickerСtx = canvasSticker.getContext('2d')
 
     canvasStickerСtx.drawImage(canvas, 0, 0)
 
-    ctx.replyWithSticker({
-      source: canvasSticker.toBuffer(),
+    const imageSharp = sharp(canvasSticker.toBuffer())
+
+    if (stickHeight >= 512) imageSharp.resize({ height: 512 })
+
+    const imageSharpBuffer = await imageSharp.webp({ quality: 100 }).png({ compressionLevel: 9, force: false }).toBuffer()
+
+    ctx.replyWithDocument({
+      source: imageSharpBuffer,
+      filename: 'sticker.webp',
     }, {
       reply_to_message_id: replyMessage.message_id,
       reply_markup: Markup.inlineKeyboard([
