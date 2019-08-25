@@ -148,6 +148,13 @@ const groupSchema = mongoose.Schema({
       default: 0,
     },
   },
+  stickerSet: {
+    name: String,
+    create: {
+      type: Boolean,
+      default: false,
+    },
+  },
 }, {
   timestamps: true,
 })

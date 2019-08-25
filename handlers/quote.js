@@ -114,17 +114,6 @@ function drawMultilineText(ctx, text, entities, fonstSize, fillStyle, textX, tex
           chart += 1
           word = word.substr(chart - lettersIndex)
         }
-
-        // for (let entitieIndex = 0; entitieIndex < entities.length; entitieIndex++) {
-        //   const entity = entities[entitieIndex]
-
-        //   if (chart + word.length > entity.offset && chart < entity.offset + entity.length + 1) {
-
-        //   }
-
-        //   // console.log(wordEntity)
-        //   // console.log(word.substr(chart + entity.length))
-        // }
       }
 
       ctx.fillText(word, lineX, lineY)
@@ -133,30 +122,7 @@ function drawMultilineText(ctx, text, entities, fonstSize, fillStyle, textX, tex
     }
 
     chart += word.length
-
-    // let word = words[index]
-
-    // if (word === '<br>') {
-    //   ctx.fillText(line, textX, textY)
-    //   line = ''
-    //   textY += lineHeight
-    // }
-    // else {
-    //   const testLine = `${line + word} `
-    //   const metrics = ctx.measureText(testLine)
-    //   const testWidth = metrics.width
-
-    //   if (testWidth > maxWidth && index > 0 && line !== '') {
-    //     ctx.fillText(line, textX, textY)
-    //     line = `${word} `
-    //     textY += lineHeight
-    //   }
-    //   else {
-    //     line = testLine
-    //   }
-    // }
   }
-  // ctx.fillText(line, textX, textY)
 
   return {
     height: textX,
@@ -250,6 +216,14 @@ module.exports = async (ctx) => {
 
     const textSize = drawMultilineText(canvasСtx, replyMessage.text, replyMessage.entities, 26, '#fff', 10, 115, canvas.width - 10, 30)
 
+    let groupWatermark = ctx.group.info.title
+
+    if (ctx.group.info.username) groupWatermark = `@${ctx.group.info.username}`
+
+    canvasСtx.font = '15px OpenSans'
+    canvasСtx.fillStyle = '#5f82a3'
+    canvasСtx.fillText(groupWatermark, 500 - canvasСtx.measureText(groupWatermark).width, textSize.width + 30)
+
     const canvasAvatarСtx = canvas.getContext('2d')
 
     let userPhotoUrl = 'https://vk.com/images/contact_2x.png'
@@ -279,7 +253,7 @@ module.exports = async (ctx) => {
       canvasСtx.fillText(messageFrom.first_name.split(/(?!$)/u, 1)[0], 30, 80)
     }
 
-    let stickHeight = textSize.width + 30
+    let stickHeight = textSize.width + 45
 
     if (stickHeight > maxHeight) stickHeight = maxHeight
 
@@ -299,14 +273,11 @@ module.exports = async (ctx) => {
 
     const imageSharpBuffer = await imageSharp.webp({ quality: 100 }).png({ compressionLevel: 9, force: false }).toBuffer()
 
-    ctx.replyWithDocument({
+    await ctx.replyWithDocument({
       source: imageSharpBuffer,
       filename: 'sticker.webp',
     }, {
       reply_to_message_id: replyMessage.message_id,
-      reply_markup: Markup.inlineKeyboard([
-        Markup.callbackButton('add', 'add'),
-      ]),
     })
   }
 }
