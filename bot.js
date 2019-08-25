@@ -33,6 +33,7 @@ const {
   handleAdminExtra,
   handleAdminMaxExtra,
   handleSendMembers,
+  handleSaveSticker,
   handleSendSettingsJson,
   handleAdminJsonReset,
   handleAdminReset,
@@ -109,6 +110,9 @@ bot.use(async (ctx, next) => {
 
   await next(ctx)
 
+  await ctx.session.userInfo.save()
+  await ctx.group.info.save()
+
   const ms = new Date() - ctx.ms
 
   console.log('Response time %sms', ms)
@@ -136,6 +140,7 @@ bot.hears('!text', onlyAdmin, handleAdminWelcomeText)
 bot.hears('!text-reset', onlyAdmin, handleAdminWelcomeTextReset)
 bot.hears('!reset', onlyAdmin, handleAdminReset)
 bot.hears('!users', onlyAdmin, handleSendMembers)
+bot.hears(/^!s(?:\s([^\s]+)|)/, onlyAdmin, handleSaveSticker)
 bot.hears('!json', onlyAdmin, handleSendSettingsJson)
 
 bot.action(/set_language:(.*)/, handleSetLanguage)

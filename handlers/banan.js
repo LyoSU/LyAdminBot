@@ -125,7 +125,7 @@ module.exports = async (ctx) => {
     }
 
     banMember.banan.time = Date.now()
-    banMember.save()
+    await banMember.save()
   }
   else {
     ctx.replyWithHTML(ctx.i18n.t('banan.show', {
