@@ -39,7 +39,6 @@ module.exports = (ctx) => new Promise(async (resolve, reject) => {
 
   if ((groupMember.updatedAt.getTime() + updateInterval) < Date.now()) {
     groupMember.updatedAt = new Date()
-    await groupMember.save()
   }
 
   resolve(groupMember)
