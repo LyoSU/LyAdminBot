@@ -21,7 +21,6 @@ module.exports = (ctx) => new Promise(async (resolve, reject) => {
 
   if ((user.updatedAt.getTime() + updateInterval) < Date.now()) {
     user.updatedAt = new Date()
-    await user.save()
   }
 
   resolve(user)
