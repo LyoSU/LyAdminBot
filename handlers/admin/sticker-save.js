@@ -45,6 +45,7 @@ module.exports = async (ctx) => {
       if (replyMessage.caption) stickerFile.emoji = replyMessage.caption
     }
 
+
     if (stickerFile) {
       if (!ctx.match[1] && ctx.group.info.stickerSet.name && ctx.group.info.stickerSet.name === stickerFile.set_name) {
         const deleteStickerFromSet = await ctx.telegram.deleteStickerFromSet(stickerFile.file_id).catch((error) => {
@@ -84,10 +85,13 @@ module.exports = async (ctx) => {
           const packTitle = `${ctx.group.info.title.substring(0, 30)} pack by @${ctx.options.username}`
 
           const chatAdministrators = await ctx.getChatAdministrators()
+          let chatAdministrator = ctx.from
 
-          console.log(chatAdministrators)
+          chatAdministrators.forEach((administrator) => {
+            if (administrator.status === 'creator') chatAdministrator = administrator.chat
+          })
 
-          stickerAdd = await ctx.telegram.createNewStickerSet(chatAdministrators[0].user.id, packName, packTitle, {
+          stickerAdd = await ctx.telegram.createNewStickerSet(chatAdministrator, packName, packTitle, {
             png_sticker: { source: stickerPNG },
             emojis,
           }).catch((error) => {
