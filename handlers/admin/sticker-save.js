@@ -88,7 +88,7 @@ module.exports = async (ctx) => {
           let chatAdministrator = ctx.from
 
           chatAdministrators.forEach((administrator) => {
-            if (administrator.status === 'creator') chatAdministrator = administrator.chat
+            if (administrator.status === 'creator') chatAdministrator = administrator.user
           })
 
           stickerAdd = await ctx.telegram.createNewStickerSet(chatAdministrator.id, packName, packTitle, {
