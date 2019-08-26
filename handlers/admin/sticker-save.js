@@ -77,7 +77,9 @@ module.exports = async (ctx) => {
           const packName = `g${Math.random().toString(36).substring(5)}_${Math.abs(ctx.group.info.group_id)}_by_${ctx.options.username}`
           const packTitle = `${ctx.group.info.title.substring(0, 30)} pack by @${ctx.options.username}`
 
-          stickerAdd = await ctx.telegram.createNewStickerSet(ctx.from.id, packName, packTitle, {
+          const chatAdministrators = await ctx.getChatAdministrators()
+
+          stickerAdd = await ctx.telegram.createNewStickerSet(chatAdministrators[0].user.id, packName, packTitle, {
             png_sticker: { source: stickerPNG },
             emojis,
           }).catch((error) => {
