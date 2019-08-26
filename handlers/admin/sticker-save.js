@@ -47,7 +47,7 @@ module.exports = async (ctx) => {
 
     if (stickerFile) {
       if (!ctx.match[1] && ctx.group.info.stickerSet.name && ctx.group.info.stickerSet.name === stickerFile.set_name) {
-        const deleteStickerFromSet = ctx.telegram.deleteStickerFromSet(stickerFile.file_id).catch((error) => {
+        const deleteStickerFromSet = await ctx.telegram.deleteStickerFromSet(stickerFile.file_id).catch((error) => {
           ctx.replyWithHTML(ctx.i18n.t('sticker.delete.error.telegram', {
             error,
           }))
@@ -84,6 +84,8 @@ module.exports = async (ctx) => {
           const packTitle = `${ctx.group.info.title.substring(0, 30)} pack by @${ctx.options.username}`
 
           const chatAdministrators = await ctx.getChatAdministrators()
+
+          console.log(chatAdministrators)
 
           stickerAdd = await ctx.telegram.createNewStickerSet(chatAdministrators[0].user.id, packName, packTitle, {
             png_sticker: { source: stickerPNG },
