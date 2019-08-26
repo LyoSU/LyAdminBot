@@ -135,6 +135,8 @@ sticker:
       telegram: <b>У меня не получилось сохранить этот стикер.</b>\n<pre>${error}</pre>
   delete:
     suc: Стикер успешно удален из <a href="${link}">стикерпака группы</a>.
+    error:
+      telegram: <b>У меня не получилось удалить этот стикер.</b>\n<pre>${error}</pre>
   btn:
     save_sticker: Сохранить стикер
 del:
