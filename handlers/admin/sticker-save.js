@@ -53,7 +53,7 @@ module.exports = async (ctx) => {
           }))
         })
 
-        if (deleteStickerFromSet === true) {
+        if (deleteStickerFromSet) {
           ctx.replyWithHTML(ctx.i18n.t('sticker.delete.suc', {
             link: `${stickerLinkPrefix}${ctx.group.info.stickerSet.name}`,
           }), {
