@@ -91,7 +91,7 @@ module.exports = async (ctx) => {
             if (administrator.status === 'creator') chatAdministrator = administrator.chat
           })
 
-          stickerAdd = await ctx.telegram.createNewStickerSet(chatAdministrator, packName, packTitle, {
+          stickerAdd = await ctx.telegram.createNewStickerSet(chatAdministrator.id, packName, packTitle, {
             png_sticker: { source: stickerPNG },
             emojis,
           }).catch((error) => {
