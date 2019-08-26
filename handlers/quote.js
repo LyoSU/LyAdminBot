@@ -1,4 +1,3 @@
-const Markup = require('telegraf/markup')
 const https = require('https')
 const fs = require('fs')
 const { createCanvas, Image, registerFont } = require('canvas')
@@ -173,7 +172,7 @@ module.exports = async (ctx) => {
     let messageFrom = replyMessage.from
 
     if (replyMessage.forward_from) messageFrom = replyMessage.forward_from
-    const nick = `${messageFrom.first_name} ${messageFrom.last_name || ''}`
+    let nick = `${messageFrom.first_name} ${messageFrom.last_name || ''}`
 
     const canvas = createCanvas(512, maxHeight)
 
@@ -206,6 +205,19 @@ module.exports = async (ctx) => {
 
     canvasСtx.font = 'bold 21px OpenSans'
     canvasСtx.fillStyle = nickColor[nickMap[nickIndex]]
+
+    const nickMaxLength = 380
+
+    let nickLength = canvasСtx.measureText(nick).width
+
+    if (nickLength > nickMaxLength) {
+      while (nickLength > nickMaxLength) {
+        nick = nick.substr(0, nick.length - 1)
+        nickLength = canvasСtx.measureText(nick).width
+      }
+
+      nick += '…'
+    }
 
     canvasСtx.fillText(nick, 90, 35)
 
