@@ -47,13 +47,19 @@ module.exports = async (ctx) => {
 
     if (stickerFile) {
       if (!ctx.match[1] && ctx.group.info.stickerSet.name && ctx.group.info.stickerSet.name === stickerFile.set_name) {
-        ctx.replyWithHTML(ctx.i18n.t('sticker.delete.suc', {
-          link: `${stickerLinkPrefix}${ctx.group.info.stickerSet.name}`,
-        }), {
-          reply_to_message_id: ctx.message.message_id,
+        const deleteStickerFromSet = ctx.telegram.deleteStickerFromSet(stickerFile.file_id).catch((error) => {
+          ctx.replyWithHTML(ctx.i18n.t('sticker.delete.error.telegram', {
+            error,
+          }))
         })
 
-        ctx.telegram.deleteStickerFromSet(stickerFile.file_id)
+        if (deleteStickerFromSet === true) {
+          ctx.replyWithHTML(ctx.i18n.t('sticker.delete.suc', {
+            link: `${stickerLinkPrefix}${ctx.group.info.stickerSet.name}`,
+          }), {
+            reply_to_message_id: ctx.message.message_id,
+          })
+        }
       }
       else {
         const fileUrl = await ctx.telegram.getFileLink(stickerFile)
@@ -98,6 +104,8 @@ module.exports = async (ctx) => {
             png_sticker: { source: stickerPNG },
             emojis,
           }).catch((error) => {
+            if (error.description === 'Bad Request: STICKERSET_INVALID') ctx.group.info.stickerSet = null
+
             ctx.replyWithHTML(ctx.i18n.t('sticker.save.error.telegram', {
               error,
             }))
