@@ -111,7 +111,7 @@ bot.use(async (ctx, next) => {
   await next(ctx)
 
   await ctx.session.userInfo.save()
-  await ctx.group.info.save()
+  if (ctx.group.info) await ctx.group.info.save()
 
   const ms = new Date() - ctx.ms
 
