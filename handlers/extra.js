@@ -1,16 +1,18 @@
 const replicators = require('telegraf/core/replicators')
 
 
-module.exports = async (ctx, next) => {
+module.exports = async (ctx) => {
   const { entities } = ctx.message
   const { maxExtra } = ctx.group.info.settings
-  let num = entities.length
+  let entitiesNum = entities.length
+  let hashtagNum = 0
 
-  if (num > maxExtra) num = maxExtra
-  for (let index = 0; index < num; index++) {
+  if (entitiesNum > maxExtra) entitiesNum = maxExtra
+
+  for (let index = 0; index < entities.length; index++) {
     const entity = entities[index]
 
-    if (entity.type === 'hashtag') {
+    if (hashtagNum < entitiesNum && entity.type === 'hashtag') {
       const hashtag = ctx.message.text.substring(entity.offset, entity.offset + entity.length)
       const groupExtra = ctx.group.info.settings.extras.find((el) => {
         if (el.name.match(new RegExp(`^${hashtag.slice(1)}$`, 'i'))) return true
@@ -24,9 +26,8 @@ module.exports = async (ctx, next) => {
         const opts = Object.assign({ chat_id: ctx.chat.id }, groupExtra.message)
 
         await ctx.telegram.callApi(method, opts)
-      }
-      else {
-        next()
+
+        hashtagNum++
       }
     }
   }
