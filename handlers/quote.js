@@ -38,93 +38,102 @@ function loadImageFromUrl(url) {
 }
 
 function drawMultilineText(ctx, text, entities, fonstSize, fillStyle, textX, textY, maxWidth, lineHeight) {
+  const charts = text.split(/(?!$)/u)
+
+  let lineX = textX
+  let lineY = textY
+
   const words = text.split(' ')
+  let chartNum = 0
+  let wordNum = 0
+  let drawLine = ''
+
 
   ctx.font = `${fonstSize}px OpenSans`
   ctx.fillStyle = fillStyle
 
-  let chart = 0
-  let lineX = textX
-  let lineY = textY
+  const defaultFont = ctx.font
+  const defaultFillStyle = ctx.fillStyle
 
-  for (let index = 0; index < words.length; index++) {
-    let word = `${words[index]} `
+  let nextFont = defaultFont
+  let nextFillStyle = defaultFillStyle
 
-    if (lineX + ctx.measureText(word).width > maxWidth) {
-      lineX = textX
-      lineY += lineHeight
-    }
+  for (let chartIndex = 0; chartIndex < charts.length; chartIndex++) {
+    let chart = charts[chartIndex]
 
-    const matchBoldStart = word.search(/<b>/)
+    chartNum += charts[chartIndex].length
+    drawLine += chart
 
-    if (matchBoldStart >= 0) {
-      const wordSplit = word.split(/<b>/)
+    if (entities) {
+      let styled = false
 
-      for (let wsIndex = 0; wsIndex < wordSplit.length; wsIndex++) {
-        ctx.font = `bold ${fonstSize}px`
-        ctx.fillText(wordSplit[wsIndex], lineX, lineY)
-        lineX += ctx.measureText(`${wordSplit[wsIndex]}`).width
-      }
-    }
+      for (let entitieIndex = 0; entitieIndex < entities.length; entitieIndex++) {
+        const entity = entities[entitieIndex]
 
-    const matchBreak = word.search(/<br>|\n|\r/)
+        if (chartNum + chart.length > entity.offset && chartNum + chart.length < entity.offset + entity.length + 1) {
+          styled = true
 
-    if (matchBreak >= 0) {
-      const wordSplit = word.split(/<br>|\n|\r/)
-
-      for (let wsIndex = 0; wsIndex < wordSplit.length; wsIndex++) {
-        ctx.fillText(wordSplit[wsIndex], lineX, lineY)
-        if (wsIndex < wordSplit.length - 1) {
-          lineX = textX
-          lineY += lineHeight
-        }
-        else {
-          lineX += ctx.measureText(`${wordSplit[wsIndex]} `).width
-        }
-      }
-    }
-    else {
-      if (entities) {
-        const letters = word.split(/(?!$)/u)
-
-        for (let lettersIndex = 0; lettersIndex < letters.length; lettersIndex++) {
-          const letter = letters[lettersIndex]
-
-          for (let entitieIndex = 0; entitieIndex < entities.length; entitieIndex++) {
-            const entity = entities[entitieIndex]
-
-            if (chart + letter.length > entity.offset && chart + letter.length < entity.offset + entity.length + 1) {
-              if (entity.type === 'bold') ctx.font = `bold ${ctx.font}`
-              if (entity.type === 'italic') ctx.font = `italic ${ctx.font}`
-              if (['pre', 'code'].includes(entity.type)) {
-                ctx.font = `Monospace ${fonstSize * 0.8}px OpenSans`
-                ctx.fillStyle = '#5887a7'
-              }
-              if (['mention', 'hashtag', 'email', 'phone_number', 'bot_command', 'url', 'text_link'].includes(entity.type)) ctx.fillStyle = '#6ab7ec'
-            }
+          if (entity.type === 'bold') nextFont = `bold ${fonstSize}px OpenSans`
+          if (entity.type === 'italic') nextFont = `italic ${fonstSize}px OpenSans`
+          if (['pre', 'code'].includes(entity.type)) {
+            nextFont = `${fonstSize * 0.8}px OpenSans`
+            nextFillStyle = '#5887a7'
           }
+          if (['mention', 'text_mention', 'hashtag', 'email', 'phone_number', 'bot_command', 'url', 'text_link'].includes(entity.type)) nextFillStyle = '#6ab7ec'
+        }
 
-          ctx.fillText(letter, lineX, lineY)
-          lineX += ctx.measureText(letter).width
-
-          ctx.font = `${fonstSize}px OpenSans`
-          ctx.fillStyle = fillStyle
-
-          chart += 1
-          word = word.substr(chart - lettersIndex)
+        if (styled === false) {
+          nextFont = defaultFont
+          nextFillStyle = defaultFillStyle
         }
       }
-
-      ctx.fillText(word, lineX, lineY)
-
-      lineX += ctx.measureText(word).width
     }
 
-    chart += word.length
+    let drawText = ''
+    let nextLineX = lineX
+    let nextLineY = lineY
+
+    if (ctx.font !== nextFont || ctx.fillStyle !== nextFillStyle) {
+      drawText = drawLine
+      nextLineX += ctx.measureText(drawText).width
+    }
+
+    if (chart === ' ') {
+      wordNum++
+      if (lineX + ctx.measureText(drawLine + words[wordNum]).width > maxWidth) {
+        drawText = drawLine
+        nextLineX = textX
+        nextLineY += lineHeight
+        chart = ''
+      }
+    }
+
+    if (chart.match(/<br>|\n|\r/)) {
+      drawText = drawLine
+      nextLineX = textX
+      nextLineY += lineHeight
+      chart = ''
+    }
+
+    if (charts.length === chartIndex + 1) {
+      drawText = drawLine
+    }
+
+    if (drawText) {
+      ctx.fillText(drawText, lineX, lineY)
+
+      ctx.font = nextFont
+      ctx.fillStyle = nextFillStyle
+
+      lineX = nextLineX
+      lineY = nextLineY
+
+      drawLine = ''
+    }
   }
 
   return {
-    height: textX,
+    height: lineX,
     width: lineY,
   }
 }
@@ -226,7 +235,12 @@ module.exports = async (ctx) => {
     if (messageFrom.username) canvasСtx.fillText(`@${messageFrom.username}`, 90, 70)
     else canvasСtx.fillText(`#${messageFrom.id}`, 90, 70)
 
-    const textSize = drawMultilineText(canvasСtx, replyMessage.text, replyMessage.entities, 26, '#fff', 10, 115, canvas.width - 10, 30)
+
+    console.time('drawMultilineText')
+    const canvasMultilineText = canvas.getContext('2d')
+    const textSize = drawMultilineText(canvasMultilineText, replyMessage.text, replyMessage.entities, 26, '#fff', 10, 115, canvas.width - 10, 30)
+
+    console.timeEnd('drawMultilineText')
 
     let groupWatermark = ctx.group.info.title
 
