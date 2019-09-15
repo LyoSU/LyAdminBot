@@ -44,14 +44,10 @@ module.exports = async (ctx) => {
   }
 
   if (banTime) {
-    if (!ctx.group.members[banUser.id]) {
-      ctx.group.members[banUser.id] = await ctx.db.GroupMember.findOne({
-        group: ctx.group.info,
-        telegram_id: banUser.id,
-      })
-    }
-
-    const banMember = ctx.group.members[banUser.id]
+    const banMember = await ctx.db.GroupMember.findOne({
+      group: ctx.group.info,
+      telegram_id: banUser.id,
+    })
 
     if (autoBan) banTime *= (banMember.banan.stack + 1)
 
