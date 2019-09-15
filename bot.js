@@ -101,17 +101,17 @@ bot.use(async (ctx, next) => {
 
   if (['supergroup', 'group'].includes(ctx.chat.type)) {
     ctx.group.info = await updateGroup(ctx)
-    if (!ctx.group.members) ctx.group.members = {}
-    ctx.group.members[ctx.from.id] = await updateGroupMember(ctx)
+    ctx.group.member = await updateGroupMember(ctx)
     if (ctx.group.info.settings.locale) ctx.i18n.locale(ctx.group.info.settings.locale)
-
-    ctx.group.member = ctx.group.members[ctx.from.id]
   }
 
   await next(ctx)
 
   await ctx.session.userInfo.save()
-  if (ctx.group.info) await ctx.group.info.save()
+  if (ctx.group.info) {
+    await ctx.group.info.save()
+    await ctx.group.member.save()
+  }
 
   const ms = new Date() - ctx.ms
 
