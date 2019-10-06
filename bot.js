@@ -77,7 +77,7 @@ bot.telegram.getMe().then((botInfo) => {
 
 bot.use(rateLimit(limitConfig))
 
-bot.use((ctx, next) => {
+bot.use(async (ctx, next) => {
   ctx.ms = new Date()
   next()
 })
@@ -99,7 +99,7 @@ bot.use(async (ctx, next) => {
   ctx.session.userInfo = await updateUser(ctx)
   if (ctx.session.userInfo.locale) ctx.i18n.locale(ctx.session.userInfo.locale)
 
-  if (['supergroup', 'group'].includes(ctx.chat.type)) {
+  if (ctx.group) {
     ctx.group.info = await updateGroup(ctx)
     if (!ctx.group.members) ctx.group.members = []
     ctx.group.members[ctx.from.id] = await updateGroupMember(ctx)
@@ -109,7 +109,7 @@ bot.use(async (ctx, next) => {
   await next(ctx)
 
   await ctx.session.userInfo.save()
-  if (ctx.group.info) {
+  if (ctx.group && ctx.group.info) {
     await ctx.group.info.save()
     await ctx.group.members[ctx.from.id].save()
   }
