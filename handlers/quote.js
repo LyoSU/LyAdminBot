@@ -119,6 +119,7 @@ function drawMultilineText(ctx, text, entities, fonstSize, fillStyle, textX, tex
       drawText = drawLine
     }
 
+
     if (drawText) {
       ctx.fillText(drawText, lineX, lineY)
 
