@@ -271,7 +271,7 @@ module.exports = async (ctx) => {
 
     const canvasAvatarСtx = canvas.getContext('2d')
 
-    let userPhotoUrl
+    let userPhotoUrl = ''
 
     const userPhoto = await ctx.telegram.getUserProfilePhotos(messageFrom.id, 0, 1)
 
@@ -283,7 +283,6 @@ module.exports = async (ctx) => {
       avatar = await loadImageFromUrl(userPhotoUrl)
     }
     catch (error) {
-      console.log(error)
       avatar = await loadImageFromPatch('./assets/404.png')
     }
 
