@@ -199,6 +199,14 @@ module.exports = async (ctx) => {
     const replyMessage = ctx.message.reply_to_message
     let messageFrom = replyMessage.from
 
+    if (replyMessage.forward_sender_name) {
+      messageFrom = {
+        id: 0,
+        first_name: replyMessage.forward_sender_name,
+        username: 'HiddenSender',
+      }
+    }
+
     if (replyMessage.forward_from) messageFrom = replyMessage.forward_from
     let nick = `${messageFrom.first_name} ${messageFrom.last_name || ''}`
 
@@ -272,14 +280,15 @@ module.exports = async (ctx) => {
     const canvasAvatarСtx = canvas.getContext('2d')
 
     let userPhotoUrl = ''
-
-    const userPhoto = await ctx.telegram.getUserProfilePhotos(messageFrom.id, 0, 1)
-
-    if (userPhoto.photos[0]) userPhotoUrl = await ctx.telegram.getFileLink(userPhoto.photos[0][0].file_id)
-
     let avatar
 
     try {
+      if (messageFrom.username) userPhotoUrl = `https://telega.one/i/userpic/320/${messageFrom.username}.jpg`
+
+      const userPhoto = await ctx.telegram.getUserProfilePhotos(messageFrom.id, 0, 1)
+
+      if (userPhoto.photos[0]) userPhotoUrl = await ctx.telegram.getFileLink(userPhoto.photos[0][0].file_id)
+
       avatar = await loadImageFromUrl(userPhotoUrl)
     }
     catch (error) {
