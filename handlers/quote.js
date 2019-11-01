@@ -37,6 +37,19 @@ function loadImageFromUrl(url) {
   })
 }
 
+function loadImageFromPatch(patch) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+
+    // eslint-disable-next-line unicorn/prefer-add-event-listener
+    img.onload = () => resolve(img)
+    // eslint-disable-next-line unicorn/prefer-add-event-listener
+    img.onerror = () => reject(new Error('Failed to load image'))
+
+    img.src = fs.readFileSync(patch)
+  })
+}
+
 function drawMultilineText(ctx, text, entities, fonstSize, fillStyle, textX, textY, maxWidth, lineHeight) {
   const charts = text.split(/(?!$)/u)
 
@@ -48,12 +61,11 @@ function drawMultilineText(ctx, text, entities, fonstSize, fillStyle, textX, tex
   let wordNum = 0
   let drawLine = ''
 
+  const defaultFont = `${fonstSize}px OpenSans`
+  const defaultFillStyle = fillStyle
 
-  ctx.font = `${fonstSize}px OpenSans`
-  ctx.fillStyle = fillStyle
-
-  const defaultFont = ctx.font
-  const defaultFillStyle = ctx.fillStyle
+  let preFont = null
+  let preFillStyle = null
 
   let nextFont = defaultFont
   let nextFillStyle = defaultFillStyle
@@ -93,7 +105,7 @@ function drawMultilineText(ctx, text, entities, fonstSize, fillStyle, textX, tex
     let nextLineX = lineX
     let nextLineY = lineY
 
-    if (ctx.font !== nextFont || ctx.fillStyle !== nextFillStyle) {
+    if (preFont !== nextFont || preFillStyle !== nextFillStyle) {
       drawText = drawLine
       nextLineX += ctx.measureText(drawText).width
     }
@@ -121,13 +133,19 @@ function drawMultilineText(ctx, text, entities, fonstSize, fillStyle, textX, tex
 
 
     if (drawText) {
-      ctx.fillText(drawText, lineX, lineY)
+      if (preFont === null) ctx.font = nextFont
+      if (preFillStyle === null) ctx.fillStyle = nextFillStyle
 
-      ctx.font = nextFont
-      ctx.fillStyle = nextFillStyle
+      ctx.fillText(drawText, lineX, lineY)
 
       lineX = nextLineX
       lineY = nextLineY
+
+      preFont = nextFont
+      preFillStyle = nextFillStyle
+
+      ctx.font = preFont
+      ctx.fillStyle = preFillStyle
 
       drawLine = ''
     }
@@ -213,7 +231,7 @@ module.exports = async (ctx) => {
     const nickIndex = messageFrom.id % 7
     const nickMap = [0, 7, 4, 1, 6, 3, 5]
 
-    canvasСtx.font = 'bold 21px OpenSans'
+    canvasСtx.font = 'bold 26px OpenSans'
     canvasСtx.fillStyle = nickColor[nickMap[nickIndex]]
 
     const nickMaxLength = 380
@@ -231,7 +249,7 @@ module.exports = async (ctx) => {
 
     canvasСtx.fillText(nick, 90, 35)
 
-    canvasСtx.font = '28px OpenSans'
+    canvasСtx.font = '22px OpenSans'
     canvasСtx.fillStyle = usernameColor[nickMap[nickIndex]]
     if (messageFrom.username) canvasСtx.fillText(`@${messageFrom.username}`, 90, 70)
     else canvasСtx.fillText(`#${messageFrom.id}`, 90, 70)
@@ -253,13 +271,21 @@ module.exports = async (ctx) => {
 
     const canvasAvatarСtx = canvas.getContext('2d')
 
-    let userPhotoUrl = 'https://vk.com/images/contact_2x.png'
+    let userPhotoUrl
 
     const userPhoto = await ctx.telegram.getUserProfilePhotos(messageFrom.id, 0, 1)
 
     if (userPhoto.photos[0]) userPhotoUrl = await ctx.telegram.getFileLink(userPhoto.photos[0][0].file_id)
 
-    const avatar = await loadImageFromUrl(userPhotoUrl)
+    let avatar
+
+    try {
+      avatar = await loadImageFromUrl(userPhotoUrl)
+    }
+    catch (error) {
+      console.log(error)
+      avatar = await loadImageFromPatch('./assets/404.png')
+    }
 
     if (avatar) {
       canvasAvatarСtx.beginPath()
