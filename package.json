@@ -15,7 +15,7 @@
     "dotenv": "^6.2.0",
     "humanize-duration": "^3.18.0",
     "languagedetect": "^1.2.0",
-    "mongoose": "^5.5.12",
+    "mongoose": "^5.7.5",
     "sharp": "^0.23.0",
     "telegraf": "^3.30.0",
     "telegraf-i18n": "^6.5.0",
