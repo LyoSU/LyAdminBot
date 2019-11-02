@@ -163,7 +163,7 @@ db.connection.once('open', async () => {
       webhook: {
         domain: process.env.BOT_DOMAIN,
         hookPath: `/LyAdminBot:${process.env.BOT_TOKEN}`,
-        port: 2200,
+        port: process.env.WEBHOOK_PORT || 2200,
       },
     }).then(() => {
       console.log('bot start webohook')
