@@ -48,7 +48,11 @@ const {
 
 global.startDate = new Date()
 
-const bot = new Telegraf(process.env.BOT_TOKEN)
+const bot = new Telegraf(process.env.BOT_TOKEN, {
+  telegram: {
+    webhookReply: false,
+  },
+})
 
 bot.context.db = db
 
