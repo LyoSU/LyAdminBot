@@ -1,6 +1,6 @@
 {
   "name": "lyadminbot",
-  "version": "1.7.11",
+  "version": "1.7.12",
   "description": "Бот для администрирования групп",
   "main": "index.js",
   "scripts": {
