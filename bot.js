@@ -157,7 +157,21 @@ bot.catch((error) => {
 
 db.connection.once('open', async () => {
   console.log('Connected to MongoDB')
-  bot.launch().then(() => {
-    console.log('bot start')
-  })
+
+  if (process.env.NODE_ENV === 'production') {
+    bot.launch({
+      webhook: {
+        domain: process.env.BOT_DOMAIN,
+        hookPath: `/LyAdminBot:${process.env.BOT_TOKEN}`,
+        port: process.env.WEBHOOK_PORT || 2200,
+      },
+    }).then(() => {
+      console.log('bot start webohook')
+    })
+  }
+  else {
+    bot.launch().then(() => {
+      console.log('bot start polling')
+    })
+  }
 })
