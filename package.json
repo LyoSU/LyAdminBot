@@ -1,6 +1,6 @@
 {
   "name": "lyadminbot",
-  "version": "1.7.12",
+  "version": "1.7.13",
   "description": "Бот для администрирования групп",
   "main": "index.js",
   "scripts": {
@@ -13,19 +13,23 @@
     "canvas-multiline-text": "^1.0.3",
     "dateformat": "^3.0.3",
     "dotenv": "^6.2.0",
+    "got": "^9.6.0",
     "humanize-duration": "^3.18.0",
-    "languagedetect": "^1.2.0",
-    "mongoose": "^5.5.12",
-    "sharp": "^0.23.0",
-    "telegraf": "^3.30.0",
+    "languagedetect": "^1.3.0",
+    "mongoose": "^5.7.7",
+    "sharp": "^0.23.2",
+    "telegraf": "^3.33.3",
     "telegraf-i18n": "^6.5.0",
     "telegraf-ratelimit": "^2.0.0",
     "telegraf-statsd": "^2.2.1"
   },
   "devDependencies": {
-    "@atomix/eslint-config": "^6.4.0",
-    "babel-eslint": "^10.0.1",
-    "eslint": "^5.16.0"
+    "eslint": "^6.0.0",
+    "eslint-config-standard": "^12.0.0",
+    "eslint-plugin-import": "^2.17.3",
+    "eslint-plugin-node": "^9.1.0",
+    "eslint-plugin-promise": "^4.1.1",
+    "eslint-plugin-standard": "^4.0.0"
   },
   "repository": {
     "type": "git",
