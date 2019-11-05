@@ -20,20 +20,20 @@ module.exports = async (ctx) => {
     )
   }
   else {
-    got.post('https://pi.lyo.su/api/vk/checkComment', {
-      body: {
-        text: ctx.message.text,
-        date: ctx.message.date
-      },
-      json: true,
-      headers: {
-        'Content-type': 'application/json'
-      },
-    }).then((result) => {
-      if (result.body.result.description) ctx.replyWithHTML(result.body.result.description, {
-        reply_to_message_id: ctx.message.message_id
-      })
-    })
+    // got.post('https://pi.lyo.su/api/vk/checkComment', {
+    //   body: {
+    //     text: ctx.message.text,
+    //     date: ctx.message.date
+    //   },
+    //   json: true,
+    //   headers: {
+    //     'Content-type': 'application/json'
+    //   },
+    // }).then((result) => {
+    //   if (result.body.result.description) ctx.replyWithHTML(result.body.result.description, {
+    //     reply_to_message_id: ctx.message.message_id
+    //   })
+    // })
 
     const lngDetector = new LanguageDetect()
     const detect = lngDetector.detect(ctx.message.text)
