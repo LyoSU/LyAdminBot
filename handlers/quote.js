@@ -199,11 +199,19 @@ module.exports = async (ctx) => {
     const replyMessage = ctx.message.reply_to_message
     let messageFrom = replyMessage.from
 
+    console.log(replyMessage)
+
     if (replyMessage.forward_sender_name) {
       messageFrom = {
         id: 0,
         first_name: replyMessage.forward_sender_name,
         username: 'HiddenSender',
+      }
+    } else if (replyMessage.forward_from_chat) {
+      messageFrom = {
+        id: replyMessage.forward_from_chat.id,
+        first_name: replyMessage.forward_from_chat.title,
+        username: replyMessage.forward_from_chat.username || null,
       }
     }
 
@@ -236,10 +244,10 @@ module.exports = async (ctx) => {
       '#faa357',
     ]
 
-    const nickIndex = messageFrom.id % 7
+    const nickIndex = Math.abs(messageFrom.id) % 7
     const nickMap = [0, 7, 4, 1, 6, 3, 5]
 
-    canvasСtx.font = 'bold 26px OpenSans'
+    canvasСtx.font = 'bold 30px OpenSans'
     canvasСtx.fillStyle = nickColor[nickMap[nickIndex]]
 
     const nickMaxLength = 380
@@ -257,7 +265,7 @@ module.exports = async (ctx) => {
 
     canvasСtx.fillText(nick, 90, 35)
 
-    canvasСtx.font = '22px OpenSans'
+    canvasСtx.font = '21px OpenSans'
     canvasСtx.fillStyle = usernameColor[nickMap[nickIndex]]
     if (messageFrom.username) canvasСtx.fillText(`@${messageFrom.username}`, 90, 70)
     else canvasСtx.fillText(`#${messageFrom.id}`, 90, 70)
@@ -265,7 +273,7 @@ module.exports = async (ctx) => {
 
     console.time('drawMultilineText')
     const canvasMultilineText = canvas.getContext('2d')
-    const textSize = drawMultilineText(canvasMultilineText, replyMessage.text, replyMessage.entities, 26, '#fff', 10, 115, canvas.width - 10, 30)
+    const textSize = drawMultilineText(canvasMultilineText, replyMessage.text, replyMessage.entities, 27, '#fff', 10, 115, canvas.width - 10, 30)
 
     console.timeEnd('drawMultilineText')
 
@@ -275,7 +283,7 @@ module.exports = async (ctx) => {
 
     canvasСtx.font = '15px OpenSans'
     canvasСtx.fillStyle = '#5f82a3'
-    canvasСtx.fillText(groupWatermark, 500 - canvasСtx.measureText(groupWatermark).width, textSize.width + 30)
+    canvasСtx.fillText(groupWatermark, 500 - canvasСtx.measureText(groupWatermark).width, textSize.width + 40)
 
     const canvasAvatarСtx = canvas.getContext('2d')
 
@@ -285,9 +293,10 @@ module.exports = async (ctx) => {
     try {
       if (messageFrom.username) userPhotoUrl = `https://telega.one/i/userpic/320/${messageFrom.username}.jpg`
 
-      const userPhoto = await ctx.telegram.getUserProfilePhotos(messageFrom.id, 0, 1)
+      const getChat = await ctx.telegram.getChat(messageFrom.id)
+      const userPhoto = getChat.photo.small_file_id
 
-      if (userPhoto.photos[0]) userPhotoUrl = await ctx.telegram.getFileLink(userPhoto.photos[0][0].file_id)
+      if (userPhoto) userPhotoUrl = await ctx.telegram.getFileLink(userPhoto)
 
       avatar = await loadImageFromUrl(userPhotoUrl)
     }
@@ -314,7 +323,7 @@ module.exports = async (ctx) => {
       canvasСtx.fillText(messageFrom.first_name.split(/(?!$)/u, 1)[0], 30, 80)
     }
 
-    let stickHeight = textSize.width + 45
+    let stickHeight = textSize.width + 55
 
     if (stickHeight > maxHeight) stickHeight = maxHeight
 
