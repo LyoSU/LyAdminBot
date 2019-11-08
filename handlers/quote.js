@@ -199,8 +199,6 @@ module.exports = async (ctx) => {
     const replyMessage = ctx.message.reply_to_message
     let messageFrom = replyMessage.from
 
-    console.log(replyMessage)
-
     if (replyMessage.forward_sender_name) {
       messageFrom = {
         id: 0,
