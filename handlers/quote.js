@@ -264,7 +264,7 @@ module.exports = async (ctx) => {
     canvasСtx.fillText(nick, 100, 35)
 
     const minFontSize  = 22
-    const maxFontSize  = 48
+    const maxFontSize  = 38
 
     let preTextSize = 25 / ((replyMessage.text.length / 10) * 0.2)
 
