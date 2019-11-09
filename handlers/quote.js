@@ -288,27 +288,30 @@ module.exports = async (ctx) => {
     canvasСtx.fillStyle = usernameColor[nickMap[nickIndex]]
     // canvasСtx.fillStyle = '#5f82a3'
 
-    if (messageFrom.username) canvasСtx.fillText(`@${messageFrom.username}`, 100, textSize.width + 40)
-    else canvasСtx.fillText(`#${messageFrom.id}`, 100, textSize.width + 40)
+    if (messageFrom.username) canvasСtx.fillText(`@${messageFrom.username}`, 110, textSize.width + 40)
+    else canvasСtx.fillText(`#${messageFrom.id}`, 110, textSize.width + 40)
 
     let groupWatermark = ctx.group.info.title
 
     if (ctx.group.info.username) groupWatermark = `@${ctx.group.info.username}`
 
-    canvasСtx.fillText(groupWatermark, 500 - canvasСtx.measureText(groupWatermark).width, textSize.width + 40)
+    canvasСtx.fillText(groupWatermark, 490 - canvasСtx.measureText(groupWatermark).width, textSize.width + 40)
 
     let stickHeight = textSize.width + 55
 
     if (stickHeight > maxHeight) stickHeight = maxHeight
 
-    const canvasSticker = createCanvas(512, stickHeight)
+    let canvasWidth = stickHeight
+    if(canvasWidth < 512) canvasWidth += 70
+
+    const canvasSticker = createCanvas(512, canvasWidth)
     const canvasBackСtx = canvasSticker.getContext('2d')
 
     canvasBackСtx.fillStyle = '#1e2c3a'
     roundRect(canvasBackСtx, 90, 0, 415, stickHeight, 20, true)
 
     const notchPic = await loadImageFromPatch('./assets/qnotch.png')
-    canvasBackСtx.drawImage(notchPic, 65, textSize.width + 20, 40, 40)
+    canvasBackСtx.drawImage(notchPic, 70, textSize.width + 15, 40, 40)
 
     const avatarSize = 35
 
