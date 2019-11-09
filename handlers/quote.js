@@ -264,7 +264,7 @@ module.exports = async (ctx) => {
     canvasСtx.fillText(nick, 110, 40)
 
     const minFontSize  = 20
-    const maxFontSize  = 32
+    const maxFontSize  = 28
 
     let preTextSize = 25 / ((replyMessage.text.length / 10) * 0.2)
 
@@ -280,24 +280,24 @@ module.exports = async (ctx) => {
 
     console.time('drawMultilineText')
     const canvasMultilineText = canvas.getContext('2d')
-    const textSize = drawMultilineText(canvasMultilineText, replyMessage.text, replyMessage.entities, preTextSize, '#fff', drawTextX, drawTextY, canvas.width - 10, lineHeight)
+    const textSize = drawMultilineText(canvasMultilineText, replyMessage.text, replyMessage.entities, preTextSize, '#fff', drawTextX, drawTextY, canvas.width - 20, lineHeight)
 
     console.timeEnd('drawMultilineText')
 
-    canvasСtx.font = '15px OpenSans'
-    canvasСtx.fillStyle = usernameColor[nickMap[nickIndex]]
+    // canvasСtx.font = '15px OpenSans'
+    // canvasСtx.fillStyle = usernameColor[nickMap[nickIndex]]
     // canvasСtx.fillStyle = '#5f82a3'
 
-    if (messageFrom.username) canvasСtx.fillText(`@${messageFrom.username}`, 110, textSize.width + 40)
-    else canvasСtx.fillText(`#${messageFrom.id}`, 110, textSize.width + 40)
+    // if (messageFrom.username) canvasСtx.fillText(`@${messageFrom.username}`, 110, textSize.width + 40)
+    // else canvasСtx.fillText(`#${messageFrom.id}`, 110, textSize.width + 40)
 
-    let groupWatermark = ctx.group.info.title
+    // let groupWatermark = ctx.group.info.title
 
-    if (ctx.group.info.username) groupWatermark = `@${ctx.group.info.username}`
+    // if (ctx.group.info.username) groupWatermark = `@${ctx.group.info.username}`
 
-    canvasСtx.fillText(groupWatermark, 490 - canvasСtx.measureText(groupWatermark).width, textSize.width + 40)
+    // canvasСtx.fillText(groupWatermark, 490 - canvasСtx.measureText(groupWatermark).width, textSize.width + 40)
 
-    let stickHeight = textSize.width + 55
+    let stickHeight = textSize.width + 20
 
     if (stickHeight > maxHeight) stickHeight = maxHeight
 
@@ -311,12 +311,12 @@ module.exports = async (ctx) => {
     roundRect(canvasBackСtx, 90, 0, 415, stickHeight, 20, true)
 
     const notchPic = await loadImageFromPatch('./assets/qnotch.png')
-    canvasBackСtx.drawImage(notchPic, 70, textSize.width + 15, 40, 40)
+    canvasBackСtx.drawImage(notchPic, 70, textSize.width - 20, 40, 40)
 
     const avatarSize = 35
 
     const avatarX = 10
-    const avatarY = textSize.width - avatarSize + 20
+    const avatarY = textSize.width - avatarSize - 20
 
     const canvasAvatarСtx = canvas.getContext('2d')
 
