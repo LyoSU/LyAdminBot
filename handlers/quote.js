@@ -245,10 +245,10 @@ module.exports = async (ctx) => {
     const nickIndex = Math.abs(messageFrom.id) % 7
     const nickMap = [0, 7, 4, 1, 6, 3, 5]
 
-    canvasСtx.font = 'bold 26px OpenSans'
+    canvasСtx.font = 'bold 22px OpenSans'
     canvasСtx.fillStyle = nickColor[nickMap[nickIndex]]
 
-    const nickMaxLength = 380
+    const nickMaxLength = 370
 
     let nickLength = canvasСtx.measureText(nick).width
 
