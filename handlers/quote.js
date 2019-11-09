@@ -311,12 +311,12 @@ module.exports = async (ctx) => {
     roundRect(canvasBackСtx, 90, 0, 415, stickHeight, 20, true)
 
     const notchPic = await loadImageFromPatch('./assets/qnotch.png')
-    canvasBackСtx.drawImage(notchPic, 70, textSize.width - 10, 40, 40)
+    canvasBackСtx.drawImage(notchPic, 70, 1, 40, 40)
 
     const avatarSize = 35
 
     const avatarX = 10
-    const avatarY = textSize.width - avatarSize - 10
+    const avatarY = 0
 
     const canvasAvatarСtx = canvas.getContext('2d')
 
