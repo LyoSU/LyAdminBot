@@ -261,10 +261,10 @@ module.exports = async (ctx) => {
       nick += '…'
     }
 
-    canvasСtx.fillText(nick, 100, 35)
+    canvasСtx.fillText(nick, 110, 40)
 
-    const minFontSize  = 22
-    const maxFontSize  = 38
+    const minFontSize  = 20
+    const maxFontSize  = 32
 
     let preTextSize = 25 / ((replyMessage.text.length / 10) * 0.2)
 
@@ -275,8 +275,8 @@ module.exports = async (ctx) => {
 
     canvasСtx.font = `${preTextSize}px OpenSans`
 
-    const drawTextX = 100
-    const drawTextY = 45 + canvasСtx.measureText('test').emHeightAscent
+    const drawTextX = 110
+    const drawTextY = 55 + canvasСtx.measureText('test').emHeightAscent
 
     console.time('drawMultilineText')
     const canvasMultilineText = canvas.getContext('2d')
