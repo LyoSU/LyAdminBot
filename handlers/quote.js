@@ -248,7 +248,7 @@ module.exports = async (ctx) => {
     canvasСtx.font = 'bold 22px OpenSans'
     canvasСtx.fillStyle = nickColor[nickMap[nickIndex]]
 
-    const nickMaxLength = 370
+    const nickMaxLength = 330
 
     let nickLength = canvasСtx.measureText(nick).width
 
@@ -261,7 +261,7 @@ module.exports = async (ctx) => {
       nick += '…'
     }
 
-    canvasСtx.fillText(nick, 110, 40)
+    canvasСtx.fillText(nick, 120, 40)
 
     const minFontSize  = 20
     const maxFontSize  = 28
@@ -275,7 +275,7 @@ module.exports = async (ctx) => {
 
     canvasСtx.font = `${preTextSize}px OpenSans`
 
-    const drawTextX = 110
+    const drawTextX = 120
     const drawTextY = 55 + canvasСtx.measureText('test').emHeightAscent
 
     console.time('drawMultilineText')
@@ -297,7 +297,7 @@ module.exports = async (ctx) => {
 
     // canvasСtx.fillText(groupWatermark, 490 - canvasСtx.measureText(groupWatermark).width, textSize.width + 40)
 
-    let stickHeight = textSize.width + 30
+    let stickHeight = textSize.width - 20
 
     if (stickHeight > maxHeight) stickHeight = maxHeight
 
@@ -308,10 +308,21 @@ module.exports = async (ctx) => {
     const canvasBackСtx = canvasSticker.getContext('2d')
 
     canvasBackСtx.fillStyle = '#1e2c3a'
-    roundRect(canvasBackСtx, 90, 0, 415, stickHeight, 20, true)
+    canvasBackСtx.fillRect(152, 0, 275, stickHeight + 43);
+    canvasBackСtx.fillRect(100, 43, 400, stickHeight - 42);
+    // roundRect(canvasBackСtx, 90, 0, 415, stickHeight, 20, true)
 
-    const notchPic = await loadImageFromPatch('./assets/qnotch.png')
-    canvasBackСtx.drawImage(notchPic, 70, 1, 40, 40)
+    const notchLeftUpPic = await loadImageFromPatch('./assets/notch/left_up.png')
+    canvasBackСtx.drawImage(notchLeftUpPic, 80, 0, 72, 43)
+
+    const notchRightUpPic = await loadImageFromPatch('./assets/notch/right_up.png')
+    canvasBackСtx.drawImage(notchRightUpPic, 427, 0, 72, 43)
+
+    const notchLeftBottomPic = await loadImageFromPatch('./assets/notch/left_bottom.png')
+    canvasBackСtx.drawImage(notchLeftBottomPic, 100, stickHeight, 72, 43)
+
+    const notchRightBottomPic = await loadImageFromPatch('./assets/notch/right_bottom.png')
+    canvasBackСtx.drawImage(notchRightBottomPic, 427, stickHeight, 72, 43)
 
     const avatarSize = 35
 
