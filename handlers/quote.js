@@ -266,12 +266,12 @@ module.exports = async (ctx) => {
     const minFontSize  = 22
     const maxFontSize  = 48
 
-    let preTextSize = 25 / ((replyMessage.text.length / 10) * 0.15)
+    let preTextSize = 25 / ((replyMessage.text.length / 10) * 0.2)
 
     if(preTextSize < minFontSize) preTextSize = minFontSize
     if(preTextSize > maxFontSize) preTextSize = maxFontSize
 
-    const lineHeight = 5 * ( preTextSize * 0.25 )
+    const lineHeight = 4 * ( preTextSize * 0.25 )
 
     canvasСtx.font = `${preTextSize}px OpenSans`
 
