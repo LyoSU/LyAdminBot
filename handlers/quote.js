@@ -245,7 +245,7 @@ module.exports = async (ctx) => {
     const nickIndex = Math.abs(messageFrom.id) % 7
     const nickMap = [0, 7, 4, 1, 6, 3, 5]
 
-    canvasСtx.font = 'bold 30px OpenSans'
+    canvasСtx.font = 'bold 26px OpenSans'
     canvasСtx.fillStyle = nickColor[nickMap[nickIndex]]
 
     const nickMaxLength = 380
@@ -261,27 +261,59 @@ module.exports = async (ctx) => {
       nick += '…'
     }
 
-    canvasСtx.fillText(nick, 90, 35)
+    canvasСtx.fillText(nick, 100, 35)
 
-    canvasСtx.font = '21px OpenSans'
-    canvasСtx.fillStyle = usernameColor[nickMap[nickIndex]]
-    if (messageFrom.username) canvasСtx.fillText(`@${messageFrom.username}`, 90, 70)
-    else canvasСtx.fillText(`#${messageFrom.id}`, 90, 70)
+    const minFontSize  = 22
+    const maxFontSize  = 48
 
+    let preTextSize = 25 / ((replyMessage.text.length / 10) * 0.15)
+
+    if(preTextSize < minFontSize) preTextSize = minFontSize
+    if(preTextSize > maxFontSize) preTextSize = maxFontSize
+
+    const lineHeight = 5 * ( preTextSize * 0.25 )
+
+    canvasСtx.font = `${preTextSize}px OpenSans`
+
+    const drawTextX = 100
+    const drawTextY = 45 + canvasСtx.measureText('test').emHeightAscent
 
     console.time('drawMultilineText')
     const canvasMultilineText = canvas.getContext('2d')
-    const textSize = drawMultilineText(canvasMultilineText, replyMessage.text, replyMessage.entities, 27, '#fff', 10, 115, canvas.width - 10, 30)
+    const textSize = drawMultilineText(canvasMultilineText, replyMessage.text, replyMessage.entities, preTextSize, '#fff', drawTextX, drawTextY, canvas.width - 10, lineHeight)
 
     console.timeEnd('drawMultilineText')
+
+    canvasСtx.font = '15px OpenSans'
+    canvasСtx.fillStyle = usernameColor[nickMap[nickIndex]]
+    // canvasСtx.fillStyle = '#5f82a3'
+
+    if (messageFrom.username) canvasСtx.fillText(`@${messageFrom.username}`, 100, textSize.width + 40)
+    else canvasСtx.fillText(`#${messageFrom.id}`, 100, textSize.width + 40)
 
     let groupWatermark = ctx.group.info.title
 
     if (ctx.group.info.username) groupWatermark = `@${ctx.group.info.username}`
 
-    canvasСtx.font = '15px OpenSans'
-    canvasСtx.fillStyle = '#5f82a3'
     canvasСtx.fillText(groupWatermark, 500 - canvasСtx.measureText(groupWatermark).width, textSize.width + 40)
+
+    let stickHeight = textSize.width + 55
+
+    if (stickHeight > maxHeight) stickHeight = maxHeight
+
+    const canvasSticker = createCanvas(512, stickHeight)
+    const canvasBackСtx = canvasSticker.getContext('2d')
+
+    canvasBackСtx.fillStyle = '#1e2c3a'
+    roundRect(canvasBackСtx, 90, 0, 415, stickHeight, 20, true)
+
+    const notchPic = await loadImageFromPatch('./assets/qnotch.png')
+    canvasBackСtx.drawImage(notchPic, 65, textSize.width + 20, 40, 40)
+
+    const avatarSize = 35
+
+    const avatarX = 10
+    const avatarY = textSize.width - avatarSize + 20
 
     const canvasAvatarСtx = canvas.getContext('2d')
 
@@ -304,11 +336,11 @@ module.exports = async (ctx) => {
 
     if (avatar) {
       canvasAvatarСtx.beginPath()
-      canvasAvatarСtx.arc(45, 45, 35, 0, Math.PI * 2, true)
+      canvasAvatarСtx.arc(avatarX + avatarSize, avatarY + avatarSize, avatarSize, 0, Math.PI * 2, true)
       canvasAvatarСtx.clip()
       canvasAvatarСtx.closePath()
       canvasAvatarСtx.restore()
-      canvasAvatarСtx.drawImage(avatar, 10, 10, 70, 70)
+      canvasAvatarСtx.drawImage(avatar, avatarX, avatarY, 70, 70)
     }
     else {
       canvasAvatarСtx.fillStyle = '#a4b7c4'
@@ -320,16 +352,6 @@ module.exports = async (ctx) => {
       canvasAvatarСtx.fillStyle = '#fff'
       canvasСtx.fillText(messageFrom.first_name.split(/(?!$)/u, 1)[0], 30, 80)
     }
-
-    let stickHeight = textSize.width + 55
-
-    if (stickHeight > maxHeight) stickHeight = maxHeight
-
-    const canvasSticker = createCanvas(512, stickHeight)
-    const canvasBackСtx = canvasSticker.getContext('2d')
-
-    canvasBackСtx.fillStyle = '#1e2c3a'
-    roundRect(canvasBackСtx, 0, 0, 512, stickHeight, 20, true)
 
     const canvasStickerСtx = canvasSticker.getContext('2d')
 
