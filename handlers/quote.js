@@ -302,7 +302,7 @@ module.exports = async (ctx) => {
     if (stickHeight > maxHeight) stickHeight = maxHeight
 
     let canvasWidth = stickHeight
-    if(canvasWidth < 512) canvasWidth += 70
+    if(canvasWidth < 512) canvasWidth += 110
 
     const canvasSticker = createCanvas(512, canvasWidth)
     const canvasBackСtx = canvasSticker.getContext('2d')
