@@ -66,6 +66,14 @@ module.exports = async (ctx) => {
         banUser.id,
         { until_date: unixBanTime }
       ).then(async () => {
+        if (banUser.id === 686968130) {
+          ctx.replyWithDocument ({
+            source: fs.createReadStream('/assets/arkasha_banan.webp')
+          }, {
+            reply_to_message_id: ctx.message.message_id
+          })
+        }
+
         const message = await ctx.replyWithHTML(ctx.i18n.t('banan.suc', {
           name: userName(banUser, true),
           duration: banDuration,
