@@ -11,6 +11,11 @@ module.exports = async (ctx) => {
   let banUser = ctx.from
   let autoBan = false
 
+  const replyMember = await ctx.telegram.getChatMember(
+    ctx.message.chat.id,
+    ctx.message.reply_to_message.from.id
+  )
+
   if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
     if (ctx.message.reply_to_message) {
       banUser = ctx.message.reply_to_message.from
@@ -24,11 +29,6 @@ module.exports = async (ctx) => {
         banTime = parseInt(arg[1], 10) * banTimeArr[banType]
       }
       else {
-        const replyMember = await ctx.telegram.getChatMember(
-          ctx.message.chat.id,
-          ctx.message.reply_to_message.from.id
-        )
-
         if (replyMember.status === 'restricted') {
           banTime = -1
         }
@@ -52,10 +52,16 @@ module.exports = async (ctx) => {
     if (autoBan) banTime *= (banMember.banan.stack + 1)
 
     if (banTime > 0) {
+      const now = Math.floor(Date.now() / 1000)
+
       const maxBanTime = 364 * 24 * 60 * 60
+      const minBanTime = 60
 
       if (banTime > maxBanTime) banTime = maxBanTime
-      const unixBanTime = ctx.message.date + banTime
+      if (banTime < minBanTime) banTime = minBanTime
+
+      const unixBanTime = now + banTime
+
       const banDuration = humanizeDuration(
         banTime * 1000,
         { language: ctx.i18n.locale(), fallbacks: ['en'] }
@@ -79,7 +85,7 @@ module.exports = async (ctx) => {
           duration: banDuration,
         }))
 
-        if ((banMember.banan.last.time + banMember.banan.last.how) > 0) {
+        if (replyMember.status === 'restricted' && (banMember.banan.last.time + banMember.banan.last.how) > 0) {
           banMember.banan.sum -= (
             banMember.banan.last.how - (
               ctx.message.date - banMember.banan.last.time
