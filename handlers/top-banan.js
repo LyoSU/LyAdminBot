@@ -25,12 +25,12 @@ module.exports = async (ctx) => {
 
     let top = ''
 
-    topMembers = topMembers.slice(0, 10)
+    topMembersSum = topMembers.slice(0, 10)
 
-    for (let index = 0; index < topMembers.length; index++) {
-      const user = await ctx.db.User.findOne({ telegram_id: topMembers[index].telegram_id })
+    for (let index = 0; index < topMembersSum.length; index++) {
+      const user = await ctx.db.User.findOne({ telegram_id: topMembersSum[index].telegram_id })
       const banan = humanizeDuration(
-        topMembers[index].banan.sum * 1000,
+        topMembersSum[index].banan.sum * 1000,
         {
           round: true,
           largest: 2,
@@ -46,11 +46,11 @@ module.exports = async (ctx) => {
 
     top += '\n'
 
-    topMembers = topMembers.slice(0, 10)
+    topMembersNum = topMembers.slice(0, 10)
 
-    for (let index = 0; index < topMembers.length; index++) {
-      const user = await ctx.db.User.findOne({ telegram_id: topMembers[index].telegram_id })
-      const banan = topMembers[index].banan.num
+    for (let index = 0; index < topMembersNum.length; index++) {
+      const user = await ctx.db.User.findOne({ telegram_id: topMembersNum[index].telegram_id })
+      const banan = topMembersNum[index].banan.num
 
       top += `\n${index+1}. ${userName(user)} — ${banan} 🍌`
     }

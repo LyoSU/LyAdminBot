@@ -170,7 +170,7 @@ db.connection.once('open', async () => {
         port: process.env.WEBHOOK_PORT || 2200,
       },
     }).then(() => {
-      console.log('bot start webohook')
+      console.log('bot start webhook')
     })
   }
   else {
