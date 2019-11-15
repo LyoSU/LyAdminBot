@@ -162,7 +162,7 @@ bot.catch((error) => {
 db.connection.once('open', async () => {
   console.log('Connected to MongoDB')
 
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.BOT_DOMAIN) {
     bot.launch({
       webhook: {
         domain: process.env.BOT_DOMAIN,
