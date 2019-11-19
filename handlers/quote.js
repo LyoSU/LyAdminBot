@@ -200,12 +200,58 @@ function drawRoundRect(ctx, x, y, width, height, radius, fill, stroke) {
   }
 }
 
+function lightOrDark(color) {
+
+  // Check the format of the color, HEX or RGB?
+  if (color.match(/^rgb/)) {
+
+    // If HEX --> store the red, green, blue values in separate variables
+    color = color.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*(\d+(?:\.\d+)?))?\)$/);
+
+    r = color[1];
+    g = color[2];
+    b = color[3];
+  }
+  else {
+
+    // If RGB --> Convert it to HEX: http://gist.github.com/983661
+    color = +("0x" + color.slice(1).replace(
+      color.length < 5 && /./g, '$&$&'
+    )
+              );
+
+    r = color >> 16;
+    g = color >> 8 & 255;
+    b = color & 255;
+  }
+
+  // HSP (Highly Sensitive Poo) equation from http://alienryderflex.com/hsp.html
+  hsp = Math.sqrt(
+    0.299 * (r * r) +
+    0.587 * (g * g) +
+    0.114 * (b * b)
+  );
+
+  // Using the HSP value, determine whether the color is light or dark
+  if (hsp>127.5) {
+    return 'light'
+  }
+  else {
+    return 'dark'
+  }
+}
+
 module.exports = async (ctx) => {
   if (ctx.message.reply_to_message && ctx.message.reply_to_message.text) {
     const maxHeight = 1024
     const maxWidth = 512
     const replyMessage = ctx.message.reply_to_message
     let messageFrom = replyMessage.from
+
+    let backColor = '#130f1c'
+    if(ctx.match && ctx.match[0]) backColor = `#${ctx.match[2]}`
+
+    const backStyle = lightOrDark(backColor)
 
     if (replyMessage.forward_sender_name) {
       messageFrom = {
@@ -288,7 +334,11 @@ module.exports = async (ctx) => {
 
     console.time('drawMultilineText')
     const canvasMultilineText = canvas.getContext('2d')
-    const textSize = drawMultilineText(canvasMultilineText, replyMessage.text, replyMessage.entities, preTextSize, '#fff', drawTextX, drawTextY, canvas.width - 20, lineHeight)
+
+    let textColor = '#fff'
+    if(backStyle === 'light') textColor = '#000'
+
+    const textSize = drawMultilineText(canvasMultilineText, replyMessage.text, replyMessage.entities, preTextSize, textColor, drawTextX, drawTextY, canvas.width - 20, lineHeight)
 
     console.timeEnd('drawMultilineText')
 
@@ -308,7 +358,7 @@ module.exports = async (ctx) => {
     let stickHeight = textSize.height - 20
     let stickWidth = textSize.textWidth + 60
 
-    if(stickWidth < nickWidth) stickWidth = nickWidth + 40
+    if(textSize.textWidth < nickWidth) stickWidth = nickWidth + 40
 
     if (stickHeight > maxHeight) stickHeight = maxHeight
     if (stickWidth > maxWidth) stickWidth = maxWidth
@@ -320,9 +370,6 @@ module.exports = async (ctx) => {
 
     const canvasSticker = createCanvas(canvasWidth, canvasHeight)
     const canvasBackСtx = canvasSticker.getContext('2d')
-
-    let backColor = '#130f1c'
-    if(ctx.match && ctx.match[0]) backColor = `#${ctx.match[2]}`
 
     canvasBackСtx.fillStyle = backColor
     // canvasBackСtx.fillRect(152, 0, 275, stickHeight + 43);
