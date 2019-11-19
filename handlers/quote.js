@@ -249,7 +249,9 @@ module.exports = async (ctx) => {
     let messageFrom = replyMessage.from
 
     let backColor = '#130f1c'
-    if(ctx.match && ctx.match[0]) backColor = `#${ctx.match[2]}`
+
+    if(ctx.match && ctx.match[2]) backColor = `${ctx.match[2]}`
+    if(ctx.match && ctx.match[2] && ctx.match[1] === '#') backColor = `#${ctx.match[2]}`
 
     const backStyle = lightOrDark(backColor)
 
