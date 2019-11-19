@@ -248,13 +248,6 @@ module.exports = async (ctx) => {
     const replyMessage = ctx.message.reply_to_message
     let messageFrom = replyMessage.from
 
-    let backColor = '#130f1c'
-
-    if(ctx.match && ctx.match[2]) backColor = `${ctx.match[2]}`
-    if(ctx.match && ctx.match[2] && ctx.match[1] === '#') backColor = `#${ctx.match[2]}`
-
-    const backStyle = lightOrDark(backColor)
-
     if (replyMessage.forward_sender_name) {
       messageFrom = {
         id: 0,
@@ -275,6 +268,15 @@ module.exports = async (ctx) => {
     const canvas = createCanvas(maxWidth, maxHeight)
 
     const canvasСtx = canvas.getContext('2d')
+
+    let backColor = '#130f1c'
+
+    if(ctx.match && ctx.match[2]) backColor = `${ctx.match[2]}`
+    if(ctx.match && ctx.match[2] && ctx.match[1] === '#') backColor = `#${ctx.match[2]}`
+
+    canvasСtx.fillStyle = backColor
+
+    const backStyle = lightOrDark(canvasСtx.fillStyle)
 
     const nickColor = [
       '#c03d33',
