@@ -373,9 +373,9 @@ module.exports = async (ctx) => {
     // canvasСtx.fillText(groupWatermark, 490 - canvasСtx.measureText(groupWatermark).width, textSize.width + 40)
 
     let stickHeight = textSize.height - 20
-    let stickWidth = textSize.textWidth + 60
+    let stickWidth = textSize.textWidth + 70
 
-    if(textSize.textWidth < nickWidth) stickWidth = nickWidth + 40
+    if(textSize.textWidth + 20 < nickWidth) stickWidth = nickWidth + 40
 
     if (stickHeight > maxHeight) stickHeight = maxHeight
     if (stickWidth > maxWidth) stickWidth = maxWidth
