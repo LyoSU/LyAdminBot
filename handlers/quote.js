@@ -57,6 +57,7 @@ function drawMultilineText (ctx, text, entities, fonstSize, fillStyle, textX, te
   let chartNum = 0
   let wordNum = 0
   let drawLine = ''
+  let drawString = ''
 
   const defaultFont = `${fonstSize}px OpenSans`
   const defaultFillStyle = fillStyle
@@ -67,11 +68,13 @@ function drawMultilineText (ctx, text, entities, fonstSize, fillStyle, textX, te
   let nextFont = defaultFont
   let nextFillStyle = defaultFillStyle
 
+  let lineWidth = 0
+
   for (let chartIndex = 0; chartIndex < charts.length; chartIndex++) {
     let chart = charts[chartIndex]
 
     chartNum += charts[chartIndex].length
-    drawLine += chart
+    drawString += chart
 
     if (entities) {
       let styled = false
@@ -103,14 +106,14 @@ function drawMultilineText (ctx, text, entities, fonstSize, fillStyle, textX, te
     let nextLineY = lineY
 
     if (preFont !== nextFont || preFillStyle !== nextFillStyle) {
-      drawText = drawLine
+      drawText = drawString
       nextLineX += ctx.measureText(drawText).width
     }
 
     if (chart === ' ') {
       wordNum++
-      if (lineX + ctx.measureText(drawLine + words[wordNum]).width > maxWidth) {
-        drawText = drawLine
+      if (lineX + ctx.measureText(drawString + words[wordNum]).width > maxWidth) {
+        drawText = drawString
         nextLineX = textX
         nextLineY += lineHeight
         chart = ''
@@ -118,14 +121,14 @@ function drawMultilineText (ctx, text, entities, fonstSize, fillStyle, textX, te
     }
 
     if (chart.match(/<br>|\n|\r/)) {
-      drawText = drawLine
+      drawText = drawString
       nextLineX = textX
       nextLineY += lineHeight
       chart = ''
     }
 
     if (charts.length === chartIndex + 1) {
-      drawText = drawLine
+      drawText = drawString
     }
 
     if (drawText) {
@@ -134,9 +137,11 @@ function drawMultilineText (ctx, text, entities, fonstSize, fillStyle, textX, te
 
       ctx.fillText(drawText, lineX, lineY)
 
-      const lineWidth = ctx.measureText(drawLine).width
+      drawLine += drawString
+      lineWidth = ctx.measureText(drawLine).width
 
       if (lineWidth > textWidth) textWidth = lineWidth
+      if (lineY !== nextLineY) drawLine = ''
 
       lineX = nextLineX
       lineY = nextLineY
@@ -147,7 +152,7 @@ function drawMultilineText (ctx, text, entities, fonstSize, fillStyle, textX, te
       ctx.font = preFont
       ctx.fillStyle = preFillStyle
 
-      drawLine = ''
+      drawString = ''
     }
   }
 
@@ -366,7 +371,7 @@ module.exports = async (ctx) => {
     // canvasСtx.fillText(groupWatermark, 490 - canvasСtx.measureText(groupWatermark).width, textSize.width + 40)
 
     let stickHeight = textSize.height - 20
-    let stickWidth = textSize.textWidth + 70
+    let stickWidth = textSize.textWidth + 30
 
     if (textSize.textWidth + 20 < nickWidth) stickWidth = nickWidth + 40
 
