@@ -3,22 +3,19 @@ const fs = require('fs')
 const { createCanvas, Image, registerFont } = require('canvas')
 const sharp = require('sharp')
 
-
 const fontsDir = 'assets/fonts/'
 
-fs.readdir(fontsDir, (err, files) => {
+fs.readdir(fontsDir, (_err, files) => {
   files.forEach((file) => {
     registerFont(`${fontsDir}/${file}`, { family: file })
   })
 })
 
-function loadImageFromUrl(url) {
+function loadImageFromUrl (url) {
   return new Promise((resolve, reject) => {
     const img = new Image()
 
-    // eslint-disable-next-line unicorn/prefer-add-event-listener
     img.onload = () => resolve(img)
-    // eslint-disable-next-line unicorn/prefer-add-event-listener
     img.onerror = () => reject(new Error('Failed to load image'))
 
     https.get(url, (res) => {
@@ -37,20 +34,18 @@ function loadImageFromUrl(url) {
   })
 }
 
-function loadImageFromPatch(patch) {
+function loadImageFromPatch (patch) {
   return new Promise((resolve, reject) => {
     const img = new Image()
 
-    // eslint-disable-next-line unicorn/prefer-add-event-listener
     img.onload = () => resolve(img)
-    // eslint-disable-next-line unicorn/prefer-add-event-listener
     img.onerror = () => reject(new Error('Failed to load image'))
 
     img.src = fs.readFileSync(patch)
   })
 }
 
-function drawMultilineText(ctx, text, entities, fonstSize, fillStyle, textX, textY, maxWidth, lineHeight) {
+function drawMultilineText (ctx, text, entities, fonstSize, fillStyle, textX, textY, maxWidth, lineHeight) {
   const charts = text.split(/(?!$)/u)
 
   let textWidth = 0
@@ -133,7 +128,6 @@ function drawMultilineText(ctx, text, entities, fonstSize, fillStyle, textX, tex
       drawText = drawLine
     }
 
-
     if (drawText) {
       if (preFont === null) ctx.font = nextFont
       if (preFillStyle === null) ctx.fillStyle = nextFillStyle
@@ -142,7 +136,7 @@ function drawMultilineText(ctx, text, entities, fonstSize, fillStyle, textX, tex
 
       const lineWidth = ctx.measureText(drawLine).width
 
-      if(lineWidth > textWidth) textWidth = lineWidth
+      if (lineWidth > textWidth) textWidth = lineWidth
 
       lineX = nextLineX
       lineY = nextLineY
@@ -164,7 +158,8 @@ function drawMultilineText(ctx, text, entities, fonstSize, fillStyle, textX, tex
   }
 }
 
-function drawRoundRect(ctx, x, y, width, height, radius, fill, stroke) {
+// https://stackoverflow.com/a/3368118
+function drawRoundRect (ctx, x, y, width, height, radius, fill, stroke) {
   if (typeof stroke === 'undefined') {
     stroke = true
   }
@@ -173,8 +168,7 @@ function drawRoundRect(ctx, x, y, width, height, radius, fill, stroke) {
   }
   if (typeof radius === 'number') {
     radius = { tl: radius, tr: radius, br: radius, bl: radius }
-  }
-  else {
+  } else {
     const defaultRadius = { tl: 0, tr: 0, br: 0, bl: 0 }
 
     for (const side in defaultRadius) {
@@ -200,43 +194,41 @@ function drawRoundRect(ctx, x, y, width, height, radius, fill, stroke) {
   }
 }
 
-function lightOrDark(color) {
+// https://codepen.io/andreaswik/pen/YjJqpK
+function lightOrDark (color) {
+  let r, g, b
 
   // Check the format of the color, HEX or RGB?
   if (color.match(/^rgb/)) {
-
     // If HEX --> store the red, green, blue values in separate variables
-    color = color.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*(\d+(?:\.\d+)?))?\)$/);
+    color = color.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*(\d+(?:\.\d+)?))?\)$/)
 
-    r = color[1];
-    g = color[2];
-    b = color[3];
-  }
-  else {
-
+    r = color[1]
+    g = color[2]
+    b = color[3]
+  } else {
     // If RGB --> Convert it to HEX: http://gist.github.com/983661
-    color = +("0x" + color.slice(1).replace(
+    color = +('0x' + color.slice(1).replace(
       color.length < 5 && /./g, '$&$&'
     )
-              );
+    )
 
-    r = color >> 16;
-    g = color >> 8 & 255;
-    b = color & 255;
+    r = color >> 16
+    g = color >> 8 & 255
+    b = color & 255
   }
 
   // HSP (Highly Sensitive Poo) equation from http://alienryderflex.com/hsp.html
-  hsp = Math.sqrt(
+  const hsp = Math.sqrt(
     0.299 * (r * r) +
     0.587 * (g * g) +
     0.114 * (b * b)
-  );
+  )
 
   // Using the HSP value, determine whether the color is light or dark
-  if (hsp>127.5) {
+  if (hsp > 127.5) {
     return 'light'
-  }
-  else {
+  } else {
     return 'dark'
   }
 }
@@ -252,13 +244,13 @@ module.exports = async (ctx) => {
       messageFrom = {
         id: 0,
         first_name: replyMessage.forward_sender_name,
-        username: 'HiddenSender',
+        username: 'HiddenSender'
       }
     } else if (replyMessage.forward_from_chat) {
       messageFrom = {
         id: replyMessage.forward_from_chat.id,
         first_name: replyMessage.forward_from_chat.title,
-        username: replyMessage.forward_from_chat.username || null,
+        username: replyMessage.forward_from_chat.username || null
       }
     }
 
@@ -271,23 +263,24 @@ module.exports = async (ctx) => {
 
     let backColor = '#130f1c'
 
-    if(ctx.match && ctx.match[2]) backColor = `${ctx.match[2]}`
-    if(ctx.match && ctx.match[2] && ctx.match[1] === '#') backColor = `#${ctx.match[2]}`
+    if (ctx.match && ctx.match[1] && ctx.match[1] === 'random') backColor = `#${(Math.floor(Math.random() * 16777216)).toString(16)}`
+    if (ctx.match && ctx.match[2]) backColor = `${ctx.match[2]}`
+    if (ctx.match && ctx.match[2] && ctx.match[1] === '#') backColor = `#${ctx.match[2]}`
 
     canvasСtx.fillStyle = backColor
 
     const backStyle = lightOrDark(canvasСtx.fillStyle)
 
-    const nickColor = [
-      '#c03d33',
-      '#4fad2d',
-      '#d09306',
-      '#168acd',
-      '#8544d6',
-      '#cd4073',
-      '#2996ad',
-      '#ce671b',
-    ]
+    // const nickColor = [
+    //   '#c03d33',
+    //   '#4fad2d',
+    //   '#d09306',
+    //   '#168acd',
+    //   '#8544d6',
+    //   '#cd4073',
+    //   '#2996ad',
+    //   '#ce671b'
+    // ]
 
     const nickColorLight = [
       '#862a23',
@@ -297,7 +290,7 @@ module.exports = async (ctx) => {
       '#5d2f95',
       '#8f2c50',
       '#1c6979',
-      '#904812',
+      '#904812'
     ]
 
     const nickColorBlack = [
@@ -308,7 +301,7 @@ module.exports = async (ctx) => {
       '#b48bf2',
       '#ff5694',
       '#62d4e3',
-      '#faa357',
+      '#faa357'
     ]
 
     const nickIndex = Math.abs(messageFrom.id) % 7
@@ -316,7 +309,7 @@ module.exports = async (ctx) => {
 
     canvasСtx.font = 'bold 22px OpenSans'
 
-    if(backStyle === 'light') canvasСtx.fillStyle = nickColorLight[nickMap[nickIndex]]
+    if (backStyle === 'light') canvasСtx.fillStyle = nickColorLight[nickMap[nickIndex]]
     else canvasСtx.fillStyle = nickColorBlack[nickMap[nickIndex]]
 
     const nickMaxLength = 330
@@ -334,15 +327,15 @@ module.exports = async (ctx) => {
 
     canvasСtx.fillText(nick, 110, 30)
 
-    const minFontSize  = 20
-    const maxFontSize  = 28
+    const minFontSize = 20
+    const maxFontSize = 28
 
     let preTextSize = 25 / ((replyMessage.text.length / 10) * 0.2)
 
-    if(preTextSize < minFontSize) preTextSize = minFontSize
-    if(preTextSize > maxFontSize) preTextSize = maxFontSize
+    if (preTextSize < minFontSize) preTextSize = minFontSize
+    if (preTextSize > maxFontSize) preTextSize = maxFontSize
 
-    const lineHeight = 4 * ( preTextSize * 0.25 )
+    const lineHeight = 4 * (preTextSize * 0.25)
 
     canvasСtx.font = `${preTextSize}px OpenSans`
 
@@ -353,7 +346,7 @@ module.exports = async (ctx) => {
     const canvasMultilineText = canvas.getContext('2d')
 
     let textColor = '#fff'
-    if(backStyle === 'light') textColor = '#000'
+    if (backStyle === 'light') textColor = '#000'
 
     const textSize = drawMultilineText(canvasMultilineText, replyMessage.text, replyMessage.entities, preTextSize, textColor, drawTextX, drawTextY, canvas.width - 20, lineHeight)
 
@@ -375,13 +368,13 @@ module.exports = async (ctx) => {
     let stickHeight = textSize.height - 20
     let stickWidth = textSize.textWidth + 70
 
-    if(textSize.textWidth + 20 < nickWidth) stickWidth = nickWidth + 40
+    if (textSize.textWidth + 20 < nickWidth) stickWidth = nickWidth + 40
 
     if (stickHeight > maxHeight) stickHeight = maxHeight
     if (stickWidth > maxWidth) stickWidth = maxWidth
 
     let canvasHeight = stickHeight
-    if(canvasHeight < 512) canvasHeight += 110
+    if (canvasHeight < 512) canvasHeight += 110
 
     let canvasWidth = stickWidth + 90
 
@@ -399,7 +392,7 @@ module.exports = async (ctx) => {
 
     canvasNotchСtx.drawImage(notchLeftUpPic, 0, 0, 72, 43)
 
-    canvasNotchСtx.globalCompositeOperation = "source-in"
+    canvasNotchСtx.globalCompositeOperation = 'source-in'
 
     canvasNotchСtx.fillStyle = backColor
     canvasNotchСtx.fillRect(0, 0, 72, 43)
@@ -440,8 +433,7 @@ module.exports = async (ctx) => {
       if (userPhoto) userPhotoUrl = await ctx.telegram.getFileLink(userPhoto)
 
       avatar = await loadImageFromUrl(userPhotoUrl)
-    }
-    catch (error) {
+    } catch (error) {
       avatar = await loadImageFromPatch('./assets/404.png')
     }
 
@@ -452,8 +444,7 @@ module.exports = async (ctx) => {
       canvasAvatarСtx.closePath()
       canvasAvatarСtx.restore()
       canvasAvatarСtx.drawImage(avatar, avatarX, avatarY, avatarSize * 2, avatarSize * 2)
-    }
-    else {
+    } else {
       canvasAvatarСtx.fillStyle = '#a4b7c4'
       canvasAvatarСtx.beginPath()
       canvasAvatarСtx.arc(avatarSize * 2, avatarSize * 2, 40, 0, Math.PI * 2, false)
@@ -476,9 +467,9 @@ module.exports = async (ctx) => {
 
     await ctx.replyWithDocument({
       source: imageSharpBuffer,
-      filename: 'sticker.webp',
+      filename: 'sticker.webp'
     }, {
-      reply_to_message_id: replyMessage.message_id,
+      reply_to_message_id: replyMessage.message_id
     })
   }
 }
