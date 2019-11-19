@@ -53,6 +53,8 @@ function loadImageFromPatch(patch) {
 function drawMultilineText(ctx, text, entities, fonstSize, fillStyle, textX, textY, maxWidth, lineHeight) {
   const charts = text.split(/(?!$)/u)
 
+  let textWidth = 0
+
   let lineX = textX
   let lineY = textY
 
@@ -138,6 +140,10 @@ function drawMultilineText(ctx, text, entities, fonstSize, fillStyle, textX, tex
 
       ctx.fillText(drawText, lineX, lineY)
 
+      const lineWidth = ctx.measureText(drawLine).width
+
+      if(lineWidth > textWidth) textWidth = lineWidth
+
       lineX = nextLineX
       lineY = nextLineY
 
@@ -152,12 +158,13 @@ function drawMultilineText(ctx, text, entities, fonstSize, fillStyle, textX, tex
   }
 
   return {
-    height: lineX,
-    width: lineY,
+    width: lineX,
+    height: lineY,
+    textWidth
   }
 }
 
-function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
+function drawRoundRect(ctx, x, y, width, height, radius, fill, stroke) {
   if (typeof stroke === 'undefined') {
     stroke = true
   }
@@ -196,6 +203,7 @@ function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
 module.exports = async (ctx) => {
   if (ctx.message.reply_to_message && ctx.message.reply_to_message.text) {
     const maxHeight = 1024
+    const maxWidth = 512
     const replyMessage = ctx.message.reply_to_message
     let messageFrom = replyMessage.from
 
@@ -216,7 +224,7 @@ module.exports = async (ctx) => {
     if (replyMessage.forward_from) messageFrom = replyMessage.forward_from
     let nick = `${messageFrom.first_name} ${messageFrom.last_name || ''}`
 
-    const canvas = createCanvas(512, maxHeight)
+    const canvas = createCanvas(maxWidth, maxHeight)
 
     const canvasСtx = canvas.getContext('2d')
 
@@ -250,12 +258,12 @@ module.exports = async (ctx) => {
 
     const nickMaxLength = 330
 
-    let nickLength = canvasСtx.measureText(nick).width
+    let nickWidth = canvasСtx.measureText(nick).width
 
-    if (nickLength > nickMaxLength) {
-      while (nickLength > nickMaxLength) {
+    if (nickWidth > nickMaxLength) {
+      while (nickWidth > nickMaxLength) {
         nick = nick.substr(0, nick.length - 1)
-        nickLength = canvasСtx.measureText(nick).width
+        nickWidth = canvasСtx.measureText(nick).width
       }
 
       nick += '…'
@@ -297,28 +305,48 @@ module.exports = async (ctx) => {
 
     // canvasСtx.fillText(groupWatermark, 490 - canvasСtx.measureText(groupWatermark).width, textSize.width + 40)
 
-    let stickHeight = textSize.width - 20
+    let stickHeight = textSize.height - 20
+    let stickWidth = textSize.textWidth + 60
+
+    if(stickWidth < nickWidth) stickWidth = nickWidth + 40
 
     if (stickHeight > maxHeight) stickHeight = maxHeight
+    if (stickWidth > maxWidth) stickWidth = maxWidth
 
-    let canvasWidth = stickHeight
-    if(canvasWidth < 512) canvasWidth += 110
+    let canvasHeight = stickHeight
+    if(canvasHeight < 512) canvasHeight += 110
 
-    const canvasSticker = createCanvas(512, canvasWidth)
+    let canvasWidth = stickWidth + 90
+
+    const canvasSticker = createCanvas(canvasWidth, canvasHeight)
     const canvasBackСtx = canvasSticker.getContext('2d')
 
-    canvasBackСtx.fillStyle = '#1e2c3a'
+    let backColor = '#130f1c'
+    if(ctx.match && ctx.match[0]) backColor = `#${ctx.match[2]}`
+
+    canvasBackСtx.fillStyle = backColor
     // canvasBackСtx.fillRect(152, 0, 275, stickHeight + 43);
     // canvasBackСtx.fillRect(100, 43, 400, stickHeight - 42);
 
-    roundRect(canvasBackСtx, 90, 0, 415, stickHeight + 43, 25, '#1e2c3a', false)
+    const notchLeftUpPic = await loadImageFromPatch('./assets/notch/left_up.png')
+
+    const canvasNotch = createCanvas(72, 43)
+    const canvasNotchСtx = canvasNotch.getContext('2d')
+
+    canvasNotchСtx.drawImage(notchLeftUpPic, 0, 0, 72, 43)
+
+    canvasNotchСtx.globalCompositeOperation = "source-in"
+
+    canvasNotchСtx.fillStyle = backColor
+    canvasNotchСtx.fillRect(0, 0, 72, 43)
+
+    canvasBackСtx.drawImage(canvasNotch, 80, 0)
+
+    drawRoundRect(canvasBackСtx, 90, 0, stickWidth, stickHeight + 43, 25, '#fff', false)
 
     // const notchPic = await loadImageFromPatch('./assets/notch.svg')
 
     // canvasBackСtx.drawImage(notchPic, 84, 2)
-
-    const notchLeftUpPic = await loadImageFromPatch('./assets/notch/left_up.png')
-    canvasBackСtx.drawImage(notchLeftUpPic, 80, 0, 72, 43)
 
     // const notchRightUpPic = await loadImageFromPatch('./assets/notch/right_up.png')
     // canvasBackСtx.drawImage(notchRightUpPic, 427, 0, 72, 43)
@@ -329,7 +357,7 @@ module.exports = async (ctx) => {
     // const notchRightBottomPic = await loadImageFromPatch('./assets/notch/right_bottom.png')
     // canvasBackСtx.drawImage(notchRightBottomPic, 427, stickHeight, 72, 43)
 
-    const avatarSize = 35
+    const avatarSize = 30
 
     const avatarX = 10
     const avatarY = 0
@@ -359,12 +387,12 @@ module.exports = async (ctx) => {
       canvasAvatarСtx.clip()
       canvasAvatarСtx.closePath()
       canvasAvatarСtx.restore()
-      canvasAvatarСtx.drawImage(avatar, avatarX, avatarY, 70, 70)
+      canvasAvatarСtx.drawImage(avatar, avatarX, avatarY, avatarSize * 2, avatarSize * 2)
     }
     else {
       canvasAvatarСtx.fillStyle = '#a4b7c4'
       canvasAvatarСtx.beginPath()
-      canvasAvatarСtx.arc(60, 60, 40, 0, Math.PI * 2, false)
+      canvasAvatarСtx.arc(avatarSize * 2, avatarSize * 2, 40, 0, Math.PI * 2, false)
       canvasAvatarСtx.fill()
 
       canvasСtx.font = 'bold 55px OpenSans'
@@ -380,7 +408,7 @@ module.exports = async (ctx) => {
 
     if (stickHeight >= 512) imageSharp.resize({ height: 512 })
 
-    const imageSharpBuffer = await imageSharp.webp({ quality: 100 }).png({ compressionLevel: 9, force: false }).toBuffer()
+    const imageSharpBuffer = await imageSharp.webp({ lossless: true, force: true }).toBuffer()
 
     await ctx.replyWithDocument({
       source: imageSharpBuffer,
