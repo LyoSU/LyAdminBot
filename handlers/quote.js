@@ -286,14 +286,14 @@ module.exports = async (ctx) => {
     ]
 
     const nickColorLight = [
-      '#c03d33',
-      '#4fad2d',
-      '#d09306',
-      '#168acd',
-      '#8544d6',
-      '#cd4073',
-      '#2996ad',
-      '#ce671b',
+      '#5d1d18',
+      '#265415',
+      '#654702',
+      '#0a4364',
+      '#412068',
+      '#641e38',
+      '#134954',
+      '#904812',
     ]
 
     const nickColorBlack = [
@@ -312,7 +312,7 @@ module.exports = async (ctx) => {
 
     canvasСtx.font = 'bold 22px OpenSans'
 
-    if(backColor === 'light') canvasСtx.fillStyle = nickColorLight[nickMap[nickIndex]]
+    if(backStyle === 'light') canvasСtx.fillStyle = nickColorLight[nickMap[nickIndex]]
     else canvasСtx.fillStyle = nickColorBlack[nickMap[nickIndex]]
 
     const nickMaxLength = 330
