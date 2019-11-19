@@ -286,14 +286,14 @@ module.exports = async (ctx) => {
     ]
 
     const nickColorLight = [
-      '#5d1d18',
-      '#265415',
-      '#654702',
-      '#0a4364',
-      '#412068',
-      '#641e38',
-      '#134954',
-      '#64320c',
+      '#c03d33',
+      '#4fad2d',
+      '#d09306',
+      '#168acd',
+      '#8544d6',
+      '#cd4073',
+      '#2996ad',
+      '#ce671b',
     ]
 
     const nickColorBlack = [
