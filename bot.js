@@ -4,11 +4,11 @@ const session = require('telegraf/session')
 const rateLimit = require('telegraf-ratelimit')
 const I18n = require('telegraf-i18n')
 const {
-  db,
+  db
 } = require('./database')
 const {
   onlyGroup,
-  onlyAdmin,
+  onlyAdmin
 } = require('./middlewares')
 const {
   handleMessage,
@@ -37,47 +37,45 @@ const {
   handleSendSettingsJson,
   handleAdminJsonReset,
   handleAdminReset,
-  handleExtra,
+  handleExtra
 } = require('./handlers')
 const {
   updateUser,
   updateGroup,
-  updateGroupMember,
+  updateGroupMember
 } = require('./helpers')
-
 
 global.startDate = new Date()
 
 const bot = new Telegraf(process.env.BOT_TOKEN, {
   telegram: {
-    webhookReply: false,
-  },
+    webhookReply: false
+  }
 })
 
 bot.context.db = db
 
 const limitConfig = {
   window: 1000,
-  limit: 1,
+  limit: 1
 }
 
 const bananLimitConfig = {
   window: 3 * 1000,
   limit: 1,
   keyGenerator: (ctx) => ctx.chat.id,
-  onLimitExceeded: (ctx) => ctx.deleteMessage(),
+  onLimitExceeded: (ctx) => ctx.deleteMessage()
 }
 
 const i18n = new I18n({
   directory: path.resolve(__dirname, 'locales'),
   defaultLanguage: 'ru',
-  defaultLanguageOnMissing: true,
+  defaultLanguageOnMissing: true
 })
 
 bot.telegram.getMe().then((botInfo) => {
   bot.options.username = botInfo.username
 })
-
 
 bot.use(rateLimit(limitConfig))
 
@@ -95,7 +93,7 @@ bot.use(session({
     }
     return null
   },
-  ttl: 60 * 5,
+  ttl: 60 * 5
 }))
 
 bot.use(i18n.middleware())
@@ -127,7 +125,7 @@ bot.command('help', handleHelp)
 bot.command('ping', handlePing)
 bot.command('lang', handleSetLanguage)
 bot.command('web', handleWebAuth)
-bot.hears(/^\/q\s(?:(#|))([^\s]+)/, handleQuote)
+bot.hears(/^\/q\s(?:(#?))([^\s]+)/, handleQuote)
 bot.command('q', handleQuote)
 bot.command('banan', onlyGroup, rateLimit(bananLimitConfig), handleBanan)
 bot.command('kick', onlyGroup, handleKick)
@@ -137,7 +135,7 @@ bot.command('top_banan', onlyGroup, handleTopBanan)
 bot.command('mystats', onlyGroup, handleMyStats)
 bot.command('extras', onlyGroup, handleExtraList)
 
-bot.hears(/^!extra\s(?:(#|))([^\s]+)/, onlyAdmin, handleAdminExtra)
+bot.hears(/^!extra\s(?:(#?))([^\s]+)/, onlyAdmin, handleAdminExtra)
 bot.hears(/^!extra-max (\d*)/, onlyAdmin, handleAdminMaxExtra)
 bot.hears('!welcome', onlyAdmin, handleAdminWelcome)
 bot.hears('!gif', onlyAdmin, handleAdminWelcomeGif)
@@ -168,13 +166,12 @@ db.connection.once('open', async () => {
       webhook: {
         domain: process.env.BOT_DOMAIN,
         hookPath: `/LyAdminBot:${process.env.BOT_TOKEN}`,
-        port: process.env.WEBHOOK_PORT || 2200,
-      },
+        port: process.env.WEBHOOK_PORT || 2200
+      }
     }).then(() => {
       console.log('bot start webhook')
     })
-  }
-  else {
+  } else {
     bot.launch().then(() => {
       console.log('bot start polling')
     })
