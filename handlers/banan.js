@@ -1,7 +1,6 @@
 const humanizeDuration = require('humanize-duration')
 const { userName, getRandomInt } = require('../utils')
 
-
 module.exports = async (ctx) => {
   const arg = ctx.message.text.split(/ +/)
   const chatMember = await ctx.telegram.getChatMember(ctx.message.chat.id, ctx.message.from.id)
@@ -22,8 +21,7 @@ module.exports = async (ctx) => {
           banType = 'm'
         }
         banTime = parseInt(arg[1], 10) * banTimeArr[banType]
-      }
-      else {
+      } else {
         const replyMember = await ctx.telegram.getChatMember(
           ctx.message.chat.id,
           ctx.message.reply_to_message.from.id
@@ -31,14 +29,12 @@ module.exports = async (ctx) => {
 
         if (replyMember.status === 'restricted') {
           banTime = -1
-        }
-        else {
+        } else {
           banTime = ctx.group.info.settings.banan.default
           autoBan = true
         }
       }
-    }
-    else {
+    } else {
       banTime = null
     }
   }
@@ -46,7 +42,7 @@ module.exports = async (ctx) => {
   if (banTime) {
     const banMember = await ctx.db.GroupMember.findOne({
       group: ctx.group.info,
-      telegram_id: banUser.id,
+      telegram_id: banUser.id
     })
 
     if (autoBan) banTime *= (banMember.banan.stack + 1)
@@ -73,7 +69,7 @@ module.exports = async (ctx) => {
         { until_date: unixBanTime }
       ).then(async () => {
         if (banUser.id === 686968130) {
-          ctx.replyWithDocument ({
+          ctx.replyWithDocument({
             source: 'assets/arkasha_banan.webp'
           }, {
             reply_to_message_id: ctx.message.message_id
@@ -82,7 +78,7 @@ module.exports = async (ctx) => {
 
         const message = await ctx.replyWithHTML(ctx.i18n.t('banan.suc', {
           name: userName(banUser, true),
-          duration: banDuration,
+          duration: banDuration
         }))
 
         const replyBanMember = await ctx.telegram.getChatMember(
@@ -103,7 +99,7 @@ module.exports = async (ctx) => {
         banMember.banan.last = {
           who: ctx.from.id,
           how: banTime,
-          time: ctx.message.date,
+          time: ctx.message.date
         }
         if (autoBan) banMember.banan.stack += 1
 
@@ -115,20 +111,19 @@ module.exports = async (ctx) => {
         }
       }).catch((error) => {
         ctx.replyWithHTML(ctx.i18n.t('banan.error', {
-          error,
+          error
         }))
       })
-    }
-    else {
+    } else {
       await ctx.telegram.restrictChatMember(ctx.chat.id, banUser.id, {
         until_date: ctx.message.date,
         can_send_messages: true,
         can_send_other_messages: true,
         can_send_media_messages: true,
-        can_add_web_page_previews: true,
+        can_add_web_page_previews: true
       }).then(() => {
         ctx.replyWithHTML(ctx.i18n.t('banan.pick', {
-          name: userName(banUser, true),
+          name: userName(banUser, true)
         }))
 
         banMember.banan.sum -= (
@@ -141,10 +136,9 @@ module.exports = async (ctx) => {
 
     banMember.banan.time = Date.now()
     await banMember.save()
-  }
-  else {
+  } else {
     ctx.replyWithHTML(ctx.i18n.t('banan.show', {
-      name: userName(ctx.from, true),
+      name: userName(ctx.from, true)
     }))
   }
 }

@@ -1,7 +1,6 @@
 const humanizeDuration = require('humanize-duration')
 const { userName } = require('../utils')
 
-
 module.exports = async (ctx) => {
   let result = ''
   let topMembers = []
@@ -14,7 +13,7 @@ module.exports = async (ctx) => {
         telegram_id: member.telegram_id,
         banan: {
           num: member.banan.num,
-          sum: member.banan.sum,
+          sum: member.banan.sum
         }
       })
     }
@@ -35,11 +34,11 @@ module.exports = async (ctx) => {
           round: true,
           largest: 2,
           language: ctx.i18n.locale(),
-          fallbacks: ['en'],
+          fallbacks: ['en']
         }
       )
 
-      top += `\n${index+1}. ${userName(user)} — ${banan}`
+      top += `\n${index + 1}. ${userName(user)} — ${banan}`
     }
 
     topMembers.sort((a, b) => b.banan.num - a.banan.num)
@@ -52,19 +51,18 @@ module.exports = async (ctx) => {
       const user = await ctx.db.User.findOne({ telegram_id: topMembersNum[index].telegram_id })
       const banan = topMembersNum[index].banan.num
 
-      top += `\n${index+1}. ${userName(user)} — ${banan} 🍌`
+      top += `\n${index + 1}. ${userName(user)} — ${banan} 🍌`
     }
 
     result = ctx.i18n.t('cmd.top_banan.info', {
       chatName: ctx.chat.title,
-      top,
+      top
     })
-  }
-  else {
+  } else {
     result = ctx.i18n.t('cmd.top_banan.error.empty')
   }
 
   ctx.replyWithHTML(result, {
-    reply_to_message_id: ctx.message.message_id,
+    reply_to_message_id: ctx.message.message_id
   })
 }
