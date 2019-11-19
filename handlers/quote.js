@@ -85,10 +85,10 @@ function drawMultilineText (ctx, text, entities, fonstSize, fillStyle, textX, te
         if (chartNum + chart.length > entity.offset && chartNum + chart.length < entity.offset + entity.length + 1) {
           styled = true
 
-          if (entity.type === 'bold') nextFont = `bold ${fonstSize}px OpenSans`
-          if (entity.type === 'italic') nextFont = `italic ${fonstSize}px OpenSans`
+          if (entity.type === 'bold') nextFont = `${fonstSize}px bold`
+          if (entity.type === 'italic') nextFont = `${fonstSize}px italic`
           if (['pre', 'code'].includes(entity.type)) {
-            nextFont = `${fonstSize * 0.8}px OpenSans`
+            nextFont = `${fonstSize}px monospace`
             nextFillStyle = '#5887a7'
           }
           if (['mention', 'text_mention', 'hashtag', 'email', 'phone_number', 'bot_command', 'url', 'text_link'].includes(entity.type)) nextFillStyle = '#6ab7ec'
