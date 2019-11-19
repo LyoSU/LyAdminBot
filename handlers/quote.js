@@ -274,7 +274,7 @@ module.exports = async (ctx) => {
 
     const canvasСtx = canvas.getContext('2d')
 
-    const nickColorLight = [
+    const nickColor = [
       '#c03d33',
       '#4fad2d',
       '#d09306',
@@ -283,6 +283,17 @@ module.exports = async (ctx) => {
       '#cd4073',
       '#2996ad',
       '#ce671b',
+    ]
+
+    const nickColorLight = [
+      '#5d1d18',
+      '#265415',
+      '#654702',
+      '#0a4364',
+      '#412068',
+      '#641e38',
+      '#134954',
+      '#64320c',
     ]
 
     const nickColorBlack = [
