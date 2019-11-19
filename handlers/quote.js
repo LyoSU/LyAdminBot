@@ -220,18 +220,18 @@ module.exports = async (ctx) => {
 
     const canvasСtx = canvas.getContext('2d')
 
-    const nickColor = [
-      '#fdacb0',
-      '#c1eec1',
-      '#f8d9a3',
-      '#acdbf9',
-      '#e0d0fa',
-      '#ffa3c4',
-      '#a3e6ef',
-      '#fccca1',
-    ]
+    // const nickColor = [
+    //   '#c03d33',
+    //   '#4fad2d',
+    //   '#d09306',
+    //   '#168acd',
+    //   '#8544d6',
+    //   '#cd4073',
+    //   '#2996ad',
+    //   '#ce671b',
+    // ]
 
-    const usernameColor = [
+    const nickColor = [
       '#fb6169',
       '#85de85',
       '#f3bc5c',
@@ -315,7 +315,7 @@ module.exports = async (ctx) => {
 
     // const notchPic = await loadImageFromPatch('./assets/notch.svg')
 
-    // canvasBackСtx.drawImage(notchPic, 0, 0)
+    // canvasBackСtx.drawImage(notchPic, 84, 2)
 
     const notchLeftUpPic = await loadImageFromPatch('./assets/notch/left_up.png')
     canvasBackСtx.drawImage(notchLeftUpPic, 80, 0, 72, 43)
