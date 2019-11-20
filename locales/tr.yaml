@@ -31,7 +31,7 @@ cmd:
         <b>telegram cevabı:</b> ${tms} ms
         <b>Bu zamandan beri çalışıyor:</b> ${workTime}
 
-        ${delay}
+        ${extra}
       delay: |
         ❗️ <b>Bot çalışmıyor:</b> ${delayTime}
   welcome:
