@@ -266,15 +266,15 @@ module.exports = async (ctx) => {
 
     const canvasСtx = canvas.getContext('2d')
 
-    let backColor = '#130f1c'
+    let backgroundColor = '#130f1c'
 
-    if (ctx.group.info.settings.quote.backgroundColor) backColor = ctx.group.info.settings.quote.backgroundColor
+    if (ctx.group.info.settings.quote.backgroundColor) backgroundColor = ctx.group.info.settings.quote.backgroundColor
 
-    if ((ctx.match && ctx.match[2] === 'random') || backColor === 'random') backColor = `#${(Math.floor(Math.random() * 16777216)).toString(16)}`
-    else if (ctx.match && ctx.match[1] === '#' && ctx.match[2]) backColor = `#${ctx.match[2]}`
-    else if (ctx.match && ctx.match[2]) backColor = `${ctx.match[2]}`
+    if ((ctx.match && ctx.match[2] === 'random') || backgroundColor === 'random') backgroundColor = `#${(Math.floor(Math.random() * 16777216)).toString(16)}`
+    else if (ctx.match && ctx.match[1] === '#' && ctx.match[2]) backgroundColor = `#${ctx.match[2]}`
+    else if (ctx.match && ctx.match[2]) backgroundColor = `${ctx.match[2]}`
 
-    canvasСtx.fillStyle = backColor
+    canvasСtx.fillStyle = backgroundColor
 
     const backStyle = lightOrDark(canvasСtx.fillStyle)
 
@@ -388,7 +388,7 @@ module.exports = async (ctx) => {
     const canvasSticker = createCanvas(canvasWidth, canvasHeight)
     const canvasBackСtx = canvasSticker.getContext('2d')
 
-    canvasBackСtx.fillStyle = backColor
+    canvasBackСtx.fillStyle = backgroundColor
     // canvasBackСtx.fillRect(152, 0, 275, stickHeight + 43);
     // canvasBackСtx.fillRect(100, 43, 400, stickHeight - 42);
 
@@ -401,7 +401,7 @@ module.exports = async (ctx) => {
 
     canvasNotchСtx.globalCompositeOperation = 'source-in'
 
-    canvasNotchСtx.fillStyle = backColor
+    canvasNotchСtx.fillStyle = backgroundColor
     canvasNotchСtx.fillRect(0, 0, 72, 43)
 
     canvasBackСtx.drawImage(canvasNotch, 80, 0)
