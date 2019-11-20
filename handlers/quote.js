@@ -380,9 +380,7 @@ module.exports = async (ctx) => {
     if (stickHeight > maxHeight) stickHeight = maxHeight
     if (stickWidth > maxWidth) stickWidth = maxWidth
 
-    let canvasHeight = stickHeight
-    if (canvasHeight < 512) canvasHeight += 110
-
+    let canvasHeight = stickHeight + 75
     let canvasWidth = stickWidth + 90
 
     const canvasSticker = createCanvas(canvasWidth, canvasHeight)
