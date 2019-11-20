@@ -114,6 +114,9 @@ cmd:
     member: |
       <a href="tg://user?id=${telegram_id}">${telegram_id}</a>
       ${banTime} | a: ${active} | f: ${flood}
+  quote:
+    set_back_color: |
+      Цвет фона цитат установлен на: <code>${backgroundColor}</code>
   reset: Настройки были сброшены
 settings:
     json:
