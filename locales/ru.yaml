@@ -85,7 +85,7 @@ cmd:
         <b>Ответ telegram:</b> ${tms} мс
         <b>Бот работает:</b> ${workTime}
 
-        ${delay}
+        ${extra}
       delay: |
         ❗️ <b>Бот не работал:</b> ${delayTime}
   welcome:
