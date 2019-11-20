@@ -18,6 +18,7 @@ const {
   handleWelcome,
   handleBanan,
   handleQuote,
+  handleAdminQuoteColor,
   handleKick,
   handleDelete,
   handleTop,
@@ -127,6 +128,7 @@ bot.command('lang', handleSetLanguage)
 bot.command('web', handleWebAuth)
 bot.hears(/^\/q\s(?:(#?))([^\s]+)/, handleQuote)
 bot.command('q', handleQuote)
+bot.hears(/^!quote-color\s(?:(#?))([^\s]+)/, onlyAdmin, handleAdminQuoteColor)
 bot.command('banan', onlyGroup, rateLimit(bananLimitConfig), handleBanan)
 bot.command('kick', onlyGroup, handleKick)
 bot.command('del', handleDelete)

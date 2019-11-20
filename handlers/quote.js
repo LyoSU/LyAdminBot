@@ -268,7 +268,9 @@ module.exports = async (ctx) => {
 
     let backColor = '#130f1c'
 
-    if (ctx.match && ctx.match[2] === 'random') backColor = `#${(Math.floor(Math.random() * 16777216)).toString(16)}`
+    if (ctx.group.info.settings.quote.backgroundColor) backColor = ctx.group.info.settings.quote.backgroundColor
+
+    if ((ctx.match && ctx.match[2] === 'random') || backColor === 'random') backColor = `#${(Math.floor(Math.random() * 16777216)).toString(16)}`
     else if (ctx.match && ctx.match[1] === '#' && ctx.match[2]) backColor = `#${ctx.match[2]}`
     else if (ctx.match && ctx.match[2]) backColor = `${ctx.match[2]}`
 
