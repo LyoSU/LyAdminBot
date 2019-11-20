@@ -1,6 +1,5 @@
 const mongoose = require('mongoose')
 
-
 const gifs = [
   'CgADBAAD6XQAAhIZZAdy9bLvfo_v3AI',
   'CgADBAAD2p8AAnsaZAe9U3IPs3ggVQI',
@@ -32,7 +31,7 @@ const gifs = [
   'CgADAgADYAADrhgZD2Qj9HOZwItYAg',
   'CgADAgADRwEAAoytQUs8O_VRukQ-4QI',
   'CgADBAADrgADkRZAU4GO6ot6PRXzAg',
-  'CgADAgADqwADcPsRENdHoywrOTF6Ag',
+  'CgADAgADqwADcPsRENdHoywrOTF6Ag'
 ]
 
 const texts = [
@@ -88,7 +87,7 @@ const texts = [
   'Чат замер в ожидании первого сообщения от %name%! Пиши, не нужно стесняться!❤️',
   'Нам с тобой, %name%, не очень везёт. Нас любят одинаково сильно!',
   'Алё, %name%, а где поднять бабла?',
-  'Я ненавижу реп и плохое настроение у %name%! Если на первый пункт мне уже плевать, то второй сейчас решим! Давай, подходи ко мне... ❤️',
+  'Я ненавижу реп и плохое настроение у %name%! Если на первый пункт мне уже плевать, то второй сейчас решим! Давай, подходи ко мне... ❤️'
 ]
 
 const groupSchema = mongoose.Schema({
@@ -96,7 +95,7 @@ const groupSchema = mongoose.Schema({
     type: Number,
     index: true,
     unique: true,
-    required: true,
+    required: true
   },
   title: String,
   username: String,
@@ -105,59 +104,62 @@ const groupSchema = mongoose.Schema({
     welcome: {
       enable: {
         type: Boolean,
-        default: true,
+        default: true
       },
       timer: {
         type: Number,
-        default: 180,
+        default: 180
       },
-      gifs: {
-        type: Array,
-        default: gifs,
-      },
-      texts: {
-        type: Array,
-        default: texts,
-      },
+      gifs: [{
+        type: String
+      }],
+      texts: [{
+        type: String
+      }]
     },
     banan: {
       default: {
         type: Number,
-        default: 300,
-      },
+        default: 300
+      }
     },
     maxExtra: {
       type: Number,
-      default: 3,
+      default: 3
     },
     extras: [{
       name: String,
       type: { type: String },
-      message: Object,
+      message: Object
     }],
     removeLng: Array,
     locale: String,
+    quote: {
+      backgroundColor: {
+        type: String,
+        default: '#130f1c'
+      }
+    }
   },
   stats: {
     messagesCount: {
       type: Number,
-      default: 0,
+      default: 0
     },
     textTotal: {
       type: Number,
-      default: 0,
-    },
+      default: 0
+    }
   },
   stickerSet: {
     name: String,
     create: {
       type: Boolean,
-      default: false,
-    },
-  },
+      default: false
+    }
+  }
 }, {
-  timestamps: true,
+  timestamps: true
 })
-
 
 module.exports = groupSchema

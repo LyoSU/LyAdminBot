@@ -4,6 +4,7 @@ const handlePing = require('./ping')
 const handleSetLanguage = require('./language-set')
 const handleBanan = require('./banan')
 const handleQuote = require('./quote')
+const handleAdminQuoteColor = require('./admin/quote-color')
 const handleDelete = require('./delete')
 const handleTop = require('./top')
 const handleTopBanan = require('./top-banan')
@@ -26,7 +27,6 @@ const handleAdminJsonReset = require('./admin/json-reset')
 const handleAdminReset = require('./admin/reset')
 const handleExtra = require('./extra')
 
-
 module.exports = {
   handleHelp,
   handleKick,
@@ -34,6 +34,7 @@ module.exports = {
   handleSetLanguage,
   handleBanan,
   handleQuote,
+  handleAdminQuoteColor,
   handleDelete,
   handleTop,
   handleTopBanan,
@@ -54,5 +55,5 @@ module.exports = {
   handleSendSettingsJson,
   handleAdminJsonReset,
   handleAdminReset,
-  handleExtra,
+  handleExtra
 }
