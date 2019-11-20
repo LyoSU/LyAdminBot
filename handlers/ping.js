@@ -38,14 +38,18 @@ module.exports = async (ctx) => {
 
   const tmpPi = await getTempPi()
 
-  const freemem = (os.freemem() / (1024 * 1024)).toFixed(0)
+  const usemem = ((os.totalmem() - os.freemem()) / (1024 * 1024)).toFixed(0)
   const totalmem = (os.totalmem() / (1024 * 1024)).toFixed(0)
 
   let extra = ''
 
-  extra += `<b>RAM:</b> ${freemem}/${totalmem} MB\n`
+  extra += `💡 Server info:\n`
+  extra += `<b>RAM:</b> ${usemem}/${totalmem} MB\n`
   extra += `<b>CPU Load:</b> ${os.loadavg()[0].toFixed(2)}\n`
-  if (!tmpPi.error) extra += `<b>Temp:</b> ${tmpPi / 1000} ℃\n`
+  if (!tmpPi.error) extra += `<b>Temp:</b> ${(tmpPi / 1000).toFixed(2)} ℃\n`
+
+  extra += '\n'
+
   extra += delay
 
   ctx.telegram.editMessageText(
