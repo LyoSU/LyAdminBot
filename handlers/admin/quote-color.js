@@ -1,6 +1,7 @@
 module.exports = async (ctx) => {
+  console.log(ctx.match)
   let backgroundColor = '#130f1c'
-  if (ctx.match && ctx.match[1] === '#' && ctx.match[4]) backgroundColor = `#${ctx.match[2]}`
+  if (ctx.match && ctx.match[1] === '#' && ctx.match[2]) backgroundColor = `#${ctx.match[2]}`
   else if (ctx.match && ctx.match[2]) backgroundColor = `${ctx.match[2]}`
 
   ctx.group.info.settings.quote.backgroundColor = backgroundColor
