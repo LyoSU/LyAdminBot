@@ -69,7 +69,8 @@ cmd:
         <b>Адказ сервера:</b> ${sms} мс
         <b>Адказ telegram:</b> ${tms} мс
         <b>Бот працуе:</b> ${workTime}
-        ${delay}
+
+        ${extra}
       delay: |
         ❗️ <b>Бот не працавал:</b> ${delayTime}
   welcome:

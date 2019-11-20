@@ -82,7 +82,7 @@ cmd:
         <b>Telegram response:</b> ${tms} ms
         <b>Bot works:</b> ${workTime}
 
-        ${delay}
+        ${extra}
       delay: |
         ❗️ <b>Bot didn't work:</b> ${delayTime}
   welcome:
