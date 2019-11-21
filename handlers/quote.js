@@ -240,7 +240,7 @@ function lightOrDark (color) {
 
 module.exports = async (ctx) => {
   if (ctx.message.reply_to_message && ctx.message.reply_to_message.text) {
-    const maxHeight = 1024
+    const maxHeight = 512
     const maxWidth = 512
     const replyMessage = ctx.message.reply_to_message
     let messageFrom = replyMessage.from
@@ -380,11 +380,11 @@ module.exports = async (ctx) => {
     if (stickHeight > maxHeight) stickHeight = maxHeight
     if (stickWidth > maxWidth) stickWidth = maxWidth
 
-    let canvasHeight = stickHeight + 85
+    let canvasHeight = stickHeight + 40
     let canvasWidth = stickWidth + 90
 
-    const canvasSticker = createCanvas(canvasWidth, canvasHeight)
-    const canvasBackСtx = canvasSticker.getContext('2d')
+    const canvasQuote = createCanvas(canvasWidth, canvasHeight)
+    const canvasBackСtx = canvasQuote.getContext('2d')
 
     canvasBackСtx.fillStyle = backgroundColor
     // canvasBackСtx.fillRect(152, 0, 275, stickHeight + 43);
@@ -405,19 +405,6 @@ module.exports = async (ctx) => {
     canvasBackСtx.drawImage(canvasNotch, 80, 0)
 
     drawRoundRect(canvasBackСtx, 90, 0, stickWidth, stickHeight + 43, 25, '#fff', false)
-
-    // const notchPic = await loadImageFromPatch('./assets/notch.svg')
-
-    // canvasBackСtx.drawImage(notchPic, 84, 2)
-
-    // const notchRightUpPic = await loadImageFromPatch('./assets/notch/right_up.png')
-    // canvasBackСtx.drawImage(notchRightUpPic, 427, 0, 72, 43)
-
-    // const notchLeftBottomPic = await loadImageFromPatch('./assets/notch/left_bottom.png')
-    // canvasBackСtx.drawImage(notchLeftBottomPic, 100, stickHeight, 72, 43)
-
-    // const notchRightBottomPic = await loadImageFromPatch('./assets/notch/right_bottom.png')
-    // canvasBackСtx.drawImage(notchRightBottomPic, 427, stickHeight, 72, 43)
 
     const avatarSize = 30
 
@@ -460,15 +447,28 @@ module.exports = async (ctx) => {
       canvasСtx.fillText(messageFrom.first_name.split(/(?!$)/u, 1)[0], 30, 80)
     }
 
+    const canvasQuoteСtx = canvasQuote.getContext('2d')
+
+    canvasQuoteСtx.drawImage(canvas, 0, 0)
+
+    const imageQuoteSharp = sharp(canvasQuote.toBuffer())
+
+    if (stickHeight > stickWidth) imageQuoteSharp.resize({ height: 512 })
+    else imageQuoteSharp.resize({ width: 512 })
+
+    const imageMetadata = await sharp(await imageQuoteSharp.toBuffer()).metadata()
+
+    const canvasSticker = createCanvas(imageMetadata.width, imageMetadata.height + 75)
     const canvasStickerСtx = canvasSticker.getContext('2d')
 
-    canvasStickerСtx.drawImage(canvas, 0, 0)
+    const imgQuote = new Image()
+    imgQuote.src = await imageQuoteSharp.toBuffer()
 
-    const imageSharp = sharp(canvasSticker.toBuffer())
+    canvasStickerСtx.drawImage(imgQuote, 0, 0)
 
-    if (stickHeight >= 512) imageSharp.resize({ height: 512 })
+    const imageStickerSharp = sharp(canvasSticker.toBuffer())
 
-    const imageSharpBuffer = await imageSharp.webp({ lossless: true, force: true }).toBuffer()
+    const imageSharpBuffer = await imageStickerSharp.webp({ lossless: true, force: true }).toBuffer()
 
     await ctx.replyWithDocument({
       source: imageSharpBuffer,
