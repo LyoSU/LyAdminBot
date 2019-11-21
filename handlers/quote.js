@@ -90,7 +90,7 @@ async function drawMultilineText (ctx, text, entities, fonstSize, fillStyle, tex
           if (entity.type === 'bold') nextFont = `bold ${fonstSize}px OpenSans`
           if (entity.type === 'italic') nextFont = `italic ${fonstSize}px OpenSans`
           if (['pre', 'code'].includes(entity.type)) {
-            nextFont = `${fonstSize}px monospace rmono`
+            nextFont = `${fonstSize}px monospace`
             nextFillStyle = '#5887a7'
           }
           if (['mention', 'text_mention', 'hashtag', 'email', 'phone_number', 'bot_command', 'url', 'text_link'].includes(entity.type)) nextFillStyle = '#6ab7ec'
