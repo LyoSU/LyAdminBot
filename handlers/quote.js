@@ -87,8 +87,8 @@ async function drawMultilineText (ctx, text, entities, fonstSize, fillStyle, tex
         if (chartNum + chart.length > entity.offset && chartNum + chart.length < entity.offset + entity.length + 1) {
           styled = true
 
-          if (entity.type === 'bold') nextFont = `${fonstSize}px bold`
-          if (entity.type === 'italic') nextFont = `${fonstSize}px italic`
+          if (entity.type === 'bold') nextFont = `bold ${fonstSize}px`
+          if (entity.type === 'italic') nextFont = `italic ${fonstSize}px`
           if (['pre', 'code'].includes(entity.type)) {
             nextFont = `${fonstSize}px monospace rmono`
             nextFillStyle = '#5887a7'
