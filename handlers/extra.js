@@ -1,6 +1,5 @@
 const replicators = require('telegraf/core/replicators')
 
-
 module.exports = async (ctx) => {
   const { entities } = ctx.message
   const { maxExtra } = ctx.group.info.settings

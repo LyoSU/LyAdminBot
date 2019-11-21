@@ -2,6 +2,10 @@ const https = require('https')
 const fs = require('fs')
 const { createCanvas, Image, registerFont } = require('canvas')
 const sharp = require('sharp')
+const runes = require('runes')
+const emojiUnicode = require('emoji-unicode')
+
+const emojiDataPatch = './node_modules/emoji-datasource-apple/img/apple/64/'
 
 const fontsDir = 'assets/fonts/'
 
@@ -45,8 +49,8 @@ function loadImageFromPatch (patch) {
   })
 }
 
-function drawMultilineText (ctx, text, entities, fonstSize, fillStyle, textX, textY, maxWidth, lineHeight) {
-  const charts = text.split(/(?!$)/u)
+async function drawMultilineText (ctx, text, entities, fonstSize, fillStyle, textX, textY, maxWidth, lineHeight) {
+  const charts = runes(text)
 
   let textWidth = 0
 
@@ -72,9 +76,7 @@ function drawMultilineText (ctx, text, entities, fonstSize, fillStyle, textX, te
 
   for (let chartIndex = 0; chartIndex < charts.length; chartIndex++) {
     let chart = charts[chartIndex]
-
-    chartNum += charts[chartIndex].length
-    drawString += chart
+    chartNum += chart.length
 
     if (entities) {
       let styled = false
@@ -104,6 +106,27 @@ function drawMultilineText (ctx, text, entities, fonstSize, fillStyle, textX, te
     let drawText = ''
     let nextLineX = lineX
     let nextLineY = lineY
+
+    let emojiemojiUnicodeCode
+
+    try {
+      emojiemojiUnicodeCode = emojiUnicode(chart)
+      chart = ' '
+    } catch (error) {
+      emojiemojiUnicodeCode = null
+    }
+
+    let emojiPng
+
+    if (emojiemojiUnicodeCode) {
+      const emojiUnicodeUnified = emojiemojiUnicodeCode.split(' ').join('-')
+      emojiPng = `${emojiDataPatch}${emojiUnicodeUnified}.png`
+
+      drawText = drawString + chart
+      nextLineX += ctx.measureText(drawText).width
+    } else {
+      drawString += chart
+    }
 
     if (preFont !== nextFont || preFillStyle !== nextFillStyle) {
       drawText = drawString
@@ -140,11 +163,25 @@ function drawMultilineText (ctx, text, entities, fonstSize, fillStyle, textX, te
       drawLine += drawString
       lineWidth = ctx.measureText(drawLine).width
 
+      // if (emojiPng) lineWidth += fonstSize * 4
+
       if (lineWidth > textWidth) textWidth = lineWidth
       if (lineY !== nextLineY) drawLine = ''
 
       lineX = nextLineX
       lineY = nextLineY
+
+      if (emojiPng) {
+        const emoji = await loadImageFromPatch(emojiPng)
+
+        const emojiSize = fonstSize / 2
+
+        ctx.drawImage(emoji, lineX - emojiSize + 5, lineY - fonstSize + 5, fonstSize, fonstSize)
+
+        lineX += emojiSize + 5
+
+        console.log(lineX)
+      }
 
       preFont = nextFont
       preFillStyle = nextFillStyle
@@ -355,7 +392,7 @@ module.exports = async (ctx) => {
     let textColor = '#fff'
     if (backStyle === 'light') textColor = '#000'
 
-    const textSize = drawMultilineText(canvasMultilineText, replyMessage.text, replyMessage.entities, preTextSize, textColor, drawTextX, drawTextY, canvas.width - 20, lineHeight)
+    const textSize = await drawMultilineText(canvasMultilineText, replyMessage.text, replyMessage.entities, preTextSize, textColor, drawTextX, drawTextY, canvas.width - 20, lineHeight)
 
     console.timeEnd('drawMultilineText')
 
