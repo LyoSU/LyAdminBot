@@ -1,0 +1,2943 @@
+﻿{
+    "1f9d1-200d-1f9b0": {
+        "uri": "person-red-hair",
+        "code": "1f9d1-200d-1f9b0",
+        "title": "Person: Red Hair",
+        "description": "The Person: Red Hair emoji is a sequence of the 🧑 Adult and 🦰 Emoji Component Red Hair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑‍🦰",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-red-hair_1f9d1-200d-1f9b0.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+200D",
+            "U+1F9B0"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f9b0": {
+        "uri": "person-light-skin-tone-red-hair",
+        "code": "1f9d1-1f3fb-200d-1f9b0",
+        "title": "Person: Light Skin Tone, Red Hair",
+        "description": "The Person: Light Skin Tone, Red Hair emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2 and 🦰 Emoji Component Red Hair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍🦰",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-light-skin-tone-red-hair_1f9d1-1f3fb-200d-1f9b0.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F9B0"
+        ]
+    },
+    "1f9d1-1f3fc-200d-1f9b0": {
+        "uri": "person-medium-light-skin-tone-red-hair",
+        "code": "1f9d1-1f3fc-200d-1f9b0",
+        "title": "Person: Medium-Light Skin Tone, Red Hair",
+        "description": "The Person: Medium-Light Skin Tone, Red Hair emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3 and 🦰 Emoji Component Red Hair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍🦰",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-medium-light-skin-tone-red-hair_1f9d1-1f3fc-200d-1f9b0.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F9B0"
+        ]
+    },
+    "1f9d1-1f3fd-200d-1f9b0": {
+        "uri": "person-medium-skin-tone-red-hair",
+        "code": "1f9d1-1f3fd-200d-1f9b0",
+        "title": "Person: Medium Skin Tone, Red Hair",
+        "description": "The Person: Medium Skin Tone, Red Hair emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4 and 🦰 Emoji Component Red Hair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍🦰",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-medium-skin-tone-red-hair_1f9d1-1f3fd-200d-1f9b0.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F9B0"
+        ]
+    },
+    "1f9d1-1f3fe-200d-1f9b0": {
+        "uri": "person-medium-dark-skin-tone-red-hair",
+        "code": "1f9d1-1f3fe-200d-1f9b0",
+        "title": "Person: Medium-Dark Skin Tone, Red Hair",
+        "description": "The Person: Medium-Dark Skin Tone, Red Hair emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5 and 🦰 Emoji Component Red Hair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍🦰",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-medium-dark-skin-tone-red-hair_1f9d1-1f3fe-200d-1f9b0.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+1F9B0"
+        ]
+    },
+    "1f9d1-1f3ff-200d-1f9b0": {
+        "uri": "person-dark-skin-tone-red-hair",
+        "code": "1f9d1-1f3ff-200d-1f9b0",
+        "title": "Person: Dark Skin Tone, Red Hair",
+        "description": "The Person: Dark Skin Tone, Red Hair emoji is a sequence of the 🧑 Adult, 🏿 Emoji Modifier Fitzpatrick Type-6 and 🦰 Emoji Component Red Hair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏿‍🦰",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-dark-skin-tone-red-hair_1f9d1-1f3ff-200d-1f9b0.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FF",
+            "U+200D",
+            "U+1F9B0"
+        ]
+    },
+    "1f9d1-200d-1f9b1": {
+        "uri": "person-curly-hair",
+        "code": "1f9d1-200d-1f9b1",
+        "title": "Person: Curly Hair",
+        "description": "The Person: Curly Hair emoji is a sequence of the 🧑 Adult and 🦱 Emoji Component Curly Hair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑‍🦱",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-curly-hair_1f9d1-200d-1f9b1.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+200D",
+            "U+1F9B1"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f9b1": {
+        "uri": "person-light-skin-tone-curly-hair",
+        "code": "1f9d1-1f3fb-200d-1f9b1",
+        "title": "Person: Light Skin Tone, Curly Hair",
+        "description": "The Person: Light Skin Tone, Curly Hair emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2 and 🦱 Emoji Component Curly Hair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍🦱",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-light-skin-tone-curly-hair_1f9d1-1f3fb-200d-1f9b1.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F9B1"
+        ]
+    },
+    "1f9d1-1f3fc-200d-1f9b1": {
+        "uri": "person-medium-light-skin-tone-curly-hair",
+        "code": "1f9d1-1f3fc-200d-1f9b1",
+        "title": "Person: Medium-Light Skin Tone, Curly Hair",
+        "description": "The Person: Medium-Light Skin Tone, Curly Hair emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3 and 🦱 Emoji Component Curly Hair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍🦱",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-medium-light-skin-tone-curly-hair_1f9d1-1f3fc-200d-1f9b1.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F9B1"
+        ]
+    },
+    "1f9d1-1f3fd-200d-1f9b1": {
+        "uri": "person-medium-skin-tone-curly-hair",
+        "code": "1f9d1-1f3fd-200d-1f9b1",
+        "title": "Person: Medium Skin Tone, Curly Hair",
+        "description": "The Person: Medium Skin Tone, Curly Hair emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4 and 🦱 Emoji Component Curly Hair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍🦱",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-medium-skin-tone-curly-hair_1f9d1-1f3fd-200d-1f9b1.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F9B1"
+        ]
+    },
+    "1f9d1-1f3fe-200d-1f9b1": {
+        "uri": "person-medium-dark-skin-tone-curly-hair",
+        "code": "1f9d1-1f3fe-200d-1f9b1",
+        "title": "Person: Medium-Dark Skin Tone, Curly Hair",
+        "description": "The Person: Medium-Dark Skin Tone, Curly Hair emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5 and 🦱 Emoji Component Curly Hair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍🦱",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-medium-dark-skin-tone-curly-hair_1f9d1-1f3fe-200d-1f9b1.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+1F9B1"
+        ]
+    },
+    "1f9d1-1f3ff-200d-1f9b1": {
+        "uri": "person-dark-skin-tone-curly-hair",
+        "code": "1f9d1-1f3ff-200d-1f9b1",
+        "title": "Person: Dark Skin Tone, Curly Hair",
+        "description": "The Person: Dark Skin Tone, Curly Hair emoji is a sequence of the 🧑 Adult, 🏿 Emoji Modifier Fitzpatrick Type-6 and 🦱 Emoji Component Curly Hair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏿‍🦱",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-dark-skin-tone-curly-hair_1f9d1-1f3ff-200d-1f9b1.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FF",
+            "U+200D",
+            "U+1F9B1"
+        ]
+    },
+    "1f9d1-200d-1f9b3": {
+        "uri": "person-white-hair",
+        "code": "1f9d1-200d-1f9b3",
+        "title": "Person: White Hair",
+        "description": "The Person: White Hair emoji is a sequence of the 🧑 Adult and 🦳 Emoji Component White Hair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑‍🦳",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-white-hair_1f9d1-200d-1f9b3.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+200D",
+            "U+1F9B3"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f9b3": {
+        "uri": "person-light-skin-tone-white-hair",
+        "code": "1f9d1-1f3fb-200d-1f9b3",
+        "title": "Person: Light Skin Tone, White Hair",
+        "description": "The Person: Light Skin Tone, White Hair emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2 and 🦳 Emoji Component White Hair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍🦳",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-light-skin-tone-white-hair_1f9d1-1f3fb-200d-1f9b3.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F9B3"
+        ]
+    },
+    "1f9d1-1f3fc-200d-1f9b3": {
+        "uri": "person-medium-light-skin-tone-white-hair",
+        "code": "1f9d1-1f3fc-200d-1f9b3",
+        "title": "Person: Medium-Light Skin Tone, White Hair",
+        "description": "The Person: Medium-Light Skin Tone, White Hair emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3 and 🦳 Emoji Component White Hair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍🦳",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-medium-light-skin-tone-white-hair_1f9d1-1f3fc-200d-1f9b3.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F9B3"
+        ]
+    },
+    "1f9d1-1f3fd-200d-1f9b3": {
+        "uri": "person-medium-skin-tone-white-hair",
+        "code": "1f9d1-1f3fd-200d-1f9b3",
+        "title": "Person: Medium Skin Tone, White Hair",
+        "description": "The Person: Medium Skin Tone, White Hair emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4 and 🦳 Emoji Component White Hair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍🦳",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-medium-skin-tone-white-hair_1f9d1-1f3fd-200d-1f9b3.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F9B3"
+        ]
+    },
+    "1f9d1-1f3fe-200d-1f9b3": {
+        "uri": "person-medium-dark-skin-tone-white-hair",
+        "code": "1f9d1-1f3fe-200d-1f9b3",
+        "title": "Person: Medium-Dark Skin Tone, White Hair",
+        "description": "The Person: Medium-Dark Skin Tone, White Hair emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5 and 🦳 Emoji Component White Hair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍🦳",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-medium-dark-skin-tone-white-hair_1f9d1-1f3fe-200d-1f9b3.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+1F9B3"
+        ]
+    },
+    "1f9d1-1f3ff-200d-1f9b3": {
+        "uri": "person-dark-skin-tone-white-hair",
+        "code": "1f9d1-1f3ff-200d-1f9b3",
+        "title": "Person: Dark Skin Tone, White Hair",
+        "description": "The Person: Dark Skin Tone, White Hair emoji is a sequence of the 🧑 Adult, 🏿 Emoji Modifier Fitzpatrick Type-6 and 🦳 Emoji Component White Hair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏿‍🦳",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-dark-skin-tone-white-hair_1f9d1-1f3ff-200d-1f9b3.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FF",
+            "U+200D",
+            "U+1F9B3"
+        ]
+    },
+    "1f9d1-200d-1f9b2": {
+        "uri": "person-bald",
+        "code": "1f9d1-200d-1f9b2",
+        "title": "Person: Bald",
+        "description": "The Person: Bald emoji is a sequence of the 🧑 Adult and 🦲 Emoji Component Bald emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑‍🦲",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-bald_1f9d1-200d-1f9b2.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+200D",
+            "U+1F9B2"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f9b2": {
+        "uri": "person-light-skin-tone-bald",
+        "code": "1f9d1-1f3fb-200d-1f9b2",
+        "title": "Person: Light Skin Tone, Bald",
+        "description": "The Person: Light Skin Tone, Bald emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2 and 🦲 Emoji Component Bald emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍🦲",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-light-skin-tone-bald_1f9d1-1f3fb-200d-1f9b2.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F9B2"
+        ]
+    },
+    "1f9d1-1f3fc-200d-1f9b2": {
+        "uri": "person-medium-light-skin-tone-bald",
+        "code": "1f9d1-1f3fc-200d-1f9b2",
+        "title": "Person: Medium-Light Skin Tone, Bald",
+        "description": "The Person: Medium-Light Skin Tone, Bald emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3 and 🦲 Emoji Component Bald emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍🦲",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-medium-light-skin-tone-bald_1f9d1-1f3fc-200d-1f9b2.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F9B2"
+        ]
+    },
+    "1f9d1-1f3fd-200d-1f9b2": {
+        "uri": "person-medium-skin-tone-bald",
+        "code": "1f9d1-1f3fd-200d-1f9b2",
+        "title": "Person: Medium Skin Tone, Bald",
+        "description": "The Person: Medium Skin Tone, Bald emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4 and 🦲 Emoji Component Bald emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍🦲",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-medium-skin-tone-bald_1f9d1-1f3fd-200d-1f9b2.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F9B2"
+        ]
+    },
+    "1f9d1-1f3fe-200d-1f9b2": {
+        "uri": "person-medium-dark-skin-tone-bald",
+        "code": "1f9d1-1f3fe-200d-1f9b2",
+        "title": "Person: Medium-Dark Skin Tone, Bald",
+        "description": "The Person: Medium-Dark Skin Tone, Bald emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5 and 🦲 Emoji Component Bald emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍🦲",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-medium-dark-skin-tone-bald_1f9d1-1f3fe-200d-1f9b2.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+1F9B2"
+        ]
+    },
+    "1f9d1-1f3ff-200d-1f9b2": {
+        "uri": "person-dark-skin-tone-bald",
+        "code": "1f9d1-1f3ff-200d-1f9b2",
+        "title": "Person: Dark Skin Tone, Bald",
+        "description": "The Person: Dark Skin Tone, Bald emoji is a sequence of the 🧑 Adult, 🏿 Emoji Modifier Fitzpatrick Type-6 and 🦲 Emoji Component Bald emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏿‍🦲",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-dark-skin-tone-bald_1f9d1-1f3ff-200d-1f9b2.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FF",
+            "U+200D",
+            "U+1F9B2"
+        ]
+    },
+    "1f9d1-200d-2695-fe0f": {
+        "uri": "health-worker",
+        "code": "1f9d1-200d-2695-fe0f",
+        "title": "Health Worker",
+        "description": "The Health Worker emoji is a sequence of the 🧑 Adult and ⚕ Staff of Aesculapius emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑‍⚕️",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/health-worker_1f9d1-200d-2695-fe0f.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+200D",
+            "U+2695",
+            "U+FE0F"
+        ]
+    },
+    "1f9d1-1f3fb-200d-2695-fe0f": {
+        "uri": "health-worker-light-skin-tone",
+        "code": "1f9d1-1f3fb-200d-2695-fe0f",
+        "title": "Health Worker: Light Skin Tone",
+        "description": "The Health Worker: Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2 and ⚕ Staff of Aesculapius emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍⚕️",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/health-worker-light-skin-tone_1f9d1-1f3fb-200d-2695-fe0f.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+2695",
+            "U+FE0F"
+        ]
+    },
+    "1f9d1-1f3fc-200d-2695-fe0f": {
+        "uri": "health-worker-medium-light-skin-tone",
+        "code": "1f9d1-1f3fc-200d-2695-fe0f",
+        "title": "Health Worker: Medium-Light Skin Tone",
+        "description": "The Health Worker: Medium-Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3 and ⚕ Staff of Aesculapius emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍⚕️",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/health-worker-medium-light-skin-tone_1f9d1-1f3fc-200d-2695-fe0f.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+2695",
+            "U+FE0F"
+        ]
+    },
+    "1f9d1-1f3fd-200d-2695-fe0f": {
+        "uri": "health-worker-medium-skin-tone",
+        "code": "1f9d1-1f3fd-200d-2695-fe0f",
+        "title": "Health Worker: Medium Skin Tone",
+        "description": "The Health Worker: Medium Skin Tone emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4 and ⚕ Staff of Aesculapius emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍⚕️",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/health-worker-medium-skin-tone_1f9d1-1f3fd-200d-2695-fe0f.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+2695",
+            "U+FE0F"
+        ]
+    },
+    "1f9d1-1f3fe-200d-2695-fe0f": {
+        "uri": "health-worker-medium-dark-skin-tone",
+        "code": "1f9d1-1f3fe-200d-2695-fe0f",
+        "title": "Health Worker: Medium-Dark Skin Tone",
+        "description": "The Health Worker: Medium-Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5 and ⚕ Staff of Aesculapius emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍⚕️",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/health-worker-medium-dark-skin-tone_1f9d1-1f3fe-200d-2695-fe0f.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+2695",
+            "U+FE0F"
+        ]
+    },
+    "1f9d1-1f3ff-200d-2695-fe0f": {
+        "uri": "health-worker-dark-skin-tone",
+        "code": "1f9d1-1f3ff-200d-2695-fe0f",
+        "title": "Health Worker: Dark Skin Tone",
+        "description": "The Health Worker: Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏿 Emoji Modifier Fitzpatrick Type-6 and ⚕ Staff of Aesculapius emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏿‍⚕️",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/health-worker-dark-skin-tone_1f9d1-1f3ff-200d-2695-fe0f.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FF",
+            "U+200D",
+            "U+2695",
+            "U+FE0F"
+        ]
+    },
+    "1f9d1-200d-1f393": {
+        "uri": "student",
+        "code": "1f9d1-200d-1f393",
+        "title": "Student",
+        "description": "The Student emoji is a sequence of the 🧑 Adult and 🎓 Graduation Cap emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑‍🎓",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/student_1f9d1-200d-1f393.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+200D",
+            "U+1F393"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f393": {
+        "uri": "student-light-skin-tone",
+        "code": "1f9d1-1f3fb-200d-1f393",
+        "title": "Student: Light Skin Tone",
+        "description": "The Student: Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2 and 🎓 Graduation Cap emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍🎓",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/student-light-skin-tone_1f9d1-1f3fb-200d-1f393.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F393"
+        ]
+    },
+    "1f9d1-1f3fc-200d-1f393": {
+        "uri": "student-medium-light-skin-tone",
+        "code": "1f9d1-1f3fc-200d-1f393",
+        "title": "Student: Medium-Light Skin Tone",
+        "description": "The Student: Medium-Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3 and 🎓 Graduation Cap emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍🎓",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/student-medium-light-skin-tone_1f9d1-1f3fc-200d-1f393.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F393"
+        ]
+    },
+    "1f9d1-1f3fd-200d-1f393": {
+        "uri": "student-medium-skin-tone",
+        "code": "1f9d1-1f3fd-200d-1f393",
+        "title": "Student: Medium Skin Tone",
+        "description": "The Student: Medium Skin Tone emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4 and 🎓 Graduation Cap emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍🎓",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/student-medium-skin-tone_1f9d1-1f3fd-200d-1f393.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F393"
+        ]
+    },
+    "1f9d1-1f3fe-200d-1f393": {
+        "uri": "student-medium-dark-skin-tone",
+        "code": "1f9d1-1f3fe-200d-1f393",
+        "title": "Student: Medium-Dark Skin Tone",
+        "description": "The Student: Medium-Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5 and 🎓 Graduation Cap emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍🎓",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/student-medium-dark-skin-tone_1f9d1-1f3fe-200d-1f393.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+1F393"
+        ]
+    },
+    "1f9d1-1f3ff-200d-1f393": {
+        "uri": "student-dark-skin-tone",
+        "code": "1f9d1-1f3ff-200d-1f393",
+        "title": "Student: Dark Skin Tone",
+        "description": "The Student: Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏿 Emoji Modifier Fitzpatrick Type-6 and 🎓 Graduation Cap emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏿‍🎓",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/student-dark-skin-tone_1f9d1-1f3ff-200d-1f393.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FF",
+            "U+200D",
+            "U+1F393"
+        ]
+    },
+    "1f9d1-200d-1f3eb": {
+        "uri": "teacher",
+        "code": "1f9d1-200d-1f3eb",
+        "title": "Teacher",
+        "description": "The Teacher emoji is a sequence of the 🧑 Adult and 🏫 School emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑‍🏫",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/teacher_1f9d1-200d-1f3eb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+200D",
+            "U+1F3EB"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f3eb": {
+        "uri": "teacher-light-skin-tone",
+        "code": "1f9d1-1f3fb-200d-1f3eb",
+        "title": "Teacher: Light Skin Tone",
+        "description": "The Teacher: Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2 and 🏫 School emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍🏫",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/teacher-light-skin-tone_1f9d1-1f3fb-200d-1f3eb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F3EB"
+        ]
+    },
+    "1f9d1-1f3fc-200d-1f3eb": {
+        "uri": "teacher-medium-light-skin-tone",
+        "code": "1f9d1-1f3fc-200d-1f3eb",
+        "title": "Teacher: Medium-Light Skin Tone",
+        "description": "The Teacher: Medium-Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3 and 🏫 School emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍🏫",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/teacher-medium-light-skin-tone_1f9d1-1f3fc-200d-1f3eb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F3EB"
+        ]
+    },
+    "1f9d1-1f3fd-200d-1f3eb": {
+        "uri": "teacher-medium-skin-tone",
+        "code": "1f9d1-1f3fd-200d-1f3eb",
+        "title": "Teacher: Medium Skin Tone",
+        "description": "The Teacher: Medium Skin Tone emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4 and 🏫 School emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍🏫",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/teacher-medium-skin-tone_1f9d1-1f3fd-200d-1f3eb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F3EB"
+        ]
+    },
+    "1f9d1-1f3fe-200d-1f3eb": {
+        "uri": "teacher-medium-dark-skin-tone",
+        "code": "1f9d1-1f3fe-200d-1f3eb",
+        "title": "Teacher: Medium-Dark Skin Tone",
+        "description": "The Teacher: Medium-Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5 and 🏫 School emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍🏫",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/teacher-medium-dark-skin-tone_1f9d1-1f3fe-200d-1f3eb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+1F3EB"
+        ]
+    },
+    "1f9d1-1f3ff-200d-1f3eb": {
+        "uri": "teacher-dark-skin-tone",
+        "code": "1f9d1-1f3ff-200d-1f3eb",
+        "title": "Teacher: Dark Skin Tone",
+        "description": "The Teacher: Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏿 Emoji Modifier Fitzpatrick Type-6 and 🏫 School emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏿‍🏫",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/teacher-dark-skin-tone_1f9d1-1f3ff-200d-1f3eb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FF",
+            "U+200D",
+            "U+1F3EB"
+        ]
+    },
+    "1f9d1-200d-2696-fe0f": {
+        "uri": "judge",
+        "code": "1f9d1-200d-2696-fe0f",
+        "title": "Judge",
+        "description": "The Judge emoji is a sequence of the 🧑 Adult and ⚖ Scales emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑‍⚖️",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/judge_1f9d1-200d-2696-fe0f.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+200D",
+            "U+2696",
+            "U+FE0F"
+        ]
+    },
+    "1f9d1-1f3fb-200d-2696-fe0f": {
+        "uri": "judge-light-skin-tone",
+        "code": "1f9d1-1f3fb-200d-2696-fe0f",
+        "title": "Judge: Light Skin Tone",
+        "description": "The Judge: Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2 and ⚖ Scales emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍⚖️",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/judge-light-skin-tone_1f9d1-1f3fb-200d-2696-fe0f.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+2696",
+            "U+FE0F"
+        ]
+    },
+    "1f9d1-1f3fc-200d-2696-fe0f": {
+        "uri": "judge-medium-light-skin-tone",
+        "code": "1f9d1-1f3fc-200d-2696-fe0f",
+        "title": "Judge: Medium-Light Skin Tone",
+        "description": "The Judge: Medium-Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3 and ⚖ Scales emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍⚖️",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/judge-medium-light-skin-tone_1f9d1-1f3fc-200d-2696-fe0f.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+2696",
+            "U+FE0F"
+        ]
+    },
+    "1f9d1-1f3fd-200d-2696-fe0f": {
+        "uri": "judge-medium-skin-tone",
+        "code": "1f9d1-1f3fd-200d-2696-fe0f",
+        "title": "Judge: Medium Skin Tone",
+        "description": "The Judge: Medium Skin Tone emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4 and ⚖ Scales emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍⚖️",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/judge-medium-skin-tone_1f9d1-1f3fd-200d-2696-fe0f.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+2696",
+            "U+FE0F"
+        ]
+    },
+    "1f9d1-1f3fe-200d-2696-fe0f": {
+        "uri": "judge-medium-dark-skin-tone",
+        "code": "1f9d1-1f3fe-200d-2696-fe0f",
+        "title": "Judge: Medium-Dark Skin Tone",
+        "description": "The Judge: Medium-Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5 and ⚖ Scales emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍⚖️",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/judge-medium-dark-skin-tone_1f9d1-1f3fe-200d-2696-fe0f.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+2696",
+            "U+FE0F"
+        ]
+    },
+    "1f9d1-1f3ff-200d-2696-fe0f": {
+        "uri": "judge-dark-skin-tone",
+        "code": "1f9d1-1f3ff-200d-2696-fe0f",
+        "title": "Judge: Dark Skin Tone",
+        "description": "The Judge: Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏿 Emoji Modifier Fitzpatrick Type-6 and ⚖ Scales emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏿‍⚖️",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/judge-dark-skin-tone_1f9d1-1f3ff-200d-2696-fe0f.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FF",
+            "U+200D",
+            "U+2696",
+            "U+FE0F"
+        ]
+    },
+    "1f9d1-200d-1f33e": {
+        "uri": "farmer",
+        "code": "1f9d1-200d-1f33e",
+        "title": "Farmer",
+        "description": "The Farmer emoji is a sequence of the 🧑 Adult and 🌾 Ear of Rice emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑‍🌾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/farmer_1f9d1-200d-1f33e.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+200D",
+            "U+1F33E"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f33e": {
+        "uri": "farmer-light-skin-tone",
+        "code": "1f9d1-1f3fb-200d-1f33e",
+        "title": "Farmer: Light Skin Tone",
+        "description": "The Farmer: Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2 and 🌾 Ear of Rice emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍🌾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/farmer-light-skin-tone_1f9d1-1f3fb-200d-1f33e.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F33E"
+        ]
+    },
+    "1f9d1-1f3fc-200d-1f33e": {
+        "uri": "farmer-medium-light-skin-tone",
+        "code": "1f9d1-1f3fc-200d-1f33e",
+        "title": "Farmer: Medium-Light Skin Tone",
+        "description": "The Farmer: Medium-Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3 and 🌾 Ear of Rice emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍🌾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/farmer-medium-light-skin-tone_1f9d1-1f3fc-200d-1f33e.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F33E"
+        ]
+    },
+    "1f9d1-1f3fd-200d-1f33e": {
+        "uri": "farmer-medium-skin-tone",
+        "code": "1f9d1-1f3fd-200d-1f33e",
+        "title": "Farmer: Medium Skin Tone",
+        "description": "The Farmer: Medium Skin Tone emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4 and 🌾 Ear of Rice emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍🌾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/farmer-medium-skin-tone_1f9d1-1f3fd-200d-1f33e.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F33E"
+        ]
+    },
+    "1f9d1-1f3fe-200d-1f33e": {
+        "uri": "farmer-medium-dark-skin-tone",
+        "code": "1f9d1-1f3fe-200d-1f33e",
+        "title": "Farmer: Medium-Dark Skin Tone",
+        "description": "The Farmer: Medium-Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5 and 🌾 Ear of Rice emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍🌾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/farmer-medium-dark-skin-tone_1f9d1-1f3fe-200d-1f33e.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+1F33E"
+        ]
+    },
+    "1f9d1-1f3ff-200d-1f33e": {
+        "uri": "farmer-dark-skin-tone",
+        "code": "1f9d1-1f3ff-200d-1f33e",
+        "title": "Farmer: Dark Skin Tone",
+        "description": "The Farmer: Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏿 Emoji Modifier Fitzpatrick Type-6 and 🌾 Ear of Rice emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏿‍🌾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/farmer-dark-skin-tone_1f9d1-1f3ff-200d-1f33e.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FF",
+            "U+200D",
+            "U+1F33E"
+        ]
+    },
+    "1f9d1-200d-1f373": {
+        "uri": "cook",
+        "code": "1f9d1-200d-1f373",
+        "title": "Cook",
+        "description": "The Cook emoji is a sequence of the 🧑 Adult and 🍳 Cooking emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑‍🍳",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/cook_1f9d1-200d-1f373.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+200D",
+            "U+1F373"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f373": {
+        "uri": "cook-light-skin-tone",
+        "code": "1f9d1-1f3fb-200d-1f373",
+        "title": "Cook: Light Skin Tone",
+        "description": "The Cook: Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2 and 🍳 Cooking emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍🍳",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/cook-light-skin-tone_1f9d1-1f3fb-200d-1f373.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F373"
+        ]
+    },
+    "1f9d1-1f3fc-200d-1f373": {
+        "uri": "cook-medium-light-skin-tone",
+        "code": "1f9d1-1f3fc-200d-1f373",
+        "title": "Cook: Medium-Light Skin Tone",
+        "description": "The Cook: Medium-Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3 and 🍳 Cooking emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍🍳",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/cook-medium-light-skin-tone_1f9d1-1f3fc-200d-1f373.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F373"
+        ]
+    },
+    "1f9d1-1f3fd-200d-1f373": {
+        "uri": "cook-medium-skin-tone",
+        "code": "1f9d1-1f3fd-200d-1f373",
+        "title": "Cook: Medium Skin Tone",
+        "description": "The Cook: Medium Skin Tone emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4 and 🍳 Cooking emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍🍳",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/cook-medium-skin-tone_1f9d1-1f3fd-200d-1f373.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F373"
+        ]
+    },
+    "1f9d1-1f3fe-200d-1f373": {
+        "uri": "cook-medium-dark-skin-tone",
+        "code": "1f9d1-1f3fe-200d-1f373",
+        "title": "Cook: Medium-Dark Skin Tone",
+        "description": "The Cook: Medium-Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5 and 🍳 Cooking emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍🍳",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/cook-medium-dark-skin-tone_1f9d1-1f3fe-200d-1f373.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+1F373"
+        ]
+    },
+    "1f9d1-1f3ff-200d-1f373": {
+        "uri": "cook-dark-skin-tone",
+        "code": "1f9d1-1f3ff-200d-1f373",
+        "title": "Cook: Dark Skin Tone",
+        "description": "The Cook: Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏿 Emoji Modifier Fitzpatrick Type-6 and 🍳 Cooking emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏿‍🍳",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/cook-dark-skin-tone_1f9d1-1f3ff-200d-1f373.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FF",
+            "U+200D",
+            "U+1F373"
+        ]
+    },
+    "1f9d1-200d-1f527": {
+        "uri": "mechanic",
+        "code": "1f9d1-200d-1f527",
+        "title": "Mechanic",
+        "description": "The Mechanic emoji is a sequence of the 🧑 Adult and 🔧 Wrench emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑‍🔧",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/mechanic_1f9d1-200d-1f527.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+200D",
+            "U+1F527"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f527": {
+        "uri": "mechanic-light-skin-tone",
+        "code": "1f9d1-1f3fb-200d-1f527",
+        "title": "Mechanic: Light Skin Tone",
+        "description": "The Mechanic: Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2 and 🔧 Wrench emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍🔧",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/mechanic-light-skin-tone_1f9d1-1f3fb-200d-1f527.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F527"
+        ]
+    },
+    "1f9d1-1f3fc-200d-1f527": {
+        "uri": "mechanic-medium-light-skin-tone",
+        "code": "1f9d1-1f3fc-200d-1f527",
+        "title": "Mechanic: Medium-Light Skin Tone",
+        "description": "The Mechanic: Medium-Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3 and 🔧 Wrench emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍🔧",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/mechanic-medium-light-skin-tone_1f9d1-1f3fc-200d-1f527.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F527"
+        ]
+    },
+    "1f9d1-1f3fd-200d-1f527": {
+        "uri": "mechanic-medium-skin-tone",
+        "code": "1f9d1-1f3fd-200d-1f527",
+        "title": "Mechanic: Medium Skin Tone",
+        "description": "The Mechanic: Medium Skin Tone emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4 and 🔧 Wrench emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍🔧",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/mechanic-medium-skin-tone_1f9d1-1f3fd-200d-1f527.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F527"
+        ]
+    },
+    "1f9d1-1f3fe-200d-1f527": {
+        "uri": "mechanic-medium-dark-skin-tone",
+        "code": "1f9d1-1f3fe-200d-1f527",
+        "title": "Mechanic: Medium-Dark Skin Tone",
+        "description": "The Mechanic: Medium-Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5 and 🔧 Wrench emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍🔧",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/mechanic-medium-dark-skin-tone_1f9d1-1f3fe-200d-1f527.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+1F527"
+        ]
+    },
+    "1f9d1-1f3ff-200d-1f527": {
+        "uri": "mechanic-dark-skin-tone",
+        "code": "1f9d1-1f3ff-200d-1f527",
+        "title": "Mechanic: Dark Skin Tone",
+        "description": "The Mechanic: Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏿 Emoji Modifier Fitzpatrick Type-6 and 🔧 Wrench emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏿‍🔧",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/mechanic-dark-skin-tone_1f9d1-1f3ff-200d-1f527.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FF",
+            "U+200D",
+            "U+1F527"
+        ]
+    },
+    "1f9d1-200d-1f3ed": {
+        "uri": "factory-worker",
+        "code": "1f9d1-200d-1f3ed",
+        "title": "Factory Worker",
+        "description": "The Factory Worker emoji is a sequence of the 🧑 Adult and 🏭 Factory emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑‍🏭",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/factory-worker_1f9d1-200d-1f3ed.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+200D",
+            "U+1F3ED"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f3ed": {
+        "uri": "factory-worker-light-skin-tone",
+        "code": "1f9d1-1f3fb-200d-1f3ed",
+        "title": "Factory Worker: Light Skin Tone",
+        "description": "The Factory Worker: Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2 and 🏭 Factory emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍🏭",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/factory-worker-light-skin-tone_1f9d1-1f3fb-200d-1f3ed.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F3ED"
+        ]
+    },
+    "1f9d1-1f3fc-200d-1f3ed": {
+        "uri": "factory-worker-medium-light-skin-tone",
+        "code": "1f9d1-1f3fc-200d-1f3ed",
+        "title": "Factory Worker: Medium-Light Skin Tone",
+        "description": "The Factory Worker: Medium-Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3 and 🏭 Factory emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍🏭",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/factory-worker-medium-light-skin-tone_1f9d1-1f3fc-200d-1f3ed.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F3ED"
+        ]
+    },
+    "1f9d1-1f3fd-200d-1f3ed": {
+        "uri": "factory-worker-medium-skin-tone",
+        "code": "1f9d1-1f3fd-200d-1f3ed",
+        "title": "Factory Worker: Medium Skin Tone",
+        "description": "The Factory Worker: Medium Skin Tone emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4 and 🏭 Factory emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍🏭",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/factory-worker-medium-skin-tone_1f9d1-1f3fd-200d-1f3ed.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F3ED"
+        ]
+    },
+    "1f9d1-1f3fe-200d-1f3ed": {
+        "uri": "factory-worker-medium-dark-skin-tone",
+        "code": "1f9d1-1f3fe-200d-1f3ed",
+        "title": "Factory Worker: Medium-Dark Skin Tone",
+        "description": "The Factory Worker: Medium-Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5 and 🏭 Factory emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍🏭",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/factory-worker-medium-dark-skin-tone_1f9d1-1f3fe-200d-1f3ed.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+1F3ED"
+        ]
+    },
+    "1f9d1-1f3ff-200d-1f3ed": {
+        "uri": "factory-worker-dark-skin-tone",
+        "code": "1f9d1-1f3ff-200d-1f3ed",
+        "title": "Factory Worker: Dark Skin Tone",
+        "description": "The Factory Worker: Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏿 Emoji Modifier Fitzpatrick Type-6 and 🏭 Factory emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏿‍🏭",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/factory-worker-dark-skin-tone_1f9d1-1f3ff-200d-1f3ed.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FF",
+            "U+200D",
+            "U+1F3ED"
+        ]
+    },
+    "1f9d1-200d-1f4bc": {
+        "uri": "office-worker",
+        "code": "1f9d1-200d-1f4bc",
+        "title": "Office Worker",
+        "description": "The Office Worker emoji is a sequence of the 🧑 Adult and 💼 Briefcase emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑‍💼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/office-worker_1f9d1-200d-1f4bc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+200D",
+            "U+1F4BC"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f4bc": {
+        "uri": "office-worker-light-skin-tone",
+        "code": "1f9d1-1f3fb-200d-1f4bc",
+        "title": "Office Worker: Light Skin Tone",
+        "description": "The Office Worker: Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2 and 💼 Briefcase emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍💼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/office-worker-light-skin-tone_1f9d1-1f3fb-200d-1f4bc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F4BC"
+        ]
+    },
+    "1f9d1-1f3fc-200d-1f4bc": {
+        "uri": "office-worker-medium-light-skin-tone",
+        "code": "1f9d1-1f3fc-200d-1f4bc",
+        "title": "Office Worker: Medium-Light Skin Tone",
+        "description": "The Office Worker: Medium-Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3 and 💼 Briefcase emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍💼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/office-worker-medium-light-skin-tone_1f9d1-1f3fc-200d-1f4bc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F4BC"
+        ]
+    },
+    "1f9d1-1f3fd-200d-1f4bc": {
+        "uri": "office-worker-medium-skin-tone",
+        "code": "1f9d1-1f3fd-200d-1f4bc",
+        "title": "Office Worker: Medium Skin Tone",
+        "description": "The Office Worker: Medium Skin Tone emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4 and 💼 Briefcase emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍💼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/office-worker-medium-skin-tone_1f9d1-1f3fd-200d-1f4bc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F4BC"
+        ]
+    },
+    "1f9d1-1f3fe-200d-1f4bc": {
+        "uri": "office-worker-medium-dark-skin-tone",
+        "code": "1f9d1-1f3fe-200d-1f4bc",
+        "title": "Office Worker: Medium-Dark Skin Tone",
+        "description": "The Office Worker: Medium-Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5 and 💼 Briefcase emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍💼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/office-worker-medium-dark-skin-tone_1f9d1-1f3fe-200d-1f4bc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+1F4BC"
+        ]
+    },
+    "1f9d1-1f3ff-200d-1f4bc": {
+        "uri": "office-worker-dark-skin-tone",
+        "code": "1f9d1-1f3ff-200d-1f4bc",
+        "title": "Office Worker: Dark Skin Tone",
+        "description": "The Office Worker: Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏿 Emoji Modifier Fitzpatrick Type-6 and 💼 Briefcase emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏿‍💼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/office-worker-dark-skin-tone_1f9d1-1f3ff-200d-1f4bc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FF",
+            "U+200D",
+            "U+1F4BC"
+        ]
+    },
+    "1f9d1-200d-1f52c": {
+        "uri": "scientist",
+        "code": "1f9d1-200d-1f52c",
+        "title": "Scientist",
+        "description": "The Scientist emoji is a sequence of the 🧑 Adult and 🔬 Microscope emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑‍🔬",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/scientist_1f9d1-200d-1f52c.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+200D",
+            "U+1F52C"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f52c": {
+        "uri": "scientist-light-skin-tone",
+        "code": "1f9d1-1f3fb-200d-1f52c",
+        "title": "Scientist: Light Skin Tone",
+        "description": "The Scientist: Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2 and 🔬 Microscope emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍🔬",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/scientist-light-skin-tone_1f9d1-1f3fb-200d-1f52c.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F52C"
+        ]
+    },
+    "1f9d1-1f3fc-200d-1f52c": {
+        "uri": "scientist-medium-light-skin-tone",
+        "code": "1f9d1-1f3fc-200d-1f52c",
+        "title": "Scientist: Medium-Light Skin Tone",
+        "description": "The Scientist: Medium-Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3 and 🔬 Microscope emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍🔬",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/scientist-medium-light-skin-tone_1f9d1-1f3fc-200d-1f52c.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F52C"
+        ]
+    },
+    "1f9d1-1f3fd-200d-1f52c": {
+        "uri": "scientist-medium-skin-tone",
+        "code": "1f9d1-1f3fd-200d-1f52c",
+        "title": "Scientist: Medium Skin Tone",
+        "description": "The Scientist: Medium Skin Tone emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4 and 🔬 Microscope emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍🔬",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/scientist-medium-skin-tone_1f9d1-1f3fd-200d-1f52c.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F52C"
+        ]
+    },
+    "1f9d1-1f3fe-200d-1f52c": {
+        "uri": "scientist-medium-dark-skin-tone",
+        "code": "1f9d1-1f3fe-200d-1f52c",
+        "title": "Scientist: Medium-Dark Skin Tone",
+        "description": "The Scientist: Medium-Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5 and 🔬 Microscope emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍🔬",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/scientist-medium-dark-skin-tone_1f9d1-1f3fe-200d-1f52c.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+1F52C"
+        ]
+    },
+    "1f9d1-1f3ff-200d-1f52c": {
+        "uri": "scientist-dark-skin-tone",
+        "code": "1f9d1-1f3ff-200d-1f52c",
+        "title": "Scientist: Dark Skin Tone",
+        "description": "The Scientist: Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏿 Emoji Modifier Fitzpatrick Type-6 and 🔬 Microscope emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏿‍🔬",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/scientist-dark-skin-tone_1f9d1-1f3ff-200d-1f52c.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FF",
+            "U+200D",
+            "U+1F52C"
+        ]
+    },
+    "1f9d1-200d-1f4bb": {
+        "uri": "technologist",
+        "code": "1f9d1-200d-1f4bb",
+        "title": "Technologist",
+        "description": "The Technologist emoji is a sequence of the 🧑 Adult and 💻 Personal Computer emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑‍💻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/technologist_1f9d1-200d-1f4bb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+200D",
+            "U+1F4BB"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f4bb": {
+        "uri": "technologist-light-skin-tone",
+        "code": "1f9d1-1f3fb-200d-1f4bb",
+        "title": "Technologist: Light Skin Tone",
+        "description": "The Technologist: Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2 and 💻 Personal Computer emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍💻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/technologist-light-skin-tone_1f9d1-1f3fb-200d-1f4bb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F4BB"
+        ]
+    },
+    "1f9d1-1f3fc-200d-1f4bb": {
+        "uri": "technologist-medium-light-skin-tone",
+        "code": "1f9d1-1f3fc-200d-1f4bb",
+        "title": "Technologist: Medium-Light Skin Tone",
+        "description": "The Technologist: Medium-Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3 and 💻 Personal Computer emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍💻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/technologist-medium-light-skin-tone_1f9d1-1f3fc-200d-1f4bb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F4BB"
+        ]
+    },
+    "1f9d1-1f3fd-200d-1f4bb": {
+        "uri": "technologist-medium-skin-tone",
+        "code": "1f9d1-1f3fd-200d-1f4bb",
+        "title": "Technologist: Medium Skin Tone",
+        "description": "The Technologist: Medium Skin Tone emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4 and 💻 Personal Computer emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍💻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/technologist-medium-skin-tone_1f9d1-1f3fd-200d-1f4bb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F4BB"
+        ]
+    },
+    "1f9d1-1f3fe-200d-1f4bb": {
+        "uri": "technologist-medium-dark-skin-tone",
+        "code": "1f9d1-1f3fe-200d-1f4bb",
+        "title": "Technologist: Medium-Dark Skin Tone",
+        "description": "The Technologist: Medium-Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5 and 💻 Personal Computer emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍💻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/technologist-medium-dark-skin-tone_1f9d1-1f3fe-200d-1f4bb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+1F4BB"
+        ]
+    },
+    "1f9d1-1f3ff-200d-1f4bb": {
+        "uri": "technologist-dark-skin-tone",
+        "code": "1f9d1-1f3ff-200d-1f4bb",
+        "title": "Technologist: Dark Skin Tone",
+        "description": "The Technologist: Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏿 Emoji Modifier Fitzpatrick Type-6 and 💻 Personal Computer emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏿‍💻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/technologist-dark-skin-tone_1f9d1-1f3ff-200d-1f4bb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FF",
+            "U+200D",
+            "U+1F4BB"
+        ]
+    },
+    "1f9d1-200d-1f3a4": {
+        "uri": "singer",
+        "code": "1f9d1-200d-1f3a4",
+        "title": "Singer",
+        "description": "The Singer emoji is a sequence of the 🧑 Adult and 🎤 Microphone emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑‍🎤",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/singer_1f9d1-200d-1f3a4.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+200D",
+            "U+1F3A4"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f3a4": {
+        "uri": "singer-light-skin-tone",
+        "code": "1f9d1-1f3fb-200d-1f3a4",
+        "title": "Singer: Light Skin Tone",
+        "description": "The Singer: Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2 and 🎤 Microphone emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍🎤",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/singer-light-skin-tone_1f9d1-1f3fb-200d-1f3a4.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F3A4"
+        ]
+    },
+    "1f9d1-1f3fc-200d-1f3a4": {
+        "uri": "singer-medium-light-skin-tone",
+        "code": "1f9d1-1f3fc-200d-1f3a4",
+        "title": "Singer: Medium-Light Skin Tone",
+        "description": "The Singer: Medium-Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3 and 🎤 Microphone emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍🎤",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/singer-medium-light-skin-tone_1f9d1-1f3fc-200d-1f3a4.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F3A4"
+        ]
+    },
+    "1f9d1-1f3fd-200d-1f3a4": {
+        "uri": "singer-medium-skin-tone",
+        "code": "1f9d1-1f3fd-200d-1f3a4",
+        "title": "Singer: Medium Skin Tone",
+        "description": "The Singer: Medium Skin Tone emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4 and 🎤 Microphone emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍🎤",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/singer-medium-skin-tone_1f9d1-1f3fd-200d-1f3a4.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F3A4"
+        ]
+    },
+    "1f9d1-1f3fe-200d-1f3a4": {
+        "uri": "singer-medium-dark-skin-tone",
+        "code": "1f9d1-1f3fe-200d-1f3a4",
+        "title": "Singer: Medium-Dark Skin Tone",
+        "description": "The Singer: Medium-Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5 and 🎤 Microphone emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍🎤",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/singer-medium-dark-skin-tone_1f9d1-1f3fe-200d-1f3a4.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+1F3A4"
+        ]
+    },
+    "1f9d1-1f3ff-200d-1f3a4": {
+        "uri": "singer-dark-skin-tone",
+        "code": "1f9d1-1f3ff-200d-1f3a4",
+        "title": "Singer: Dark Skin Tone",
+        "description": "The Singer: Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏿 Emoji Modifier Fitzpatrick Type-6 and 🎤 Microphone emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏿‍🎤",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/singer-dark-skin-tone_1f9d1-1f3ff-200d-1f3a4.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FF",
+            "U+200D",
+            "U+1F3A4"
+        ]
+    },
+    "1f9d1-200d-1f3a8": {
+        "uri": "artist",
+        "code": "1f9d1-200d-1f3a8",
+        "title": "Artist",
+        "description": "The Artist emoji is a sequence of the 🧑 Adult and 🎨 Artist Palette emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑‍🎨",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/artist_1f9d1-200d-1f3a8.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+200D",
+            "U+1F3A8"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f3a8": {
+        "uri": "artist-light-skin-tone",
+        "code": "1f9d1-1f3fb-200d-1f3a8",
+        "title": "Artist: Light Skin Tone",
+        "description": "The Artist: Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2 and 🎨 Artist Palette emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍🎨",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/artist-light-skin-tone_1f9d1-1f3fb-200d-1f3a8.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F3A8"
+        ]
+    },
+    "1f9d1-1f3fc-200d-1f3a8": {
+        "uri": "artist-medium-light-skin-tone",
+        "code": "1f9d1-1f3fc-200d-1f3a8",
+        "title": "Artist: Medium-Light Skin Tone",
+        "description": "The Artist: Medium-Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3 and 🎨 Artist Palette emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍🎨",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/artist-medium-light-skin-tone_1f9d1-1f3fc-200d-1f3a8.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F3A8"
+        ]
+    },
+    "1f9d1-1f3fd-200d-1f3a8": {
+        "uri": "artist-medium-skin-tone",
+        "code": "1f9d1-1f3fd-200d-1f3a8",
+        "title": "Artist: Medium Skin Tone",
+        "description": "The Artist: Medium Skin Tone emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4 and 🎨 Artist Palette emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍🎨",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/artist-medium-skin-tone_1f9d1-1f3fd-200d-1f3a8.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F3A8"
+        ]
+    },
+    "1f9d1-1f3fe-200d-1f3a8": {
+        "uri": "artist-medium-dark-skin-tone",
+        "code": "1f9d1-1f3fe-200d-1f3a8",
+        "title": "Artist: Medium-Dark Skin Tone",
+        "description": "The Artist: Medium-Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5 and 🎨 Artist Palette emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍🎨",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/artist-medium-dark-skin-tone_1f9d1-1f3fe-200d-1f3a8.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+1F3A8"
+        ]
+    },
+    "1f9d1-1f3ff-200d-1f3a8": {
+        "uri": "artist-dark-skin-tone",
+        "code": "1f9d1-1f3ff-200d-1f3a8",
+        "title": "Artist: Dark Skin Tone",
+        "description": "The Artist: Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏿 Emoji Modifier Fitzpatrick Type-6 and 🎨 Artist Palette emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏿‍🎨",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/artist-dark-skin-tone_1f9d1-1f3ff-200d-1f3a8.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FF",
+            "U+200D",
+            "U+1F3A8"
+        ]
+    },
+    "1f9d1-200d-2708-fe0f": {
+        "uri": "pilot",
+        "code": "1f9d1-200d-2708-fe0f",
+        "title": "Pilot",
+        "description": "The Pilot emoji is a sequence of the 🧑 Adult and ✈ Airplane emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑‍✈️",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/pilot_1f9d1-200d-2708-fe0f.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+200D",
+            "U+2708",
+            "U+FE0F"
+        ]
+    },
+    "1f9d1-1f3fb-200d-2708-fe0f": {
+        "uri": "pilot-light-skin-tone",
+        "code": "1f9d1-1f3fb-200d-2708-fe0f",
+        "title": "Pilot: Light Skin Tone",
+        "description": "The Pilot: Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2 and ✈ Airplane emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍✈️",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/pilot-light-skin-tone_1f9d1-1f3fb-200d-2708-fe0f.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+2708",
+            "U+FE0F"
+        ]
+    },
+    "1f9d1-1f3fc-200d-2708-fe0f": {
+        "uri": "pilot-medium-light-skin-tone",
+        "code": "1f9d1-1f3fc-200d-2708-fe0f",
+        "title": "Pilot: Medium-Light Skin Tone",
+        "description": "The Pilot: Medium-Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3 and ✈ Airplane emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍✈️",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/pilot-medium-light-skin-tone_1f9d1-1f3fc-200d-2708-fe0f.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+2708",
+            "U+FE0F"
+        ]
+    },
+    "1f9d1-1f3fd-200d-2708-fe0f": {
+        "uri": "pilot-medium-skin-tone",
+        "code": "1f9d1-1f3fd-200d-2708-fe0f",
+        "title": "Pilot: Medium Skin Tone",
+        "description": "The Pilot: Medium Skin Tone emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4 and ✈ Airplane emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍✈️",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/pilot-medium-skin-tone_1f9d1-1f3fd-200d-2708-fe0f.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+2708",
+            "U+FE0F"
+        ]
+    },
+    "1f9d1-1f3fe-200d-2708-fe0f": {
+        "uri": "pilot-medium-dark-skin-tone",
+        "code": "1f9d1-1f3fe-200d-2708-fe0f",
+        "title": "Pilot: Medium-Dark Skin Tone",
+        "description": "The Pilot: Medium-Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5 and ✈ Airplane emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍✈️",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/pilot-medium-dark-skin-tone_1f9d1-1f3fe-200d-2708-fe0f.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+2708",
+            "U+FE0F"
+        ]
+    },
+    "1f9d1-1f3ff-200d-2708-fe0f": {
+        "uri": "pilot-dark-skin-tone",
+        "code": "1f9d1-1f3ff-200d-2708-fe0f",
+        "title": "Pilot: Dark Skin Tone",
+        "description": "The Pilot: Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏿 Emoji Modifier Fitzpatrick Type-6 and ✈ Airplane emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏿‍✈️",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/pilot-dark-skin-tone_1f9d1-1f3ff-200d-2708-fe0f.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FF",
+            "U+200D",
+            "U+2708",
+            "U+FE0F"
+        ]
+    },
+    "1f9d1-200d-1f680": {
+        "uri": "astronaut",
+        "code": "1f9d1-200d-1f680",
+        "title": "Astronaut",
+        "description": "The Astronaut emoji is a sequence of the 🧑 Adult and 🚀 Rocket emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑‍🚀",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/astronaut_1f9d1-200d-1f680.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+200D",
+            "U+1F680"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f680": {
+        "uri": "astronaut-light-skin-tone",
+        "code": "1f9d1-1f3fb-200d-1f680",
+        "title": "Astronaut: Light Skin Tone",
+        "description": "The Astronaut: Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2 and 🚀 Rocket emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍🚀",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/astronaut-light-skin-tone_1f9d1-1f3fb-200d-1f680.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F680"
+        ]
+    },
+    "1f9d1-1f3fc-200d-1f680": {
+        "uri": "astronaut-medium-light-skin-tone",
+        "code": "1f9d1-1f3fc-200d-1f680",
+        "title": "Astronaut: Medium-Light Skin Tone",
+        "description": "The Astronaut: Medium-Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3 and 🚀 Rocket emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍🚀",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/astronaut-medium-light-skin-tone_1f9d1-1f3fc-200d-1f680.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F680"
+        ]
+    },
+    "1f9d1-1f3fd-200d-1f680": {
+        "uri": "astronaut-medium-skin-tone",
+        "code": "1f9d1-1f3fd-200d-1f680",
+        "title": "Astronaut: Medium Skin Tone",
+        "description": "The Astronaut: Medium Skin Tone emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4 and 🚀 Rocket emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍🚀",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/astronaut-medium-skin-tone_1f9d1-1f3fd-200d-1f680.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F680"
+        ]
+    },
+    "1f9d1-1f3fe-200d-1f680": {
+        "uri": "astronaut-medium-dark-skin-tone",
+        "code": "1f9d1-1f3fe-200d-1f680",
+        "title": "Astronaut: Medium-Dark Skin Tone",
+        "description": "The Astronaut: Medium-Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5 and 🚀 Rocket emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍🚀",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/astronaut-medium-dark-skin-tone_1f9d1-1f3fe-200d-1f680.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+1F680"
+        ]
+    },
+    "1f9d1-1f3ff-200d-1f680": {
+        "uri": "astronaut-dark-skin-tone",
+        "code": "1f9d1-1f3ff-200d-1f680",
+        "title": "Astronaut: Dark Skin Tone",
+        "description": "The Astronaut: Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏿 Emoji Modifier Fitzpatrick Type-6 and 🚀 Rocket emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏿‍🚀",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/astronaut-dark-skin-tone_1f9d1-1f3ff-200d-1f680.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FF",
+            "U+200D",
+            "U+1F680"
+        ]
+    },
+    "1f9d1-200d-1f692": {
+        "uri": "firefighter",
+        "code": "1f9d1-200d-1f692",
+        "title": "Firefighter",
+        "description": "The Firefighter emoji is a sequence of the 🧑 Adult and 🚒 Fire Engine emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑‍🚒",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/firefighter_1f9d1-200d-1f692.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+200D",
+            "U+1F692"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f692": {
+        "uri": "firefighter-light-skin-tone",
+        "code": "1f9d1-1f3fb-200d-1f692",
+        "title": "Firefighter: Light Skin Tone",
+        "description": "The Firefighter: Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2 and 🚒 Fire Engine emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍🚒",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/firefighter-light-skin-tone_1f9d1-1f3fb-200d-1f692.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F692"
+        ]
+    },
+    "1f9d1-1f3fc-200d-1f692": {
+        "uri": "firefighter-medium-light-skin-tone",
+        "code": "1f9d1-1f3fc-200d-1f692",
+        "title": "Firefighter: Medium-Light Skin Tone",
+        "description": "The Firefighter: Medium-Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3 and 🚒 Fire Engine emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍🚒",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/firefighter-medium-light-skin-tone_1f9d1-1f3fc-200d-1f692.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F692"
+        ]
+    },
+    "1f9d1-1f3fd-200d-1f692": {
+        "uri": "firefighter-medium-skin-tone",
+        "code": "1f9d1-1f3fd-200d-1f692",
+        "title": "Firefighter: Medium Skin Tone",
+        "description": "The Firefighter: Medium Skin Tone emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4 and 🚒 Fire Engine emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍🚒",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/firefighter-medium-skin-tone_1f9d1-1f3fd-200d-1f692.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F692"
+        ]
+    },
+    "1f9d1-1f3fe-200d-1f692": {
+        "uri": "firefighter-medium-dark-skin-tone",
+        "code": "1f9d1-1f3fe-200d-1f692",
+        "title": "Firefighter: Medium-Dark Skin Tone",
+        "description": "The Firefighter: Medium-Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5 and 🚒 Fire Engine emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍🚒",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/firefighter-medium-dark-skin-tone_1f9d1-1f3fe-200d-1f692.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+1F692"
+        ]
+    },
+    "1f9d1-1f3ff-200d-1f692": {
+        "uri": "firefighter-dark-skin-tone",
+        "code": "1f9d1-1f3ff-200d-1f692",
+        "title": "Firefighter: Dark Skin Tone",
+        "description": "The Firefighter: Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏿 Emoji Modifier Fitzpatrick Type-6 and 🚒 Fire Engine emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏿‍🚒",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/firefighter-dark-skin-tone_1f9d1-1f3ff-200d-1f692.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FF",
+            "U+200D",
+            "U+1F692"
+        ]
+    },
+    "1f9d1-200d-1f9af": {
+        "uri": "person-with-probing-cane",
+        "code": "1f9d1-200d-1f9af",
+        "title": "Person With Probing Cane",
+        "description": "The Person With Probing Cane emoji is a sequence of the 🧑 Adult and 🦯 Probing Cane emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑‍🦯",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-with-probing-cane_1f9d1-200d-1f9af.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+200D",
+            "U+1F9AF"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f9af": {
+        "uri": "person-with-probing-cane-light-skin-tone",
+        "code": "1f9d1-1f3fb-200d-1f9af",
+        "title": "Person With Probing Cane: Light Skin Tone",
+        "description": "The Person With Probing Cane: Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2 and 🦯 Probing Cane emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍🦯",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-with-probing-cane-light-skin-tone_1f9d1-1f3fb-200d-1f9af.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F9AF"
+        ]
+    },
+    "1f9d1-1f3fc-200d-1f9af": {
+        "uri": "person-with-probing-cane-medium-light-skin-tone",
+        "code": "1f9d1-1f3fc-200d-1f9af",
+        "title": "Person With Probing Cane: Medium-Light Skin Tone",
+        "description": "The Person With Probing Cane: Medium-Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3 and 🦯 Probing Cane emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍🦯",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-with-probing-cane-medium-light-skin-tone_1f9d1-1f3fc-200d-1f9af.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F9AF"
+        ]
+    },
+    "1f9d1-1f3fd-200d-1f9af": {
+        "uri": "person-with-probing-cane-medium-skin-tone",
+        "code": "1f9d1-1f3fd-200d-1f9af",
+        "title": "Person With Probing Cane: Medium Skin Tone",
+        "description": "The Person With Probing Cane: Medium Skin Tone emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4 and 🦯 Probing Cane emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍🦯",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-with-probing-cane-medium-skin-tone_1f9d1-1f3fd-200d-1f9af.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F9AF"
+        ]
+    },
+    "1f9d1-1f3fe-200d-1f9af": {
+        "uri": "person-with-probing-cane-medium-dark-skin-tone",
+        "code": "1f9d1-1f3fe-200d-1f9af",
+        "title": "Person With Probing Cane: Medium-Dark Skin Tone",
+        "description": "The Person With Probing Cane: Medium-Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5 and 🦯 Probing Cane emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍🦯",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-with-probing-cane-medium-dark-skin-tone_1f9d1-1f3fe-200d-1f9af.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+1F9AF"
+        ]
+    },
+    "1f9d1-1f3ff-200d-1f9af": {
+        "uri": "person-with-probing-cane-dark-skin-tone",
+        "code": "1f9d1-1f3ff-200d-1f9af",
+        "title": "Person With Probing Cane: Dark Skin Tone",
+        "description": "The Person With Probing Cane: Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏿 Emoji Modifier Fitzpatrick Type-6 and 🦯 Probing Cane emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏿‍🦯",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-with-probing-cane-dark-skin-tone_1f9d1-1f3ff-200d-1f9af.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FF",
+            "U+200D",
+            "U+1F9AF"
+        ]
+    },
+    "1f9d1-200d-1f9bc": {
+        "uri": "person-in-motorized-wheelchair",
+        "code": "1f9d1-200d-1f9bc",
+        "title": "Person in Motorized Wheelchair",
+        "description": "The Person in Motorized Wheelchair emoji is a sequence of the 🧑 Adult and 🦼 Motorized Wheelchair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑‍🦼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-in-motorized-wheelchair_1f9d1-200d-1f9bc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+200D",
+            "U+1F9BC"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f9bc": {
+        "uri": "person-in-motorized-wheelchair-light-skin-tone",
+        "code": "1f9d1-1f3fb-200d-1f9bc",
+        "title": "Person in Motorized Wheelchair: Light Skin Tone",
+        "description": "The Person in Motorized Wheelchair: Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2 and 🦼 Motorized Wheelchair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍🦼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-in-motorized-wheelchair-light-skin-tone_1f9d1-1f3fb-200d-1f9bc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F9BC"
+        ]
+    },
+    "1f9d1-1f3fc-200d-1f9bc": {
+        "uri": "person-in-motorized-wheelchair-medium-light-skin-tone",
+        "code": "1f9d1-1f3fc-200d-1f9bc",
+        "title": "Person in Motorized Wheelchair: Medium-Light Skin Tone",
+        "description": "The Person in Motorized Wheelchair: Medium-Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3 and 🦼 Motorized Wheelchair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍🦼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-in-motorized-wheelchair-medium-light-skin-tone_1f9d1-1f3fc-200d-1f9bc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F9BC"
+        ]
+    },
+    "1f9d1-1f3fd-200d-1f9bc": {
+        "uri": "person-in-motorized-wheelchair-medium-skin-tone",
+        "code": "1f9d1-1f3fd-200d-1f9bc",
+        "title": "Person in Motorized Wheelchair: Medium Skin Tone",
+        "description": "The Person in Motorized Wheelchair: Medium Skin Tone emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4 and 🦼 Motorized Wheelchair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍🦼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-in-motorized-wheelchair-medium-skin-tone_1f9d1-1f3fd-200d-1f9bc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F9BC"
+        ]
+    },
+    "1f9d1-1f3fe-200d-1f9bc": {
+        "uri": "person-in-motorized-wheelchair-medium-dark-skin-tone",
+        "code": "1f9d1-1f3fe-200d-1f9bc",
+        "title": "Person in Motorized Wheelchair: Medium-Dark Skin Tone",
+        "description": "The Person in Motorized Wheelchair: Medium-Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5 and 🦼 Motorized Wheelchair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍🦼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-in-motorized-wheelchair-medium-dark-skin-tone_1f9d1-1f3fe-200d-1f9bc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+1F9BC"
+        ]
+    },
+    "1f9d1-1f3ff-200d-1f9bc": {
+        "uri": "person-in-motorized-wheelchair-dark-skin-tone",
+        "code": "1f9d1-1f3ff-200d-1f9bc",
+        "title": "Person in Motorized Wheelchair: Dark Skin Tone",
+        "description": "The Person in Motorized Wheelchair: Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏿 Emoji Modifier Fitzpatrick Type-6 and 🦼 Motorized Wheelchair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏿‍🦼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-in-motorized-wheelchair-dark-skin-tone_1f9d1-1f3ff-200d-1f9bc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FF",
+            "U+200D",
+            "U+1F9BC"
+        ]
+    },
+    "1f9d1-200d-1f9bd": {
+        "uri": "person-in-manual-wheelchair",
+        "code": "1f9d1-200d-1f9bd",
+        "title": "Person in Manual Wheelchair",
+        "description": "The Person in Manual Wheelchair emoji is a sequence of the 🧑 Adult and 🦽 Manual Wheelchair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑‍🦽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-in-manual-wheelchair_1f9d1-200d-1f9bd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+200D",
+            "U+1F9BD"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f9bd": {
+        "uri": "person-in-manual-wheelchair-light-skin-ton",
+        "code": "1f9d1-1f3fb-200d-1f9bd",
+        "title": "Person in Manual Wheelchair: Light Skin Ton",
+        "description": "The Person in Manual Wheelchair: Light Skin Ton emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2 and 🦽 Manual Wheelchair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍🦽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-in-manual-wheelchair-light-skin-ton_1f9d1-1f3fb-200d-1f9bd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F9BD"
+        ]
+    },
+    "1f9d1-1f3fc-200d-1f9bd": {
+        "uri": "person-in-manual-wheelchair-medium-light-skin-tone",
+        "code": "1f9d1-1f3fc-200d-1f9bd",
+        "title": "Person in Manual Wheelchair: Medium-Light Skin Tone",
+        "description": "The Person in Manual Wheelchair: Medium-Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3 and 🦽 Manual Wheelchair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍🦽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-in-manual-wheelchair-medium-light-skin-tone_1f9d1-1f3fc-200d-1f9bd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F9BD"
+        ]
+    },
+    "1f9d1-1f3fd-200d-1f9bd": {
+        "uri": "person-in-manual-wheelchair-medium-skin-tone",
+        "code": "1f9d1-1f3fd-200d-1f9bd",
+        "title": "Person in Manual Wheelchair: Medium Skin Tone",
+        "description": "The Person in Manual Wheelchair: Medium Skin Tone emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4 and 🦽 Manual Wheelchair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍🦽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-in-manual-wheelchair-medium-skin-tone_1f9d1-1f3fd-200d-1f9bd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F9BD"
+        ]
+    },
+    "1f9d1-1f3fe-200d-1f9bd": {
+        "uri": "person-in-manual-wheelchair-medium-dark-skin-tone",
+        "code": "1f9d1-1f3fe-200d-1f9bd",
+        "title": "Person in Manual Wheelchair: Medium-Dark Skin Tone",
+        "description": "The Person in Manual Wheelchair: Medium-Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5 and 🦽 Manual Wheelchair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍🦽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-in-manual-wheelchair-medium-dark-skin-tone_1f9d1-1f3fe-200d-1f9bd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+1F9BD"
+        ]
+    },
+    "1f9d1-1f3ff-200d-1f9bd": {
+        "uri": "person-in-manual-wheelchair-dark-skin-tone",
+        "code": "1f9d1-1f3ff-200d-1f9bd",
+        "title": "Person in Manual Wheelchair: Dark Skin Tone",
+        "description": "The Person in Manual Wheelchair: Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏿 Emoji Modifier Fitzpatrick Type-6 and 🦽 Manual Wheelchair emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏿‍🦽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-in-manual-wheelchair-dark-skin-tone_1f9d1-1f3ff-200d-1f9bd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FF",
+            "U+200D",
+            "U+1F9BD"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f91d-200d-1f9d1-1f3fc": {
+        "uri": "people-holding-hands-light-skin-tone-medium-light-skin-tone",
+        "code": "1f9d1-1f3fb-200d-1f91d-200d-1f9d1-1f3fc",
+        "title": "People Holding Hands: Light Skin Tone, Medium-Light Skin Tone",
+        "description": "The People Holding Hands: Light Skin Tone, Medium-Light Skin Tone emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2, 🤝 Handshake, 🧑 Adult and 🏼 Emoji Modifier Fitzpatrick Type-3 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍🤝‍🧑🏼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/people-holding-hands-light-skin-tone-medium-light-skin-tone_1f9d1-1f3fb-200d-1f91d-200d-1f9d1-1f3fc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F9D1",
+            "U+1F3FC"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f91d-200d-1f9d1-1f3fd": {
+        "uri": "people-holding-hands-light-skin-tone-medium-skin-tone",
+        "code": "1f9d1-1f3fb-200d-1f91d-200d-1f9d1-1f3fd",
+        "title": "People Holding Hands: Light Skin Tone, Medium Skin Tone",
+        "description": "The People Holding Hands: Light Skin Tone, Medium Skin Tone emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2, 🤝 Handshake, 🧑 Adult and 🏽 Emoji Modifier Fitzpatrick Type-4 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍🤝‍🧑🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/people-holding-hands-light-skin-tone-medium-skin-tone_1f9d1-1f3fb-200d-1f91d-200d-1f9d1-1f3fd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F9D1",
+            "U+1F3FD"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f91d-200d-1f9d1-1f3fe": {
+        "uri": "people-holding-hands-light-skin-tone-medium-dark-skin-tone",
+        "code": "1f9d1-1f3fb-200d-1f91d-200d-1f9d1-1f3fe",
+        "title": "People Holding Hands: Light Skin Tone, Medium-Dark Skin Tone",
+        "description": "The People Holding Hands: Light Skin Tone, Medium-Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2, 🤝 Handshake, 🧑 Adult and 🏾 Emoji Modifier Fitzpatrick Type-5 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍🤝‍🧑🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/people-holding-hands-light-skin-tone-medium-dark-skin-tone_1f9d1-1f3fb-200d-1f91d-200d-1f9d1-1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F9D1",
+            "U+1F3FE"
+        ]
+    },
+    "1f9d1-1f3fb-200d-1f91d-200d-1f9d1-1f3ff": {
+        "uri": "people-holding-hands-light-skin-tone-dark-skin-tone",
+        "code": "1f9d1-1f3fb-200d-1f91d-200d-1f9d1-1f3ff",
+        "title": "People Holding Hands: Light Skin Tone, Dark Skin Tone",
+        "description": "The People Holding Hands: Light Skin Tone, Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏻 Emoji Modifier Fitzpatrick Type-1-2, 🤝 Handshake, 🧑 Adult and 🏿 Emoji Modifier Fitzpatrick Type-6 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏻‍🤝‍🧑🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/people-holding-hands-light-skin-tone-dark-skin-tone_1f9d1-1f3fb-200d-1f91d-200d-1f9d1-1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F9D1",
+            "U+1F3FF"
+        ]
+    },
+    "1f9d1-1f3fc-200d-1f91d-200d-1f9d1-1f3fd": {
+        "uri": "people-holding-hands-medium-light-skin-tone-medium-skin-tone",
+        "code": "1f9d1-1f3fc-200d-1f91d-200d-1f9d1-1f3fd",
+        "title": "People Holding Hands: Medium-Light Skin Tone, Medium Skin Tone",
+        "description": "The People Holding Hands: Medium-Light Skin Tone, Medium Skin Tone emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3, 🤝 Handshake, 🧑 Adult and 🏽 Emoji Modifier Fitzpatrick Type-4 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍🤝‍🧑🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/people-holding-hands-medium-light-skin-tone-medium-skin-tone_1f9d1-1f3fc-200d-1f91d-200d-1f9d1-1f3fd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F9D1",
+            "U+1F3FD"
+        ]
+    },
+    "1f9d1-1f3fc-200d-1f91d-200d-1f9d1-1f3fe": {
+        "uri": "people-holding-hands-medium-light-skin-tone-medium-dark-skin-tone",
+        "code": "1f9d1-1f3fc-200d-1f91d-200d-1f9d1-1f3fe",
+        "title": "People Holding Hands: Medium-Light Skin Tone, Medium-Dark Skin Tone",
+        "description": "The People Holding Hands: Medium-Light Skin Tone, Medium-Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3, 🤝 Handshake, 🧑 Adult and 🏾 Emoji Modifier Fitzpatrick Type-5 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍🤝‍🧑🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/people-holding-hands-medium-light-skin-tone-medium-dark-skin-tone_1f9d1-1f3fc-200d-1f91d-200d-1f9d1-1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F9D1",
+            "U+1F3FE"
+        ]
+    },
+    "1f9d1-1f3fc-200d-1f91d-200d-1f9d1-1f3ff": {
+        "uri": "people-holding-hands-medium-light-skin-tone-dark-skin-tone",
+        "code": "1f9d1-1f3fc-200d-1f91d-200d-1f9d1-1f3ff",
+        "title": "People Holding Hands: Medium-Light Skin Tone, Dark Skin Tone",
+        "description": "The People Holding Hands: Medium-Light Skin Tone, Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏼 Emoji Modifier Fitzpatrick Type-3, 🤝 Handshake, 🧑 Adult and 🏿 Emoji Modifier Fitzpatrick Type-6 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏼‍🤝‍🧑🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/people-holding-hands-medium-light-skin-tone-dark-skin-tone_1f9d1-1f3fc-200d-1f91d-200d-1f9d1-1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F9D1",
+            "U+1F3FF"
+        ]
+    },
+    "1f9d1-1f3fd-200d-1f91d-200d-1f9d1-1f3fe": {
+        "uri": "people-holding-hands-medium-skin-tone-medium-dark-skin-tone",
+        "code": "1f9d1-1f3fd-200d-1f91d-200d-1f9d1-1f3fe",
+        "title": "People Holding Hands: Medium Skin Tone, Medium-Dark Skin Tone",
+        "description": "The People Holding Hands: Medium Skin Tone, Medium-Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4, 🤝 Handshake, 🧑 Adult and 🏾 Emoji Modifier Fitzpatrick Type-5 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍🤝‍🧑🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/people-holding-hands-medium-skin-tone-medium-dark-skin-tone_1f9d1-1f3fd-200d-1f91d-200d-1f9d1-1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F9D1",
+            "U+1F3FE"
+        ]
+    },
+    "1f9d1-1f3fd-200d-1f91d-200d-1f9d1-1f3ff": {
+        "uri": "people-holding-hands-medium-skin-tone-dark-skin-tone",
+        "code": "1f9d1-1f3fd-200d-1f91d-200d-1f9d1-1f3ff",
+        "title": "People Holding Hands: Medium Skin Tone, Dark Skin Tone",
+        "description": "The People Holding Hands: Medium Skin Tone, Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏽 Emoji Modifier Fitzpatrick Type-4, 🤝 Handshake, 🧑 Adult and 🏿 Emoji Modifier Fitzpatrick Type-6 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏽‍🤝‍🧑🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/people-holding-hands-medium-skin-tone-dark-skin-tone_1f9d1-1f3fd-200d-1f91d-200d-1f9d1-1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F9D1",
+            "U+1F3FF"
+        ]
+    },
+    "1f9d1-1f3fe-200d-1f91d-200d-1f9d1-1f3ff": {
+        "uri": "people-holding-hands-medium-dark-skin-tone-dark-skin-tone",
+        "code": "1f9d1-1f3fe-200d-1f91d-200d-1f9d1-1f3ff",
+        "title": "People Holding Hands: Medium-Dark Skin Tone, Dark Skin Tone",
+        "description": "The People Holding Hands: Medium-Dark Skin Tone, Dark Skin Tone emoji is a sequence of the 🧑 Adult, 🏾 Emoji Modifier Fitzpatrick Type-5, 🤝 Handshake, 🧑 Adult and 🏿 Emoji Modifier Fitzpatrick Type-6 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "🧑🏾‍🤝‍🧑🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/people-holding-hands-medium-dark-skin-tone-dark-skin-tone_1f9d1-1f3fe-200d-1f91d-200d-1f9d1-1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F9D1",
+            "U+1F3FE",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F9D1",
+            "U+1F3FF"
+        ]
+    },
+    "1f469-1f3fb-200d-1f91d-200d-1f469-1f3fc": {
+        "uri": "women-holding-hands-light-skin-tone-medium-light-skin-tone",
+        "code": "1f469-1f3fb-200d-1f91d-200d-1f469-1f3fc",
+        "title": "Women Holding Hands: Light Skin Tone, Medium-Light Skin Tone",
+        "description": "The Women Holding Hands: Light Skin Tone, Medium-Light Skin Tone emoji is a sequence of the 👩 Woman, 🏻 Emoji Modifier Fitzpatrick Type-1-2, 🤝 Handshake, 👩 Woman and 🏼 Emoji Modifier Fitzpatrick Type-3 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "👩🏻‍🤝‍👩🏼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/women-holding-hands-light-skin-tone-medium-light-skin-tone_1f469-1f3fb-200d-1f91d-200d-1f469-1f3fc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F469",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F469",
+            "U+1F3FC"
+        ]
+    },
+    "1f469-1f3fb-200d-1f91d-200d-1f469-1f3fd": {
+        "uri": "women-holding-hands-light-skin-tone-medium-skin-tone",
+        "code": "1f469-1f3fb-200d-1f91d-200d-1f469-1f3fd",
+        "title": "Women Holding Hands: Light Skin Tone, Medium Skin Tone",
+        "description": "The Women Holding Hands: Light Skin Tone, Medium Skin Tone emoji is a sequence of the 👩 Woman, 🏻 Emoji Modifier Fitzpatrick Type-1-2, 🤝 Handshake, 👩 Woman and 🏽 Emoji Modifier Fitzpatrick Type-4 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "👩🏻‍🤝‍👩🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/women-holding-hands-light-skin-tone-medium-skin-tone_1f469-1f3fb-200d-1f91d-200d-1f469-1f3fd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F469",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F469",
+            "U+1F3FD"
+        ]
+    },
+    "1f469-1f3fb-200d-1f91d-200d-1f469-1f3fe": {
+        "uri": "women-holding-hands-light-skin-tone-medium-dark-skin-tone",
+        "code": "1f469-1f3fb-200d-1f91d-200d-1f469-1f3fe",
+        "title": "Women Holding Hands: Light Skin Tone, Medium-Dark Skin Tone",
+        "description": "The Women Holding Hands: Light Skin Tone, Medium-Dark Skin Tone emoji is a sequence of the 👩 Woman, 🏻 Emoji Modifier Fitzpatrick Type-1-2, 🤝 Handshake, 👩 Woman and 🏾 Emoji Modifier Fitzpatrick Type-5 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "👩🏻‍🤝‍👩🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/women-holding-hands-light-skin-tone-medium-dark-skin-tone_1f469-1f3fb-200d-1f91d-200d-1f469-1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F469",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F469",
+            "U+1F3FE"
+        ]
+    },
+    "1f469-1f3fb-200d-1f91d-200d-1f469-1f3ff": {
+        "uri": "women-holding-hands-light-skin-tone-dark-skin-tone",
+        "code": "1f469-1f3fb-200d-1f91d-200d-1f469-1f3ff",
+        "title": "Women Holding Hands: Light Skin Tone, Dark Skin Tone",
+        "description": "The Women Holding Hands: Light Skin Tone, Dark Skin Tone emoji is a sequence of the 👩 Woman, 🏻 Emoji Modifier Fitzpatrick Type-1-2, 🤝 Handshake, 👩 Woman and 🏿 Emoji Modifier Fitzpatrick Type-6 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "👩🏻‍🤝‍👩🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/women-holding-hands-light-skin-tone-dark-skin-tone_1f469-1f3fb-200d-1f91d-200d-1f469-1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F469",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F469",
+            "U+1F3FF"
+        ]
+    },
+    "1f469-1f3fc-200d-1f91d-200d-1f469-1f3fd": {
+        "uri": "women-holding-hands-medium-light-skin-tone-medium-skin-tone",
+        "code": "1f469-1f3fc-200d-1f91d-200d-1f469-1f3fd",
+        "title": "Women Holding Hands: Medium-Light Skin Tone, Medium Skin Tone",
+        "description": "The Women Holding Hands: Medium-Light Skin Tone, Medium Skin Tone emoji is a sequence of the 👩 Woman, 🏼 Emoji Modifier Fitzpatrick Type-3, 🤝 Handshake, 👩 Woman and 🏽 Emoji Modifier Fitzpatrick Type-4 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "👩🏼‍🤝‍👩🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/women-holding-hands-medium-light-skin-tone-medium-skin-tone_1f469-1f3fc-200d-1f91d-200d-1f469-1f3fd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F469",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F469",
+            "U+1F3FD"
+        ]
+    },
+    "1f469-1f3fc-200d-1f91d-200d-1f469-1f3fe": {
+        "uri": "women-holding-hands-medium-light-skin-tone-medium-dark-skin-tone",
+        "code": "1f469-1f3fc-200d-1f91d-200d-1f469-1f3fe",
+        "title": "Women Holding Hands: Medium-Light Skin Tone, Medium-Dark Skin Tone",
+        "description": "The Women Holding Hands: Medium-Light Skin Tone, Medium-Dark Skin Tone emoji is a sequence of the 👩 Woman, 🏼 Emoji Modifier Fitzpatrick Type-3, 🤝 Handshake, 👩 Woman and 🏾 Emoji Modifier Fitzpatrick Type-5 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "👩🏼‍🤝‍👩🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/women-holding-hands-medium-light-skin-tone-medium-dark-skin-tone_1f469-1f3fc-200d-1f91d-200d-1f469-1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F469",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F469",
+            "U+1F3FE"
+        ]
+    },
+    "1f469-1f3fc-200d-1f91d-200d-1f469-1f3ff": {
+        "uri": "women-holding-hands-medium-light-skin-tone-dark-skin-tone",
+        "code": "1f469-1f3fc-200d-1f91d-200d-1f469-1f3ff",
+        "title": "Women Holding Hands: Medium-Light Skin Tone, Dark Skin Tone",
+        "description": "The Women Holding Hands: Medium-Light Skin Tone, Dark Skin Tone emoji is a sequence of the 👩 Woman, 🏼 Emoji Modifier Fitzpatrick Type-3, 🤝 Handshake, 👩 Woman and 🏿 Emoji Modifier Fitzpatrick Type-6 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "👩🏼‍🤝‍👩🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/women-holding-hands-medium-light-skin-tone-dark-skin-tone_1f469-1f3fc-200d-1f91d-200d-1f469-1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F469",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F469",
+            "U+1F3FF"
+        ]
+    },
+    "1f469-1f3fd-200d-1f91d-200d-1f469-1f3fe": {
+        "uri": "women-holding-hands-medium-skin-tone-medium-dark-skin-tone",
+        "code": "1f469-1f3fd-200d-1f91d-200d-1f469-1f3fe",
+        "title": "Women Holding Hands: Medium Skin Tone, Medium-Dark Skin Tone",
+        "description": "The Women Holding Hands: Medium Skin Tone, Medium-Dark Skin Tone emoji is a sequence of the 👩 Woman, 🏽 Emoji Modifier Fitzpatrick Type-4, 🤝 Handshake, 👩 Woman and 🏾 Emoji Modifier Fitzpatrick Type-5 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "👩🏽‍🤝‍👩🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/women-holding-hands-medium-skin-tone-medium-dark-skin-tone_1f469-1f3fd-200d-1f91d-200d-1f469-1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F469",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F469",
+            "U+1F3FE"
+        ]
+    },
+    "1f469-1f3fd-200d-1f91d-200d-1f469-1f3ff": {
+        "uri": "women-holding-hands-medium-skin-tone-dark-skin-tone",
+        "code": "1f469-1f3fd-200d-1f91d-200d-1f469-1f3ff",
+        "title": "Women Holding Hands: Medium Skin Tone, Dark Skin Tone",
+        "description": "The Women Holding Hands: Medium Skin Tone, Dark Skin Tone emoji is a sequence of the 👩 Woman, 🏽 Emoji Modifier Fitzpatrick Type-4, 🤝 Handshake, 👩 Woman and 🏿 Emoji Modifier Fitzpatrick Type-6 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "👩🏽‍🤝‍👩🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/women-holding-hands-medium-skin-tone-dark-skin-tone_1f469-1f3fd-200d-1f91d-200d-1f469-1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F469",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F469",
+            "U+1F3FF"
+        ]
+    },
+    "1f469-1f3fe-200d-1f91d-200d-1f469-1f3ff": {
+        "uri": "women-holding-hands-medium-dark-skin-tone-dark-skin-tone",
+        "code": "1f469-1f3fe-200d-1f91d-200d-1f469-1f3ff",
+        "title": "Women Holding Hands: Medium-Dark Skin Tone, Dark Skin Tone",
+        "description": "The Women Holding Hands: Medium-Dark Skin Tone, Dark Skin Tone emoji is a sequence of the 👩 Woman, 🏾 Emoji Modifier Fitzpatrick Type-5, 🤝 Handshake, 👩 Woman and 🏿 Emoji Modifier Fitzpatrick Type-6 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "👩🏾‍🤝‍👩🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/women-holding-hands-medium-dark-skin-tone-dark-skin-tone_1f469-1f3fe-200d-1f91d-200d-1f469-1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F469",
+            "U+1F3FE",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F469",
+            "U+1F3FF"
+        ]
+    },
+    "1f468-1f3fb-200d-1f91d-200d-1f468-1f3fc": {
+        "uri": "men-holding-hands-light-skin-tone-medium-light-skin-tone",
+        "code": "1f468-1f3fb-200d-1f91d-200d-1f468-1f3fc",
+        "title": "Men Holding Hands: Light Skin Tone, Medium-Light Skin Tone",
+        "description": "The Men Holding Hands: Light Skin Tone, Medium-Light Skin Tone emoji is a sequence of the 👨 Man, 🏻 Emoji Modifier Fitzpatrick Type-1-2, 🤝 Handshake, 👨 Man and 🏼 Emoji Modifier Fitzpatrick Type-3 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "👨🏻‍🤝‍👨🏼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/men-holding-hands-light-skin-tone-medium-light-skin-tone_1f468-1f3fb-200d-1f91d-200d-1f468-1f3fc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F468",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F468",
+            "U+1F3FC"
+        ]
+    },
+    "1f468-1f3fb-200d-1f91d-200d-1f468-1f3fd": {
+        "uri": "men-holding-hands-light-skin-tone-medium-skin-tone",
+        "code": "1f468-1f3fb-200d-1f91d-200d-1f468-1f3fd",
+        "title": "Men Holding Hands: Light Skin Tone, Medium Skin Tone",
+        "description": "The Men Holding Hands: Light Skin Tone, Medium Skin Tone emoji is a sequence of the 👨 Man, 🏻 Emoji Modifier Fitzpatrick Type-1-2, 🤝 Handshake, 👨 Man and 🏽 Emoji Modifier Fitzpatrick Type-4 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "👨🏻‍🤝‍👨🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/men-holding-hands-light-skin-tone-medium-skin-tone_1f468-1f3fb-200d-1f91d-200d-1f468-1f3fd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F468",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F468",
+            "U+1F3FD"
+        ]
+    },
+    "1f468-1f3fb-200d-1f91d-200d-1f468-1f3fe": {
+        "uri": "men-holding-hands-light-skin-tone-medium-dark-skin-tone",
+        "code": "1f468-1f3fb-200d-1f91d-200d-1f468-1f3fe",
+        "title": "Men Holding Hands: Light Skin Tone, Medium-Dark Skin Tone",
+        "description": "The Men Holding Hands: Light Skin Tone, Medium-Dark Skin Tone emoji is a sequence of the 👨 Man, 🏻 Emoji Modifier Fitzpatrick Type-1-2, 🤝 Handshake, 👨 Man and 🏾 Emoji Modifier Fitzpatrick Type-5 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "👨🏻‍🤝‍👨🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/men-holding-hands-light-skin-tone-medium-dark-skin-tone_1f468-1f3fb-200d-1f91d-200d-1f468-1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F468",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F468",
+            "U+1F3FE"
+        ]
+    },
+    "1f468-1f3fb-200d-1f91d-200d-1f468-1f3ff": {
+        "uri": "men-holding-hands-light-skin-tone-dark-skin-tone",
+        "code": "1f468-1f3fb-200d-1f91d-200d-1f468-1f3ff",
+        "title": "Men Holding Hands: Light Skin Tone, Dark Skin Tone",
+        "description": "The Men Holding Hands: Light Skin Tone, Dark Skin Tone emoji is a sequence of the 👨 Man, 🏻 Emoji Modifier Fitzpatrick Type-1-2, 🤝 Handshake, 👨 Man and 🏿 Emoji Modifier Fitzpatrick Type-6 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "👨🏻‍🤝‍👨🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/men-holding-hands-light-skin-tone-dark-skin-tone_1f468-1f3fb-200d-1f91d-200d-1f468-1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F468",
+            "U+1F3FB",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F468",
+            "U+1F3FF"
+        ]
+    },
+    "1f468-1f3fc-200d-1f91d-200d-1f468-1f3fd": {
+        "uri": "men-holding-hands-medium-light-skin-tone-medium-skin-tone",
+        "code": "1f468-1f3fc-200d-1f91d-200d-1f468-1f3fd",
+        "title": "Men Holding Hands: Medium-Light Skin Tone, Medium Skin Tone",
+        "description": "The Men Holding Hands: Medium-Light Skin Tone, Medium Skin Tone emoji is a sequence of the 👨 Man, 🏼 Emoji Modifier Fitzpatrick Type-3, 🤝 Handshake, 👨 Man and 🏽 Emoji Modifier Fitzpatrick Type-4 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "👨🏼‍🤝‍👨🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/men-holding-hands-medium-light-skin-tone-medium-skin-tone_1f468-1f3fc-200d-1f91d-200d-1f468-1f3fd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F468",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F468",
+            "U+1F3FD"
+        ]
+    },
+    "1f468-1f3fc-200d-1f91d-200d-1f468-1f3fe": {
+        "uri": "men-holding-hands-medium-light-skin-tone-medium-dark-skin-tone",
+        "code": "1f468-1f3fc-200d-1f91d-200d-1f468-1f3fe",
+        "title": "Men Holding Hands: Medium-Light Skin Tone, Medium-Dark Skin Tone",
+        "description": "The Men Holding Hands: Medium-Light Skin Tone, Medium-Dark Skin Tone emoji is a sequence of the 👨 Man, 🏼 Emoji Modifier Fitzpatrick Type-3, 🤝 Handshake, 👨 Man and 🏾 Emoji Modifier Fitzpatrick Type-5 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "👨🏼‍🤝‍👨🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/men-holding-hands-medium-light-skin-tone-medium-dark-skin-tone_1f468-1f3fc-200d-1f91d-200d-1f468-1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F468",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F468",
+            "U+1F3FE"
+        ]
+    },
+    "1f468-1f3fc-200d-1f91d-200d-1f468-1f3ff": {
+        "uri": "men-holding-hands-medium-light-skin-tone-dark-skin-tone",
+        "code": "1f468-1f3fc-200d-1f91d-200d-1f468-1f3ff",
+        "title": "Men Holding Hands: Medium-Light Skin Tone, Dark Skin Tone",
+        "description": "The Men Holding Hands: Medium-Light Skin Tone, Dark Skin Tone emoji is a sequence of the 👨 Man, 🏼 Emoji Modifier Fitzpatrick Type-3, 🤝 Handshake, 👨 Man and 🏿 Emoji Modifier Fitzpatrick Type-6 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "👨🏼‍🤝‍👨🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/men-holding-hands-medium-light-skin-tone-dark-skin-tone_1f468-1f3fc-200d-1f91d-200d-1f468-1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F468",
+            "U+1F3FC",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F468",
+            "U+1F3FF"
+        ]
+    },
+    "1f468-1f3fd-200d-1f91d-200d-1f468-1f3fe": {
+        "uri": "men-holding-hands-medium-skin-tone-medium-dark-skin-tone",
+        "code": "1f468-1f3fd-200d-1f91d-200d-1f468-1f3fe",
+        "title": "Men Holding Hands: Medium Skin Tone, Medium-Dark Skin Tone",
+        "description": "The Men Holding Hands: Medium Skin Tone, Medium-Dark Skin Tone emoji is a sequence of the 👨 Man, 🏽 Emoji Modifier Fitzpatrick Type-4, 🤝 Handshake, 👨 Man and 🏾 Emoji Modifier Fitzpatrick Type-5 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "👨🏽‍🤝‍👨🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/men-holding-hands-medium-skin-tone-medium-dark-skin-tone_1f468-1f3fd-200d-1f91d-200d-1f468-1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F468",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F468",
+            "U+1F3FE"
+        ]
+    },
+    "1f468-1f3fd-200d-1f91d-200d-1f468-1f3ff": {
+        "uri": "men-holding-hands-medium-skin-tone-dark-skin-tone",
+        "code": "1f468-1f3fd-200d-1f91d-200d-1f468-1f3ff",
+        "title": "Men Holding Hands: Medium Skin Tone, Dark Skin Tone",
+        "description": "The Men Holding Hands: Medium Skin Tone, Dark Skin Tone emoji is a sequence of the 👨 Man, 🏽 Emoji Modifier Fitzpatrick Type-4, 🤝 Handshake, 👨 Man and 🏿 Emoji Modifier Fitzpatrick Type-6 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "👨🏽‍🤝‍👨🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/men-holding-hands-medium-skin-tone-dark-skin-tone_1f468-1f3fd-200d-1f91d-200d-1f468-1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F468",
+            "U+1F3FD",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F468",
+            "U+1F3FF"
+        ]
+    },
+    "1f468-1f3fe-200d-1f91d-200d-1f468-1f3ff": {
+        "uri": "men-holding-hands-medium-dark-skin-tone-dark-skin-tone",
+        "code": "1f468-1f3fe-200d-1f91d-200d-1f468-1f3ff",
+        "title": "Men Holding Hands: Medium-Dark Skin Tone, Dark Skin Tone",
+        "description": "The Men Holding Hands: Medium-Dark Skin Tone, Dark Skin Tone emoji is a sequence of the 👨 Man, 🏾 Emoji Modifier Fitzpatrick Type-5, 🤝 Handshake, 👨 Man and 🏿 Emoji Modifier Fitzpatrick Type-6 emojis.\nThese are combined using a zero width joiner between each character and display as a single emoji on supported platforms.",
+        "emoji": "👨🏾‍🤝‍👨🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/men-holding-hands-medium-dark-skin-tone-dark-skin-tone_1f468-1f3fe-200d-1f91d-200d-1f468-1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F468",
+            "U+1F3FE",
+            "U+200D",
+            "U+1F91D",
+            "U+200D",
+            "U+1F468",
+            "U+1F3FF"
+        ]
+    }
+}
