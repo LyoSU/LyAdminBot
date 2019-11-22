@@ -398,7 +398,7 @@ module.exports = async (ctx) => {
     await drawMultilineText(canvasСtx, nick, 'bold', 22, canvasСtx.fillStyle, 110, 30, nickMaxLength, 5)
 
     const minFontSize = 25
-    const maxFontSize = 38
+    const maxFontSize = 34
 
     let preTextSize = 25 / ((replyMessage.text.length / 10) * 0.2)
 
