@@ -49,154 +49,162 @@ function loadImageFromPatch (patch) {
   })
 }
 
-async function drawMultilineText (ctx, text, entities, fonstSize, fillStyle, textX, textY, maxWidth, lineHeight) {
+async function getEmojiImage (chart) {
+  let emojiPng
+
+  try {
+    const emojiemojiUnicodeCode = emojiUnicode(chart)
+    chart = ' '
+    const emojiUnicodeUnified = emojiemojiUnicodeCode.split(' ').join('-')
+    emojiPng = `${emojiDataPatch}${emojiUnicodeUnified}.png`
+  } catch (error) {
+    emojiPng = null
+  }
+
+  if (emojiPng) {
+    const emoji = await loadImageFromPatch(emojiPng)
+
+    return emoji
+  } else {
+    return {
+      ok: false
+    }
+  }
+}
+
+async function drawMultilineText (ctx, text, entities, fontSize, fillStyle, textX, textY, maxWidth, lineHeight) {
   const charts = runes(text)
 
-  let textWidth = 0
-
-  let lineX = textX
-  let lineY = textY
-
-  const words = text.split(' ')
   let chartNum = 0
-  let wordNum = 0
-  let drawLine = ''
-  let drawString = ''
 
-  const defaultFont = `${fonstSize}px OpenSans`
-  const defaultFillStyle = fillStyle
-
-  let preFont = null
-  let preFillStyle = null
-
-  let nextFont = defaultFont
-  let nextFillStyle = defaultFillStyle
-
-  let lineWidth = 0
+  const styledChart = []
 
   for (let chartIndex = 0; chartIndex < charts.length; chartIndex++) {
     let chart = charts[chartIndex]
-    chartNum += chart.length
 
-    if (entities) {
-      let styled = false
+    const style = []
 
+    if (entities && typeof entities === 'object') {
       for (let entitieIndex = 0; entitieIndex < entities.length; entitieIndex++) {
         const entity = entities[entitieIndex]
 
         if (chartNum + chart.length > entity.offset && chartNum + chart.length < entity.offset + entity.length + 1) {
-          styled = true
-
-          if (entity.type === 'bold') nextFont = `bold ${fonstSize}px OpenSans`
-          if (entity.type === 'italic') nextFont = `italic ${fonstSize}px OpenSans`
+          if (entity.type === 'bold') style.push('bold')
+          if (entity.type === 'italic') style.push('italic')
           if (['pre', 'code'].includes(entity.type)) {
-            nextFont = `${fonstSize}px monospace`
-            nextFillStyle = '#5887a7'
+            style.push('monospace')
           }
-          if (['mention', 'text_mention', 'hashtag', 'email', 'phone_number', 'bot_command', 'url', 'text_link'].includes(entity.type)) nextFillStyle = '#6ab7ec'
-        }
-
-        if (styled === false) {
-          nextFont = defaultFont
-          nextFillStyle = defaultFillStyle
+          if (['mention', 'text_mention', 'hashtag', 'email', 'phone_number', 'bot_command', 'url', 'text_link'].includes(entity.type)) style.push('mention')
         }
       }
     }
 
-    let drawText = ''
-    let nextLineX = lineX
-    let nextLineY = lineY
-
-    let emojiemojiUnicodeCode
+    if (entities && typeof entities === 'string') style.push(entities)
 
     try {
-      emojiemojiUnicodeCode = emojiUnicode(chart)
-      chart = ' '
+      emojiUnicode(chart)
+      style.push('emoji')
     } catch (error) {
-      emojiemojiUnicodeCode = null
     }
 
-    let emojiPng
+    styledChart.push({
+      chart,
+      style
+    })
 
-    if (emojiemojiUnicodeCode) {
+    chartNum += chart.length
+  }
+
+  const styledWords = []
+
+  let stringNum = 0
+
+  for (let index = 0; index < styledChart.length; index++) {
+    const chartStyle = styledChart[index]
+    const lastChart = styledChart[index - 1]
+
+    const spaceMatch = /\s|\n|\r/
+
+    if (
+      lastChart && (
+        (chartStyle.style.includes('emoji')) ||
+        (chartStyle.chart.match(spaceMatch) && !lastChart.chart.match(spaceMatch)) ||
+        (lastChart.chart.match(spaceMatch) && !chartStyle.chart.match(spaceMatch)) ||
+        (chartStyle.style && lastChart.style && chartStyle.style.toString() !== lastChart.style.toString())
+      )
+    ) {
+      stringNum++
+    }
+
+    if (!styledWords[stringNum]) {
+      styledWords[stringNum] = {
+        word: chartStyle.chart,
+        style: chartStyle.style
+      }
+    } else styledWords[stringNum].word += chartStyle.chart
+  }
+
+  let lineX = textX
+  let lineY = textY
+
+  let textWidth = 0
+
+  for (let index = 0; index < styledWords.length; index++) {
+    const styledWord = styledWords[index]
+
+    let emoji
+
+    if (styledWord.style.includes('emoji')) {
+      const emojiemojiUnicodeCode = emojiUnicode(styledWord.word)
       const emojiUnicodeUnified = emojiemojiUnicodeCode.split(' ').join('-')
-      emojiPng = `${emojiDataPatch}${emojiUnicodeUnified}.png`
-
-      drawText = drawString + chart
-      nextLineX += ctx.measureText(drawText).width
+      const emojiPng = `${emojiDataPatch}${emojiUnicodeUnified}.png`
+      try {
+        emoji = await loadImageFromPatch(emojiPng)
+      } catch (error) {
+      }
+    } else if (styledWord.style.includes('bold')) {
+      ctx.font = `bold ${fontSize}px OpenSans`
+      ctx.fillStyle = fillStyle
+    } else if (styledWord.style.includes('italic')) {
+      ctx.font = `italic ${fontSize}px OpenSans`
+      ctx.fillStyle = fillStyle
+    } else if (styledWord.style.includes('monospace')) {
+      ctx.font = `${fontSize}px monospace`
+      ctx.fillStyle = '#5887a7'
+    } else if (styledWord.style.includes('mention')) {
+      ctx.font = `${fontSize}px mention`
+      ctx.fillStyle = '#6ab7ec'
     } else {
-      drawString += chart
+      ctx.font = `${fontSize}px OpenSans`
+      ctx.fillStyle = fillStyle
     }
 
-    if (preFont !== nextFont || preFillStyle !== nextFillStyle) {
-      drawText = drawString
-      nextLineX += ctx.measureText(drawText).width
+    let lineWidth = lineX + ctx.measureText(styledWord.word).width
+
+    if (lineWidth > textWidth) textWidth = lineWidth
+
+    if (lineWidth > maxWidth) {
+      lineWidth = textX + ctx.measureText(styledWord.word).width
+      lineX = textX
+      lineY += lineHeight
     }
 
-    if (chart === ' ') {
-      wordNum++
-      if (lineX + ctx.measureText(drawString + words[wordNum]).width > maxWidth) {
-        drawText = drawString
-        nextLineX = textX
-        nextLineY += lineHeight
-        chart = ''
-      }
+    if (emoji) {
+      const emojiSize = fontSize / 2
+
+      ctx.drawImage(emoji, lineX, lineY - fontSize, fontSize + 5, fontSize + 5)
+
+      lineX += emojiSize + 10
+    } else {
+      ctx.fillText(styledWord.word, lineX, lineY)
     }
 
-    if (chart.match(/<br>|\n|\r/)) {
-      drawText = drawString
-      nextLineX = textX
-      nextLineY += lineHeight
-      chart = ''
-    }
-
-    if (charts.length === chartIndex + 1) {
-      drawText = drawString
-    }
-
-    if (drawText) {
-      if (preFont === null) ctx.font = nextFont
-      if (preFillStyle === null) ctx.fillStyle = nextFillStyle
-
-      ctx.fillText(drawText, lineX, lineY)
-
-      drawLine += drawString
-      lineWidth = ctx.measureText(drawLine).width
-
-      // if (emojiPng) lineWidth += fonstSize * 4
-
-      if (lineWidth > textWidth) textWidth = lineWidth
-      if (lineY !== nextLineY) drawLine = ''
-
-      lineX = nextLineX
-      lineY = nextLineY
-
-      if (emojiPng) {
-        const emoji = await loadImageFromPatch(emojiPng)
-
-        const emojiSize = fonstSize / 2
-
-        ctx.drawImage(emoji, lineX - emojiSize + 5, lineY - fonstSize + 5, fonstSize, fonstSize)
-
-        lineX += emojiSize + 5
-
-        console.log(lineX)
-      }
-
-      preFont = nextFont
-      preFillStyle = nextFillStyle
-
-      ctx.font = preFont
-      ctx.fillStyle = preFillStyle
-
-      drawString = ''
-    }
+    lineX = lineWidth
   }
 
   return {
-    width: lineX,
-    height: lineY,
-    textWidth
+    width: textWidth,
+    height: lineY
   }
 }
 
@@ -277,9 +285,13 @@ function lightOrDark (color) {
 
 module.exports = async (ctx) => {
   if (ctx.message.reply_to_message && ctx.message.reply_to_message.text) {
-    const maxHeight = 512
+    // settings
     const maxWidth = 512
+    const maxHeight = 512
+
+    // set parms
     const replyMessage = ctx.message.reply_to_message
+
     let messageFrom = replyMessage.from
 
     if (replyMessage.forward_sender_name) {
@@ -299,10 +311,11 @@ module.exports = async (ctx) => {
     if (replyMessage.forward_from) messageFrom = replyMessage.forward_from
     let nick = `${messageFrom.first_name} ${messageFrom.last_name || ''}`
 
+    // create canvas
     const canvas = createCanvas(maxWidth, maxHeight)
-
     const canvasСtx = canvas.getContext('2d')
 
+    // ser background color
     let backgroundColor = '#130f1c'
 
     if (ctx.group.info.settings.quote.backgroundColor) backgroundColor = ctx.group.info.settings.quote.backgroundColor
@@ -313,8 +326,11 @@ module.exports = async (ctx) => {
 
     canvasСtx.fillStyle = backgroundColor
 
+    // check background style color black/light
     const backStyle = lightOrDark(canvasСtx.fillStyle)
 
+    // defsult color from tdesktop
+    // https://github.com/telegramdesktop/tdesktop/blob/67d08c2d4064e04bec37454b5b32c5c6e606420a/Telegram/SourceFiles/data/data_peer.cpp#L43
     // const nickColor = [
     //   '#c03d33',
     //   '#4fad2d',
@@ -326,6 +342,7 @@ module.exports = async (ctx) => {
     //   '#ce671b'
     // ]
 
+    // nick light style color
     const nickColorLight = [
       '#862a23',
       '#37791f',
@@ -337,6 +354,7 @@ module.exports = async (ctx) => {
       '#904812'
     ]
 
+    // nick black style color
     const nickColorBlack = [
       '#fb6169',
       '#85de85',
@@ -348,6 +366,8 @@ module.exports = async (ctx) => {
       '#faa357'
     ]
 
+    // user nick  color
+    // https://github.com/telegramdesktop/tdesktop/blob/67d08c2d4064e04bec37454b5b32c5c6e606420a/Telegram/SourceFiles/data/data_peer.cpp#L43
     const nickIndex = Math.abs(messageFrom.id) % 7
     const nickMap = [0, 7, 4, 1, 6, 3, 5]
 
@@ -356,6 +376,7 @@ module.exports = async (ctx) => {
     if (backStyle === 'light') canvasСtx.fillStyle = nickColorLight[nickMap[nickIndex]]
     else canvasСtx.fillStyle = nickColorBlack[nickMap[nickIndex]]
 
+    // nick max length
     const nickMaxLength = 330
 
     let nickWidth = canvasСtx.measureText(nick).width
@@ -369,17 +390,20 @@ module.exports = async (ctx) => {
       nick += '…'
     }
 
-    canvasСtx.fillText(nick, 110, 30)
+    // render nick
+    // canvasСtx.fillText(nick, 110, 30)
 
-    const minFontSize = 20
-    const maxFontSize = 28
+    await drawMultilineText(canvasСtx, nick, 'bold', 22, canvasСtx.fillStyle, 110, 30, nickMaxLength, 5)
+
+    const minFontSize = 25
+    const maxFontSize = 38
 
     let preTextSize = 25 / ((replyMessage.text.length / 10) * 0.2)
 
     if (preTextSize < minFontSize) preTextSize = minFontSize
     if (preTextSize > maxFontSize) preTextSize = maxFontSize
 
-    const lineHeight = 4 * (preTextSize * 0.25)
+    const lineHeight = 4 * (preTextSize * 0.30)
 
     canvasСtx.font = `${preTextSize}px OpenSans`
 
@@ -392,27 +416,16 @@ module.exports = async (ctx) => {
     let textColor = '#fff'
     if (backStyle === 'light') textColor = '#000'
 
-    const textSize = await drawMultilineText(canvasMultilineText, replyMessage.text, replyMessage.entities, preTextSize, textColor, drawTextX, drawTextY, canvas.width - 20, lineHeight)
+    const textSize = await drawMultilineText(canvasMultilineText, replyMessage.text, replyMessage.entities, preTextSize, textColor, drawTextX, drawTextY, maxWidth, lineHeight)
 
     console.timeEnd('drawMultilineText')
 
-    // canvasСtx.font = '15px OpenSans'
-    // canvasСtx.fillStyle = usernameColor[nickMap[nickIndex]]
-    // canvasСtx.fillStyle = '#5f82a3'
-
-    // if (messageFrom.username) canvasСtx.fillText(`@${messageFrom.username}`, 110, textSize.width + 40)
-    // else canvasСtx.fillText(`#${messageFrom.id}`, 110, textSize.width + 40)
-
-    // let groupWatermark = ctx.group.info.title
-
-    // if (ctx.group.info.username) groupWatermark = `@${ctx.group.info.username}`
-
-    // canvasСtx.fillText(groupWatermark, 490 - canvasСtx.measureText(groupWatermark).width, textSize.width + 40)
-
     let stickHeight = textSize.height - 20
-    let stickWidth = textSize.textWidth + 30
+    let stickWidth = textSize.width - 100
 
-    if (textSize.textWidth + 20 < nickWidth) stickWidth = nickWidth + 40
+    // stickWidth = 512
+
+    if (stickWidth < nickWidth) stickWidth = nickWidth + 40
 
     if (stickHeight > maxHeight) stickHeight = maxHeight
     if (stickWidth > maxWidth) stickWidth = maxWidth
