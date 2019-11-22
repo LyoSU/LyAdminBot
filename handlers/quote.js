@@ -3,7 +3,9 @@ const fs = require('fs')
 const { createCanvas, Image, registerFont } = require('canvas')
 const sharp = require('sharp')
 const runes = require('runes')
-const emojiUnicode = require('emoji-unicode')
+const {
+  emojipedia
+} = require('../helpers')
 
 const emojiDataPatch = './node_modules/emoji-datasource-apple/img/apple/64/'
 
@@ -49,30 +51,7 @@ function loadImageFromPatch (patch) {
   })
 }
 
-async function getEmojiImage (chart) {
-  let emojiPng
-
-  try {
-    const emojiemojiUnicodeCode = emojiUnicode(chart)
-    chart = ' '
-    const emojiUnicodeUnified = emojiemojiUnicodeCode.split(' ').join('-')
-    emojiPng = `${emojiDataPatch}${emojiUnicodeUnified}.png`
-  } catch (error) {
-    emojiPng = null
-  }
-
-  if (emojiPng) {
-    const emoji = await loadImageFromPatch(emojiPng)
-
-    return emoji
-  } else {
-    return {
-      ok: false
-    }
-  }
-}
-
-async function drawMultilineText (ctx, text, entities, fontSize, fillStyle, textX, textY, maxWidth, lineHeight) {
+async function drawMultilineText (ctx, text, entities, fontSize, fillStyle, textX, textY, maxWidth, maxHeight, lineHeight) {
   const charts = runes(text)
 
   let chartNum = 0
@@ -101,11 +80,9 @@ async function drawMultilineText (ctx, text, entities, fontSize, fillStyle, text
 
     if (entities && typeof entities === 'string') style.push(entities)
 
-    try {
-      emojiUnicode(chart)
-      style.push('emoji')
-    } catch (error) {
-    }
+    const emojiCheck = emojipedia.getEmoji(chart)
+
+    if (emojiCheck.length > 0) style.push('emoji')
 
     styledChart.push({
       chart,
@@ -151,18 +128,22 @@ async function drawMultilineText (ctx, text, entities, fontSize, fillStyle, text
 
   let textWidth = 0
 
+  let breakWrite = false
+
   for (let index = 0; index < styledWords.length; index++) {
     const styledWord = styledWords[index]
 
     let emoji
 
     if (styledWord.style.includes('emoji')) {
-      const emojiemojiUnicodeCode = emojiUnicode(styledWord.word)
-      const emojiUnicodeUnified = emojiemojiUnicodeCode.split(' ').join('-')
-      const emojiPng = `${emojiDataPatch}${emojiUnicodeUnified}.png`
+      const emojiCheck = emojipedia.getEmoji(styledWord.word)
+      let emojiDb = emojipedia.emojiDb[emojiCheck]
+      if (emojiDb.redirect) emojiDb = emojipedia.emojiDb[emojiDb.redirect]
+      const emojiPng = `${emojiDataPatch}${emojiCheck.join('-')}.png`
       try {
         emoji = await loadImageFromPatch(emojiPng)
       } catch (error) {
+        emoji = await loadImageFromUrl(emojiDb.image.src)
       }
     } else if (styledWord.style.includes('bold')) {
       ctx.font = `bold ${fontSize}px OpenSans`
@@ -181,27 +162,38 @@ async function drawMultilineText (ctx, text, entities, fontSize, fillStyle, text
       ctx.fillStyle = fillStyle
     }
 
-    let lineWidth = lineX + ctx.measureText(styledWord.word).width
+    let lineWidth
+
+    if (styledWord.style.includes('emoji')) lineWidth = lineX + fontSize + (fontSize * 0.25)
+    else lineWidth = lineX + ctx.measureText(styledWord.word).width
 
     if (styledWord.word.match(breakMatch) || lineWidth > maxWidth) {
-      lineWidth = textX + ctx.measureText(styledWord.word).width
-      lineX = textX
-      lineY += lineHeight
+      if (!styledWord.word.match(breakMatch) && lineY + lineHeight > maxHeight) {
+        while (lineWidth > maxWidth) {
+          styledWord.word = styledWord.word.substr(0, styledWord.word.length - 1)
+          lineWidth = lineX + ctx.measureText(styledWord.word).width
+        }
+
+        styledWord.word += '…'
+        breakWrite = true
+      } else {
+        lineWidth = textX + ctx.measureText(styledWord.word).width
+        lineX = textX
+        lineY += lineHeight
+      }
     }
 
     if (lineWidth > textWidth) textWidth = lineWidth
 
     if (emoji) {
-      const emojiSize = fontSize / 2
-
       ctx.drawImage(emoji, lineX, lineY - fontSize, fontSize + 5, fontSize + 5)
-
-      lineX += emojiSize + 10
     } else {
       ctx.fillText(styledWord.word, lineX, lineY)
     }
 
     lineX = lineWidth
+
+    if (breakWrite) break
   }
 
   return {
@@ -320,7 +312,7 @@ module.exports = async (ctx) => {
     // ser background color
     let backgroundColor = '#130f1c'
 
-    if (ctx.group.info.settings.quote.backgroundColor) backgroundColor = ctx.group.info.settings.quote.backgroundColor
+    if (ctx.group && ctx.group.info.settings.quote.backgroundColor) backgroundColor = ctx.group.info.settings.quote.backgroundColor
 
     if ((ctx.match && ctx.match[2] === 'random') || backgroundColor === 'random') backgroundColor = `#${(Math.floor(Math.random() * 16777216)).toString(16)}`
     else if (ctx.match && ctx.match[1] === '#' && ctx.match[2]) backgroundColor = `#${ctx.match[2]}`
@@ -379,23 +371,20 @@ module.exports = async (ctx) => {
     else canvasСtx.fillStyle = nickColorBlack[nickMap[nickIndex]]
 
     // nick max length
-    const nickMaxLength = 330
 
-    let nickWidth = canvasСtx.measureText(nick).width
+    // if (nickWidth > nickMaxLength) {
+    //   while (nickWidth > nickMaxLength) {
+    //     nick = nick.substr(0, nick.length - 1)
+    //     nickWidth = canvasСtx.measureText(nick).width
+    //   }
 
-    if (nickWidth > nickMaxLength) {
-      while (nickWidth > nickMaxLength) {
-        nick = nick.substr(0, nick.length - 1)
-        nickWidth = canvasСtx.measureText(nick).width
-      }
-
-      nick += '…'
-    }
+    //   nick += '…'
+    // }
 
     // render nick
     // canvasСtx.fillText(nick, 110, 30)
 
-    await drawMultilineText(canvasСtx, nick, 'bold', 22, canvasСtx.fillStyle, 110, 30, nickMaxLength, 5)
+    const nickTextSize = await drawMultilineText(canvasСtx, nick, 'bold', 22, canvasСtx.fillStyle, 110, 30, maxWidth, 0, 0)
 
     const minFontSize = 25
     const maxFontSize = 34
@@ -418,16 +407,16 @@ module.exports = async (ctx) => {
     let textColor = '#fff'
     if (backStyle === 'light') textColor = '#000'
 
-    const textSize = await drawMultilineText(canvasMultilineText, replyMessage.text, replyMessage.entities, preTextSize, textColor, drawTextX, drawTextY, maxWidth, lineHeight)
+    const textSize = await drawMultilineText(canvasMultilineText, replyMessage.text, replyMessage.entities, preTextSize, textColor, drawTextX, drawTextY, maxWidth, 512, lineHeight)
 
     console.timeEnd('drawMultilineText')
 
     let stickHeight = textSize.height - 20
     let stickWidth = textSize.width - 70
 
-    // stickWidth = 512
+    const nickWidth = nickTextSize.width - 70
 
-    if (stickWidth < nickWidth) stickWidth = nickWidth + 40
+    if (stickWidth < nickWidth) stickWidth = nickWidth
 
     if (stickHeight > maxHeight) stickHeight = maxHeight
     if (stickWidth > maxWidth) stickWidth = maxWidth
