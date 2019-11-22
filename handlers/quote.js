@@ -421,7 +421,7 @@ module.exports = async (ctx) => {
     console.timeEnd('drawMultilineText')
 
     let stickHeight = textSize.height - 20
-    let stickWidth = textSize.width - 100
+    let stickWidth = textSize.width - 90
 
     // stickWidth = 512
 
