@@ -278,13 +278,18 @@ function lightOrDark (color) {
 }
 
 module.exports = async (ctx) => {
-  if (ctx.message.reply_to_message && ctx.message.reply_to_message.text) {
+  if (ctx.message.reply_to_message && (ctx.message.reply_to_message.text || ctx.message.reply_to_message.caption)) {
     // settings
     const maxWidth = 512
     const maxHeight = 512
 
     // set parms
     const replyMessage = ctx.message.reply_to_message
+
+    let text
+
+    if (replyMessage.caption) text = replyMessage.caption
+    else text = replyMessage.text
 
     let messageFrom = replyMessage.from
 
@@ -389,7 +394,7 @@ module.exports = async (ctx) => {
     const minFontSize = 25
     const maxFontSize = 34
 
-    let preTextSize = 25 / ((replyMessage.text.length / 10) * 0.2)
+    let preTextSize = 25 / ((text.length / 10) * 0.2)
 
     if (preTextSize < minFontSize) preTextSize = minFontSize
     if (preTextSize > maxFontSize) preTextSize = maxFontSize
@@ -407,7 +412,7 @@ module.exports = async (ctx) => {
     let textColor = '#fff'
     if (backStyle === 'light') textColor = '#000'
 
-    const textSize = await drawMultilineText(canvasMultilineText, replyMessage.text, replyMessage.entities, preTextSize, textColor, drawTextX, drawTextY, maxWidth, 512, lineHeight)
+    const textSize = await drawMultilineText(canvasMultilineText, text, replyMessage.entities, preTextSize, textColor, drawTextX, drawTextY, maxWidth, 512, lineHeight)
 
     console.timeEnd('drawMultilineText')
 
