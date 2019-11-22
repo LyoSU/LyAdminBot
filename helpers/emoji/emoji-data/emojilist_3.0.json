@@ -1,0 +1,2882 @@
+﻿{
+    "1f923": {
+        "uri": "rolling-on-the-floor-laughing",
+        "code": "1f923",
+        "title": "Rolling on the Floor Laughing",
+        "description": "A yellow face with a big grin and scrunched, X-shaped eyes, tilted on its side as if rolling on the floor laughing (the internet acronym ROFL). Sheds two tears and tilts right on most platforms. Often conveys hysterical laughter more intense than 😂 Face With Tears of Joy.\nMicrosoft's design previously featured a smiley with hands and feet.",
+        "aliases": [
+            "ROFL"
+        ],
+        "emoji": "🤣",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/rolling-on-the-floor-laughing_1f923.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F923"
+        ]
+    },
+    "1f925": {
+        "uri": "lying-face",
+        "code": "1f925",
+        "title": "Lying Face",
+        "description": "A yellow face with raised eyebrows, enlarged eyes, slight frown, and long nose, indicating it’s telling a lie in the manner of Pinocchio. Like that character, Facebook's design features a wooden nose.\nMay represent lying, a liar, and other concepts of deceit and dishonesty to varying degrees of intensity. Sometimes used to convey disbelief (e.g., You must be kidding) or feeling abashed (e.g., as if caught in the act of lying).",
+        "aliases": [
+            "Liar",
+            "Long Nose",
+            "Pinocchio"
+        ],
+        "emoji": "🤥",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/lying-face_1f925.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F925"
+        ]
+    },
+    "1f924": {
+        "uri": "drooling-face",
+        "code": "1f924",
+        "title": "Drooling Face",
+        "description": "A yellow face, usually shown with closed eyes and raised eyebrows, with saliva drooling from one corner of its mouth. Often used to show desire for a person (sexy, attractive) or object (e.g., delicious food). May also represent someone is tired or sleeping.\nNot to be confused with 😋 Face Savoring Food or 😪 Sleepy Face.\nSamsung's design previously featured a startled facial expression.",
+        "aliases": [
+            "Drool"
+        ],
+        "emoji": "🤤",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/drooling-face_1f924.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F924"
+        ]
+    },
+    "1f922": {
+        "uri": "nauseated-face",
+        "code": "1f922",
+        "title": "Nauseated Face",
+        "description": "A sickly-green face with concerned eyes and puffed, often red cheeks, as if holding back vomit. May represent physical illness or general disgust. Not to be confused with 🤮 Face Vomiting.\nDiffers from other smileys conveying sickness, including 🤒 Face With Thermometer (used especially for colds and flus) and 🤕 Face With Head-Bandage (physical injury).",
+        "aliases": [
+            "Disgust",
+            "Green Face",
+            "Vomit"
+        ],
+        "emoji": "🤢",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/nauseated-face_1f922.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F922"
+        ]
+    },
+    "1f927": {
+        "uri": "sneezing-face",
+        "code": "1f927",
+        "title": "Sneezing Face",
+        "description": "A yellow face with scrunched, X-shaped eyes sneezing or blowing its nose into a white tissue, as if from a cold or allergies. Often depicted with a crumpled-looking mouth.\nMay also represent someone in an emotional state wiping away tears, as at a wedding.",
+        "aliases": [
+            "Gesundheit"
+        ],
+        "emoji": "🤧",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/sneezing-face_1f927.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F927"
+        ]
+    },
+    "1f920": {
+        "uri": "face-with-cowboy-hat",
+        "code": "1f920",
+        "title": "Cowboy Hat Face",
+        "description": "Yee-haw! A yellow smiley wearing a wide-brimmed, brown-leather cowboy hat. Its smile varies across platforms. May convey a sense of exuberance, whimsy, confidence, adventure, or other sentiments.\nSeveral vendors, including Apple, feature the same expression as their 😃 Grinning Face With Big Eyes.",
+        "aliases": [
+            "Cowboy"
+        ],
+        "unicodename": "Face With Cowboy Hat",
+        "emoji": "🤠",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/face-with-cowboy-hat_1f920.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F920"
+        ]
+    },
+    "1f921": {
+        "uri": "clown-face",
+        "code": "1f921",
+        "title": "Clown Face",
+        "description": "A classic circus or birthday clown. Features white face makeup, a red nose, exaggerated eyes and smile, and two tufts of hair (red or blue). May convey that someone is silly or foolish or that something is creepy or scary.",
+        "aliases": [
+            "Creepy Clown",
+            "Evil Clown",
+            "Scary Clown"
+        ],
+        "emoji": "🤡",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/clown-face_1f921.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F921"
+        ]
+    },
+    "1f5a4": {
+        "uri": "black-heart",
+        "code": "1f5a4",
+        "title": "Black Heart",
+        "description": "A heart shaded completely black. May be used to express morbidity, sorrow, or a form of dark humor.\nNot to be confused with the Heavy Black Heart or Black Heart Suit which are both red.",
+        "aliases": [
+            "Dark Heart"
+        ],
+        "emoji": "🖤",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/black-heart_1f5a4.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F5A4"
+        ]
+    },
+    "1f91a": {
+        "uri": "raised-back-of-hand",
+        "code": "1f91a",
+        "title": "Raised Back of Hand",
+        "description": "A raised hand, showing the reverse side of the palm. May be paired with the forward-facing raised hand emoji.",
+        "aliases": [
+            "Backhand"
+        ],
+        "emoji": "🤚",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/raised-back-of-hand_1f91a.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91A"
+        ]
+    },
+    "1f91a-1f3fb": {
+        "uri": "raised-back-of-hand-type-1-2",
+        "code": "1f91a-1f3fb",
+        "title": "Raised Back of Hand: Light Skin Tone",
+        "description": "This version of the 🤚 Raised Back of Hand emoji\nhas the 🏻 Light Skin Tone\napplied, which is displayed as a Pale Skin Tone\non supported platforms.",
+        "emoji": "🤚🏻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/raised-back-of-hand_emoji-modifier-fitzpatrick-type-1-2_1f91a-1f3fb_1f3fb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91A",
+            "U+1F3FB"
+        ]
+    },
+    "1f91a-1f3fc": {
+        "uri": "raised-back-of-hand-type-3",
+        "code": "1f91a-1f3fc",
+        "title": "Raised Back of Hand: Medium-Light Skin Tone",
+        "description": "This version of the 🤚 Raised Back of Hand emoji\nhas the 🏼 Medium-Light Skin Tone\napplied, which is displayed as a Cream White Skin Tone\non supported platforms.",
+        "emoji": "🤚🏼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/raised-back-of-hand_emoji-modifier-fitzpatrick-type-3_1f91a-1f3fc_1f3fc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91A",
+            "U+1F3FC"
+        ]
+    },
+    "1f91a-1f3fd": {
+        "uri": "raised-back-of-hand-type-4",
+        "code": "1f91a-1f3fd",
+        "title": "Raised Back of Hand: Medium Skin Tone",
+        "description": "This version of the 🤚 Raised Back of Hand emoji\nhas the 🏽 Medium Skin Tone\napplied, which is displayed as a Moderate Brown Skin Tone\non supported platforms.",
+        "emoji": "🤚🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/raised-back-of-hand_emoji-modifier-fitzpatrick-type-4_1f91a-1f3fd_1f3fd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91A",
+            "U+1F3FD"
+        ]
+    },
+    "1f91a-1f3fe": {
+        "uri": "raised-back-of-hand-type-5",
+        "code": "1f91a-1f3fe",
+        "title": "Raised Back of Hand: Medium-Dark Skin Tone",
+        "description": "This version of the 🤚 Raised Back of Hand emoji\nhas the 🏾 Medium-Dark Skin Tone\napplied, which is displayed as a Dark Brown Skin Tone\non supported platforms.",
+        "emoji": "🤚🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/raised-back-of-hand_emoji-modifier-fitzpatrick-type-5_1f91a-1f3fe_1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91A",
+            "U+1F3FE"
+        ]
+    },
+    "1f91a-1f3ff": {
+        "uri": "raised-back-of-hand-type-6",
+        "code": "1f91a-1f3ff",
+        "title": "Raised Back of Hand: Dark Skin Tone",
+        "description": "This version of the 🤚 Raised Back of Hand emoji\nhas the 🏿 Dark Skin Tone\napplied, which is displayed as a Black Skin Tone\non supported platforms.",
+        "emoji": "🤚🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/raised-back-of-hand_emoji-modifier-fitzpatrick-type-6_1f91a-1f3ff_1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91A",
+            "U+1F3FF"
+        ]
+    },
+    "1f91e": {
+        "uri": "hand-with-index-and-middle-fingers-crossed",
+        "code": "1f91e",
+        "title": "Crossed Fingers",
+        "description": "A fingers crossed emoji which displays the index (first) finger crossed over the middle (second) finger. Commonly used as a gesture indicating luck, or to show desire of a favorable outcome.\nThis emoji is displayed with an additional finger on Samsung devices.",
+        "aliases": [
+            "Fingers Crossed",
+            "Good Luck"
+        ],
+        "unicodename": "Hand With Index and Middle Fingers Crossed",
+        "emoji": "🤞",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/hand-with-index-and-middle-fingers-crossed_1f91e.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91E"
+        ]
+    },
+    "1f91e-1f3fb": {
+        "uri": "hand-with-index-and-middle-fingers-crossed-type-1-2",
+        "code": "1f91e-1f3fb",
+        "title": "Crossed Fingers: Light Skin Tone",
+        "description": "This version of the 🤞 Crossed Fingers emoji\nhas the 🏻 Light Skin Tone\napplied, which is displayed as a Pale Skin Tone\non supported platforms.",
+        "emoji": "🤞🏻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/hand-with-index-and-middle-fingers-crossed_emoji-modifier-fitzpatrick-type-1-2_1f91e-1f3fb_1f3fb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91E",
+            "U+1F3FB"
+        ]
+    },
+    "1f91e-1f3fc": {
+        "uri": "hand-with-index-and-middle-fingers-crossed-type-3",
+        "code": "1f91e-1f3fc",
+        "title": "Crossed Fingers: Medium-Light Skin Tone",
+        "description": "This version of the 🤞 Crossed Fingers emoji\nhas the 🏼 Medium-Light Skin Tone\napplied, which is displayed as a Cream White Skin Tone\non supported platforms.",
+        "emoji": "🤞🏼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/hand-with-index-and-middle-fingers-crossed_emoji-modifier-fitzpatrick-type-3_1f91e-1f3fc_1f3fc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91E",
+            "U+1F3FC"
+        ]
+    },
+    "1f91e-1f3fd": {
+        "uri": "hand-with-index-and-middle-fingers-crossed-type-4",
+        "code": "1f91e-1f3fd",
+        "title": "Crossed Fingers: Medium Skin Tone",
+        "description": "This version of the 🤞 Crossed Fingers emoji\nhas the 🏽 Medium Skin Tone\napplied, which is displayed as a Moderate Brown Skin Tone\non supported platforms.",
+        "emoji": "🤞🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/hand-with-index-and-middle-fingers-crossed_emoji-modifier-fitzpatrick-type-4_1f91e-1f3fd_1f3fd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91E",
+            "U+1F3FD"
+        ]
+    },
+    "1f91e-1f3fe": {
+        "uri": "hand-with-index-and-middle-fingers-crossed-type-5",
+        "code": "1f91e-1f3fe",
+        "title": "Crossed Fingers: Medium-Dark Skin Tone",
+        "description": "This version of the 🤞 Crossed Fingers emoji\nhas the 🏾 Medium-Dark Skin Tone\napplied, which is displayed as a Dark Brown Skin Tone\non supported platforms.",
+        "emoji": "🤞🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/hand-with-index-and-middle-fingers-crossed_emoji-modifier-fitzpatrick-type-5_1f91e-1f3fe_1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91E",
+            "U+1F3FE"
+        ]
+    },
+    "1f91e-1f3ff": {
+        "uri": "hand-with-index-and-middle-fingers-crossed-type-6",
+        "code": "1f91e-1f3ff",
+        "title": "Crossed Fingers: Dark Skin Tone",
+        "description": "This version of the 🤞 Crossed Fingers emoji\nhas the 🏿 Dark Skin Tone\napplied, which is displayed as a Black Skin Tone\non supported platforms.",
+        "emoji": "🤞🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/hand-with-index-and-middle-fingers-crossed_emoji-modifier-fitzpatrick-type-6_1f91e-1f3ff_1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91E",
+            "U+1F3FF"
+        ]
+    },
+    "1f919": {
+        "uri": "call-me-hand",
+        "code": "1f919",
+        "title": "Call Me Hand",
+        "description": "A hand with thumb and little (pinky) finger extended, making a traditional phone-like shape. May be used in conjunction with a face to suggest “call me” (please).\nNot to be confused with the sign of the horns or the shaka sign (which does not yet have an emoji representation).",
+        "aliases": [
+            "Phone Hand",
+            "Shaka"
+        ],
+        "emoji": "🤙",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/call-me-hand_1f919.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F919"
+        ]
+    },
+    "1f919-1f3fb": {
+        "uri": "call-me-hand-type-1-2",
+        "code": "1f919-1f3fb",
+        "title": "Call Me Hand: Light Skin Tone",
+        "description": "This version of the 🤙 Call Me Hand emoji\nhas the 🏻 Light Skin Tone\napplied, which is displayed as a Pale Skin Tone\non supported platforms.",
+        "emoji": "🤙🏻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/call-me-hand_emoji-modifier-fitzpatrick-type-1-2_1f919-1f3fb_1f3fb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F919",
+            "U+1F3FB"
+        ]
+    },
+    "1f919-1f3fc": {
+        "uri": "call-me-hand-type-3",
+        "code": "1f919-1f3fc",
+        "title": "Call Me Hand: Medium-Light Skin Tone",
+        "description": "This version of the 🤙 Call Me Hand emoji\nhas the 🏼 Medium-Light Skin Tone\napplied, which is displayed as a Cream White Skin Tone\non supported platforms.",
+        "emoji": "🤙🏼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/call-me-hand_emoji-modifier-fitzpatrick-type-3_1f919-1f3fc_1f3fc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F919",
+            "U+1F3FC"
+        ]
+    },
+    "1f919-1f3fd": {
+        "uri": "call-me-hand-type-4",
+        "code": "1f919-1f3fd",
+        "title": "Call Me Hand: Medium Skin Tone",
+        "description": "This version of the 🤙 Call Me Hand emoji\nhas the 🏽 Medium Skin Tone\napplied, which is displayed as a Moderate Brown Skin Tone\non supported platforms.",
+        "emoji": "🤙🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/call-me-hand_emoji-modifier-fitzpatrick-type-4_1f919-1f3fd_1f3fd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F919",
+            "U+1F3FD"
+        ]
+    },
+    "1f919-1f3fe": {
+        "uri": "call-me-hand-type-5",
+        "code": "1f919-1f3fe",
+        "title": "Call Me Hand: Medium-Dark Skin Tone",
+        "description": "This version of the 🤙 Call Me Hand emoji\nhas the 🏾 Medium-Dark Skin Tone\napplied, which is displayed as a Dark Brown Skin Tone\non supported platforms.",
+        "emoji": "🤙🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/call-me-hand_emoji-modifier-fitzpatrick-type-5_1f919-1f3fe_1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F919",
+            "U+1F3FE"
+        ]
+    },
+    "1f919-1f3ff": {
+        "uri": "call-me-hand-type-6",
+        "code": "1f919-1f3ff",
+        "title": "Call Me Hand: Dark Skin Tone",
+        "description": "This version of the 🤙 Call Me Hand emoji\nhas the 🏿 Dark Skin Tone\napplied, which is displayed as a Black Skin Tone\non supported platforms.",
+        "emoji": "🤙🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/call-me-hand_emoji-modifier-fitzpatrick-type-6_1f919-1f3ff_1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F919",
+            "U+1F3FF"
+        ]
+    },
+    "1f91b": {
+        "uri": "left-facing-fist",
+        "code": "1f91b",
+        "title": "Left-Facing Fist",
+        "description": "A fist pointing left, which may be used in conjunction with the right-facing fist to complete a fist-bump gesture.",
+        "aliases": [
+            "Left Fist Bump"
+        ],
+        "emoji": "🤛",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/left-facing-fist_1f91b.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91B"
+        ]
+    },
+    "1f91b-1f3fb": {
+        "uri": "left-facing-fist-type-1-2",
+        "code": "1f91b-1f3fb",
+        "title": "Left-Facing Fist: Light Skin Tone",
+        "description": "This version of the 🤛 Left-Facing Fist emoji\nhas the 🏻 Light Skin Tone\napplied, which is displayed as a Pale Skin Tone\non supported platforms.",
+        "emoji": "🤛🏻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/left-facing-fist_emoji-modifier-fitzpatrick-type-1-2_1f91b-1f3fb_1f3fb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91B",
+            "U+1F3FB"
+        ]
+    },
+    "1f91b-1f3fc": {
+        "uri": "left-facing-fist-type-3",
+        "code": "1f91b-1f3fc",
+        "title": "Left-Facing Fist: Medium-Light Skin Tone",
+        "description": "This version of the 🤛 Left-Facing Fist emoji\nhas the 🏼 Medium-Light Skin Tone\napplied, which is displayed as a Cream White Skin Tone\non supported platforms.",
+        "emoji": "🤛🏼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/left-facing-fist_emoji-modifier-fitzpatrick-type-3_1f91b-1f3fc_1f3fc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91B",
+            "U+1F3FC"
+        ]
+    },
+    "1f91b-1f3fd": {
+        "uri": "left-facing-fist-type-4",
+        "code": "1f91b-1f3fd",
+        "title": "Left-Facing Fist: Medium Skin Tone",
+        "description": "This version of the 🤛 Left-Facing Fist emoji\nhas the 🏽 Medium Skin Tone\napplied, which is displayed as a Moderate Brown Skin Tone\non supported platforms.",
+        "emoji": "🤛🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/left-facing-fist_emoji-modifier-fitzpatrick-type-4_1f91b-1f3fd_1f3fd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91B",
+            "U+1F3FD"
+        ]
+    },
+    "1f91b-1f3fe": {
+        "uri": "left-facing-fist-type-5",
+        "code": "1f91b-1f3fe",
+        "title": "Left-Facing Fist: Medium-Dark Skin Tone",
+        "description": "This version of the 🤛 Left-Facing Fist emoji\nhas the 🏾 Medium-Dark Skin Tone\napplied, which is displayed as a Dark Brown Skin Tone\non supported platforms.",
+        "emoji": "🤛🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/left-facing-fist_emoji-modifier-fitzpatrick-type-5_1f91b-1f3fe_1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91B",
+            "U+1F3FE"
+        ]
+    },
+    "1f91b-1f3ff": {
+        "uri": "left-facing-fist-type-6",
+        "code": "1f91b-1f3ff",
+        "title": "Left-Facing Fist: Dark Skin Tone",
+        "description": "This version of the 🤛 Left-Facing Fist emoji\nhas the 🏿 Dark Skin Tone\napplied, which is displayed as a Black Skin Tone\non supported platforms.",
+        "emoji": "🤛🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/left-facing-fist_emoji-modifier-fitzpatrick-type-6_1f91b-1f3ff_1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91B",
+            "U+1F3FF"
+        ]
+    },
+    "1f91c": {
+        "uri": "right-facing-fist",
+        "code": "1f91c",
+        "title": "Right-Facing Fist",
+        "description": "A fist pointing right, which may be used in conjunction with the left-facing fist to complete a fist-bump gesture.",
+        "aliases": [
+            "Right Fist Bump"
+        ],
+        "emoji": "🤜",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/right-facing-fist_1f91c.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91C"
+        ]
+    },
+    "1f91c-1f3fb": {
+        "uri": "right-facing-fist-type-1-2",
+        "code": "1f91c-1f3fb",
+        "title": "Right-Facing Fist: Light Skin Tone",
+        "description": "This version of the 🤜 Right-Facing Fist emoji\nhas the 🏻 Light Skin Tone\napplied, which is displayed as a Pale Skin Tone\non supported platforms.",
+        "emoji": "🤜🏻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/right-facing-fist_emoji-modifier-fitzpatrick-type-1-2_1f91c-1f3fb_1f3fb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91C",
+            "U+1F3FB"
+        ]
+    },
+    "1f91c-1f3fc": {
+        "uri": "right-facing-fist-type-3",
+        "code": "1f91c-1f3fc",
+        "title": "Right-Facing Fist: Medium-Light Skin Tone",
+        "description": "This version of the 🤜 Right-Facing Fist emoji\nhas the 🏼 Medium-Light Skin Tone\napplied, which is displayed as a Cream White Skin Tone\non supported platforms.",
+        "emoji": "🤜🏼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/right-facing-fist_emoji-modifier-fitzpatrick-type-3_1f91c-1f3fc_1f3fc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91C",
+            "U+1F3FC"
+        ]
+    },
+    "1f91c-1f3fd": {
+        "uri": "right-facing-fist-type-4",
+        "code": "1f91c-1f3fd",
+        "title": "Right-Facing Fist: Medium Skin Tone",
+        "description": "This version of the 🤜 Right-Facing Fist emoji\nhas the 🏽 Medium Skin Tone\napplied, which is displayed as a Moderate Brown Skin Tone\non supported platforms.",
+        "emoji": "🤜🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/right-facing-fist_emoji-modifier-fitzpatrick-type-4_1f91c-1f3fd_1f3fd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91C",
+            "U+1F3FD"
+        ]
+    },
+    "1f91c-1f3fe": {
+        "uri": "right-facing-fist-type-5",
+        "code": "1f91c-1f3fe",
+        "title": "Right-Facing Fist: Medium-Dark Skin Tone",
+        "description": "This version of the 🤜 Right-Facing Fist emoji\nhas the 🏾 Medium-Dark Skin Tone\napplied, which is displayed as a Dark Brown Skin Tone\non supported platforms.",
+        "emoji": "🤜🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/right-facing-fist_emoji-modifier-fitzpatrick-type-5_1f91c-1f3fe_1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91C",
+            "U+1F3FE"
+        ]
+    },
+    "1f91c-1f3ff": {
+        "uri": "right-facing-fist-type-6",
+        "code": "1f91c-1f3ff",
+        "title": "Right-Facing Fist: Dark Skin Tone",
+        "description": "This version of the 🤜 Right-Facing Fist emoji\nhas the 🏿 Dark Skin Tone\napplied, which is displayed as a Black Skin Tone\non supported platforms.",
+        "emoji": "🤜🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/right-facing-fist_emoji-modifier-fitzpatrick-type-6_1f91c-1f3ff_1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91C",
+            "U+1F3FF"
+        ]
+    },
+    "1f91d": {
+        "uri": "handshake",
+        "code": "1f91d",
+        "title": "Handshake",
+        "description": "Two hands performing a handshake gesture, indicating a cordial greeting between friends or associates.",
+        "aliases": [
+            "Shaking Hands"
+        ],
+        "emoji": "🤝",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/handshake_1f91d.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F91D"
+        ]
+    },
+    "1f91d-1f3fb": {
+        "uri": "handshake-type-1-2",
+        "code": "1f91d-1f3fb",
+        "title": "Handshake, Type-1-2",
+        "description": "This version of the 🤝 Handshake emoji\nhas the 🏻 Light Skin Tone\napplied, which is displayed as a Pale Skin Tone\non supported platforms.",
+        "emoji": "🤝🏻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/google/223/handshake_emoji-modifier-fitzpatrick-type-1-2_1f91d-1f3fb_1f3fb.png",
+            "ver": "Google Android 10.0"
+        },
+        "codepoints": [
+            "U+1F91D",
+            "U+1F3FB"
+        ]
+    },
+    "1f91d-1f3fc": {
+        "uri": "handshake-type-3",
+        "code": "1f91d-1f3fc",
+        "title": "Handshake, Type-3",
+        "description": "This version of the 🤝 Handshake emoji\nhas the 🏼 Medium-Light Skin Tone\napplied, which is displayed as a Cream White Skin Tone\non supported platforms.",
+        "emoji": "🤝🏼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/google/223/handshake_emoji-modifier-fitzpatrick-type-3_1f91d-1f3fc_1f3fc.png",
+            "ver": "Google Android 10.0"
+        },
+        "codepoints": [
+            "U+1F91D",
+            "U+1F3FC"
+        ]
+    },
+    "1f91d-1f3fd": {
+        "uri": "handshake-type-4",
+        "code": "1f91d-1f3fd",
+        "title": "Handshake, Type-4",
+        "description": "This version of the 🤝 Handshake emoji\nhas the 🏽 Medium Skin Tone\napplied, which is displayed as a Moderate Brown Skin Tone\non supported platforms.",
+        "emoji": "🤝🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/google/223/handshake_emoji-modifier-fitzpatrick-type-4_1f91d-1f3fd_1f3fd.png",
+            "ver": "Google Android 10.0"
+        },
+        "codepoints": [
+            "U+1F91D",
+            "U+1F3FD"
+        ]
+    },
+    "1f91d-1f3fe": {
+        "uri": "handshake-type-5",
+        "code": "1f91d-1f3fe",
+        "title": "Handshake, Type-5",
+        "description": "This version of the 🤝 Handshake emoji\nhas the 🏾 Medium-Dark Skin Tone\napplied, which is displayed as a Dark Brown Skin Tone\non supported platforms.",
+        "emoji": "🤝🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/google/223/handshake_emoji-modifier-fitzpatrick-type-5_1f91d-1f3fe_1f3fe.png",
+            "ver": "Google Android 10.0"
+        },
+        "codepoints": [
+            "U+1F91D",
+            "U+1F3FE"
+        ]
+    },
+    "1f933": {
+        "uri": "selfie",
+        "code": "1f933",
+        "title": "Selfie",
+        "description": "A mobile phone held up to take a selfie (photo of the person holding the phone or camera). Generally represented as a disembodied arm holding a mobile phone.",
+        "aliases": [
+            "Phone Camera",
+            "Selfie Hand"
+        ],
+        "emoji": "🤳",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/selfie_1f933.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F933"
+        ]
+    },
+    "1f91d-1f3ff": {
+        "uri": "handshake-type-6",
+        "code": "1f91d-1f3ff",
+        "title": "Handshake, Type-6",
+        "description": "This version of the 🤝 Handshake emoji\nhas the 🏿 Dark Skin Tone\napplied, which is displayed as a Black Skin Tone\non supported platforms.",
+        "emoji": "🤝🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/google/223/handshake_emoji-modifier-fitzpatrick-type-6_1f91d-1f3ff_1f3ff.png",
+            "ver": "Google Android 10.0"
+        },
+        "codepoints": [
+            "U+1F91D",
+            "U+1F3FF"
+        ]
+    },
+    "1f933-1f3fb": {
+        "uri": "selfie-type-1-2",
+        "code": "1f933-1f3fb",
+        "title": "Selfie: Light Skin Tone",
+        "description": "This version of the 🤳 Selfie emoji\nhas the 🏻 Light Skin Tone\napplied, which is displayed as a Pale Skin Tone\non supported platforms.",
+        "emoji": "🤳🏻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/selfie_emoji-modifier-fitzpatrick-type-1-2_1f933-1f3fb_1f3fb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F933",
+            "U+1F3FB"
+        ]
+    },
+    "1f933-1f3fc": {
+        "uri": "selfie-type-3",
+        "code": "1f933-1f3fc",
+        "title": "Selfie: Medium-Light Skin Tone",
+        "description": "This version of the 🤳 Selfie emoji\nhas the 🏼 Medium-Light Skin Tone\napplied, which is displayed as a Cream White Skin Tone\non supported platforms.",
+        "emoji": "🤳🏼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/selfie_emoji-modifier-fitzpatrick-type-3_1f933-1f3fc_1f3fc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F933",
+            "U+1F3FC"
+        ]
+    },
+    "1f933-1f3fd": {
+        "uri": "selfie-type-4",
+        "code": "1f933-1f3fd",
+        "title": "Selfie: Medium Skin Tone",
+        "description": "This version of the 🤳 Selfie emoji\nhas the 🏽 Medium Skin Tone\napplied, which is displayed as a Moderate Brown Skin Tone\non supported platforms.",
+        "emoji": "🤳🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/selfie_emoji-modifier-fitzpatrick-type-4_1f933-1f3fd_1f3fd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F933",
+            "U+1F3FD"
+        ]
+    },
+    "1f933-1f3fe": {
+        "uri": "selfie-type-5",
+        "code": "1f933-1f3fe",
+        "title": "Selfie: Medium-Dark Skin Tone",
+        "description": "This version of the 🤳 Selfie emoji\nhas the 🏾 Medium-Dark Skin Tone\napplied, which is displayed as a Dark Brown Skin Tone\non supported platforms.",
+        "emoji": "🤳🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/selfie_emoji-modifier-fitzpatrick-type-5_1f933-1f3fe_1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F933",
+            "U+1F3FE"
+        ]
+    },
+    "1f933-1f3ff": {
+        "uri": "selfie-type-6",
+        "code": "1f933-1f3ff",
+        "title": "Selfie: Dark Skin Tone",
+        "description": "This version of the 🤳 Selfie emoji\nhas the 🏿 Dark Skin Tone\napplied, which is displayed as a Black Skin Tone\non supported platforms.",
+        "emoji": "🤳🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/selfie_emoji-modifier-fitzpatrick-type-6_1f933-1f3ff_1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F933",
+            "U+1F3FF"
+        ]
+    },
+    "1f926": {
+        "uri": "face-palm",
+        "code": "1f926",
+        "title": "Person Facepalming",
+        "description": "A hand shown pressing against the head of a person, commonly written as facepalm. Used to display frustration or embarrassment at the ineptitude of a person or situation.\nMay be used in a similar context to the acronym SMH (shaking my head), or in relation to the Picard Facepalm meme.",
+        "aliases": [
+            "Facepalm",
+            "Hitting Head",
+            "Picard",
+            "SMH"
+        ],
+        "unicodename": "Face Palm",
+        "emoji": "🤦",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/face-palm_1f926.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F926"
+        ]
+    },
+    "1f926-1f3fb": {
+        "uri": "face-palm-type-1-2",
+        "code": "1f926-1f3fb",
+        "title": "Person Facepalming: Light Skin Tone",
+        "description": "This version of the 🤦 Person Facepalming emoji\nhas the 🏻 Light Skin Tone\napplied, which is displayed as a Pale Skin Tone\non supported platforms.",
+        "emoji": "🤦🏻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/face-palm_emoji-modifier-fitzpatrick-type-1-2_1f926-1f3fb_1f3fb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F926",
+            "U+1F3FB"
+        ]
+    },
+    "1f926-1f3fc": {
+        "uri": "face-palm-type-3",
+        "code": "1f926-1f3fc",
+        "title": "Person Facepalming: Medium-Light Skin Tone",
+        "description": "This version of the 🤦 Person Facepalming emoji\nhas the 🏼 Medium-Light Skin Tone\napplied, which is displayed as a Cream White Skin Tone\non supported platforms.",
+        "emoji": "🤦🏼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/face-palm_emoji-modifier-fitzpatrick-type-3_1f926-1f3fc_1f3fc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F926",
+            "U+1F3FC"
+        ]
+    },
+    "1f926-1f3fd": {
+        "uri": "face-palm-type-4",
+        "code": "1f926-1f3fd",
+        "title": "Person Facepalming: Medium Skin Tone",
+        "description": "This version of the 🤦 Person Facepalming emoji\nhas the 🏽 Medium Skin Tone\napplied, which is displayed as a Moderate Brown Skin Tone\non supported platforms.",
+        "emoji": "🤦🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/face-palm_emoji-modifier-fitzpatrick-type-4_1f926-1f3fd_1f3fd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F926",
+            "U+1F3FD"
+        ]
+    },
+    "1f926-1f3fe": {
+        "uri": "face-palm-type-5",
+        "code": "1f926-1f3fe",
+        "title": "Person Facepalming: Medium-Dark Skin Tone",
+        "description": "This version of the 🤦 Person Facepalming emoji\nhas the 🏾 Medium-Dark Skin Tone\napplied, which is displayed as a Dark Brown Skin Tone\non supported platforms.",
+        "emoji": "🤦🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/face-palm_emoji-modifier-fitzpatrick-type-5_1f926-1f3fe_1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F926",
+            "U+1F3FE"
+        ]
+    },
+    "1f926-1f3ff": {
+        "uri": "face-palm-type-6",
+        "code": "1f926-1f3ff",
+        "title": "Person Facepalming: Dark Skin Tone",
+        "description": "This version of the 🤦 Person Facepalming emoji\nhas the 🏿 Dark Skin Tone\napplied, which is displayed as a Black Skin Tone\non supported platforms.",
+        "emoji": "🤦🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/face-palm_emoji-modifier-fitzpatrick-type-6_1f926-1f3ff_1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F926",
+            "U+1F3FF"
+        ]
+    },
+    "1f937": {
+        "uri": "shrug",
+        "code": "1f937",
+        "title": "Person Shrugging",
+        "description": "A person shrugging their shoulders to indicate a lack of knowledge about a particular topic, or a lack of care about the result of a situation.\nDisplays as raised shoulders, sometimes in conjunction with raised arms and flat hands. The shrug gesture in text (emoticon) form is known as a shruggie and typed as: ¯\\_(ツ)_/¯\nThe Unicode character Shrug (\"Person Shrugging\") does not specify a gender though is displayed as a woman on most major platforms. See also Woman Shrugging or Man Shrugging.",
+        "aliases": [
+            "¯\\_(ツ)_/¯",
+            "Shrugging"
+        ],
+        "unicodename": "Shrug",
+        "emoji": "🤷",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/shrug_1f937.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F937"
+        ]
+    },
+    "1f937-1f3fb": {
+        "uri": "shrug-type-1-2",
+        "code": "1f937-1f3fb",
+        "title": "Person Shrugging: Light Skin Tone",
+        "description": "This version of the 🤷 Person Shrugging emoji\nhas the 🏻 Light Skin Tone\napplied, which is displayed as a Pale Skin Tone\non supported platforms.",
+        "emoji": "🤷🏻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/shrug_emoji-modifier-fitzpatrick-type-1-2_1f937-1f3fb_1f3fb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F937",
+            "U+1F3FB"
+        ]
+    },
+    "1f937-1f3fc": {
+        "uri": "shrug-type-3",
+        "code": "1f937-1f3fc",
+        "title": "Person Shrugging: Medium-Light Skin Tone",
+        "description": "This version of the 🤷 Person Shrugging emoji\nhas the 🏼 Medium-Light Skin Tone\napplied, which is displayed as a Cream White Skin Tone\non supported platforms.",
+        "emoji": "🤷🏼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/shrug_emoji-modifier-fitzpatrick-type-3_1f937-1f3fc_1f3fc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F937",
+            "U+1F3FC"
+        ]
+    },
+    "1f937-1f3fd": {
+        "uri": "shrug-type-4",
+        "code": "1f937-1f3fd",
+        "title": "Person Shrugging: Medium Skin Tone",
+        "description": "This version of the 🤷 Person Shrugging emoji\nhas the 🏽 Medium Skin Tone\napplied, which is displayed as a Moderate Brown Skin Tone\non supported platforms.",
+        "emoji": "🤷🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/shrug_emoji-modifier-fitzpatrick-type-4_1f937-1f3fd_1f3fd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F937",
+            "U+1F3FD"
+        ]
+    },
+    "1f937-1f3fe": {
+        "uri": "shrug-type-5",
+        "code": "1f937-1f3fe",
+        "title": "Person Shrugging: Medium-Dark Skin Tone",
+        "description": "This version of the 🤷 Person Shrugging emoji\nhas the 🏾 Medium-Dark Skin Tone\napplied, which is displayed as a Dark Brown Skin Tone\non supported platforms.",
+        "emoji": "🤷🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/shrug_emoji-modifier-fitzpatrick-type-5_1f937-1f3fe_1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F937",
+            "U+1F3FE"
+        ]
+    },
+    "1f937-1f3ff": {
+        "uri": "shrug-type-6",
+        "code": "1f937-1f3ff",
+        "title": "Person Shrugging: Dark Skin Tone",
+        "description": "This version of the 🤷 Person Shrugging emoji\nhas the 🏿 Dark Skin Tone\napplied, which is displayed as a Black Skin Tone\non supported platforms.",
+        "emoji": "🤷🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/shrug_emoji-modifier-fitzpatrick-type-6_1f937-1f3ff_1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F937",
+            "U+1F3FF"
+        ]
+    },
+    "1f934": {
+        "uri": "prince",
+        "code": "1f934",
+        "title": "Prince",
+        "description": "Male royalty, intended as a gender pair for the princess emoji. Shown as a man with a crown.\nNot a reference to the musician Prince, however the man singer emoji on WhatsApp does show a character that bears a heavy resemblance to this artist.",
+        "emoji": "🤴",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/prince_1f934.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F934"
+        ]
+    },
+    "1f934-1f3fb": {
+        "uri": "prince-type-1-2",
+        "code": "1f934-1f3fb",
+        "title": "Prince: Light Skin Tone",
+        "description": "This version of the 🤴 Prince emoji\nhas the 🏻 Light Skin Tone\napplied, which is displayed as a Pale Skin Tone\non supported platforms.",
+        "emoji": "🤴🏻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/prince_emoji-modifier-fitzpatrick-type-1-2_1f934-1f3fb_1f3fb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F934",
+            "U+1F3FB"
+        ]
+    },
+    "1f934-1f3fc": {
+        "uri": "prince-type-3",
+        "code": "1f934-1f3fc",
+        "title": "Prince: Medium-Light Skin Tone",
+        "description": "This version of the 🤴 Prince emoji\nhas the 🏼 Medium-Light Skin Tone\napplied, which is displayed as a Cream White Skin Tone\non supported platforms.",
+        "emoji": "🤴🏼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/prince_emoji-modifier-fitzpatrick-type-3_1f934-1f3fc_1f3fc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F934",
+            "U+1F3FC"
+        ]
+    },
+    "1f934-1f3fd": {
+        "uri": "prince-type-4",
+        "code": "1f934-1f3fd",
+        "title": "Prince: Medium Skin Tone",
+        "description": "This version of the 🤴 Prince emoji\nhas the 🏽 Medium Skin Tone\napplied, which is displayed as a Moderate Brown Skin Tone\non supported platforms.",
+        "emoji": "🤴🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/prince_emoji-modifier-fitzpatrick-type-4_1f934-1f3fd_1f3fd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F934",
+            "U+1F3FD"
+        ]
+    },
+    "1f934-1f3fe": {
+        "uri": "prince-type-5",
+        "code": "1f934-1f3fe",
+        "title": "Prince: Medium-Dark Skin Tone",
+        "description": "This version of the 🤴 Prince emoji\nhas the 🏾 Medium-Dark Skin Tone\napplied, which is displayed as a Dark Brown Skin Tone\non supported platforms.",
+        "emoji": "🤴🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/prince_emoji-modifier-fitzpatrick-type-5_1f934-1f3fe_1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F934",
+            "U+1F3FE"
+        ]
+    },
+    "1f934-1f3ff": {
+        "uri": "prince-type-6",
+        "code": "1f934-1f3ff",
+        "title": "Prince: Dark Skin Tone",
+        "description": "This version of the 🤴 Prince emoji\nhas the 🏿 Dark Skin Tone\napplied, which is displayed as a Black Skin Tone\non supported platforms.",
+        "emoji": "🤴🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/prince_emoji-modifier-fitzpatrick-type-6_1f934-1f3ff_1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F934",
+            "U+1F3FF"
+        ]
+    },
+    "1f935": {
+        "uri": "man-in-tuxedo",
+        "code": "1f935",
+        "title": "Man in Tuxedo",
+        "description": "A man dressed for a formal occassion, wearing a tuxedo. This emoji may be used as the gender pair for the bride emoji.",
+        "aliases": [
+            "Groom",
+            "Man In Suit"
+        ],
+        "emoji": "🤵",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/man-in-tuxedo_1f935.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F935"
+        ]
+    },
+    "1f935-1f3fb": {
+        "uri": "man-in-tuxedo-type-1-2",
+        "code": "1f935-1f3fb",
+        "title": "Man in Tuxedo: Light Skin Tone",
+        "description": "This version of the 🤵 Man in Tuxedo emoji\nhas the 🏻 Light Skin Tone\napplied, which is displayed as a Pale Skin Tone\non supported platforms.",
+        "emoji": "🤵🏻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/man-in-tuxedo_emoji-modifier-fitzpatrick-type-1-2_1f935-1f3fb_1f3fb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F935",
+            "U+1F3FB"
+        ]
+    },
+    "1f935-1f3fc": {
+        "uri": "man-in-tuxedo-type-3",
+        "code": "1f935-1f3fc",
+        "title": "Man in Tuxedo: Medium-Light Skin Tone",
+        "description": "This version of the 🤵 Man in Tuxedo emoji\nhas the 🏼 Medium-Light Skin Tone\napplied, which is displayed as a Cream White Skin Tone\non supported platforms.",
+        "emoji": "🤵🏼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/man-in-tuxedo_emoji-modifier-fitzpatrick-type-3_1f935-1f3fc_1f3fc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F935",
+            "U+1F3FC"
+        ]
+    },
+    "1f935-1f3fd": {
+        "uri": "man-in-tuxedo-type-4",
+        "code": "1f935-1f3fd",
+        "title": "Man in Tuxedo: Medium Skin Tone",
+        "description": "This version of the 🤵 Man in Tuxedo emoji\nhas the 🏽 Medium Skin Tone\napplied, which is displayed as a Moderate Brown Skin Tone\non supported platforms.",
+        "emoji": "🤵🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/man-in-tuxedo_emoji-modifier-fitzpatrick-type-4_1f935-1f3fd_1f3fd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F935",
+            "U+1F3FD"
+        ]
+    },
+    "1f935-1f3fe": {
+        "uri": "man-in-tuxedo-type-5",
+        "code": "1f935-1f3fe",
+        "title": "Man in Tuxedo: Medium-Dark Skin Tone",
+        "description": "This version of the 🤵 Man in Tuxedo emoji\nhas the 🏾 Medium-Dark Skin Tone\napplied, which is displayed as a Dark Brown Skin Tone\non supported platforms.",
+        "emoji": "🤵🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/man-in-tuxedo_emoji-modifier-fitzpatrick-type-5_1f935-1f3fe_1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F935",
+            "U+1F3FE"
+        ]
+    },
+    "1f935-1f3ff": {
+        "uri": "man-in-tuxedo-type-6",
+        "code": "1f935-1f3ff",
+        "title": "Man in Tuxedo: Dark Skin Tone",
+        "description": "This version of the 🤵 Man in Tuxedo emoji\nhas the 🏿 Dark Skin Tone\napplied, which is displayed as a Black Skin Tone\non supported platforms.",
+        "emoji": "🤵🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/man-in-tuxedo_emoji-modifier-fitzpatrick-type-6_1f935-1f3ff_1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F935",
+            "U+1F3FF"
+        ]
+    },
+    "1f930": {
+        "uri": "pregnant-woman",
+        "code": "1f930",
+        "title": "Pregnant Woman",
+        "description": "A pregnant woman, intended to complete the family emoji set. Sometimes used in jest to represent feeling full after over-eating; aka \"food baby\".",
+        "aliases": [
+            "Pregnancy",
+            "Pregnant Lady"
+        ],
+        "emoji": "🤰",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/pregnant-woman_1f930.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F930"
+        ]
+    },
+    "1f930-1f3fb": {
+        "uri": "pregnant-woman-type-1-2",
+        "code": "1f930-1f3fb",
+        "title": "Pregnant Woman: Light Skin Tone",
+        "description": "This version of the 🤰 Pregnant Woman emoji\nhas the 🏻 Light Skin Tone\napplied, which is displayed as a Pale Skin Tone\non supported platforms.",
+        "emoji": "🤰🏻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/pregnant-woman_emoji-modifier-fitzpatrick-type-1-2_1f930-1f3fb_1f3fb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F930",
+            "U+1F3FB"
+        ]
+    },
+    "1f930-1f3fc": {
+        "uri": "pregnant-woman-type-3",
+        "code": "1f930-1f3fc",
+        "title": "Pregnant Woman: Medium-Light Skin Tone",
+        "description": "This version of the 🤰 Pregnant Woman emoji\nhas the 🏼 Medium-Light Skin Tone\napplied, which is displayed as a Cream White Skin Tone\non supported platforms.",
+        "emoji": "🤰🏼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/pregnant-woman_emoji-modifier-fitzpatrick-type-3_1f930-1f3fc_1f3fc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F930",
+            "U+1F3FC"
+        ]
+    },
+    "1f930-1f3fd": {
+        "uri": "pregnant-woman-type-4",
+        "code": "1f930-1f3fd",
+        "title": "Pregnant Woman: Medium Skin Tone",
+        "description": "This version of the 🤰 Pregnant Woman emoji\nhas the 🏽 Medium Skin Tone\napplied, which is displayed as a Moderate Brown Skin Tone\non supported platforms.",
+        "emoji": "🤰🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/pregnant-woman_emoji-modifier-fitzpatrick-type-4_1f930-1f3fd_1f3fd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F930",
+            "U+1F3FD"
+        ]
+    },
+    "1f930-1f3fe": {
+        "uri": "pregnant-woman-type-5",
+        "code": "1f930-1f3fe",
+        "title": "Pregnant Woman: Medium-Dark Skin Tone",
+        "description": "This version of the 🤰 Pregnant Woman emoji\nhas the 🏾 Medium-Dark Skin Tone\napplied, which is displayed as a Dark Brown Skin Tone\non supported platforms.",
+        "emoji": "🤰🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/pregnant-woman_emoji-modifier-fitzpatrick-type-5_1f930-1f3fe_1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F930",
+            "U+1F3FE"
+        ]
+    },
+    "1f930-1f3ff": {
+        "uri": "pregnant-woman-type-6",
+        "code": "1f930-1f3ff",
+        "title": "Pregnant Woman: Dark Skin Tone",
+        "description": "This version of the 🤰 Pregnant Woman emoji\nhas the 🏿 Dark Skin Tone\napplied, which is displayed as a Black Skin Tone\non supported platforms.",
+        "emoji": "🤰🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/pregnant-woman_emoji-modifier-fitzpatrick-type-6_1f930-1f3ff_1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F930",
+            "U+1F3FF"
+        ]
+    },
+    "1f936": {
+        "uri": "mother-christmas",
+        "code": "1f936",
+        "title": "Mrs. Claus",
+        "description": "Mother Christmas, more commonly known as Mrs. Claus, is the wife of Santa Claus. Displayed as an older woman with glasses and a festive red and white bonnet. See also: Christmas emoji list.",
+        "aliases": [
+            "Mrs Claus"
+        ],
+        "unicodename": "Mother Christmas",
+        "emoji": "🤶",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/mother-christmas_1f936.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F936"
+        ]
+    },
+    "1f936-1f3fb": {
+        "uri": "mother-christmas-type-1-2",
+        "code": "1f936-1f3fb",
+        "title": "Mrs. Claus: Light Skin Tone",
+        "description": "This version of the 🤶 Mrs. Claus emoji\nhas the 🏻 Light Skin Tone\napplied, which is displayed as a Pale Skin Tone\non supported platforms.",
+        "emoji": "🤶🏻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/mother-christmas_emoji-modifier-fitzpatrick-type-1-2_1f936-1f3fb_1f3fb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F936",
+            "U+1F3FB"
+        ]
+    },
+    "1f936-1f3fc": {
+        "uri": "mother-christmas-type-3",
+        "code": "1f936-1f3fc",
+        "title": "Mrs. Claus: Medium-Light Skin Tone",
+        "description": "This version of the 🤶 Mrs. Claus emoji\nhas the 🏼 Medium-Light Skin Tone\napplied, which is displayed as a Cream White Skin Tone\non supported platforms.",
+        "emoji": "🤶🏼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/mother-christmas_emoji-modifier-fitzpatrick-type-3_1f936-1f3fc_1f3fc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F936",
+            "U+1F3FC"
+        ]
+    },
+    "1f936-1f3fd": {
+        "uri": "mother-christmas-type-4",
+        "code": "1f936-1f3fd",
+        "title": "Mrs. Claus: Medium Skin Tone",
+        "description": "This version of the 🤶 Mrs. Claus emoji\nhas the 🏽 Medium Skin Tone\napplied, which is displayed as a Moderate Brown Skin Tone\non supported platforms.",
+        "emoji": "🤶🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/mother-christmas_emoji-modifier-fitzpatrick-type-4_1f936-1f3fd_1f3fd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F936",
+            "U+1F3FD"
+        ]
+    },
+    "1f936-1f3fe": {
+        "uri": "mother-christmas-type-5",
+        "code": "1f936-1f3fe",
+        "title": "Mrs. Claus: Medium-Dark Skin Tone",
+        "description": "This version of the 🤶 Mrs. Claus emoji\nhas the 🏾 Medium-Dark Skin Tone\napplied, which is displayed as a Dark Brown Skin Tone\non supported platforms.",
+        "emoji": "🤶🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/mother-christmas_emoji-modifier-fitzpatrick-type-5_1f936-1f3fe_1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F936",
+            "U+1F3FE"
+        ]
+    },
+    "1f936-1f3ff": {
+        "uri": "mother-christmas-type-6",
+        "code": "1f936-1f3ff",
+        "title": "Mrs. Claus: Dark Skin Tone",
+        "description": "This version of the 🤶 Mrs. Claus emoji\nhas the 🏿 Dark Skin Tone\napplied, which is displayed as a Black Skin Tone\non supported platforms.",
+        "emoji": "🤶🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/mother-christmas_emoji-modifier-fitzpatrick-type-6_1f936-1f3ff_1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F936",
+            "U+1F3FF"
+        ]
+    },
+    "1f57a": {
+        "uri": "man-dancing",
+        "code": "1f57a",
+        "title": "Man Dancing",
+        "description": "A man dancing, added as a gender pair for the 💃 Woman Dancing. Shown on most platforms in a 70s-era suit, and one hand in the air in a disco-dancing style.",
+        "aliases": [
+            "Disco Dancer",
+            "Male Dancer"
+        ],
+        "emoji": "🕺",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/man-dancing_1f57a.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F57A"
+        ]
+    },
+    "1f57a-1f3fb": {
+        "uri": "man-dancing-type-1-2",
+        "code": "1f57a-1f3fb",
+        "title": "Man Dancing: Light Skin Tone",
+        "description": "This version of the 🕺 Man Dancing emoji\nhas the 🏻 Light Skin Tone\napplied, which is displayed as a Pale Skin Tone\non supported platforms.",
+        "emoji": "🕺🏻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/man-dancing_emoji-modifier-fitzpatrick-type-1-2_1f57a-1f3fb_1f3fb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F57A",
+            "U+1F3FB"
+        ]
+    },
+    "1f57a-1f3fc": {
+        "uri": "man-dancing-type-3",
+        "code": "1f57a-1f3fc",
+        "title": "Man Dancing: Medium-Light Skin Tone",
+        "description": "This version of the 🕺 Man Dancing emoji\nhas the 🏼 Medium-Light Skin Tone\napplied, which is displayed as a Cream White Skin Tone\non supported platforms.",
+        "emoji": "🕺🏼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/man-dancing_emoji-modifier-fitzpatrick-type-3_1f57a-1f3fc_1f3fc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F57A",
+            "U+1F3FC"
+        ]
+    },
+    "1f57a-1f3fd": {
+        "uri": "man-dancing-type-4",
+        "code": "1f57a-1f3fd",
+        "title": "Man Dancing: Medium Skin Tone",
+        "description": "This version of the 🕺 Man Dancing emoji\nhas the 🏽 Medium Skin Tone\napplied, which is displayed as a Moderate Brown Skin Tone\non supported platforms.",
+        "emoji": "🕺🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/man-dancing_emoji-modifier-fitzpatrick-type-4_1f57a-1f3fd_1f3fd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F57A",
+            "U+1F3FD"
+        ]
+    },
+    "1f57a-1f3fe": {
+        "uri": "man-dancing-type-5",
+        "code": "1f57a-1f3fe",
+        "title": "Man Dancing: Medium-Dark Skin Tone",
+        "description": "This version of the 🕺 Man Dancing emoji\nhas the 🏾 Medium-Dark Skin Tone\napplied, which is displayed as a Dark Brown Skin Tone\non supported platforms.",
+        "emoji": "🕺🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/man-dancing_emoji-modifier-fitzpatrick-type-5_1f57a-1f3fe_1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F57A",
+            "U+1F3FE"
+        ]
+    },
+    "1f57a-1f3ff": {
+        "uri": "man-dancing-type-6",
+        "code": "1f57a-1f3ff",
+        "title": "Man Dancing: Dark Skin Tone",
+        "description": "This version of the 🕺 Man Dancing emoji\nhas the 🏿 Dark Skin Tone\napplied, which is displayed as a Black Skin Tone\non supported platforms.",
+        "emoji": "🕺🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/man-dancing_emoji-modifier-fitzpatrick-type-6_1f57a-1f3ff_1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F57A",
+            "U+1F3FF"
+        ]
+    },
+    "1f93a": {
+        "uri": "fencer",
+        "code": "1f93a",
+        "title": "Person Fencing",
+        "description": "A person shown in the sport of fencing, with a Rapier-style sword, mask, and protective clothing.",
+        "unicodename": "Fencer",
+        "emoji": "🤺",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/fencer_1f93a.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F93A"
+        ]
+    },
+    "1f938": {
+        "uri": "person-doing-cartwheel",
+        "code": "1f938",
+        "title": "Person Cartwheeling",
+        "description": "A person doing a cartwheel, representing the sport of gymnastics.",
+        "aliases": [
+            "Gymnast",
+            "Gymnastics"
+        ],
+        "unicodename": "Person Doing Cartwheel",
+        "emoji": "🤸",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-doing-cartwheel_1f938.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F938"
+        ]
+    },
+    "1f938-1f3fb": {
+        "uri": "person-doing-cartwheel-type-1-2",
+        "code": "1f938-1f3fb",
+        "title": "Person Cartwheeling: Light Skin Tone",
+        "description": "This version of the 🤸 Person Cartwheeling emoji\nhas the 🏻 Light Skin Tone\napplied, which is displayed as a Pale Skin Tone\non supported platforms.",
+        "emoji": "🤸🏻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-doing-cartwheel_emoji-modifier-fitzpatrick-type-1-2_1f938-1f3fb_1f3fb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F938",
+            "U+1F3FB"
+        ]
+    },
+    "1f938-1f3fc": {
+        "uri": "person-doing-cartwheel-type-3",
+        "code": "1f938-1f3fc",
+        "title": "Person Cartwheeling: Medium-Light Skin Tone",
+        "description": "This version of the 🤸 Person Cartwheeling emoji\nhas the 🏼 Medium-Light Skin Tone\napplied, which is displayed as a Cream White Skin Tone\non supported platforms.",
+        "emoji": "🤸🏼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-doing-cartwheel_emoji-modifier-fitzpatrick-type-3_1f938-1f3fc_1f3fc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F938",
+            "U+1F3FC"
+        ]
+    },
+    "1f938-1f3fd": {
+        "uri": "person-doing-cartwheel-type-4",
+        "code": "1f938-1f3fd",
+        "title": "Person Cartwheeling: Medium Skin Tone",
+        "description": "This version of the 🤸 Person Cartwheeling emoji\nhas the 🏽 Medium Skin Tone\napplied, which is displayed as a Moderate Brown Skin Tone\non supported platforms.",
+        "emoji": "🤸🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-doing-cartwheel_emoji-modifier-fitzpatrick-type-4_1f938-1f3fd_1f3fd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F938",
+            "U+1F3FD"
+        ]
+    },
+    "1f938-1f3fe": {
+        "uri": "person-doing-cartwheel-type-5",
+        "code": "1f938-1f3fe",
+        "title": "Person Cartwheeling: Medium-Dark Skin Tone",
+        "description": "This version of the 🤸 Person Cartwheeling emoji\nhas the 🏾 Medium-Dark Skin Tone\napplied, which is displayed as a Dark Brown Skin Tone\non supported platforms.",
+        "emoji": "🤸🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-doing-cartwheel_emoji-modifier-fitzpatrick-type-5_1f938-1f3fe_1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F938",
+            "U+1F3FE"
+        ]
+    },
+    "1f938-1f3ff": {
+        "uri": "person-doing-cartwheel-type-6",
+        "code": "1f938-1f3ff",
+        "title": "Person Cartwheeling: Dark Skin Tone",
+        "description": "This version of the 🤸 Person Cartwheeling emoji\nhas the 🏿 Dark Skin Tone\napplied, which is displayed as a Black Skin Tone\non supported platforms.",
+        "emoji": "🤸🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/person-doing-cartwheel_emoji-modifier-fitzpatrick-type-6_1f938-1f3ff_1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F938",
+            "U+1F3FF"
+        ]
+    },
+    "1f93c": {
+        "uri": "wrestlers",
+        "code": "1f93c",
+        "title": "People Wrestling",
+        "description": "Two people in the sport of wrestling.",
+        "aliases": [
+            "Wrestling"
+        ],
+        "unicodename": "Wrestlers",
+        "emoji": "🤼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/wrestlers_1f93c.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F93C"
+        ]
+    },
+    "1f93d": {
+        "uri": "water-polo",
+        "code": "1f93d",
+        "title": "Person Playing Water Polo",
+        "description": "A person shown in water with a ball, playing the sport of water polo.",
+        "unicodename": "Water Polo",
+        "emoji": "🤽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/water-polo_1f93d.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F93D"
+        ]
+    },
+    "1f93d-1f3fb": {
+        "uri": "water-polo-type-1-2",
+        "code": "1f93d-1f3fb",
+        "title": "Person Playing Water Polo: Light Skin Tone",
+        "description": "This version of the 🤽 Person Playing Water Polo emoji\nhas the 🏻 Light Skin Tone\napplied, which is displayed as a Pale Skin Tone\non supported platforms.",
+        "emoji": "🤽🏻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/water-polo_emoji-modifier-fitzpatrick-type-1-2_1f93d-1f3fb_1f3fb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F93D",
+            "U+1F3FB"
+        ]
+    },
+    "1f93d-1f3fc": {
+        "uri": "water-polo-type-3",
+        "code": "1f93d-1f3fc",
+        "title": "Person Playing Water Polo: Medium-Light Skin Tone",
+        "description": "This version of the 🤽 Person Playing Water Polo emoji\nhas the 🏼 Medium-Light Skin Tone\napplied, which is displayed as a Cream White Skin Tone\non supported platforms.",
+        "emoji": "🤽🏼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/water-polo_emoji-modifier-fitzpatrick-type-3_1f93d-1f3fc_1f3fc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F93D",
+            "U+1F3FC"
+        ]
+    },
+    "1f93d-1f3fd": {
+        "uri": "water-polo-type-4",
+        "code": "1f93d-1f3fd",
+        "title": "Person Playing Water Polo: Medium Skin Tone",
+        "description": "This version of the 🤽 Person Playing Water Polo emoji\nhas the 🏽 Medium Skin Tone\napplied, which is displayed as a Moderate Brown Skin Tone\non supported platforms.",
+        "emoji": "🤽🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/water-polo_emoji-modifier-fitzpatrick-type-4_1f93d-1f3fd_1f3fd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F93D",
+            "U+1F3FD"
+        ]
+    },
+    "1f93d-1f3fe": {
+        "uri": "water-polo-type-5",
+        "code": "1f93d-1f3fe",
+        "title": "Person Playing Water Polo: Medium-Dark Skin Tone",
+        "description": "This version of the 🤽 Person Playing Water Polo emoji\nhas the 🏾 Medium-Dark Skin Tone\napplied, which is displayed as a Dark Brown Skin Tone\non supported platforms.",
+        "emoji": "🤽🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/water-polo_emoji-modifier-fitzpatrick-type-5_1f93d-1f3fe_1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F93D",
+            "U+1F3FE"
+        ]
+    },
+    "1f93d-1f3ff": {
+        "uri": "water-polo-type-6",
+        "code": "1f93d-1f3ff",
+        "title": "Person Playing Water Polo: Dark Skin Tone",
+        "description": "This version of the 🤽 Person Playing Water Polo emoji\nhas the 🏿 Dark Skin Tone\napplied, which is displayed as a Black Skin Tone\non supported platforms.",
+        "emoji": "🤽🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/water-polo_emoji-modifier-fitzpatrick-type-6_1f93d-1f3ff_1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F93D",
+            "U+1F3FF"
+        ]
+    },
+    "1f93e": {
+        "uri": "handball",
+        "code": "1f93e",
+        "title": "Person Playing Handball",
+        "description": "",
+        "unicodename": "Handball",
+        "emoji": "🤾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/handball_1f93e.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F93E"
+        ]
+    },
+    "1f93e-1f3fb": {
+        "uri": "handball-type-1-2",
+        "code": "1f93e-1f3fb",
+        "title": "Person Playing Handball: Light Skin Tone",
+        "description": "This version of the 🤾 Person Playing Handball emoji\nhas the 🏻 Light Skin Tone\napplied, which is displayed as a Pale Skin Tone\non supported platforms.",
+        "emoji": "🤾🏻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/handball_emoji-modifier-fitzpatrick-type-1-2_1f93e-1f3fb_1f3fb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F93E",
+            "U+1F3FB"
+        ]
+    },
+    "1f93e-1f3fc": {
+        "uri": "handball-type-3",
+        "code": "1f93e-1f3fc",
+        "title": "Person Playing Handball: Medium-Light Skin Tone",
+        "description": "This version of the 🤾 Person Playing Handball emoji\nhas the 🏼 Medium-Light Skin Tone\napplied, which is displayed as a Cream White Skin Tone\non supported platforms.",
+        "emoji": "🤾🏼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/handball_emoji-modifier-fitzpatrick-type-3_1f93e-1f3fc_1f3fc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F93E",
+            "U+1F3FC"
+        ]
+    },
+    "1f93e-1f3fd": {
+        "uri": "handball-type-4",
+        "code": "1f93e-1f3fd",
+        "title": "Person Playing Handball: Medium Skin Tone",
+        "description": "This version of the 🤾 Person Playing Handball emoji\nhas the 🏽 Medium Skin Tone\napplied, which is displayed as a Moderate Brown Skin Tone\non supported platforms.",
+        "emoji": "🤾🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/handball_emoji-modifier-fitzpatrick-type-4_1f93e-1f3fd_1f3fd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F93E",
+            "U+1F3FD"
+        ]
+    },
+    "1f93e-1f3fe": {
+        "uri": "handball-type-5",
+        "code": "1f93e-1f3fe",
+        "title": "Person Playing Handball: Medium-Dark Skin Tone",
+        "description": "This version of the 🤾 Person Playing Handball emoji\nhas the 🏾 Medium-Dark Skin Tone\napplied, which is displayed as a Dark Brown Skin Tone\non supported platforms.",
+        "emoji": "🤾🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/handball_emoji-modifier-fitzpatrick-type-5_1f93e-1f3fe_1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F93E",
+            "U+1F3FE"
+        ]
+    },
+    "1f93e-1f3ff": {
+        "uri": "handball-type-6",
+        "code": "1f93e-1f3ff",
+        "title": "Person Playing Handball: Dark Skin Tone",
+        "description": "This version of the 🤾 Person Playing Handball emoji\nhas the 🏿 Dark Skin Tone\napplied, which is displayed as a Black Skin Tone\non supported platforms.",
+        "emoji": "🤾🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/handball_emoji-modifier-fitzpatrick-type-6_1f93e-1f3ff_1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F93E",
+            "U+1F3FF"
+        ]
+    },
+    "1f939": {
+        "uri": "juggling",
+        "code": "1f939",
+        "title": "Person Juggling",
+        "description": "A person juggling between three and five colored balls. The person shown in this emoji generally has the appearance of a man, and wears a hat on most major platforms.",
+        "aliases": [
+            "Juggler"
+        ],
+        "unicodename": "Juggling",
+        "emoji": "🤹",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/juggling_1f939.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F939"
+        ]
+    },
+    "1f939-1f3fb": {
+        "uri": "juggling-type-1-2",
+        "code": "1f939-1f3fb",
+        "title": "Person Juggling: Light Skin Tone",
+        "description": "This version of the 🤹 Person Juggling emoji\nhas the 🏻 Light Skin Tone\napplied, which is displayed as a Pale Skin Tone\non supported platforms.",
+        "emoji": "🤹🏻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/juggling_emoji-modifier-fitzpatrick-type-1-2_1f939-1f3fb_1f3fb.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F939",
+            "U+1F3FB"
+        ]
+    },
+    "1f939-1f3fc": {
+        "uri": "juggling-type-3",
+        "code": "1f939-1f3fc",
+        "title": "Person Juggling: Medium-Light Skin Tone",
+        "description": "This version of the 🤹 Person Juggling emoji\nhas the 🏼 Medium-Light Skin Tone\napplied, which is displayed as a Cream White Skin Tone\non supported platforms.",
+        "emoji": "🤹🏼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/juggling_emoji-modifier-fitzpatrick-type-3_1f939-1f3fc_1f3fc.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F939",
+            "U+1F3FC"
+        ]
+    },
+    "1f939-1f3fd": {
+        "uri": "juggling-type-4",
+        "code": "1f939-1f3fd",
+        "title": "Person Juggling: Medium Skin Tone",
+        "description": "This version of the 🤹 Person Juggling emoji\nhas the 🏽 Medium Skin Tone\napplied, which is displayed as a Moderate Brown Skin Tone\non supported platforms.",
+        "emoji": "🤹🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/juggling_emoji-modifier-fitzpatrick-type-4_1f939-1f3fd_1f3fd.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F939",
+            "U+1F3FD"
+        ]
+    },
+    "1f939-1f3fe": {
+        "uri": "juggling-type-5",
+        "code": "1f939-1f3fe",
+        "title": "Person Juggling: Medium-Dark Skin Tone",
+        "description": "This version of the 🤹 Person Juggling emoji\nhas the 🏾 Medium-Dark Skin Tone\napplied, which is displayed as a Dark Brown Skin Tone\non supported platforms.",
+        "emoji": "🤹🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/juggling_emoji-modifier-fitzpatrick-type-5_1f939-1f3fe_1f3fe.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F939",
+            "U+1F3FE"
+        ]
+    },
+    "1f939-1f3ff": {
+        "uri": "juggling-type-6",
+        "code": "1f939-1f3ff",
+        "title": "Person Juggling: Dark Skin Tone",
+        "description": "This version of the 🤹 Person Juggling emoji\nhas the 🏿 Dark Skin Tone\napplied, which is displayed as a Black Skin Tone\non supported platforms.",
+        "emoji": "🤹🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/juggling_emoji-modifier-fitzpatrick-type-6_1f939-1f3ff_1f3ff.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F939",
+            "U+1F3FF"
+        ]
+    },
+    "1f98d": {
+        "uri": "gorilla",
+        "code": "1f98d",
+        "title": "Gorilla",
+        "description": "A gorilla, the powerful, black-haired great ape. Variously depicted in full profile on all fours facing left or as a friendly, cartoon-styled gorilla face looking straight ahead.\nApple, WhatsApp, Facebook, and Microsoft’s designs feature a full gorilla, as a silverback, with strong shoulders and reddish forehead. Google, Samsung, and Twitter’s designs feature a black and gray gorilla face with a neutral expression and prominent forehead and jaw.\nFacebook’s design previously featured only a gorilla face.",
+        "emoji": "🦍",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/gorilla_1f98d.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F98D"
+        ]
+    },
+    "1f98a": {
+        "uri": "fox-face",
+        "code": "1f98a",
+        "title": "Fox",
+        "description": "A friendly, cartoon-styled faced of a fox, the cunning canine, looking straight ahead. Depicted as an orange fox  face with a black nose, pointed ears, and shaggy, white cheeks.\nOften used with an affectionate or playful tone (e.g., slang, foxy). Does not have a full-bodied fox emoji counterpart.\nAvailable as an Apple Animoji.",
+        "aliases": [
+            "Fox"
+        ],
+        "unicodename": "Fox Face",
+        "emoji": "🦊",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/fox-face_1f98a.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F98A"
+        ]
+    },
+    "1f98c": {
+        "uri": "deer",
+        "code": "1f98c",
+        "title": "Deer",
+        "description": "A deer, a fleet-footed, hoofed mammal whose males (bucks, stags) generally have antlers. Variously depicted as a light-brown deer in full profile on all fours facing left or as a deer face looking straight head; both depictions feature large, branched antlers.\nMay be used to represent elk, moose, antelope, or reindeer, especially in connection with Christmas.\nApple, Microsoft, WhatsApp, and Facebook's designs feature a deer in full profile; Google, Samsung, and Twitter's designs feature a deer face.\nGoogle’s deer has a red nose, as Rudolph the Red-nosed Reindeer. Apple and WhatsApp’s deers are white-tailed.",
+        "aliases": [
+            "Buck",
+            "Reindeer",
+            "Stag"
+        ],
+        "emoji": "🦌",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/deer_1f98c.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F98C"
+        ]
+    },
+    "1f98f": {
+        "uri": "rhinoceros",
+        "code": "1f98f",
+        "title": "Rhinoceros",
+        "description": "A rhinoceros, a large mammal with one or two massive horns on its nose. Generally shown in light gray with two horns, depicted in full profile on all fours or as a rhinoceros head looking left.\nResembles the white or black rhinoceros.\nApple, Microsoft, WhatsApp, and Facebook’s designs feature the full animal; Google, Samsung, and Twitter’s designs feature only a rhinoceros head. Facebook’s design previously featured only a rhinoceros head.",
+        "aliases": [
+            "Rhino"
+        ],
+        "emoji": "🦏",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/rhinoceros_1f98f.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F98F"
+        ]
+    },
+    "1f987": {
+        "uri": "bat",
+        "code": "1f987",
+        "title": "Bat",
+        "description": "A bat, the flying mammal of the night. Variously depicted as a brown, black, or gray bat, with wings outspread and pointy ears, facing forward or left.\nOften used in association with Halloween, vampires, and Batman.\nGoogle’s bat is purplish in color, bearing two fangs. Samsung’s bat was previously brown, Facebook’s gray.",
+        "aliases": [
+            "Batman"
+        ],
+        "emoji": "🦇",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/bat_1f987.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F987"
+        ]
+    },
+    "1f985": {
+        "uri": "eagle",
+        "code": "1f985",
+        "title": "Eagle",
+        "description": "A bald eagle, the majestic bird of prey with brown feathers and distinctive white head. Generally depicted facing left, with its wings outspread and talons out, as if swooping down to seize prey.\nCommonly associated with the United States, whose national emblem is the bald eagle. May be used for other eagles and birds of prey (e.g., hawks) more generally.\nGoogle’s eagle has its wings tucked in, as if perched on a branch. Twitter’s design shows only the bust of an eagle. Apple’s 📰 Newspaper features its eagle on its masthead.",
+        "aliases": [
+            "Bald Eagle"
+        ],
+        "emoji": "🦅",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/eagle_1f985.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F985"
+        ]
+    },
+    "1f986": {
+        "uri": "duck",
+        "code": "1f986",
+        "title": "Duck",
+        "description": "Quack! A duck, a waterbird with webbed feet. Depicted as a male (drake) mallard in full profile facing left, standing on its legs with gray and brown feathers, a yellow bill, and its distinctive green head.\nMay be consumed in the form of a 🍗 Poultry Leg. Occasionally used as a substitute for the F-word, due to rhyming and Apple's iPhone autocorrect.\nSamsung’s design previously featured a yellow rubber ducky.",
+        "emoji": "🦆",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/duck_1f986.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F986"
+        ]
+    },
+    "1f989": {
+        "uri": "owl",
+        "code": "1f989",
+        "title": "Owl",
+        "description": "An owl, the hooting, large-eyed bird of the night. Depicted as a reddish-brown owl, as a great horned owl, facing forward, Shown with large, round, gold-rimmed eyes, feet curled on or as if on a branch, wings tucked in, and its distinctive, horn-like tufts of feathers.\nMay be used to represent wisdom. Popularly used in connection with the hip-hop artist Drake.\nApple and Microsoft’s owls are on a branch. Microsoft’s owl previously resembled a barn owl, Samsung’s was purple.",
+        "emoji": "🦉",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/owl_1f989.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F989"
+        ]
+    },
+    "1f98e": {
+        "uri": "lizard",
+        "code": "1f98e",
+        "title": "Lizard",
+        "description": "A lizard, a scaly reptile with a long tail. Depicted as a light-green lizard on all fours from above, generally looking left with large eyes, a lightly textured or colored back, and toes outspread, as a gecko.\nMay be used for a variety of wild and pet lizards.\nGoogle’s lizard was previously brown.",
+        "aliases": [
+            "Gecko"
+        ],
+        "emoji": "🦎",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/lizard_1f98e.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F98E"
+        ]
+    },
+    "1f988": {
+        "uri": "shark",
+        "code": "1f988",
+        "title": "Shark",
+        "description": "A shark, a large, stealthy fish with many teeth. Generally depicted as a gray shark in full profile facing left, as a tiger, bull, or great white shark hunting in the water. Shown with a white underside and three gills, its pointed nose and teeth-lined mouth curving down to a sharp dorsal fin and long, pointed tail.\nNot to be confused with 🐬 Dolphin.",
+        "aliases": [
+            "Great White Shark"
+        ],
+        "emoji": "🦈",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/shark_1f988.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F988"
+        ]
+    },
+    "1f98b": {
+        "uri": "butterfly",
+        "code": "1f98b",
+        "title": "Butterfly",
+        "description": "A butterfly, a beautiful winged insect whose larva is a caterpillar. Depicted with its wings outspread, as a blue-and-black morpho butterfly or orange-and-black monarch butterfly.\nMay be used to represent a moth and ideas of beauty and happiness.\nSamsung’s butterfly previously resembled a monarch.",
+        "emoji": "🦋",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/butterfly_1f98b.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F98B"
+        ]
+    },
+    "1f940": {
+        "uri": "wilted-flower",
+        "code": "1f940",
+        "title": "Wilted Flower",
+        "description": "A flower that has wilted, or is dying. Generally depicted as a limp, faded red rose drooping over the to the right on a dried-out, green stem, shedding a petal.\nMay be used to express such sad sentiments as heartbreak, though sometimes with a sense of irony. Sometimes used to represent a rose or other flower, with positive connotations.\nNot to be confused with 🌹 Rose.\nWhatsApp's flower suggests a wilted 🌻 Sunflower; Twitter's a 🌷 Tulip, as Microsoft and Samsung's previously did. Facebook's flower was previously orange.",
+        "aliases": [
+            "Dead Flower",
+            "Drooping Flower"
+        ],
+        "emoji": "🥀",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/wilted-flower_1f940.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F940"
+        ]
+    },
+    "1f95d": {
+        "uri": "kiwifruit",
+        "code": "1f95d",
+        "title": "Kiwi Fruit",
+        "description": "A kiwifruit, or Chinese gooseberry, with its fuzzy, brown skin sliced open to show its light-green flesh, white core, and black seeds.\nMay be associated with New Zealand, whose residents are nicknamed Kiwis, after the bird.",
+        "aliases": [
+            "Chinese Gooseberry",
+            "Kiwi"
+        ],
+        "unicodename": "Kiwifruit",
+        "emoji": "🥝",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/kiwifruit_1f95d.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F95D"
+        ]
+    },
+    "1f951": {
+        "uri": "avocado",
+        "code": "1f951",
+        "title": "Avocado",
+        "description": "A pear-shaped avocado, sliced in half to show its yellow-green flesh and large brown pit. Ready for toast, guacamole, or millennial jokes.",
+        "emoji": "🥑",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/avocado_1f951.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F951"
+        ]
+    },
+    "1f954": {
+        "uri": "potato",
+        "code": "1f954",
+        "title": "Potato",
+        "description": "A whole potato—such as a russet, used for baking, mashing, or frying—shown with a few eyes on its golden-brown skin. Not to be confused with the roasted sweet potato.",
+        "aliases": [
+            "Baked Potato",
+            "Idaho Potato"
+        ],
+        "emoji": "🥔",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/potato_1f954.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F954"
+        ]
+    },
+    "1f955": {
+        "uri": "carrot",
+        "code": "1f955",
+        "title": "Carrot",
+        "description": "A whole, bright orange carrot, topped with long green leaves, as if freshly plucked from the garden. Some platforms feature a longer, thinner carrot, others a shorter, more bulbous one.",
+        "emoji": "🥕",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/carrot_1f955.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F955"
+        ]
+    },
+    "1f952": {
+        "uri": "cucumber",
+        "code": "1f952",
+        "title": "Cucumber",
+        "description": "A long, green cucumber with bumpy skin. Resembles its derived product, a pickle or gherkin, on many platforms, except on Apple and WhatsApp, which depict it with light-green, seed-y slices.",
+        "aliases": [
+            "Gherkin",
+            "Pickle"
+        ],
+        "emoji": "🥒",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/cucumber_1f952.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F952"
+        ]
+    },
+    "1f95c": {
+        "uri": "peanuts",
+        "code": "1f95c",
+        "title": "Peanuts",
+        "description": "The pod of the peanut, shown in its rounded, grooved, light-brown shell. Apple depicts a pair.\nMay be used for peanut butter as well as other edible nuts (e.g., almonds) or metaphorical ones, including slang for “crazy” and “testicle.”",
+        "aliases": [
+            "Nuts"
+        ],
+        "emoji": "🥜",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/peanuts_1f95c.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F95C"
+        ]
+    },
+    "1f950": {
+        "uri": "croissant",
+        "code": "1f950",
+        "title": "Croissant",
+        "description": "The flaky, golden-brown crescent of a croissant, a breakfast pastry associated with France and Austria.",
+        "emoji": "🥐",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/croissant_1f950.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F950"
+        ]
+    },
+    "1f956": {
+        "uri": "baguette-bread",
+        "code": "1f956",
+        "title": "Baguette Bread",
+        "description": "The long, thin loaf of a baguette, with scoring on its golden-brown crust. A bread commonly associated with France.",
+        "aliases": [
+            "French Bread"
+        ],
+        "emoji": "🥖",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/baguette-bread_1f956.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F956"
+        ]
+    },
+    "1f95e": {
+        "uri": "pancakes",
+        "code": "1f95e",
+        "title": "Pancakes",
+        "description": "A stack of breakfast pancakes, topped with a pad of butter and maple syrup oozing down its golden-brown sides, onto a plate on some platforms. Associated with the Christian observance of Shrove Tuesday, or \"Pancake Day.\"",
+        "aliases": [
+            "Crêpes",
+            "Hotcakes"
+        ],
+        "emoji": "🥞",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/pancakes_1f95e.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F95E"
+        ]
+    },
+    "1f953": {
+        "uri": "bacon",
+        "code": "1f953",
+        "title": "Bacon",
+        "description": "Strips of crispy, fatty, reddish-brown bacon, as fried for breakfast. Depicted as a pair on most platforms.",
+        "aliases": [
+            "Rashers"
+        ],
+        "emoji": "🥓",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/bacon_1f953.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F953"
+        ]
+    },
+    "1f959": {
+        "uri": "stuffed-flatbread",
+        "code": "1f959",
+        "title": "Stuffed Flatbread",
+        "description": "A flatbread, like pita, stuffed with lettuce, tomato, and/or meat. Resembles a doner kebab, falafel, shawarma, or gyro sandwich, popular in the Middle East and the Mediterranean. Apple and WhatsApp add red onion and cucumber. Not to be confused with the Burrito.",
+        "aliases": [
+            "Doner Kebab",
+            "Gyro",
+            "Shawarma"
+        ],
+        "emoji": "🥙",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/stuffed-flatbread_1f959.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F959"
+        ]
+    },
+    "1f95a": {
+        "uri": "egg",
+        "code": "1f95a",
+        "title": "Egg",
+        "description": "An egg, most commonly displayed as a chicken egg with a white or light brown shell. May be used in cooking.",
+        "emoji": "🥚",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/egg_1f95a.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F95A"
+        ]
+    },
+    "1f958": {
+        "uri": "shallow-pan-of-food",
+        "code": "1f958",
+        "title": "Shallow Pan of Food",
+        "description": "A flat, shallow, black pan with side handles, containing saffron-colored rice, vegetables, a leg of poultry, and/or shrimp and lemon slices. Commonly associated with paella, a traditional dish from Spain. May be used for eating, cooking, dining, and meals more generally.\nApple's version of this emoji is considered to be representative of the traditional ingredients from Valencia. Samsung previously displayed this emoji as a Korean hot pot.",
+        "aliases": [
+            "Paella"
+        ],
+        "emoji": "🥘",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/shallow-pan-of-food_1f958.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F958"
+        ]
+    },
+    "1f957": {
+        "uri": "green-salad",
+        "code": "1f957",
+        "title": "Green Salad",
+        "description": "An undressed garden salad in a bowl with leafy-green lettuce and other ingredients such as tomato, red onion, and black olives. Commonly associated with healthy eating and living.\nGoogle previously displayed a hard-boiled egg, removed in 2018 to make the salad vegan-friendly.",
+        "aliases": [
+            "Salad"
+        ],
+        "emoji": "🥗",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/green-salad_1f957.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F957"
+        ]
+    },
+    "1f990": {
+        "uri": "shrimp",
+        "code": "1f990",
+        "title": "Shrimp",
+        "description": "A shrimp (prawn), a small crustacean with a long tail. Generally depicted as a reddish-orange shrimp (as cooked) in full profile facing left, with tiny eyes, many limbs, and its long antennae curling back as its long tail curls in.\nMay be consumed in the form of 🍤 Fried Shrimp or 🥘 Shallow Pan of Food. Often used to represent seafood.\nThe antennae of Apple’s shrimp curls under its body. The body of Facebook’s shrimp is straight. Google and Samsung’s shrimp previously faced right.",
+        "aliases": [
+            "Prawn"
+        ],
+        "emoji": "🦐",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/shrimp_1f990.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F990"
+        ]
+    },
+    "1f991": {
+        "uri": "squid",
+        "code": "1f991",
+        "title": "Squid",
+        "description": "A squid, an octopus-like sea animal with ten arms. Generally depicted as a pinkish-orange giant squid, facing forward or angled to the left, with a slender, arrow-like body, small eyes, and two, long arms raised up at its sides. Platforms generally depict six arms.\nOccasionally used to represent squid as a food item. Not to be confused with 🐙 Octopus, though their applications may overlap.\nMicrosoft, WhatsApp, and Twitter’s squids are facing forward. Samsung’s squid was previously gray.",
+        "emoji": "🦑",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/squid_1f991.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F991"
+        ]
+    },
+    "1f93c-1f3fb": {
+        "uri": "wrestlers-type-1-2",
+        "code": "1f93c-1f3fb",
+        "title": "Wrestlers, Type-1-2",
+        "description": "This version of the 🤼 People Wrestling emoji\nhas the 🏻 Light Skin Tone\napplied, which is displayed as a Pale Skin Tone\non supported platforms.",
+        "emoji": "🤼🏻",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/google/223/wrestlers_emoji-modifier-fitzpatrick-type-1-2_1f93c-1f3fb_1f3fb.png",
+            "ver": "Google Android 10.0"
+        },
+        "codepoints": [
+            "U+1F93C",
+            "U+1F3FB"
+        ]
+    },
+    "1f93c-1f3fc": {
+        "uri": "wrestlers-type-3",
+        "code": "1f93c-1f3fc",
+        "title": "Wrestlers, Type-3",
+        "description": "This version of the 🤼 People Wrestling emoji\nhas the 🏼 Medium-Light Skin Tone\napplied, which is displayed as a Cream White Skin Tone\non supported platforms.",
+        "emoji": "🤼🏼",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/google/223/wrestlers_emoji-modifier-fitzpatrick-type-3_1f93c-1f3fc_1f3fc.png",
+            "ver": "Google Android 10.0"
+        },
+        "codepoints": [
+            "U+1F93C",
+            "U+1F3FC"
+        ]
+    },
+    "1f93c-1f3fd": {
+        "uri": "wrestlers-type-4",
+        "code": "1f93c-1f3fd",
+        "title": "Wrestlers, Type-4",
+        "description": "This version of the 🤼 People Wrestling emoji\nhas the 🏽 Medium Skin Tone\napplied, which is displayed as a Moderate Brown Skin Tone\non supported platforms.",
+        "emoji": "🤼🏽",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/google/223/wrestlers_emoji-modifier-fitzpatrick-type-4_1f93c-1f3fd_1f3fd.png",
+            "ver": "Google Android 10.0"
+        },
+        "codepoints": [
+            "U+1F93C",
+            "U+1F3FD"
+        ]
+    },
+    "1f93c-1f3fe": {
+        "uri": "wrestlers-type-5",
+        "code": "1f93c-1f3fe",
+        "title": "Wrestlers, Type-5",
+        "description": "This version of the 🤼 People Wrestling emoji\nhas the 🏾 Medium-Dark Skin Tone\napplied, which is displayed as a Dark Brown Skin Tone\non supported platforms.",
+        "emoji": "🤼🏾",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/google/223/wrestlers_emoji-modifier-fitzpatrick-type-5_1f93c-1f3fe_1f3fe.png",
+            "ver": "Google Android 10.0"
+        },
+        "codepoints": [
+            "U+1F93C",
+            "U+1F3FE"
+        ]
+    },
+    "1f93c-1f3ff": {
+        "uri": "wrestlers-type-6",
+        "code": "1f93c-1f3ff",
+        "title": "Wrestlers, Type-6",
+        "description": "This version of the 🤼 People Wrestling emoji\nhas the 🏿 Dark Skin Tone\napplied, which is displayed as a Black Skin Tone\non supported platforms.",
+        "emoji": "🤼🏿",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/google/223/wrestlers_emoji-modifier-fitzpatrick-type-6_1f93c-1f3ff_1f3ff.png",
+            "ver": "Google Android 10.0"
+        },
+        "codepoints": [
+            "U+1F93C",
+            "U+1F3FF"
+        ]
+    },
+    "1f95b": {
+        "uri": "glass-of-milk",
+        "code": "1f95b",
+        "title": "Glass of Milk",
+        "description": "A tall glass of white milk, as from a cow but also other mammals, nuts, or plants. Most platforms depict a glass filled near to the brim, but some show a glass half-full—or half-empty.",
+        "aliases": [
+            "Milk"
+        ],
+        "emoji": "🥛",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/glass-of-milk_1f95b.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F95B"
+        ]
+    },
+    "1f942": {
+        "uri": "clinking-glasses",
+        "code": "1f942",
+        "title": "Clinking Glasses",
+        "description": "Two flutes of champagne or sparkling wine being clinked together, as done at a celebratory or convivial toast (“Cheers!”). Samsung’s design suggests two glasses of white wine. Some platforms include stylized links to mark the clinking. See also Clinking Beer Mugs—and Bottle With Popping Cork for a refill.",
+        "aliases": [
+            "Celebration",
+            "Champagne Glasses",
+            "Cheers"
+        ],
+        "emoji": "🥂",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/clinking-glasses_1f942.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F942"
+        ]
+    },
+    "1f943": {
+        "uri": "tumbler-glass",
+        "code": "1f943",
+        "title": "Tumbler Glass",
+        "description": "A short, flat glass, as used for brown liquors like whiskey or Scotch whisky. Apple and WhatsApp serve theirs neat, while other platforms include ice (\"on the rocks\"). Samsung's glass features the faint initials ONI, an apparent in-company easter egg.",
+        "aliases": [
+            "Bourbon",
+            "Liquor",
+            "Rum",
+            "Whiskey",
+            "Whisky"
+        ],
+        "emoji": "🥃",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/tumbler-glass_1f943.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F943"
+        ]
+    },
+    "1f944": {
+        "uri": "spoon",
+        "code": "1f944",
+        "title": "Spoon",
+        "description": "A silver spoon, as used to eat soup, cereal, or ice cream as well as serve food or stir drinks. Positioned at various angles across platforms. May be paired with Fork and Knife, Fork and Knife With Plate, and Bowl With Spoon.",
+        "emoji": "🥄",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/spoon_1f944.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F944"
+        ]
+    },
+    "1f6f5": {
+        "uri": "motor-scooter",
+        "code": "1f6f5",
+        "title": "Motor Scooter",
+        "description": "A motor scooter, which may be displayed as any type of motorbike with or without a step-through frame. Distinct from the racing motorcycle, which is used for sport, not transport.",
+        "aliases": [
+            "Motor Bike",
+            "Motor Cycle",
+            "Vespa"
+        ],
+        "emoji": "🛵",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/motor-scooter_1f6f5.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F6F5"
+        ]
+    },
+    "1f6f4": {
+        "uri": "scooter",
+        "code": "1f6f4",
+        "title": "Kick Scooter",
+        "description": "A non-motorized scooter, with two wheels and handles.",
+        "unicodename": "Scooter",
+        "emoji": "🛴",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/scooter_1f6f4.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F6F4"
+        ]
+    },
+    "1f6d1": {
+        "uri": "octagonal-sign",
+        "code": "1f6d1",
+        "title": "Stop Sign",
+        "description": "A red, octagonal sign. Used in many countries as a stop sign.",
+        "aliases": [
+            "Stop Sign"
+        ],
+        "unicodename": "Octagonal Sign",
+        "emoji": "🛑",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/octagonal-sign_1f6d1.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F6D1"
+        ]
+    },
+    "1f6f6": {
+        "uri": "canoe",
+        "code": "1f6f6",
+        "title": "Canoe",
+        "description": "",
+        "emoji": "🛶",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/canoe_1f6f6.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F6F6"
+        ]
+    },
+    "1f947": {
+        "uri": "first-place-medal",
+        "code": "1f947",
+        "title": "1st Place Medal",
+        "description": "",
+        "aliases": [
+            "Gold Medal"
+        ],
+        "unicodename": "First Place Medal",
+        "emoji": "🥇",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/first-place-medal_1f947.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F947"
+        ]
+    },
+    "1f948": {
+        "uri": "second-place-medal",
+        "code": "1f948",
+        "title": "2nd Place Medal",
+        "description": "",
+        "aliases": [
+            "Silver Medal"
+        ],
+        "unicodename": "Second Place Medal",
+        "emoji": "🥈",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/second-place-medal_1f948.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F948"
+        ]
+    },
+    "1f949": {
+        "uri": "third-place-medal",
+        "code": "1f949",
+        "title": "3rd Place Medal",
+        "description": "",
+        "aliases": [
+            "Bronze Medal"
+        ],
+        "unicodename": "Third Place Medal",
+        "emoji": "🥉",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/third-place-medal_1f949.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F949"
+        ]
+    },
+    "1f94a": {
+        "uri": "boxing-glove",
+        "code": "1f94a",
+        "title": "Boxing Glove",
+        "description": "A padded boxing glove, used in the sport of boxing. Usually red.",
+        "emoji": "🥊",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/boxing-glove_1f94a.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F94A"
+        ]
+    },
+    "1f94b": {
+        "uri": "martial-arts-uniform",
+        "code": "1f94b",
+        "title": "Martial Arts Uniform",
+        "description": "A white uniform used in marital arts such as judo or karate. Held together using a material belt. Known as keikogi in Japanese.",
+        "aliases": [
+            "Judo"
+        ],
+        "emoji": "🥋",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/martial-arts-uniform_1f94b.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F94B"
+        ]
+    },
+    "1f945": {
+        "uri": "goal-net",
+        "code": "1f945",
+        "title": "Goal Net",
+        "description": "",
+        "emoji": "🥅",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/goal-net_1f945.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F945"
+        ]
+    },
+    "1f941": {
+        "uri": "drum-with-drumsticks",
+        "code": "1f941",
+        "title": "Drum",
+        "description": "A drum shown with drumsticks. A percussion instrument which is likely to be displayed as a snare drum.",
+        "unicodename": "Drum With Drumsticks",
+        "emoji": "🥁",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/drum-with-drumsticks_1f941.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F941"
+        ]
+    },
+    "1f6d2": {
+        "uri": "shopping-trolley",
+        "code": "1f6d2",
+        "title": "Shopping Cart",
+        "description": "",
+        "aliases": [
+            "Shopping Cart"
+        ],
+        "unicodename": "Shopping Trolley",
+        "emoji": "🛒",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/shopping-trolley_1f6d2.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+1F6D2"
+        ]
+    },
+    "0023-fe0f-20e3": {
+        "uri": "keycap-number-sign",
+        "code": "0023-fe0f-20e3",
+        "title": "Keycap Number Sign",
+        "description": "A hash key, sometimes referred to as a pound key in the United States. Most commonly used online to make a hashtag (or hash flag) on social media sites.\nThe Keycap Number Sign emoji is a sequence of the # Number Sign and ⃣ Combining Enclosing Keycap emojis.\nThese display as a single emoji on supported platforms.",
+        "aliases": [
+            "Hash Key",
+            "Hashtag",
+            "Octothorpe",
+            "Pound Key"
+        ],
+        "emoji": "#️⃣",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/keycap-number-sign_23-fe0f-20e3.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "shortcodes": [
+            ":hash:"
+        ],
+        "codepoints": [
+            "U+23",
+            "U+FE0F",
+            "U+20E3"
+        ]
+    },
+    "002a-fe0f-20e3": {
+        "uri": "keycap-asterisk",
+        "code": "002a-fe0f-20e3",
+        "title": "Keycap Asterisk",
+        "description": "The Keycap Asterisk emoji is a sequence of the * Asterisk and ⃣ Combining Enclosing Keycap emojis.\nThese display as a single emoji on supported platforms.",
+        "aliases": [
+            "Star Keycap"
+        ],
+        "emoji": "*️⃣",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/keycap-asterisk_2a-fe0f-20e3.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "codepoints": [
+            "U+2A",
+            "U+FE0F",
+            "U+20E3"
+        ]
+    },
+    "0030-fe0f-20e3": {
+        "uri": "keycap-digit-zero",
+        "code": "0030-fe0f-20e3",
+        "title": "Keycap Digit Zero",
+        "description": "The Keycap Digit Zero emoji is a sequence of the 0 Digit Zero and ⃣ Combining Enclosing Keycap emojis.\nThese display as a single emoji on supported platforms.",
+        "emoji": "0️⃣",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/keycap-digit-zero_30-fe0f-20e3.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "shortcodes": [
+            ":zero:"
+        ],
+        "codepoints": [
+            "U+30",
+            "U+FE0F",
+            "U+20E3"
+        ]
+    },
+    "0031-fe0f-20e3": {
+        "uri": "keycap-digit-one",
+        "code": "0031-fe0f-20e3",
+        "title": "Keycap Digit One",
+        "description": "The Keycap Digit One emoji is a sequence of the 1 Digit One and ⃣ Combining Enclosing Keycap emojis.\nThese display as a single emoji on supported platforms.",
+        "emoji": "1️⃣",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/keycap-digit-one_31-fe0f-20e3.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "shortcodes": [
+            ":one:"
+        ],
+        "codepoints": [
+            "U+31",
+            "U+FE0F",
+            "U+20E3"
+        ]
+    },
+    "0032-fe0f-20e3": {
+        "uri": "keycap-digit-two",
+        "code": "0032-fe0f-20e3",
+        "title": "Keycap Digit Two",
+        "description": "The Keycap Digit Two emoji is a sequence of the 2 Digit Two and ⃣ Combining Enclosing Keycap emojis.\nThese display as a single emoji on supported platforms.",
+        "emoji": "2️⃣",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/keycap-digit-two_32-fe0f-20e3.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "shortcodes": [
+            ":two:"
+        ],
+        "codepoints": [
+            "U+32",
+            "U+FE0F",
+            "U+20E3"
+        ]
+    },
+    "0033-fe0f-20e3": {
+        "uri": "keycap-digit-three",
+        "code": "0033-fe0f-20e3",
+        "title": "Keycap Digit Three",
+        "description": "The Keycap Digit Three emoji is a sequence of the 3 Digit Three and ⃣ Combining Enclosing Keycap emojis.\nThese display as a single emoji on supported platforms.",
+        "emoji": "3️⃣",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/keycap-digit-three_33-fe0f-20e3.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "shortcodes": [
+            ":three:"
+        ],
+        "codepoints": [
+            "U+33",
+            "U+FE0F",
+            "U+20E3"
+        ]
+    },
+    "0034-fe0f-20e3": {
+        "uri": "keycap-digit-four",
+        "code": "0034-fe0f-20e3",
+        "title": "Keycap Digit Four",
+        "description": "The Keycap Digit Four emoji is a sequence of the 4 Digit Four and ⃣ Combining Enclosing Keycap emojis.\nThese display as a single emoji on supported platforms.",
+        "emoji": "4️⃣",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/keycap-digit-four_34-fe0f-20e3.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "shortcodes": [
+            ":four:"
+        ],
+        "codepoints": [
+            "U+34",
+            "U+FE0F",
+            "U+20E3"
+        ]
+    },
+    "0035-fe0f-20e3": {
+        "uri": "keycap-digit-five",
+        "code": "0035-fe0f-20e3",
+        "title": "Keycap Digit Five",
+        "description": "The Keycap Digit Five emoji is a sequence of the 5 Digit Five and ⃣ Combining Enclosing Keycap emojis.\nThese display as a single emoji on supported platforms.",
+        "emoji": "5️⃣",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/keycap-digit-five_35-fe0f-20e3.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "shortcodes": [
+            ":five:"
+        ],
+        "codepoints": [
+            "U+35",
+            "U+FE0F",
+            "U+20E3"
+        ]
+    },
+    "0036-fe0f-20e3": {
+        "uri": "keycap-digit-six",
+        "code": "0036-fe0f-20e3",
+        "title": "Keycap Digit Six",
+        "description": "The Keycap Digit Six emoji is a sequence of the 6 Digit Six and ⃣ Combining Enclosing Keycap emojis.\nThese display as a single emoji on supported platforms.",
+        "emoji": "6️⃣",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/keycap-digit-six_36-fe0f-20e3.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "shortcodes": [
+            ":six:"
+        ],
+        "codepoints": [
+            "U+36",
+            "U+FE0F",
+            "U+20E3"
+        ]
+    },
+    "0037-fe0f-20e3": {
+        "uri": "keycap-digit-seven",
+        "code": "0037-fe0f-20e3",
+        "title": "Keycap Digit Seven",
+        "description": "The Keycap Digit Seven emoji is a sequence of the 7 Digit Seven and ⃣ Combining Enclosing Keycap emojis.\nThese display as a single emoji on supported platforms.",
+        "emoji": "7️⃣",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/keycap-digit-seven_37-fe0f-20e3.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "shortcodes": [
+            ":seven:"
+        ],
+        "codepoints": [
+            "U+37",
+            "U+FE0F",
+            "U+20E3"
+        ]
+    },
+    "0038-fe0f-20e3": {
+        "uri": "keycap-digit-eight",
+        "code": "0038-fe0f-20e3",
+        "title": "Keycap Digit Eight",
+        "description": "The Keycap Digit Eight emoji is a sequence of the 8 Digit Eight and ⃣ Combining Enclosing Keycap emojis.\nThese display as a single emoji on supported platforms.",
+        "emoji": "8️⃣",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/keycap-digit-eight_38-fe0f-20e3.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "shortcodes": [
+            ":eight:"
+        ],
+        "codepoints": [
+            "U+38",
+            "U+FE0F",
+            "U+20E3"
+        ]
+    },
+    "0039-fe0f-20e3": {
+        "uri": "keycap-digit-nine",
+        "code": "0039-fe0f-20e3",
+        "title": "Keycap Digit Nine",
+        "description": "The Keycap Digit Nine emoji is a sequence of the 9 Digit Nine and ⃣ Combining Enclosing Keycap emojis.\nThese display as a single emoji on supported platforms.",
+        "emoji": "9️⃣",
+        "image": {
+            "src": "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/240/apple/232/keycap-digit-nine_39-fe0f-20e3.png",
+            "ver": "Apple iOS 13.2"
+        },
+        "shortcodes": [
+            ":nine:"
+        ],
+        "codepoints": [
+            "U+39",
+            "U+FE0F",
+            "U+20E3"
+        ]
+    }
+}
