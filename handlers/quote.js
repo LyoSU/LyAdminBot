@@ -183,13 +183,13 @@ async function drawMultilineText (ctx, text, entities, fontSize, fillStyle, text
 
     let lineWidth = lineX + ctx.measureText(styledWord.word).width
 
-    if (lineWidth > textWidth) textWidth = lineWidth
-
     if (styledWord.word.match(breakMatch) || lineWidth > maxWidth) {
       lineWidth = textX + ctx.measureText(styledWord.word).width
       lineX = textX
       lineY += lineHeight
     }
+
+    if (lineWidth > textWidth) textWidth = lineWidth
 
     if (emoji) {
       const emojiSize = fontSize / 2
@@ -423,7 +423,7 @@ module.exports = async (ctx) => {
     console.timeEnd('drawMultilineText')
 
     let stickHeight = textSize.height - 20
-    let stickWidth = textSize.width - 90
+    let stickWidth = textSize.width - 70
 
     // stickWidth = 512
 
