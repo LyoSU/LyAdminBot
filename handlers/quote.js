@@ -119,15 +119,17 @@ async function drawMultilineText (ctx, text, entities, fontSize, fillStyle, text
 
   let stringNum = 0
 
+  const breakMatch = /<br>|\n|\r/
+  const spaceMatch = /\s/
+
   for (let index = 0; index < styledChart.length; index++) {
     const chartStyle = styledChart[index]
     const lastChart = styledChart[index - 1]
 
-    const spaceMatch = /\s|\n|\r/
-
     if (
       lastChart && (
         (chartStyle.style.includes('emoji')) ||
+        (chartStyle.chart.match(breakMatch)) ||
         (chartStyle.chart.match(spaceMatch) && !lastChart.chart.match(spaceMatch)) ||
         (lastChart.chart.match(spaceMatch) && !chartStyle.chart.match(spaceMatch)) ||
         (chartStyle.style && lastChart.style && chartStyle.style.toString() !== lastChart.style.toString())
@@ -183,7 +185,7 @@ async function drawMultilineText (ctx, text, entities, fontSize, fillStyle, text
 
     if (lineWidth > textWidth) textWidth = lineWidth
 
-    if (lineWidth > maxWidth) {
+    if (styledWord.word.match(breakMatch) || lineWidth > maxWidth) {
       lineWidth = textX + ctx.measureText(styledWord.word).width
       lineX = textX
       lineY += lineHeight
