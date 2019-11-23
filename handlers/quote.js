@@ -283,7 +283,7 @@ module.exports = async (ctx) => {
   if (ctx.message.reply_to_message && (ctx.message.reply_to_message.text || ctx.message.reply_to_message.caption)) {
     // settings
     const maxWidth = 512
-    const maxHeight = 512
+    const maxHeight = 1024
 
     // set parms
     const replyMessage = ctx.message.reply_to_message
