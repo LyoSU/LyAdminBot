@@ -139,7 +139,7 @@ async function drawMultilineText (ctx, text, entities, fontSize, fillStyle, text
       const getEmoji = emojipedia.getEmoji(styledWord.word)
       let emojiDb = emojipedia.emojiDb[getEmoji]
       if (emojiDb.redirect) emojiDb = emojipedia.emojiDb[emojiDb.redirect]
-      const emojiPng = `${emojiDataPatch}${getEmoji.join('-')}.png`
+      const emojiPng = `${emojiDataPatch}${emojiDb.code}.png`
       try {
         emojiImage = await loadImageFromPatch(emojiPng)
       } catch (error) {
