@@ -7,7 +7,7 @@ const {
   emojipedia
 } = require('../helpers')
 
-const emojiDataPatch = './node_modules/emoji-datasource-apple/img/apple/64/'
+const emojiDataPatch = './helpers/emoji/image/'
 
 const fontsDir = 'assets/fonts/'
 
@@ -133,7 +133,7 @@ async function drawMultilineText (ctx, text, entities, fontSize, fillStyle, text
   for (let index = 0; index < styledWords.length; index++) {
     const styledWord = styledWords[index]
 
-    let emoji
+    let emojiImage
 
     if (styledWord.style.includes('emoji')) {
       const getEmoji = emojipedia.getEmoji(styledWord.word)
@@ -141,9 +141,9 @@ async function drawMultilineText (ctx, text, entities, fontSize, fillStyle, text
       if (emojiDb.redirect) emojiDb = emojipedia.emojiDb[emojiDb.redirect]
       const emojiPng = `${emojiDataPatch}${getEmoji.join('-')}.png`
       try {
-        emoji = await loadImageFromPatch(emojiPng)
+        emojiImage = await loadImageFromPatch(emojiPng)
       } catch (error) {
-        emoji = await loadImageFromUrl(emojiDb.image.src)
+        if (emojiDb.image && emojiDb.image.src) emojiImage = await loadImageFromUrl(emojiDb.image.src)
       }
     } else if (styledWord.style.includes('bold')) {
       ctx.font = `bold ${fontSize}px OpenSans`
@@ -185,8 +185,8 @@ async function drawMultilineText (ctx, text, entities, fontSize, fillStyle, text
 
     if (lineWidth > textWidth) textWidth = lineWidth
 
-    if (emoji) {
-      ctx.drawImage(emoji, lineX, lineY - fontSize, fontSize + 5, fontSize + 5)
+    if (emojiImage) {
+      ctx.drawImage(emojiImage, lineX, lineY - fontSize, fontSize + 5, fontSize + 5)
     } else {
       ctx.fillText(styledWord.word, lineX, lineY)
     }
@@ -375,21 +375,9 @@ module.exports = async (ctx) => {
     if (backStyle === 'light') canvasСtx.fillStyle = nickColorLight[nickMap[nickIndex]]
     else canvasСtx.fillStyle = nickColorBlack[nickMap[nickIndex]]
 
-    // nick max length
-
-    // if (nickWidth > nickMaxLength) {
-    //   while (nickWidth > nickMaxLength) {
-    //     nick = nick.substr(0, nick.length - 1)
-    //     nickWidth = canvasСtx.measureText(nick).width
-    //   }
-
-    //   nick += '…'
-    // }
-
-    // render nick
-    // canvasСtx.fillText(nick, 110, 30)
-
-    const nickTextSize = await drawMultilineText(canvasСtx, nick, 'bold', 22, canvasСtx.fillStyle, 110, 30, maxWidth, 0, 0)
+    console.time(`drawNick`)
+    const nickTextSize = await drawMultilineText(canvasСtx, nick, 'bold', 22, canvasСtx.fillStyle, 110, 30, maxWidth - 15, 0, 0)
+    console.timeEnd(`drawNick`)
 
     const minFontSize = 25
     const maxFontSize = 34
@@ -406,15 +394,15 @@ module.exports = async (ctx) => {
     const drawTextX = 110
     const drawTextY = 45 + canvasСtx.measureText('test').emHeightAscent
 
-    console.time('drawMultilineText')
+    console.time(`drawText`)
     const canvasMultilineText = canvas.getContext('2d')
 
     let textColor = '#fff'
     if (backStyle === 'light') textColor = '#000'
 
-    const textSize = await drawMultilineText(canvasMultilineText, text, replyMessage.entities, preTextSize, textColor, drawTextX, drawTextY, maxWidth, 512, lineHeight)
+    const textSize = await drawMultilineText(canvasMultilineText, text, replyMessage.entities, preTextSize, textColor, drawTextX, drawTextY, maxWidth - 15, maxHeight - 15, lineHeight)
 
-    console.timeEnd('drawMultilineText')
+    console.timeEnd(`drawText`)
 
     let stickHeight = textSize.height - 20
     let stickWidth = textSize.width - 70
@@ -433,8 +421,6 @@ module.exports = async (ctx) => {
     const canvasBackСtx = canvasQuote.getContext('2d')
 
     canvasBackСtx.fillStyle = backgroundColor
-    // canvasBackСtx.fillRect(152, 0, 275, stickHeight + 43);
-    // canvasBackСtx.fillRect(100, 43, 400, stickHeight - 42);
 
     const notchLeftUpPic = await loadImageFromPatch('./assets/notch/left_up.png')
 
