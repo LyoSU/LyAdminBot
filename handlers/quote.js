@@ -405,16 +405,16 @@ module.exports = async (ctx) => {
     console.timeEnd(`drawText`)
 
     let stickHeight = textSize.height - 20
-    let stickWidth = textSize.width - 70
+    let stickWidth = textSize.width - 60
 
-    const nickWidth = nickTextSize.width - 70
+    const nickWidth = nickTextSize.width - 60
 
     if (stickWidth < nickWidth) stickWidth = nickWidth
 
     if (stickHeight > maxHeight) stickHeight = maxHeight
     if (stickWidth > maxWidth) stickWidth = maxWidth
 
-    let canvasHeight = stickHeight + 40
+    let canvasHeight = stickHeight + 60
     let canvasWidth = stickWidth + 90
 
     const canvasQuote = createCanvas(canvasWidth, canvasHeight)
