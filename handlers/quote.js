@@ -80,9 +80,9 @@ async function drawMultilineText (ctx, text, entities, fontSize, fillStyle, text
 
     if (entities && typeof entities === 'string') style.push(entities)
 
-    const emojiCheck = emojipedia.getEmoji(chart)
+    const checkEmoji = emojipedia.getEmoji(chart)
 
-    if (emojiCheck.length > 0) style.push('emoji')
+    if (checkEmoji.length > 0) style.push('emoji')
 
     styledChart.push({
       chart,
@@ -136,10 +136,10 @@ async function drawMultilineText (ctx, text, entities, fontSize, fillStyle, text
     let emoji
 
     if (styledWord.style.includes('emoji')) {
-      const emojiCheck = emojipedia.getEmoji(styledWord.word)
-      let emojiDb = emojipedia.emojiDb[emojiCheck]
+      const getEmoji = emojipedia.getEmoji(styledWord.word)
+      let emojiDb = emojipedia.emojiDb[getEmoji]
       if (emojiDb.redirect) emojiDb = emojipedia.emojiDb[emojiDb.redirect]
-      const emojiPng = `${emojiDataPatch}${emojiCheck.join('-')}.png`
+      const emojiPng = `${emojiDataPatch}${getEmoji.join('-')}.png`
       try {
         emoji = await loadImageFromPatch(emojiPng)
       } catch (error) {
