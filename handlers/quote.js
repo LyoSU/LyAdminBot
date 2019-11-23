@@ -377,8 +377,11 @@ module.exports = async (ctx) => {
     if (backStyle === 'light') canvasСtx.fillStyle = nickColorLight[nickMap[nickIndex]]
     else canvasСtx.fillStyle = nickColorBlack[nickMap[nickIndex]]
 
+    const drawNickX = 100
+    const drawNickY = 30
+
     console.time(`drawNick`)
-    const nickTextSize = await drawMultilineText(canvasСtx, nick, 'bold', 22, canvasСtx.fillStyle, 110, 30, maxWidth - 15, 0, 0)
+    const nickTextSize = await drawMultilineText(canvasСtx, nick, 'bold', 22, canvasСtx.fillStyle, drawNickX, drawNickY, maxWidth - 15, 0, 0)
     console.timeEnd(`drawNick`)
 
     const minFontSize = 25
@@ -393,16 +396,15 @@ module.exports = async (ctx) => {
 
     canvasСtx.font = `${preTextSize}px OpenSans`
 
-    const drawTextX = 110
-    const drawTextY = 45 + canvasСtx.measureText('test').emHeightAscent
+    const drawTextX = drawNickX
+    const drawTextY = drawNickY + 15 + canvasСtx.measureText('test').emHeightAscent
 
     console.time(`drawText`)
-    const canvasMultilineText = canvas.getContext('2d')
 
     let textColor = '#fff'
     if (backStyle === 'light') textColor = '#000'
 
-    const textSize = await drawMultilineText(canvasMultilineText, text, replyMessage.entities, preTextSize, textColor, drawTextX, drawTextY, maxWidth - 15, maxHeight - 15, lineHeight)
+    const textSize = await drawMultilineText(canvasСtx, text, replyMessage.entities, preTextSize, textColor, drawTextX, drawTextY, maxWidth - 15, maxHeight - 15, lineHeight)
 
     console.timeEnd(`drawText`)
 
@@ -424,21 +426,21 @@ module.exports = async (ctx) => {
 
     canvasBackСtx.fillStyle = backgroundColor
 
-    const notchLeftUpPic = await loadImageFromPatch('./assets/notch/left_up.png')
+    // const notchPic = await loadImageFromPatch('./assets/notch.png')
 
-    const canvasNotch = createCanvas(72, 43)
-    const canvasNotchСtx = canvasNotch.getContext('2d')
+    // const canvasNotch = createCanvas(30, 18)
+    // const canvasNotchСtx = canvasNotch.getContext('2d')
 
-    canvasNotchСtx.drawImage(notchLeftUpPic, 0, 0, 72, 43)
+    // canvasNotchСtx.drawImage(notchPic, 0, 0, 30, 18)
 
-    canvasNotchСtx.globalCompositeOperation = 'source-in'
+    // canvasNotchСtx.globalCompositeOperation = 'source-in'
 
-    canvasNotchСtx.fillStyle = backgroundColor
-    canvasNotchСtx.fillRect(0, 0, 72, 43)
+    // canvasNotchСtx.fillStyle = backgroundColor
+    // canvasNotchСtx.fillRect(0, 0, 30, 18)
 
-    canvasBackСtx.drawImage(canvasNotch, 80, 0)
+    // canvasBackСtx.drawImage(canvasNotch, 80, 0)
 
-    drawRoundRect(canvasBackСtx, 90, 0, stickWidth, stickHeight + 43, 25, '#fff', false)
+    drawRoundRect(canvasBackСtx, 80, 0, stickWidth, stickHeight + 43, 25, '#fff', false)
 
     const avatarSize = 30
 
