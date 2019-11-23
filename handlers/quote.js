@@ -416,7 +416,7 @@ module.exports = async (ctx) => {
     if (stickHeight > maxHeight) stickHeight = maxHeight
     if (stickWidth > maxWidth) stickWidth = maxWidth
 
-    let canvasHeight = stickHeight + 60
+    let canvasHeight = stickHeight + 45
     let canvasWidth = stickWidth + 90
 
     const canvasQuote = createCanvas(canvasWidth, canvasHeight)
@@ -492,7 +492,7 @@ module.exports = async (ctx) => {
 
     const imageMetadata = await sharp(await imageQuoteSharp.toBuffer()).metadata()
 
-    const canvasSticker = createCanvas(imageMetadata.width, imageMetadata.height + 75)
+    const canvasSticker = createCanvas(imageMetadata.width, imageMetadata.height + 65)
     const canvasStickerСtx = canvasSticker.getContext('2d')
 
     const imgQuote = new Image()
