@@ -172,12 +172,14 @@ async function drawMultilineText (ctx, text, entities, fontSize, fillStyle, text
         while (lineWidth > maxWidth) {
           styledWord.word = styledWord.word.substr(0, styledWord.word.length - 1)
           lineWidth = lineX + ctx.measureText(styledWord.word).width
+          if (styledWord.word.length <= 0) break
         }
 
         styledWord.word += '…'
         breakWrite = true
       } else {
-        lineWidth = textX + ctx.measureText(styledWord.word).width
+        if (styledWord.style.includes('emoji')) lineWidth = textX + fontSize + (fontSize * 0.25)
+        else lineWidth = textX + ctx.measureText(styledWord.word).width
         lineX = textX
         lineY += lineHeight
       }
