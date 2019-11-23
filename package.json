@@ -1,6 +1,6 @@
 {
   "name": "lyadminbot",
-  "version": "1.13.0",
+  "version": "1.13.1",
   "description": "Бот для администрирования групп",
   "main": "index.js",
   "scripts": {
@@ -12,8 +12,6 @@
     "canvas": "^2.6.0",
     "dateformat": "^3.0.3",
     "dotenv": "^6.2.0",
-    "emoji-datasource-apple": "^4.1.0",
-    "emoji-regex": "^8.0.0",
     "got": "^9.6.0",
     "humanize-duration": "^3.18.0",
     "languagedetect": "^1.3.0",
