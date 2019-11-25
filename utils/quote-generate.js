@@ -294,45 +294,50 @@ function drawAvatar (avatar) {
   return canvas
 }
 
-function drawQuote (backgroundColor, avarat, nick, text, maxWidth, maxHeight) {
+async function drawQuote (backgroundColor, avarat, nick, text, maxWidth, maxHeight) {
   let width = nick.width
   if (width < text.width) width = text.width
 
   let height = nick.height + text.height
 
-  const blockPosX = 145
+  const blockPosX = 75
   const blockPosY = 0
 
-  const indent = 35
+  const indent = 15
 
   width += blockPosX + (indent * 2)
   height += blockPosY
 
-  const downPadding = 75
-
-  const canvas = createCanvas(width, height + downPadding)
+  const canvas = createCanvas(width, height)
   const canvasCtx = canvas.getContext('2d')
 
-  const rect = drawRoundRect(backgroundColor, width - blockPosX, height, 25, '#fff', false)
+  const rect = drawRoundRect(backgroundColor, width - blockPosX, height - 10, 25, '#fff', false)
 
-  canvasCtx.drawImage(avarat, 0, 0, 125, 125)
+  canvasCtx.drawImage(avarat, 0, 0, 65, 65)
   canvasCtx.drawImage(rect, blockPosX, blockPosY)
   canvasCtx.drawImage(nick, blockPosX + indent, indent)
-  canvasCtx.drawImage(text, blockPosX + indent, nick.height + 10)
+  canvasCtx.drawImage(text, blockPosX + indent, nick.height)
 
   const imageQuoteSharp = sharp(canvas.toBuffer())
 
   if (canvas.height > canvas.width) imageQuoteSharp.resize({ height: maxHeight })
   else imageQuoteSharp.resize({ width: maxWidth })
 
-  const imageCanvas = imageQuoteSharp.webp({ lossless: true, force: true }).toBuffer()
+  const downPadding = 75
 
-  return imageCanvas
+  const canvasImage = await loadCanvasImage(await imageQuoteSharp.toBuffer())
+
+  const canvasPadding = createCanvas(canvasImage.width, canvasImage.height + downPadding)
+  const canvasPaddingCtx = canvasPadding.getContext('2d')
+
+  canvasPaddingCtx.drawImage(canvasImage, 0, 0)
+
+  const quoteImage = sharp(canvasPadding.toBuffer()).webp({ lossless: true, force: true }).toBuffer()
+
+  return quoteImage
 }
 
 module.exports = async (avatar, backgroundColor, userId, nick, text, entities) => {
-  const drawAvatarCanvas = drawAvatar(avatar)
-
   // check background style color black/light
   const backStyle = lightOrDark(backgroundColor)
 
@@ -386,7 +391,7 @@ module.exports = async (avatar, backgroundColor, userId, nick, text, entities) =
 
   const nickSize = 22
 
-  const drawNickCanvas = drawMultilineText(nick, 'bold', nickSize * 2, nickColor, 0, nickSize * 2, width * 2, nickSize * 2)
+  const drawNickCanvas = drawMultilineText(nick, 'bold', nickSize, nickColor, 0, nickSize, width, nickSize)
 
   const minFontSize = 25
   const maxFontSize = 34
@@ -399,13 +404,13 @@ module.exports = async (avatar, backgroundColor, userId, nick, text, entities) =
   let textColor = '#fff'
   if (backStyle === 'light') textColor = '#000'
 
-  const drawTextCanvas = drawMultilineText(text, entities, fontSize * 2, textColor, 0, fontSize * 2, width * 2, height * 2 - fontSize)
+  const drawTextCanvas = drawMultilineText(text, entities, fontSize, textColor, 0, fontSize, width, height - fontSize)
 
   const quote = drawQuote(
     backgroundColor,
-    await drawAvatarCanvas,
+    drawAvatar(avatar),
     await drawNickCanvas, await drawTextCanvas,
-    width * 2, height * 2
+    width, height
   )
 
   return quote
