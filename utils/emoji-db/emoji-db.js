@@ -1,116 +1,53 @@
-class EmojiSearcher {
-    constructor(db) {
-        let smap = {};
-        for (const r in db) {
-            addSmapElement(smap, r);
+const fs = require('fs');
+const EmojiSearcher = require('./emoji-searcher');
+
+function initDb({ dbDir }){
+    // default db filenames
+    const filePrefx = 'emojilist_';
+    const fileSuffx = '.json';
+    // load files
+    let dbFiles = fs.readdirSync(dbDir);
+    // remove non db files
+    dbFiles = dbFiles.filter((dbFile) => {
+        if (!dbFile.endsWith('.json') || !dbFile.startsWith(filePrefx)) {
+            return false;
         }
-        this._smap = smap;
+        return true;
+    });
+    // make emoji db nums
+    dbFiles = dbFiles.map((dbFile) => {
+        return dbFile
+            .replace(new RegExp('^'+filePrefx),'')
+            .replace(new RegExp(fileSuffx+'$'),'');
+    });
+    // sort dbs
+    dbFiles.sort((a, b) => {
+        a = !a.match(/unqualified/) ? parseFloat(a) : Infinity;
+        b = !b.match(/unqualified/) ? parseFloat(b) : Infinity;
+        return a - b;
+    });
+    // load dbs
+    let emojiDbData = {};
+    for (const dbFile of dbFiles) {
+        let loadEmojiDbData = require(dbDir + filePrefx + dbFile + fileSuffx);
+        emojiDbData = Object.assign({}, emojiDbData, loadEmojiDbData);
     }
-    getEmojis(text) {
-        let sp = this._smap;
-        let lastCode = '';
-        let emojis = [];
-        let root = true;
-        for (const rune of text) {
-            const cp = rune.codePointAt(0).toString(16).padStart(4, '0');
-            if (cp in sp) {
-                if ('code' in sp[cp]) {
-                    lastCode = sp[cp].code;
-                }
-                if ('child' in sp[cp]) {
-                    sp = sp[cp].child;
-                    root = false;
-                }
-                else {
-                    if (lastCode != '') {
-                        emojis.push(lastCode);
-                        lastCode = '';
-                    }
-                    sp = this._smap;
-                    root = true;
-                }
-            }
-            else {
-                if (lastCode != '') {
-                    emojis.push(lastCode);
-                    lastCode = '';
-                }
-                sp = this._smap;
-                if (!root) {
-                    root = true;
-                    // retry search in root
-                    if (cp in sp) {
-                        if ('code' in sp[cp]) {
-                            lastCode = sp[cp].code;
-                        }
-                        if ('child' in sp[cp]) {
-                            sp = sp[cp].child;
-                            root = false;
-                        } else {
-                            if (lastCode != '') {
-                                emojis.push(lastCode);
-                                lastCode = '';
-                            }
-                            sp = this._smap;
-                            root = true;
-                        }
-                    }
-                }
-            }
-        }
-        if (lastCode != '') {
-            emojis.push(lastCode);
-        }
-        return emojis;
-    }
+    // return db
+    return emojiDbData;
 }
 
 class EmojiDb {
     constructor({ useDefaultDb, dbDir }) {
-        // set separator
+        // set defaults
         this.codePointSeparator = '-';
-        // default db filenames
-        const filePrefx = 'emojilist_';
-        const fileSuffx = '.json';
-        // load default db
-        if(useDefaultDb){
-            dbDir = __dirname + '/database/';
-        }
+        this.dbData = {};
         // empty db
-        if(!dbDir && !useDefaultDb){
-            this.dbData = {};
+        if(useDefaultDb && !dbDir){
+            dbDir = __dirname + '/database/';
+            this.dbData = initDb({ useDefaultDb, dbDir });
         }
-        // load list
-        else{
-            const fs = require('fs');
-            let dbFiles = fs.readdirSync(dbDir);
-            // remove non db files
-            dbFiles = dbFiles.filter((dbFile) => {
-                if (!dbFile.endsWith('.json') || !dbFile.startsWith(filePrefx)) {
-                    return false;
-                }
-                return true;
-            });
-            // make emoji db nums
-            dbFiles = dbFiles.map((dbFile) => {
-                return dbFile
-                    .replace(new RegExp('^'+filePrefx),'')
-                    .replace(new RegExp(fileSuffx+'$'),'');
-            });
-            // sort dbs
-            dbFiles.sort((a, b) => {
-                a = !a.match(/unqualified/) ? parseFloat(a) : Infinity;
-                b = !b.match(/unqualified/) ? parseFloat(b) : Infinity;
-                return a - b;
-            });
-            // load dbs
-            let emojiDbData = {};
-            for (const dbFile of dbFiles) {
-                let loadEmojiDbData = require(dbDir + filePrefx + dbFile + fileSuffx);
-                emojiDbData = Object.assign({}, emojiDbData, loadEmojiDbData);
-            }
-            // return db
-            this.dbData = emojiDbData;
+        else if(!useDefaultDb && dbDir){
+            this.dbData = initDb({ dbDir });
         }
     }
     searchFromText({ input, fixCodePoints, showData }){
@@ -154,26 +91,6 @@ class EmojiDb {
         }
         return codePointArray;
     }
-}
-
-function addSmapElement(smap, code) {
-    let c = code.split('-');
-    let m = smap;
-    for (let i = 0; i < c.length - 1; i++) {
-        const p = c[i];
-        if (!(p in m)) {
-            m[p] = {};
-        }
-        if (!('child' in m[p])) {
-            m[p].child = {};
-        }
-        m = m[p].child;
-    }
-    let p = c[c.length - 1];
-    if (!(p in m)) {
-        m[p] = {};
-    }
-    m[p].code = code;
 }
 
 function fixEmojiCodePoint(codePoint, dbData){

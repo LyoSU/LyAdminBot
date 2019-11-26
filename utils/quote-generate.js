@@ -81,7 +81,7 @@ function lightOrDark (color) {
   }
 }
 
-async function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, maxWidth, maxHeight) {
+function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, maxWidth, maxHeight) {
   return new Promise(async (resolve, reject) => {
     const canvas = createCanvas(maxWidth + fontSize, maxHeight + fontSize)
     const canvasСtx = canvas.getContext('2d')
@@ -364,7 +364,7 @@ async function drawQuote (backgroundColor, avarat, nick, text, maxWidth, maxHeig
   return quoteImage
 }
 
-module.exports = async (avatar, backgroundColor, userId, nick, text, entities) => {
+module.exports = (avatar, backgroundColor, userId, nick, text, entities) => {
   return new Promise(async (resolve, reject) => {
     // check background style color black/light
     const backStyle = lightOrDark(backgroundColor)
