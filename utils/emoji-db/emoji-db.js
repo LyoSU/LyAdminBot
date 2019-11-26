@@ -1,8 +1,74 @@
+class EmojiSearcher {
+    constructor(db) {
+        let smap = {};
+        for (const r in db) {
+            addSmapElement(smap, r);
+        }
+        this._smap = smap;
+    }
+    getEmojis(text) {
+        let sp = this._smap;
+        let lastCode = '';
+        let emojis = [];
+        let root = true;
+        for (const rune of text) {
+            const cp = rune.codePointAt(0).toString(16).padStart(4, '0');
+            if (cp in sp) {
+                if ('code' in sp[cp]) {
+                    lastCode = sp[cp].code;
+                }
+                if ('child' in sp[cp]) {
+                    sp = sp[cp].child;
+                    root = false;
+                }
+                else {
+                    if (lastCode != '') {
+                        emojis.push(lastCode);
+                        lastCode = '';
+                    }
+                    sp = this._smap;
+                    root = true;
+                }
+            }
+            else {
+                if (lastCode != '') {
+                    emojis.push(lastCode);
+                    lastCode = '';
+                }
+                sp = this._smap;
+                if (!root) {
+                    root = true;
+                    // retry search in root
+                    if (cp in sp) {
+                        if ('code' in sp[cp]) {
+                            lastCode = sp[cp].code;
+                        }
+                        if ('child' in sp[cp]) {
+                            sp = sp[cp].child;
+                            root = false;
+                        } else {
+                            if (lastCode != '') {
+                                emojis.push(lastCode);
+                                lastCode = '';
+                            }
+                            sp = this._smap;
+                            root = true;
+                        }
+                    }
+                }
+            }
+        }
+        if (lastCode != '') {
+            emojis.push(lastCode);
+        }
+        return emojis;
+    }
+}
+
 class EmojiDb {
     constructor({ useDefaultDb, dbDir }) {
-        // init searcher class and set separator
-        this.EmojiSearchDb = require('./emoji-searcher');
-        this.codepointSeparator = '-';
+        // set separator
+        this.codePointSeparator = '-';
         // default db filenames
         const filePrefx = 'emojilist_';
         const fileSuffx = '.json';
@@ -48,7 +114,7 @@ class EmojiDb {
         }
     }
     searchFromText({ input, fixCodePoints, showData }){
-        let foundEmojis = new this.EmojiSearchDb(this.dbData).getEmojis(input);
+        let foundEmojis = new EmojiSearcher(this.dbData).getEmojis(input);
         if(showData){
             const emojisData = [];
             for(let e of foundEmojis){
@@ -74,7 +140,7 @@ class EmojiDb {
         for (const textContent of emoji) {
             codePointArray.push(textContent.codePointAt(0).toString(16).padStart(4, '0'));
         }
-        return codePointArray.join(separator || this.codepointSeparator);
+        return codePointArray.join(separator || this.codePointSeparator);
     }
     fromCodePoint(codePoint){
         codePoint = typeof codePoint === 'string' ? parseInt(codePoint, 16) : codePoint;
@@ -82,12 +148,32 @@ class EmojiDb {
     }
     toCodePointArray(emojiArray, separator){
         let codePointArray = [];
-        separator = separator ? separator : this.codepointSeparator;
+        separator = separator || this.codePointSeparator;
         for (let ix = 0; ix < emojiArray.length; ix++) {
             codePointArray.push(this.toCodePoint(emojiArray[ix], separator));
         }
         return codePointArray;
     }
+}
+
+function addSmapElement(smap, code) {
+    let c = code.split('-');
+    let m = smap;
+    for (let i = 0; i < c.length - 1; i++) {
+        const p = c[i];
+        if (!(p in m)) {
+            m[p] = {};
+        }
+        if (!('child' in m[p])) {
+            m[p].child = {};
+        }
+        m = m[p].child;
+    }
+    let p = c[c.length - 1];
+    if (!(p in m)) {
+        m[p] = {};
+    }
+    m[p].code = code;
 }
 
 function fixEmojiCodePoint(codePoint, dbData){
