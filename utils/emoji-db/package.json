@@ -1,0 +1,14 @@
+{
+    "name": "emoji-db",
+    "version": "1.3.1",
+    "description": "Unofficial Emojipedia.org emoji data",
+    "main": "emoji-db.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "author": "Seiya Dev.",
+    "license": "MIT",
+    "directories": {
+        "doc": "docs"
+    }
+}

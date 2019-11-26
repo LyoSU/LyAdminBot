@@ -1,0 +1,2534 @@
+﻿{
+    "2049": {
+        "qualified": "2049-fe0f"
+    },
+    "2122": {
+        "qualified": "2122-fe0f"
+    },
+    "2139": {
+        "qualified": "2139-fe0f"
+    },
+    "2194": {
+        "qualified": "2194-fe0f"
+    },
+    "2195": {
+        "qualified": "2195-fe0f"
+    },
+    "2196": {
+        "qualified": "2196-fe0f"
+    },
+    "2197": {
+        "qualified": "2197-fe0f"
+    },
+    "2198": {
+        "qualified": "2198-fe0f"
+    },
+    "2199": {
+        "qualified": "2199-fe0f"
+    },
+    "2328": {
+        "qualified": "2328-fe0f"
+    },
+    "2600": {
+        "qualified": "2600-fe0f"
+    },
+    "2601": {
+        "qualified": "2601-fe0f"
+    },
+    "2602": {
+        "qualified": "2602-fe0f"
+    },
+    "2603": {
+        "qualified": "2603-fe0f"
+    },
+    "2604": {
+        "qualified": "2604-fe0f"
+    },
+    "2611": {
+        "qualified": "2611-fe0f"
+    },
+    "2618": {
+        "qualified": "2618-fe0f"
+    },
+    "2620": {
+        "qualified": "2620-fe0f"
+    },
+    "2622": {
+        "qualified": "2622-fe0f"
+    },
+    "2623": {
+        "qualified": "2623-fe0f"
+    },
+    "2626": {
+        "qualified": "2626-fe0f"
+    },
+    "2638": {
+        "qualified": "2638-fe0f"
+    },
+    "2639": {
+        "qualified": "2639-fe0f"
+    },
+    "2640": {
+        "qualified": "2640-fe0f"
+    },
+    "2642": {
+        "qualified": "2642-fe0f"
+    },
+    "2660": {
+        "qualified": "2660-fe0f"
+    },
+    "2663": {
+        "qualified": "2663-fe0f"
+    },
+    "2665": {
+        "qualified": "2665-fe0f"
+    },
+    "2666": {
+        "qualified": "2666-fe0f"
+    },
+    "2668": {
+        "qualified": "2668-fe0f"
+    },
+    "2692": {
+        "qualified": "2692-fe0f"
+    },
+    "2694": {
+        "qualified": "2694-fe0f"
+    },
+    "2695": {
+        "qualified": "2695-fe0f"
+    },
+    "2696": {
+        "qualified": "2696-fe0f"
+    },
+    "2697": {
+        "qualified": "2697-fe0f"
+    },
+    "2699": {
+        "qualified": "2699-fe0f"
+    },
+    "2702": {
+        "qualified": "2702-fe0f"
+    },
+    "2708": {
+        "qualified": "2708-fe0f"
+    },
+    "2709": {
+        "qualified": "2709-fe0f"
+    },
+    "2712": {
+        "qualified": "2712-fe0f"
+    },
+    "2714": {
+        "qualified": "2714-fe0f"
+    },
+    "2716": {
+        "qualified": "2716-fe0f"
+    },
+    "2721": {
+        "qualified": "2721-fe0f"
+    },
+    "2733": {
+        "qualified": "2733-fe0f"
+    },
+    "2734": {
+        "qualified": "2734-fe0f"
+    },
+    "2744": {
+        "qualified": "2744-fe0f"
+    },
+    "2747": {
+        "qualified": "2747-fe0f"
+    },
+    "2763": {
+        "qualified": "2763-fe0f"
+    },
+    "2764": {
+        "qualified": "2764-fe0f"
+    },
+    "2934": {
+        "qualified": "2934-fe0f"
+    },
+    "2935": {
+        "qualified": "2935-fe0f"
+    },
+    "3030": {
+        "qualified": "3030-fe0f"
+    },
+    "3297": {
+        "qualified": "3297-fe0f"
+    },
+    "3299": {
+        "qualified": "3299-fe0f"
+    },
+    "263a": {
+        "qualified": "263a-fe0f"
+    },
+    "1f573": {
+        "qualified": "1f573-fe0f"
+    },
+    "1f441-200d-1f5e8-fe0f": {
+        "qualified": "1f441-fe0f-200d-1f5e8-fe0f"
+    },
+    "1f441-fe0f-200d-1f5e8": {
+        "qualified": "1f441-fe0f-200d-1f5e8-fe0f"
+    },
+    "1f441-200d-1f5e8": {
+        "qualified": "1f441-fe0f-200d-1f5e8-fe0f"
+    },
+    "1f5e8": {
+        "qualified": "1f5e8-fe0f"
+    },
+    "1f5ef": {
+        "qualified": "1f5ef-fe0f"
+    },
+    "1f590": {
+        "qualified": "1f590-fe0f"
+    },
+    "270c": {
+        "qualified": "270c-fe0f"
+    },
+    "261d": {
+        "qualified": "261d-fe0f"
+    },
+    "270d": {
+        "qualified": "270d-fe0f"
+    },
+    "1f441": {
+        "qualified": "1f441-fe0f"
+    },
+    "1f471-200d-2640": {
+        "qualified": "1f471-200d-2640-fe0f"
+    },
+    "1f471-1f3fb-200d-2640": {
+        "qualified": "1f471-1f3fb-200d-2640-fe0f"
+    },
+    "1f471-1f3fc-200d-2640": {
+        "qualified": "1f471-1f3fc-200d-2640-fe0f"
+    },
+    "1f471-1f3fd-200d-2640": {
+        "qualified": "1f471-1f3fd-200d-2640-fe0f"
+    },
+    "1f471-1f3fe-200d-2640": {
+        "qualified": "1f471-1f3fe-200d-2640-fe0f"
+    },
+    "1f471-1f3ff-200d-2640": {
+        "qualified": "1f471-1f3ff-200d-2640-fe0f"
+    },
+    "1f471-200d-2642": {
+        "qualified": "1f471-200d-2642-fe0f"
+    },
+    "1f471-1f3fb-200d-2642": {
+        "qualified": "1f471-1f3fb-200d-2642-fe0f"
+    },
+    "1f471-1f3fc-200d-2642": {
+        "qualified": "1f471-1f3fc-200d-2642-fe0f"
+    },
+    "1f471-1f3fd-200d-2642": {
+        "qualified": "1f471-1f3fd-200d-2642-fe0f"
+    },
+    "1f471-1f3fe-200d-2642": {
+        "qualified": "1f471-1f3fe-200d-2642-fe0f"
+    },
+    "1f471-1f3ff-200d-2642": {
+        "qualified": "1f471-1f3ff-200d-2642-fe0f"
+    },
+    "1f64d-200d-2642": {
+        "qualified": "1f64d-200d-2642-fe0f"
+    },
+    "1f64d-1f3fb-200d-2642": {
+        "qualified": "1f64d-1f3fb-200d-2642-fe0f"
+    },
+    "1f64d-1f3fc-200d-2642": {
+        "qualified": "1f64d-1f3fc-200d-2642-fe0f"
+    },
+    "1f64d-1f3fd-200d-2642": {
+        "qualified": "1f64d-1f3fd-200d-2642-fe0f"
+    },
+    "1f64d-1f3fe-200d-2642": {
+        "qualified": "1f64d-1f3fe-200d-2642-fe0f"
+    },
+    "1f64d-1f3ff-200d-2642": {
+        "qualified": "1f64d-1f3ff-200d-2642-fe0f"
+    },
+    "1f64d-200d-2640": {
+        "qualified": "1f64d-200d-2640-fe0f"
+    },
+    "1f64d-1f3fb-200d-2640": {
+        "qualified": "1f64d-1f3fb-200d-2640-fe0f"
+    },
+    "1f64d-1f3fc-200d-2640": {
+        "qualified": "1f64d-1f3fc-200d-2640-fe0f"
+    },
+    "1f64d-1f3fd-200d-2640": {
+        "qualified": "1f64d-1f3fd-200d-2640-fe0f"
+    },
+    "1f64d-1f3fe-200d-2640": {
+        "qualified": "1f64d-1f3fe-200d-2640-fe0f"
+    },
+    "1f64d-1f3ff-200d-2640": {
+        "qualified": "1f64d-1f3ff-200d-2640-fe0f"
+    },
+    "1f64e-200d-2642": {
+        "qualified": "1f64e-200d-2642-fe0f"
+    },
+    "1f64e-1f3fb-200d-2642": {
+        "qualified": "1f64e-1f3fb-200d-2642-fe0f"
+    },
+    "1f64e-1f3fc-200d-2642": {
+        "qualified": "1f64e-1f3fc-200d-2642-fe0f"
+    },
+    "1f64e-1f3fd-200d-2642": {
+        "qualified": "1f64e-1f3fd-200d-2642-fe0f"
+    },
+    "1f64e-1f3fe-200d-2642": {
+        "qualified": "1f64e-1f3fe-200d-2642-fe0f"
+    },
+    "1f64e-1f3ff-200d-2642": {
+        "qualified": "1f64e-1f3ff-200d-2642-fe0f"
+    },
+    "1f64e-200d-2640": {
+        "qualified": "1f64e-200d-2640-fe0f"
+    },
+    "1f64e-1f3fb-200d-2640": {
+        "qualified": "1f64e-1f3fb-200d-2640-fe0f"
+    },
+    "1f64e-1f3fc-200d-2640": {
+        "qualified": "1f64e-1f3fc-200d-2640-fe0f"
+    },
+    "1f64e-1f3fd-200d-2640": {
+        "qualified": "1f64e-1f3fd-200d-2640-fe0f"
+    },
+    "1f64e-1f3fe-200d-2640": {
+        "qualified": "1f64e-1f3fe-200d-2640-fe0f"
+    },
+    "1f64e-1f3ff-200d-2640": {
+        "qualified": "1f64e-1f3ff-200d-2640-fe0f"
+    },
+    "1f645-200d-2642": {
+        "qualified": "1f645-200d-2642-fe0f"
+    },
+    "1f645-1f3fb-200d-2642": {
+        "qualified": "1f645-1f3fb-200d-2642-fe0f"
+    },
+    "1f645-1f3fc-200d-2642": {
+        "qualified": "1f645-1f3fc-200d-2642-fe0f"
+    },
+    "1f645-1f3fd-200d-2642": {
+        "qualified": "1f645-1f3fd-200d-2642-fe0f"
+    },
+    "1f645-1f3fe-200d-2642": {
+        "qualified": "1f645-1f3fe-200d-2642-fe0f"
+    },
+    "1f645-1f3ff-200d-2642": {
+        "qualified": "1f645-1f3ff-200d-2642-fe0f"
+    },
+    "1f645-200d-2640": {
+        "qualified": "1f645-200d-2640-fe0f"
+    },
+    "1f645-1f3fb-200d-2640": {
+        "qualified": "1f645-1f3fb-200d-2640-fe0f"
+    },
+    "1f645-1f3fc-200d-2640": {
+        "qualified": "1f645-1f3fc-200d-2640-fe0f"
+    },
+    "1f645-1f3fd-200d-2640": {
+        "qualified": "1f645-1f3fd-200d-2640-fe0f"
+    },
+    "1f645-1f3fe-200d-2640": {
+        "qualified": "1f645-1f3fe-200d-2640-fe0f"
+    },
+    "1f645-1f3ff-200d-2640": {
+        "qualified": "1f645-1f3ff-200d-2640-fe0f"
+    },
+    "1f646-200d-2642": {
+        "qualified": "1f646-200d-2642-fe0f"
+    },
+    "1f646-1f3fb-200d-2642": {
+        "qualified": "1f646-1f3fb-200d-2642-fe0f"
+    },
+    "1f646-1f3fc-200d-2642": {
+        "qualified": "1f646-1f3fc-200d-2642-fe0f"
+    },
+    "1f646-1f3fd-200d-2642": {
+        "qualified": "1f646-1f3fd-200d-2642-fe0f"
+    },
+    "1f646-1f3fe-200d-2642": {
+        "qualified": "1f646-1f3fe-200d-2642-fe0f"
+    },
+    "1f646-1f3ff-200d-2642": {
+        "qualified": "1f646-1f3ff-200d-2642-fe0f"
+    },
+    "1f646-200d-2640": {
+        "qualified": "1f646-200d-2640-fe0f"
+    },
+    "1f646-1f3fb-200d-2640": {
+        "qualified": "1f646-1f3fb-200d-2640-fe0f"
+    },
+    "1f646-1f3fc-200d-2640": {
+        "qualified": "1f646-1f3fc-200d-2640-fe0f"
+    },
+    "1f646-1f3fd-200d-2640": {
+        "qualified": "1f646-1f3fd-200d-2640-fe0f"
+    },
+    "1f646-1f3fe-200d-2640": {
+        "qualified": "1f646-1f3fe-200d-2640-fe0f"
+    },
+    "1f646-1f3ff-200d-2640": {
+        "qualified": "1f646-1f3ff-200d-2640-fe0f"
+    },
+    "1f481-200d-2642": {
+        "qualified": "1f481-200d-2642-fe0f"
+    },
+    "1f481-1f3fb-200d-2642": {
+        "qualified": "1f481-1f3fb-200d-2642-fe0f"
+    },
+    "1f481-1f3fc-200d-2642": {
+        "qualified": "1f481-1f3fc-200d-2642-fe0f"
+    },
+    "1f481-1f3fd-200d-2642": {
+        "qualified": "1f481-1f3fd-200d-2642-fe0f"
+    },
+    "1f481-1f3fe-200d-2642": {
+        "qualified": "1f481-1f3fe-200d-2642-fe0f"
+    },
+    "1f481-1f3ff-200d-2642": {
+        "qualified": "1f481-1f3ff-200d-2642-fe0f"
+    },
+    "1f481-200d-2640": {
+        "qualified": "1f481-200d-2640-fe0f"
+    },
+    "1f481-1f3fb-200d-2640": {
+        "qualified": "1f481-1f3fb-200d-2640-fe0f"
+    },
+    "1f481-1f3fc-200d-2640": {
+        "qualified": "1f481-1f3fc-200d-2640-fe0f"
+    },
+    "1f481-1f3fd-200d-2640": {
+        "qualified": "1f481-1f3fd-200d-2640-fe0f"
+    },
+    "1f481-1f3fe-200d-2640": {
+        "qualified": "1f481-1f3fe-200d-2640-fe0f"
+    },
+    "1f481-1f3ff-200d-2640": {
+        "qualified": "1f481-1f3ff-200d-2640-fe0f"
+    },
+    "1f64b-200d-2642": {
+        "qualified": "1f64b-200d-2642-fe0f"
+    },
+    "1f64b-1f3fb-200d-2642": {
+        "qualified": "1f64b-1f3fb-200d-2642-fe0f"
+    },
+    "1f64b-1f3fc-200d-2642": {
+        "qualified": "1f64b-1f3fc-200d-2642-fe0f"
+    },
+    "1f64b-1f3fd-200d-2642": {
+        "qualified": "1f64b-1f3fd-200d-2642-fe0f"
+    },
+    "1f64b-1f3fe-200d-2642": {
+        "qualified": "1f64b-1f3fe-200d-2642-fe0f"
+    },
+    "1f64b-1f3ff-200d-2642": {
+        "qualified": "1f64b-1f3ff-200d-2642-fe0f"
+    },
+    "1f64b-200d-2640": {
+        "qualified": "1f64b-200d-2640-fe0f"
+    },
+    "1f64b-1f3fb-200d-2640": {
+        "qualified": "1f64b-1f3fb-200d-2640-fe0f"
+    },
+    "1f64b-1f3fc-200d-2640": {
+        "qualified": "1f64b-1f3fc-200d-2640-fe0f"
+    },
+    "1f64b-1f3fd-200d-2640": {
+        "qualified": "1f64b-1f3fd-200d-2640-fe0f"
+    },
+    "1f64b-1f3fe-200d-2640": {
+        "qualified": "1f64b-1f3fe-200d-2640-fe0f"
+    },
+    "1f64b-1f3ff-200d-2640": {
+        "qualified": "1f64b-1f3ff-200d-2640-fe0f"
+    },
+    "1f9cf-200d-2642": {
+        "qualified": "1f9cf-200d-2642-fe0f"
+    },
+    "1f9cf-1f3fb-200d-2642": {
+        "qualified": "1f9cf-1f3fb-200d-2642-fe0f"
+    },
+    "1f9cf-1f3fc-200d-2642": {
+        "qualified": "1f9cf-1f3fc-200d-2642-fe0f"
+    },
+    "1f9cf-1f3fd-200d-2642": {
+        "qualified": "1f9cf-1f3fd-200d-2642-fe0f"
+    },
+    "1f9cf-1f3fe-200d-2642": {
+        "qualified": "1f9cf-1f3fe-200d-2642-fe0f"
+    },
+    "1f9cf-1f3ff-200d-2642": {
+        "qualified": "1f9cf-1f3ff-200d-2642-fe0f"
+    },
+    "1f9cf-200d-2640": {
+        "qualified": "1f9cf-200d-2640-fe0f"
+    },
+    "1f9cf-1f3fb-200d-2640": {
+        "qualified": "1f9cf-1f3fb-200d-2640-fe0f"
+    },
+    "1f9cf-1f3fc-200d-2640": {
+        "qualified": "1f9cf-1f3fc-200d-2640-fe0f"
+    },
+    "1f9cf-1f3fd-200d-2640": {
+        "qualified": "1f9cf-1f3fd-200d-2640-fe0f"
+    },
+    "1f9cf-1f3fe-200d-2640": {
+        "qualified": "1f9cf-1f3fe-200d-2640-fe0f"
+    },
+    "1f9cf-1f3ff-200d-2640": {
+        "qualified": "1f9cf-1f3ff-200d-2640-fe0f"
+    },
+    "1f647-200d-2642": {
+        "qualified": "1f647-200d-2642-fe0f"
+    },
+    "1f647-1f3fb-200d-2642": {
+        "qualified": "1f647-1f3fb-200d-2642-fe0f"
+    },
+    "1f647-1f3fc-200d-2642": {
+        "qualified": "1f647-1f3fc-200d-2642-fe0f"
+    },
+    "1f647-1f3fd-200d-2642": {
+        "qualified": "1f647-1f3fd-200d-2642-fe0f"
+    },
+    "1f647-1f3fe-200d-2642": {
+        "qualified": "1f647-1f3fe-200d-2642-fe0f"
+    },
+    "1f647-1f3ff-200d-2642": {
+        "qualified": "1f647-1f3ff-200d-2642-fe0f"
+    },
+    "1f647-200d-2640": {
+        "qualified": "1f647-200d-2640-fe0f"
+    },
+    "1f647-1f3fb-200d-2640": {
+        "qualified": "1f647-1f3fb-200d-2640-fe0f"
+    },
+    "1f647-1f3fc-200d-2640": {
+        "qualified": "1f647-1f3fc-200d-2640-fe0f"
+    },
+    "1f647-1f3fd-200d-2640": {
+        "qualified": "1f647-1f3fd-200d-2640-fe0f"
+    },
+    "1f647-1f3fe-200d-2640": {
+        "qualified": "1f647-1f3fe-200d-2640-fe0f"
+    },
+    "1f647-1f3ff-200d-2640": {
+        "qualified": "1f647-1f3ff-200d-2640-fe0f"
+    },
+    "1f926-200d-2642": {
+        "qualified": "1f926-200d-2642-fe0f"
+    },
+    "1f926-1f3fb-200d-2642": {
+        "qualified": "1f926-1f3fb-200d-2642-fe0f"
+    },
+    "1f926-1f3fc-200d-2642": {
+        "qualified": "1f926-1f3fc-200d-2642-fe0f"
+    },
+    "1f926-1f3fd-200d-2642": {
+        "qualified": "1f926-1f3fd-200d-2642-fe0f"
+    },
+    "1f926-1f3fe-200d-2642": {
+        "qualified": "1f926-1f3fe-200d-2642-fe0f"
+    },
+    "1f926-1f3ff-200d-2642": {
+        "qualified": "1f926-1f3ff-200d-2642-fe0f"
+    },
+    "1f926-200d-2640": {
+        "qualified": "1f926-200d-2640-fe0f"
+    },
+    "1f926-1f3fb-200d-2640": {
+        "qualified": "1f926-1f3fb-200d-2640-fe0f"
+    },
+    "1f926-1f3fc-200d-2640": {
+        "qualified": "1f926-1f3fc-200d-2640-fe0f"
+    },
+    "1f926-1f3fd-200d-2640": {
+        "qualified": "1f926-1f3fd-200d-2640-fe0f"
+    },
+    "1f926-1f3fe-200d-2640": {
+        "qualified": "1f926-1f3fe-200d-2640-fe0f"
+    },
+    "1f926-1f3ff-200d-2640": {
+        "qualified": "1f926-1f3ff-200d-2640-fe0f"
+    },
+    "1f937-200d-2642": {
+        "qualified": "1f937-200d-2642-fe0f"
+    },
+    "1f937-1f3fb-200d-2642": {
+        "qualified": "1f937-1f3fb-200d-2642-fe0f"
+    },
+    "1f937-1f3fc-200d-2642": {
+        "qualified": "1f937-1f3fc-200d-2642-fe0f"
+    },
+    "1f937-1f3fd-200d-2642": {
+        "qualified": "1f937-1f3fd-200d-2642-fe0f"
+    },
+    "1f937-1f3fe-200d-2642": {
+        "qualified": "1f937-1f3fe-200d-2642-fe0f"
+    },
+    "1f937-1f3ff-200d-2642": {
+        "qualified": "1f937-1f3ff-200d-2642-fe0f"
+    },
+    "1f937-200d-2640": {
+        "qualified": "1f937-200d-2640-fe0f"
+    },
+    "1f937-1f3fb-200d-2640": {
+        "qualified": "1f937-1f3fb-200d-2640-fe0f"
+    },
+    "1f937-1f3fc-200d-2640": {
+        "qualified": "1f937-1f3fc-200d-2640-fe0f"
+    },
+    "1f937-1f3fd-200d-2640": {
+        "qualified": "1f937-1f3fd-200d-2640-fe0f"
+    },
+    "1f937-1f3fe-200d-2640": {
+        "qualified": "1f937-1f3fe-200d-2640-fe0f"
+    },
+    "1f937-1f3ff-200d-2640": {
+        "qualified": "1f937-1f3ff-200d-2640-fe0f"
+    },
+    "1f9d1-200d-2695": {
+        "qualified": "1f9d1-200d-2695-fe0f"
+    },
+    "1f9d1-1f3fb-200d-2695": {
+        "qualified": "1f9d1-1f3fb-200d-2695-fe0f"
+    },
+    "1f9d1-1f3fc-200d-2695": {
+        "qualified": "1f9d1-1f3fc-200d-2695-fe0f"
+    },
+    "1f9d1-1f3fd-200d-2695": {
+        "qualified": "1f9d1-1f3fd-200d-2695-fe0f"
+    },
+    "1f9d1-1f3fe-200d-2695": {
+        "qualified": "1f9d1-1f3fe-200d-2695-fe0f"
+    },
+    "1f9d1-1f3ff-200d-2695": {
+        "qualified": "1f9d1-1f3ff-200d-2695-fe0f"
+    },
+    "1f468-200d-2695": {
+        "qualified": "1f468-200d-2695-fe0f"
+    },
+    "1f468-1f3fb-200d-2695": {
+        "qualified": "1f468-1f3fb-200d-2695-fe0f"
+    },
+    "1f468-1f3fc-200d-2695": {
+        "qualified": "1f468-1f3fc-200d-2695-fe0f"
+    },
+    "1f468-1f3fd-200d-2695": {
+        "qualified": "1f468-1f3fd-200d-2695-fe0f"
+    },
+    "1f468-1f3fe-200d-2695": {
+        "qualified": "1f468-1f3fe-200d-2695-fe0f"
+    },
+    "1f468-1f3ff-200d-2695": {
+        "qualified": "1f468-1f3ff-200d-2695-fe0f"
+    },
+    "1f469-200d-2695": {
+        "qualified": "1f469-200d-2695-fe0f"
+    },
+    "1f469-1f3fb-200d-2695": {
+        "qualified": "1f469-1f3fb-200d-2695-fe0f"
+    },
+    "1f469-1f3fc-200d-2695": {
+        "qualified": "1f469-1f3fc-200d-2695-fe0f"
+    },
+    "1f469-1f3fd-200d-2695": {
+        "qualified": "1f469-1f3fd-200d-2695-fe0f"
+    },
+    "1f469-1f3fe-200d-2695": {
+        "qualified": "1f469-1f3fe-200d-2695-fe0f"
+    },
+    "1f469-1f3ff-200d-2695": {
+        "qualified": "1f469-1f3ff-200d-2695-fe0f"
+    },
+    "1f9d1-200d-2696": {
+        "qualified": "1f9d1-200d-2696-fe0f"
+    },
+    "1f9d1-1f3fb-200d-2696": {
+        "qualified": "1f9d1-1f3fb-200d-2696-fe0f"
+    },
+    "1f9d1-1f3fc-200d-2696": {
+        "qualified": "1f9d1-1f3fc-200d-2696-fe0f"
+    },
+    "1f9d1-1f3fd-200d-2696": {
+        "qualified": "1f9d1-1f3fd-200d-2696-fe0f"
+    },
+    "1f9d1-1f3fe-200d-2696": {
+        "qualified": "1f9d1-1f3fe-200d-2696-fe0f"
+    },
+    "1f9d1-1f3ff-200d-2696": {
+        "qualified": "1f9d1-1f3ff-200d-2696-fe0f"
+    },
+    "1f468-200d-2696": {
+        "qualified": "1f468-200d-2696-fe0f"
+    },
+    "1f468-1f3fb-200d-2696": {
+        "qualified": "1f468-1f3fb-200d-2696-fe0f"
+    },
+    "1f468-1f3fc-200d-2696": {
+        "qualified": "1f468-1f3fc-200d-2696-fe0f"
+    },
+    "1f468-1f3fd-200d-2696": {
+        "qualified": "1f468-1f3fd-200d-2696-fe0f"
+    },
+    "1f468-1f3fe-200d-2696": {
+        "qualified": "1f468-1f3fe-200d-2696-fe0f"
+    },
+    "1f468-1f3ff-200d-2696": {
+        "qualified": "1f468-1f3ff-200d-2696-fe0f"
+    },
+    "1f469-200d-2696": {
+        "qualified": "1f469-200d-2696-fe0f"
+    },
+    "1f469-1f3fb-200d-2696": {
+        "qualified": "1f469-1f3fb-200d-2696-fe0f"
+    },
+    "1f469-1f3fc-200d-2696": {
+        "qualified": "1f469-1f3fc-200d-2696-fe0f"
+    },
+    "1f469-1f3fd-200d-2696": {
+        "qualified": "1f469-1f3fd-200d-2696-fe0f"
+    },
+    "1f469-1f3fe-200d-2696": {
+        "qualified": "1f469-1f3fe-200d-2696-fe0f"
+    },
+    "1f469-1f3ff-200d-2696": {
+        "qualified": "1f469-1f3ff-200d-2696-fe0f"
+    },
+    "1f9d1-200d-2708": {
+        "qualified": "1f9d1-200d-2708-fe0f"
+    },
+    "1f9d1-1f3fb-200d-2708": {
+        "qualified": "1f9d1-1f3fb-200d-2708-fe0f"
+    },
+    "1f9d1-1f3fc-200d-2708": {
+        "qualified": "1f9d1-1f3fc-200d-2708-fe0f"
+    },
+    "1f9d1-1f3fd-200d-2708": {
+        "qualified": "1f9d1-1f3fd-200d-2708-fe0f"
+    },
+    "1f9d1-1f3fe-200d-2708": {
+        "qualified": "1f9d1-1f3fe-200d-2708-fe0f"
+    },
+    "1f9d1-1f3ff-200d-2708": {
+        "qualified": "1f9d1-1f3ff-200d-2708-fe0f"
+    },
+    "1f468-200d-2708": {
+        "qualified": "1f468-200d-2708-fe0f"
+    },
+    "1f468-1f3fb-200d-2708": {
+        "qualified": "1f468-1f3fb-200d-2708-fe0f"
+    },
+    "1f468-1f3fc-200d-2708": {
+        "qualified": "1f468-1f3fc-200d-2708-fe0f"
+    },
+    "1f468-1f3fd-200d-2708": {
+        "qualified": "1f468-1f3fd-200d-2708-fe0f"
+    },
+    "1f468-1f3fe-200d-2708": {
+        "qualified": "1f468-1f3fe-200d-2708-fe0f"
+    },
+    "1f468-1f3ff-200d-2708": {
+        "qualified": "1f468-1f3ff-200d-2708-fe0f"
+    },
+    "1f469-200d-2708": {
+        "qualified": "1f469-200d-2708-fe0f"
+    },
+    "1f469-1f3fb-200d-2708": {
+        "qualified": "1f469-1f3fb-200d-2708-fe0f"
+    },
+    "1f469-1f3fc-200d-2708": {
+        "qualified": "1f469-1f3fc-200d-2708-fe0f"
+    },
+    "1f469-1f3fd-200d-2708": {
+        "qualified": "1f469-1f3fd-200d-2708-fe0f"
+    },
+    "1f469-1f3fe-200d-2708": {
+        "qualified": "1f469-1f3fe-200d-2708-fe0f"
+    },
+    "1f469-1f3ff-200d-2708": {
+        "qualified": "1f469-1f3ff-200d-2708-fe0f"
+    },
+    "1f46e-200d-2642": {
+        "qualified": "1f46e-200d-2642-fe0f"
+    },
+    "1f46e-1f3fb-200d-2642": {
+        "qualified": "1f46e-1f3fb-200d-2642-fe0f"
+    },
+    "1f46e-1f3fc-200d-2642": {
+        "qualified": "1f46e-1f3fc-200d-2642-fe0f"
+    },
+    "1f46e-1f3fd-200d-2642": {
+        "qualified": "1f46e-1f3fd-200d-2642-fe0f"
+    },
+    "1f46e-1f3fe-200d-2642": {
+        "qualified": "1f46e-1f3fe-200d-2642-fe0f"
+    },
+    "1f46e-1f3ff-200d-2642": {
+        "qualified": "1f46e-1f3ff-200d-2642-fe0f"
+    },
+    "1f46e-200d-2640": {
+        "qualified": "1f46e-200d-2640-fe0f"
+    },
+    "1f46e-1f3fb-200d-2640": {
+        "qualified": "1f46e-1f3fb-200d-2640-fe0f"
+    },
+    "1f46e-1f3fc-200d-2640": {
+        "qualified": "1f46e-1f3fc-200d-2640-fe0f"
+    },
+    "1f46e-1f3fd-200d-2640": {
+        "qualified": "1f46e-1f3fd-200d-2640-fe0f"
+    },
+    "1f46e-1f3fe-200d-2640": {
+        "qualified": "1f46e-1f3fe-200d-2640-fe0f"
+    },
+    "1f46e-1f3ff-200d-2640": {
+        "qualified": "1f46e-1f3ff-200d-2640-fe0f"
+    },
+    "1f575": {
+        "qualified": "1f575-fe0f"
+    },
+    "1f575-200d-2642-fe0f": {
+        "qualified": "1f575-fe0f-200d-2642-fe0f"
+    },
+    "1f575-fe0f-200d-2642": {
+        "qualified": "1f575-fe0f-200d-2642-fe0f"
+    },
+    "1f575-200d-2642": {
+        "qualified": "1f575-fe0f-200d-2642-fe0f"
+    },
+    "1f575-1f3fb-200d-2642": {
+        "qualified": "1f575-1f3fb-200d-2642-fe0f"
+    },
+    "1f575-1f3fc-200d-2642": {
+        "qualified": "1f575-1f3fc-200d-2642-fe0f"
+    },
+    "1f575-1f3fd-200d-2642": {
+        "qualified": "1f575-1f3fd-200d-2642-fe0f"
+    },
+    "1f575-1f3fe-200d-2642": {
+        "qualified": "1f575-1f3fe-200d-2642-fe0f"
+    },
+    "1f575-1f3ff-200d-2642": {
+        "qualified": "1f575-1f3ff-200d-2642-fe0f"
+    },
+    "1f575-200d-2640-fe0f": {
+        "qualified": "1f575-fe0f-200d-2640-fe0f"
+    },
+    "1f575-fe0f-200d-2640": {
+        "qualified": "1f575-fe0f-200d-2640-fe0f"
+    },
+    "1f575-200d-2640": {
+        "qualified": "1f575-fe0f-200d-2640-fe0f"
+    },
+    "1f575-1f3fb-200d-2640": {
+        "qualified": "1f575-1f3fb-200d-2640-fe0f"
+    },
+    "1f575-1f3fc-200d-2640": {
+        "qualified": "1f575-1f3fc-200d-2640-fe0f"
+    },
+    "1f575-1f3fd-200d-2640": {
+        "qualified": "1f575-1f3fd-200d-2640-fe0f"
+    },
+    "1f575-1f3fe-200d-2640": {
+        "qualified": "1f575-1f3fe-200d-2640-fe0f"
+    },
+    "1f575-1f3ff-200d-2640": {
+        "qualified": "1f575-1f3ff-200d-2640-fe0f"
+    },
+    "1f482-200d-2642": {
+        "qualified": "1f482-200d-2642-fe0f"
+    },
+    "1f482-1f3fb-200d-2642": {
+        "qualified": "1f482-1f3fb-200d-2642-fe0f"
+    },
+    "1f482-1f3fc-200d-2642": {
+        "qualified": "1f482-1f3fc-200d-2642-fe0f"
+    },
+    "1f482-1f3fd-200d-2642": {
+        "qualified": "1f482-1f3fd-200d-2642-fe0f"
+    },
+    "1f482-1f3fe-200d-2642": {
+        "qualified": "1f482-1f3fe-200d-2642-fe0f"
+    },
+    "1f482-1f3ff-200d-2642": {
+        "qualified": "1f482-1f3ff-200d-2642-fe0f"
+    },
+    "1f482-200d-2640": {
+        "qualified": "1f482-200d-2640-fe0f"
+    },
+    "1f482-1f3fb-200d-2640": {
+        "qualified": "1f482-1f3fb-200d-2640-fe0f"
+    },
+    "1f482-1f3fc-200d-2640": {
+        "qualified": "1f482-1f3fc-200d-2640-fe0f"
+    },
+    "1f482-1f3fd-200d-2640": {
+        "qualified": "1f482-1f3fd-200d-2640-fe0f"
+    },
+    "1f482-1f3fe-200d-2640": {
+        "qualified": "1f482-1f3fe-200d-2640-fe0f"
+    },
+    "1f482-1f3ff-200d-2640": {
+        "qualified": "1f482-1f3ff-200d-2640-fe0f"
+    },
+    "1f477-200d-2642": {
+        "qualified": "1f477-200d-2642-fe0f"
+    },
+    "1f477-1f3fb-200d-2642": {
+        "qualified": "1f477-1f3fb-200d-2642-fe0f"
+    },
+    "1f477-1f3fc-200d-2642": {
+        "qualified": "1f477-1f3fc-200d-2642-fe0f"
+    },
+    "1f477-1f3fd-200d-2642": {
+        "qualified": "1f477-1f3fd-200d-2642-fe0f"
+    },
+    "1f477-1f3fe-200d-2642": {
+        "qualified": "1f477-1f3fe-200d-2642-fe0f"
+    },
+    "1f477-1f3ff-200d-2642": {
+        "qualified": "1f477-1f3ff-200d-2642-fe0f"
+    },
+    "1f477-200d-2640": {
+        "qualified": "1f477-200d-2640-fe0f"
+    },
+    "1f477-1f3fb-200d-2640": {
+        "qualified": "1f477-1f3fb-200d-2640-fe0f"
+    },
+    "1f477-1f3fc-200d-2640": {
+        "qualified": "1f477-1f3fc-200d-2640-fe0f"
+    },
+    "1f477-1f3fd-200d-2640": {
+        "qualified": "1f477-1f3fd-200d-2640-fe0f"
+    },
+    "1f477-1f3fe-200d-2640": {
+        "qualified": "1f477-1f3fe-200d-2640-fe0f"
+    },
+    "1f477-1f3ff-200d-2640": {
+        "qualified": "1f477-1f3ff-200d-2640-fe0f"
+    },
+    "1f473-200d-2642": {
+        "qualified": "1f473-200d-2642-fe0f"
+    },
+    "1f473-1f3fb-200d-2642": {
+        "qualified": "1f473-1f3fb-200d-2642-fe0f"
+    },
+    "1f473-1f3fc-200d-2642": {
+        "qualified": "1f473-1f3fc-200d-2642-fe0f"
+    },
+    "1f473-1f3fd-200d-2642": {
+        "qualified": "1f473-1f3fd-200d-2642-fe0f"
+    },
+    "1f473-1f3fe-200d-2642": {
+        "qualified": "1f473-1f3fe-200d-2642-fe0f"
+    },
+    "1f473-1f3ff-200d-2642": {
+        "qualified": "1f473-1f3ff-200d-2642-fe0f"
+    },
+    "1f473-200d-2640": {
+        "qualified": "1f473-200d-2640-fe0f"
+    },
+    "1f473-1f3fb-200d-2640": {
+        "qualified": "1f473-1f3fb-200d-2640-fe0f"
+    },
+    "1f473-1f3fc-200d-2640": {
+        "qualified": "1f473-1f3fc-200d-2640-fe0f"
+    },
+    "1f473-1f3fd-200d-2640": {
+        "qualified": "1f473-1f3fd-200d-2640-fe0f"
+    },
+    "1f473-1f3fe-200d-2640": {
+        "qualified": "1f473-1f3fe-200d-2640-fe0f"
+    },
+    "1f473-1f3ff-200d-2640": {
+        "qualified": "1f473-1f3ff-200d-2640-fe0f"
+    },
+    "1f9b8-200d-2642": {
+        "qualified": "1f9b8-200d-2642-fe0f"
+    },
+    "1f9b8-1f3fb-200d-2642": {
+        "qualified": "1f9b8-1f3fb-200d-2642-fe0f"
+    },
+    "1f9b8-1f3fc-200d-2642": {
+        "qualified": "1f9b8-1f3fc-200d-2642-fe0f"
+    },
+    "1f9b8-1f3fd-200d-2642": {
+        "qualified": "1f9b8-1f3fd-200d-2642-fe0f"
+    },
+    "1f9b8-1f3fe-200d-2642": {
+        "qualified": "1f9b8-1f3fe-200d-2642-fe0f"
+    },
+    "1f9b8-1f3ff-200d-2642": {
+        "qualified": "1f9b8-1f3ff-200d-2642-fe0f"
+    },
+    "1f9b8-200d-2640": {
+        "qualified": "1f9b8-200d-2640-fe0f"
+    },
+    "1f9b8-1f3fb-200d-2640": {
+        "qualified": "1f9b8-1f3fb-200d-2640-fe0f"
+    },
+    "1f9b8-1f3fc-200d-2640": {
+        "qualified": "1f9b8-1f3fc-200d-2640-fe0f"
+    },
+    "1f9b8-1f3fd-200d-2640": {
+        "qualified": "1f9b8-1f3fd-200d-2640-fe0f"
+    },
+    "1f9b8-1f3fe-200d-2640": {
+        "qualified": "1f9b8-1f3fe-200d-2640-fe0f"
+    },
+    "1f9b8-1f3ff-200d-2640": {
+        "qualified": "1f9b8-1f3ff-200d-2640-fe0f"
+    },
+    "1f9b9-200d-2642": {
+        "qualified": "1f9b9-200d-2642-fe0f"
+    },
+    "1f9b9-1f3fb-200d-2642": {
+        "qualified": "1f9b9-1f3fb-200d-2642-fe0f"
+    },
+    "1f9b9-1f3fc-200d-2642": {
+        "qualified": "1f9b9-1f3fc-200d-2642-fe0f"
+    },
+    "1f9b9-1f3fd-200d-2642": {
+        "qualified": "1f9b9-1f3fd-200d-2642-fe0f"
+    },
+    "1f9b9-1f3fe-200d-2642": {
+        "qualified": "1f9b9-1f3fe-200d-2642-fe0f"
+    },
+    "1f9b9-1f3ff-200d-2642": {
+        "qualified": "1f9b9-1f3ff-200d-2642-fe0f"
+    },
+    "1f9b9-200d-2640": {
+        "qualified": "1f9b9-200d-2640-fe0f"
+    },
+    "1f9b9-1f3fb-200d-2640": {
+        "qualified": "1f9b9-1f3fb-200d-2640-fe0f"
+    },
+    "1f9b9-1f3fc-200d-2640": {
+        "qualified": "1f9b9-1f3fc-200d-2640-fe0f"
+    },
+    "1f9b9-1f3fd-200d-2640": {
+        "qualified": "1f9b9-1f3fd-200d-2640-fe0f"
+    },
+    "1f9b9-1f3fe-200d-2640": {
+        "qualified": "1f9b9-1f3fe-200d-2640-fe0f"
+    },
+    "1f9b9-1f3ff-200d-2640": {
+        "qualified": "1f9b9-1f3ff-200d-2640-fe0f"
+    },
+    "1f9d9-200d-2642": {
+        "qualified": "1f9d9-200d-2642-fe0f"
+    },
+    "1f9d9-1f3fb-200d-2642": {
+        "qualified": "1f9d9-1f3fb-200d-2642-fe0f"
+    },
+    "1f9d9-1f3fc-200d-2642": {
+        "qualified": "1f9d9-1f3fc-200d-2642-fe0f"
+    },
+    "1f9d9-1f3fd-200d-2642": {
+        "qualified": "1f9d9-1f3fd-200d-2642-fe0f"
+    },
+    "1f9d9-1f3fe-200d-2642": {
+        "qualified": "1f9d9-1f3fe-200d-2642-fe0f"
+    },
+    "1f9d9-1f3ff-200d-2642": {
+        "qualified": "1f9d9-1f3ff-200d-2642-fe0f"
+    },
+    "1f9d9-200d-2640": {
+        "qualified": "1f9d9-200d-2640-fe0f"
+    },
+    "1f9d9-1f3fb-200d-2640": {
+        "qualified": "1f9d9-1f3fb-200d-2640-fe0f"
+    },
+    "1f9d9-1f3fc-200d-2640": {
+        "qualified": "1f9d9-1f3fc-200d-2640-fe0f"
+    },
+    "1f9d9-1f3fd-200d-2640": {
+        "qualified": "1f9d9-1f3fd-200d-2640-fe0f"
+    },
+    "1f9d9-1f3fe-200d-2640": {
+        "qualified": "1f9d9-1f3fe-200d-2640-fe0f"
+    },
+    "1f9d9-1f3ff-200d-2640": {
+        "qualified": "1f9d9-1f3ff-200d-2640-fe0f"
+    },
+    "1f9da-200d-2642": {
+        "qualified": "1f9da-200d-2642-fe0f"
+    },
+    "1f9da-1f3fb-200d-2642": {
+        "qualified": "1f9da-1f3fb-200d-2642-fe0f"
+    },
+    "1f9da-1f3fc-200d-2642": {
+        "qualified": "1f9da-1f3fc-200d-2642-fe0f"
+    },
+    "1f9da-1f3fd-200d-2642": {
+        "qualified": "1f9da-1f3fd-200d-2642-fe0f"
+    },
+    "1f9da-1f3fe-200d-2642": {
+        "qualified": "1f9da-1f3fe-200d-2642-fe0f"
+    },
+    "1f9da-1f3ff-200d-2642": {
+        "qualified": "1f9da-1f3ff-200d-2642-fe0f"
+    },
+    "1f9da-200d-2640": {
+        "qualified": "1f9da-200d-2640-fe0f"
+    },
+    "1f9da-1f3fb-200d-2640": {
+        "qualified": "1f9da-1f3fb-200d-2640-fe0f"
+    },
+    "1f9da-1f3fc-200d-2640": {
+        "qualified": "1f9da-1f3fc-200d-2640-fe0f"
+    },
+    "1f9da-1f3fd-200d-2640": {
+        "qualified": "1f9da-1f3fd-200d-2640-fe0f"
+    },
+    "1f9da-1f3fe-200d-2640": {
+        "qualified": "1f9da-1f3fe-200d-2640-fe0f"
+    },
+    "1f9da-1f3ff-200d-2640": {
+        "qualified": "1f9da-1f3ff-200d-2640-fe0f"
+    },
+    "1f9db-200d-2642": {
+        "qualified": "1f9db-200d-2642-fe0f"
+    },
+    "1f9db-1f3fb-200d-2642": {
+        "qualified": "1f9db-1f3fb-200d-2642-fe0f"
+    },
+    "1f9db-1f3fc-200d-2642": {
+        "qualified": "1f9db-1f3fc-200d-2642-fe0f"
+    },
+    "1f9db-1f3fd-200d-2642": {
+        "qualified": "1f9db-1f3fd-200d-2642-fe0f"
+    },
+    "1f9db-1f3fe-200d-2642": {
+        "qualified": "1f9db-1f3fe-200d-2642-fe0f"
+    },
+    "1f9db-1f3ff-200d-2642": {
+        "qualified": "1f9db-1f3ff-200d-2642-fe0f"
+    },
+    "1f9db-200d-2640": {
+        "qualified": "1f9db-200d-2640-fe0f"
+    },
+    "1f9db-1f3fb-200d-2640": {
+        "qualified": "1f9db-1f3fb-200d-2640-fe0f"
+    },
+    "1f9db-1f3fc-200d-2640": {
+        "qualified": "1f9db-1f3fc-200d-2640-fe0f"
+    },
+    "1f9db-1f3fd-200d-2640": {
+        "qualified": "1f9db-1f3fd-200d-2640-fe0f"
+    },
+    "1f9db-1f3fe-200d-2640": {
+        "qualified": "1f9db-1f3fe-200d-2640-fe0f"
+    },
+    "1f9db-1f3ff-200d-2640": {
+        "qualified": "1f9db-1f3ff-200d-2640-fe0f"
+    },
+    "1f9dc-200d-2642": {
+        "qualified": "1f9dc-200d-2642-fe0f"
+    },
+    "1f9dc-1f3fb-200d-2642": {
+        "qualified": "1f9dc-1f3fb-200d-2642-fe0f"
+    },
+    "1f9dc-1f3fc-200d-2642": {
+        "qualified": "1f9dc-1f3fc-200d-2642-fe0f"
+    },
+    "1f9dc-1f3fd-200d-2642": {
+        "qualified": "1f9dc-1f3fd-200d-2642-fe0f"
+    },
+    "1f9dc-1f3fe-200d-2642": {
+        "qualified": "1f9dc-1f3fe-200d-2642-fe0f"
+    },
+    "1f9dc-1f3ff-200d-2642": {
+        "qualified": "1f9dc-1f3ff-200d-2642-fe0f"
+    },
+    "1f9dc-200d-2640": {
+        "qualified": "1f9dc-200d-2640-fe0f"
+    },
+    "1f9dc-1f3fb-200d-2640": {
+        "qualified": "1f9dc-1f3fb-200d-2640-fe0f"
+    },
+    "1f9dc-1f3fc-200d-2640": {
+        "qualified": "1f9dc-1f3fc-200d-2640-fe0f"
+    },
+    "1f9dc-1f3fd-200d-2640": {
+        "qualified": "1f9dc-1f3fd-200d-2640-fe0f"
+    },
+    "1f9dc-1f3fe-200d-2640": {
+        "qualified": "1f9dc-1f3fe-200d-2640-fe0f"
+    },
+    "1f9dc-1f3ff-200d-2640": {
+        "qualified": "1f9dc-1f3ff-200d-2640-fe0f"
+    },
+    "1f9dd-200d-2642": {
+        "qualified": "1f9dd-200d-2642-fe0f"
+    },
+    "1f9dd-1f3fb-200d-2642": {
+        "qualified": "1f9dd-1f3fb-200d-2642-fe0f"
+    },
+    "1f9dd-1f3fc-200d-2642": {
+        "qualified": "1f9dd-1f3fc-200d-2642-fe0f"
+    },
+    "1f9dd-1f3fd-200d-2642": {
+        "qualified": "1f9dd-1f3fd-200d-2642-fe0f"
+    },
+    "1f9dd-1f3fe-200d-2642": {
+        "qualified": "1f9dd-1f3fe-200d-2642-fe0f"
+    },
+    "1f9dd-1f3ff-200d-2642": {
+        "qualified": "1f9dd-1f3ff-200d-2642-fe0f"
+    },
+    "1f9dd-200d-2640": {
+        "qualified": "1f9dd-200d-2640-fe0f"
+    },
+    "1f9dd-1f3fb-200d-2640": {
+        "qualified": "1f9dd-1f3fb-200d-2640-fe0f"
+    },
+    "1f9dd-1f3fc-200d-2640": {
+        "qualified": "1f9dd-1f3fc-200d-2640-fe0f"
+    },
+    "1f9dd-1f3fd-200d-2640": {
+        "qualified": "1f9dd-1f3fd-200d-2640-fe0f"
+    },
+    "1f9dd-1f3fe-200d-2640": {
+        "qualified": "1f9dd-1f3fe-200d-2640-fe0f"
+    },
+    "1f9dd-1f3ff-200d-2640": {
+        "qualified": "1f9dd-1f3ff-200d-2640-fe0f"
+    },
+    "1f9de-200d-2642": {
+        "qualified": "1f9de-200d-2642-fe0f"
+    },
+    "1f9de-200d-2640": {
+        "qualified": "1f9de-200d-2640-fe0f"
+    },
+    "1f9df-200d-2642": {
+        "qualified": "1f9df-200d-2642-fe0f"
+    },
+    "1f9df-200d-2640": {
+        "qualified": "1f9df-200d-2640-fe0f"
+    },
+    "1f486-200d-2642": {
+        "qualified": "1f486-200d-2642-fe0f"
+    },
+    "1f486-1f3fb-200d-2642": {
+        "qualified": "1f486-1f3fb-200d-2642-fe0f"
+    },
+    "1f486-1f3fc-200d-2642": {
+        "qualified": "1f486-1f3fc-200d-2642-fe0f"
+    },
+    "1f486-1f3fd-200d-2642": {
+        "qualified": "1f486-1f3fd-200d-2642-fe0f"
+    },
+    "1f486-1f3fe-200d-2642": {
+        "qualified": "1f486-1f3fe-200d-2642-fe0f"
+    },
+    "1f486-1f3ff-200d-2642": {
+        "qualified": "1f486-1f3ff-200d-2642-fe0f"
+    },
+    "1f486-200d-2640": {
+        "qualified": "1f486-200d-2640-fe0f"
+    },
+    "1f486-1f3fb-200d-2640": {
+        "qualified": "1f486-1f3fb-200d-2640-fe0f"
+    },
+    "1f486-1f3fc-200d-2640": {
+        "qualified": "1f486-1f3fc-200d-2640-fe0f"
+    },
+    "1f486-1f3fd-200d-2640": {
+        "qualified": "1f486-1f3fd-200d-2640-fe0f"
+    },
+    "1f486-1f3fe-200d-2640": {
+        "qualified": "1f486-1f3fe-200d-2640-fe0f"
+    },
+    "1f486-1f3ff-200d-2640": {
+        "qualified": "1f486-1f3ff-200d-2640-fe0f"
+    },
+    "1f487-200d-2642": {
+        "qualified": "1f487-200d-2642-fe0f"
+    },
+    "1f487-1f3fb-200d-2642": {
+        "qualified": "1f487-1f3fb-200d-2642-fe0f"
+    },
+    "1f487-1f3fc-200d-2642": {
+        "qualified": "1f487-1f3fc-200d-2642-fe0f"
+    },
+    "1f487-1f3fd-200d-2642": {
+        "qualified": "1f487-1f3fd-200d-2642-fe0f"
+    },
+    "1f487-1f3fe-200d-2642": {
+        "qualified": "1f487-1f3fe-200d-2642-fe0f"
+    },
+    "1f487-1f3ff-200d-2642": {
+        "qualified": "1f487-1f3ff-200d-2642-fe0f"
+    },
+    "1f487-200d-2640": {
+        "qualified": "1f487-200d-2640-fe0f"
+    },
+    "1f487-1f3fb-200d-2640": {
+        "qualified": "1f487-1f3fb-200d-2640-fe0f"
+    },
+    "1f487-1f3fc-200d-2640": {
+        "qualified": "1f487-1f3fc-200d-2640-fe0f"
+    },
+    "1f487-1f3fd-200d-2640": {
+        "qualified": "1f487-1f3fd-200d-2640-fe0f"
+    },
+    "1f487-1f3fe-200d-2640": {
+        "qualified": "1f487-1f3fe-200d-2640-fe0f"
+    },
+    "1f487-1f3ff-200d-2640": {
+        "qualified": "1f487-1f3ff-200d-2640-fe0f"
+    },
+    "1f6b6-200d-2642": {
+        "qualified": "1f6b6-200d-2642-fe0f"
+    },
+    "1f6b6-1f3fb-200d-2642": {
+        "qualified": "1f6b6-1f3fb-200d-2642-fe0f"
+    },
+    "1f6b6-1f3fc-200d-2642": {
+        "qualified": "1f6b6-1f3fc-200d-2642-fe0f"
+    },
+    "1f6b6-1f3fd-200d-2642": {
+        "qualified": "1f6b6-1f3fd-200d-2642-fe0f"
+    },
+    "1f6b6-1f3fe-200d-2642": {
+        "qualified": "1f6b6-1f3fe-200d-2642-fe0f"
+    },
+    "1f6b6-1f3ff-200d-2642": {
+        "qualified": "1f6b6-1f3ff-200d-2642-fe0f"
+    },
+    "1f6b6-200d-2640": {
+        "qualified": "1f6b6-200d-2640-fe0f"
+    },
+    "1f6b6-1f3fb-200d-2640": {
+        "qualified": "1f6b6-1f3fb-200d-2640-fe0f"
+    },
+    "1f6b6-1f3fc-200d-2640": {
+        "qualified": "1f6b6-1f3fc-200d-2640-fe0f"
+    },
+    "1f6b6-1f3fd-200d-2640": {
+        "qualified": "1f6b6-1f3fd-200d-2640-fe0f"
+    },
+    "1f6b6-1f3fe-200d-2640": {
+        "qualified": "1f6b6-1f3fe-200d-2640-fe0f"
+    },
+    "1f6b6-1f3ff-200d-2640": {
+        "qualified": "1f6b6-1f3ff-200d-2640-fe0f"
+    },
+    "1f9cd-200d-2642": {
+        "qualified": "1f9cd-200d-2642-fe0f"
+    },
+    "1f9cd-1f3fb-200d-2642": {
+        "qualified": "1f9cd-1f3fb-200d-2642-fe0f"
+    },
+    "1f9cd-1f3fc-200d-2642": {
+        "qualified": "1f9cd-1f3fc-200d-2642-fe0f"
+    },
+    "1f9cd-1f3fd-200d-2642": {
+        "qualified": "1f9cd-1f3fd-200d-2642-fe0f"
+    },
+    "1f9cd-1f3fe-200d-2642": {
+        "qualified": "1f9cd-1f3fe-200d-2642-fe0f"
+    },
+    "1f9cd-1f3ff-200d-2642": {
+        "qualified": "1f9cd-1f3ff-200d-2642-fe0f"
+    },
+    "1f9cd-200d-2640": {
+        "qualified": "1f9cd-200d-2640-fe0f"
+    },
+    "1f9cd-1f3fb-200d-2640": {
+        "qualified": "1f9cd-1f3fb-200d-2640-fe0f"
+    },
+    "1f9cd-1f3fc-200d-2640": {
+        "qualified": "1f9cd-1f3fc-200d-2640-fe0f"
+    },
+    "1f9cd-1f3fd-200d-2640": {
+        "qualified": "1f9cd-1f3fd-200d-2640-fe0f"
+    },
+    "1f9cd-1f3fe-200d-2640": {
+        "qualified": "1f9cd-1f3fe-200d-2640-fe0f"
+    },
+    "1f9cd-1f3ff-200d-2640": {
+        "qualified": "1f9cd-1f3ff-200d-2640-fe0f"
+    },
+    "1f9ce-200d-2642": {
+        "qualified": "1f9ce-200d-2642-fe0f"
+    },
+    "1f9ce-1f3fb-200d-2642": {
+        "qualified": "1f9ce-1f3fb-200d-2642-fe0f"
+    },
+    "1f9ce-1f3fc-200d-2642": {
+        "qualified": "1f9ce-1f3fc-200d-2642-fe0f"
+    },
+    "1f9ce-1f3fd-200d-2642": {
+        "qualified": "1f9ce-1f3fd-200d-2642-fe0f"
+    },
+    "1f9ce-1f3fe-200d-2642": {
+        "qualified": "1f9ce-1f3fe-200d-2642-fe0f"
+    },
+    "1f9ce-1f3ff-200d-2642": {
+        "qualified": "1f9ce-1f3ff-200d-2642-fe0f"
+    },
+    "1f9ce-200d-2640": {
+        "qualified": "1f9ce-200d-2640-fe0f"
+    },
+    "1f9ce-1f3fb-200d-2640": {
+        "qualified": "1f9ce-1f3fb-200d-2640-fe0f"
+    },
+    "1f9ce-1f3fc-200d-2640": {
+        "qualified": "1f9ce-1f3fc-200d-2640-fe0f"
+    },
+    "1f9ce-1f3fd-200d-2640": {
+        "qualified": "1f9ce-1f3fd-200d-2640-fe0f"
+    },
+    "1f9ce-1f3fe-200d-2640": {
+        "qualified": "1f9ce-1f3fe-200d-2640-fe0f"
+    },
+    "1f9ce-1f3ff-200d-2640": {
+        "qualified": "1f9ce-1f3ff-200d-2640-fe0f"
+    },
+    "1f3c3-200d-2642": {
+        "qualified": "1f3c3-200d-2642-fe0f"
+    },
+    "1f3c3-1f3fb-200d-2642": {
+        "qualified": "1f3c3-1f3fb-200d-2642-fe0f"
+    },
+    "1f3c3-1f3fc-200d-2642": {
+        "qualified": "1f3c3-1f3fc-200d-2642-fe0f"
+    },
+    "1f3c3-1f3fd-200d-2642": {
+        "qualified": "1f3c3-1f3fd-200d-2642-fe0f"
+    },
+    "1f3c3-1f3fe-200d-2642": {
+        "qualified": "1f3c3-1f3fe-200d-2642-fe0f"
+    },
+    "1f3c3-1f3ff-200d-2642": {
+        "qualified": "1f3c3-1f3ff-200d-2642-fe0f"
+    },
+    "1f3c3-200d-2640": {
+        "qualified": "1f3c3-200d-2640-fe0f"
+    },
+    "1f3c3-1f3fb-200d-2640": {
+        "qualified": "1f3c3-1f3fb-200d-2640-fe0f"
+    },
+    "1f3c3-1f3fc-200d-2640": {
+        "qualified": "1f3c3-1f3fc-200d-2640-fe0f"
+    },
+    "1f3c3-1f3fd-200d-2640": {
+        "qualified": "1f3c3-1f3fd-200d-2640-fe0f"
+    },
+    "1f3c3-1f3fe-200d-2640": {
+        "qualified": "1f3c3-1f3fe-200d-2640-fe0f"
+    },
+    "1f3c3-1f3ff-200d-2640": {
+        "qualified": "1f3c3-1f3ff-200d-2640-fe0f"
+    },
+    "1f574": {
+        "qualified": "1f574-fe0f"
+    },
+    "1f46f-200d-2642": {
+        "qualified": "1f46f-200d-2642-fe0f"
+    },
+    "1f46f-200d-2640": {
+        "qualified": "1f46f-200d-2640-fe0f"
+    },
+    "1f9d6-200d-2642": {
+        "qualified": "1f9d6-200d-2642-fe0f"
+    },
+    "1f9d6-1f3fb-200d-2642": {
+        "qualified": "1f9d6-1f3fb-200d-2642-fe0f"
+    },
+    "1f9d6-1f3fc-200d-2642": {
+        "qualified": "1f9d6-1f3fc-200d-2642-fe0f"
+    },
+    "1f9d6-1f3fd-200d-2642": {
+        "qualified": "1f9d6-1f3fd-200d-2642-fe0f"
+    },
+    "1f9d6-1f3fe-200d-2642": {
+        "qualified": "1f9d6-1f3fe-200d-2642-fe0f"
+    },
+    "1f9d6-1f3ff-200d-2642": {
+        "qualified": "1f9d6-1f3ff-200d-2642-fe0f"
+    },
+    "1f9d6-200d-2640": {
+        "qualified": "1f9d6-200d-2640-fe0f"
+    },
+    "1f9d6-1f3fb-200d-2640": {
+        "qualified": "1f9d6-1f3fb-200d-2640-fe0f"
+    },
+    "1f9d6-1f3fc-200d-2640": {
+        "qualified": "1f9d6-1f3fc-200d-2640-fe0f"
+    },
+    "1f9d6-1f3fd-200d-2640": {
+        "qualified": "1f9d6-1f3fd-200d-2640-fe0f"
+    },
+    "1f9d6-1f3fe-200d-2640": {
+        "qualified": "1f9d6-1f3fe-200d-2640-fe0f"
+    },
+    "1f9d6-1f3ff-200d-2640": {
+        "qualified": "1f9d6-1f3ff-200d-2640-fe0f"
+    },
+    "1f9d7-200d-2642": {
+        "qualified": "1f9d7-200d-2642-fe0f"
+    },
+    "1f9d7-1f3fb-200d-2642": {
+        "qualified": "1f9d7-1f3fb-200d-2642-fe0f"
+    },
+    "1f9d7-1f3fc-200d-2642": {
+        "qualified": "1f9d7-1f3fc-200d-2642-fe0f"
+    },
+    "1f9d7-1f3fd-200d-2642": {
+        "qualified": "1f9d7-1f3fd-200d-2642-fe0f"
+    },
+    "1f9d7-1f3fe-200d-2642": {
+        "qualified": "1f9d7-1f3fe-200d-2642-fe0f"
+    },
+    "1f9d7-1f3ff-200d-2642": {
+        "qualified": "1f9d7-1f3ff-200d-2642-fe0f"
+    },
+    "1f9d7-200d-2640": {
+        "qualified": "1f9d7-200d-2640-fe0f"
+    },
+    "1f9d7-1f3fb-200d-2640": {
+        "qualified": "1f9d7-1f3fb-200d-2640-fe0f"
+    },
+    "1f9d7-1f3fc-200d-2640": {
+        "qualified": "1f9d7-1f3fc-200d-2640-fe0f"
+    },
+    "1f9d7-1f3fd-200d-2640": {
+        "qualified": "1f9d7-1f3fd-200d-2640-fe0f"
+    },
+    "1f9d7-1f3fe-200d-2640": {
+        "qualified": "1f9d7-1f3fe-200d-2640-fe0f"
+    },
+    "1f9d7-1f3ff-200d-2640": {
+        "qualified": "1f9d7-1f3ff-200d-2640-fe0f"
+    },
+    "26f7": {
+        "qualified": "26f7-fe0f"
+    },
+    "1f3cc": {
+        "qualified": "1f3cc-fe0f"
+    },
+    "1f3cc-200d-2642-fe0f": {
+        "qualified": "1f3cc-fe0f-200d-2642-fe0f"
+    },
+    "1f3cc-fe0f-200d-2642": {
+        "qualified": "1f3cc-fe0f-200d-2642-fe0f"
+    },
+    "1f3cc-200d-2642": {
+        "qualified": "1f3cc-fe0f-200d-2642-fe0f"
+    },
+    "1f3cc-1f3fb-200d-2642": {
+        "qualified": "1f3cc-1f3fb-200d-2642-fe0f"
+    },
+    "1f3cc-1f3fc-200d-2642": {
+        "qualified": "1f3cc-1f3fc-200d-2642-fe0f"
+    },
+    "1f3cc-1f3fd-200d-2642": {
+        "qualified": "1f3cc-1f3fd-200d-2642-fe0f"
+    },
+    "1f3cc-1f3fe-200d-2642": {
+        "qualified": "1f3cc-1f3fe-200d-2642-fe0f"
+    },
+    "1f3cc-1f3ff-200d-2642": {
+        "qualified": "1f3cc-1f3ff-200d-2642-fe0f"
+    },
+    "1f3cc-200d-2640-fe0f": {
+        "qualified": "1f3cc-fe0f-200d-2640-fe0f"
+    },
+    "1f3cc-fe0f-200d-2640": {
+        "qualified": "1f3cc-fe0f-200d-2640-fe0f"
+    },
+    "1f3cc-200d-2640": {
+        "qualified": "1f3cc-fe0f-200d-2640-fe0f"
+    },
+    "1f3cc-1f3fb-200d-2640": {
+        "qualified": "1f3cc-1f3fb-200d-2640-fe0f"
+    },
+    "1f3cc-1f3fc-200d-2640": {
+        "qualified": "1f3cc-1f3fc-200d-2640-fe0f"
+    },
+    "1f3cc-1f3fd-200d-2640": {
+        "qualified": "1f3cc-1f3fd-200d-2640-fe0f"
+    },
+    "1f3cc-1f3fe-200d-2640": {
+        "qualified": "1f3cc-1f3fe-200d-2640-fe0f"
+    },
+    "1f3cc-1f3ff-200d-2640": {
+        "qualified": "1f3cc-1f3ff-200d-2640-fe0f"
+    },
+    "1f3c4-200d-2642": {
+        "qualified": "1f3c4-200d-2642-fe0f"
+    },
+    "1f3c4-1f3fb-200d-2642": {
+        "qualified": "1f3c4-1f3fb-200d-2642-fe0f"
+    },
+    "1f3c4-1f3fc-200d-2642": {
+        "qualified": "1f3c4-1f3fc-200d-2642-fe0f"
+    },
+    "1f3c4-1f3fd-200d-2642": {
+        "qualified": "1f3c4-1f3fd-200d-2642-fe0f"
+    },
+    "1f3c4-1f3fe-200d-2642": {
+        "qualified": "1f3c4-1f3fe-200d-2642-fe0f"
+    },
+    "1f3c4-1f3ff-200d-2642": {
+        "qualified": "1f3c4-1f3ff-200d-2642-fe0f"
+    },
+    "1f3c4-200d-2640": {
+        "qualified": "1f3c4-200d-2640-fe0f"
+    },
+    "1f3c4-1f3fb-200d-2640": {
+        "qualified": "1f3c4-1f3fb-200d-2640-fe0f"
+    },
+    "1f3c4-1f3fc-200d-2640": {
+        "qualified": "1f3c4-1f3fc-200d-2640-fe0f"
+    },
+    "1f3c4-1f3fd-200d-2640": {
+        "qualified": "1f3c4-1f3fd-200d-2640-fe0f"
+    },
+    "1f3c4-1f3fe-200d-2640": {
+        "qualified": "1f3c4-1f3fe-200d-2640-fe0f"
+    },
+    "1f3c4-1f3ff-200d-2640": {
+        "qualified": "1f3c4-1f3ff-200d-2640-fe0f"
+    },
+    "1f6a3-200d-2642": {
+        "qualified": "1f6a3-200d-2642-fe0f"
+    },
+    "1f6a3-1f3fb-200d-2642": {
+        "qualified": "1f6a3-1f3fb-200d-2642-fe0f"
+    },
+    "1f6a3-1f3fc-200d-2642": {
+        "qualified": "1f6a3-1f3fc-200d-2642-fe0f"
+    },
+    "1f6a3-1f3fd-200d-2642": {
+        "qualified": "1f6a3-1f3fd-200d-2642-fe0f"
+    },
+    "1f6a3-1f3fe-200d-2642": {
+        "qualified": "1f6a3-1f3fe-200d-2642-fe0f"
+    },
+    "1f6a3-1f3ff-200d-2642": {
+        "qualified": "1f6a3-1f3ff-200d-2642-fe0f"
+    },
+    "1f6a3-200d-2640": {
+        "qualified": "1f6a3-200d-2640-fe0f"
+    },
+    "1f6a3-1f3fb-200d-2640": {
+        "qualified": "1f6a3-1f3fb-200d-2640-fe0f"
+    },
+    "1f6a3-1f3fc-200d-2640": {
+        "qualified": "1f6a3-1f3fc-200d-2640-fe0f"
+    },
+    "1f6a3-1f3fd-200d-2640": {
+        "qualified": "1f6a3-1f3fd-200d-2640-fe0f"
+    },
+    "1f6a3-1f3fe-200d-2640": {
+        "qualified": "1f6a3-1f3fe-200d-2640-fe0f"
+    },
+    "1f6a3-1f3ff-200d-2640": {
+        "qualified": "1f6a3-1f3ff-200d-2640-fe0f"
+    },
+    "1f3ca-200d-2642": {
+        "qualified": "1f3ca-200d-2642-fe0f"
+    },
+    "1f3ca-1f3fb-200d-2642": {
+        "qualified": "1f3ca-1f3fb-200d-2642-fe0f"
+    },
+    "1f3ca-1f3fc-200d-2642": {
+        "qualified": "1f3ca-1f3fc-200d-2642-fe0f"
+    },
+    "1f3ca-1f3fd-200d-2642": {
+        "qualified": "1f3ca-1f3fd-200d-2642-fe0f"
+    },
+    "1f3ca-1f3fe-200d-2642": {
+        "qualified": "1f3ca-1f3fe-200d-2642-fe0f"
+    },
+    "1f3ca-1f3ff-200d-2642": {
+        "qualified": "1f3ca-1f3ff-200d-2642-fe0f"
+    },
+    "1f3ca-200d-2640": {
+        "qualified": "1f3ca-200d-2640-fe0f"
+    },
+    "1f3ca-1f3fb-200d-2640": {
+        "qualified": "1f3ca-1f3fb-200d-2640-fe0f"
+    },
+    "1f3ca-1f3fc-200d-2640": {
+        "qualified": "1f3ca-1f3fc-200d-2640-fe0f"
+    },
+    "1f3ca-1f3fd-200d-2640": {
+        "qualified": "1f3ca-1f3fd-200d-2640-fe0f"
+    },
+    "1f3ca-1f3fe-200d-2640": {
+        "qualified": "1f3ca-1f3fe-200d-2640-fe0f"
+    },
+    "1f3ca-1f3ff-200d-2640": {
+        "qualified": "1f3ca-1f3ff-200d-2640-fe0f"
+    },
+    "26f9": {
+        "qualified": "26f9-fe0f"
+    },
+    "26f9-200d-2642-fe0f": {
+        "qualified": "26f9-fe0f-200d-2642-fe0f"
+    },
+    "26f9-fe0f-200d-2642": {
+        "qualified": "26f9-fe0f-200d-2642-fe0f"
+    },
+    "26f9-200d-2642": {
+        "qualified": "26f9-fe0f-200d-2642-fe0f"
+    },
+    "26f9-1f3fb-200d-2642": {
+        "qualified": "26f9-1f3fb-200d-2642-fe0f"
+    },
+    "26f9-1f3fc-200d-2642": {
+        "qualified": "26f9-1f3fc-200d-2642-fe0f"
+    },
+    "26f9-1f3fd-200d-2642": {
+        "qualified": "26f9-1f3fd-200d-2642-fe0f"
+    },
+    "26f9-1f3fe-200d-2642": {
+        "qualified": "26f9-1f3fe-200d-2642-fe0f"
+    },
+    "26f9-1f3ff-200d-2642": {
+        "qualified": "26f9-1f3ff-200d-2642-fe0f"
+    },
+    "26f9-200d-2640-fe0f": {
+        "qualified": "26f9-fe0f-200d-2640-fe0f"
+    },
+    "26f9-fe0f-200d-2640": {
+        "qualified": "26f9-fe0f-200d-2640-fe0f"
+    },
+    "26f9-200d-2640": {
+        "qualified": "26f9-fe0f-200d-2640-fe0f"
+    },
+    "26f9-1f3fb-200d-2640": {
+        "qualified": "26f9-1f3fb-200d-2640-fe0f"
+    },
+    "26f9-1f3fc-200d-2640": {
+        "qualified": "26f9-1f3fc-200d-2640-fe0f"
+    },
+    "26f9-1f3fd-200d-2640": {
+        "qualified": "26f9-1f3fd-200d-2640-fe0f"
+    },
+    "26f9-1f3fe-200d-2640": {
+        "qualified": "26f9-1f3fe-200d-2640-fe0f"
+    },
+    "26f9-1f3ff-200d-2640": {
+        "qualified": "26f9-1f3ff-200d-2640-fe0f"
+    },
+    "1f3cb": {
+        "qualified": "1f3cb-fe0f"
+    },
+    "1f3cb-200d-2642-fe0f": {
+        "qualified": "1f3cb-fe0f-200d-2642-fe0f"
+    },
+    "1f3cb-fe0f-200d-2642": {
+        "qualified": "1f3cb-fe0f-200d-2642-fe0f"
+    },
+    "1f3cb-200d-2642": {
+        "qualified": "1f3cb-fe0f-200d-2642-fe0f"
+    },
+    "1f3cb-1f3fb-200d-2642": {
+        "qualified": "1f3cb-1f3fb-200d-2642-fe0f"
+    },
+    "1f3cb-1f3fc-200d-2642": {
+        "qualified": "1f3cb-1f3fc-200d-2642-fe0f"
+    },
+    "1f3cb-1f3fd-200d-2642": {
+        "qualified": "1f3cb-1f3fd-200d-2642-fe0f"
+    },
+    "1f3cb-1f3fe-200d-2642": {
+        "qualified": "1f3cb-1f3fe-200d-2642-fe0f"
+    },
+    "1f3cb-1f3ff-200d-2642": {
+        "qualified": "1f3cb-1f3ff-200d-2642-fe0f"
+    },
+    "1f3cb-200d-2640-fe0f": {
+        "qualified": "1f3cb-fe0f-200d-2640-fe0f"
+    },
+    "1f3cb-fe0f-200d-2640": {
+        "qualified": "1f3cb-fe0f-200d-2640-fe0f"
+    },
+    "1f3cb-200d-2640": {
+        "qualified": "1f3cb-fe0f-200d-2640-fe0f"
+    },
+    "1f3cb-1f3fb-200d-2640": {
+        "qualified": "1f3cb-1f3fb-200d-2640-fe0f"
+    },
+    "1f3cb-1f3fc-200d-2640": {
+        "qualified": "1f3cb-1f3fc-200d-2640-fe0f"
+    },
+    "1f3cb-1f3fd-200d-2640": {
+        "qualified": "1f3cb-1f3fd-200d-2640-fe0f"
+    },
+    "1f3cb-1f3fe-200d-2640": {
+        "qualified": "1f3cb-1f3fe-200d-2640-fe0f"
+    },
+    "1f3cb-1f3ff-200d-2640": {
+        "qualified": "1f3cb-1f3ff-200d-2640-fe0f"
+    },
+    "1f6b4-200d-2642": {
+        "qualified": "1f6b4-200d-2642-fe0f"
+    },
+    "1f6b4-1f3fb-200d-2642": {
+        "qualified": "1f6b4-1f3fb-200d-2642-fe0f"
+    },
+    "1f6b4-1f3fc-200d-2642": {
+        "qualified": "1f6b4-1f3fc-200d-2642-fe0f"
+    },
+    "1f6b4-1f3fd-200d-2642": {
+        "qualified": "1f6b4-1f3fd-200d-2642-fe0f"
+    },
+    "1f6b4-1f3fe-200d-2642": {
+        "qualified": "1f6b4-1f3fe-200d-2642-fe0f"
+    },
+    "1f6b4-1f3ff-200d-2642": {
+        "qualified": "1f6b4-1f3ff-200d-2642-fe0f"
+    },
+    "1f6b4-200d-2640": {
+        "qualified": "1f6b4-200d-2640-fe0f"
+    },
+    "1f6b4-1f3fb-200d-2640": {
+        "qualified": "1f6b4-1f3fb-200d-2640-fe0f"
+    },
+    "1f6b4-1f3fc-200d-2640": {
+        "qualified": "1f6b4-1f3fc-200d-2640-fe0f"
+    },
+    "1f6b4-1f3fd-200d-2640": {
+        "qualified": "1f6b4-1f3fd-200d-2640-fe0f"
+    },
+    "1f6b4-1f3fe-200d-2640": {
+        "qualified": "1f6b4-1f3fe-200d-2640-fe0f"
+    },
+    "1f6b4-1f3ff-200d-2640": {
+        "qualified": "1f6b4-1f3ff-200d-2640-fe0f"
+    },
+    "1f6b5-200d-2642": {
+        "qualified": "1f6b5-200d-2642-fe0f"
+    },
+    "1f6b5-1f3fb-200d-2642": {
+        "qualified": "1f6b5-1f3fb-200d-2642-fe0f"
+    },
+    "1f6b5-1f3fc-200d-2642": {
+        "qualified": "1f6b5-1f3fc-200d-2642-fe0f"
+    },
+    "1f6b5-1f3fd-200d-2642": {
+        "qualified": "1f6b5-1f3fd-200d-2642-fe0f"
+    },
+    "1f6b5-1f3fe-200d-2642": {
+        "qualified": "1f6b5-1f3fe-200d-2642-fe0f"
+    },
+    "1f6b5-1f3ff-200d-2642": {
+        "qualified": "1f6b5-1f3ff-200d-2642-fe0f"
+    },
+    "1f6b5-200d-2640": {
+        "qualified": "1f6b5-200d-2640-fe0f"
+    },
+    "1f6b5-1f3fb-200d-2640": {
+        "qualified": "1f6b5-1f3fb-200d-2640-fe0f"
+    },
+    "1f6b5-1f3fc-200d-2640": {
+        "qualified": "1f6b5-1f3fc-200d-2640-fe0f"
+    },
+    "1f6b5-1f3fd-200d-2640": {
+        "qualified": "1f6b5-1f3fd-200d-2640-fe0f"
+    },
+    "1f6b5-1f3fe-200d-2640": {
+        "qualified": "1f6b5-1f3fe-200d-2640-fe0f"
+    },
+    "1f6b5-1f3ff-200d-2640": {
+        "qualified": "1f6b5-1f3ff-200d-2640-fe0f"
+    },
+    "1f938-200d-2642": {
+        "qualified": "1f938-200d-2642-fe0f"
+    },
+    "1f938-1f3fb-200d-2642": {
+        "qualified": "1f938-1f3fb-200d-2642-fe0f"
+    },
+    "1f938-1f3fc-200d-2642": {
+        "qualified": "1f938-1f3fc-200d-2642-fe0f"
+    },
+    "1f938-1f3fd-200d-2642": {
+        "qualified": "1f938-1f3fd-200d-2642-fe0f"
+    },
+    "1f938-1f3fe-200d-2642": {
+        "qualified": "1f938-1f3fe-200d-2642-fe0f"
+    },
+    "1f938-1f3ff-200d-2642": {
+        "qualified": "1f938-1f3ff-200d-2642-fe0f"
+    },
+    "1f938-200d-2640": {
+        "qualified": "1f938-200d-2640-fe0f"
+    },
+    "1f938-1f3fb-200d-2640": {
+        "qualified": "1f938-1f3fb-200d-2640-fe0f"
+    },
+    "1f938-1f3fc-200d-2640": {
+        "qualified": "1f938-1f3fc-200d-2640-fe0f"
+    },
+    "1f938-1f3fd-200d-2640": {
+        "qualified": "1f938-1f3fd-200d-2640-fe0f"
+    },
+    "1f938-1f3fe-200d-2640": {
+        "qualified": "1f938-1f3fe-200d-2640-fe0f"
+    },
+    "1f938-1f3ff-200d-2640": {
+        "qualified": "1f938-1f3ff-200d-2640-fe0f"
+    },
+    "1f93c-200d-2642": {
+        "qualified": "1f93c-200d-2642-fe0f"
+    },
+    "1f93c-200d-2640": {
+        "qualified": "1f93c-200d-2640-fe0f"
+    },
+    "1f93d-200d-2642": {
+        "qualified": "1f93d-200d-2642-fe0f"
+    },
+    "1f93d-1f3fb-200d-2642": {
+        "qualified": "1f93d-1f3fb-200d-2642-fe0f"
+    },
+    "1f93d-1f3fc-200d-2642": {
+        "qualified": "1f93d-1f3fc-200d-2642-fe0f"
+    },
+    "1f93d-1f3fd-200d-2642": {
+        "qualified": "1f93d-1f3fd-200d-2642-fe0f"
+    },
+    "1f93d-1f3fe-200d-2642": {
+        "qualified": "1f93d-1f3fe-200d-2642-fe0f"
+    },
+    "1f93d-1f3ff-200d-2642": {
+        "qualified": "1f93d-1f3ff-200d-2642-fe0f"
+    },
+    "1f93d-200d-2640": {
+        "qualified": "1f93d-200d-2640-fe0f"
+    },
+    "1f93d-1f3fb-200d-2640": {
+        "qualified": "1f93d-1f3fb-200d-2640-fe0f"
+    },
+    "1f93d-1f3fc-200d-2640": {
+        "qualified": "1f93d-1f3fc-200d-2640-fe0f"
+    },
+    "1f93d-1f3fd-200d-2640": {
+        "qualified": "1f93d-1f3fd-200d-2640-fe0f"
+    },
+    "1f93d-1f3fe-200d-2640": {
+        "qualified": "1f93d-1f3fe-200d-2640-fe0f"
+    },
+    "1f93d-1f3ff-200d-2640": {
+        "qualified": "1f93d-1f3ff-200d-2640-fe0f"
+    },
+    "1f93e-200d-2642": {
+        "qualified": "1f93e-200d-2642-fe0f"
+    },
+    "1f93e-1f3fb-200d-2642": {
+        "qualified": "1f93e-1f3fb-200d-2642-fe0f"
+    },
+    "1f93e-1f3fc-200d-2642": {
+        "qualified": "1f93e-1f3fc-200d-2642-fe0f"
+    },
+    "1f93e-1f3fd-200d-2642": {
+        "qualified": "1f93e-1f3fd-200d-2642-fe0f"
+    },
+    "1f93e-1f3fe-200d-2642": {
+        "qualified": "1f93e-1f3fe-200d-2642-fe0f"
+    },
+    "1f93e-1f3ff-200d-2642": {
+        "qualified": "1f93e-1f3ff-200d-2642-fe0f"
+    },
+    "1f93e-200d-2640": {
+        "qualified": "1f93e-200d-2640-fe0f"
+    },
+    "1f93e-1f3fb-200d-2640": {
+        "qualified": "1f93e-1f3fb-200d-2640-fe0f"
+    },
+    "1f93e-1f3fc-200d-2640": {
+        "qualified": "1f93e-1f3fc-200d-2640-fe0f"
+    },
+    "1f93e-1f3fd-200d-2640": {
+        "qualified": "1f93e-1f3fd-200d-2640-fe0f"
+    },
+    "1f93e-1f3fe-200d-2640": {
+        "qualified": "1f93e-1f3fe-200d-2640-fe0f"
+    },
+    "1f93e-1f3ff-200d-2640": {
+        "qualified": "1f93e-1f3ff-200d-2640-fe0f"
+    },
+    "1f939-200d-2642": {
+        "qualified": "1f939-200d-2642-fe0f"
+    },
+    "1f939-1f3fb-200d-2642": {
+        "qualified": "1f939-1f3fb-200d-2642-fe0f"
+    },
+    "1f939-1f3fc-200d-2642": {
+        "qualified": "1f939-1f3fc-200d-2642-fe0f"
+    },
+    "1f939-1f3fd-200d-2642": {
+        "qualified": "1f939-1f3fd-200d-2642-fe0f"
+    },
+    "1f939-1f3fe-200d-2642": {
+        "qualified": "1f939-1f3fe-200d-2642-fe0f"
+    },
+    "1f939-1f3ff-200d-2642": {
+        "qualified": "1f939-1f3ff-200d-2642-fe0f"
+    },
+    "1f939-200d-2640": {
+        "qualified": "1f939-200d-2640-fe0f"
+    },
+    "1f939-1f3fb-200d-2640": {
+        "qualified": "1f939-1f3fb-200d-2640-fe0f"
+    },
+    "1f939-1f3fc-200d-2640": {
+        "qualified": "1f939-1f3fc-200d-2640-fe0f"
+    },
+    "1f939-1f3fd-200d-2640": {
+        "qualified": "1f939-1f3fd-200d-2640-fe0f"
+    },
+    "1f939-1f3fe-200d-2640": {
+        "qualified": "1f939-1f3fe-200d-2640-fe0f"
+    },
+    "1f939-1f3ff-200d-2640": {
+        "qualified": "1f939-1f3ff-200d-2640-fe0f"
+    },
+    "1f9d8-200d-2642": {
+        "qualified": "1f9d8-200d-2642-fe0f"
+    },
+    "1f9d8-1f3fb-200d-2642": {
+        "qualified": "1f9d8-1f3fb-200d-2642-fe0f"
+    },
+    "1f9d8-1f3fc-200d-2642": {
+        "qualified": "1f9d8-1f3fc-200d-2642-fe0f"
+    },
+    "1f9d8-1f3fd-200d-2642": {
+        "qualified": "1f9d8-1f3fd-200d-2642-fe0f"
+    },
+    "1f9d8-1f3fe-200d-2642": {
+        "qualified": "1f9d8-1f3fe-200d-2642-fe0f"
+    },
+    "1f9d8-1f3ff-200d-2642": {
+        "qualified": "1f9d8-1f3ff-200d-2642-fe0f"
+    },
+    "1f9d8-200d-2640": {
+        "qualified": "1f9d8-200d-2640-fe0f"
+    },
+    "1f9d8-1f3fb-200d-2640": {
+        "qualified": "1f9d8-1f3fb-200d-2640-fe0f"
+    },
+    "1f9d8-1f3fc-200d-2640": {
+        "qualified": "1f9d8-1f3fc-200d-2640-fe0f"
+    },
+    "1f9d8-1f3fd-200d-2640": {
+        "qualified": "1f9d8-1f3fd-200d-2640-fe0f"
+    },
+    "1f9d8-1f3fe-200d-2640": {
+        "qualified": "1f9d8-1f3fe-200d-2640-fe0f"
+    },
+    "1f9d8-1f3ff-200d-2640": {
+        "qualified": "1f9d8-1f3ff-200d-2640-fe0f"
+    },
+    "1f469-200d-2764-200d-1f48b-200d-1f468": {
+        "qualified": "1f469-200d-2764-fe0f-200d-1f48b-200d-1f468"
+    },
+    "1f468-200d-2764-200d-1f48b-200d-1f468": {
+        "qualified": "1f468-200d-2764-fe0f-200d-1f48b-200d-1f468"
+    },
+    "1f469-200d-2764-200d-1f48b-200d-1f469": {
+        "qualified": "1f469-200d-2764-fe0f-200d-1f48b-200d-1f469"
+    },
+    "1f469-200d-2764-200d-1f468": {
+        "qualified": "1f469-200d-2764-fe0f-200d-1f468"
+    },
+    "1f468-200d-2764-200d-1f468": {
+        "qualified": "1f468-200d-2764-fe0f-200d-1f468"
+    },
+    "1f469-200d-2764-200d-1f469": {
+        "qualified": "1f469-200d-2764-fe0f-200d-1f469"
+    },
+    "1f5e3": {
+        "qualified": "1f5e3-fe0f"
+    },
+    "1f3fb": {
+        "qualified": "1f463"
+    },
+    "1f3fc": {
+        "qualified": "1f463"
+    },
+    "1f3fd": {
+        "qualified": "1f463"
+    },
+    "1f3fe": {
+        "qualified": "1f463"
+    },
+    "1f3ff": {
+        "qualified": "1f463"
+    },
+    "1f9b0": {
+        "qualified": "1f463"
+    },
+    "1f9b1": {
+        "qualified": "1f463"
+    },
+    "1f9b3": {
+        "qualified": "1f463"
+    },
+    "1f9b2": {
+        "qualified": "1f463"
+    },
+    "1f43f": {
+        "qualified": "1f43f-fe0f"
+    },
+    "1f54a": {
+        "qualified": "1f54a-fe0f"
+    },
+    "1f577": {
+        "qualified": "1f577-fe0f"
+    },
+    "1f578": {
+        "qualified": "1f578-fe0f"
+    },
+    "1f3f5": {
+        "qualified": "1f3f5-fe0f"
+    },
+    "1f336": {
+        "qualified": "1f336-fe0f"
+    },
+    "1f37d": {
+        "qualified": "1f37d-fe0f"
+    },
+    "1f5fa": {
+        "qualified": "1f5fa-fe0f"
+    },
+    "1f3d4": {
+        "qualified": "1f3d4-fe0f"
+    },
+    "26f0": {
+        "qualified": "26f0-fe0f"
+    },
+    "1f3d5": {
+        "qualified": "1f3d5-fe0f"
+    },
+    "1f3d6": {
+        "qualified": "1f3d6-fe0f"
+    },
+    "1f3dc": {
+        "qualified": "1f3dc-fe0f"
+    },
+    "1f3dd": {
+        "qualified": "1f3dd-fe0f"
+    },
+    "1f3de": {
+        "qualified": "1f3de-fe0f"
+    },
+    "1f3df": {
+        "qualified": "1f3df-fe0f"
+    },
+    "1f3db": {
+        "qualified": "1f3db-fe0f"
+    },
+    "1f3d7": {
+        "qualified": "1f3d7-fe0f"
+    },
+    "1f3d8": {
+        "qualified": "1f3d8-fe0f"
+    },
+    "1f3da": {
+        "qualified": "1f3da-fe0f"
+    },
+    "26e9": {
+        "qualified": "26e9-fe0f"
+    },
+    "1f3d9": {
+        "qualified": "1f3d9-fe0f"
+    },
+    "1f3ce": {
+        "qualified": "1f3ce-fe0f"
+    },
+    "1f3cd": {
+        "qualified": "1f3cd-fe0f"
+    },
+    "1f6e3": {
+        "qualified": "1f6e3-fe0f"
+    },
+    "1f6e4": {
+        "qualified": "1f6e4-fe0f"
+    },
+    "1f6e2": {
+        "qualified": "1f6e2-fe0f"
+    },
+    "1f6f3": {
+        "qualified": "1f6f3-fe0f"
+    },
+    "26f4": {
+        "qualified": "26f4-fe0f"
+    },
+    "1f6e5": {
+        "qualified": "1f6e5-fe0f"
+    },
+    "1f6e9": {
+        "qualified": "1f6e9-fe0f"
+    },
+    "1f6f0": {
+        "qualified": "1f6f0-fe0f"
+    },
+    "1f6ce": {
+        "qualified": "1f6ce-fe0f"
+    },
+    "23f1": {
+        "qualified": "23f1-fe0f"
+    },
+    "23f2": {
+        "qualified": "23f2-fe0f"
+    },
+    "1f570": {
+        "qualified": "1f570-fe0f"
+    },
+    "1f321": {
+        "qualified": "1f321-fe0f"
+    },
+    "26c8": {
+        "qualified": "26c8-fe0f"
+    },
+    "1f324": {
+        "qualified": "1f324-fe0f"
+    },
+    "1f325": {
+        "qualified": "1f325-fe0f"
+    },
+    "1f326": {
+        "qualified": "1f326-fe0f"
+    },
+    "1f327": {
+        "qualified": "1f327-fe0f"
+    },
+    "1f328": {
+        "qualified": "1f328-fe0f"
+    },
+    "1f329": {
+        "qualified": "1f329-fe0f"
+    },
+    "1f32a": {
+        "qualified": "1f32a-fe0f"
+    },
+    "1f32b": {
+        "qualified": "1f32b-fe0f"
+    },
+    "1f32c": {
+        "qualified": "1f32c-fe0f"
+    },
+    "26f1": {
+        "qualified": "26f1-fe0f"
+    },
+    "1f397": {
+        "qualified": "1f397-fe0f"
+    },
+    "1f39f": {
+        "qualified": "1f39f-fe0f"
+    },
+    "1f396": {
+        "qualified": "1f396-fe0f"
+    },
+    "26f8": {
+        "qualified": "26f8-fe0f"
+    },
+    "1f579": {
+        "qualified": "1f579-fe0f"
+    },
+    "265f": {
+        "qualified": "265f-fe0f"
+    },
+    "1f5bc": {
+        "qualified": "1f5bc-fe0f"
+    },
+    "1f576": {
+        "qualified": "1f576-fe0f"
+    },
+    "1f6cd": {
+        "qualified": "1f6cd-fe0f"
+    },
+    "26d1": {
+        "qualified": "26d1-fe0f"
+    },
+    "1f399": {
+        "qualified": "1f399-fe0f"
+    },
+    "1f39a": {
+        "qualified": "1f39a-fe0f"
+    },
+    "1f39b": {
+        "qualified": "1f39b-fe0f"
+    },
+    "260e": {
+        "qualified": "260e-fe0f"
+    },
+    "1f5a5": {
+        "qualified": "1f5a5-fe0f"
+    },
+    "1f5a8": {
+        "qualified": "1f5a8-fe0f"
+    },
+    "1f5b1": {
+        "qualified": "1f5b1-fe0f"
+    },
+    "1f5b2": {
+        "qualified": "1f5b2-fe0f"
+    },
+    "1f39e": {
+        "qualified": "1f39e-fe0f"
+    },
+    "1f4fd": {
+        "qualified": "1f4fd-fe0f"
+    },
+    "1f56f": {
+        "qualified": "1f56f-fe0f"
+    },
+    "1f5de": {
+        "qualified": "1f5de-fe0f"
+    },
+    "1f3f7": {
+        "qualified": "1f3f7-fe0f"
+    },
+    "1f5f3": {
+        "qualified": "1f5f3-fe0f"
+    },
+    "270f": {
+        "qualified": "270f-fe0f"
+    },
+    "1f58b": {
+        "qualified": "1f58b-fe0f"
+    },
+    "1f58a": {
+        "qualified": "1f58a-fe0f"
+    },
+    "1f58c": {
+        "qualified": "1f58c-fe0f"
+    },
+    "1f58d": {
+        "qualified": "1f58d-fe0f"
+    },
+    "1f5c2": {
+        "qualified": "1f5c2-fe0f"
+    },
+    "1f5d2": {
+        "qualified": "1f5d2-fe0f"
+    },
+    "1f5d3": {
+        "qualified": "1f5d3-fe0f"
+    },
+    "1f587": {
+        "qualified": "1f587-fe0f"
+    },
+    "1f5c3": {
+        "qualified": "1f5c3-fe0f"
+    },
+    "1f5c4": {
+        "qualified": "1f5c4-fe0f"
+    },
+    "1f5d1": {
+        "qualified": "1f5d1-fe0f"
+    },
+    "1f5dd": {
+        "qualified": "1f5dd-fe0f"
+    },
+    "26cf": {
+        "qualified": "26cf-fe0f"
+    },
+    "1f6e0": {
+        "qualified": "1f6e0-fe0f"
+    },
+    "1f5e1": {
+        "qualified": "1f5e1-fe0f"
+    },
+    "1f6e1": {
+        "qualified": "1f6e1-fe0f"
+    },
+    "1f5dc": {
+        "qualified": "1f5dc-fe0f"
+    },
+    "26d3": {
+        "qualified": "26d3-fe0f"
+    },
+    "1f6cf": {
+        "qualified": "1f6cf-fe0f"
+    },
+    "1f6cb": {
+        "qualified": "1f6cb-fe0f"
+    },
+    "26b0": {
+        "qualified": "26b0-fe0f"
+    },
+    "26b1": {
+        "qualified": "26b1-fe0f"
+    },
+    "26a0": {
+        "qualified": "26a0-fe0f"
+    },
+    "2b06": {
+        "qualified": "2b06-fe0f"
+    },
+    "27a1": {
+        "qualified": "27a1-fe0f"
+    },
+    "2b07": {
+        "qualified": "2b07-fe0f"
+    },
+    "2b05": {
+        "qualified": "2b05-fe0f"
+    },
+    "21a9": {
+        "qualified": "21a9-fe0f"
+    },
+    "21aa": {
+        "qualified": "21aa-fe0f"
+    },
+    "269b": {
+        "qualified": "269b-fe0f"
+    },
+    "1f549": {
+        "qualified": "1f549-fe0f"
+    },
+    "262f": {
+        "qualified": "262f-fe0f"
+    },
+    "271d": {
+        "qualified": "271d-fe0f"
+    },
+    "262a": {
+        "qualified": "262a-fe0f"
+    },
+    "262e": {
+        "qualified": "262e-fe0f"
+    },
+    "25b6": {
+        "qualified": "25b6-fe0f"
+    },
+    "23ed": {
+        "qualified": "23ed-fe0f"
+    },
+    "23ef": {
+        "qualified": "23ef-fe0f"
+    },
+    "25c0": {
+        "qualified": "25c0-fe0f"
+    },
+    "23ee": {
+        "qualified": "23ee-fe0f"
+    },
+    "23f8": {
+        "qualified": "23f8-fe0f"
+    },
+    "23f9": {
+        "qualified": "23f9-fe0f"
+    },
+    "23fa": {
+        "qualified": "23fa-fe0f"
+    },
+    "23cf": {
+        "qualified": "23cf-fe0f"
+    },
+    "267e": {
+        "qualified": "267e-fe0f"
+    },
+    "267b": {
+        "qualified": "267b-fe0f"
+    },
+    "269c": {
+        "qualified": "269c-fe0f"
+    },
+    "303d": {
+        "qualified": "303d-fe0f"
+    },
+    "203c": {
+        "qualified": "203c-fe0f"
+    },
+    "00a9": {
+        "qualified": "00a9-fe0f"
+    },
+    "00ae": {
+        "qualified": "00ae-fe0f"
+    },
+    "0023-20e3": {
+        "qualified": "0023-fe0f-20e3"
+    },
+    "002a-20e3": {
+        "qualified": "002a-fe0f-20e3"
+    },
+    "0030-20e3": {
+        "qualified": "0030-fe0f-20e3"
+    },
+    "0031-20e3": {
+        "qualified": "0031-fe0f-20e3"
+    },
+    "0032-20e3": {
+        "qualified": "0032-fe0f-20e3"
+    },
+    "0033-20e3": {
+        "qualified": "0033-fe0f-20e3"
+    },
+    "0034-20e3": {
+        "qualified": "0034-fe0f-20e3"
+    },
+    "0035-20e3": {
+        "qualified": "0035-fe0f-20e3"
+    },
+    "0036-20e3": {
+        "qualified": "0036-fe0f-20e3"
+    },
+    "0037-20e3": {
+        "qualified": "0037-fe0f-20e3"
+    },
+    "0038-20e3": {
+        "qualified": "0038-fe0f-20e3"
+    },
+    "0039-20e3": {
+        "qualified": "0039-fe0f-20e3"
+    },
+    "1f170": {
+        "qualified": "1f170-fe0f"
+    },
+    "1f171": {
+        "qualified": "1f171-fe0f"
+    },
+    "24c2": {
+        "qualified": "24c2-fe0f"
+    },
+    "1f17e": {
+        "qualified": "1f17e-fe0f"
+    },
+    "1f17f": {
+        "qualified": "1f17f-fe0f"
+    },
+    "1f202": {
+        "qualified": "1f202-fe0f"
+    },
+    "1f237": {
+        "qualified": "1f237-fe0f"
+    },
+    "25fc": {
+        "qualified": "25fc-fe0f"
+    },
+    "25fb": {
+        "qualified": "25fb-fe0f"
+    },
+    "25aa": {
+        "qualified": "25aa-fe0f"
+    },
+    "25ab": {
+        "qualified": "25ab-fe0f"
+    },
+    "1f3f3": {
+        "qualified": "1f3f3-fe0f"
+    },
+    "1f3f3-200d-1f308": {
+        "qualified": "1f3f3-fe0f-200d-1f308"
+    },
+    "1f3f4-200d-2620": {
+        "qualified": "1f3f4-200d-2620-fe0f"
+    }
+}

@@ -12,7 +12,7 @@ module.exports = (url) => {
         chunks.push(chunk)
       })
       res.on('end', () => {
-        reject(Buffer.concat(chunks))
+        resolve(Buffer.concat(chunks))
       })
     })
   })

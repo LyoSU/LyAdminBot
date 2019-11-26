@@ -79,4 +79,7 @@ typings/
 # DynamoDB Local files
 .dynamodb/
 
-assets/fonts/
+assets/fonts/*
+assets/emojis/*
+
+!.gitkeep
