@@ -82,174 +82,176 @@ function lightOrDark (color) {
 }
 
 async function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, maxWidth, maxHeight) {
-  const canvas = createCanvas(maxWidth + fontSize, maxHeight + fontSize)
-  const canvasСtx = canvas.getContext('2d')
+  return new Promise(async (resolve, reject) => {
+    const canvas = createCanvas(maxWidth + fontSize, maxHeight + fontSize)
+    const canvasСtx = canvas.getContext('2d')
 
-  const charts = runes(text)
+    const charts = runes(text)
 
-  const lineHeight = 4 * (fontSize * 0.3)
+    const lineHeight = 4 * (fontSize * 0.3)
 
-  let chartNum = 0
+    let chartNum = 0
 
-  const styledChart = []
+    const styledChart = []
 
-  for (let chartIndex = 0; chartIndex < charts.length; chartIndex++) {
-    let chart = charts[chartIndex]
+    for (let chartIndex = 0; chartIndex < charts.length; chartIndex++) {
+      let chart = charts[chartIndex]
 
-    const style = []
+      const style = []
 
-    if (entities && typeof entities === 'object') {
-      for (let entitieIndex = 0; entitieIndex < entities.length; entitieIndex++) {
-        const entity = entities[entitieIndex]
+      if (entities && typeof entities === 'object') {
+        for (let entitieIndex = 0; entitieIndex < entities.length; entitieIndex++) {
+          const entity = entities[entitieIndex]
 
-        if (chartNum + chart.length > entity.offset && chartNum + chart.length < entity.offset + entity.length + 1) {
-          if (entity.type === 'bold') style.push('bold')
-          if (entity.type === 'italic') style.push('italic')
-          if (['pre', 'code'].includes(entity.type)) {
-            style.push('monospace')
+          if (chartNum + chart.length > entity.offset && chartNum + chart.length < entity.offset + entity.length + 1) {
+            if (entity.type === 'bold') style.push('bold')
+            if (entity.type === 'italic') style.push('italic')
+            if (['pre', 'code'].includes(entity.type)) {
+              style.push('monospace')
+            }
+            if (['mention', 'text_mention', 'hashtag', 'email', 'phone_number', 'bot_command', 'url', 'text_link'].includes(entity.type)) style.push('mention')
           }
-          if (['mention', 'text_mention', 'hashtag', 'email', 'phone_number', 'bot_command', 'url', 'text_link'].includes(entity.type)) style.push('mention')
         }
       }
+
+      if (entities && typeof entities === 'string') style.push(entities)
+
+      const checkEmoji = emojiDb.searchFromText({ input: chart })
+
+      if (checkEmoji.length > 0) style.push('emoji')
+
+      styledChart.push({
+        chart,
+        style
+      })
+
+      chartNum += chart.length
     }
 
-    if (entities && typeof entities === 'string') style.push(entities)
+    const styledWords = []
 
-    const checkEmoji = emojiDb.searchFromText({ input: chart })
+    let stringNum = 0
 
-    if (checkEmoji.length > 0) style.push('emoji')
+    const breakMatch = /<br>|\n|\r/
+    const spaceMatch = /\s/
 
-    styledChart.push({
-      chart,
-      style
-    })
+    for (let index = 0; index < styledChart.length; index++) {
+      const chartStyle = styledChart[index]
+      const lastChart = styledChart[index - 1]
 
-    chartNum += chart.length
-  }
-
-  const styledWords = []
-
-  let stringNum = 0
-
-  const breakMatch = /<br>|\n|\r/
-  const spaceMatch = /\s/
-
-  for (let index = 0; index < styledChart.length; index++) {
-    const chartStyle = styledChart[index]
-    const lastChart = styledChart[index - 1]
-
-    if (
-      lastChart && (
-        (chartStyle.style.includes('emoji')) ||
-        (chartStyle.chart.match(breakMatch)) ||
-        (chartStyle.chart.match(spaceMatch) && !lastChart.chart.match(spaceMatch)) ||
-        (lastChart.chart.match(spaceMatch) && !chartStyle.chart.match(spaceMatch)) ||
-        (chartStyle.style && lastChart.style && chartStyle.style.toString() !== lastChart.style.toString())
-      )
-    ) {
-      stringNum++
-    }
-
-    if (!styledWords[stringNum]) {
-      styledWords[stringNum] = {
-        word: chartStyle.chart,
-        style: chartStyle.style
+      if (
+        lastChart && (
+          (chartStyle.style.includes('emoji')) ||
+          (chartStyle.chart.match(breakMatch)) ||
+          (chartStyle.chart.match(spaceMatch) && !lastChart.chart.match(spaceMatch)) ||
+          (lastChart.chart.match(spaceMatch) && !chartStyle.chart.match(spaceMatch)) ||
+          (chartStyle.style && lastChart.style && chartStyle.style.toString() !== lastChart.style.toString())
+        )
+      ) {
+        stringNum++
       }
-    } else styledWords[stringNum].word += chartStyle.chart
-  }
 
-  let lineX = textX
-  let lineY = textY
-
-  let textWidth = 0
-
-  let breakWrite = false
-  for (let index = 0; index < styledWords.length; index++) {
-    const styledWord = styledWords[index]
-
-    let emojiImage
-
-    if (styledWord.style.includes('emoji')) {
-      const getEmoji = emojiDb.searchFromText({ input: styledWord.word })
-      let emojiDbInfo = emojiDb.dbData[getEmoji]
-      if (emojiDbInfo.qualified) emojiDbInfo = emojiDb.dbData[emojiDbInfo.qualified]
-      const emojiPng = `${emojiDataDir}${emojiDbInfo.code}.png`
-
-      try {
-        emojiImage = await loadCanvasImage(emojiPng)
-      } catch (error) {
-        emojiImage = await loadCanvasImage(emojiDb.image.src)
-      }
-    } else if (styledWord.style.includes('bold')) {
-      canvasСtx.font = `bold ${fontSize}px OpenSans`
-      canvasСtx.fillStyle = fontColor
-    } else if (styledWord.style.includes('italic')) {
-      canvasСtx.font = `italic ${fontSize}px OpenSans`
-      canvasСtx.fillStyle = fontColor
-    } else if (styledWord.style.includes('monospace')) {
-      canvasСtx.font = `${fontSize}px monospace`
-      canvasСtx.fillStyle = '#5887a7'
-    } else if (styledWord.style.includes('mention')) {
-      canvasСtx.font = `${fontSize}px mention`
-      canvasСtx.fillStyle = '#6ab7ec'
-    } else {
-      canvasСtx.font = `${fontSize}px OpenSans`
-      canvasСtx.fillStyle = fontColor
+      if (!styledWords[stringNum]) {
+        styledWords[stringNum] = {
+          word: chartStyle.chart,
+          style: chartStyle.style
+        }
+      } else styledWords[stringNum].word += chartStyle.chart
     }
 
-    // if (canvasСtx.measureText(styledWord.word).width > maxWidth - fontSize) {
-    //   while (canvasСtx.measureText(styledWord.word).width > maxWidth - fontSize * 2) {
-    //     styledWord.word = styledWord.word.substr(0, styledWord.word.length - 1)
-    //     if (styledWord.word.length <= 0) break
-    //   }
-    //   styledWord.word += '…'
-    // }
+    let lineX = textX
+    let lineY = textY
 
-    let lineWidth
-    let wordlWidth = canvasСtx.measureText(styledWord.word).width
+    let textWidth = 0
 
-    if (styledWord.style.includes('emoji')) lineWidth = lineX + fontSize + (fontSize * 0.15)
-    else lineWidth = lineX + wordlWidth
+    let breakWrite = false
+    for (let index = 0; index < styledWords.length; index++) {
+      const styledWord = styledWords[index]
 
-    if (styledWord.word.match(breakMatch) || (lineWidth > maxWidth - fontSize * 2 && wordlWidth < maxWidth)) {
-      if (styledWord.word.match(spaceMatch)) styledWord.word = ''
-      if (!styledWord.word.match(breakMatch) && lineY + lineHeight > maxHeight) {
-        while (lineWidth > maxWidth - fontSize * 2) {
+      let emojiImage
+
+      if (styledWord.style.includes('emoji')) {
+        const getEmoji = emojiDb.searchFromText({ input: styledWord.word })
+        let emojiDbInfo = emojiDb.dbData[getEmoji]
+        if (emojiDbInfo.qualified) emojiDbInfo = emojiDb.dbData[emojiDbInfo.qualified]
+        const emojiPng = `${emojiDataDir}${emojiDbInfo.code}.png`
+
+        try {
+          emojiImage = await loadCanvasImage(emojiPng)
+        } catch (error) {
+          emojiImage = await loadCanvasImage(emojiDb.image.src)
+        }
+      } else if (styledWord.style.includes('bold')) {
+        canvasСtx.font = `bold ${fontSize}px OpenSans`
+        canvasСtx.fillStyle = fontColor
+      } else if (styledWord.style.includes('italic')) {
+        canvasСtx.font = `italic ${fontSize}px OpenSans`
+        canvasСtx.fillStyle = fontColor
+      } else if (styledWord.style.includes('monospace')) {
+        canvasСtx.font = `${fontSize}px monospace`
+        canvasСtx.fillStyle = '#5887a7'
+      } else if (styledWord.style.includes('mention')) {
+        canvasСtx.font = `${fontSize}px mention`
+        canvasСtx.fillStyle = '#6ab7ec'
+      } else {
+        canvasСtx.font = `${fontSize}px OpenSans`
+        canvasСtx.fillStyle = fontColor
+      }
+
+      if (canvasСtx.measureText(styledWord.word).width > maxWidth - fontSize) {
+        while (canvasСtx.measureText(styledWord.word).width > maxWidth - fontSize * 2) {
           styledWord.word = styledWord.word.substr(0, styledWord.word.length - 1)
-          lineWidth = lineX + canvasСtx.measureText(styledWord.word).width
           if (styledWord.word.length <= 0) break
         }
-
         styledWord.word += '…'
-        breakWrite = true
-      } else {
-        if (styledWord.style.includes('emoji')) lineWidth = textX + fontSize + (fontSize * 0.15)
-        else lineWidth = textX + canvasСtx.measureText(styledWord.word).width
-        lineX = textX
-        lineY += lineHeight
       }
+
+      let lineWidth
+      let wordlWidth = canvasСtx.measureText(styledWord.word).width
+
+      if (styledWord.style.includes('emoji')) lineWidth = lineX + fontSize + (fontSize * 0.15)
+      else lineWidth = lineX + wordlWidth
+
+      if (styledWord.word.match(breakMatch) || (lineWidth > maxWidth - fontSize * 2 && wordlWidth < maxWidth)) {
+        if (styledWord.word.match(spaceMatch)) styledWord.word = ''
+        if (!styledWord.word.match(breakMatch) && lineY + lineHeight > maxHeight) {
+          while (lineWidth > maxWidth - fontSize * 2) {
+            styledWord.word = styledWord.word.substr(0, styledWord.word.length - 1)
+            lineWidth = lineX + canvasСtx.measureText(styledWord.word).width
+            if (styledWord.word.length <= 0) break
+          }
+
+          styledWord.word += '…'
+          breakWrite = true
+        } else {
+          if (styledWord.style.includes('emoji')) lineWidth = textX + fontSize + (fontSize * 0.15)
+          else lineWidth = textX + canvasСtx.measureText(styledWord.word).width
+          lineX = textX
+          lineY += lineHeight
+        }
+      }
+
+      if (lineWidth > textWidth) textWidth = lineWidth
+      if (textWidth > maxWidth) textWidth = maxWidth
+
+      if (emojiImage) {
+        canvasСtx.drawImage(emojiImage, lineX, lineY - fontSize + (fontSize * 0.15), fontSize, fontSize)
+      } else {
+        canvasСtx.fillText(styledWord.word, lineX, lineY)
+      }
+
+      lineX = lineWidth
+
+      if (breakWrite) break
     }
 
-    if (lineWidth > textWidth) textWidth = lineWidth
-    if (textWidth > maxWidth) textWidth = maxWidth
+    const canvasResize = createCanvas(textWidth, lineY + fontSize)
+    const canvasResizeСtx = canvasResize.getContext('2d')
 
-    if (emojiImage) {
-      canvasСtx.drawImage(emojiImage, lineX, lineY - fontSize + (fontSize * 0.15), fontSize, fontSize)
-    } else {
-      canvasСtx.fillText(styledWord.word, lineX, lineY)
-    }
+    canvasResizeСtx.drawImage(canvas, 0, 0)
 
-    lineX = lineWidth
-
-    if (breakWrite) break
-  }
-
-  const canvasResize = createCanvas(textWidth, lineY + fontSize)
-  const canvasResizeСtx = canvasResize.getContext('2d')
-
-  canvasResizeСtx.drawImage(canvas, 0, 0)
-
-  return canvasResize
+    resolve(canvasResize)
+  })
 }
 
 // https://stackoverflow.com/a/3368118
@@ -416,7 +418,7 @@ module.exports = async (avatar, backgroundColor, userId, nick, text, entities) =
 
   const drawNickCanvas = drawMultilineText(nick, 'bold', nickSize, nickColor, 0, nickSize, width, nickSize)
 
-  const minFontSize = 22
+  const minFontSize = 18
   const maxFontSize = 28
 
   let fontSize = 25 / ((text.length / 10) * 0.2)
