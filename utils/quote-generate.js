@@ -172,7 +172,7 @@ async function drawMultilineText (text, entities, fontSize, fontColor, textX, te
     if (styledWord.style.includes('emoji')) {
       const getEmoji = emojiDb.searchFromText({ input: styledWord.word })
       let emojiDbInfo = emojiDb.dbData[getEmoji]
-      if (emojiDb.redirect) emojiDbInfo = emojiDb.dbData[emojiDb.redirect]
+      if (emojiDbInfo.qualified) emojiDbInfo = emojiDb.dbData[emojiDbInfo.qualified]
       const emojiPng = `${emojiDataDir}${emojiDbInfo.code}.png`
 
       try {
