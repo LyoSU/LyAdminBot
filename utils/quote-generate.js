@@ -1,23 +1,46 @@
 const fs = require('fs')
 const { createCanvas, registerFont } = require('canvas')
 const runes = require('runes')
-const emojipedia = require('./emojipedia')
+const loadImageFromUrl = require('./image-load-url')
+const EmojiDbLib = require('./emoji-db')
 const loadCanvasImage = require('./canvas-image-load')
 const sharp = require('sharp')
 
+const emojiDb = new EmojiDbLib({ useDefaultDb: true })
+
 const fontsDir = 'assets/fonts/'
+const emojiDataDir = 'assets/emojis/'
 
 fs.readdir(fontsDir, (_err, files) => {
   files.forEach((file) => {
     try {
-      registerFont(`${fontsDir}/${file}`, { family: file })
+      registerFont(`${fontsDir}${file}`, { family: file })
     } catch (error) {
-      console.error(`${fontsDir}/${file} not font file`)
+      console.error(`${fontsDir}${file} not font file`)
     }
   })
 })
 
-const emojiDataPath = './utils/emojipedia/image/'
+async function downloadEmoji () {
+  const dbData = emojiDb.dbData
+
+  Object.keys(dbData).map(async (key) => {
+    const emoji = dbData[key]
+
+    if (emoji.image) {
+      const fileName = `${emoji.code}.png`
+      if (!fs.existsSync(`${emojiDataDir}${fileName}`)) {
+        const img = await loadImageFromUrl(emoji.image.src)
+
+        fs.writeFile(`${emojiDataDir}${fileName}`, img, (err) => {
+          if (err) return console.log(err)
+        })
+      }
+    }
+  })
+}
+
+downloadEmoji()
 
 // https://codepen.io/andreaswik/pen/YjJqpK
 function lightOrDark (color) {
@@ -92,7 +115,7 @@ async function drawMultilineText (text, entities, fontSize, fontColor, textX, te
 
     if (entities && typeof entities === 'string') style.push(entities)
 
-    const checkEmoji = emojipedia.getEmoji(chart)
+    const checkEmoji = emojiDb.searchFromText({ input: chart })
 
     if (checkEmoji.length > 0) style.push('emoji')
 
@@ -147,10 +170,10 @@ async function drawMultilineText (text, entities, fontSize, fontColor, textX, te
     let emojiImage
 
     if (styledWord.style.includes('emoji')) {
-      const getEmoji = emojipedia.getEmoji(styledWord.word)
-      let emojiDb = emojipedia.emojiDb[getEmoji]
-      if (emojiDb.redirect) emojiDb = emojipedia.emojiDb[emojiDb.redirect]
-      const emojiPng = `${emojiDataPath}${emojiDb.code}.png`
+      const getEmoji = emojiDb.searchFromText({ input: styledWord.word })
+      let emojiDbInfo = emojiDb.dbData[getEmoji]
+      if (emojiDb.redirect) emojiDbInfo = emojiDb.dbData[emojiDb.redirect]
+      const emojiPng = `${emojiDataDir}${emojiDbInfo.code}.png`
 
       try {
         emojiImage = await loadCanvasImage(emojiPng)
@@ -393,8 +416,8 @@ module.exports = async (avatar, backgroundColor, userId, nick, text, entities) =
 
   const drawNickCanvas = drawMultilineText(nick, 'bold', nickSize, nickColor, 0, nickSize, width, nickSize)
 
-  const minFontSize = 25
-  const maxFontSize = 34
+  const minFontSize = 22
+  const maxFontSize = 28
 
   let fontSize = 25 / ((text.length / 10) * 0.2)
 
