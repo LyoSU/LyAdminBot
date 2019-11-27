@@ -8,10 +8,15 @@ module.exports = async (ctx) => {
     // set parms
     const replyMessage = ctx.message.reply_to_message
 
-    let text
+    let text, entities
 
-    if (replyMessage.caption) text = replyMessage.caption
-    else text = replyMessage.text
+    if (replyMessage.caption) {
+      text = replyMessage.caption
+      entities = replyMessage.caption_entities
+    } else {
+      text = replyMessage.text
+      entities = replyMessage.entities
+    }
 
     let messageFrom = replyMessage.from
 
@@ -58,7 +63,7 @@ module.exports = async (ctx) => {
       avatarImage = await loadCanvasImage('./assets/404.png')
     }
 
-    const canvasQuote = await generateQuote(avatarImage, backgroundColor, messageFrom.id, nick, text, replyMessage.entities)
+    const canvasQuote = await generateQuote(avatarImage, backgroundColor, messageFrom.id, nick, text, entities)
 
     ctx.replyWithDocument({
       source: canvasQuote,
