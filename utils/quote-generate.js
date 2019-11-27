@@ -93,19 +93,22 @@ function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, m
 
     const styledChar = []
 
-    const emojis = emojiDb.searchFromText({ input: text, fixCodePoints: true, showData: true })
+    const emojis = emojiDb.searchFromText({ input: text, fixCodePoints: true })
 
-    chars.map((char, charIndex) => {
+    for (let charIndex = 0; charIndex < chars.length; charIndex++) {
+      const char = chars[charIndex]
+
       styledChar[charIndex] = {
         char,
         style: []
       }
 
       if (entities && typeof entities === 'string') styledChar[charIndex].style.push(entities)
-    })
+    }
 
     if (entities && typeof entities === 'object') {
-      entities.map((entity) => {
+      for (let entityIndex = 0; entityIndex < entities.length; entityIndex++) {
+        const entity = chars[entityIndex]
         const style = []
 
         if (entity.type === 'bold') style.push('bold')
@@ -118,14 +121,16 @@ function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, m
         for (let charIndex = entity.offset; charIndex < entity.offset + entity.length; charIndex++) {
           styledChar[charIndex].style = style
         }
-      })
+      }
     }
 
-    emojis.found.map((emoji, emojiIndex) => {
+    for (let emojiIndex = 0; emojiIndex < emojis.length; emojiIndex++) {
+      const emoji = emojis[emojiIndex]
+
       for (let charIndex = emoji.offset; charIndex < emoji.offset + emoji.length; charIndex++) {
-        styledChar[charIndex].emoji = emojis.data[emojiIndex]
+        styledChar[charIndex].emoji = emoji.found
       }
-    })
+    }
 
     const styledWords = []
 
@@ -140,7 +145,7 @@ function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, m
 
       if (
         lastChar && (
-          (charStyle.emoji && lastChar.emoji && charStyle.emoji.code !== lastChar.emoji.code) ||
+          (charStyle.emoji !== lastChar.emoji) ||
           (charStyle.char.match(breakMatch)) ||
           (charStyle.char.match(spaceMatch) && !lastChar.char.match(spaceMatch)) ||
           (lastChar.char.match(spaceMatch) && !charStyle.char.match(spaceMatch)) ||
@@ -160,8 +165,6 @@ function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, m
       } else styledWords[stringNum].word += charStyle.char
     }
 
-    console.log(styledWords)
-
     let lineX = textX
     let lineY = textY
 
@@ -174,7 +177,7 @@ function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, m
       let emojiImage
 
       if (styledWord.emoji) {
-        const emojiPng = `${emojiDataDir}${styledWord.emoji.code}.png`
+        const emojiPng = `${emojiDataDir}${styledWord.emoji}.png`
 
         try {
           emojiImage = await loadCanvasImage(emojiPng)
