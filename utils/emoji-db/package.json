@@ -1,6 +1,6 @@
 {
     "name": "emoji-db",
-    "version": "1.4.1",
+    "version": "1.5.2",
     "description": "Unofficial Emojipedia.org emoji data",
     "main": "emoji-db.js",
     "scripts": {
