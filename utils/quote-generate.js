@@ -128,7 +128,10 @@ function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, m
       const emoji = emojis[emojiIndex]
 
       for (let charIndex = emoji.offset; charIndex < emoji.offset + emoji.length; charIndex++) {
-        styledChar[charIndex].emoji = emoji.found
+        styledChar[charIndex].emoji = {
+          index: emojiIndex,
+          code: emoji.found
+        }
       }
     }
 
@@ -142,10 +145,9 @@ function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, m
     for (let index = 0; index < styledChar.length; index++) {
       const charStyle = styledChar[index]
       const lastChar = styledChar[index - 1]
-
       if (
         lastChar && (
-          (charStyle.emoji !== lastChar.emoji) ||
+          (charStyle.emoji && lastChar.emoji && charStyle.emoji.index !== lastChar.emoji.index) ||
           (charStyle.char.match(breakMatch)) ||
           (charStyle.char.match(spaceMatch) && !lastChar.char.match(spaceMatch)) ||
           (lastChar.char.match(spaceMatch) && !charStyle.char.match(spaceMatch)) ||
@@ -177,12 +179,11 @@ function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, m
       let emojiImage
 
       if (styledWord.emoji) {
-        const emojiPng = `${emojiDataDir}${styledWord.emoji}.png`
+        const emojiPng = `${emojiDataDir}${styledWord.emoji.code}.png`
 
         try {
           emojiImage = await loadCanvasImage(emojiPng)
         } catch (error) {
-          emojiImage = await loadCanvasImage(emojiDb.image.src)
         }
       }
 
