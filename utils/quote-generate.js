@@ -108,7 +108,7 @@ function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, m
 
     if (entities && typeof entities === 'object') {
       for (let entityIndex = 0; entityIndex < entities.length; entityIndex++) {
-        const entity = chars[entityIndex]
+        const entity = entities[entityIndex]
         const style = []
 
         if (entity.type === 'bold') style.push('bold')
@@ -123,6 +123,8 @@ function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, m
         }
       }
     }
+
+    console.log(styledChar)
 
     for (let emojiIndex = 0; emojiIndex < emojis.length; emojiIndex++) {
       const emoji = emojis[emojiIndex]
