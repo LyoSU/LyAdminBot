@@ -96,30 +96,30 @@ function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, m
     const emojis = emojiDb.searchFromText({ input: text, fixCodePoints: true, showData: true })
 
     chars.map((char, charIndex) => {
-      const style = []
-
-      if (entities && typeof entities === 'object') {
-        for (let entitieIndex = 0; entitieIndex < entities.length; entitieIndex++) {
-          const entity = entities[entitieIndex]
-
-          if (charIndex >= entity.offset && charIndex <= entity.offset + entity.length) {
-            if (entity.type === 'bold') style.push('bold')
-            if (entity.type === 'italic') style.push('italic')
-            if (['pre', 'code'].includes(entity.type)) {
-              style.push('monospace')
-            }
-            if (['mention', 'text_mention', 'hashtag', 'email', 'phone_number', 'bot_command', 'url', 'text_link'].includes(entity.type)) style.push('mention')
-          }
-        }
+      styledChar[charIndex] = {
+        char,
+        style: []
       }
 
-      if (entities && typeof entities === 'string') style.push(entities)
-
-      styledChar.push({
-        char,
-        style
-      })
+      if (entities && typeof entities === 'string') styledChar[charIndex].style.push(entities)
     })
+
+    if (entities && typeof entities === 'object') {
+      entities.map((entity) => {
+        const style = []
+
+        if (entity.type === 'bold') style.push('bold')
+        if (entity.type === 'italic') style.push('italic')
+        if (['pre', 'code'].includes(entity.type)) {
+          style.push('monospace')
+        }
+        if (['mention', 'text_mention', 'hashtag', 'email', 'phone_number', 'bot_command', 'url', 'text_link'].includes(entity.type)) style.push('mention')
+
+        for (let charIndex = entity.offset; charIndex < entity.offset + entity.length; charIndex++) {
+          styledChar[charIndex].style = style
+        }
+      })
+    }
 
     emojis.found.map((emoji, emojiIndex) => {
       for (let charIndex = emoji.offset; charIndex < emoji.offset + emoji.length; charIndex++) {
