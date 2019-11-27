@@ -86,24 +86,23 @@ function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, m
     const canvas = createCanvas(maxWidth + fontSize, maxHeight + fontSize)
     const canvasСtx = canvas.getContext('2d')
 
-    const charts = runes(text)
+    // const chars = runes(text)
+    const chars = text.split('')
 
     const lineHeight = 4 * (fontSize * 0.3)
 
-    let chartNum = 0
+    const styledChar = []
 
-    const styledChart = []
+    const emojis = emojiDb.searchFromText({ input: text, fixCodePoints: true, showData: true })
 
-    for (let chartIndex = 0; chartIndex < charts.length; chartIndex++) {
-      let chart = charts[chartIndex]
-
+    chars.map((char, charIndex) => {
       const style = []
 
       if (entities && typeof entities === 'object') {
         for (let entitieIndex = 0; entitieIndex < entities.length; entitieIndex++) {
           const entity = entities[entitieIndex]
 
-          if (chartNum + chart.length > entity.offset && chartNum + chart.length < entity.offset + entity.length + 1) {
+          if (charIndex >= entity.offset && charIndex <= entity.offset + entity.length) {
             if (entity.type === 'bold') style.push('bold')
             if (entity.type === 'italic') style.push('italic')
             if (['pre', 'code'].includes(entity.type)) {
@@ -116,17 +115,17 @@ function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, m
 
       if (entities && typeof entities === 'string') style.push(entities)
 
-      const checkEmoji = emojiDb.searchFromText({ input: chart, fixCodePoints: true })
-
-      if (checkEmoji.length > 0) style.push('emoji')
-
-      styledChart.push({
-        chart,
+      styledChar.push({
+        char,
         style
       })
+    })
 
-      chartNum += chart.length
-    }
+    emojis.found.map((emoji, emojiIndex) => {
+      for (let charIndex = emoji.offset; charIndex < emoji.offset + emoji.length; charIndex++) {
+        styledChar[charIndex].emoji = emojis.data[emojiIndex]
+      }
+    })
 
     const styledWords = []
 
@@ -135,17 +134,17 @@ function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, m
     const breakMatch = /<br>|\n|\r/
     const spaceMatch = /\s/
 
-    for (let index = 0; index < styledChart.length; index++) {
-      const chartStyle = styledChart[index]
-      const lastChart = styledChart[index - 1]
+    for (let index = 0; index < styledChar.length; index++) {
+      const charStyle = styledChar[index]
+      const lastChar = styledChar[index - 1]
 
       if (
-        lastChart && (
-          (chartStyle.style.includes('emoji')) ||
-          (chartStyle.chart.match(breakMatch)) ||
-          (chartStyle.chart.match(spaceMatch) && !lastChart.chart.match(spaceMatch)) ||
-          (lastChart.chart.match(spaceMatch) && !chartStyle.chart.match(spaceMatch)) ||
-          (chartStyle.style && lastChart.style && chartStyle.style.toString() !== lastChart.style.toString())
+        lastChar && (
+          (charStyle.emoji && lastChar.emoji && charStyle.emoji.found !== lastChar.emoji.found) ||
+          (charStyle.char.match(breakMatch)) ||
+          (charStyle.char.match(spaceMatch) && !lastChar.char.match(spaceMatch)) ||
+          (lastChar.char.match(spaceMatch) && !charStyle.char.match(spaceMatch)) ||
+          (charStyle.style && lastChar.style && charStyle.style.toString() !== lastChar.style.toString())
         )
       ) {
         stringNum++
@@ -153,10 +152,12 @@ function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, m
 
       if (!styledWords[stringNum]) {
         styledWords[stringNum] = {
-          word: chartStyle.chart,
-          style: chartStyle.style
+          word: charStyle.char
         }
-      } else styledWords[stringNum].word += chartStyle.chart
+
+        if (charStyle.style) styledWords[stringNum].style = charStyle.style
+        if (charStyle.emoji) styledWords[stringNum].emoji = charStyle.emoji
+      } else styledWords[stringNum].word += charStyle.char
     }
 
     let lineX = textX
@@ -170,20 +171,17 @@ function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, m
 
       let emojiImage
 
-      if (styledWord.style.includes('emoji')) {
-        const getEmoji = emojiDb.searchFromText({ input: styledWord.word, fixCodePoints: true }).join('-')
-        let emojiDbInfo = emojiDb.dbData[getEmoji]
-        if (emojiDbInfo) {
-          if (emojiDbInfo.qualified) emojiDbInfo = emojiDb.dbData[emojiDbInfo.qualified]
-          const emojiPng = `${emojiDataDir}${emojiDbInfo.code}.png`
+      if (styledWord.emoji) {
+        const emojiPng = `${emojiDataDir}${styledWord.emoji.code}.png`
 
-          try {
-            emojiImage = await loadCanvasImage(emojiPng)
-          } catch (error) {
-            emojiImage = await loadCanvasImage(emojiDb.image.src)
-          }
+        try {
+          emojiImage = await loadCanvasImage(emojiPng)
+        } catch (error) {
+          emojiImage = await loadCanvasImage(emojiDb.image.src)
         }
-      } else if (styledWord.style.includes('bold')) {
+      }
+
+      if (styledWord.style.includes('bold')) {
         canvasСtx.font = `bold ${fontSize}px OpenSans`
         canvasСtx.fillStyle = fontColor
       } else if (styledWord.style.includes('italic')) {

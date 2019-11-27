@@ -52,23 +52,23 @@ class EmojiDb {
     }
     searchFromText({ input, fixCodePoints, showData }){
         let foundEmojis = new EmojiSearcher(this.dbData).getEmojis(input);
+        if(fixCodePoints || showData){
+            let fixedFoundEmojis = [];
+            for(let e of foundEmojis){
+                e.found = fixEmojiCodePoint(e.found, this.dbData);
+                e.emoji = this.dbData[e.found].emoji;
+                fixedFoundEmojis.push(e);
+            }
+            foundEmojis = fixedFoundEmojis;
+        }
         if(showData){
             const emojisData = [];
             for(let e of foundEmojis){
-                e = fixEmojiCodePoint(e, this.dbData);
-                emojisData.push(this.dbData[e]);
+                emojisData.push(this.dbData[e.found]);
             }
-            return emojisData;
+            return { found: foundEmojis, data: [...new Set(emojisData)] };
         }
         else{
-            if(fixCodePoints){
-                let fixedFoundEmojis = [];
-                for(let e of foundEmojis){
-                    e = fixEmojiCodePoint(e, this.dbData);
-                    fixedFoundEmojis.push(e);
-                }
-                foundEmojis = fixedFoundEmojis;
-            }
             return foundEmojis;
         }
     }
