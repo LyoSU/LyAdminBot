@@ -145,13 +145,20 @@ function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, m
     for (let index = 0; index < styledChar.length; index++) {
       const charStyle = styledChar[index]
       const lastChar = styledChar[index - 1]
+
       if (
         lastChar && (
-          (charStyle.emoji && lastChar.emoji && charStyle.emoji.index !== lastChar.emoji.index) ||
-          (charStyle.char.match(breakMatch)) ||
-          (charStyle.char.match(spaceMatch) && !lastChar.char.match(spaceMatch)) ||
-          (lastChar.char.match(spaceMatch) && !charStyle.char.match(spaceMatch)) ||
-          (charStyle.style && lastChar.style && charStyle.style.toString() !== lastChar.style.toString())
+          (
+            (charStyle.emoji && !lastChar.emoji) ||
+            (!charStyle.emoji && lastChar.emoji) ||
+            (charStyle.emoji && lastChar.emoji && charStyle.emoji.index !== lastChar.emoji.index)
+          ) ||
+          (
+            (charStyle.char.match(breakMatch)) ||
+            (charStyle.char.match(spaceMatch) && !lastChar.char.match(spaceMatch)) ||
+            (lastChar.char.match(spaceMatch) && !charStyle.char.match(spaceMatch)) ||
+            (charStyle.style && lastChar.style && charStyle.style.toString() !== lastChar.style.toString())
+          )
         )
       ) {
         stringNum++
