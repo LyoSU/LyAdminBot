@@ -215,7 +215,7 @@ function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, m
       let lineWidth
       let wordlWidth = canvasСtx.measureText(styledWord.word).width
 
-      if (styledWord.style.includes('emoji')) lineWidth = lineX + fontSize + (fontSize * 0.15)
+      if (styledWord.emoji) lineWidth = lineX + fontSize + (fontSize * 0.15)
       else lineWidth = lineX + wordlWidth
 
       if (styledWord.word.match(breakMatch) || (lineWidth > maxWidth - fontSize * 2 && wordlWidth < maxWidth)) {
@@ -230,7 +230,7 @@ function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, m
           styledWord.word += '…'
           breakWrite = true
         } else {
-          if (styledWord.style.includes('emoji')) lineWidth = textX + fontSize + (fontSize * 0.15)
+          if (styledWord.emoji) lineWidth = textX + fontSize + (fontSize * 0.15)
           else lineWidth = textX + canvasСtx.measureText(styledWord.word).width
           lineX = textX
           lineY += lineHeight
