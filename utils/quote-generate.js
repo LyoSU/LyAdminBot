@@ -140,7 +140,7 @@ function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, m
 
       if (
         lastChar && (
-          (charStyle.emoji && lastChar.emoji && charStyle.emoji.found !== lastChar.emoji.found) ||
+          (charStyle.emoji && lastChar.emoji && charStyle.emoji.code !== lastChar.emoji.code) ||
           (charStyle.char.match(breakMatch)) ||
           (charStyle.char.match(spaceMatch) && !lastChar.char.match(spaceMatch)) ||
           (lastChar.char.match(spaceMatch) && !charStyle.char.match(spaceMatch)) ||
@@ -159,6 +159,8 @@ function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, m
         if (charStyle.emoji) styledWords[stringNum].emoji = charStyle.emoji
       } else styledWords[stringNum].word += charStyle.char
     }
+
+    console.log(styledWords)
 
     let lineX = textX
     let lineY = textY
