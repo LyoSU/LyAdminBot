@@ -124,8 +124,6 @@ function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, m
       }
     }
 
-    console.log(styledChar)
-
     for (let emojiIndex = 0; emojiIndex < emojis.length; emojiIndex++) {
       const emoji = emojis[emojiIndex]
 
@@ -327,36 +325,50 @@ function drawAvatar (avatar) {
   return canvas
 }
 
-async function drawQuote (backgroundColor, avarat, nick, text, maxWidth, maxHeight) {
-  let width = nick.width
-  if (width < text.width) width = text.width
-
-  let height = nick.height + text.height
-
+async function drawQuote (backgroundColor, avatar, nick, text, maxWidth, maxHeight) {
   const blockPosX = 75
   const blockPosY = 0
 
   const indent = 15
 
+  const avatarPosX = 0
+  const avatarPosY = 0
+  const avatarSize = 65
+
+  const downPadding = 75
+
+  let width = nick.width
+  if (width < text.width) width = text.width
+  let height = nick.height + text.height
   width += blockPosX + (indent * 2)
   height += blockPosY
+
+  const rectWidth = width - blockPosX
+  const rectHeight = height
+  const rectPosX = blockPosX
+  const rectPosY = blockPosY
+  const rectRoundRadius = 25
+
+  const nickPosX = blockPosX + indent
+  const nickPosY = indent
+
+  const textPosX = blockPosX + indent
+  const textPosY = nick.height
 
   const canvas = createCanvas(width, height)
   const canvasCtx = canvas.getContext('2d')
 
-  const rect = drawRoundRect(backgroundColor, width - blockPosX, height, 25, '#fff', false)
+  const rect = drawRoundRect(backgroundColor, rectWidth, rectHeight, rectRoundRadius, '#fff', false)
 
-  canvasCtx.drawImage(avarat, 0, 0, 65, 65)
-  canvasCtx.drawImage(rect, blockPosX, blockPosY)
-  canvasCtx.drawImage(nick, blockPosX + indent, indent)
-  canvasCtx.drawImage(text, blockPosX + indent, nick.height)
+  canvasCtx.drawImage(avatar, avatarPosX, avatarPosY, avatarSize, avatarSize)
+  canvasCtx.drawImage(rect, rectPosX, rectPosY)
+  canvasCtx.drawImage(nick, nickPosX, nickPosY)
+  canvasCtx.drawImage(text, textPosX, textPosY)
 
   const imageQuoteSharp = sharp(canvas.toBuffer())
 
   if (canvas.height > canvas.width) imageQuoteSharp.resize({ height: maxHeight })
   else imageQuoteSharp.resize({ width: maxWidth })
-
-  const downPadding = 75
 
   const canvasImage = await loadCanvasImage(await imageQuoteSharp.toBuffer())
 
