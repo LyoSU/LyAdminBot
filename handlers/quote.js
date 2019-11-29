@@ -49,14 +49,13 @@ module.exports = async (ctx) => {
     let avatarImage
 
     try {
-      let userPhotoUrl = ''
-
-      if (messageFrom.username) userPhotoUrl = `https://telega.one/i/userpic/320/${messageFrom.username}.jpg`
+      let userPhotoUrl = './assets/404.png'
 
       const getChat = await ctx.telegram.getChat(messageFrom.id)
       const userPhoto = getChat.photo.small_file_id
 
       if (userPhoto) userPhotoUrl = await ctx.telegram.getFileLink(userPhoto)
+      else if (messageFrom.username) userPhotoUrl = `https://telega.one/i/userpic/320/${messageFrom.username}.jpg`
 
       avatarImage = await loadCanvasImage(userPhotoUrl)
     } catch (error) {

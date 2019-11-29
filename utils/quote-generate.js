@@ -1,8 +1,7 @@
 const fs = require('fs')
 const { createCanvas, registerFont } = require('canvas')
-const runes = require('runes')
 const loadImageFromUrl = require('./image-load-url')
-const EmojiDbLib = require('./emoji-db')
+const EmojiDbLib = require('emoji-db')
 const loadCanvasImage = require('./canvas-image-load')
 const sharp = require('sharp')
 
