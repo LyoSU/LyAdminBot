@@ -29,7 +29,9 @@ async function downloadEmoji () {
     if (emoji.image) {
       const fileName = `${emoji.code}.png`
       if (!fs.existsSync(`${emojiDataDir}${fileName}`)) {
-        const img = await loadImageFromUrl(emoji.image.src)
+        const fileUrl = `https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/120/apple/232/${emoji.image.file_name}`
+
+        const img = await loadImageFromUrl(fileUrl)
 
         fs.writeFile(`${emojiDataDir}${fileName}`, img, (err) => {
           if (err) return console.log(err)
