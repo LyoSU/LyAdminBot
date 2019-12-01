@@ -1,9 +1,8 @@
 module.exports = {
   apps: [{
-    name: 'LyBotDBApi',
+    name: 'LyAdminBot',
     script: './index.js',
-    instances: 'max',
-    exec_mode: 'cluster',
+    instances: 1,
     watch: true,
     env: {
       NODE_ENV: 'development'
