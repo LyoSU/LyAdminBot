@@ -15,7 +15,10 @@ module.exports = async (ctx) => {
       if (ctx.match[2] > 0) messageCount = ctx.match[2]
       if (ctx.match[4] > 0) messageCount = ctx.match[4]
     }
-    if (messageCount > 5) messageCount = 5
+
+    const maxQuoteMessage = 10
+
+    if (messageCount > maxQuoteMessage) messageCount = maxQuoteMessage
 
     const quoteMessages = []
     const quoteImages = []
