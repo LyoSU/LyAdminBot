@@ -23,8 +23,10 @@ module.exports = async (ctx) => {
     for (let index = 0; index < messageCount; index++) {
       if (index > 0) {
         try {
-          quoteMessages[index] = await ctx.telegram.forwardMessage(ctx.message.chat.id, ctx.message.chat.id, ctx.message.reply_to_message.message_id + index)
-          ctx.telegram.deleteMessage(ctx.message.chat.id, quoteMessages[index].message_id)
+          let chatForward = ctx.message.chat.id
+          if (process.env.GROUP_ID) chatForward = process.env.GROUP_ID
+          quoteMessages[index] = await ctx.telegram.forwardMessage(chatForward, ctx.message.chat.id, ctx.message.reply_to_message.message_id + index)
+          if (!process.env.GROUP_ID) ctx.telegram.deleteMessage(ctx.message.chat.id, quoteMessages[index].message_id)
           quoteMessage = quoteMessages[index]
         } catch (error) {
           quoteMessage = null
