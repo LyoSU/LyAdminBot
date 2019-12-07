@@ -3,7 +3,6 @@ const { createCanvas, registerFont } = require('canvas')
 const loadImageFromUrl = require('./image-load-url')
 const EmojiDbLib = require('emoji-db')
 const loadCanvasImage = require('./canvas-image-load')
-const sharp = require('sharp')
 
 const emojiDb = new EmojiDbLib({ useDefaultDb: true })
 
@@ -87,7 +86,6 @@ function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, m
     const canvas = createCanvas(maxWidth + fontSize, maxHeight + fontSize)
     const canvasСtx = canvas.getContext('2d')
 
-    // const chars = runes(text)
     const chars = text.split('')
 
     const lineHeight = 4 * (fontSize * 0.3)
@@ -343,11 +341,13 @@ async function drawQuote (backgroundColor, avatar, nick, text, maxWidth, maxHeig
   const avatarPosY = 0
   const avatarSize = 65
 
-  const downPadding = 75
-
-  let width = nick.width
+  let width = 0
+  if (nick) width = nick.width
   if (width < text.width) width = text.width
-  let height = nick.height + text.height
+
+  let height = text.height + indent
+  if (nick) height = nick.height + text.height
+
   width += blockPosX + (indent * 2)
   height += blockPosY
 
@@ -361,39 +361,32 @@ async function drawQuote (backgroundColor, avatar, nick, text, maxWidth, maxHeig
   const nickPosY = indent
 
   const textPosX = blockPosX + indent
-  const textPosY = nick.height
+  let textPosY = indent
+  if (nick) textPosY = nick.height
 
   const canvas = createCanvas(width, height)
   const canvasCtx = canvas.getContext('2d')
 
   const rect = drawRoundRect(backgroundColor, rectWidth, rectHeight, rectRoundRadius, '#fff', false)
 
-  canvasCtx.drawImage(avatar, avatarPosX, avatarPosY, avatarSize, avatarSize)
-  canvasCtx.drawImage(rect, rectPosX, rectPosY)
-  canvasCtx.drawImage(nick, nickPosX, nickPosY)
-  canvasCtx.drawImage(text, textPosX, textPosY)
+  if (avatar) canvasCtx.drawImage(avatar, avatarPosX, avatarPosY, avatarSize, avatarSize)
+  if (rect) canvasCtx.drawImage(rect, rectPosX, rectPosY)
+  if (nick) canvasCtx.drawImage(nick, nickPosX, nickPosY)
+  if (text) canvasCtx.drawImage(text, textPosX, textPosY)
 
-  const imageQuoteSharp = sharp(canvas.toBuffer())
-
-  if (canvas.height > canvas.width) imageQuoteSharp.resize({ height: maxHeight })
-  else imageQuoteSharp.resize({ width: maxWidth })
-
-  const canvasImage = await loadCanvasImage(await imageQuoteSharp.toBuffer())
-
-  const canvasPadding = createCanvas(canvasImage.width, canvasImage.height + downPadding)
-  const canvasPaddingCtx = canvasPadding.getContext('2d')
-
-  canvasPaddingCtx.drawImage(canvasImage, 0, 0)
-
-  const quoteImage = sharp(canvasPadding.toBuffer()).webp({ lossless: true, force: true }).toBuffer()
-
-  return quoteImage
+  return canvas
 }
 
 module.exports = (avatar, backgroundColor, userId, nick, text, entities) => {
   return new Promise(async (resolve, reject) => {
+    const canvas = createCanvas(0, 0)
+    const canvasCtx = canvas.getContext('2d')
+
+    canvasCtx.fillStyle = backgroundColor
+    backgroundColor = canvasCtx.fillStyle
+
     // check background style color black/light
-    const backStyle = lightOrDark(backgroundColor)
+    const backStyle = lightOrDark(canvasCtx.fillStyle)
 
     const width = 512
     const height = 512
@@ -445,25 +438,31 @@ module.exports = (avatar, backgroundColor, userId, nick, text, entities) => {
 
     const nickSize = 22
 
-    const drawNickCanvas = drawMultilineText(nick, 'bold', nickSize, nickColor, 0, nickSize, width, nickSize)
+    let nickCanvas
+    if (nick) nickCanvas = await drawMultilineText(nick, 'bold', nickSize, nickColor, 0, nickSize, width, nickSize)
 
-    const minFontSize = 18
-    const maxFontSize = 28
+    // const minFontSize = 18
+    // const maxFontSize = 28
 
-    let fontSize = 25 / ((text.length / 10) * 0.2)
+    // let fontSize = 25 / ((text.length / 10) * 0.2)
 
-    if (fontSize < minFontSize) fontSize = minFontSize
-    if (fontSize > maxFontSize) fontSize = maxFontSize
+    // if (fontSize < minFontSize) fontSize = minFontSize
+    // if (fontSize > maxFontSize) fontSize = maxFontSize
+
+    const fontSize = 24
 
     let textColor = '#fff'
     if (backStyle === 'light') textColor = '#000'
 
     const drawTextCanvas = drawMultilineText(text, entities, fontSize, textColor, 0, fontSize, width, height - fontSize)
 
+    let avatarCanvas
+    if (avatar) avatarCanvas = drawAvatar(avatar)
+
     const quote = drawQuote(
       backgroundColor,
-      drawAvatar(avatar),
-      await drawNickCanvas, await drawTextCanvas,
+      avatarCanvas,
+      nickCanvas, await drawTextCanvas,
       width, height
     )
 

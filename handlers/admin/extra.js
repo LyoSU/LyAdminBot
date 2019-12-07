@@ -20,7 +20,7 @@ module.exports = async (ctx) => {
       ctx.group.info.settings.extras.push({
         name: extraName,
         type: extraType,
-        message: extraMessage,
+        message: extraMessage
       })
 
       await ctx.replyWithHTML(ctx.i18n.t('cmd.extra.push', { extraName }))
