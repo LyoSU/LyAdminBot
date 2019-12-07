@@ -60,6 +60,8 @@ module.exports = async (ctx) => {
           }
         }
 
+        if (quoteMessage.forward_from) messageFrom = quoteMessage.forward_from
+
         quoteMessages[index].from = messageFrom
 
         // ser background color
@@ -72,8 +74,6 @@ module.exports = async (ctx) => {
         if ((ctx.match && colorName === 'random') || backgroundColor === 'random') backgroundColor = `#${(Math.floor(Math.random() * 16777216)).toString(16)}`
         else if (ctx.match && ctx.match[3] === '#' && colorName) backgroundColor = `#${colorName}`
         else if (ctx.match && colorName) backgroundColor = `${colorName}`
-
-        if (quoteMessage.forward_from) messageFrom = quoteMessage.forward_from
 
         let diffUser = true
         if (quoteMessages[index - 1] && (quoteMessages[index].from.first_name === quoteMessages[index - 1].from.first_name)) diffUser = false
