@@ -2,7 +2,6 @@ const https = require('https')
 const Stream = require('stream').Transform
 const sharp = require('sharp')
 
-
 const downloadFileByUrl = (fileUrl) => new Promise(async (resolve, reject) => {
   const data = new Stream()
 
