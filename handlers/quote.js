@@ -71,7 +71,8 @@ module.exports = async (ctx) => {
 
         if (ctx.group && ctx.group.info.settings.quote.backgroundColor) backgroundColor = ctx.group.info.settings.quote.backgroundColor
 
-        let colorName = ctx.match[4]
+        let colorName
+        if (ctx.match[1] !== '/qd' || ctx.match[2]) colorName = ctx.match[4]
 
         if ((ctx.match && colorName === 'random') || backgroundColor === 'random') backgroundColor = `#${(Math.floor(Math.random() * 16777216)).toString(16)}`
         else if (ctx.match && ctx.match[3] === '#' && colorName) backgroundColor = `#${colorName}`
