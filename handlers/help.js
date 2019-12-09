@@ -1,9 +1,5 @@
-const { version } = require('../package.json')
-
 module.exports = async (ctx) => {
-  const message = await ctx.replyWithHTML(ctx.i18n.t('cmd.help', {
-    version
-  }), {
+  const message = await ctx.replyWithHTML(ctx.i18n.t('cmd.help'), {
     reply_to_message_id: ctx.message.message_id
   })
 
