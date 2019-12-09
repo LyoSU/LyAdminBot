@@ -4,7 +4,6 @@ const handlePing = require('./ping')
 const handleSetLanguage = require('./language-set')
 const handleBanan = require('./banan')
 const handleQuote = require('./quote')
-const handleAdminQuoteColor = require('./admin/quote-color')
 const handleDelete = require('./delete')
 const handleTop = require('./top')
 const handleTopBanan = require('./top-banan')
@@ -34,7 +33,6 @@ module.exports = {
   handleSetLanguage,
   handleBanan,
   handleQuote,
-  handleAdminQuoteColor,
   handleDelete,
   handleTop,
   handleTopBanan,
