@@ -1,12 +1,11 @@
 const Markup = require('telegraf/markup')
 
-
 module.exports = async (ctx) => {
   const locales = {
     en: '🇺🇸',
     ru: '🇷🇺',
     uk: '🇺🇦',
-    by: '🇧🇾',
+    by: '🇧🇾'
   }
 
   if (ctx.updateType === 'callback_query') {
@@ -41,8 +40,8 @@ module.exports = async (ctx) => {
 
     ctx.reply('🇷🇺 Выберите язык\n🇺🇸 Choose language', {
       reply_markup: Markup.inlineKeyboard(button, {
-        columns: 5,
-      }),
+        columns: 5
+      })
     })
   }
 }

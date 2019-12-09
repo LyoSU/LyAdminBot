@@ -115,9 +115,8 @@ cmd:
     member: |
       <a href="tg://user?id=${telegram_id}">${telegram_id}</a>
       ${banTime} | a: ${active} | f: ${flood}
-  quote:
-    set_back_color: |
-      Цвет фона цитат установлен на: <code>${backgroundColor}</code>
+  quote: |
+    Для создания цитат используйте бота @QuotLyBot
   reset: Настройки были сброшены
 settings:
     json:
@@ -141,7 +140,10 @@ sticker:
     suc: Стикер успешно удален из <a href="${link}">стикерпака группы</a>.
     error:
       telegram: <b>У меня не получилось удалить этот стикер.</b>\n<pre>${error}</pre>
-  btn:
-    save_sticker: Сохранить стикер
+  empty_forward: |
+    Команду необходимо писать в ответ на сообщение со стикером, фото или файлом фото.
+  only_admin: |
+      Команду может использовать только администратор группы.
+      Для сохранения стикерпака в личный стикерпак перешли сообщение боту @fStikBot
 del:
   error: <b>У меня не получилось удалить сообщение</b>\n<pre>${error}</pre>

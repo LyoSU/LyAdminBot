@@ -18,7 +18,6 @@ const {
   handleWelcome,
   handleBanan,
   handleQuote,
-  handleAdminQuoteColor,
   handleKick,
   handleDelete,
   handleTop,
@@ -74,10 +73,6 @@ const i18n = new I18n({
   defaultLanguageOnMissing: true
 })
 
-bot.telegram.getMe().then((botInfo) => {
-  bot.options.username = botInfo.username
-})
-
 bot.use(rateLimit(limitConfig))
 
 bot.use(async (ctx, next) => {
@@ -126,8 +121,7 @@ bot.command('help', handleHelp)
 bot.command('ping', handlePing)
 bot.command('lang', handleSetLanguage)
 bot.command('web', handleWebAuth)
-bot.hears(/^(\/qd|\/q)(?:(?:(?:\s(\d+))?\s(?:(#?))([^\s]+))?)/, handleQuote)
-bot.hears(/^!quote-color(?:(?:\s(?:(#?))([^\s]+))?)/, onlyAdmin, handleAdminQuoteColor)
+bot.command('q', handleQuote)
 bot.command('banan', onlyGroup, rateLimit(bananLimitConfig), handleBanan)
 bot.command('kick', onlyGroup, handleKick)
 bot.command('del', handleDelete)

@@ -8,7 +8,6 @@ module.exports = async (ctx) => {
       ctx.i18n.t('private.start', {
         name: userName(ctx.from)
       }),
-
       Extra.HTML().markup((m) => m.inlineKeyboard([
         m.urlButton(
           ctx.i18n.t('private.btn_add'),
