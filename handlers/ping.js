@@ -1,4 +1,5 @@
 const humanizeDuration = require('humanize-duration')
+const { version } = require('../package.json')
 const spawn = require('child_process').spawn
 const os = require('os')
 
@@ -42,6 +43,8 @@ module.exports = async (ctx) => {
   const totalmem = (os.totalmem() / (1024 * 1024)).toFixed(0)
 
   let extra = ''
+
+  extra += `Version: ${version}\n\n`
 
   extra += `💡 Server info:\n`
   extra += `<b>RAM:</b> ${usemem}/${totalmem} MB\n`

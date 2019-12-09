@@ -41,8 +41,6 @@ cmd:
 
     <b>👨🏻‍💻 Блог разработчика:</b> @LyBlog
     <b>GitHub:</b> github.com/LyoSU/LyAdminBot
-
-    <pre>v${version}</pre>
   my_stats:
     send_pm: Статистика отправлена в ЛС
     chat: |
