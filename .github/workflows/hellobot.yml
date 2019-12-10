@@ -12,4 +12,5 @@ jobs:
         npm ci
         npm start
       env:
+        MONGODB_URI: ${{ secrets.MONGODB_URI }}
         BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
