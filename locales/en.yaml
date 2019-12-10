@@ -37,8 +37,6 @@ cmd:
 
     <b>👨🏻‍💻 Developer's blog (Russian):</b> @LyBlog
     <b>GitHub:</b> github.com/LyoSU/LyAdminBot
-
-    <pre>v${version}</pre>
   my_stats:
     send_pm: Stats sent in a PM
     chat: |
