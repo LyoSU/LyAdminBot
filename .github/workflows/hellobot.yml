@@ -1,0 +1,15 @@
+name: HelloBot
+
+on: [push]
+
+jobs:
+  work:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: HelloBot
+      run: |
+        npm ci
+        npm start
+      env:
+        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
