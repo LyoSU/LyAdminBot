@@ -29,7 +29,6 @@ cmd:
     <code>!reset</code> - скінуць налады групы
     <b>👨🏻‍💻 Блог распрацоўніка:</b> @LyBlog
     <b>GitHub:</b> github.com/LyoSU/LyAdminBot
-    <pre>v${version}</pre>
   my_stats:
     send_pm: Статыстыка адпраўлена ў ЛС
     chat: |
