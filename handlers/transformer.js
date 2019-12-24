@@ -16,7 +16,7 @@ module.exports = async (ctx) => {
     const mediumResult = await extend.post('https://models.dobro.ai/gpt2/medium/', {
       body: {
         prompt: text,
-        length: 60,
+        length: 30,
         num_samples: 4
       }
     })
