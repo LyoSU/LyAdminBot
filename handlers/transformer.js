@@ -17,7 +17,7 @@ module.exports = async (ctx) => {
       body: {
         prompt: text,
         length: 30,
-        num_samples: 4
+        num_samples: 1
       }
     })
 
