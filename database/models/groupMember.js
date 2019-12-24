@@ -1,10 +1,9 @@
 const mongoose = require('mongoose')
 
-
 const groupMemberSchema = mongoose.Schema({
   group: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Group',
+    ref: 'Group'
   },
   telegram_id: {
     type: Number,

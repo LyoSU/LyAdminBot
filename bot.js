@@ -37,7 +37,8 @@ const {
   handleSendSettingsJson,
   handleAdminJsonReset,
   handleAdminReset,
-  handleExtra
+  handleExtra,
+  handleTransformer
 } = require('./handlers')
 const {
   updateUser,
@@ -129,6 +130,8 @@ bot.command('top', onlyGroup, handleTop)
 bot.command('top_banan', onlyGroup, handleTopBanan)
 bot.command('mystats', onlyGroup, handleMyStats)
 bot.command('extras', onlyGroup, handleExtraList)
+
+bot.command('t', handleTransformer)
 
 bot.hears(/^!extra\s(?:(#?))([^\s]+)/, onlyAdmin, handleAdminExtra)
 bot.hears(/^!extra-max (\d*)/, onlyAdmin, handleAdminMaxExtra)
