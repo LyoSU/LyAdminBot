@@ -33,6 +33,7 @@ const {
   handleAdminWelcomeTextReset,
   handleAdminExtra,
   handleAdminMaxExtra,
+  handleAdminCas,
   handleSendMembers,
   handleSaveSticker,
   handleSendSettingsJson,
@@ -94,7 +95,6 @@ bot.use(session({
 }))
 
 bot.use(i18n.middleware())
-bot.use(casBan)
 bot.use(async (ctx, next) => {
   ctx.session.userInfo = await updateUser(ctx)
   if (ctx.session.userInfo.locale) ctx.i18n.locale(ctx.session.userInfo.locale)
@@ -105,6 +105,7 @@ bot.use(async (ctx, next) => {
     ctx.group.members[ctx.from.id] = await updateGroupMember(ctx)
     if (ctx.group.info.settings.locale) ctx.i18n.locale(ctx.group.info.settings.locale)
   }
+  await casBan(ctx)
 
   await next(ctx)
 
@@ -135,6 +136,7 @@ bot.command('extras', onlyGroup, handleExtraList)
 bot.hears(/^!extra\s(?:(#?))([^\s]+)/, onlyAdmin, handleAdminExtra)
 bot.hears(/^!extra-max (\d*)/, onlyAdmin, handleAdminMaxExtra)
 bot.hears('!welcome', onlyAdmin, handleAdminWelcome)
+bot.hears('!cas', onlyAdmin, handleAdminCas)
 bot.hears('!gif', onlyAdmin, handleAdminWelcomeGif)
 bot.hears('!gif-reset', onlyAdmin, handleAdminWelcomeGifReset)
 bot.hears('!text', onlyAdmin, handleAdminWelcomeText)

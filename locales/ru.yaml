@@ -113,6 +113,9 @@ cmd:
       ${banTime} | a: ${active} | f: ${flood}
   quote: |
     Для создания цитат используйте бота @QuotLyBot
+  cas:
+    disable: CAS Ban отключен
+    enable: CAS Ban включен
   reset: Настройки были сброшены
 settings:
     json:

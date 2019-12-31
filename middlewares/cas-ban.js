@@ -7,10 +7,9 @@ const extend = got.extend({
   throwHttpErrors: false
 })
 
-module.exports = async (ctx, next) => {
-  if (['supergroup', 'group'].includes(ctx.chat.type)) {
+module.exports = async (ctx) => {
+  if (ctx.group && ctx.group.info.settings.cas === true) {
     const userId = ctx.from.id
-
     extend.get(`https://api.cas.chat/check?user_id=${userId}`).then(({ body }) => {
       if (body.ok === true) {
         console.log(body)
@@ -24,6 +23,4 @@ module.exports = async (ctx, next) => {
       }
     })
   }
-  
-  next()
 }

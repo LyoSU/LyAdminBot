@@ -139,6 +139,10 @@ const groupSchema = mongoose.Schema({
         type: String,
         default: '#130f1c'
       }
+    },
+    cas: {
+      type: Boolean,
+      default: true
     }
   },
   stats: {
