@@ -1,0 +1,16 @@
+name: LyAdminBot
+
+on: [push]
+
+jobs:
+  work:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: bot
+      run: |
+        npm ci
+        npm start
+      env:
+        MONGODB_URI: ${{ secrets.MONGODB_URI }}
+        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
