@@ -8,7 +8,8 @@ const {
 } = require('./database')
 const {
   onlyGroup,
-  onlyAdmin
+  onlyAdmin,
+  casBan
 } = require('./middlewares')
 const {
   handleMessage,
@@ -37,8 +38,7 @@ const {
   handleSendSettingsJson,
   handleAdminJsonReset,
   handleAdminReset,
-  handleExtra,
-  handleTransformer
+  handleExtra
 } = require('./handlers')
 const {
   updateUser,
@@ -94,6 +94,7 @@ bot.use(session({
 }))
 
 bot.use(i18n.middleware())
+bot.use(casBan)
 bot.use(async (ctx, next) => {
   ctx.session.userInfo = await updateUser(ctx)
   if (ctx.session.userInfo.locale) ctx.i18n.locale(ctx.session.userInfo.locale)
