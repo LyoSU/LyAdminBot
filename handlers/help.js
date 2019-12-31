@@ -3,8 +3,10 @@ module.exports = async (ctx) => {
     reply_to_message_id: ctx.message.message_id
   })
 
-  setTimeout(() => {
-    ctx.deleteMessage(message.message_id)
-    ctx.deleteMessage()
-  }, 60 * 1000)
+  if (['supergroup', 'group'].includes(ctx.chat.type)) {
+    setTimeout(() => {
+      ctx.deleteMessage(message.message_id)
+      ctx.deleteMessage()
+    }, 60 * 1000)
+  }
 }

@@ -25,7 +25,6 @@ const handleSendSettingsJson = require('./admin/send-settings-json')
 const handleAdminJsonReset = require('./admin/json-reset')
 const handleAdminReset = require('./admin/reset')
 const handleExtra = require('./extra')
-const handleTransformer = require('./transformer')
 
 module.exports = {
   handleHelp,
@@ -54,6 +53,5 @@ module.exports = {
   handleSendSettingsJson,
   handleAdminJsonReset,
   handleAdminReset,
-  handleExtra,
-  handleTransformer
+  handleExtra
 }
