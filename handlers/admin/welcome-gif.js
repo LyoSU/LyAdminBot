@@ -12,7 +12,9 @@ module.exports = async (ctx) => {
       return
     }
 
-    delete ctx.group.info.settings.welcome.gifs[gifId]
+    const gifIndex = ctx.group.info.settings.welcome.gifs.indexOf(gifId)
+
+    ctx.group.info.settings.welcome.gifs.splice(gifIndex, 1)
     ctx.replyWithHTML(ctx.i18n.t('cmd.gif.pull')).catch(console.log)
   }
 }
