@@ -13,7 +13,6 @@ module.exports = async (ctx) => {
     extend.get(`https://api.cas.chat/check?user_id=${userId}`).then(({ body }) => {
       if (body.ok === true) {
         console.log(body)
-        ctx.deleteMessage()
         ctx.telegram.kickChatMember(ctx.chat.id, userId)
         ctx.replyWithHTML(ctx.i18n.t('cas.banned', {
           name: userName(ctx.from, true),
@@ -21,6 +20,7 @@ module.exports = async (ctx) => {
         }), {
           reply_to_message_id: ctx.message.message_id
         })
+        ctx.deleteMessage()
       }
     })
   }
