@@ -55,7 +55,7 @@ module.exports = async (ctx) => {
 
   extra += delay
 
-  ctx.telegram.editMessageText(
+  await ctx.telegram.editMessageText(
     message.chat.id, message.message_id, null,
     ctx.i18n.t('cmd.ping.pong', { sms, tms, workTime, extra }),
     { parse_mode: 'HTML' }

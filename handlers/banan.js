@@ -40,10 +40,13 @@ module.exports = async (ctx) => {
   }
 
   if (banTime) {
-    const banMember = await ctx.db.GroupMember.findOne({
-      group: ctx.group.info,
-      telegram_id: banUser.id
-    })
+    if (!ctx.group.members[banUser.id]) {
+      ctx.group.members[banUser.id] = await ctx.db.GroupMember.findOne({
+        group: ctx.group.info,
+        telegram_id: banUser.id
+      })
+    }
+    const banMember = ctx.group.members[banUser.id]
 
     if (autoBan) banTime *= (banMember.banan.stack + 1)
 
@@ -81,18 +84,18 @@ module.exports = async (ctx) => {
           duration: banDuration
         }))
 
-        const replyBanMember = await ctx.telegram.getChatMember(
-          ctx.message.chat.id,
-          banUser.id
-        )
+        // const replyBanMember = await ctx.telegram.getChatMember(
+        //   ctx.message.chat.id,
+        //   banUser.id
+        // )
 
-        if (replyBanMember.status === 'restricted' && (banMember.banan.last.time + banMember.banan.last.how) > 0) {
-          banMember.banan.sum -= (
-            banMember.banan.last.how - (
-              ctx.message.date - banMember.banan.last.time
-            )
-          )
-        }
+        // if (replyBanMember.status === 'restricted' && (banMember.banan.last.time + banMember.banan.last.how) > 0) {
+        //   banMember.banan.sum -= (
+        //     banMember.banan.last.how - (
+        //       ctx.message.date - banMember.banan.last.time
+        //     )
+        //   )
+        // }
 
         banMember.banan.num += 1
         banMember.banan.sum += banTime
@@ -135,7 +138,6 @@ module.exports = async (ctx) => {
     }
 
     banMember.banan.time = Date.now()
-    await banMember.save()
   } else {
     await ctx.replyWithHTML(ctx.i18n.t('banan.show', {
       name: userName(ctx.from, true)
