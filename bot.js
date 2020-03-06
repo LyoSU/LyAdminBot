@@ -95,7 +95,7 @@ bot.use(session({
 
 bot.use(i18n.middleware())
 bot.use(async (ctx, next) => {
-  const ms = new Date()
+  ctx.ms = new Date()
   ctx.session.userInfo = await updateUser(ctx)
   if (ctx.session.userInfo.locale) ctx.i18n.locale(ctx.session.userInfo.locale)
 
@@ -115,7 +115,7 @@ bot.use(async (ctx, next) => {
     await ctx.group.members[ctx.from.id].save()
   }
 
-  console.log('Response time %sms', new Date() - ms)
+  console.log('Response time %sms', new Date() - ctx.ms)
 })
 
 bot.command('help', handleHelp)
