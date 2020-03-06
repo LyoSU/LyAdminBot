@@ -6,7 +6,13 @@ module.exports = async (ctx, next) => {
     ).catch(console.log)
 
     if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
-      await next()
+      return next()
+    } else {
+      ctx.replyWithHTML(ctx.i18n.t('only_admin'), {
+        reply_to_message_id: ctx.message.message_id
+      })
     }
+  } else {
+    return next()
   }
 }
