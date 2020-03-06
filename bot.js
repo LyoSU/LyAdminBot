@@ -55,6 +55,10 @@ const bot = new Telegraf(process.env.BOT_TOKEN, {
   }
 })
 
+bot.catch((error) => {
+  console.log('Oops', error)
+})
+
 bot.context.db = db
 
 const limitConfig = {
@@ -77,11 +81,6 @@ const i18n = new I18n({
 
 bot.use(rateLimit(limitConfig))
 
-bot.use(async (ctx, next) => {
-  ctx.ms = new Date()
-  next()
-})
-
 bot.use(session({ ttl: 60 * 5 }))
 bot.use(session({
   property: 'group',
@@ -96,6 +95,7 @@ bot.use(session({
 
 bot.use(i18n.middleware())
 bot.use(async (ctx, next) => {
+  const ms = new Date()
   ctx.session.userInfo = await updateUser(ctx)
   if (ctx.session.userInfo.locale) ctx.i18n.locale(ctx.session.userInfo.locale)
 
@@ -115,9 +115,7 @@ bot.use(async (ctx, next) => {
     await ctx.group.members[ctx.from.id].save()
   }
 
-  const ms = new Date() - ctx.ms
-
-  console.log('Response time %sms', ms)
+  console.log('Response time %sms', new Date() - ms)
 })
 
 bot.command('help', handleHelp)
@@ -152,10 +150,6 @@ bot.hashtag(() => true, rateLimit({ window: 3 * 1000, limit: 1 }), handleExtra)
 bot.on('document', onlyAdmin, handleAdminJsonReset)
 bot.on('new_chat_members', handleWelcome)
 bot.on('message', handleMessage)
-
-bot.catch((error) => {
-  console.log('Oops', error)
-})
 
 db.connection.once('open', async () => {
   console.log('Connected to MongoDB')

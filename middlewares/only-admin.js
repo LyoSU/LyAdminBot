@@ -6,7 +6,7 @@ module.exports = async (ctx, next) => {
     ).catch(console.log)
 
     if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
-      next()
+      await next()
     }
   }
 }

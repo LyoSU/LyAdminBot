@@ -1,5 +1,5 @@
-module.exports = async (ctx, next) => {
+module.exports = (ctx, next) => {
   if (['supergroup', 'group'].includes(ctx.chat.type)) {
-    next()
+    return next()
   }
 }

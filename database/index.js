@@ -1,9 +1,8 @@
 const collections = require('./models')
 const connection = require('./connection')
 
-
 const db = {
-  connection,
+  connection
 }
 
 Object.keys(collections).forEach((collectionName) => {
@@ -11,5 +10,5 @@ Object.keys(collections).forEach((collectionName) => {
 })
 
 module.exports = {
-  db,
+  db
 }
