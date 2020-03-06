@@ -1,12 +1,17 @@
 const https = require('https')
 
-
 module.exports = async (ctx) => {
+  const chatMember = await ctx.tg.getChatMember(
+    ctx.message.chat.id,
+    ctx.message.from.id
+  )
+
   if (
-    ctx.message.forward_from
-    && ctx.message.forward_from.username === ctx.options.username
-    && ctx.message.document
-    && ctx.message.document.mime_type === 'application/json'
+    ['creator', 'administrator'].includes(chatMember.status) &&
+    ctx.message.forward_from &&
+    ctx.message.forward_from.username === ctx.options.username &&
+    ctx.message.document &&
+    ctx.message.document.mime_type === 'application/json'
   ) {
     const fileUrl = await ctx.telegram.getFileLink(ctx.message.document.file_id)
 
@@ -23,7 +28,7 @@ module.exports = async (ctx) => {
         ctx.group.info.settings = settings
 
         ctx.replyWithHTML(ctx.i18n.t('settings.json.reset'), {
-          reply_to_message_id: ctx.message.message_id,
+          reply_to_message_id: ctx.message.message_id
         })
       })
     })

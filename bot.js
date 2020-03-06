@@ -144,7 +144,7 @@ bot.hears('!json', onlyAdmin, handleSendSettingsJson)
 bot.action(/set_language:(.*)/, handleSetLanguage)
 bot.hashtag(() => true, rateLimit({ window: 3 * 1000, limit: 1 }), handleExtra)
 
-bot.on('document', onlyAdmin, handleAdminJsonReset)
+bot.on('document', handleAdminJsonReset)
 bot.on('new_chat_members', handleWelcome)
 bot.on('message', handleMessage)
 
