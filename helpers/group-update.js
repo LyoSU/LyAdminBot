@@ -1,4 +1,4 @@
-module.exports = (ctx) => new Promise(async (resolve, reject) => {
+module.exports = async (ctx) => {
   let group
 
   if (!ctx.group.info) group = await ctx.db.Group.findOne({ group_id: ctx.chat.id })
@@ -30,5 +30,5 @@ module.exports = (ctx) => new Promise(async (resolve, reject) => {
     group.updatedAt = new Date()
   }
 
-  resolve(group)
-})
+  return group
+}

@@ -1,7 +1,9 @@
-module.exports = (ctx) => new Promise(async (resolve, reject) => {
+module.exports = async (ctx) => {
+  if (!ctx.from) return
+
   let user
 
-  if (!ctx.session.userInfo) user = await ctx.db.User.findOne({ telegram_id: ctx.from.id }).catch(reject)
+  if (!ctx.session.userInfo) user = await ctx.db.User.findOne({ telegram_id: ctx.from.id })
   else user = ctx.session.userInfo
 
   const now = Math.floor(new Date().getTime() / 1000)
@@ -23,5 +25,5 @@ module.exports = (ctx) => new Promise(async (resolve, reject) => {
     user.updatedAt = new Date()
   }
 
-  resolve(user)
-})
+  return user
+}
