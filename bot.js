@@ -7,6 +7,7 @@ const {
   db
 } = require('./database')
 const {
+  stats,
   onlyGroup,
   onlyAdmin,
   casBan
@@ -61,6 +62,8 @@ bot.catch((error) => {
   console.log('Oops', error)
 })
 
+bot.use(stats)
+
 bot.context.db = db
 
 const i18n = new I18n({
@@ -88,7 +91,6 @@ bot.use(session({
 
 bot.use(i18n.middleware())
 bot.use(async (ctx, next) => {
-  ctx.ms = new Date()
   ctx.session.userInfo = await updateUser(ctx)
   if (ctx.session.userInfo.locale) ctx.i18n.locale(ctx.session.userInfo.locale)
 
@@ -107,8 +109,6 @@ bot.use(async (ctx, next) => {
     await ctx.group.info.save()
     await ctx.group.members[ctx.from.id].save()
   }
-
-  console.log('Response time %sms', new Date() - ctx.ms)
 })
 
 bot.command('help', handleHelp)
