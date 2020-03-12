@@ -18,7 +18,7 @@ function getTempPi () {
 }
 
 module.exports = async (ctx) => {
-  const sms = new Date() - ctx.ms
+  const sms = new Date() - ctx.state.startMs
   const dt = (new Date() / 1000) - ctx.message.date
   let delay = ''
 
@@ -31,7 +31,7 @@ module.exports = async (ctx) => {
   const message = await ctx.replyWithHTML('Pong', {
     reply_to_message_id: ctx.message.message_id
   })
-  const tms = new Date() - ctx.ms - sms
+  const tms = new Date() - ctx.state.startMs - sms
   const workTime = humanizeDuration(
     new Date() - global.startDate,
     { language: ctx.i18n.locale(), fallbacks: ['en'], round: true }
