@@ -19,7 +19,7 @@ module.exports = async (ctx) => {
           link: `https://cas.chat/query?u=${userId}`
         }), {
           reply_to_message_id: ctx.message.message_id
-        })
+        }).catch(() => {})
         ctx.deleteMessage()
       }
     })
