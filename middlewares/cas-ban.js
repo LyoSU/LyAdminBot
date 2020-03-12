@@ -13,7 +13,7 @@ module.exports = async (ctx) => {
     extend.get(`https://api.cas.chat/check?user_id=${userId}`).then(({ body }) => {
       if (body.ok === true) {
         console.log(body)
-        ctx.telegram.kickChatMember(ctx.chat.id, userId)
+        ctx.telegram.kickChatMember(ctx.chat.id, userId).catch(() => {})
         ctx.replyWithHTML(ctx.i18n.t('cas.banned', {
           name: userName(ctx.from, true),
           link: `https://cas.chat/query?u=${userId}`
