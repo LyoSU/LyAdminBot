@@ -104,10 +104,10 @@ bot.use(async (ctx, next) => {
 
   await next(ctx)
 
-  await ctx.session.userInfo.save()
+  await ctx.session.userInfo.save().catch(() => {})
   if (ctx.group && ctx.group.info) {
-    await ctx.group.info.save()
-    await ctx.group.members[ctx.from.id].save()
+    await ctx.group.info.save().catch(() => {})
+    await ctx.group.members[ctx.from.id].save().catch(() => {})
   }
 })
 
