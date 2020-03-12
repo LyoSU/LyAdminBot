@@ -62,7 +62,7 @@ module.exports = async (ctx) => {
     result = ctx.i18n.t('cmd.top_banan.error.empty')
   }
 
-  ctx.replyWithHTML(result, {
+  await ctx.replyWithHTML(result, {
     reply_to_message_id: ctx.message.message_id
   })
 }

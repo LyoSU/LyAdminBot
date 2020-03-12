@@ -72,7 +72,7 @@ module.exports = async (ctx) => {
         { until_date: unixBanTime }
       ).then(async () => {
         if (banUser.id === 686968130) {
-          ctx.replyWithDocument({
+          await ctx.replyWithDocument({
             source: 'assets/arkasha_banan.webp'
           }, {
             reply_to_message_id: ctx.message.message_id
