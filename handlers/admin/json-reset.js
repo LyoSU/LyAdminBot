@@ -1,5 +1,21 @@
 const https = require('https')
 
+const getFile = (url) => {
+  return new Promise((resolve) => {
+    https.get(url, (response) => {
+      let data = ''
+
+      response.on('data', (chunk) => {
+        data += chunk
+      })
+
+      response.on('end', () => {
+        resolve(data)
+      })
+    })
+  })
+}
+
 module.exports = async (ctx) => {
   const chatMember = await ctx.tg.getChatMember(
     ctx.message.chat.id,
@@ -15,22 +31,13 @@ module.exports = async (ctx) => {
   ) {
     const fileUrl = await ctx.telegram.getFileLink(ctx.message.document.file_id)
 
-    https.get(fileUrl, (response) => {
-      let json = ''
+    const settings = JSON.parse(await getFile(fileUrl))
 
-      response.on('data', (chunk) => {
-        json += chunk
-      })
+    ctx.group.info.settings = settings
+    await ctx.group.info.save()
 
-      response.on('end', () => {
-        const settings = JSON.parse(json)
-
-        ctx.group.info.settings = settings
-
-        ctx.replyWithHTML(ctx.i18n.t('settings.json.reset'), {
-          reply_to_message_id: ctx.message.message_id
-        })
-      })
+    await ctx.replyWithHTML(ctx.i18n.t('settings.json.reset'), {
+      reply_to_message_id: ctx.message.message_id
     })
   }
 }
