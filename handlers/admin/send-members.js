@@ -1,8 +1,7 @@
 const humanizeDuration = require('humanize-duration')
 
-
 module.exports = async (ctx) => {
-  ctx.deleteMessage()
+  await ctx.deleteMessage()
 
   const { members } = ctx.group.info
   const maxUser = 100
