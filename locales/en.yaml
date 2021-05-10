@@ -123,3 +123,5 @@ kick:
   error: <b>I can't kick</b>\n<pre>${error}</pre>
 del:
   error: <b>I can't delete the message</b>\n<pre>${error}</pre>
+
+only_group: This command is available only in group
