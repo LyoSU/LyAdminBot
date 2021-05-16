@@ -46,8 +46,8 @@ module.exports = async (ctx) => {
 
     if (gMessage) {
       setTimeout(() => {
-        await ctx.deleteMessage(gMessage.message_id)
-        await ctx.deleteMessage()
+        ctx.deleteMessage(gMessage.message_id)
+        ctx.deleteMessage()
       }, 3 * 1000)
     }
   }
