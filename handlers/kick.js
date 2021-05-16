@@ -18,12 +18,12 @@ module.exports = async (ctx) => {
   }
 
   if (kickUser) {
-    ctx.telegram.unbanChatMember(ctx.chat.id, kickUser.id).then(() => {
+    await ctx.telegram.unbanChatMember(ctx.chat.id, kickUser.id).then(() => {
       ctx.replyWithHTML(ctx.i18n.t('kick.suc', {
         name: userName(kickUser, true),
       }))
     }).catch((error) => {
-      ctx.replyWithHTML(ctx.i18n.t('kick.error', {
+      return ctx.replyWithHTML(ctx.i18n.t('kick.error', {
         error,
       }))
     })

@@ -6,7 +6,7 @@ module.exports = async (ctx) => {
 
   if (['supergroup', 'group'].includes(ctx.chat.type)) loginUrl += `?group_id=${ctx.chat.id}`
 
-  ctx.reply('web', {
+  await ctx.reply('web', {
     reply_markup: Markup.inlineKeyboard([
       Markup.loginButton('Login', loginUrl, {
         request_write_access: true,

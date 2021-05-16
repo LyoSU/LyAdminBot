@@ -10,7 +10,7 @@ module.exports = async (ctx) => {
     result = ctx.i18n.t('cmd.extras.list', { extras })
   }
 
-  ctx.replyWithHTML(result, {
+  await ctx.replyWithHTML(result, {
     reply_to_message_id: ctx.message.message_id,
   })
 }

@@ -17,15 +17,15 @@ module.exports = async (ctx) => {
         )
 
         if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
-          ctx.answerCbQuery(locales[ctx.match[1]])
+          await ctx.answerCbQuery(locales[ctx.match[1]])
           ctx.group.info.settings.locale = ctx.match[1]
         }
         else {
-          ctx.answerCbQuery()
+          await ctx.answerCbQuery()
         }
       }
       else {
-        ctx.answerCbQuery(locales[ctx.match[1]])
+        await ctx.answerCbQuery(locales[ctx.match[1]])
 
         ctx.session.userInfo.locale = ctx.match[1]
       }
@@ -38,7 +38,7 @@ module.exports = async (ctx) => {
       button.push(Markup.callbackButton(locales[key], `set_language:${key}`))
     })
 
-    ctx.reply('🇷🇺 Выберите язык\n🇺🇸 Choose language', {
+    await ctx.reply('🇷🇺 Выберите язык\n🇺🇸 Choose language', {
       reply_markup: Markup.inlineKeyboard(button, {
         columns: 5
       })

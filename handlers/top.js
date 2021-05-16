@@ -28,7 +28,7 @@ module.exports = async (ctx) => {
       top += `\n${userName(user)} — ${topMembers[index].active}%`
     }
 
-    ctx.replyWithHTML(ctx.i18n.t('cmd.top.info', {
+    await ctx.replyWithHTML(ctx.i18n.t('cmd.top.info', {
       chatName: ctx.chat.title,
       top,
     }), {
