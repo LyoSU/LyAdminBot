@@ -97,7 +97,7 @@ bot.use(session({
 bot.use(i18n.middleware())
 
 bot.use(async (ctx, next) => {
-  if (!ctx.session || ctx.session.userInfo) console.error(ctx)
+  if (!ctx.session) console.error(ctx)
   ctx.session.userInfo = await updateUser(ctx)
   if (ctx.session.userInfo.locale) ctx.i18n.locale(ctx.session.userInfo.locale)
 
