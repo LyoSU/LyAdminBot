@@ -59,6 +59,11 @@ const bot = new Telegraf(process.env.BOT_TOKEN, {
 bot.on(['channel_post', 'edited_channel_post'], () => {})
 
 bot.use((ctx, next) => {
+  if (ctx.update.my_chat_member) console.log(ctx.update)
+  else return next()
+})
+
+bot.use((ctx, next) => {
   next().catch((error) => {
     console.log('Oops', error)
   })
@@ -95,7 +100,7 @@ bot.use(session({
 bot.use(i18n.middleware())
 
 bot.use(async (ctx, next) => {
-  if (!ctx.session) console.error(ctx)
+  // if (!ctx.session) console.error(ctx)
   ctx.session.userInfo = await updateUser(ctx)
   if (ctx.session.userInfo.locale) ctx.i18n.locale(ctx.session.userInfo.locale)
 
