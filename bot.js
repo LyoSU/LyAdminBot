@@ -122,7 +122,6 @@ bot.use(async (ctx, next) => {
   }
 })
 
-bot.use(handleBanAllChannel)
 
 bot.command('help', handleHelp)
 bot.command('ping', handlePing)
@@ -142,6 +141,8 @@ bot.command('banan', onlyGroup, rateLimit({
   keyGenerator: (ctx) => ctx.chat.id,
   onLimitExceeded: (ctx) => ctx.deleteMessage()
 }), handleBanan)
+
+bot.use(handleBanAllChannel)
 
 bot.hears(/^!extra\s(?:(#?))([^\s]+)/, onlyAdmin, handleAdminExtra)
 bot.hears(/^!extra-max (\d*)/, onlyAdmin, handleAdminMaxExtra)
