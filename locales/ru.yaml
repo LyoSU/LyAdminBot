@@ -116,6 +116,9 @@ cmd:
   cas:
     disable: CAS Ban отключен
     enable: CAS Ban включен
+  banChannel:
+    disable: Ban Channel отключен
+    enable: Ban Channel включен
   reset: Настройки были сброшены
 settings:
     json:

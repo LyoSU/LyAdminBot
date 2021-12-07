@@ -143,6 +143,10 @@ const groupSchema = mongoose.Schema({
     cas: {
       type: Boolean,
       default: true
+    },
+    banChannel: {
+      type: Boolean,
+      default: false
     }
   },
   stats: {

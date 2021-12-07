@@ -40,7 +40,8 @@ const {
   handleSendSettingsJson,
   handleAdminJsonReset,
   handleAdminReset,
-  handleExtra
+  handleExtra,
+  handleBanAllChannel
 } = require('./handlers')
 const {
   updateUser,
@@ -120,6 +121,8 @@ bot.use(async (ctx, next) => {
     await ctx.group.members[ctx.from.id].save().catch(() => {})
   }
 })
+
+bot.use(handleBanAllChannel)
 
 bot.command('help', handleHelp)
 bot.command('ping', handlePing)
