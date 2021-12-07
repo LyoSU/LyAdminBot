@@ -16,7 +16,7 @@ composer.hears('!banChannel', onlyAdmin, async (ctx, next) => {
   }
 })
 
-composer.on('message', onlyGroup, async ctx => {
+composer.on('message', async ctx => {
   if (ctx.message.sender_chat && ctx.group.info.settings.banChannel) {
     await ctx.deleteMessage()
 

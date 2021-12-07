@@ -122,7 +122,6 @@ bot.use(async (ctx, next) => {
   }
 })
 
-
 bot.command('help', handleHelp)
 bot.command('ping', handlePing)
 bot.command('lang', handleSetLanguage)
