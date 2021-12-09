@@ -65,7 +65,7 @@ module.exports = async (ctx) => {
         banTime * 1000,
         { language: ctx.i18n.locale(), fallbacks: ['en'] }
       )
-      if (ctx.message.reply_to_message.sender_chat) {
+      if (ctx.message.reply_to_message && ctx.message.reply_to_message.sender_chat) {
         await ctx.tg.callApi('banChatSenderChat', {
           chat_id: ctx.chat.id,
           sender_chat_id: ctx.message.reply_to_message.sender_chat.id,
