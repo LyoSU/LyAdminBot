@@ -9,7 +9,9 @@ const extend = got.extend({
 
 module.exports = async (ctx) => {
   if (ctx.group && ctx.group.info.settings.cas === true) {
-    const userId = ctx.from.id
+    let userId = ctx.from.id
+    if (ctx.message.sender_chat.id) userId = ctx.message.sender_chat.id
+
     extend.get(`https://api.cas.chat/check?user_id=${userId}`).then(({ body }) => {
       if (body.ok === true) {
         console.log(body)
