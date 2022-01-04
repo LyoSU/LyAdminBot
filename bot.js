@@ -111,7 +111,7 @@ bot.use(async (ctx, next) => {
     ctx.group.members[ctx.from.id] = await updateGroupMember(ctx)
     if (ctx.group.info.settings.locale) ctx.i18n.locale(ctx.group.info.settings.locale)
   }
-  await casBan(ctx)
+  if (ctx.message) await casBan(ctx)
 
   await next(ctx)
 
