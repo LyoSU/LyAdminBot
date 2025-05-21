@@ -97,6 +97,12 @@ module.exports = async (ctx) => {
     return
   }
 
+  // Skip if user ID is Telegram service notifications (777000)
+  if (ctx.from && ctx.from.id === 777000) {
+    console.log('[SPAM CHECK] Skipping Telegram service message (ID 777000)')
+    return
+  }
+
   // Skip if user is an administrator
   const chatMember = await ctx.telegram.getChatMember(ctx.chat.id, ctx.from.id).catch(() => null)
   if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
