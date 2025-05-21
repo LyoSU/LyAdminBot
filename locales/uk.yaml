@@ -28,6 +28,7 @@ cmd:
     <code>!gif</code> - додати/видалити гіф в список привітань
     <code>!text</code> - додати/видалити текст в список привітань
     <code>!extra arg</code> - створити extra з назвою \#arg
+    <code>!extra-max 3</code> - встановити максимальну кількість extra в повідомленні
 
     <code>!json</code> - відправити налаштування
 
@@ -98,6 +99,7 @@ cmd:
   extra:
     push: \#${extraName} успішно збережено
     pull: \#${extraName} успішно видалено
+    max: Максимальна кількість extra в повідомленні встановлена на <b>${maxExtra}</b>
     error:
       not_found: |
         <b>Помилка!</b>
@@ -107,6 +109,14 @@ cmd:
     member: |
       <a href="tg://user?id=${telegram_id}">${telegram_id}</a>
       ${banTime} | a: ${active} | f: ${flood}
+  quote: |
+    Для створення цитат використовуйте бота @QuotLyBot
+  cas:
+    disable: CAS Ban вимкнено
+    enable: CAS Ban увімкнено
+  banChannel:
+    disable: Ban Channel вимкнено
+    enable: Ban Channel увімкнено
   reset: Налаштування були скинуті
 settings:
     json:
@@ -122,7 +132,30 @@ kick:
   error: <b>У мене не вийшло виштовхнув</b>\n<pre>${error}</pre>
 del:
   error: <b>У мене не вийшло видалити повідомлення</b>\n<pre>${error}</pre>
+sticker:
+  save:
+    suc: Стікер успішно доданий до <a href="${link}">групового стікерпаку</a>.
+    error:
+      animated: Я не можу додати анімований стікер.
+      telegram: <b>Я не зміг зберегти цей стікер.</b>\n<pre>${error}</pre>
+  delete:
+    suc: Стікер успішно видалений з <a href="${link}">групового стікерпаку</a>.
+    error:
+      telegram: <b>Я не зміг видалити цей стікер.</b>\n<pre>${error}</pre>
+  empty_forward: |
+    Команду потрібно писати у відповідь на повідомлення зі стікером, фотографією або файлом фотографії.
+  only_admin: |
+    Команду може використовувати тільки адміністратор групи.
+    Щоб зберегти стікерпак в особистий стікерпак, перешліть повідомлення боту @fStikBot
+cas:
+  banned: |
+    ${name} був забанений в групі, тому що має CAS бан.
+
+    <a href="${link}">Детальніше</a>
 spam:
   banned: |
     ${name} був забанений назавжди.
     Причина: ${reason}
+
+only_group: Ця команда доступна тільки в групі
+only_admin: Цю команду може використовувати тільки адміністратор групи
