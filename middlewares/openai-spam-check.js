@@ -142,11 +142,20 @@ module.exports = async (ctx) => {
         // Delete the message
         await ctx.deleteMessage().catch(error => console.error(`[MUTE ERROR] Failed to delete message: ${error.message}`))
 
-        // Send notification to the chat
-        await ctx.replyWithHTML(ctx.i18n.t('spam.muted', {
+        // Send notification to the chat and delete it after 30 seconds
+        const notificationMsg = await ctx.replyWithHTML(ctx.i18n.t('spam.muted', {
           name: userName(ctx.from, true),
           reason: result.reason
         })).catch(error => console.error(`[MUTE ERROR] Failed to send notification: ${error.message}`))
+
+        // Schedule notification message deletion
+        if (notificationMsg) {
+          setTimeout(async () => {
+            await ctx.telegram.deleteMessage(ctx.chat.id, notificationMsg.message_id)
+              .catch(error => console.error(`[MUTE ERROR] Failed to delete notification after timeout: ${error.message}`))
+            console.log(`[MUTE] Auto-deleted notification message after timeout`)
+          }, 25 * 1000) // 25 seconds
+        }
 
         return true // Stop further processing
       }
