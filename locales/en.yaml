@@ -155,5 +155,11 @@ cas:
 
     <a href="${link}">More details</a>
 
+spam:
+  banned: |
+    ${name} was permanently banned from the group.
+    Reason: ${reason}
+
 only_group: This command is available only in group
 only_admin: This command can only be used by a group administrator.
+

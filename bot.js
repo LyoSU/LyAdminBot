@@ -10,7 +10,8 @@ const {
   stats,
   onlyGroup,
   onlyAdmin,
-  casBan
+  casBan,
+  openaiSpamCheck
 } = require('./middlewares')
 const {
   handleMessage,
@@ -112,6 +113,7 @@ bot.use(async (ctx, next) => {
     if (ctx.group.info.settings.locale) ctx.i18n.locale(ctx.group.info.settings.locale)
   }
   if (ctx.message) await casBan(ctx)
+  if (ctx.message) await openaiSpamCheck(ctx)
 
   await next(ctx)
 

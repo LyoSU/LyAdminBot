@@ -122,3 +122,7 @@ kick:
   error: <b>У мене не вийшло виштовхнув</b>\n<pre>${error}</pre>
 del:
   error: <b>У мене не вийшло видалити повідомлення</b>\n<pre>${error}</pre>
+spam:
+  banned: |
+    ${name} був забанений назавжди.
+    Причина: ${reason}
