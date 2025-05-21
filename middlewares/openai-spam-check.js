@@ -51,7 +51,7 @@ Respond ONLY with this exact JSON format:
     console.log(`[SPAM CHECK] Analyzing message: "${text.substring(0, 100)}${text.length > 100 ? '...' : ''}"`)
 
     const response = await openai.chat.completions.create({
-      model: 'google/gemma-3n-e4b-it:free',
+      model: 'google/gemini-2.5-flash-preview-05-20',
       messages: [
         { role: 'user', content: prompt }
       ],
