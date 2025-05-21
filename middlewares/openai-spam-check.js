@@ -77,9 +77,19 @@ module.exports = async (ctx) => {
     return
   }
 
-  // // Skip if user is an administrator
+  // Skip if message is a command
+  if (ctx.message && ctx.message.text && ctx.message.text.startsWith('/')) {
+    return
+  }
+
+  // Skip if user is an administrator
   const chatMember = await ctx.telegram.getChatMember(ctx.chat.id, ctx.from.id).catch(() => null)
   if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
+    return
+  }
+
+  // Skip if message is from an anonymous admin (bot acting on behalf of a chat)
+  if (ctx.from && ctx.from.is_bot && ctx.sender_chat) {
     return
   }
 
