@@ -1,33 +1,23 @@
 # LyAdminBot
 
+[![LyAdminBot](https://img.shields.io/badge/LyAdmin-Bot-blueviolet.svg)](https://t.me/LyAdminBot)
 
-[![LyAdminBot bot](https://img.shields.io/badge/LyAdmin-Bot-blueviolet.svg)](https://t.me/LyAdminBot)
+A Telegram bot designed for chat administration and moderation.
 
-Бот для администрирования чатов.
-
-## Настройка бота
-Для использования функций OpenAI модерации необходимо создать файл `.env` и добавить:
-```
-OPENAI_API_KEY=ваш_ключ_api_openai
-```
-
-### Модерация спама
-Бот автоматически проверяет сообщения новых участников (которые написали менее 5 сообщений) на наличие спама, используя GPT-4o модель OpenAI. При обнаружении спама пользователь будет навсегда заблокирован в группе.
-
-## Список команд
-- `/ping` - проверить работу бота
-- `/banan` - выдать бан
-- `/kick` - пнуть
-- `/del` - удалить сообщение
-- `/top` - топ участников по активности
-- `/top_banan` - топ участников по времени банана
-- `/mystats` - статистика в чате
-- `/extras` - список extra чата
-- `!welcome` - включить/отключить приветствия
-- `!gif` - добавить/удалить гиф в список приветствий
-- `!text` - добавить/удалить текст в список приветствий
-- `!extra arg` - создать extra с названием #arg
-- `!json` - отправить настройки
-- `!reset-text` - сбросить все тексты приветствий
-- `!reset-gif` - сбросить все gif приветствий
-- `!reset` - сбросить настройки группы
+## Command List
+- `/ping` - Checks the bot's operational status.
+- `/banan` - Issues a ban to a user.
+- `/kick` - Removes a user from the chat.
+- `/del` - Deletes the replied-to message.
+- `/top` - Displays the most active chat participants.
+- `/top_banan` - Shows the leaderboard of users by ban duration.
+- `/mystats` - Retrieves your chat activity statistics.
+- `/extras` - Lists the chat's custom extra commands/notes.
+- `!welcome` - Toggles welcome messages on/off.
+- `!gif` - Adds or removes a GIF from the welcome message rotation.
+- `!text` - Adds or removes a text message from the welcome message rotation.
+- `!extra arg` - Creates a custom command/note named `#arg`.
+- `!json` - Exports the current chat settings as a JSON file.
+- `!reset-text` - Clears all custom welcome text messages.
+- `!reset-gif` - Clears all custom welcome GIFs.
+- `!reset` - Resets all group settings to their defaults.
