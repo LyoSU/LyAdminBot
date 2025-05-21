@@ -48,6 +48,8 @@ Respond ONLY with this exact JSON format:
 }
 `
 
+    console.log(`[SPAM CHECK] Analyzing message: "${text.substring(0, 100)}${text.length > 100 ? '...' : ''}"`)
+
     const response = await openai.chat.completions.create({
       model: 'google/gemma-3n-e4b-it:free',
       messages: [
@@ -64,6 +66,8 @@ Respond ONLY with this exact JSON format:
       const jsonMatch = contentStr.match(/\{[\s\S]*\}/)
       const jsonStr = jsonMatch ? jsonMatch[0] : '{}'
       const result = JSON.parse(jsonStr)
+
+      console.log(`[SPAM CHECK] Result: ${result.isSpam ? 'SPAM' : 'NOT SPAM'} - Reason: ${result.reason || 'Unspecified reason'}`)
 
       return {
         isSpam: result.isSpam,
@@ -112,23 +116,30 @@ module.exports = async (ctx) => {
       ctx.group.members[ctx.from.id].stats.messagesCount <= 5) {
     // Check message for spam
     if (ctx.message && (ctx.message.text || ctx.message.caption)) {
-      const result = await checkSpam(ctx.message.text || ctx.message.caption)
+      const messageText = ctx.message.text || ctx.message.caption
+      console.log(`[SPAM CHECK] Checking message from ${userName(ctx.from)} (messages: ${ctx.group.members[ctx.from.id].stats.messagesCount})`)
+
+      const result = await checkSpam(messageText)
 
       if (result.isSpam) {
+        console.log(`[BAN] User ${userName(ctx.from)} (ID: ${ctx.from.id}) banned for spam`)
+        console.log(`[BAN] Message: "${messageText.substring(0, 150)}${messageText.length > 150 ? '...' : ''}"`)
+        console.log(`[BAN] Reason: ${result.reason}`)
+
         // Permanently ban the user
         await ctx.telegram.kickChatMember(
           ctx.chat.id,
           ctx.from.id
-        ).catch(console.error)
+        ).catch(error => console.error(`[BAN ERROR] Failed to ban user: ${error.message}`))
 
         // Delete the message
-        await ctx.deleteMessage().catch(console.error)
+        await ctx.deleteMessage().catch(error => console.error(`[BAN ERROR] Failed to delete message: ${error.message}`))
 
         // Send notification to the chat
         await ctx.replyWithHTML(ctx.i18n.t('spam.banned', {
           name: userName(ctx.from, true),
           reason: result.reason
-        })).catch(console.error)
+        })).catch(error => console.error(`[BAN ERROR] Failed to send notification: ${error.message}`))
 
         return true // Stop further processing
       }
