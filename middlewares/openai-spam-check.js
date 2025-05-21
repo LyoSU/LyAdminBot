@@ -17,23 +17,34 @@ const checkSpam = async (text) => {
 
   try {
     const prompt = `
-You are a chat moderator. Your task is to determine if a message contains spam or harmful content.
+You are a Telegram spam detection system. Your only job is to identify typical Telegram spam messages.
 
-Analyze the following message and identify if it contains any of these issues:
-1. Spam (advertisements, suspicious links, mass messaging)
-2. Offensive content or hate speech
-3. Threats, scams, or manipulative content
-4. Messages that appear to be sent by bots rather than humans
-
-Message:
+Message to analyze:
 """
 ${text}
 """
 
-Respond ONLY with a JSON object in this format:
+Focus ONLY on these common Telegram spam patterns:
+1. Cryptocurrency/trading schemes: Promises of quick profits, investments, crypto signals
+2. Dating/adult content solicitation: Links to dating sites, inappropriate services
+3. Mass group invitations: Messages inviting users to other groups/channels without context
+4. Fake giveaways: Free crypto, prizes requiring clicking suspicious links
+5. Job scams: Unrealistic work-from-home offers, easy money schemes
+6. Automated bot messages: Generic templates with suspicious links
+7. Unauthorized promotions: Unsolicited advertising of services or products
+8. Phishing attempts: Messages asking for personal data or Telegram credentials
+
+Important: Do NOT flag:
+- Normal conversations
+- Questions about cryptocurrencies without promotion
+- Legitimate sharing of information
+- Opinions or discussions
+- Regular links shared in conversation
+
+Respond ONLY with this exact JSON format:
 {
   "isSpam": true or false,
-  "reason": "brief explanation of why this was flagged or not (1-10 words)"
+  "reason": "brief explanation (3-10 words)"
 }
 `
 
