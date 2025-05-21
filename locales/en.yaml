@@ -28,6 +28,8 @@ cmd:
     <code>!gif</code> - to add/remove gif in the greetings list
     <code>!text</code> - to add/remove text in the greetings list
     <code>!extra arg</code> - create an extra named \#arg
+    <code>!extra-max 3</code> - set the maximum number of extra in a message
+    <code>!s 👍</code> - save stickers/images to sticker pack
 
     <code>!json</code> - send settings
 
@@ -104,10 +106,19 @@ cmd:
         <b>Error!</b>
         The extra \#${extraName} doesn't found.
         To create a new command you should input the command again in response to the message.
+    set:
   members:
     member: |
       <a href="tg://user?id=${telegram_id}">${telegram_id}</a>
       ${banTime} | a: ${active} | f: ${flood}
+  quote: |
+    To create quotes, use the bot @QuotLyBot
+  cas:
+    disable: CAS Ban disabled
+    enable: CAS Ban enabled
+  banChannel:
+    disable: Ban Channel disabled
+    enable: Ban Channel enabled
   reset: Settings have been reset
 settings:
     json:
@@ -123,5 +134,26 @@ kick:
   error: <b>I can't kick</b>\n<pre>${error}</pre>
 del:
   error: <b>I can't delete the message</b>\n<pre>${error}</pre>
+sticker:
+  save:
+    suc: Sticker successfully added to <a href="${link}">group sticker pack</a>.
+    error:
+      animated: I can't add animated sticker.
+      telegram: <b>I couldn't save this sticker.</b>\n<pre>${error}</pre>
+  delete:
+    suc: Sticker successfully removed from <a href="${link}">group sticker pack</a>.
+    error:
+      telegram: <b>I couldn't delete this sticker.</b>\n<pre>${error}</pre>
+  empty_forward: |
+    The command must be written in response to a message with a sticker, photo, or photo file.
+  only_admin: |
+      The command can only be used by a group administrator.
+      To save a sticker pack to a personal sticker pack, forward the message to the bot @fStikBot
+cas:
+  banned: |
+    ${name} was banned from the group because they have a CAS ban.
+
+    <a href="${link}">More details</a>
 
 only_group: This command is available only in group
+only_admin: This command can only be used by a group administrator.

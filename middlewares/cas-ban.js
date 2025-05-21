@@ -20,7 +20,8 @@ module.exports = async (ctx) => {
           name: userName(ctx.from, true),
           link: `https://cas.chat/query?u=${userId}`
         }), {
-          reply_to_message_id: ctx.message.message_id
+          reply_to_message_id: ctx.message.message_id,
+          disable_web_page_preview: true
         }).catch(() => {})
         ctx.deleteMessage()
       }

@@ -77,7 +77,7 @@ bot.context.db = db
 
 const i18n = new I18n({
   directory: path.resolve(__dirname, 'locales'),
-  defaultLanguage: 'ru',
+  defaultLanguage: 'en',
   defaultLanguageOnMissing: true
 })
 
