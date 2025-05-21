@@ -112,8 +112,20 @@ bot.use(async (ctx, next) => {
     ctx.group.members[ctx.from.id] = await updateGroupMember(ctx)
     if (ctx.group.info.settings.locale) ctx.i18n.locale(ctx.group.info.settings.locale)
   }
-  if (ctx.message) await casBan(ctx)
-  if (ctx.message) await openaiSpamCheck(ctx)
+
+  if (ctx.message) {
+    let isSpam = false
+
+    isSpam = await casBan(ctx)
+
+    if (!isSpam) {
+      isSpam = await openaiSpamCheck(ctx)
+    }
+
+    if (isSpam) {
+      return next(ctx)
+    }
+  }
 
   await next(ctx)
 

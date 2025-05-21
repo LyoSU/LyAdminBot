@@ -24,6 +24,8 @@ module.exports = async (ctx) => {
           disable_web_page_preview: true
         }).catch(() => {})
         ctx.deleteMessage()
+
+        return true
       }
     })
   }

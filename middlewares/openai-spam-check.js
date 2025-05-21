@@ -109,10 +109,10 @@ module.exports = async (ctx) => {
           reason: result.reason
         })).catch(console.error)
 
-        return // Stop further processing
+        return true // Stop further processing
       }
     }
   }
 
-  return true // Continue processing
+  return false // Continue processing
 }
