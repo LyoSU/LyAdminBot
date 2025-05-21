@@ -122,24 +122,31 @@ module.exports = async (ctx) => {
       const result = await checkSpam(messageText)
 
       if (result.isSpam) {
-        console.log(`[BAN] User ${userName(ctx.from)} (ID: ${ctx.from.id}) banned for spam`)
-        console.log(`[BAN] Message: "${messageText.substring(0, 150)}${messageText.length > 150 ? '...' : ''}"`)
-        console.log(`[BAN] Reason: ${result.reason}`)
+        console.log(`[MUTE] User ${userName(ctx.from)} (ID: ${ctx.from.id}) muted for spam`)
+        console.log(`[MUTE] Message: "${messageText.substring(0, 150)}${messageText.length > 150 ? '...' : ''}"`)
+        console.log(`[MUTE] Reason: ${result.reason}`)
 
-        // Permanently ban the user
-        await ctx.telegram.kickChatMember(
+        // Mute the user for 24 hours (86400 seconds)
+        await ctx.telegram.restrictChatMember(
           ctx.chat.id,
-          ctx.from.id
-        ).catch(error => console.error(`[BAN ERROR] Failed to ban user: ${error.message}`))
+          ctx.from.id,
+          {
+            can_send_messages: false,
+            can_send_media_messages: false,
+            can_send_other_messages: false,
+            can_add_web_page_previews: false,
+            until_date: Math.floor(Date.now() / 1000) + 86400 // 24 hours from now
+          }
+        ).catch(error => console.error(`[MUTE ERROR] Failed to mute user: ${error.message}`))
 
         // Delete the message
-        await ctx.deleteMessage().catch(error => console.error(`[BAN ERROR] Failed to delete message: ${error.message}`))
+        await ctx.deleteMessage().catch(error => console.error(`[MUTE ERROR] Failed to delete message: ${error.message}`))
 
         // Send notification to the chat
-        await ctx.replyWithHTML(ctx.i18n.t('spam.banned', {
+        await ctx.replyWithHTML(ctx.i18n.t('spam.muted', {
           name: userName(ctx.from, true),
           reason: result.reason
-        })).catch(error => console.error(`[BAN ERROR] Failed to send notification: ${error.message}`))
+        })).catch(error => console.error(`[MUTE ERROR] Failed to send notification: ${error.message}`))
 
         return true // Stop further processing
       }
