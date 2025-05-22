@@ -10,12 +10,25 @@ const openai = new OpenAI({
 /**
  * Checks message for spam or harmful content using OpenAI model
  * @param {String} text - text to check
+ * @param {Object} context - additional context information
  * @returns {Promise<Object>} - result with isSpam flag and reason
  */
-const checkSpam = async (text) => {
+const checkSpam = async (text, context = {}) => {
   if (!text || text.length === 0) return { isSpam: false }
 
   try {
+    // Build context information for the prompt
+    const groupInfo = context.groupName ? `Group: "${context.groupName}"` : ''
+    const userInfo = context.userName ? `User: ${context.userName}` : ''
+    const repliedToInfo = context.repliedToMessage
+      ? `Reply to message: "${context.repliedToMessage}"` : ''
+    const userMessageCount = context.messageCount !== undefined
+      ? `User message count: ${context.messageCount}` : ''
+
+    const contextInfo = [groupInfo, userInfo, repliedToInfo, userMessageCount]
+      .filter(item => item !== '')
+      .join('\n')
+
     const prompt = `
 You are a Telegram spam detection system. Your only job is to identify typical Telegram spam messages.
 
@@ -23,6 +36,9 @@ Message to analyze:
 """
 ${text}
 """
+
+Context information:
+${contextInfo}
 
 Focus ONLY on these common Telegram spam patterns:
 1. Cryptocurrency/trading schemes: Promises of quick profits, investments, crypto signals
@@ -40,6 +56,7 @@ Important: Do NOT flag:
 - Legitimate sharing of information
 - Opinions or discussions
 - Regular links shared in conversation
+- Messages appropriate to the group context
 
 Respond ONLY with this exact JSON format:
 {
@@ -125,7 +142,23 @@ module.exports = async (ctx) => {
       const messageText = ctx.message.text || ctx.message.caption
       console.log(`[SPAM CHECK] Checking message from ${userName(ctx.from)} (messages: ${ctx.group.members[ctx.from.id].stats.messagesCount})`)
 
-      const result = await checkSpam(messageText)
+      // Get reply message if exists
+      let repliedToMessage = null
+      if (ctx.message.reply_to_message) {
+        repliedToMessage = ctx.message.reply_to_message.text ||
+                          ctx.message.reply_to_message.caption ||
+                          'Media message without text'
+      }
+
+      // Build context object
+      const context = {
+        groupName: ctx.chat.title,
+        userName: userName(ctx.from),
+        messageCount: ctx.group.members[ctx.from.id].stats.messagesCount,
+        repliedToMessage: repliedToMessage
+      }
+
+      const result = await checkSpam(messageText, context)
 
       if (result.isSpam) {
         console.log(`[MUTE] User ${userName(ctx.from)} (ID: ${ctx.from.id}) muted for spam`)

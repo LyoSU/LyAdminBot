@@ -12,7 +12,7 @@ module.exports = async (ctx) => {
     let userId = ctx.from.id
     if (ctx.message.sender_chat && ctx.message.sender_chat.id) userId = ctx.message.sender_chat.id
 
-    extend.get(`https://api.cas.chat/check?user_id=${userId}`).then(({ body }) => {
+    return extend.get(`https://api.cas.chat/check?user_id=${userId}`).then(({ body }) => {
       if (body.ok === true) {
         console.log(body)
         ctx.telegram.kickChatMember(ctx.chat.id, userId).catch(() => {})
