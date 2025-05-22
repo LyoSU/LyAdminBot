@@ -20,12 +20,27 @@ const checkSpam = async (text, context = {}) => {
     // Build context information for the prompt
     const groupInfo = context.groupName ? `Group: "${context.groupName}"` : ''
     const userInfo = context.userName ? `User: ${context.userName}` : ''
+    const userDetails = context.userDetails ? `User details: ${context.userDetails}` : ''
+    const userLanguage = context.languageCode ? `User language: ${context.languageCode}` : ''
+    const isPremium = context.isPremium ? `Telegram Premium user: Yes` : ''
+    const isNewAccount = context.isNewAccount ? `New account: Yes` : ''
     const repliedToInfo = context.repliedToMessage
       ? `Reply to message: "${context.repliedToMessage}"` : ''
     const userMessageCount = context.messageCount !== undefined
       ? `User message count: ${context.messageCount}` : ''
+    const hasUsername = context.username ? `Username: @${context.username}` : 'No username'
 
-    const contextInfo = [groupInfo, userInfo, repliedToInfo, userMessageCount]
+    const contextInfo = [
+      groupInfo,
+      userInfo,
+      userDetails,
+      hasUsername,
+      userLanguage,
+      isPremium,
+      isNewAccount,
+      userMessageCount,
+      repliedToInfo
+    ]
       .filter(item => item !== '')
       .join('\n')
 
@@ -49,6 +64,8 @@ Focus ONLY on these common Telegram spam patterns:
 6. Automated bot messages: Generic templates with suspicious links
 7. Unauthorized promotions: Unsolicited advertising of services or products
 8. Phishing attempts: Messages asking for personal data or Telegram credentials
+9. New accounts with suspicious behavior: New accounts posting promotional content
+10. Bot-like communication patterns: Generic messages that appear automated
 
 Important: Do NOT flag:
 - Normal conversations
@@ -57,11 +74,13 @@ Important: Do NOT flag:
 - Opinions or discussions
 - Regular links shared in conversation
 - Messages appropriate to the group context
+- Messages from premium users (less likely to be spam)
 
 Respond ONLY with this exact JSON format:
 {
-  "isSpam": true or false,
-  "reason": "brief explanation (3-10 words)"
+  "reason": "brief explanation (3-10 words)",
+  "confidence": 0-100,
+  "isSpam": true or false
 }
 `
 
@@ -84,11 +103,12 @@ Respond ONLY with this exact JSON format:
       const jsonStr = jsonMatch ? jsonMatch[0] : '{}'
       const result = JSON.parse(jsonStr)
 
-      console.log(`[SPAM CHECK] Result: ${result.isSpam ? 'SPAM' : 'NOT SPAM'} - Reason: ${result.reason || 'Unspecified reason'}`)
+      console.log(`[SPAM CHECK] Result: ${result.isSpam ? 'SPAM' : 'NOT SPAM'} - Reason: ${result.reason || 'Unspecified reason'} - Confidence: ${result.confidence || 'N/A'}%`)
 
       return {
         isSpam: result.isSpam,
-        reason: result.reason || 'Unspecified reason'
+        reason: result.reason || 'Unspecified reason',
+        confidence: result.confidence || 0
       }
     } catch (parseError) {
       console.error('Failed to parse JSON response:', parseError)
@@ -98,6 +118,47 @@ Respond ONLY with this exact JSON format:
     console.error('OpenAI chat completion error:', error)
     return { isSpam: false }
   }
+}
+
+/**
+ * Extract links from a message text
+ * @param {String} text - Message text
+ * @returns {Array} - Array of links
+ */
+const extractLinks = (text) => {
+  if (!text) return []
+  // URL regex pattern
+  const urlRegex = /(https?:\/\/[^\s]+)|(t\.me\/[^\s]+)|(www\.[^\s]+)/gi
+  return text.match(urlRegex) || []
+}
+
+/**
+ * Check if user account is potentially new based on ID
+ * Higher Telegram IDs tend to be newer accounts
+ * @param {Number} userId - Telegram user ID
+ * @returns {Boolean} - True if likely a new account
+ */
+const isLikelyNewAccount = (userId) => {
+  // This is a very rough heuristic and may not be accurate
+  // The specific threshold would need to be adjusted based on observation
+  return userId > 6000000000 // Example threshold, adjust as needed
+}
+
+/**
+ * Format user details string
+ * @param {Object} user - Telegram user object
+ * @returns {String} - Formatted user details
+ */
+const formatUserDetails = (user) => {
+  if (!user) return ''
+
+  const details = []
+
+  if (user.first_name) details.push(`First name: ${user.first_name}`)
+  if (user.last_name) details.push(`Last name: ${user.last_name}`)
+  if (user.is_bot) details.push('Is bot')
+
+  return details.join(', ')
 }
 
 /**
@@ -150,22 +211,46 @@ module.exports = async (ctx) => {
                           'Media message without text'
       }
 
+      // Extract links from message
+      const links = extractLinks(messageText)
+
+      // Check if likely a new account
+      const isNewAccount = isLikelyNewAccount(ctx.from.id)
+
+      // Format user details
+      const userDetails = formatUserDetails(ctx.from)
+
       // Build context object
       const context = {
         groupName: ctx.chat.title,
         userName: userName(ctx.from),
+        userDetails: userDetails,
+        languageCode: ctx.from.language_code,
+        isPremium: ctx.from.is_premium,
+        isNewAccount: isNewAccount,
+        username: ctx.from.username,
         messageCount: ctx.group.members[ctx.from.id].stats.messagesCount,
-        repliedToMessage: repliedToMessage
+        repliedToMessage: repliedToMessage,
+        links: links
       }
 
       const result = await checkSpam(messageText, context)
 
-      if (result.isSpam) {
+      // Use confidence threshold if available
+      const confidenceThreshold = 70 // Default threshold
+      const isConfidentSpam = result.isSpam &&
+                             (result.confidence === undefined ||
+                              result.confidence >= confidenceThreshold)
+
+      if (isConfidentSpam) {
         console.log(`[MUTE] User ${userName(ctx.from)} (ID: ${ctx.from.id}) muted for spam`)
         console.log(`[MUTE] Message: "${messageText.substring(0, 150)}${messageText.length > 150 ? '...' : ''}"`)
-        console.log(`[MUTE] Reason: ${result.reason}`)
+        console.log(`[MUTE] Reason: ${result.reason} (Confidence: ${result.confidence || 'N/A'}%)`)
 
-        // Mute the user for 24 hours (86400 seconds)
+        // Get mute duration - premium users get shorter mute time as they're less likely to be spammers
+        const muteDuration = ctx.from.is_premium ? 3600 : 86400 // 1 hour for premium, 24 hours for regular
+
+        // Mute the user
         await ctx.telegram.restrictChatMember(
           ctx.chat.id,
           ctx.from.id,
@@ -174,7 +259,7 @@ module.exports = async (ctx) => {
             can_send_media_messages: false,
             can_send_other_messages: false,
             can_add_web_page_previews: false,
-            until_date: Math.floor(Date.now() / 1000) + 86400 // 24 hours from now
+            until_date: Math.floor(Date.now() / 1000) + muteDuration
           }
         ).catch(error => console.error(`[MUTE ERROR] Failed to mute user: ${error.message}`))
 
