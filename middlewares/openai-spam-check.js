@@ -21,6 +21,7 @@ const checkSpam = async (text, context = {}) => {
     const groupInfo = context.groupName ? `Group: "${context.groupName}"` : ''
     const userInfo = context.userName ? `User: ${context.userName}` : ''
     const userDetails = context.userDetails ? `User details: ${context.userDetails}` : ''
+    const detailedUserInfo = context.detailedUserInfo ? `Detailed user info: ${context.detailedUserInfo}` : ''
     const userLanguage = context.languageCode ? `User language: ${context.languageCode}` : ''
     const isPremium = context.isPremium ? `Telegram Premium user: Yes` : ''
     const isNewAccount = context.isNewAccount ? `New account: Yes` : ''
@@ -34,6 +35,7 @@ const checkSpam = async (text, context = {}) => {
       groupInfo,
       userInfo,
       userDetails,
+      detailedUserInfo,
       hasUsername,
       userLanguage,
       isPremium,
@@ -162,6 +164,93 @@ const formatUserDetails = (user) => {
 }
 
 /**
+ * Get detailed user information using getChat method
+ * @param {Object} telegram - Telegram bot instance
+ * @param {Number} userId - User ID to get information about
+ * @returns {Promise<Object>} - Detailed user information or null
+ */
+const getDetailedUserInfo = async (telegram, userId) => {
+  try {
+    const chatInfo = await telegram.getChat(userId)
+    return chatInfo
+  } catch (error) {
+    // User might have privacy settings that prevent getting their info
+    console.log(`[SPAM CHECK] Could not get detailed info for user ${userId}: ${error.message}`)
+    return null
+  }
+}
+
+/**
+ * Extract relevant information from ChatFullInfo for spam analysis
+ * @param {Object} chatInfo - ChatFullInfo object from getChat
+ * @returns {Object} - Extracted user information
+ */
+const extractUserAnalysisInfo = (chatInfo) => {
+  if (!chatInfo) return {}
+
+  const info = {}
+
+  // Basic information
+  if (chatInfo.first_name) info.firstName = chatInfo.first_name
+  if (chatInfo.last_name) info.lastName = chatInfo.last_name
+  if (chatInfo.username) info.username = chatInfo.username
+  if (chatInfo.bio) info.bio = chatInfo.bio
+
+  // Account characteristics
+  if (chatInfo.has_private_forwards) info.hasPrivateForwards = true
+  if (chatInfo.has_restricted_voice_and_video_messages) info.hasRestrictedMedia = true
+
+  // Profile customization (indicators of legitimate users)
+  if (chatInfo.accent_color_id !== undefined) info.hasCustomAccentColor = true
+  if (chatInfo.profile_accent_color_id !== undefined) info.hasCustomProfileColor = true
+  if (chatInfo.emoji_status_custom_emoji_id) info.hasCustomEmojiStatus = true
+  if (chatInfo.profile_background_custom_emoji_id) info.hasCustomProfileBackground = true
+
+  // Business account information (legitimate business users)
+  if (chatInfo.business_intro) {
+    info.isBusinessAccount = true
+    info.businessIntro = chatInfo.business_intro.title || chatInfo.business_intro.message
+  }
+  if (chatInfo.business_location) info.hasBusinessLocation = true
+  if (chatInfo.business_opening_hours) info.hasBusinessHours = true
+
+  // Personal channel (indicates more established user)
+  if (chatInfo.personal_chat) info.hasPersonalChannel = true
+
+  // Photo presence (legitimate users often have profile photos)
+  if (chatInfo.photo) info.hasProfilePhoto = true
+
+  return info
+}
+
+/**
+ * Format detailed user information for spam analysis
+ * @param {Object} userInfo - Extracted user information
+ * @returns {String} - Formatted user information string
+ */
+const formatDetailedUserInfo = (userInfo) => {
+  if (!userInfo || Object.keys(userInfo).length === 0) return ''
+
+  const details = []
+
+  if (userInfo.bio) details.push(`Bio: "${userInfo.bio}"`)
+  if (userInfo.isBusinessAccount) details.push('Business account')
+  if (userInfo.businessIntro) details.push(`Business intro: "${userInfo.businessIntro}"`)
+  if (userInfo.hasBusinessLocation) details.push('Has business location')
+  if (userInfo.hasBusinessHours) details.push('Has business hours')
+  if (userInfo.hasPersonalChannel) details.push('Has personal channel')
+  if (userInfo.hasProfilePhoto) details.push('Has profile photo')
+  if (userInfo.hasCustomAccentColor) details.push('Custom accent color')
+  if (userInfo.hasCustomProfileColor) details.push('Custom profile color')
+  if (userInfo.hasCustomEmojiStatus) details.push('Custom emoji status')
+  if (userInfo.hasCustomProfileBackground) details.push('Custom profile background')
+  if (userInfo.hasPrivateForwards) details.push('Private forwards enabled')
+  if (userInfo.hasRestrictedMedia) details.push('Restricted voice/video messages')
+
+  return details.length > 0 ? details.join(', ') : ''
+}
+
+/**
  * Middleware for checking messages from new users for spam
  */
 module.exports = async (ctx) => {
@@ -203,6 +292,11 @@ module.exports = async (ctx) => {
       const messageText = ctx.message.text || ctx.message.caption
       console.log(`[SPAM CHECK] Checking message from ${userName(ctx.from)} (messages: ${ctx.group.members[ctx.from.id].stats.messagesCount})`)
 
+      // Get detailed user information
+      const detailedUserInfo = await getDetailedUserInfo(ctx.telegram, ctx.from.id)
+      const extractedUserInfo = extractUserAnalysisInfo(detailedUserInfo)
+      const detailedUserInfoString = formatDetailedUserInfo(extractedUserInfo)
+
       // Get reply message if exists
       let repliedToMessage = null
       if (ctx.message.reply_to_message) {
@@ -225,6 +319,7 @@ module.exports = async (ctx) => {
         groupName: ctx.chat.title,
         userName: userName(ctx.from),
         userDetails: userDetails,
+        detailedUserInfo: detailedUserInfoString,
         languageCode: ctx.from.language_code,
         isPremium: ctx.from.is_premium,
         isNewAccount: isNewAccount,
