@@ -47,7 +47,8 @@ const {
 const {
   updateUser,
   updateGroup,
-  updateGroupMember
+  updateGroupMember,
+  userName
 } = require('./helpers')
 
 global.startDate = new Date()
@@ -116,9 +117,26 @@ bot.use(async (ctx, next) => {
   if (ctx.message) {
     let isSpam = false
 
-    isSpam = await casBan(ctx)
+    // Check for OpenAI global ban first
+    if (ctx.session.userInfo && ctx.session.userInfo.isGlobalBanned) {
+      console.log(`[GLOBAL BAN] User ${userName(ctx.from)} (ID: ${ctx.from.id}) is globally banned by AI. Reason: ${ctx.session.userInfo.globalBanReason}. Banning in current group.`)
+      try {
+        await ctx.telegram.kickChatMember(ctx.chat.id, ctx.from.id)
+        await ctx.replyWithHTML(ctx.i18n.t('global_ban.kicked', {
+          name: userName(ctx.from, true),
+          reason: ctx.session.userInfo.globalBanReason
+        }))
+      } catch (error) {
+        console.error(`[GLOBAL BAN ERROR] Failed to kick globally banned user: ${error.message}`)
+      }
+      isSpam = true // Prevents further processing
+    }
 
     if (!isSpam) {
+      isSpam = await casBan(ctx)
+    }
+
+    if (!isSpam) { // Only run OpenAI check if not banned by CAS or globally
       isSpam = await openaiSpamCheck(ctx)
     }
 
@@ -129,7 +147,10 @@ bot.use(async (ctx, next) => {
 
   await next(ctx)
 
-  await ctx.session.userInfo.save().catch(() => {})
+  // Save user info after all checks, including potential global ban update by openaiSpamCheck
+  if (ctx.session.userInfo) {
+    await ctx.session.userInfo.save().catch((err) => { console.error('[USER SAVE ERROR]', err) })
+  }
   if (ctx.group && ctx.group.info) {
     await ctx.group.info.save().catch(() => {})
     await ctx.group.members[ctx.from.id].save().catch(() => {})

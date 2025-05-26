@@ -162,7 +162,25 @@ spam:
   muted: |
     ${name} was muted for 24 hours.
     Reason: ${reason}
+  error:
+    mute_failed: |
+      ❌ <b>Failed to mute ${name}</b>
+      Reason: ${reason}
+    delete_failed: |
+      ❌ <b>Failed to delete spam message from ${name}</b>
+      Reason: ${reason}
+    partial_success_muted: |
+      ✅ ${name} was muted for spam
+      Reason: ${reason}
+      ⚠️ Could not delete the message
+    partial_success_deleted: |
+      ✅ Spam message deleted
+      ⚠️ Could not mute ${name}
+      Reason: ${reason}
 
 only_group: This command is available only in group
 only_admin: This command can only be used by a group administrator.
+
+global_ban:
+  kicked: "User {name} has been kicked because they are globally banned by AI. Reason: {reason}"
 

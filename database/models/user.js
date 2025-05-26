@@ -10,7 +10,13 @@ const userSchema = mongoose.Schema({
   first_name: String,
   last_name: String,
   username: String,
-  locale: String
+  locale: String,
+  isGlobalBanned: {
+    type: Boolean,
+    default: false
+  },
+  globalBanReason: String,
+  globalBanDate: Date
 }, {
   timestamps: true
 })

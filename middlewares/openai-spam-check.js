@@ -345,35 +345,77 @@ module.exports = async (ctx) => {
         // Get mute duration - premium users get shorter mute time as they're less likely to be spammers
         const muteDuration = ctx.from.is_premium ? 3600 : 86400 // 1 hour for premium, 24 hours for regular
 
+        let muteSuccess = false
+        let deleteSuccess = false
+
         // Mute the user
-        await ctx.telegram.restrictChatMember(
-          ctx.chat.id,
-          ctx.from.id,
-          {
-            can_send_messages: false,
-            can_send_media_messages: false,
-            can_send_other_messages: false,
-            can_add_web_page_previews: false,
-            until_date: Math.floor(Date.now() / 1000) + muteDuration
-          }
-        ).catch(error => console.error(`[MUTE ERROR] Failed to mute user: ${error.message}`))
+        try {
+          await ctx.telegram.restrictChatMember(
+            ctx.chat.id,
+            ctx.from.id,
+            {
+              can_send_messages: false,
+              can_send_media_messages: false,
+              can_send_other_messages: false,
+              can_add_web_page_previews: false,
+              until_date: Math.floor(Date.now() / 1000) + muteDuration
+            }
+          )
+          muteSuccess = true
+        } catch (error) {
+          console.error(`[MUTE ERROR] Failed to mute user: ${error.message}`)
+
+          // Send error notification to chat
+          await ctx.replyWithHTML(`❌ <b>Failed to mute ${userName(ctx.from, true)}</b>\nReason: ${error.message}`)
+            .catch(e => console.error(`[MUTE ERROR] Failed to send mute error notification: ${e.message}`))
+        }
 
         // Delete the message
-        await ctx.deleteMessage().catch(error => console.error(`[MUTE ERROR] Failed to delete message: ${error.message}`))
+        try {
+          await ctx.deleteMessage()
+          deleteSuccess = true
+        } catch (error) {
+          console.error(`[MUTE ERROR] Failed to delete message: ${error.message}`)
 
-        // Send notification to the chat and delete it after 30 seconds
-        const notificationMsg = await ctx.replyWithHTML(ctx.i18n.t('spam.muted', {
-          name: userName(ctx.from, true),
-          reason: result.reason
-        })).catch(error => console.error(`[MUTE ERROR] Failed to send notification: ${error.message}`))
+          // Send error notification to chat
+          await ctx.replyWithHTML(`❌ <b>Failed to delete spam message from ${userName(ctx.from, true)}</b>\nReason: ${error.message}`, {
+            reply_to_message_id: ctx.message.message_id
+          }).catch(e => console.error(`[MUTE ERROR] Failed to send delete error notification: ${e.message}`))
+        }
 
-        // Schedule notification message deletion
-        if (notificationMsg) {
-          setTimeout(async () => {
-            await ctx.telegram.deleteMessage(ctx.chat.id, notificationMsg.message_id)
-              .catch(error => console.error(`[MUTE ERROR] Failed to delete notification after timeout: ${error.message}`))
-            console.log(`[MUTE] Auto-deleted notification message after timeout`)
-          }, 25 * 1000) // 25 seconds
+        // Send success notification only if at least one action succeeded
+        if (muteSuccess || deleteSuccess) {
+          let statusMessage = ''
+          if (muteSuccess && deleteSuccess) {
+            statusMessage = ctx.i18n.t('spam.muted', {
+              name: userName(ctx.from, true),
+              reason: result.reason
+            })
+            // Set global ban status
+            if (ctx.session.userInfo) {
+              ctx.session.userInfo.isGlobalBanned = true;
+              ctx.session.userInfo.globalBanReason = result.reason;
+              ctx.session.userInfo.globalBanDate = new Date();
+              await ctx.session.userInfo.save().catch(err => console.error('[SPAM CHECK ERROR] Failed to save global ban status:', err));
+              console.log(`[GLOBAL BAN] User ${userName(ctx.from)} (ID: ${ctx.from.id}) globally banned by AI. Reason: ${result.reason}`);
+            }
+          } else if (muteSuccess && !deleteSuccess) {
+            statusMessage = `✅ ${userName(ctx.from, true)} was muted for spam\nReason: ${result.reason}\n⚠️ Could not delete the message`
+          } else if (!muteSuccess && deleteSuccess) {
+            statusMessage = `✅ Spam message deleted\n⚠️ Could not mute ${userName(ctx.from, true)}\nReason: ${result.reason}`
+          }
+
+          const notificationMsg = await ctx.replyWithHTML(statusMessage)
+            .catch(error => console.error(`[MUTE ERROR] Failed to send notification: ${error.message}`))
+
+          // Schedule notification message deletion
+          if (notificationMsg) {
+            setTimeout(async () => {
+              await ctx.telegram.deleteMessage(ctx.chat.id, notificationMsg.message_id)
+                .catch(error => console.error(`[MUTE ERROR] Failed to delete notification after timeout: ${error.message}`))
+              console.log(`[MUTE] Auto-deleted notification message after timeout`)
+            }, 25 * 1000) // 25 seconds
+          }
         }
 
         return true // Stop further processing
