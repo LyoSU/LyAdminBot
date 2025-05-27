@@ -47,8 +47,7 @@ const {
 const {
   updateUser,
   updateGroup,
-  updateGroupMember,
-  userName
+  updateGroupMember
 } = require('./helpers')
 
 global.startDate = new Date()
@@ -119,11 +118,11 @@ bot.use(async (ctx, next) => {
 
     // Check for OpenAI global ban first
     if (ctx.session.userInfo && ctx.session.userInfo.isGlobalBanned) {
-      console.log(`[GLOBAL BAN] User ${userName(ctx.from)} (ID: ${ctx.from.id}) is globally banned by AI. Reason: ${ctx.session.userInfo.globalBanReason}. Banning in current group.`)
+      console.log(`[GLOBAL BAN] User ${ctx.from.first_name} (ID: ${ctx.from.id}) is globally banned by AI. Reason: ${ctx.session.userInfo.globalBanReason}. Banning in current group.`)
       try {
         await ctx.telegram.kickChatMember(ctx.chat.id, ctx.from.id)
         await ctx.replyWithHTML(ctx.i18n.t('global_ban.kicked', {
-          name: userName(ctx.from, true),
+          name: ctx.from.first_name,
           reason: ctx.session.userInfo.globalBanReason
         }))
       } catch (error) {
