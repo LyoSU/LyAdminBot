@@ -65,3 +65,6 @@ kick:
   error: <b>Atamadım</b>\n<pre>${error}</pre>
 del:
   error: <b>Mesajı silemedim</b>\n<pre>${error}</pre>
+
+global_ban:
+  kicked: "Kullanıcı ${name} yapay zeka tarafından küresel olarak yasaklandığı için atıldı. Sebep: ${reason}"
