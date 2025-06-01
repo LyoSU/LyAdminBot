@@ -1,7 +1,7 @@
 const replicators = require('telegraf/core/replicators')
 
 module.exports = async (ctx) => {
-  const { entities } = ctx.message
+  const entities = ctx.message.entities || []
   const { maxExtra } = ctx.group.info.settings
   let entitiesNum = entities.length
   let hashtagNum = 0
