@@ -147,6 +147,19 @@ const groupSchema = mongoose.Schema({
     banChannel: {
       type: Boolean,
       default: false
+    },
+    openaiSpamCheck: {
+      enabled: {
+        type: Boolean,
+        default: true
+      },
+      globalBan: {
+        type: Boolean,
+        default: true
+      },
+      customRules: [{
+        type: String
+      }]
     }
   },
   stats: {

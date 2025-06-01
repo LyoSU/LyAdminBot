@@ -53,6 +53,43 @@ cmd:
         <b>Hata!</b>
         \#${extraName} bulunamadı
         Yeni bir tane oluşturmak için iletiye yanıt olarak komutu yeniden yanıtlayın.
+  spam_settings:
+    enabled: "✅ <b>Otomatik spam kontrolü etkinleştirildi</b>"
+    disabled: "❌ <b>Otomatik spam kontrolü devre dışı bırakıldı</b>"
+    allow:
+      added: "✅ <b>İzin kuralı eklendi:</b>\n\"${rule}\""
+      error: "❌ <b>Hata:</b> Kural metnini belirtin\n\n<b>Örnek:</b> <code>!spam allow ödev satışı</code>"
+    deny:
+      added: "✅ <b>Yasak kuralı eklendi:</b>\n\"${rule}\""
+      error: "❌ <b>Hata:</b> Kural metnini belirtin\n\n<b>Örnek:</b> <code>!spam deny kazanç reklamları</code>"
+    remove:
+      success: "✅ <b>Kural silindi:</b>\n\"${rule}\""
+      error: "❌ <b>Hata:</b> Geçersiz kural numarası\n\nKural listesini görmek için <code>!spam</code> kullanın"
+    clear: "✅ <b>Tüm kurallar temizlendi</b> (vardı: ${count})"
+    globalban:
+      enabled: "✅ <b>Global yasak etkinleştirildi</b>\n• Bu grupta yapay zeka tarafından yasaklanan kullanıcılar diğer tüm gruplarda da yasaklanacak\n• Diğer gruplarda yapay zeka tarafından yasaklanan kullanıcılar bu grupta da yasaklanacak"
+      disabled: "❌ <b>Global yasak devre dışı bırakıldı</b>\n• Bu grupta yapay zeka tarafından yasaklanan kullanıcılar diğer gruplarda yasaklanmayacak\n• Diğer gruplarda yapay zeka tarafından yasaklanan kullanıcılar bu grupta yasaklanmayacak"
+      error: "❌ <b>Hata:</b> <code>!spam globalban on</code> veya <code>!spam globalban off</code> kullanın"
+    status:
+      title: "🛡 <b>Otomatik spam kontrolü ayarları</b>"
+      enabled_text: "✅ Etkin"
+      disabled_text: "❌ Devre dışı"
+      globalban_enabled: "✅ Etkin"
+      globalban_disabled: "❌ Devre dışı"
+      rules_title: "Kurallar (${count}):"
+      rules_empty: "Yapılandırılmamış"
+      rule_allow: "✅ İzin ver"
+      rule_deny: "❌ Yasak"
+      commands_title: "Mevcut komutlar:"
+      commands: |
+        <code>!spam on</code> - etkinleştir
+        <code>!spam off</code> - devre dışı bırak
+        <code>!spam globalban on</code> - global yasağı etkinleştir
+        <code>!spam globalban off</code> - global yasağı devre dışı bırak
+        <code>!spam allow metin</code> - izin ver
+        <code>!spam deny metin</code> - yasak
+        <code>!spam remove numara</code> - kuralı sil
+        <code>!spam clear</code> - tüm kuralları temizle
   reset: Ayarlar sıfırlandı
 banan:
   show: ${name} banlanan 🍌

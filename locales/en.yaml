@@ -119,6 +119,43 @@ cmd:
   banChannel:
     disable: Ban Channel disabled
     enable: Ban Channel enabled
+  spam_settings:
+    enabled: "✅ <b>Automatic spam check enabled</b>"
+    disabled: "❌ <b>Automatic spam check disabled</b>"
+    allow:
+      added: "✅ <b>Added allow rule:</b>\n\"${rule}\""
+      error: "❌ <b>Error:</b> Please specify rule text\n\n<b>Example:</b> <code>!spam allow coursework sales</code>"
+    deny:
+      added: "✅ <b>Added deny rule:</b>\n\"${rule}\""
+      error: "❌ <b>Error:</b> Please specify rule text\n\n<b>Example:</b> <code>!spam deny earning schemes</code>"
+    remove:
+      success: "✅ <b>Removed rule:</b>\n\"${rule}\""
+      error: "❌ <b>Error:</b> Invalid rule number\n\nUse <code>!spam</code> to see the list of rules"
+    clear: "✅ <b>All rules cleared</b> (was: ${count})"
+    globalban:
+      enabled: "✅ <b>Global ban enabled</b>\n• Users banned by AI in this group will be banned in all other groups\n• Users banned by AI in other groups will be banned in this group"
+      disabled: "❌ <b>Global ban disabled</b>\n• Users banned by AI in this group will NOT be banned in other groups\n• Users banned by AI in other groups will NOT be banned in this group"
+      error: "❌ <b>Error:</b> Use <code>!spam globalban on</code> or <code>!spam globalban off</code>"
+    status:
+      title: "🛡 <b>Automatic spam check settings</b>"
+      enabled_text: "✅ Enabled"
+      disabled_text: "❌ Disabled"
+      globalban_enabled: "✅ Enabled"
+      globalban_disabled: "❌ Disabled"
+      rules_title: "Rules (${count}):"
+      rules_empty: "Not configured"
+      rule_allow: "✅ Allow"
+      rule_deny: "❌ Deny"
+      commands_title: "Available commands:"
+      commands: |
+        <code>!spam on</code> - enable
+        <code>!spam off</code> - disable
+        <code>!spam globalban on</code> - enable global ban
+        <code>!spam globalban off</code> - disable global ban
+        <code>!spam allow text</code> - allow
+        <code>!spam deny text</code> - deny
+        <code>!spam remove number</code> - remove rule
+        <code>!spam clear</code> - clear all rules
   reset: Settings have been reset
 settings:
     json:

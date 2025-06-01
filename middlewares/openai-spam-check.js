@@ -46,6 +46,37 @@ const checkSpam = async (text, context = {}) => {
       .filter(item => item !== '')
       .join('\n')
 
+    // Add custom rules to the prompt if they exist
+    let customRulesPrompt = ''
+    if (context.customRules && context.customRules.length > 0) {
+      const allowRules = context.customRules
+        .filter(rule => rule.toUpperCase().startsWith('ALLOW:'))
+        .map(rule => `- ${rule.substring(6).trim()}`)
+
+      const denyRules = context.customRules
+        .filter(rule => rule.toUpperCase().startsWith('DENY:'))
+        .map(rule => `- ${rule.substring(5).trim()}`)
+
+      let allowPrompt = ''
+      if (allowRules.length > 0) {
+        allowPrompt = `
+
+Group-specific ALLOW rules (do NOT flag messages that fall under these rules):
+${allowRules.join('\n')}
+`
+      }
+
+      let denyPrompt = ''
+      if (denyRules.length > 0) {
+        denyPrompt = `
+
+Group-specific DENY rules (ALWAYS flag messages that fall under these rules as spam, even if they seem legitimate otherwise):
+${denyRules.join('\n')}
+`
+      }
+      customRulesPrompt = `${allowPrompt}${denyPrompt}`
+    }
+
     const prompt = `
 You are a Telegram spam detection system. Your only job is to identify typical Telegram spam messages.
 
@@ -77,7 +108,7 @@ Important: Do NOT flag:
 - Regular links shared in conversation
 - Messages appropriate to the group context
 - Messages from premium users (less likely to be spam)
-
+${customRulesPrompt}
 Respond ONLY with this exact JSON format:
 {
   "reason": "brief explanation (3-10 words)",
@@ -259,6 +290,12 @@ module.exports = async (ctx) => {
     return
   }
 
+  // Check if OpenAI spam check is enabled for this group
+  if (ctx.group && ctx.group.info && ctx.group.info.settings && ctx.group.info.settings.openaiSpamCheck && ctx.group.info.settings.openaiSpamCheck.enabled === false) {
+    console.log(`[SPAM CHECK] OpenAI spam check is disabled for group "${ctx.chat.title}"`)
+    return false // Continue processing, but skip OpenAI check
+  }
+
   // Skip if message is a command
   if (ctx.message && ctx.message.text && ctx.message.text.startsWith('/')) {
     return
@@ -326,7 +363,8 @@ module.exports = async (ctx) => {
         username: ctx.from.username,
         messageCount: ctx.group.members[ctx.from.id].stats.messagesCount,
         repliedToMessage: repliedToMessage,
-        links: links
+        links: links,
+        customRules: (ctx.group && ctx.group.info && ctx.group.info.settings && ctx.group.info.settings.openaiSpamCheck && ctx.group.info.settings.openaiSpamCheck.customRules) || []
       }
 
       const result = await checkSpam(messageText, context)
@@ -393,11 +431,22 @@ module.exports = async (ctx) => {
             })
             // Set global ban status
             if (ctx.session.userInfo) {
-              ctx.session.userInfo.isGlobalBanned = true;
-              ctx.session.userInfo.globalBanReason = result.reason;
-              ctx.session.userInfo.globalBanDate = new Date();
-              await ctx.session.userInfo.save().catch(err => console.error('[SPAM CHECK ERROR] Failed to save global ban status:', err));
-              console.log(`[GLOBAL BAN] User ${userName(ctx.from)} (ID: ${ctx.from.id}) globally banned by AI. Reason: ${result.reason}`);
+              // Check if global ban is enabled for this group
+              const globalBanEnabled = ctx.group &&
+                                     ctx.group.info &&
+                                     ctx.group.info.settings &&
+                                     ctx.group.info.settings.openaiSpamCheck &&
+                                     ctx.group.info.settings.openaiSpamCheck.globalBan !== false
+
+              if (globalBanEnabled) {
+                ctx.session.userInfo.isGlobalBanned = true
+                ctx.session.userInfo.globalBanReason = result.reason
+                ctx.session.userInfo.globalBanDate = new Date()
+                await ctx.session.userInfo.save().catch(err => console.error('[SPAM CHECK ERROR] Failed to save global ban status:', err))
+                console.log(`[GLOBAL BAN] User ${userName(ctx.from)} (ID: ${ctx.from.id}) globally banned by AI. Reason: ${result.reason}`)
+              } else {
+                console.log(`[SPAM CHECK] Global ban skipped for group "${ctx.chat.title}" - globalBan setting is disabled`)
+              }
             }
           } else if (muteSuccess && !deleteSuccess) {
             statusMessage = `✅ ${userName(ctx.from, true)} was muted for spam\nReason: ${result.reason}\n⚠️ Could not delete the message`

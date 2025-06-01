@@ -20,6 +20,7 @@ const handleAdminWelcomeTextReset = require('./admin/welcome-text-reset')
 const handleAdminExtra = require('./admin/extra')
 const handleAdminMaxExtra = require('./admin/extra-max')
 const handleAdminCas = require('./admin/cas')
+const handleAdminSpamSettings = require('./admin/spam-settings')
 const handleSendMembers = require('./admin/send-members')
 const handleSaveSticker = require('./admin/sticker-save')
 const handleSendSettingsJson = require('./admin/send-settings-json')
@@ -51,6 +52,7 @@ module.exports = {
   handleAdminExtra,
   handleAdminMaxExtra,
   handleAdminCas,
+  handleAdminSpamSettings,
   handleSendMembers,
   handleSaveSticker,
   handleSendSettingsJson,

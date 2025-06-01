@@ -36,6 +36,7 @@ const {
   handleAdminExtra,
   handleAdminMaxExtra,
   handleAdminCas,
+  handleAdminSpamSettings,
   handleSendMembers,
   handleSaveSticker,
   handleSendSettingsJson,
@@ -118,17 +119,28 @@ bot.use(async (ctx, next) => {
 
     // Check for OpenAI global ban first
     if (ctx.session.userInfo && ctx.session.userInfo.isGlobalBanned) {
-      console.log(`[GLOBAL BAN] User ${ctx.from.first_name} (ID: ${ctx.from.id}) is globally banned by AI. Reason: ${ctx.session.userInfo.globalBanReason}. Banning in current group.`)
-      try {
-        await ctx.telegram.kickChatMember(ctx.chat.id, ctx.from.id)
-        await ctx.replyWithHTML(ctx.i18n.t('global_ban.kicked', {
-          name: ctx.from.first_name,
-          reason: ctx.session.userInfo.globalBanReason
-        }))
-      } catch (error) {
-        console.error(`[GLOBAL BAN ERROR] Failed to kick globally banned user: ${error.message}`)
+      // Check if this group participates in global bans
+      const globalBanEnabled = ctx.group &&
+                             ctx.group.info &&
+                             ctx.group.info.settings &&
+                             ctx.group.info.settings.openaiSpamCheck &&
+                             ctx.group.info.settings.openaiSpamCheck.globalBan !== false
+
+      if (globalBanEnabled) {
+        console.log(`[GLOBAL BAN] User ${ctx.from.first_name} (ID: ${ctx.from.id}) is globally banned by AI. Reason: ${ctx.session.userInfo.globalBanReason}. Banning in current group.`)
+        try {
+          await ctx.telegram.kickChatMember(ctx.chat.id, ctx.from.id)
+          await ctx.replyWithHTML(ctx.i18n.t('global_ban.kicked', {
+            name: ctx.from.first_name,
+            reason: ctx.session.userInfo.globalBanReason
+          }))
+        } catch (error) {
+          console.error(`[GLOBAL BAN ERROR] Failed to kick globally banned user: ${error.message}`)
+        }
+        isSpam = true // Prevents further processing
+      } else {
+        console.log(`[GLOBAL BAN] User ${ctx.from.first_name} (ID: ${ctx.from.id}) is globally banned but group "${ctx.chat.title}" has global ban disabled`)
       }
-      isSpam = true // Prevents further processing
     }
 
     if (!isSpam) {
@@ -181,6 +193,7 @@ bot.hears(/^!extra\s(?:(#?))([^\s]+)/, onlyAdmin, handleAdminExtra)
 bot.hears(/^!extra-max (\d*)/, onlyAdmin, handleAdminMaxExtra)
 bot.hears('!welcome', onlyAdmin, handleAdminWelcome)
 bot.hears('!cas', onlyAdmin, handleAdminCas)
+bot.hears(/^!spam(?:\s(.*))?/, onlyAdmin, handleAdminSpamSettings)
 bot.hears('!gif', onlyAdmin, handleAdminWelcomeGif)
 bot.hears('!gif-reset', onlyAdmin, handleAdminWelcomeGifReset)
 bot.hears('!text', onlyAdmin, handleAdminWelcomeText)
