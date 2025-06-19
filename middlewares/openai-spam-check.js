@@ -386,39 +386,59 @@ module.exports = async (ctx) => {
         let muteSuccess = false
         let deleteSuccess = false
 
-        // Mute the user
+        // Check bot permissions before attempting to mute
+        let canRestrictMembers = false
         try {
-          await ctx.telegram.restrictChatMember(
-            ctx.chat.id,
-            ctx.from.id,
-            {
-              can_send_messages: false,
-              can_send_media_messages: false,
-              can_send_other_messages: false,
-              can_add_web_page_previews: false,
-              until_date: Math.floor(Date.now() / 1000) + muteDuration
-            }
-          )
-          muteSuccess = true
+          const botMember = await ctx.telegram.getChatMember(ctx.chat.id, ctx.botInfo.id)
+          canRestrictMembers = botMember.can_restrict_members
         } catch (error) {
-          console.error(`[MUTE ERROR] Failed to mute user: ${error.message}`)
-
-          // Send error notification to chat
-          await ctx.replyWithHTML(`❌ <b>Failed to mute ${userName(ctx.from, true)}</b>\nReason: ${error.message}`)
-            .catch(e => console.error(`[MUTE ERROR] Failed to send mute error notification: ${e.message}`))
+          console.error(`[PERMISSION CHECK] Failed to check bot permissions: ${error.message}`)
         }
 
-        // Delete the message
-        try {
-          await ctx.deleteMessage()
-          deleteSuccess = true
-        } catch (error) {
-          console.error(`[MUTE ERROR] Failed to delete message: ${error.message}`)
+        // Mute the user only if bot has permissions
+        if (canRestrictMembers) {
+          try {
+            await ctx.telegram.restrictChatMember(
+              ctx.chat.id,
+              ctx.from.id,
+              {
+                can_send_messages: false,
+                can_send_media_messages: false,
+                can_send_other_messages: false,
+                can_add_web_page_previews: false,
+                until_date: Math.floor(Date.now() / 1000) + muteDuration
+              }
+            )
+            muteSuccess = true
+          } catch (error) {
+            console.error(`[MUTE ERROR] Failed to mute user: ${error.message}`)
+            // Don't send error notification to avoid spam
+          }
+        } else {
+          console.error(`[MUTE ERROR] Bot doesn't have permission to restrict members in chat ${ctx.chat.id}`)
+        }
 
-          // Send error notification to chat
-          await ctx.replyWithHTML(`❌ <b>Failed to delete spam message from ${userName(ctx.from, true)}</b>\nReason: ${error.message}`, {
-            reply_to_message_id: ctx.message.message_id
-          }).catch(e => console.error(`[MUTE ERROR] Failed to send delete error notification: ${e.message}`))
+        // Check if bot can delete messages before attempting
+        let canDeleteMessages = false
+        try {
+          const botMember = await ctx.telegram.getChatMember(ctx.chat.id, ctx.botInfo.id)
+          canDeleteMessages = botMember.can_delete_messages ||
+                             (ctx.message.date && (Date.now() / 1000 - ctx.message.date) < 2 * 24 * 60 * 60) // Can delete messages < 48h old
+        } catch (error) {
+          console.error(`[PERMISSION CHECK] Failed to check delete permissions: ${error.message}`)
+        }
+
+        // Delete the message only if possible
+        if (canDeleteMessages) {
+          try {
+            await ctx.deleteMessage()
+            deleteSuccess = true
+          } catch (error) {
+            console.error(`[MUTE ERROR] Failed to delete message: ${error.message}`)
+            // Don't send error notification to avoid spam
+          }
+        } else {
+          console.error(`[MUTE ERROR] Bot doesn't have permission to delete messages in chat ${ctx.chat.id}`)
         }
 
         // Send success notification only if at least one action succeeded

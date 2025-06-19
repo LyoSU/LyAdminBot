@@ -159,12 +159,41 @@ bot.use(async (ctx, next) => {
   await next(ctx)
 
   // Save user info after all checks, including potential global ban update by openaiSpamCheck
-  if (ctx.session.userInfo) {
-    await ctx.session.userInfo.save().catch((err) => { console.error('[USER SAVE ERROR]', err) })
+  // Use Promise.allSettled to avoid parallel save conflicts
+  const savePromises = []
+
+  if (ctx.session.userInfo && !ctx.session.userInfo.isSaving) {
+    ctx.session.userInfo.isSaving = true
+    savePromises.push(
+      ctx.session.userInfo.save()
+        .then(() => { ctx.session.userInfo.isSaving = false })
+        .catch((err) => {
+          ctx.session.userInfo.isSaving = false
+          console.error('[USER SAVE ERROR]', err)
+        })
+    )
   }
-  if (ctx.group && ctx.group.info) {
-    await ctx.group.info.save().catch(() => {})
-    await ctx.group.members[ctx.from.id].save().catch(() => {})
+
+  if (ctx.group && ctx.group.info && !ctx.group.info.isSaving) {
+    ctx.group.info.isSaving = true
+    savePromises.push(
+      ctx.group.info.save()
+        .then(() => { ctx.group.info.isSaving = false })
+        .catch(() => { ctx.group.info.isSaving = false })
+    )
+  }
+
+  if (ctx.group && ctx.group.members && ctx.group.members[ctx.from.id] && !ctx.group.members[ctx.from.id].isSaving) {
+    ctx.group.members[ctx.from.id].isSaving = true
+    savePromises.push(
+      ctx.group.members[ctx.from.id].save()
+        .then(() => { ctx.group.members[ctx.from.id].isSaving = false })
+        .catch(() => { ctx.group.members[ctx.from.id].isSaving = false })
+    )
+  }
+
+  if (savePromises.length > 0) {
+    await Promise.allSettled(savePromises)
   }
 })
 

@@ -50,10 +50,20 @@ module.exports = async (ctx) => {
         // Log formatted CAS data
         console.log(formatCasLog(body))
 
-        // Ban the user
-        ctx.telegram.kickChatMember(ctx.chat.id, userId).catch(() => {})
+        // Check bot permissions before banning
+        ctx.telegram.getChatMember(ctx.chat.id, ctx.botInfo.id)
+          .then(botMember => {
+            if (botMember.can_restrict_members) {
+              // Ban the user
+              ctx.telegram.kickChatMember(ctx.chat.id, userId)
+                .catch(error => console.error(`[GLOBAL BAN ERROR] Failed to kick globally banned user: ${error.message}`))
+            } else {
+              console.error(`[GLOBAL BAN ERROR] Bot doesn't have permission to restrict members in chat ${ctx.chat.id}`)
+            }
+          })
+          .catch(error => console.error(`[PERMISSION CHECK] Failed to check bot permissions for ban: ${error.message}`))
 
-        // Send notification message
+        // Send notification message with error handling
         ctx.replyWithHTML(ctx.i18n.t('cas.banned', {
           name: userName(ctx.from, true),
           link: `https://cas.chat/query?u=${userId}`
@@ -69,10 +79,19 @@ module.exports = async (ctx) => {
               console.log(`[CAS BAN] Auto-deleted notification message after timeout`)
             }, 25 * 1000) // 25 seconds
           }
-        }).catch(() => {})
+        }).catch(error => {
+          // Check if bot was removed from chat
+          if (error.code === 403 && error.description.includes('bot is not a member')) {
+            console.error(`[CAS BAN] Bot was removed from chat ${ctx.chat.id}`)
+          } else {
+            console.error(`[CAS BAN] Failed to send notification: ${error.message}`)
+          }
+        })
 
-        // Delete the original message
-        ctx.deleteMessage()
+        // Delete the original message with error handling
+        ctx.deleteMessage().catch(error => {
+          console.error(`[CAS BAN] Failed to delete original message: ${error.message}`)
+        })
 
         return true
       }
