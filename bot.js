@@ -117,29 +117,50 @@ bot.use(async (ctx, next) => {
   if (ctx.message) {
     let isSpam = false
 
+    // Function to check if global ban has expired (24 hours)
+    const isGlobalBanExpired = (globalBanDate) => {
+      if (!globalBanDate) return true
+      const now = new Date()
+      const banTime = new Date(globalBanDate)
+      const hoursDiff = (now - banTime) / (1000 * 60 * 60)
+      return hoursDiff >= 24
+    }
+
     // Check for OpenAI global ban first
     if (ctx.session.userInfo && ctx.session.userInfo.isGlobalBanned) {
-      // Check if this group participates in global bans
-      const globalBanEnabled = ctx.group &&
-                             ctx.group.info &&
-                             ctx.group.info.settings &&
-                             ctx.group.info.settings.openaiSpamCheck &&
-                             ctx.group.info.settings.openaiSpamCheck.globalBan !== false
-
-      if (globalBanEnabled) {
-        console.log(`[GLOBAL BAN] User ${ctx.from.first_name} (ID: ${ctx.from.id}) is globally banned by AI. Reason: ${ctx.session.userInfo.globalBanReason}. Banning in current group.`)
-        try {
-          await ctx.telegram.kickChatMember(ctx.chat.id, ctx.from.id)
-          await ctx.replyWithHTML(ctx.i18n.t('global_ban.kicked', {
-            name: ctx.from.first_name,
-            reason: ctx.session.userInfo.globalBanReason
-          }))
-        } catch (error) {
-          console.error(`[GLOBAL BAN ERROR] Failed to kick globally banned user: ${error.message}`)
-        }
-        isSpam = true // Prevents further processing
+      // Check if global ban has expired
+      if (isGlobalBanExpired(ctx.session.userInfo.globalBanDate)) {
+        // Clear expired global ban
+        ctx.session.userInfo.isGlobalBanned = false
+        ctx.session.userInfo.globalBanReason = undefined
+        ctx.session.userInfo.globalBanDate = undefined
+        await ctx.session.userInfo.save().catch(err => console.error('[GLOBAL BAN CLEANUP] Failed to clear expired ban:', err))
+        console.log(`[GLOBAL BAN EXPIRED] Cleared expired global ban for user ${ctx.from.first_name} (ID: ${ctx.from.id})`)
       } else {
-        console.log(`[GLOBAL BAN] User ${ctx.from.first_name} (ID: ${ctx.from.id}) is globally banned but group "${ctx.chat.title}" has global ban disabled`)
+        // Check if this group participates in global bans
+        const globalBanEnabled = ctx.group &&
+                               ctx.group.info &&
+                               ctx.group.info.settings &&
+                               ctx.group.info.settings.openaiSpamCheck &&
+                               ctx.group.info.settings.openaiSpamCheck.globalBan !== false
+
+        if (globalBanEnabled) {
+          const banDate = new Date(ctx.session.userInfo.globalBanDate)
+          const timeLeft = 24 - ((new Date() - banDate) / (1000 * 60 * 60))
+          console.log(`[GLOBAL BAN] User ${ctx.from.first_name} (ID: ${ctx.from.id}) is globally banned by AI. Reason: ${ctx.session.userInfo.globalBanReason}. Time left: ${timeLeft.toFixed(1)}h. Banning in current group.`)
+          try {
+            await ctx.telegram.kickChatMember(ctx.chat.id, ctx.from.id)
+            await ctx.replyWithHTML(ctx.i18n.t('global_ban.kicked', {
+              name: ctx.from.first_name,
+              reason: ctx.session.userInfo.globalBanReason
+            }))
+          } catch (error) {
+            console.error(`[GLOBAL BAN ERROR] Failed to kick globally banned user: ${error.message}`)
+          }
+          isSpam = true // Prevents further processing
+        } else {
+          console.log(`[GLOBAL BAN] User ${ctx.from.first_name} (ID: ${ctx.from.id}) is globally banned but group "${ctx.chat.title}" has global ban disabled`)
+        }
       }
     }
 
