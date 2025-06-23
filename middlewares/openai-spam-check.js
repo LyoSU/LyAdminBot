@@ -8,6 +8,101 @@ const openai = new OpenAI({
 })
 
 /**
+ * Check if user is in trusted whitelist
+ * @param {Number} userId - User ID to check
+ * @param {Object} groupSettings - Group spam check settings
+ * @returns {Boolean} - True if user is trusted
+ */
+const isTrustedUser = (userId, groupSettings) => {
+  if (!groupSettings || !groupSettings.trustedUsers) return false
+  return groupSettings.trustedUsers.includes(userId)
+}
+
+/**
+ * Get message frequency analysis for user
+ * @param {Object} userStats - User statistics from database
+ * @returns {Object} - Frequency analysis result
+ */
+const analyzeMessageFrequency = (userStats) => {
+  if (!userStats) return { isRapidFire: false, messagesPerMinute: 0 }
+
+  // This would need to be implemented with message timestamps in the database
+  // For now, return conservative values
+  return {
+    isRapidFire: false,
+    messagesPerMinute: 0,
+    recentMessageCount: userStats.messagesCount || 0
+  }
+}
+
+/**
+ * Calculate dynamic confidence threshold based on user profile
+ * @param {Object} context - User and message context
+ * @param {Object} groupSettings - Group spam check settings
+ * @returns {Number} - Adjusted confidence threshold
+ */
+const calculateDynamicThreshold = (context, groupSettings) => {
+  let baseThreshold = (groupSettings && groupSettings.confidenceThreshold) || 70
+
+  // Reduce threshold for highly suspicious indicators
+  if (context.isNewAccount && context.messageCount <= 2) {
+    baseThreshold -= 10
+  }
+
+  // Increase threshold for trusted indicators
+  if (context.isPremium) baseThreshold += 15
+  if (context.hasProfilePhoto) baseThreshold += 10
+  if (context.hasUsername) baseThreshold += 5
+  if (context.messageCount > 10) baseThreshold += 10
+
+  // Ensure threshold stays within reasonable bounds
+  return Math.max(50, Math.min(95, baseThreshold))
+}
+
+/**
+ * Determine appropriate action based on spam confidence and user profile
+ * @param {Object} result - Spam detection result
+ * @param {Object} context - User context
+ * @param {Number} threshold - Confidence threshold
+ * @returns {Object} - Action to take
+ */
+const determineAction = (result, context, threshold) => {
+  if (!result.isSpam || result.confidence < threshold) {
+    return { action: 'none' }
+  }
+
+  const confidence = result.confidence || 0
+
+  // Very high confidence - immediate mute and delete
+  if (confidence >= 90) {
+    return {
+      action: 'mute_and_delete',
+      duration: context.isPremium ? 3600 : 86400, // 1h for premium, 24h for regular
+      reason: result.reason
+    }
+  }
+
+  // High confidence - warn first, then restrict on next offense
+  if (confidence >= 80) {
+    return {
+      action: 'warn_and_restrict',
+      duration: context.isPremium ? 1800 : 7200, // 30min for premium, 2h for regular
+      reason: result.reason
+    }
+  }
+
+  // Medium confidence - delete message only, no mute
+  if (confidence >= threshold) {
+    return {
+      action: 'delete_only',
+      reason: result.reason
+    }
+  }
+
+  return { action: 'none' }
+}
+
+/**
  * Checks message for spam or harmful content using OpenAI model
  * @param {String} text - text to check
  * @param {Object} context - additional context information
@@ -31,6 +126,11 @@ const checkSpam = async (text, context = {}) => {
       ? `User message count: ${context.messageCount}` : ''
     const hasUsername = context.username ? `Username: @${context.username}` : 'No username'
 
+    // Add message frequency analysis
+    const frequencyInfo = context.messageFrequency
+      ? `Message frequency: ${context.messageFrequency.messagesPerMinute}/min, Rapid fire: ${context.messageFrequency.isRapidFire}`
+      : ''
+
     const contextInfo = [
       groupInfo,
       userInfo,
@@ -41,6 +141,7 @@ const checkSpam = async (text, context = {}) => {
       isPremium,
       isNewAccount,
       userMessageCount,
+      frequencyInfo,
       repliedToInfo
     ]
       .filter(item => item !== '')
@@ -77,16 +178,10 @@ ${denyRules.join('\n')}
       customRulesPrompt = `${allowPrompt}${denyPrompt}`
     }
 
-    const prompt = `
-You are a Telegram spam detection system. Your only job is to identify typical Telegram spam messages.
+    // System instructions
+    const systemPrompt = `You are a Telegram spam detection system. Your only job is to identify typical Telegram spam messages.
 
-Message to analyze:
-"""
-${text}
-"""
-
-Context information:
-${contextInfo}
+CRITICAL: Be extra cautious with borderline cases. When in doubt, err on the side of NOT flagging legitimate messages.
 
 Focus ONLY on these common Telegram spam patterns:
 1. Cryptocurrency/trading schemes: Promises of quick profits, investments, crypto signals
@@ -97,25 +192,54 @@ Focus ONLY on these common Telegram spam patterns:
 6. Automated bot messages: Generic templates with suspicious links
 7. Unauthorized promotions: Unsolicited advertising of services or products
 8. Phishing attempts: Messages asking for personal data or Telegram credentials
-9. New accounts with suspicious behavior: New accounts posting promotional content
-10. Bot-like communication patterns: Generic messages that appear automated
+9. Scam links: Suspicious shortened URLs or known malicious domains
+10. Mass duplication: Identical messages posted across multiple groups
+
+ENHANCED GUIDELINES for FALSE POSITIVE PREVENTION:
+- Premium users are much less likely to be spammers - be more lenient
+- Users with profile photos, usernames, and bio information are more legitimate
+- Users with message history in the group (>5 messages) are less suspicious
+- Messages replying to others in context are more likely legitimate
+- Consider the group's language and culture - what seems spam in one context may be normal in another
+- Generic greetings, questions, or normal conversation should NEVER be flagged
+- Sharing personal opinions, experiences, or asking for help is legitimate
+- Messages in the same language as the user's profile are more legitimate
 
 Important: Do NOT flag:
-- Normal conversations
-- Questions about cryptocurrencies without promotion
-- Legitimate sharing of information
-- Opinions or discussions
-- Regular links shared in conversation
-- Messages appropriate to the group context
-- Messages from premium users (less likely to be spam)
+- Normal conversations and questions
+- Legitimate cryptocurrency discussions without promotional content
+- Sharing personal experiences or opinions
+- Asking for help or advice
+- Regular links shared in conversation context
+- Messages appropriate to the group topic
+- Replies that are contextually relevant
+- Greetings, introductions, or normal social interactions
 ${customRulesPrompt}
+
+Rate your confidence from 0-100. Use confidence levels wisely:
+- 90-100: Only for obvious spam with clear malicious intent
+- 80-89: Strong spam indicators but not completely certain
+- 70-79: Some spam indicators present
+- 60-69: Borderline cases
+- Below 60: Probably legitimate
+
 Respond ONLY with this exact JSON format:
 {
   "reason": "brief explanation (3-10 words)",
   "confidence": 0-100,
   "isSpam": true or false
-}
-`
+}`
+
+    // User message with specific content to analyze
+    const userPrompt = `Analyze this message for spam:
+
+Message:
+"""
+${text}
+"""
+
+Context information:
+${contextInfo}`
 
     console.log(`[SPAM CHECK] Analyzing message: "${text.substring(0, 100)}${text.length > 100 ? '...' : ''}"`)
 
@@ -123,7 +247,8 @@ Respond ONLY with this exact JSON format:
       model: 'google/gemini-2.5-flash',
       reasoning_effort: 'low',
       messages: [
-        { role: 'user', content: prompt }
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
       ],
       temperature: 0,
       response_format: { type: 'json_object' },
@@ -238,14 +363,6 @@ const extractUserAnalysisInfo = (chatInfo) => {
   if (chatInfo.emoji_status_custom_emoji_id) info.hasCustomEmojiStatus = true
   if (chatInfo.profile_background_custom_emoji_id) info.hasCustomProfileBackground = true
 
-  // Business account information (legitimate business users)
-  if (chatInfo.business_intro) {
-    info.isBusinessAccount = true
-    info.businessIntro = chatInfo.business_intro.title || chatInfo.business_intro.message
-  }
-  if (chatInfo.business_location) info.hasBusinessLocation = true
-  if (chatInfo.business_opening_hours) info.hasBusinessHours = true
-
   // Personal channel (indicates more established user)
   if (chatInfo.personal_chat) info.hasPersonalChannel = true
 
@@ -266,7 +383,6 @@ const formatDetailedUserInfo = (userInfo) => {
   const details = []
 
   if (userInfo.bio) details.push(`Bio: "${userInfo.bio}"`)
-  if (userInfo.isBusinessAccount) details.push('Business account')
   if (userInfo.businessIntro) details.push(`Business intro: "${userInfo.businessIntro}"`)
   if (userInfo.hasBusinessLocation) details.push('Has business location')
   if (userInfo.hasBusinessHours) details.push('Has business hours')
@@ -319,6 +435,13 @@ module.exports = async (ctx) => {
     return
   }
 
+  // Skip if user is in trusted whitelist
+  const spamSettings = ctx.group && ctx.group.info && ctx.group.info.settings && ctx.group.info.settings.openaiSpamCheck
+  if (spamSettings && isTrustedUser(ctx.from.id, spamSettings)) {
+    console.log(`[SPAM CHECK] Skipping trusted user ${userName(ctx.from)} (ID: ${ctx.from.id})`)
+    return
+  }
+
   // Check number of messages from the user
   if (ctx.group &&
       ctx.group.members &&
@@ -365,24 +488,23 @@ module.exports = async (ctx) => {
         messageCount: ctx.group.members[ctx.from.id].stats.messagesCount,
         repliedToMessage: repliedToMessage,
         links: links,
-        customRules: (ctx.group && ctx.group.info && ctx.group.info.settings && ctx.group.info.settings.openaiSpamCheck && ctx.group.info.settings.openaiSpamCheck.customRules) || []
+        customRules: (ctx.group && ctx.group.info && ctx.group.info.settings && ctx.group.info.settings.openaiSpamCheck && ctx.group.info.settings.openaiSpamCheck.customRules) || [],
+        messageFrequency: analyzeMessageFrequency(ctx.group.members[ctx.from.id].stats)
       }
 
       const result = await checkSpam(messageText, context)
 
-      // Use confidence threshold if available
-      const confidenceThreshold = 70 // Default threshold
-      const isConfidentSpam = result.isSpam &&
-                             (result.confidence === undefined ||
-                              result.confidence >= confidenceThreshold)
+      // Use dynamic confidence threshold and determine appropriate action
+      const confidenceThreshold = calculateDynamicThreshold(context, ctx.group.info.settings)
+      const action = determineAction(result, context, confidenceThreshold)
 
-      if (isConfidentSpam) {
-        console.log(`[MUTE] User ${userName(ctx.from)} (ID: ${ctx.from.id}) muted for spam`)
-        console.log(`[MUTE] Message: "${messageText.substring(0, 150)}${messageText.length > 150 ? '...' : ''}"`)
-        console.log(`[MUTE] Reason: ${result.reason} (Confidence: ${result.confidence || 'N/A'}%)`)
+      if (action.action !== 'none') {
+        console.log(`[SPAM ACTION] User ${userName(ctx.from)} (ID: ${ctx.from.id}) - Action: ${action.action}`)
+        console.log(`[SPAM ACTION] Message: "${messageText.substring(0, 150)}${messageText.length > 150 ? '...' : ''}"`)
+        console.log(`[SPAM ACTION] Reason: ${action.reason} (Confidence: ${result.confidence || 'N/A'}%)`)
 
-        // Get mute duration - premium users get shorter mute time as they're less likely to be spammers
-        const muteDuration = ctx.from.is_premium ? 3600 : 86400 // 1 hour for premium, 24 hours for regular
+        // Get mute duration from action or default
+        const muteDuration = action.duration || (ctx.from.is_premium ? 3600 : 86400)
 
         let muteSuccess = false
         let deleteSuccess = false
@@ -396,27 +518,30 @@ module.exports = async (ctx) => {
           console.error(`[PERMISSION CHECK] Failed to check bot permissions: ${error.message}`)
         }
 
-        // Mute the user only if bot has permissions
-        if (canRestrictMembers) {
-          try {
-            await ctx.telegram.restrictChatMember(
-              ctx.chat.id,
-              ctx.from.id,
-              {
-                can_send_messages: false,
-                can_send_media_messages: false,
-                can_send_other_messages: false,
-                can_add_web_page_previews: false,
-                until_date: Math.floor(Date.now() / 1000) + muteDuration
-              }
-            )
-            muteSuccess = true
-          } catch (error) {
-            console.error(`[MUTE ERROR] Failed to mute user: ${error.message}`)
-            // Don't send error notification to avoid spam
+        // Handle different action types
+        if (action.action === 'mute_and_delete' || action.action === 'warn_and_restrict') {
+          // Mute the user only if bot has permissions
+          if (canRestrictMembers) {
+            try {
+              await ctx.telegram.restrictChatMember(
+                ctx.chat.id,
+                ctx.from.id,
+                {
+                  can_send_messages: false,
+                  can_send_media_messages: false,
+                  can_send_other_messages: false,
+                  can_add_web_page_previews: false,
+                  until_date: Math.floor(Date.now() / 1000) + muteDuration
+                }
+              )
+              muteSuccess = true
+            } catch (error) {
+              console.error(`[MUTE ERROR] Failed to mute user: ${error.message}`)
+              // Don't send error notification to avoid spam
+            }
+          } else {
+            console.error(`[MUTE ERROR] Bot doesn't have permission to restrict members in chat ${ctx.chat.id}`)
           }
-        } else {
-          console.error(`[MUTE ERROR] Bot doesn't have permission to restrict members in chat ${ctx.chat.id}`)
         }
 
         // Check if bot can delete messages before attempting
@@ -429,17 +554,19 @@ module.exports = async (ctx) => {
           console.error(`[PERMISSION CHECK] Failed to check delete permissions: ${error.message}`)
         }
 
-        // Delete the message only if possible
-        if (canDeleteMessages) {
-          try {
-            await ctx.deleteMessage()
-            deleteSuccess = true
-          } catch (error) {
-            console.error(`[MUTE ERROR] Failed to delete message: ${error.message}`)
-            // Don't send error notification to avoid spam
+        // Delete the message based on action type
+        if (action.action === 'mute_and_delete' || action.action === 'delete_only') {
+          if (canDeleteMessages) {
+            try {
+              await ctx.deleteMessage()
+              deleteSuccess = true
+            } catch (error) {
+              console.error(`[DELETE ERROR] Failed to delete message: ${error.message}`)
+              // Don't send error notification to avoid spam
+            }
+          } else {
+            console.error(`[DELETE ERROR] Bot doesn't have permission to delete messages in chat ${ctx.chat.id}`)
           }
-        } else {
-          console.error(`[MUTE ERROR] Bot doesn't have permission to delete messages in chat ${ctx.chat.id}`)
         }
 
         // Send success notification only if at least one action succeeded
