@@ -555,7 +555,7 @@ module.exports = async (ctx) => {
         }
 
         // Delete the message based on action type
-        if (action.action === 'mute_and_delete' || action.action === 'delete_only') {
+        if (action.action === 'mute_and_delete' || action.action === 'delete_only' || action.action === 'warn_and_restrict') {
           if (canDeleteMessages) {
             try {
               await ctx.deleteMessage()
