@@ -2,7 +2,6 @@ const humanizeDuration = require('humanize-duration')
 const dateFormat = require('dateformat')
 const { userName } = require('../utils')
 
-
 module.exports = async (ctx) => {
   if (['supergroup', 'group'].includes(ctx.chat.type)) {
     const groupAvrg = ctx.group.info.stats.textTotal / ctx.group.info.stats.messagesCount
@@ -26,21 +25,20 @@ module.exports = async (ctx) => {
       messages: ctx.group.members[ctx.from.id].stats.messagesCount,
       active,
       flood,
-      createdAt: dateFormat(ctx.group.members[ctx.from.id].createdAt, 'dd.mm.yyyy H:MM:ss'),
+      createdAt: dateFormat(ctx.group.members[ctx.from.id].createdAt, 'dd.mm.yyyy H:MM:ss')
     }), {
-      parse_mode: 'HTML',
+      parse_mode: 'HTML'
     }).catch(() => {})
 
     let gMessage
 
     if (pMessage) {
       gMessage = await ctx.replyWithHTML(ctx.i18n.t('cmd.my_stats.send_pm'), {
-        reply_to_message_id: ctx.message.message_id,
+        reply_to_message_id: ctx.message.message_id
       })
-    }
-    else {
+    } else {
       gMessage = await ctx.replyWithHTML(ctx.i18n.t('cmd.my_stats.error.blocked'), {
-        reply_to_message_id: ctx.message.message_id,
+        reply_to_message_id: ctx.message.message_id
       })
     }
 

@@ -5,8 +5,8 @@ module.exports = async (ctx) => {
 
   ctx.replyWithDocument({
     source: file,
-    filename: `group.settings.${ctx.chat.id}.json`,
+    filename: `group.settings.${ctx.chat.id}.json`
   }, {
-    reply_to_message_id: ctx.message.message_id,
+    reply_to_message_id: ctx.message.message_id
   })
 }

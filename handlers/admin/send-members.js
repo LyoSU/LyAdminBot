@@ -32,20 +32,20 @@ module.exports = async (ctx) => {
               h: () => 'h',
               m: () => 'm',
               s: () => 's',
-              ms: () => 'ms',
-            },
+              ms: () => 'ms'
+            }
           },
-          largest: 2,
+          largest: 2
         }
       ),
       active,
-      flood,
+      flood
     })
 
     if (index > maxUser * messages || members.length === index + 1) {
       messages++
       ctx.telegram.sendMessage(ctx.from.id, memberList, {
-        parse_mode: 'HTML',
+        parse_mode: 'HTML'
       })
       memberList = ''
     }

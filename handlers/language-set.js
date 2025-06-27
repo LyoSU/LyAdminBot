@@ -19,19 +19,16 @@ module.exports = async (ctx) => {
         if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
           await ctx.answerCbQuery(locales[ctx.match[1]])
           ctx.group.info.settings.locale = ctx.match[1]
-        }
-        else {
+        } else {
           await ctx.answerCbQuery()
         }
-      }
-      else {
+      } else {
         await ctx.answerCbQuery(locales[ctx.match[1]])
 
         ctx.session.userInfo.locale = ctx.match[1]
       }
     }
-  }
-  else {
+  } else {
     const button = []
 
     Object.keys(locales).map((key) => {

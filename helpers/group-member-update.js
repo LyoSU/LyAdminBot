@@ -4,10 +4,9 @@ module.exports = (ctx) => new Promise(async (resolve, reject) => {
   if (!ctx.group.members[ctx.from.id]) {
     groupMember = await ctx.db.GroupMember.findOne({
       group: ctx.group.info.id,
-      telegram_id: ctx.from.id,
+      telegram_id: ctx.from.id
     })
-  }
-  else groupMember = ctx.group.members[ctx.from.id]
+  } else groupMember = ctx.group.members[ctx.from.id]
 
   if (!groupMember) {
     groupMember = new ctx.db.GroupMember()

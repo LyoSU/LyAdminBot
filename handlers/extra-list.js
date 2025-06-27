@@ -11,6 +11,6 @@ module.exports = async (ctx) => {
   }
 
   await ctx.replyWithHTML(result, {
-    reply_to_message_id: ctx.message.message_id,
+    reply_to_message_id: ctx.message.message_id
   })
 }

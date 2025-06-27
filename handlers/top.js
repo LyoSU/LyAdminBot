@@ -1,6 +1,5 @@
 const { userName } = require('../utils')
 
-
 module.exports = async (ctx) => {
   let topMembers = []
 
@@ -11,7 +10,7 @@ module.exports = async (ctx) => {
 
     topMembers.push({
       telegram_id: member.telegram_id,
-      active,
+      active
     })
   })
 
@@ -30,9 +29,9 @@ module.exports = async (ctx) => {
 
     await ctx.replyWithHTML(ctx.i18n.t('cmd.top.info', {
       chatName: ctx.chat.title,
-      top,
+      top
     }), {
-      reply_to_message_id: ctx.message.message_id,
+      reply_to_message_id: ctx.message.message_id
     })
   }
 }

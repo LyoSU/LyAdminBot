@@ -15,8 +15,7 @@ module.exports = async (ctx) => {
 
       delete ctx.group.info.settings.welcome.texts[groupText]
       ctx.replyWithHTML(ctx.i18n.t('cmd.text.pull'))
-    }
-    else {
+    } else {
       ctx.replyWithHTML(ctx.i18n.t('cmd.text.error'))
     }
   }

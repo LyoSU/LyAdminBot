@@ -58,7 +58,7 @@ module.exports = async (ctx) => {
 
             if (deleteStickerFromSet) {
               result = ctx.i18n.t('sticker.delete.suc', {
-                link: `${stickerLinkPrefix}${ctx.group.info.stickerSet.name}`,
+                link: `${stickerLinkPrefix}${ctx.group.info.stickerSet.name}`
               })
             }
           } else {
@@ -103,8 +103,7 @@ module.exports = async (ctx) => {
                 ctx.group.info.stickerSet.name = packName
                 ctx.group.info.stickerSet.create = true
               }
-            }
-            else {
+            } else {
               stickerAdd = await ctx.telegram.addStickerToSet(ctx.from.id, ctx.group.info.stickerSet.name, {
                 png_sticker: { source: stickerPNG },
                 emojis
