@@ -149,6 +149,7 @@ bot.use(async (ctx, next) => {
           const timeLeft = 24 - ((new Date() - banDate) / (1000 * 60 * 60))
           console.log(`[GLOBAL BAN] User ${ctx.from.first_name} (ID: ${ctx.from.id}) is globally banned by AI. Reason: ${ctx.session.userInfo.globalBanReason}. Time left: ${timeLeft.toFixed(1)}h. Banning in current group.`)
           try {
+            await ctx.telegram.deleteMessage(ctx.chat.id, ctx.message.message_id)
             await ctx.telegram.kickChatMember(ctx.chat.id, ctx.from.id)
             await ctx.replyWithHTML(ctx.i18n.t('global_ban.kicked', {
               name: ctx.from.first_name,
