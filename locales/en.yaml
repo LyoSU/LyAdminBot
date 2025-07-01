@@ -1,43 +1,70 @@
 private:
   start: |
-    Hello, <b>${name}</b>!
-    I can help you manage a group
-    Add me to the group.
+    Hello, <b>${name}</b>! 👋
 
-    /help - help
+    I'm <b>LyAdminBot</b> - I'll help you administer your group.
+
+    🔧 <b>My capabilities:</b>
+    • Member moderation (bans, kicks)
+    • Welcome settings for new members
+    • AI-powered spam protection
+    • Member activity statistics
+    • Extra commands for quick responses
+    • Group sticker pack management
+
+    📝 Use /help to view all commands
 
     <b>👨🏻‍💻 Developer's blog (Russian):</b> @LyBlog
   btn_add: Add to the group
 cmd:
   help: |
-    I can help you to manage the group
+    🤖 <b>LyAdminBot</b> - bot for group administration
 
-    <b>The list of commands:</b>
-    /ping - check bot status
-    /banan - ban
-    /kick - kick
-    /del - delete a message
-    /top - get a list of participants sorted by activity
-    /top_banan - get a list of participants sorted by number of complaints
-    /mystats - my statistics in the chat
-    /extras - list of extras in the chat
+    📋 <b>BASIC COMMANDS:</b>
+    /ping - check bot status and show statistics
+    /mystats - your personal statistics in the group
+    /top - top most active group members
+    /top_banan - top members by ban time 🍌
+    /extras - list of all extra commands in the group
+    /lang - change interface language
 
-    /lang - change language
+    ⚖️ <b>MODERATION:</b>
+    /banan - issue a ban (admins only)
+    /kick - remove member from group (admins only)
+    /del - delete message (admins only)
+    /quote - create quote (requires @QuotLyBot)
 
-    <code>!welcome</code> - to enable/disable greeting
-    <code>!gif</code> - to add/remove gif in the greetings list
-    <code>!text</code> - to add/remove text in the greetings list
-    <code>!extra arg</code> - create an extra named \#arg
-    <code>!extra-max 3</code> - set the maximum number of extra in a message
-    <code>!s 👍</code> - save stickers/images to sticker pack
+    🎉 <b>WELCOME SETTINGS (admins only):</b>
+    <code>!welcome</code> - enable/disable new member greetings
+    <code>!gif</code> - add/remove GIF in reply to message
+    <code>!text</code> - add/remove text in reply to message
+    <code>!gif-reset</code> - clear all greeting GIFs
+    <code>!text-reset</code> - clear all greeting texts
 
-    <code>!json</code> - send settings
+    🔧 <b>EXTRA COMMANDS (admins only):</b>
+    <code>!extra name</code> - create extra command #name
+    <code>!extra-max 5</code> - maximum extra commands in one message
 
-    <code>!text-reset</code> - to reset all greeting texts
-    <code>!gif-reset</code> - to reset all greeting gifs
-    <code>!reset</code> - to reset group settings
+    🛡️ <b>SPAM PROTECTION (admins only):</b>
+    <code>!spam</code> - show spam filter settings
+    <code>!spam on/off</code> - enable/disable AI checking
+    <code>!spam globalban on/off</code> - global ban for spammers
+    <code>!cas</code> - enable/disable CAS protection
+    <code>!banChannel</code> - ban messages from channels
 
-    <b>👨🏻‍💻 Developer's blog (Russian):</b> @LyBlog
+    ⚙️ <b>SETTINGS (admins only):</b>
+    <code>!json</code> - export group settings
+    <code>!reset</code> - reset all group settings
+    <code>!members</code> - get member list in PM
+
+    💡 <b>ADDITIONAL FEATURES:</b>
+    • Automatic deletion of messages in certain languages
+    • Activity statistics tracking for members
+    • 🍌 ban system with automatic time increase
+    • Group sticker pack support
+
+    <b>👨🏻‍💻 Developer:</b> @LyBlog
+    <b>📂 GitHub:</b> github.com/LyoSU/LyAdminBot
     <b>GitHub:</b> github.com/LyoSU/LyAdminBot
   my_stats:
     send_pm: Stats sent in a PM
