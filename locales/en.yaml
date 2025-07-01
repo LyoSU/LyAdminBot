@@ -32,7 +32,6 @@ cmd:
     /banan - issue a ban (admins only)
     /kick - remove member from group (admins only)
     /del - delete message (admins only)
-    /quote - create quote (requires @QuotLyBot)
 
     🎉 <b>WELCOME SETTINGS (admins only):</b>
     <code>!welcome</code> - enable/disable new member greetings
