@@ -241,7 +241,12 @@ ${text}
 Context information:
 ${contextInfo}`
 
-    console.log(`[SPAM CHECK] Analyzing message: "${text.substring(0, 100)}${text.length > 100 ? '...' : ''}"`)
+    const shortText = text.substring(0, 100)
+    const displayText = text.length > 100 ? `${shortText}...` : shortText
+    const userId = context.userId || 'Unknown'
+    const userName = context.userName || 'Unknown User'
+
+    console.log(`[OPENAI SPAM] 🔍 Analyzing message from ${userName} (ID: ${userId}): "${displayText}"`)
 
     const response = await openai.chat.completions.create({
       model: 'google/gemini-2.5-flash',
@@ -262,19 +267,26 @@ ${contextInfo}`
       const jsonStr = jsonMatch ? jsonMatch[0] : '{}'
       const result = JSON.parse(jsonStr)
 
-      console.log(`[SPAM CHECK] Result: ${result.isSpam ? 'SPAM' : 'NOT SPAM'} - Reason: ${result.reason || 'Unspecified reason'} - Confidence: ${result.confidence || 'N/A'}%`)
+      const spamStatus = result.isSpam ? '🚨 SPAM DETECTED' : '✅ CLEAN MESSAGE'
+      const confidence = result.confidence || 0
+      const reason = result.reason || 'Unspecified reason'
+
+      console.log(`[OPENAI SPAM] ${spamStatus} for ${userName} (ID: ${userId})`)
+      console.log(`[OPENAI SPAM] 📊 Confidence: ${confidence}% | 📝 Reason: ${reason}`)
 
       return {
         isSpam: result.isSpam,
-        reason: result.reason || 'Unspecified reason',
-        confidence: result.confidence || 0
+        reason: reason,
+        confidence: confidence
       }
     } catch (parseError) {
-      console.error('Failed to parse JSON response:', parseError)
+      console.error(`[OPENAI SPAM] ❌ Failed to parse AI response for ${userName} (ID: ${userId}):`, parseError)
       return { isSpam: false }
     }
   } catch (error) {
-    console.error('OpenAI chat completion error:', error)
+    const userId = context.userId || 'Unknown'
+    const userName = context.userName || 'Unknown User'
+    console.error(`[OPENAI SPAM] ❌ API error for ${userName} (ID: ${userId}):`, error.message)
     return { isSpam: false }
   }
 }
@@ -332,7 +344,7 @@ const getDetailedUserInfo = async (telegram, userId) => {
     return chatInfo
   } catch (error) {
     // User might have privacy settings that prevent getting their info
-    console.log(`[SPAM CHECK] Could not get detailed info for user ${userId}: ${error.message}`)
+    console.log(`[USER INFO] ⚠️ Could not get detailed info for user ID ${userId}: ${error.message}`)
     return null
   }
 }
@@ -409,7 +421,7 @@ module.exports = async (ctx) => {
 
   // Check if OpenAI spam check is enabled for this group
   if (ctx.group && ctx.group.info && ctx.group.info.settings && ctx.group.info.settings.openaiSpamCheck && ctx.group.info.settings.openaiSpamCheck.enabled === false) {
-    console.log(`[SPAM CHECK] OpenAI spam check is disabled for group "${ctx.chat.title}"`)
+    console.log(`[OPENAI SPAM] ⚙️ OpenAI spam check is disabled for group "${ctx.chat.title}"`)
     return false // Continue processing, but skip OpenAI check
   }
 
@@ -420,7 +432,7 @@ module.exports = async (ctx) => {
 
   // Skip if user ID is Telegram service notifications (777000)
   if (ctx.from && ctx.from.id === 777000) {
-    console.log('[SPAM CHECK] Skipping Telegram service message (ID 777000)')
+    console.log('[OPENAI SPAM] ⏭️ Skipping Telegram service message (ID 777000)')
     return
   }
 
@@ -438,7 +450,7 @@ module.exports = async (ctx) => {
   // Skip if user is in trusted whitelist
   const spamSettings = ctx.group && ctx.group.info && ctx.group.info.settings && ctx.group.info.settings.openaiSpamCheck
   if (spamSettings && isTrustedUser(ctx.from.id, spamSettings)) {
-    console.log(`[SPAM CHECK] Skipping trusted user ${userName(ctx.from)} (ID: ${ctx.from.id})`)
+    console.log(`[OPENAI SPAM] ⭐ Skipping trusted user ${userName(ctx.from)} (ID: ${ctx.from.id})`)
     return
   }
 
@@ -451,7 +463,8 @@ module.exports = async (ctx) => {
     // Check message for spam
     if (ctx.message && (ctx.message.text || ctx.message.caption)) {
       const messageText = ctx.message.text || ctx.message.caption
-      console.log(`[SPAM CHECK] Checking message from ${userName(ctx.from)} (messages: ${ctx.group.members[ctx.from.id].stats.messagesCount})`)
+      const messageCount = ctx.group.members[ctx.from.id].stats.messagesCount
+      console.log(`[OPENAI SPAM] 🔍 Checking new user ${userName(ctx.from)} (ID: ${ctx.from.id}) with ${messageCount} messages`)
 
       // Get detailed user information
       const detailedUserInfo = await getDetailedUserInfo(ctx.telegram, ctx.from.id)
@@ -477,6 +490,7 @@ module.exports = async (ctx) => {
 
       // Build context object
       const context = {
+        userId: ctx.from.id, // Додаємо userId для логів
         groupName: ctx.chat.title,
         userName: userName(ctx.from),
         userDetails: userDetails,
@@ -498,10 +512,18 @@ module.exports = async (ctx) => {
       const confidenceThreshold = calculateDynamicThreshold(context, ctx.group.info.settings)
       const action = determineAction(result, context, confidenceThreshold)
 
+      console.log(`[OPENAI SPAM] 🎯 Threshold: ${confidenceThreshold}% | 🎬 Action: ${action.action}`)
+
       if (action.action !== 'none') {
-        console.log(`[SPAM ACTION] User ${userName(ctx.from)} (ID: ${ctx.from.id}) - Action: ${action.action}`)
-        console.log(`[SPAM ACTION] Message: "${messageText.substring(0, 150)}${messageText.length > 150 ? '...' : ''}"`)
-        console.log(`[SPAM ACTION] Reason: ${action.reason} (Confidence: ${result.confidence || 'N/A'}%)`)
+        const userName = context.userName
+        const userId = context.userId
+        const shortMessage = messageText.substring(0, 150)
+        const displayMessage = messageText.length > 150 ? `${shortMessage}...` : shortMessage
+
+        console.log(`[SPAM ACTION] 🚨 Taking action against ${userName} (ID: ${userId})`)
+        console.log(`[SPAM ACTION] 🔨 Action: ${action.action} | ⏱️ Duration: ${action.duration || 'N/A'}s`)
+        console.log(`[SPAM ACTION] 💬 Message: "${displayMessage}"`)
+        console.log(`[SPAM ACTION] 📝 Reason: ${action.reason} | 📊 Confidence: ${result.confidence || 'N/A'}%`)
 
         // Get mute duration from action or default
         const muteDuration = action.duration || (ctx.from.is_premium ? 3600 : 86400)
@@ -515,7 +537,7 @@ module.exports = async (ctx) => {
           const botMember = await ctx.telegram.getChatMember(ctx.chat.id, ctx.botInfo.id)
           canRestrictMembers = botMember.can_restrict_members
         } catch (error) {
-          console.error(`[PERMISSION CHECK] Failed to check bot permissions: ${error.message}`)
+          console.error(`[PERMISSIONS] ❌ Failed to check bot restrict permissions: ${error.message}`)
         }
 
         // Handle different action types
@@ -535,12 +557,13 @@ module.exports = async (ctx) => {
                 }
               )
               muteSuccess = true
+              console.log(`[SPAM ACTION] ✅ Successfully muted ${userName} for ${muteDuration}s`)
             } catch (error) {
-              console.error(`[MUTE ERROR] Failed to mute user: ${error.message}`)
+              console.error(`[SPAM ACTION] ❌ Failed to mute ${userName} (ID: ${userId}): ${error.message}`)
               // Don't send error notification to avoid spam
             }
           } else {
-            console.error(`[MUTE ERROR] Bot doesn't have permission to restrict members in chat ${ctx.chat.id}`)
+            console.error(`[SPAM ACTION] ❌ Bot lacks permission to restrict members in "${ctx.chat.title}"`)
           }
         }
 
@@ -551,7 +574,7 @@ module.exports = async (ctx) => {
           canDeleteMessages = botMember.can_delete_messages ||
                              (ctx.message.date && (Date.now() / 1000 - ctx.message.date) < 2 * 24 * 60 * 60) // Can delete messages < 48h old
         } catch (error) {
-          console.error(`[PERMISSION CHECK] Failed to check delete permissions: ${error.message}`)
+          console.error(`[PERMISSIONS] ❌ Failed to check delete permissions: ${error.message}`)
         }
 
         // Delete the message based on action type
@@ -560,12 +583,13 @@ module.exports = async (ctx) => {
             try {
               await ctx.deleteMessage()
               deleteSuccess = true
+              console.log(`[SPAM ACTION] ✅ Successfully deleted message from ${userName}`)
             } catch (error) {
-              console.error(`[DELETE ERROR] Failed to delete message: ${error.message}`)
+              console.error(`[SPAM ACTION] ❌ Failed to delete message from ${userName} (ID: ${userId}): ${error.message}`)
               // Don't send error notification to avoid spam
             }
           } else {
-            console.error(`[DELETE ERROR] Bot doesn't have permission to delete messages in chat ${ctx.chat.id}`)
+            console.error(`[SPAM ACTION] ❌ Bot lacks permission to delete messages in "${ctx.chat.title}"`)
           }
         }
 
@@ -590,10 +614,10 @@ module.exports = async (ctx) => {
                 ctx.session.userInfo.isGlobalBanned = true
                 ctx.session.userInfo.globalBanReason = result.reason
                 ctx.session.userInfo.globalBanDate = new Date()
-                await ctx.session.userInfo.save().catch(err => console.error('[SPAM CHECK ERROR] Failed to save global ban status:', err))
-                console.log(`[GLOBAL BAN] User ${userName(ctx.from)} (ID: ${ctx.from.id}) globally banned by AI. Reason: ${result.reason}`)
+                await ctx.session.userInfo.save().catch(err => console.error('[GLOBAL BAN] ❌ Failed to save global ban status:', err))
+                console.log(`[GLOBAL BAN] 🌐 User ${userName} (ID: ${userId}) globally banned by AI. Reason: ${result.reason}`)
               } else {
-                console.log(`[SPAM CHECK] Global ban skipped for group "${ctx.chat.title}" - globalBan setting is disabled`)
+                console.log(`[GLOBAL BAN] ⚙️ Global ban skipped for group "${ctx.chat.title}" - disabled in settings`)
               }
             }
           } else if (muteSuccess && !deleteSuccess) {
@@ -603,14 +627,15 @@ module.exports = async (ctx) => {
           }
 
           const notificationMsg = await ctx.replyWithHTML(statusMessage)
-            .catch(error => console.error(`[MUTE ERROR] Failed to send notification: ${error.message}`))
+            .catch(error => console.error(`[NOTIFICATION] ❌ Failed to send notification: ${error.message}`))
 
           // Schedule notification message deletion
           if (notificationMsg) {
+            console.log(`[NOTIFICATION] 📨 Sent spam action notification, will auto-delete in 25s`)
             setTimeout(async () => {
               await ctx.telegram.deleteMessage(ctx.chat.id, notificationMsg.message_id)
-                .catch(error => console.error(`[MUTE ERROR] Failed to delete notification after timeout: ${error.message}`))
-              console.log(`[MUTE] Auto-deleted notification message after timeout`)
+                .catch(error => console.error(`[NOTIFICATION] ❌ Failed to delete notification after timeout: ${error.message}`))
+              console.log(`[NOTIFICATION] 🗑️ Auto-deleted notification message`)
             }, 25 * 1000) // 25 seconds
           }
         }
