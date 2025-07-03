@@ -103,18 +103,22 @@ bot.use(session({
 bot.use(i18n.middleware())
 
 bot.use(async (ctx, next) => {
-  // if (!ctx.session) console.error(ctx)
+  // Skip if no session or no user (e.g., channel posts, service messages)
+  if (!ctx.session || !ctx.from) {
+    return next(ctx)
+  }
+
   ctx.session.userInfo = await updateUser(ctx)
   if (ctx.session.userInfo.locale) ctx.i18n.locale(ctx.session.userInfo.locale)
 
-  if (ctx.group) {
+  if (ctx.group && ctx.from) {
     ctx.group.info = await updateGroup(ctx)
     if (!ctx.group.members) ctx.group.members = []
     ctx.group.members[ctx.from.id] = await updateGroupMember(ctx)
     if (ctx.group.info.settings.locale) ctx.i18n.locale(ctx.group.info.settings.locale)
   }
 
-  if (ctx.message) {
+  if (ctx.message && ctx.from) {
     let isSpam = false
 
     // Function to check if global ban has expired (24 hours)
@@ -205,7 +209,7 @@ bot.use(async (ctx, next) => {
     )
   }
 
-  if (ctx.group && ctx.group.members && ctx.group.members[ctx.from.id] && !ctx.group.members[ctx.from.id].isSaving) {
+  if (ctx.group && ctx.group.members && ctx.from && ctx.group.members[ctx.from.id] && !ctx.group.members[ctx.from.id].isSaving) {
     ctx.group.members[ctx.from.id].isSaving = true
     savePromises.push(
       ctx.group.members[ctx.from.id].save()
