@@ -436,8 +436,8 @@ const formatDetailedUserInfo = (userInfo) => {
  * Middleware for checking messages from new users for spam
  */
 module.exports = async (ctx) => {
-  // Skip if not in a group chat
-  if (!ctx.chat || !['supergroup', 'group'].includes(ctx.chat.type)) {
+  // Skip if not in a group chat or no user
+  if (!ctx.chat || !['supergroup', 'group'].includes(ctx.chat.type) || !ctx.from) {
     return
   }
 
@@ -453,7 +453,7 @@ module.exports = async (ctx) => {
   }
 
   // Skip if user ID is Telegram service notifications (777000)
-  if (ctx.from && ctx.from.id === 777000) {
+  if (ctx.from.id === 777000) {
     console.log('[OPENAI SPAM] ⏭️ Skipping Telegram service message (ID 777000)')
     return
   }
@@ -465,7 +465,7 @@ module.exports = async (ctx) => {
   }
 
   // Skip if message is from an anonymous admin (bot acting on behalf of a chat)
-  if (ctx.from && ctx.from.is_bot && ctx.sender_chat) {
+  if (ctx.from.is_bot && ctx.sender_chat) {
     return
   }
 
