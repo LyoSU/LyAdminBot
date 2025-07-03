@@ -552,12 +552,12 @@ module.exports = async (ctx) => {
       }
 
       if (action.action !== 'none') {
-        const userName = context.userName
+        const userDisplayName = context.userName
         const userId = context.userId
         const shortMessage = messageText.substring(0, 150)
         const displayMessage = messageText.length > 150 ? `${shortMessage}...` : shortMessage
 
-        console.log(`[SPAM ACTION] 🚨 Taking action against ${userName} (ID: ${userId})`)
+        console.log(`[SPAM ACTION] 🚨 Taking action against ${userDisplayName} (ID: ${userId})`)
         console.log(`[SPAM ACTION] 🔨 Action: ${action.action} | ⏱️ Duration: ${action.duration || 'N/A'}s`)
         console.log(`[SPAM ACTION] 💬 Message: "${displayMessage}"`)
         console.log(`[SPAM ACTION] 📝 Reason: ${action.reason} | 📊 Confidence: ${result.confidence || 'N/A'}%`)
@@ -594,9 +594,9 @@ module.exports = async (ctx) => {
                 }
               )
               muteSuccess = true
-              console.log(`[SPAM ACTION] ✅ Successfully muted ${userName} for ${muteDuration}s`)
+              console.log(`[SPAM ACTION] ✅ Successfully muted ${userDisplayName} for ${muteDuration}s`)
             } catch (error) {
-              console.error(`[SPAM ACTION] ❌ Failed to mute ${userName} (ID: ${userId}): ${error.message}`)
+              console.error(`[SPAM ACTION] ❌ Failed to mute ${userDisplayName} (ID: ${userId}): ${error.message}`)
               // Don't send error notification to avoid spam
             }
           } else {
@@ -620,9 +620,9 @@ module.exports = async (ctx) => {
             try {
               await ctx.deleteMessage()
               deleteSuccess = true
-              console.log(`[SPAM ACTION] ✅ Successfully deleted message from ${userName}`)
+              console.log(`[SPAM ACTION] ✅ Successfully deleted message from ${userDisplayName}`)
             } catch (error) {
-              console.error(`[SPAM ACTION] ❌ Failed to delete message from ${userName} (ID: ${userId}): ${error.message}`)
+              console.error(`[SPAM ACTION] ❌ Failed to delete message from ${userDisplayName} (ID: ${userId}): ${error.message}`)
               // Don't send error notification to avoid spam
             }
           } else {
@@ -652,7 +652,7 @@ module.exports = async (ctx) => {
                 ctx.session.userInfo.globalBanReason = result.reason
                 ctx.session.userInfo.globalBanDate = new Date()
                 await ctx.session.userInfo.save().catch(err => console.error('[GLOBAL BAN] ❌ Failed to save global ban status:', err))
-                console.log(`[GLOBAL BAN] 🌐 User ${userName} (ID: ${userId}) globally banned by AI. Reason: ${result.reason}`)
+                console.log(`[GLOBAL BAN] 🌐 User ${userDisplayName} (ID: ${userId}) globally banned by AI. Reason: ${result.reason}`)
               } else {
                 console.log(`[GLOBAL BAN] ⚙️ Global ban skipped for group "${ctx.chat.title}" - disabled in settings`)
               }
