@@ -46,7 +46,12 @@ const calculateDynamicThreshold = (context, groupSettings) => {
 
   // Reduce threshold for highly suspicious indicators
   if (context.isNewAccount && context.messageCount <= 2) {
-    baseThreshold -= 10
+    baseThreshold -= 20 // Збільшуємо зниження для нових акаунтів
+  }
+
+  // Додаткові зниження для підозрілих індикаторів
+  if (context.messageCount <= 1) {
+    baseThreshold -= 15 // Ще більше знижуємо для першого повідомлення
   }
 
   // Increase threshold for trusted indicators
@@ -56,7 +61,7 @@ const calculateDynamicThreshold = (context, groupSettings) => {
   if (context.messageCount > 10) baseThreshold += 10
 
   // Ensure threshold stays within reasonable bounds
-  return Math.max(50, Math.min(95, baseThreshold))
+  return Math.max(40, Math.min(95, baseThreshold)) // Знижуємо мінімальний поріг до 40%
 }
 
 /**
@@ -93,6 +98,15 @@ const determineAction = (result, context, threshold) => {
 
   // Medium confidence - delete message only, no mute
   if (confidence >= threshold) {
+    // Для нових користувачів з підозрілими повідомленнями - більш агресивні дії
+    if (context.messageCount <= 2 && context.isNewAccount) {
+      return {
+        action: 'warn_and_restrict',
+        duration: context.isPremium ? 1800 : 7200, // 30min for premium, 2h for regular
+        reason: result.reason
+      }
+    }
+
     return {
       action: 'delete_only',
       reason: result.reason
@@ -220,7 +234,7 @@ Rate your confidence from 0-100. Use confidence levels wisely:
 - 90-100: Only for obvious spam with clear malicious intent
 - 80-89: Strong spam indicators but not completely certain
 - 70-79: Some spam indicators present
-- 60-69: Borderline cases
+- 60-69: Borderline cases - but be more aggressive with new users
 - Below 60: Probably legitimate
 
 Respond ONLY with this exact JSON format:
@@ -310,9 +324,17 @@ const extractLinks = (text) => {
  * @returns {Boolean} - True if likely a new account
  */
 const isLikelyNewAccount = (userId) => {
-  // This is a very rough heuristic and may not be accurate
-  // The specific threshold would need to be adjusted based on observation
-  return userId > 6000000000 // Example threshold, adjust as needed
+  // Більш точна евристика для визначення нових акаунтів
+  // ID понад 7 мільярдів - це дуже нові акаунти (2024+)
+  if (userId > 7000000000) return true
+
+  // ID понад 6 мільярдів - це нові акаунти (2023+)
+  if (userId > 6000000000) return true
+
+  // ID понад 5 мільярдів - це відносно нові акаунти (2022+)
+  if (userId > 5000000000) return true
+
+  return false
 }
 
 /**
@@ -512,7 +534,22 @@ module.exports = async (ctx) => {
       const confidenceThreshold = calculateDynamicThreshold(context, ctx.group.info.settings)
       const action = determineAction(result, context, confidenceThreshold)
 
-      console.log(`[OPENAI SPAM] 🎯 Threshold: ${confidenceThreshold}% | 🎬 Action: ${action.action}`)
+      // Додаткове логування для діагностики
+      const baseThreshold = (ctx.group && ctx.group.info && ctx.group.info.settings && ctx.group.info.settings.openaiSpamCheck && ctx.group.info.settings.openaiSpamCheck.confidenceThreshold) || 70
+      console.log(`[OPENAI SPAM] 🎯 Base threshold: ${baseThreshold}% | Adjusted: ${confidenceThreshold}% | 🎬 Action: ${action.action}`)
+
+      // Логуємо причини зміни порогу
+      if (context.isNewAccount && context.messageCount <= 2) {
+        console.log(`[OPENAI SPAM] 📉 Threshold reduced: New account with ${context.messageCount} messages`)
+      }
+      if (context.messageCount <= 1) {
+        console.log(`[OPENAI SPAM] 📉 Threshold reduced: First message from user`)
+      }
+
+      // Логуємо додаткову інформацію про користувача
+      if (context.messageCount <= 3) {
+        console.log(`[OPENAI SPAM] 📊 User analysis: New user (${context.messageCount} messages), Premium: ${context.isPremium}, Has username: ${!!context.username}`)
+      }
 
       if (action.action !== 'none') {
         const userName = context.userName
