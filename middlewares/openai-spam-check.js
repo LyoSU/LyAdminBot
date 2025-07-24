@@ -441,6 +441,10 @@ module.exports = async (ctx) => {
     return
   }
 
+  // Get the actual sender ID - prioritize sender_chat for channels
+  const senderId = (ctx.message && ctx.message.sender_chat && ctx.message.sender_chat.id) || ctx.from.id
+  const senderInfo = (ctx.message && ctx.message.sender_chat) || ctx.from
+
   // Check if OpenAI spam check is enabled for this group
   if (ctx.group && ctx.group.info && ctx.group.info.settings && ctx.group.info.settings.openaiSpamCheck && ctx.group.info.settings.openaiSpamCheck.enabled === false) {
     console.log(`[OPENAI SPAM] ⚙️ OpenAI spam check is disabled for group "${ctx.chat.title}"`)
@@ -453,14 +457,8 @@ module.exports = async (ctx) => {
   }
 
   // Skip if user ID is Telegram service notifications (777000)
-  if (ctx.from.id === 777000) {
+  if (senderId === 777000) {
     console.log('[OPENAI SPAM] ⏭️ Skipping Telegram service message (ID 777000)')
-    return
-  }
-
-  // Skip if user is an administrator
-  const chatMember = await ctx.telegram.getChatMember(ctx.chat.id, ctx.from.id).catch(() => null)
-  if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
     return
   }
 
@@ -469,27 +467,33 @@ module.exports = async (ctx) => {
     return
   }
 
+  // Skip if user is an administrator
+  const chatMember = await ctx.telegram.getChatMember(ctx.chat.id, senderId).catch(() => null)
+  if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
+    return
+  }
+
   // Skip if user is in trusted whitelist
   const spamSettings = ctx.group && ctx.group.info && ctx.group.info.settings && ctx.group.info.settings.openaiSpamCheck
-  if (spamSettings && isTrustedUser(ctx.from.id, spamSettings)) {
-    console.log(`[OPENAI SPAM] ⭐ Skipping trusted user ${userName(ctx.from)} (ID: ${ctx.from.id})`)
+  if (spamSettings && isTrustedUser(senderId, spamSettings)) {
+    console.log(`[OPENAI SPAM] ⭐ Skipping trusted user ${userName(senderInfo)} (ID: ${senderId})`)
     return
   }
 
   // Check number of messages from the user
   if (ctx.group &&
       ctx.group.members &&
-      ctx.group.members[ctx.from.id] &&
-      ctx.group.members[ctx.from.id].stats &&
-      ctx.group.members[ctx.from.id].stats.messagesCount <= 5) {
+      ctx.group.members[senderId] &&
+      ctx.group.members[senderId].stats &&
+      ctx.group.members[senderId].stats.messagesCount <= 5) {
     // Check message for spam
     if (ctx.message && (ctx.message.text || ctx.message.caption)) {
       const messageText = ctx.message.text || ctx.message.caption
-      const messageCount = ctx.group.members[ctx.from.id].stats.messagesCount
-      console.log(`[OPENAI SPAM] 🔍 Checking new user ${userName(ctx.from)} (ID: ${ctx.from.id}) with ${messageCount} messages`)
+      const messageCount = ctx.group.members[senderId].stats.messagesCount
+      console.log(`[OPENAI SPAM] 🔍 Checking new user ${userName(senderInfo)} (ID: ${senderId}) with ${messageCount} messages`)
 
       // Get detailed user information
-      const detailedUserInfo = await getDetailedUserInfo(ctx.telegram, ctx.from.id)
+      const detailedUserInfo = await getDetailedUserInfo(ctx.telegram, senderId)
       const extractedUserInfo = extractUserAnalysisInfo(detailedUserInfo)
       const detailedUserInfoString = formatDetailedUserInfo(extractedUserInfo)
 
@@ -505,27 +509,27 @@ module.exports = async (ctx) => {
       const links = extractLinks(messageText)
 
       // Check if likely a new account
-      const isNewAccount = isLikelyNewAccount(ctx.from.id)
+      const isNewAccount = isLikelyNewAccount(senderId)
 
       // Format user details
-      const userDetails = formatUserDetails(ctx.from)
+      const userDetails = formatUserDetails(senderInfo)
 
       // Build context object
       const context = {
-        userId: ctx.from.id, // Додаємо userId для логів
+        userId: senderId, // Use actual sender ID for logs
         groupName: ctx.chat.title,
-        userName: userName(ctx.from),
+        userName: userName(senderInfo),
         userDetails: userDetails,
         detailedUserInfo: detailedUserInfoString,
-        languageCode: ctx.from.language_code,
-        isPremium: ctx.from.is_premium,
+        languageCode: senderInfo.language_code,
+        isPremium: senderInfo.is_premium,
         isNewAccount: isNewAccount,
-        username: ctx.from.username,
-        messageCount: ctx.group.members[ctx.from.id].stats.messagesCount,
+        username: senderInfo.username,
+        messageCount: ctx.group.members[senderId].stats.messagesCount,
         repliedToMessage: repliedToMessage,
         links: links,
         customRules: (ctx.group && ctx.group.info && ctx.group.info.settings && ctx.group.info.settings.openaiSpamCheck && ctx.group.info.settings.openaiSpamCheck.customRules) || [],
-        messageFrequency: analyzeMessageFrequency(ctx.group.members[ctx.from.id].stats)
+        messageFrequency: analyzeMessageFrequency(ctx.group.members[senderId].stats)
       }
 
       const result = await checkSpam(messageText, context)
@@ -563,7 +567,7 @@ module.exports = async (ctx) => {
         console.log(`[SPAM ACTION] 📝 Reason: ${action.reason} | 📊 Confidence: ${result.confidence || 'N/A'}%`)
 
         // Get mute duration from action or default
-        const muteDuration = action.duration || (ctx.from.is_premium ? 3600 : 86400)
+        const muteDuration = action.duration || (senderInfo.is_premium ? 3600 : 86400)
 
         let muteSuccess = false
         let deleteSuccess = false
@@ -584,7 +588,7 @@ module.exports = async (ctx) => {
             try {
               await ctx.telegram.restrictChatMember(
                 ctx.chat.id,
-                ctx.from.id,
+                senderId,
                 {
                   can_send_messages: false,
                   can_send_media_messages: false,
@@ -635,7 +639,7 @@ module.exports = async (ctx) => {
           let statusMessage = ''
           if (muteSuccess && deleteSuccess) {
             statusMessage = ctx.i18n.t('spam.muted', {
-              name: userName(ctx.from, true),
+              name: userName(senderInfo, true),
               reason: result.reason
             })
             // Set global ban status
@@ -658,9 +662,9 @@ module.exports = async (ctx) => {
               }
             }
           } else if (muteSuccess && !deleteSuccess) {
-            statusMessage = `✅ ${userName(ctx.from, true)} was muted for spam\nReason: ${result.reason}\n⚠️ Could not delete the message`
+            statusMessage = `✅ ${userName(senderInfo, true)} was muted for spam\nReason: ${result.reason}\n⚠️ Could not delete the message`
           } else if (!muteSuccess && deleteSuccess) {
-            statusMessage = `✅ Spam message deleted\n⚠️ Could not mute ${userName(ctx.from, true)}\nReason: ${result.reason}`
+            statusMessage = `✅ Spam message deleted\n⚠️ Could not mute ${userName(senderInfo, true)}\nReason: ${result.reason}`
           }
 
           const notificationMsg = await ctx.replyWithHTML(statusMessage)
