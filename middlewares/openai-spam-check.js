@@ -472,17 +472,6 @@ module.exports = async (ctx) => {
     return
   }
 
-  // Skip if user is an administrator
-  try {
-    const chatMember = await ctx.telegram.getChatMember(ctx.chat.id, senderId)
-    if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
-      return
-    }
-  } catch (error) {
-    console.log(`[OPENAI SPAM] ⚠️ Could not check admin status for user ${senderId}: ${error.message}`)
-    // Continue processing if admin check fails
-  }
-
   // Skip if user is in trusted whitelist
   const spamSettings = ctx.group && ctx.group.info && ctx.group.info.settings && ctx.group.info.settings.openaiSpamCheck
   if (spamSettings && isTrustedUser(senderId, spamSettings)) {
@@ -496,6 +485,17 @@ module.exports = async (ctx) => {
       ctx.group.members[senderId] &&
       ctx.group.members[senderId].stats &&
       ctx.group.members[senderId].stats.messagesCount <= 5) {
+
+    // Skip if user is an administrator (check only for new users to save API calls)
+    try {
+      const chatMember = await ctx.telegram.getChatMember(ctx.chat.id, senderId)
+      if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
+        return
+      }
+    } catch (error) {
+      console.log(`[OPENAI SPAM] ⚠️ Could not check admin status for user ${senderId}: ${error.message}`)
+      // Continue processing if admin check fails
+    }
     // Check message for spam - handle various message types
     if (ctx.message) {
       let messageText = ctx.message.text || ctx.message.caption || ''
