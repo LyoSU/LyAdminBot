@@ -484,8 +484,8 @@ module.exports = async (ctx) => {
       ctx.group.members &&
       ctx.group.members[senderId] &&
       ctx.group.members[senderId].stats &&
-      ctx.group.members[senderId].stats.messagesCount <= 5) {
-
+      ctx.group.members[senderId].stats.messagesCount <= 5
+  ) {
     // Skip if user is an administrator (check only for new users to save API calls)
     try {
       const chatMember = await ctx.telegram.getChatMember(ctx.chat.id, senderId)
