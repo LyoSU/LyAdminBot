@@ -441,6 +441,11 @@ module.exports = async (ctx) => {
     return
   }
 
+  // Skip if no group context or member data
+  if (!ctx.group || !ctx.group.members) {
+    return
+  }
+
   // Get the actual sender ID - prioritize sender_chat for channels
   const senderId = (ctx.message && ctx.message.sender_chat && ctx.message.sender_chat.id) || ctx.from.id
   const senderInfo = (ctx.message && ctx.message.sender_chat) || ctx.from
@@ -468,9 +473,14 @@ module.exports = async (ctx) => {
   }
 
   // Skip if user is an administrator
-  const chatMember = await ctx.telegram.getChatMember(ctx.chat.id, senderId).catch(() => null)
-  if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
-    return
+  try {
+    const chatMember = await ctx.telegram.getChatMember(ctx.chat.id, senderId)
+    if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
+      return
+    }
+  } catch (error) {
+    console.log(`[OPENAI SPAM] ⚠️ Could not check admin status for user ${senderId}: ${error.message}`)
+    // Continue processing if admin check fails
   }
 
   // Skip if user is in trusted whitelist
@@ -486,16 +496,45 @@ module.exports = async (ctx) => {
       ctx.group.members[senderId] &&
       ctx.group.members[senderId].stats &&
       ctx.group.members[senderId].stats.messagesCount <= 5) {
-    // Check message for spam
-    if (ctx.message && (ctx.message.text || ctx.message.caption)) {
-      const messageText = ctx.message.text || ctx.message.caption
+    // Check message for spam - handle various message types
+    if (ctx.message) {
+      let messageText = ctx.message.text || ctx.message.caption || ''
+      // Handle messages without text/caption
+      if (!messageText.trim()) {
+        if (ctx.message.sticker) {
+          messageText = `[Sticker: ${ctx.message.sticker.emoji || 'unknown'}]`
+        } else if (ctx.message.voice) {
+          messageText = '[Voice message]'
+        } else if (ctx.message.video_note) {
+          messageText = '[Video note]'
+        } else if (ctx.message.document) {
+          messageText = `[Document: ${ctx.message.document.file_name || 'unknown'}]`
+        } else if (ctx.message.photo) {
+          messageText = '[Photo]'
+        } else if (ctx.message.video) {
+          messageText = '[Video]'
+        } else if (ctx.message.audio) {
+          messageText = '[Audio]'
+        } else if (ctx.message.animation) {
+          messageText = '[GIF/Animation]'
+        } else {
+          messageText = '[Media message]'
+        }
+      }
       const messageCount = ctx.group.members[senderId].stats.messagesCount
       console.log(`[OPENAI SPAM] 🔍 Checking new user ${userName(senderInfo)} (ID: ${senderId}) with ${messageCount} messages`)
 
       // Get detailed user information
-      const detailedUserInfo = await getDetailedUserInfo(ctx.telegram, senderId)
-      const extractedUserInfo = extractUserAnalysisInfo(detailedUserInfo)
-      const detailedUserInfoString = formatDetailedUserInfo(extractedUserInfo)
+      let detailedUserInfo = null
+      let detailedUserInfoString = ''
+      try {
+        detailedUserInfo = await getDetailedUserInfo(ctx.telegram, senderId)
+        const extractedUserInfo = extractUserAnalysisInfo(detailedUserInfo)
+        detailedUserInfoString = formatDetailedUserInfo(extractedUserInfo)
+      } catch (error) {
+        console.log(`[OPENAI SPAM] ⚠️ Could not get detailed user info for ${senderId}: ${error.message}`)
+        // Continue with basic information
+      }
 
       // Get reply message if exists
       let repliedToMessage = null
@@ -532,10 +571,16 @@ module.exports = async (ctx) => {
         messageFrequency: analyzeMessageFrequency(ctx.group.members[senderId].stats)
       }
 
-      const result = await checkSpam(messageText, context)
+      let result
+      try {
+        result = await checkSpam(messageText, context)
+      } catch (error) {
+        console.error(`[OPENAI SPAM] ❌ Spam check failed for ${userName(senderInfo)} (ID: ${senderId}): ${error.message}`)
+        return false // Continue processing on spam check failure
+      }
 
       // Use dynamic confidence threshold and determine appropriate action
-      const confidenceThreshold = calculateDynamicThreshold(context, ctx.group.info.settings)
+      const confidenceThreshold = calculateDynamicThreshold(context, ctx.group.info.settings || {})
       const action = determineAction(result, context, confidenceThreshold)
 
       // Додаткове логування для діагностики
