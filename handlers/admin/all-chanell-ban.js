@@ -17,7 +17,7 @@ composer.hears('!banChannel', onlyAdmin, async (ctx, next) => {
 })
 
 composer.on('message', async (ctx, next) => {
-  if (ctx.message.sender_chat && ctx.group.info.settings.banChannel) {
+  if (ctx.message.sender_chat && ctx.group.info.settings.banChannel && !ctx.message.is_automatic_forward) {
     await ctx.deleteMessage()
 
     return ctx.tg.callApi('banChatSenderChat', {
