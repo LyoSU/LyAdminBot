@@ -136,6 +136,8 @@ const checkSpam = async (text, context = {}) => {
     const isNewAccount = context.isNewAccount ? `New account: Yes` : ''
     const repliedToInfo = context.repliedToMessage
       ? `Reply to message: "${context.repliedToMessage}"` : ''
+    const externalReplyInfo = context.externalReplyInfo
+      ? `External reply info: ${context.externalReplyInfo}` : ''
     const userMessageCount = context.messageCount !== undefined
       ? `User message count: ${context.messageCount}` : ''
     const hasUsername = context.username ? `Username: @${context.username}` : 'No username'
@@ -156,7 +158,8 @@ const checkSpam = async (text, context = {}) => {
       isNewAccount,
       userMessageCount,
       frequencyInfo,
-      repliedToInfo
+      repliedToInfo,
+      externalReplyInfo
     ]
       .filter(item => item !== '')
       .join('\n')
@@ -214,6 +217,7 @@ ENHANCED GUIDELINES for FALSE POSITIVE PREVENTION:
 - Users with profile photos, usernames, and bio information are more legitimate
 - Users with message history in the group (>5 messages) are less suspicious
 - Messages replying to others in context are more likely legitimate
+- External replies (replies to messages from other chats) can be legitimate cross-chat discussions
 - Consider the group's language and culture - what seems spam in one context may be normal in another
 - Generic greetings, questions, or normal conversation should NEVER be flagged
 - Sharing personal opinions, experiences, or asking for help is legitimate
@@ -226,8 +230,9 @@ Important: Do NOT flag:
 - Asking for help or advice
 - Regular links shared in conversation context
 - Messages appropriate to the group topic
-- Replies that are contextually relevant
+- Replies that are contextually relevant (including external replies)
 - Greetings, introductions, or normal social interactions
+- Cross-chat discussions when replying to external messages
 ${customRulesPrompt}
 
 Rate your confidence from 0-100. Use confidence levels wisely:
@@ -538,10 +543,51 @@ module.exports = async (ctx) => {
 
       // Get reply message if exists
       let repliedToMessage = null
+      let externalReplyInfo = null
+
       if (ctx.message.reply_to_message) {
         repliedToMessage = ctx.message.reply_to_message.text ||
                           ctx.message.reply_to_message.caption ||
                           'Media message without text'
+      }
+
+      // Handle external reply (reply to message from another chat)
+      if (ctx.message.external_reply) {
+        const external = ctx.message.external_reply
+        let externalContent = ''
+
+        // Extract content from external reply based on type
+        if (external.animation) externalContent = '[Animation from external chat]'
+        else if (external.audio) externalContent = '[Audio from external chat]'
+        else if (external.document) externalContent = `[Document: ${external.document.file_name || 'unknown'} from external chat]`
+        else if (external.photo) externalContent = '[Photo from external chat]'
+        else if (external.sticker) externalContent = `[Sticker: ${external.sticker.emoji || 'unknown'} from external chat]`
+        else if (external.story) externalContent = '[Story from external chat]'
+        else if (external.video) externalContent = '[Video from external chat]'
+        else if (external.video_note) externalContent = '[Video note from external chat]'
+        else if (external.voice) externalContent = '[Voice message from external chat]'
+        else if (external.contact) externalContent = '[Contact from external chat]'
+        else if (external.dice) externalContent = '[Dice from external chat]'
+        else if (external.game) externalContent = '[Game from external chat]'
+        else if (external.giveaway) externalContent = '[Giveaway from external chat]'
+        else if (external.giveaway_winners) externalContent = '[Giveaway winners from external chat]'
+        else if (external.invoice) externalContent = '[Invoice from external chat]'
+        else if (external.location) externalContent = '[Location from external chat]'
+        else if (external.poll) externalContent = '[Poll from external chat]'
+        else if (external.venue) externalContent = '[Venue from external chat]'
+        else externalContent = '[External reply - content type unknown]'
+
+        // Add chat information if available
+        let chatInfo = ''
+        if (external.chat) {
+          if (external.chat.title) {
+            chatInfo = ` from "${external.chat.title}"`
+          } else if (external.chat.username) {
+            chatInfo = ` from @${external.chat.username}`
+          }
+        }
+
+        externalReplyInfo = `External reply${chatInfo}: ${externalContent}`
       }
 
       // Extract links from message
@@ -566,6 +612,7 @@ module.exports = async (ctx) => {
         username: senderInfo.username,
         messageCount: ctx.group.members[senderId].stats.messagesCount,
         repliedToMessage: repliedToMessage,
+        externalReplyInfo: externalReplyInfo,
         links: links,
         customRules: (ctx.group && ctx.group.info && ctx.group.info.settings && ctx.group.info.settings.openaiSpamCheck && ctx.group.info.settings.openaiSpamCheck.customRules) || [],
         messageFrequency: analyzeMessageFrequency(ctx.group.members[senderId].stats)
