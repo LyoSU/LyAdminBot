@@ -215,19 +215,38 @@ ${contextInfo.join('\n')}`
 
     console.log(`[SPAM CHECK] OpenRouter result: ${isSpam ? 'SPAM' : 'CLEAN'} (${confidence}%)`)
 
-    // Save to knowledge base if confidence is high enough
-    if (embedding && confidence >= 80) {
-      try {
-        await saveSpamPattern({
-          text: messageText,
-          embedding,
-          classification: isSpam ? 'spam' : 'clean',
-          confidence: confidence / 100,
-          features
-        })
-        console.log(`[SPAM CHECK] Saved pattern to knowledge base`)
-      } catch (saveError) {
-        console.error('[SPAM CHECK] Failed to save pattern:', saveError.message)
+    // Save to knowledge base based on confidence and action taken
+    if (embedding) {
+      let shouldSave = false
+      let saveConfidence = confidence / 100
+
+      // High confidence from LLM - always save
+      if (confidence >= 90) {
+        shouldSave = true
+      }
+      // Medium confidence - save only if resulted in mute/ban (high certainty action)
+      else if (confidence >= 75) {
+        // We'll check this after actions are taken - move saving logic to middleware
+        shouldSave = false // Don't save here, save in middleware after action
+      }
+      // Clean messages with high confidence - always save
+      else if (!isSpam && confidence >= 85) {
+        shouldSave = true
+      }
+
+      if (shouldSave) {
+        try {
+          await saveSpamPattern({
+            text: messageText,
+            embedding,
+            classification: isSpam ? 'spam' : 'clean',
+            confidence: saveConfidence,
+            features
+          })
+          console.log(`[SPAM CHECK] Saved pattern to knowledge base (confidence: ${confidence}%)`)
+        } catch (saveError) {
+          console.error('[SPAM CHECK] Failed to save pattern:', saveError.message)
+        }
       }
     }
 

@@ -1,5 +1,7 @@
 const { userName } = require('../utils')
 const { checkSpam, checkTrustedUser, getSpamSettings } = require('../helpers/spam-check')
+const { saveSpamPattern } = require('../helpers/spam-patterns')
+const { generateEmbedding, extractFeatures } = require('../helpers/message-embeddings')
 
 /**
  * Determine appropriate action based on spam confidence and user profile
@@ -293,6 +295,36 @@ module.exports = async (ctx) => {
             }
           } else {
             console.error(`[SPAM ACTION] ❌ Bot lacks permission to delete messages in "${ctx.chat.title}"`)
+          }
+        }
+
+        // Save to knowledge base after successful action (higher confidence in spam classification)
+        if (result.source === 'openrouter_llm' && result.confidence >= 75 && result.confidence < 90) {
+          try {
+            const embedding = await generateEmbedding(messageText)
+            const features = extractFeatures(messageText, context)
+            
+            let adjustedConfidence = result.confidence / 100
+            
+            // Increase confidence if strong action was taken (mute + delete)
+            if (muteSuccess && deleteSuccess) {
+              adjustedConfidence = Math.min(0.95, adjustedConfidence + 0.1) // Boost by 10%
+            } else if (muteSuccess || deleteSuccess) {
+              adjustedConfidence = Math.min(0.9, adjustedConfidence + 0.05) // Boost by 5%
+            }
+            
+            if (embedding) {
+              await saveSpamPattern({
+                text: messageText,
+                embedding,
+                classification: result.isSpam ? 'spam' : 'clean',
+                confidence: adjustedConfidence,
+                features
+              })
+              console.log(`[SPAM ACTION] Saved pattern with boosted confidence: ${(adjustedConfidence * 100).toFixed(1)}%`)
+            }
+          } catch (saveError) {
+            console.error('[SPAM ACTION] Failed to save confirmed pattern:', saveError.message)
           }
         }
 
