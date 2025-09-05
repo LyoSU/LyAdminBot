@@ -43,8 +43,7 @@ const saveSpamPattern = async ({
   embedding,
   classification,
   confidence,
-  features = {},
-  source = 'llm_analysis'
+  features = {}
 }) => {
   const contentHash = generateContentHash(text)
 
@@ -74,8 +73,7 @@ const saveSpamPattern = async ({
       confidence,
       features,
       hitCount: 1,
-      lastMatched: new Date(),
-      source
+      lastMatched: new Date()
     })
 
     const result = await pattern.save()
@@ -91,7 +89,7 @@ const saveSpamPattern = async ({
  */
 const findSimilarPatterns = async (embedding, threshold = 0.85) => {
   try {
-    // OPTIMIZATION: Limit patterns to check (temporary fix until vector DB)
+    // Simple approach - no pre-filtering as it reduces accuracy
     const maxPatterns = 500 // Limit for performance
     const patterns = await SpamPattern.find({})
       .select('embedding classification confidence features')
@@ -111,15 +109,10 @@ const findSimilarPatterns = async (embedding, threshold = 0.85) => {
       }
     }
 
-    // Sort by similarity descending and limit results
+    // Sort by similarity descending
     similarities.sort((a, b) => b.similarity - a.similarity)
 
-    // Log warning if we're at the limit
-    if (patterns.length >= maxPatterns) {
-      console.log(`[VECTOR SEARCH] Warning: Reached pattern limit (${maxPatterns}). Consider MongoDB Atlas vector search.`)
-    }
-
-    return similarities.slice(0, 20) // Return top 20 matches only
+    return similarities.slice(0, 10) // Return top 10 matches only
   } catch (error) {
     console.error('Error finding similar patterns:', error)
     return []
@@ -132,8 +125,8 @@ const findSimilarPatterns = async (embedding, threshold = 0.85) => {
 const classifyBySimilarity = async (embedding) => {
   try {
     // Find similar patterns with different thresholds
-    const highConfidence = await findSimilarPatterns(embedding, 0.88) // Lowered from 0.90 for better matching
-    const mediumConfidence = await findSimilarPatterns(embedding, 0.83) // Lowered from 0.85
+    const highConfidence = await findSimilarPatterns(embedding, 0.88)
+    const mediumConfidence = await findSimilarPatterns(embedding, 0.83)
 
     // Check high confidence matches first
     if (highConfidence.length > 0) {
@@ -320,10 +313,7 @@ const getKnowledgeStats = async () => {
 }
 
 module.exports = {
-  generateContentHash,
-  cosineSimilarity,
   saveSpamPattern,
-  findSimilarPatterns,
   classifyBySimilarity,
   cleanupOldPatterns,
   mergeSimilarPatterns,

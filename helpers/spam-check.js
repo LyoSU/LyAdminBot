@@ -8,8 +8,7 @@ const {
   saveSpamPattern,
   classifyBySimilarity,
   cleanupOldPatterns,
-  mergeSimilarPatterns,
-  getKnowledgeStats
+  mergeSimilarPatterns
 } = require('./spam-patterns')
 
 // Create OpenRouter client for LLM
@@ -224,8 +223,7 @@ ${contextInfo.join('\n')}`
           embedding,
           classification: isSpam ? 'spam' : 'clean',
           confidence: confidence / 100,
-          features,
-          source: 'llm_analysis'
+          features
         })
         console.log(`[SPAM CHECK] Saved pattern to knowledge base`)
       } catch (saveError) {
@@ -267,16 +265,8 @@ const checkTrustedUser = (userId, ctx) => {
   return isTrustedUser(userId, settings)
 }
 
-/**
- * Get spam knowledge statistics
- */
-const getSpamStats = async () => {
-  return getKnowledgeStats()
-}
-
 module.exports = {
   checkSpam,
   checkTrustedUser,
-  getSpamSettings,
-  getSpamStats
+  getSpamSettings
 }

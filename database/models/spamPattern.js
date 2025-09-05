@@ -24,19 +24,7 @@ const spamPatternSchema = mongoose.Schema({
     required: true
   },
   features: {
-    messageLength: Number,
-    wordCount: Number,
-    hasLinks: Boolean,
-    hasEmojis: Boolean,
-    hasMentions: Boolean,
-    hasPhoneNumbers: Boolean,
-    hasEmails: Boolean,
-    capitalRatio: Number,
-    digitRatio: Number,
-    specialCharRatio: Number,
-    isNewUser: Boolean,
-    isPremium: Boolean,
-    userMessageCount: Number
+    type: mongoose.Schema.Types.Mixed // Simple storage without structure
   },
   hitCount: {
     type: Number,
@@ -47,11 +35,6 @@ const spamPatternSchema = mongoose.Schema({
     default: Date.now,
     index: true
   },
-  source: {
-    type: String,
-    enum: ['llm_analysis', 'cluster_merge'],
-    default: 'llm_analysis'
-  }
 }, {
   timestamps: true
 })
