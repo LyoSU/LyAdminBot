@@ -157,10 +157,13 @@ module.exports = async (ctx) => {
 
     // Check message for spam
     if (ctx.message) {
-      let messageText = ctx.message.text || ctx.message.caption || ''
+      let originalText = ctx.message.text || ctx.message.caption || ''
+      
+      // Remove test mode hashtag before processing
+      let messageText = originalText.replace(/#testspam/gi, '').trim()
 
       // Handle messages without text/caption
-      if (!messageText.trim()) {
+      if (!messageText) {
         if (ctx.message.sticker) {
           messageText = `[Sticker: ${ctx.message.sticker.emoji || 'unknown'}]`
         } else if (ctx.message.voice) {
@@ -205,7 +208,8 @@ module.exports = async (ctx) => {
 
       if (isTestMode) {
         console.log('[SPAM CHECK] 🧪 TEST MODE - Message details:')
-        console.log(`  📝 Text: "${messageText.substring(0, 100)}..."`)
+        console.log(`  📝 Original: "${originalText.substring(0, 100)}..."`)
+        console.log(`  📝 Processed: "${messageText.substring(0, 100)}..."`)
         console.log(`  🤖 Classification: ${result.isSpam ? 'SPAM' : 'CLEAN'}`)
         console.log(`  📊 Confidence: ${result.confidence}%`)
         console.log(`  💾 Source: ${result.source}`)
