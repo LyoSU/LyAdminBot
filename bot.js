@@ -11,7 +11,7 @@ const {
   onlyGroup,
   onlyAdmin,
   casBan,
-  openaiSpamCheck
+  spamCheck
 } = require('./middlewares')
 const {
   handleMessage,
@@ -174,7 +174,7 @@ bot.use(async (ctx, next) => {
     }
 
     if (!isSpam) { // Only run OpenAI check if not banned by CAS or globally
-      isSpam = await openaiSpamCheck(ctx)
+      isSpam = await spamCheck(ctx)
     }
 
     if (isSpam) {
