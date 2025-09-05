@@ -160,7 +160,7 @@ module.exports = async (ctx) => {
     // Check message for spam
     if (ctx.message) {
       let originalText = ctx.message.text || ctx.message.caption || ''
-      
+
       // Remove test mode hashtag before processing
       let messageText = originalText.replace(/#testspam/gi, '').trim()
 
@@ -303,16 +303,16 @@ module.exports = async (ctx) => {
           try {
             const embedding = await generateEmbedding(messageText)
             const features = extractFeatures(messageText, context)
-            
+
             let adjustedConfidence = result.confidence / 100
-            
+
             // Increase confidence if strong action was taken (mute + delete)
             if (muteSuccess && deleteSuccess) {
               adjustedConfidence = Math.min(0.95, adjustedConfidence + 0.1) // Boost by 10%
             } else if (muteSuccess || deleteSuccess) {
               adjustedConfidence = Math.min(0.9, adjustedConfidence + 0.05) // Boost by 5%
             }
-            
+
             if (embedding) {
               await saveSpamPattern({
                 text: messageText,
