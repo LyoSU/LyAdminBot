@@ -69,25 +69,32 @@ const analyzeMessageFrequency = (userStats) => {
 }
 
 /**
- * Calculate dynamic threshold for LLM
+ * Calculate dynamic threshold for LLM - Professional approach to minimize false positives
  */
 const calculateDynamicThreshold = (context, groupSettings) => {
-  let baseThreshold = (groupSettings && groupSettings.confidenceThreshold) || 70
+  let baseThreshold = (groupSettings && groupSettings.confidenceThreshold) || 75 // Increased from 70
 
-  if (context.isNewAccount && context.messageCount <= 2) {
-    baseThreshold -= 20
+  // More conservative approach for new accounts
+  if (context.isNewAccount && context.messageCount <= 1) {
+    baseThreshold -= 10 // Reduced from -20
   }
 
-  if (context.messageCount <= 1) {
-    baseThreshold -= 15
+  if (context.messageCount <= 1 && !context.isNewAccount) {
+    baseThreshold -= 5 // Reduced from -15
   }
 
-  if (context.isPremium) baseThreshold += 15
-  if (context.hasProfile) baseThreshold += 10
-  if (context.hasUsername) baseThreshold += 5
-  if (context.messageCount > 10) baseThreshold += 10
+  // Trust indicators
+  if (context.isPremium) baseThreshold += 20 // Increased from 15
+  if (context.hasProfile) baseThreshold += 15 // Increased from 10
+  if (context.hasUsername) baseThreshold += 10 // Increased from 5
+  if (context.messageCount > 10) baseThreshold += 15 // Increased from 10
 
-  return Math.max(40, Math.min(95, baseThreshold))
+  // Account age matters
+  if (context.accountAge === 'established') baseThreshold += 10
+  if (context.accountAge === 'very_new') baseThreshold -= 5
+
+  // More conservative bounds - no actions below 60%
+  return Math.max(60, Math.min(95, baseThreshold))
 }
 
 /**
@@ -113,8 +120,13 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     // Extract features from message
     const features = extractFeatures(messageText, userContext)
 
-    // Generate embedding for the message
-    const embedding = await generateEmbedding(messageText)
+    // Generate embedding for the message with context
+    const hasCaption = messageText !== ctx.message.text && !!ctx.message.caption
+    const embedding = await generateEmbedding(messageText, {
+      isNewAccount: userContext.isNewAccount,
+      messageCount: userContext.messageCount,
+      hasCaption
+    })
 
     if (embedding) {
       // Try to classify using local database first

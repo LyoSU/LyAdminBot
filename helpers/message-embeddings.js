@@ -65,20 +65,30 @@ const extractFeatures = (text, userContext = {}) => {
 }
 
 /**
- * Generate embedding for message
+ * Generate embedding for message with context
  */
-const generateEmbedding = async (text) => {
+const generateEmbedding = async (text, userContext = {}) => {
   try {
-    const normalized = normalizeMessage(text)
+    let processedText = normalizeMessage(text)
 
-    // Skip if message is too short or empty
-    if (normalized.length < 3) {
+    // Skip embedding for placeholder media text without captions
+    if (isPlaceholderMediaText(text) && !userContext.hasCaption) {
       return null
+    }
+
+    // Skip if message is too short or empty after normalization
+    if (processedText.length < 3) {
+      return null
+    }
+
+    // Add minimal context for better embeddings (only for edge cases)
+    if (userContext.isNewAccount && userContext.messageCount <= 1) {
+      processedText = `first message: ${processedText}`
     }
 
     const response = await openai.embeddings.create({
       model: 'text-embedding-3-small',
-      input: normalized,
+      input: processedText,
       encoding_format: 'float'
     })
 
@@ -87,6 +97,16 @@ const generateEmbedding = async (text) => {
     console.error('Error generating embedding:', error.message)
     return null
   }
+}
+
+/**
+ * Check if text is just a placeholder for media without meaningful content
+ */
+const isPlaceholderMediaText = (text) => {
+  const placeholders = [
+    '[Photo]', '[Voice message]', '[Media message]', '[Video]', '[Audio]'
+  ]
+  return placeholders.includes(text)
 }
 
 /**
