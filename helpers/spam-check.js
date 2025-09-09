@@ -10,6 +10,10 @@ const {
   cleanupOldPatterns,
   mergeSimilarPatterns
 } = require('./spam-patterns')
+const {
+  isNewAccount,
+  getAccountAge
+} = require('./account-age')
 
 // Create OpenRouter client for LLM
 const openRouter = new OpenAI({
@@ -50,28 +54,6 @@ const isTrustedUser = (userId, groupSettings) => {
 const hasUserProfile = (ctx) => {
   const user = ctx.from
   return !!(user && (user.username || user.is_premium))
-}
-
-/**
- * Check if account is new
- */
-const isNewAccount = (ctx) => {
-  if (!ctx.from) return false
-  const userId = ctx.from.id
-  // IDs over 6 billion are newer accounts (2023+)
-  return userId > 6000000000
-}
-
-/**
- * Get account age estimation
- */
-const getAccountAge = (ctx) => {
-  if (!ctx.from) return 'unknown'
-  const userId = ctx.from.id
-  if (userId > 7000000000) return 'very_new'
-  if (userId > 6000000000) return 'new'
-  if (userId > 5000000000) return 'recent'
-  return 'established'
 }
 
 /**
@@ -223,14 +205,12 @@ ${contextInfo.join('\n')}`
       // High confidence from LLM - always save
       if (confidence >= 90) {
         shouldSave = true
-      }
-      // Medium confidence - save only if resulted in mute/ban (high certainty action)
-      else if (confidence >= 75) {
+      } else if (confidence >= 75) {
+        // Medium confidence - save only if resulted in mute/ban (high certainty action)
         // We'll check this after actions are taken - move saving logic to middleware
         shouldSave = false // Don't save here, save in middleware after action
-      }
-      // Clean messages with high confidence - always save
-      else if (!isSpam && confidence >= 85) {
+      } else if (!isSpam && confidence >= 85) {
+        // Clean messages with high confidence - always save
         shouldSave = true
       }
 
