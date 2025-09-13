@@ -1,6 +1,6 @@
 const { userName } = require('../utils')
 const { checkSpam, checkTrustedUser, getSpamSettings } = require('../helpers/spam-check')
-const { saveSpamPattern } = require('../helpers/spam-patterns')
+const { saveSpamVector } = require('../helpers/spam-vectors')
 const { generateEmbedding, extractFeatures } = require('../helpers/message-embeddings')
 
 /**
@@ -314,14 +314,14 @@ module.exports = async (ctx) => {
             }
 
             if (embedding) {
-              await saveSpamPattern({
+              await saveSpamVector({
                 text: messageText,
                 embedding,
                 classification: result.isSpam ? 'spam' : 'clean',
                 confidence: adjustedConfidence,
                 features
               })
-              console.log(`[SPAM ACTION] Saved pattern with boosted confidence: ${(adjustedConfidence * 100).toFixed(1)}%`)
+              console.log(`[SPAM ACTION] Saved vector with boosted confidence: ${(adjustedConfidence * 100).toFixed(1)}%`)
             }
           } catch (saveError) {
             console.error('[SPAM ACTION] Failed to save confirmed pattern:', saveError.message)

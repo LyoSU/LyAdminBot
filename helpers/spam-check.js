@@ -5,11 +5,11 @@ const {
   getAdaptiveThreshold
 } = require('./message-embeddings')
 const {
-  saveSpamPattern,
+  saveSpamVector,
   classifyBySimilarity,
-  cleanupOldPatterns,
-  mergeSimilarPatterns
-} = require('./spam-patterns')
+  cleanupOldVectors,
+  mergeSimilarVectors
+} = require('./spam-vectors')
 const {
   isNewAccount,
   getAccountAge
@@ -27,10 +27,10 @@ const initializeCleanup = () => {
   if (!cleanupInitialized) {
     setInterval(async () => {
       try {
-        const cleanedCount = await cleanupOldPatterns()
-        const mergedCount = await mergeSimilarPatterns()
+        const cleanedCount = await cleanupOldVectors()
+        const mergedCount = await mergeSimilarVectors()
         if (cleanedCount > 0 || mergedCount > 0) {
-          console.log(`[CLEANUP] Removed ${cleanedCount} old patterns, merged ${mergedCount} similar patterns`)
+          console.log(`[CLEANUP] Removed ${cleanedCount} old vectors, merged ${mergedCount} similar vectors`)
         }
       } catch (err) {
         console.error('[CLEANUP] Error during cleanup:', err)
@@ -133,22 +133,22 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
       const localResult = await classifyBySimilarity(embedding)
 
       if (localResult) {
-        console.log(`[SPAM CHECK] Local match: ${localResult.classification} (${(localResult.confidence * 100).toFixed(1)}%)`)
+        console.log(`[SPAM CHECK] Qdrant match: ${localResult.classification} (${(localResult.confidence * 100).toFixed(1)}%)`)
 
         // If confidence is high enough, return local result
         const adaptiveThreshold = getAdaptiveThreshold(features)
         console.log(`[SPAM CHECK] Adaptive threshold: ${(adaptiveThreshold * 100).toFixed(1)}%`)
 
         if (localResult.confidence >= adaptiveThreshold) {
-          console.log(`[SPAM CHECK] Using local result (confidence ${(localResult.confidence * 100).toFixed(1)}% >= threshold ${(adaptiveThreshold * 100).toFixed(1)}%)`)
+          console.log(`[SPAM CHECK] Using Qdrant result (confidence ${(localResult.confidence * 100).toFixed(1)}% >= threshold ${(adaptiveThreshold * 100).toFixed(1)}%)`)
           return {
             isSpam: localResult.classification === 'spam',
             confidence: localResult.confidence * 100,
-            reason: `Pattern match: ${localResult.classification}`,
-            source: 'local_db'
+            reason: `Vector match: ${localResult.classification}`,
+            source: 'qdrant_db'
           }
         } else {
-          console.log(`[SPAM CHECK] Local confidence too low (${(localResult.confidence * 100).toFixed(1)}% < ${(adaptiveThreshold * 100).toFixed(1)}%), checking with LLM`)
+          console.log(`[SPAM CHECK] Qdrant confidence too low (${(localResult.confidence * 100).toFixed(1)}% < ${(adaptiveThreshold * 100).toFixed(1)}%), checking with LLM`)
         }
       }
     }
@@ -228,16 +228,16 @@ ${contextInfo.join('\n')}`
 
       if (shouldSave) {
         try {
-          await saveSpamPattern({
+          await saveSpamVector({
             text: messageText,
             embedding,
             classification: isSpam ? 'spam' : 'clean',
             confidence: saveConfidence,
             features
           })
-          console.log(`[SPAM CHECK] Saved pattern to knowledge base (confidence: ${confidence}%)`)
+          console.log(`[SPAM CHECK] Saved vector to Qdrant (confidence: ${confidence}%)`)
         } catch (saveError) {
-          console.error('[SPAM CHECK] Failed to save pattern:', saveError.message)
+          console.error('[SPAM CHECK] Failed to save vector:', saveError.message)
         }
       }
     }

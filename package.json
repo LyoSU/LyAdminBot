@@ -9,6 +9,7 @@
     "lint:fix": "node_modules/.bin/eslint --fix --ext js ."
   },
   "dependencies": {
+    "@qdrant/js-client-rest": "^1.15.1",
     "dateformat": "^3.0.3",
     "dotenv": "^6.2.0",
     "got": "^9.6.0",
