@@ -730,10 +730,7 @@ module.exports = async (ctx) => {
         if (muteSuccess || deleteSuccess) {
           let statusMessage = ''
           if (muteSuccess && deleteSuccess) {
-            statusMessage = ctx.i18n.t('spam.muted', {
-              name: userName(senderInfo, true),
-              reason: result.reason
-            })
+            statusMessage = `🤖 AI spam protection activated\n👤 User: ${userName(senderInfo, true)}\n📝 ${result.reason}`
             // Set global ban status
             if (ctx.session.userInfo) {
               // Check if global ban is enabled for this group
@@ -754,9 +751,9 @@ module.exports = async (ctx) => {
               }
             }
           } else if (muteSuccess && !deleteSuccess) {
-            statusMessage = `✅ ${userName(senderInfo, true)} was muted for spam\nReason: ${result.reason}\n⚠️ Could not delete the message`
+            statusMessage = `🤖 AI muted user for spam\n👤 ${userName(senderInfo, true)}\n📝 ${result.reason}\n⚠️ Could not delete the message`
           } else if (!muteSuccess && deleteSuccess) {
-            statusMessage = `✅ Spam message deleted\n⚠️ Could not mute ${userName(senderInfo, true)}\nReason: ${result.reason}`
+            statusMessage = `🤖 AI deleted spam message\n📝 ${result.reason}\n⚠️ Could not mute ${userName(senderInfo, true)}`
           }
 
           const notificationMsg = await ctx.replyWithHTML(statusMessage)

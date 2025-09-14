@@ -335,11 +335,11 @@ module.exports = async (ctx) => {
           const testModeLabel = isTestMode ? '\n🧪 TEST MODE' : ''
 
           if (muteSuccess && deleteSuccess) {
-            statusMessage = `🤖 Spam detected by AI system${testModeLabel}\n👤 User: ${userName(senderInfo, true)}\n📊 Confidence: ${result.confidence}%\n🔍 Source: ${result.source}\n📝 Reason: ${result.reason}`
+            statusMessage = `🤖 AI spam protection activated${testModeLabel}\n👤 User: ${userName(senderInfo, true)}\n📝 ${result.reason}`
           } else if (muteSuccess && !deleteSuccess) {
-            statusMessage = `🤖 User muted by AI system${testModeLabel}\n👤 User: ${userName(senderInfo, true)}\n📊 Confidence: ${result.confidence}%\n🔍 Source: ${result.source}\n⚠️ Could not delete the message`
+            statusMessage = `🤖 AI muted user for spam${testModeLabel}\n👤 User: ${userName(senderInfo, true)}\n📝 ${result.reason}\n⚠️ Could not delete the message`
           } else if (!muteSuccess && deleteSuccess) {
-            statusMessage = `🤖 Spam message deleted by AI${testModeLabel}\n📊 Confidence: ${result.confidence}%\n🔍 Source: ${result.source}\n⚠️ Could not mute ${userName(senderInfo, true)}`
+            statusMessage = `🤖 AI deleted spam message${testModeLabel}\n📝 ${result.reason}\n⚠️ Could not mute ${userName(senderInfo, true)}`
           }
 
           const notificationMsg = await ctx.replyWithHTML(statusMessage)
