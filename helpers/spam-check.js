@@ -166,32 +166,36 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     if (userContext.isNewAccount) contextInfo.push('New account: Yes')
     if (userContext.messageCount !== undefined) contextInfo.push(`Message count: ${userContext.messageCount}`)
 
-    const systemPrompt = `You are a Telegram spam detection system. Analyze messages for common spam patterns.
+    const systemPrompt = `You are an expert Telegram spam detection system. Your task is to classify messages as SPAM or CLEAN.
 
-Common spam patterns to detect:
-- Cryptocurrency/trading schemes and pump-and-dump offers
-- Dating/adult content solicitation and escort services
-- Mass group invitations without context
-- Fake giveaways and "free money" schemes
-- Job scams and unrealistic work opportunities
-- Phishing attempts and credential harvesting
+SPAM indicators:
+• Crypto/trading schemes: "free crypto", "guaranteed profit", "trading signals"
+• Adult content: dating sites, escort services, explicit material
+• Scam schemes: fake giveaways, "click here to win", lottery winners
+• Mass promotions: unsolicited advertising, group invitations
+• Phishing: requests for personal data, suspicious links
 
-Consider user context:
-- Premium users are significantly less likely to be spammers
-- New accounts (high user IDs) with first messages are more suspicious
-- Users with established message history are more trustworthy
-- Messages with context (replies) are often legitimate
+CLEAN indicators:
+• Normal conversation and questions
+• Contextual replies to previous messages
+• Legitimate discussions related to group topic
+• Messages from premium users or established accounts
 
-Be conservative with borderline cases - false positives harm real users.
+Classification guidelines:
+• SPAM confidence 90-100%: Clear malicious intent, obvious patterns
+• SPAM confidence 80-89%: Strong spam indicators but some uncertainty
+• SPAM confidence 70-79%: Suspicious but borderline cases
+• CLEAN confidence 85-100%: Clearly legitimate content
+• Be conservative - when in doubt, classify as CLEAN to avoid false positives`
 
-Respond with JSON: {"classification": "SPAM" or "CLEAN", "confidence": 0-100, "reasoning": "brief explanation"}`
+    const userPrompt = `Message to classify: "${messageText}"
 
-    const userPrompt = `Message: "${messageText}"
+User context:
+${contextInfo.join('\n')}
 
-Context:
-${contextInfo.join('\n')}`
+Analyze and classify this message.`
 
-    // Use OpenRouter for LLM analysis
+    // Use OpenRouter for LLM analysis with structured output
     const response = await openRouter.chat.completions.create({
       model: process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash',
       messages: [
@@ -199,8 +203,35 @@ ${contextInfo.join('\n')}`
         { role: 'user', content: userPrompt }
       ],
       temperature: 0,
-      response_format: { type: 'json_object' },
-      max_tokens: 200
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'spam_analysis',
+          schema: {
+            type: 'object',
+            properties: {
+              reasoning: {
+                type: 'string',
+                description: 'Brief explanation of the classification'
+              },
+              classification: {
+                type: 'string',
+                enum: ['SPAM', 'CLEAN'],
+                description: 'Whether the message is spam or clean'
+              },
+              confidence: {
+                type: 'integer',
+                minimum: 0,
+                maximum: 100,
+                description: 'Confidence level from 0 to 100'
+              }
+            },
+            required: ['reasoning', 'classification', 'confidence'],
+            additionalProperties: false
+          }
+        }
+      },
+      max_tokens: 500
     })
 
     const analysis = JSON.parse(response.choices[0].message.content)
