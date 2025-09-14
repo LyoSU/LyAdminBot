@@ -101,16 +101,47 @@ const saveSpamVector = async ({
 }
 
 /**
- * Find similar vectors in Qdrant
+ * Find similar vectors in Qdrant with proper filtering
  */
-const findSimilarVectors = async (embedding, threshold = 0.85, limit = 10) => {
+const findSimilarVectors = async (embedding, threshold = 0.85, limit = 10, features = {}) => {
   await ensureInitialized()
 
   try {
+    // Build filter with correct Qdrant syntax
+    let filter = null
+
+    // Only add filter if we have meaningful conditions
+    const filterConditions = []
+
+    if (features.hasLinks === true) {
+      filterConditions.push({
+        key: "features.hasLinks",
+        match: { value: true }
+      })
+    }
+
+    if (features.isNewUser !== undefined) {
+      filterConditions.push({
+        key: "features.isNewUser",
+        match: { value: features.isNewUser }
+      })
+    }
+
+    // Add time-based filtering for recent patterns
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+
+    // Simplified filter - only use indexed fields until all indexes are created
+    if (filterConditions.length > 0) {
+      filter = {
+        must: filterConditions
+      }
+    }
+
     const searchResult = await client.search(SPAM_COLLECTION, {
       vector: embedding,
-      limit: Math.max(limit, 50), // Search more broadly then filter
+      limit: Math.max(limit * 2, 20),
       score_threshold: threshold,
+      filter: filter,
       with_payload: true
     })
 
@@ -131,9 +162,31 @@ const findSimilarVectors = async (embedding, threshold = 0.85, limit = 10) => {
     return similarities
   } catch (error) {
     console.error('[QDRANT] Error finding similar vectors:', error)
-    return []
+    // Fallback to simple search without filter
+    try {
+      const fallbackResult = await client.search(SPAM_COLLECTION, {
+        vector: embedding,
+        limit: limit,
+        score_threshold: threshold,
+        with_payload: true
+      })
+
+      return fallbackResult.map(point => ({
+        id: point.id,
+        classification: point.payload.classification,
+        confidence: point.payload.confidence,
+        features: point.payload.features,
+        hitCount: point.payload.hitCount || 1,
+        similarity: point.score,
+        lastMatched: point.payload.lastMatched
+      }))
+    } catch (fallbackError) {
+      console.error('[QDRANT] Fallback search also failed:', fallbackError)
+      return []
+    }
   }
 }
+
 
 /**
  * Get classification based on similar vectors
@@ -142,7 +195,7 @@ const classifyBySimilarity = async (embedding) => {
   await ensureInitialized()
 
   try {
-    // Find similar patterns with different confidence levels
+    // Find similar patterns with different confidence levels (no features for now)
     const highConfidence = await findSimilarVectors(embedding, 0.88, 5)
     const mediumConfidence = await findSimilarVectors(embedding, 0.83, 10)
 

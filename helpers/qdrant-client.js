@@ -33,11 +33,11 @@ const initializeCollection = async () => {
         },
         // Optimize for high-speed searches with good recall
         hnsw_config: {
-          m: 16,           // Number of connections per element (balanced)
-          ef_construct: 200, // Size of candidate list during construction
-          full_scan_threshold: 10000 // Use HNSW for collections > 10k vectors
+          m: 32,           // Increased for better accuracy (spam detection needs precision)
+          ef_construct: 400, // Higher for better graph quality
+          full_scan_threshold: 5000 // Lower threshold for better performance
         },
-        // Use quantization to reduce memory usage for large datasets
+        // Use quantization to reduce memory usage by 75%
         quantization_config: {
           scalar: {
             type: 'int8',
@@ -45,11 +45,13 @@ const initializeCollection = async () => {
             always_ram: true
           }
         },
-        // Optimize storage
+        // Optimize storage for spam patterns
         optimizers_config: {
-          default_segment_number: 2,
-          max_segment_size: 20000,
-          memmap_threshold: 50000
+          default_segment_number: 4, // More segments for better parallelization
+          max_segment_size: 50000,   // Larger segments for spam datasets
+          memmap_threshold: 100000,  // Use memmap for large collections
+          indexing_threshold: 10000, // Start indexing earlier
+          flush_interval_sec: 30     // More frequent flushes for real-time updates
         }
       })
 
@@ -73,9 +75,53 @@ const initializeCollection = async () => {
         field_schema: 'datetime'
       })
 
+      // Create payload index for hitCount for popular pattern detection
+      await client.createPayloadIndex(SPAM_COLLECTION, {
+        field_name: 'hitCount',
+        field_schema: 'integer'
+      })
+
+      // Create payload index for createdAt for time-based filtering
+      await client.createPayloadIndex(SPAM_COLLECTION, {
+        field_name: 'createdAt',
+        field_schema: 'datetime'
+      })
+
+      // Create compound index for spam pattern analysis
+      await client.createPayloadIndex(SPAM_COLLECTION, {
+        field_name: 'features.hasLinks',
+        field_schema: 'bool'
+      })
+
+      await client.createPayloadIndex(SPAM_COLLECTION, {
+        field_name: 'features.isNewUser',
+        field_schema: 'bool'
+      })
+
       console.log(`[QDRANT] Created payload indexes for ${SPAM_COLLECTION}`)
     } else {
       console.log(`[QDRANT] Collection ${SPAM_COLLECTION} already exists`)
+
+      // Try to create missing indexes if they don't exist
+      try {
+        await client.createPayloadIndex(SPAM_COLLECTION, {
+          field_name: 'hitCount',
+          field_schema: 'integer'
+        })
+        console.log(`[QDRANT] Added missing hitCount index`)
+      } catch (indexError) {
+        // Index might already exist, that's ok
+      }
+
+      try {
+        await client.createPayloadIndex(SPAM_COLLECTION, {
+          field_name: 'features.hasLinks',
+          field_schema: 'bool'
+        })
+        console.log(`[QDRANT] Added missing features.hasLinks index`)
+      } catch (indexError) {
+        // Index might already exist, that's ok
+      }
     }
 
     return true
