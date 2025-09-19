@@ -457,7 +457,6 @@ module.exports = async (ctx) => {
 
   // Check if OpenAI spam check is enabled for this group
   if (ctx.group && ctx.group.info && ctx.group.info.settings && ctx.group.info.settings.openaiSpamCheck && ctx.group.info.settings.openaiSpamCheck.enabled === false) {
-    console.log(`[OPENAI SPAM] ⚙️ OpenAI spam check is disabled for group "${ctx.chat.title}"`)
     return false // Continue processing, but skip OpenAI check
   }
 

@@ -103,7 +103,6 @@ module.exports = async (ctx) => {
   // Check if spam check is enabled for this group
   const spamSettings = getSpamSettings(ctx)
   if (!spamSettings || spamSettings.enabled === false) {
-    console.log(`[SPAM CHECK] ⚙️ Spam check is disabled for group "${ctx.chat.title}"`)
     return false
   }
 
