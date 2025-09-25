@@ -268,7 +268,7 @@ ${contextInfo}`
     console.log(`[OPENAI SPAM] 🔍 Analyzing message from ${userName} (ID: ${userId}): "${displayText}"`)
 
     const response = await openai.chat.completions.create({
-      model: 'google/gemini-2.5-flash',
+      model: 'google/gemini-2.5-flash-preview-09-2025',
       reasoning_effort: 'low',
       messages: [
         { role: 'system', content: systemPrompt },
