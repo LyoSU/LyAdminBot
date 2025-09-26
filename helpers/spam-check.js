@@ -197,7 +197,7 @@ Analyze and classify this message.`
 
     // Use OpenRouter for LLM analysis with structured output
     const response = await openRouter.chat.completions.create({
-      model: process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash',
+      model: process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash-preview-09-2025',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
