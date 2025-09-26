@@ -197,7 +197,7 @@ Analyze and classify this message.`
 
     // Use OpenRouter for LLM analysis with structured output
     const response = await openRouter.chat.completions.create({
-      model: process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash-preview-09-2025',
+      model: process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
@@ -231,10 +231,22 @@ Analyze and classify this message.`
           }
         }
       },
-      max_tokens: 500
+      max_tokens: 1000
     })
 
-    const analysis = JSON.parse(response.choices[0].message.content)
+    let analysis
+    try {
+      const content = response.choices[0].message.content
+      if (!content) {
+        throw new Error('Empty response content')
+      }
+      analysis = JSON.parse(content)
+    } catch (parseError) {
+      console.error('[SPAM CHECK] JSON parsing error:', parseError.message)
+      console.error('[SPAM CHECK] Raw response content:', response.choices && response.choices[0] && response.choices[0].message && response.choices[0].message.content)
+      return null // Return null to indicate parsing failure
+    }
+
     const isSpam = analysis.classification === 'SPAM'
     const confidence = parseInt(analysis.confidence) || 70
 
