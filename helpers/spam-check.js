@@ -62,18 +62,6 @@ const hasUserProfile = (ctx) => {
 }
 
 /**
- * Analyze message frequency
- */
-const analyzeMessageFrequency = (userStats) => {
-  if (!userStats) return { isRapidFire: false, messagesPerMinute: 0 }
-  return {
-    isRapidFire: false,
-    messagesPerMinute: 0,
-    recentMessageCount: userStats.messagesCount || 0
-  }
-}
-
-/**
  * Calculate dynamic threshold for LLM - Professional approach to minimize false positives
  */
 const calculateDynamicThreshold = (context, groupSettings) => {
@@ -284,8 +272,7 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
       hasProfile: hasUserProfile(ctx),
       messageCount: (ctx.session && ctx.session.userStats && ctx.session.userStats.messagesCount) || 0,
       previousWarnings: (ctx.session && ctx.session.userStats && ctx.session.userStats.warningsCount) || 0,
-      accountAge: getAccountAge(ctx),
-      messageFrequency: analyzeMessageFrequency(ctx.session && ctx.session.userStats)
+      accountAge: getAccountAge(ctx)
     }
 
     // Extract features from message
