@@ -21,6 +21,11 @@ const openRouter = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY
 })
 
+// Create OpenAI client for moderation
+const openAI = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+})
+
 // Schedule cleanup tasks on startup
 let cleanupInitialized = false
 const initializeCleanup = () => {
@@ -98,12 +103,162 @@ const calculateDynamicThreshold = (context, groupSettings) => {
 }
 
 /**
+ * Get message photo URL for moderation
+ */
+const getMessagePhotoUrl = async (ctx, messagePhoto) => {
+  try {
+    if (!messagePhoto || !messagePhoto.file_id) return null
+
+    const fileLink = await ctx.telegram.getFileLink(messagePhoto.file_id)
+    return fileLink
+  } catch (error) {
+    console.error('[MODERATION] Error getting message photo:', error.message)
+    return null
+  }
+}
+
+/**
+ * Get user profile photo URL for moderation
+ */
+const getUserProfilePhotoUrl = async (ctx) => {
+  try {
+    if (!ctx.from || !ctx.from.id) return null
+
+    const userProfilePhotos = await ctx.telegram.getUserProfilePhotos(ctx.from.id, 0, 1)
+    if (!userProfilePhotos.photos || userProfilePhotos.photos.length === 0) {
+      return null
+    }
+
+    const photo = userProfilePhotos.photos[0][0] // Get the smallest size for moderation
+    const fileLink = await ctx.telegram.getFileLink(photo.file_id)
+    return fileLink
+  } catch (error) {
+    console.error('[MODERATION] Error getting user profile photo:', error.message)
+    return null
+  }
+}
+
+/**
+ * Check message content using OpenAI moderation API
+ */
+const checkOpenAIModeration = async (messageText, imageUrl = null, imageType = 'unknown') => {
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      console.log('[MODERATION] OpenAI API key not configured, skipping moderation check')
+      return null
+    }
+
+    const input = []
+
+    // Add text if present
+    if (messageText && messageText.trim()) {
+      input.push({ type: 'text', text: messageText })
+    }
+
+    // Add single image if provided
+    if (imageUrl) {
+      input.push({
+        type: 'image_url',
+        image_url: {
+          url: imageUrl
+        }
+      })
+      console.log(`[MODERATION] Adding ${imageType} to moderation check`)
+    }
+
+    if (input.length === 0) {
+      return null
+    }
+
+    const response = await openAI.moderations.create({
+      model: 'omni-moderation-latest',
+      input: input.length === 1 ? input[0].text : input
+    })
+
+    const result = response.results[0]
+
+    if (result.flagged) {
+      const flaggedCategories = Object.entries(result.categories)
+        .filter(([_, flagged]) => flagged)
+        .map(([category, _]) => category)
+
+      const highestScore = Math.max(...Object.values(result.category_scores))
+
+      console.log(`[MODERATION] Content flagged: ${flaggedCategories.join(', ')} (highest score: ${(highestScore * 100).toFixed(1)}%)`)
+
+      return {
+        flagged: true,
+        categories: flaggedCategories,
+        highestScore: highestScore * 100,
+        reason: `Inappropriate content: ${flaggedCategories.join(', ')}`
+      }
+    }
+
+    console.log('[MODERATION] Content passed moderation check')
+    return { flagged: false }
+  } catch (error) {
+    console.error('[MODERATION] Error during moderation check:', error.message)
+    return null
+  }
+}
+
+/**
  * Main spam check function using hybrid approach
  */
 const checkSpam = async (messageText, ctx, groupSettings) => {
   try {
     // Initialize cleanup on first run
     initializeCleanup()
+
+    // Check with OpenAI moderation first - if flagged, treat as high-priority spam
+    const messagePhoto = ctx.message && ctx.message.photo && ctx.message.photo[0] ? ctx.message.photo[0] : null
+    const userAvatarUrl = await getUserProfilePhotoUrl(ctx)
+
+    // Check text content first
+    const textModerationResult = await checkOpenAIModeration(messageText, null, 'text')
+    if (textModerationResult && textModerationResult.flagged) {
+      console.log(`[SPAM CHECK] Text flagged by OpenAI moderation: ${textModerationResult.reason}`)
+      return {
+        isSpam: true,
+        confidence: Math.max(90, textModerationResult.highestScore),
+        reason: textModerationResult.reason,
+        source: 'openai_moderation_text',
+        categories: textModerationResult.categories
+      }
+    }
+
+    // Check message photo if present
+    if (messagePhoto && messagePhoto.file_id) {
+      const messagePhotoUrl = await getMessagePhotoUrl(ctx, messagePhoto)
+      if (messagePhotoUrl) {
+        const photoModerationResult = await checkOpenAIModeration(messageText, messagePhotoUrl, 'message photo')
+        if (photoModerationResult && photoModerationResult.flagged) {
+          console.log(`[SPAM CHECK] Message photo flagged by OpenAI moderation: ${photoModerationResult.reason}`)
+          return {
+            isSpam: true,
+            confidence: Math.max(90, photoModerationResult.highestScore),
+            reason: photoModerationResult.reason,
+            source: 'openai_moderation_photo',
+            categories: photoModerationResult.categories
+          }
+        }
+      }
+    }
+
+    // Check user avatar if present
+    if (userAvatarUrl) {
+      const avatarModerationResult = await checkOpenAIModeration(messageText, userAvatarUrl, 'user avatar')
+      if (avatarModerationResult && avatarModerationResult.flagged) {
+        console.log(`[SPAM CHECK] User avatar flagged by OpenAI moderation: ${avatarModerationResult.reason}`)
+        return {
+          isSpam: true,
+          confidence: Math.max(90, avatarModerationResult.highestScore),
+          reason: avatarModerationResult.reason,
+          source: 'openai_moderation_avatar',
+          categories: avatarModerationResult.categories
+        }
+      }
+    }
 
     // Create user context for analysis
     const userContext = {
@@ -322,5 +477,8 @@ const checkTrustedUser = (userId, ctx) => {
 module.exports = {
   checkSpam,
   checkTrustedUser,
-  getSpamSettings
+  getSpamSettings,
+  checkOpenAIModeration,
+  getUserProfilePhotoUrl,
+  getMessagePhotoUrl
 }
