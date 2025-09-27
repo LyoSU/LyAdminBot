@@ -327,6 +327,32 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     if (ctx.message && ctx.message.quote && ctx.message.quote.text) {
       contextInfo.push(`Quoted text: "${ctx.message.quote.text.trim()}"`)
     }
+
+    // Add regular reply info if present
+    if (ctx.message && ctx.message.reply_to_message) {
+      const replyTo = ctx.message.reply_to_message
+      const replyInfo = []
+
+      // Add info about the user being replied to
+      if (replyTo.from) {
+        const replyToUser = replyTo.from.username ? `@${replyTo.from.username}` : replyTo.from.first_name
+        replyInfo.push(`Reply to: ${replyToUser}`)
+      }
+
+      // Add snippet of original message text if available (longer for better context)
+      if (replyTo.text && replyTo.text.trim()) {
+        const snippet = replyTo.text.trim().substring(0, 200)
+        replyInfo.push(`Original message: "${snippet}${replyTo.text.length > 200 ? '...' : ''}"`)
+      } else if (replyTo.caption && replyTo.caption.trim()) {
+        const snippet = replyTo.caption.trim().substring(0, 200)
+        replyInfo.push(`Original caption: "${snippet}${replyTo.caption.length > 200 ? '...' : ''}"`)
+      }
+
+      if (replyInfo.length > 0) {
+        contextInfo.push(`Reply context: ${replyInfo.join(', ')}`)
+      }
+    }
+
     if (ctx.message && ctx.message.external_reply) {
       const externalReply = ctx.message.external_reply
       const replyInfo = []
@@ -362,20 +388,29 @@ SPAM indicators:
 • Phishing: requests for personal data, suspicious links
 • Suspicious user bio: crypto promotions, dating links, spam patterns
 • Suspicious quoted text: spam content being referenced or promoted
+• Suspicious reply patterns: inappropriate replies to legitimate messages
 • External replies: replies to messages from suspicious channels or chats
 
 CLEAN indicators:
 • Normal conversation and questions
-• Contextual replies to previous messages
+• Contextual replies to previous messages that make sense in context
 • Legitimate discussions related to group topic
 • Messages from premium users or established accounts
+• Helpful responses to specific requests (e.g., providing asked-for links, answering questions)
+• Replies that directly address the content of the original message
 
 Classification guidelines:
 • SPAM confidence 90-100%: Clear malicious intent, obvious patterns
 • SPAM confidence 80-89%: Strong spam indicators but some uncertainty
 • SPAM confidence 70-79%: Suspicious but borderline cases
 • CLEAN confidence 85-100%: Clearly legitimate content
-• Be conservative - when in doubt, classify as CLEAN to avoid false positives`
+• Be conservative - when in doubt, classify as CLEAN to avoid false positives
+
+Special attention to reply context:
+• If message is a reply, analyze if the response makes sense given the original message
+• Links/promotions may be legitimate if they were specifically requested
+• Consider if the reply directly addresses questions or requests in the original message
+• Unsolicited promotions in replies to unrelated messages are suspicious`
 
     const userPrompt = `Message to classify: "${messageText}"
 
