@@ -324,6 +324,33 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     if (userContext.isNewAccount) contextInfo.push('New account: Yes')
     if (userContext.messageCount !== undefined) contextInfo.push(`Message count: ${userContext.messageCount}`)
     if (userBio && userBio.trim()) contextInfo.push(`User bio: "${userBio.trim()}"`)
+    if (ctx.message && ctx.message.quote && ctx.message.quote.text) {
+      contextInfo.push(`Quoted text: "${ctx.message.quote.text.trim()}"`)
+    }
+    if (ctx.message && ctx.message.external_reply) {
+      const externalReply = ctx.message.external_reply
+      const replyInfo = []
+
+      // Add origin information
+      if (externalReply.origin) {
+        if (externalReply.origin.type === 'user' && externalReply.origin.sender_user) {
+          replyInfo.push(`Reply to user: @${externalReply.origin.sender_user.username || externalReply.origin.sender_user.first_name}`)
+        } else if (externalReply.origin.type === 'channel' && externalReply.origin.chat) {
+          replyInfo.push(`Reply to channel: ${externalReply.origin.chat.title || externalReply.origin.chat.username}`)
+        } else if (externalReply.origin.type === 'chat' && externalReply.origin.sender_chat) {
+          replyInfo.push(`Reply to chat: ${externalReply.origin.sender_chat.title}`)
+        }
+      }
+
+      // Add chat info if available
+      if (externalReply.chat && externalReply.chat.title) {
+        replyInfo.push(`Original chat: "${externalReply.chat.title}"`)
+      }
+
+      if (replyInfo.length > 0) {
+        contextInfo.push(`External reply: ${replyInfo.join(', ')}`)
+      }
+    }
 
     const systemPrompt = `You are an expert Telegram spam detection system. Your task is to classify messages as SPAM or CLEAN.
 
@@ -333,6 +360,9 @@ SPAM indicators:
 • Scam schemes: fake giveaways, "click here to win", lottery winners
 • Mass promotions: unsolicited advertising, group invitations
 • Phishing: requests for personal data, suspicious links
+• Suspicious user bio: crypto promotions, dating links, spam patterns
+• Suspicious quoted text: spam content being referenced or promoted
+• External replies: replies to messages from suspicious channels or chats
 
 CLEAN indicators:
 • Normal conversation and questions
