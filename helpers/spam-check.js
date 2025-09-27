@@ -139,6 +139,21 @@ const getUserProfilePhotoUrl = async (ctx) => {
 }
 
 /**
+ * Get user bio from Telegram getChat API
+ */
+const getUserBio = async (ctx) => {
+  try {
+    if (!ctx.from || !ctx.from.id) return null
+
+    const chatInfo = await ctx.telegram.getChat(ctx.from.id)
+    return chatInfo.bio || null
+  } catch (error) {
+    console.error('[MODERATION] Error getting user bio:', error.message)
+    return null
+  }
+}
+
+/**
  * Check message content using OpenAI moderation API
  */
 const checkOpenAIModeration = async (messageText, imageUrl = null, imageType = 'unknown') => {
@@ -213,6 +228,7 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     // Check with OpenAI moderation first - if flagged, treat as high-priority spam
     const messagePhoto = ctx.message && ctx.message.photo && ctx.message.photo[0] ? ctx.message.photo[0] : null
     const userAvatarUrl = await getUserProfilePhotoUrl(ctx)
+    const userBio = await getUserBio(ctx)
 
     // Check text content first
     const textModerationResult = await checkOpenAIModeration(messageText, null, 'text')
@@ -320,6 +336,7 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     if (userContext.isPremium) contextInfo.push('Premium user: Yes')
     if (userContext.isNewAccount) contextInfo.push('New account: Yes')
     if (userContext.messageCount !== undefined) contextInfo.push(`Message count: ${userContext.messageCount}`)
+    if (userBio && userBio.trim()) contextInfo.push(`User bio: "${userBio.trim()}"`)
 
     const systemPrompt = `You are an expert Telegram spam detection system. Your task is to classify messages as SPAM or CLEAN.
 
@@ -480,5 +497,6 @@ module.exports = {
   getSpamSettings,
   checkOpenAIModeration,
   getUserProfilePhotoUrl,
-  getMessagePhotoUrl
+  getMessagePhotoUrl,
+  getUserBio
 }
