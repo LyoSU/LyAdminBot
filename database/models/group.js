@@ -44,12 +44,6 @@ const groupSchema = mongoose.Schema({
     }],
     removeLng: Array,
     locale: String,
-    quote: {
-      backgroundColor: {
-        type: String,
-        default: '#130f1c'
-      }
-    },
     cas: {
       type: Boolean,
       default: true
