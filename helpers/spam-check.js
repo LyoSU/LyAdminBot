@@ -143,6 +143,7 @@ const getUserBio = async (ctx) => {
 
 /**
  * Check message content using OpenAI moderation API
+ * Only flags content for categories relevant to Telegram group moderation
  */
 const checkOpenAIModeration = async (messageText, imageUrl = null, imageType = 'unknown') => {
   try {
@@ -180,12 +181,24 @@ const checkOpenAIModeration = async (messageText, imageUrl = null, imageType = '
 
     const result = response.results[0]
 
-    if (result.flagged) {
-      const flaggedCategories = Object.entries(result.categories)
-        .filter(([_, flagged]) => flagged)
-        .map(([category, _]) => category)
+    // Whitelist only relevant categories for Telegram moderation
+    const relevantCategories = [
+      'sexual',
+      'sexual/minors'
+    ]
 
-      const highestScore = Math.max(...Object.values(result.category_scores))
+    // Filter flagged categories to only include relevant ones
+    const flaggedCategories = Object.entries(result.categories)
+      .filter(([category, flagged]) => flagged && relevantCategories.includes(category))
+      .map(([category, _]) => category)
+
+    if (flaggedCategories.length > 0) {
+      // Get highest score only from relevant categories
+      const relevantScores = Object.entries(result.category_scores)
+        .filter(([category, _]) => relevantCategories.includes(category))
+        .map(([_, score]) => score)
+
+      const highestScore = Math.max(...relevantScores)
 
       console.log(`[MODERATION] Content flagged: ${flaggedCategories.join(', ')} (highest score: ${(highestScore * 100).toFixed(1)}%)`)
 
