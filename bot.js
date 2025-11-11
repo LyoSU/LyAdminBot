@@ -85,7 +85,7 @@ const i18n = new I18n({
 
 bot.use(rateLimit({
   window: 1000,
-  limit: 1
+  limit: 5
 }))
 
 bot.use(session({ ttl: 60 * 5 }))
