@@ -78,11 +78,13 @@ bot.use((ctx, next) => {
       errorMsg.includes('have no rights to send a message') ||
       errorMsg.includes('need administrator rights')
     ) {
-      console.log(`[BOT] Cannot write to chat ${ctx.chat?.id}, leaving...`)
+      const chatId = ctx.chat && ctx.chat.id
+      const chatTitle = ctx.chat && ctx.chat.title
+      console.log(`[BOT] Cannot write to chat ${chatId}, leaving...`)
       try {
-        if (ctx.chat?.id) {
-          await ctx.telegram.leaveChat(ctx.chat.id)
-          console.log(`[BOT] Left chat ${ctx.chat.id} (${ctx.chat.title || 'unknown'})`)
+        if (chatId) {
+          await ctx.telegram.leaveChat(chatId)
+          console.log(`[BOT] Left chat ${chatId} (${chatTitle || 'unknown'})`)
         }
       } catch (leaveError) {
         console.log(`[BOT] Failed to leave chat: ${leaveError.message}`)
