@@ -125,6 +125,24 @@ module.exports = async (ctx) => {
     return
   }
 
+  // Only check actual user content (whitelist approach)
+  const hasUserContent = ctx.message && (
+    ctx.message.text ||
+    ctx.message.caption ||
+    ctx.message.photo ||
+    ctx.message.video ||
+    ctx.message.document ||
+    ctx.message.audio ||
+    ctx.message.voice ||
+    ctx.message.video_note ||
+    ctx.message.sticker ||
+    ctx.message.animation
+  )
+
+  if (!hasUserContent) {
+    return
+  }
+
   // Skip if user is in trusted whitelist - except in test mode
   if (!isTestMode && checkTrustedUser(senderId, ctx)) {
     console.log(`[SPAM CHECK] ⭐ Skipping trusted user ${userName(senderInfo)} (ID: ${senderId})`)
