@@ -33,7 +33,7 @@ const initializeCollection = async () => {
         },
         // Optimize for high-speed searches with good recall
         hnsw_config: {
-          m: 32,           // Increased for better accuracy (spam detection needs precision)
+          m: 32, // Increased for better accuracy (spam detection needs precision)
           ef_construct: 400, // Higher for better graph quality
           full_scan_threshold: 5000 // Lower threshold for better performance
         },
@@ -48,10 +48,10 @@ const initializeCollection = async () => {
         // Optimize storage for spam patterns
         optimizers_config: {
           default_segment_number: 4, // More segments for better parallelization
-          max_segment_size: 50000,   // Larger segments for spam datasets
-          memmap_threshold: 100000,  // Use memmap for large collections
+          max_segment_size: 50000, // Larger segments for spam datasets
+          memmap_threshold: 100000, // Use memmap for large collections
           indexing_threshold: 10000, // Start indexing earlier
-          flush_interval_sec: 30     // More frequent flushes for real-time updates
+          flush_interval_sec: 30 // More frequent flushes for real-time updates
         }
       })
 

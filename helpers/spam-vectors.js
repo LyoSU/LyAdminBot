@@ -115,14 +115,14 @@ const findSimilarVectors = async (embedding, threshold = 0.85, limit = 10, featu
 
     if (features.hasLinks === true) {
       filterConditions.push({
-        key: "features.hasLinks",
+        key: 'features.hasLinks',
         match: { value: true }
       })
     }
 
     if (features.isNewUser !== undefined) {
       filterConditions.push({
-        key: "features.isNewUser",
+        key: 'features.isNewUser',
         match: { value: features.isNewUser }
       })
     }
@@ -186,7 +186,6 @@ const findSimilarVectors = async (embedding, threshold = 0.85, limit = 10, featu
     }
   }
 }
-
 
 /**
  * Get classification based on similar vectors

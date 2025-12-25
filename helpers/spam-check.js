@@ -14,6 +14,9 @@ const {
   isNewAccount,
   getAccountAge
 } = require('./account-age')
+const {
+  calculateVelocityScore
+} = require('./velocity')
 
 // Create OpenRouter client for LLM
 const openRouter = new OpenAI({
@@ -306,6 +309,40 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
       messageCount: (ctx.session && ctx.session.userStats && ctx.session.userStats.messagesCount) || 0,
       previousWarnings: (ctx.session && ctx.session.userStats && ctx.session.userStats.warningsCount) || 0,
       accountAge: getAccountAge(ctx)
+    }
+
+    // Velocity check - detect cross-chat spam patterns
+    try {
+      const velocityResult = await calculateVelocityScore(
+        messageText,
+        ctx.from.id,
+        ctx.chat.id,
+        ctx.message.message_id
+      )
+
+      if (velocityResult.score > 0) {
+        console.log(`[SPAM CHECK] Velocity score: ${(velocityResult.score * 100).toFixed(1)}% (${velocityResult.dominant})`)
+      }
+
+      // High velocity = definite spam (cross-chat spam detected)
+      if (velocityResult.score >= 0.8) {
+        console.log(`[SPAM CHECK] High velocity spam detected: ${velocityResult.recommendation.reason}`)
+        return {
+          isSpam: true,
+          confidence: velocityResult.recommendation.confidence,
+          reason: velocityResult.recommendation.reason,
+          source: 'velocity',
+          velocitySignals: velocityResult.signals
+        }
+      }
+
+      // Medium velocity = boost other spam signals
+      if (velocityResult.score >= 0.4) {
+        userContext.velocityBoost = velocityResult.score * 20 // Up to +8% boost
+        userContext.velocityReason = velocityResult.dominant
+      }
+    } catch (velocityError) {
+      console.error('[SPAM CHECK] Velocity check error:', velocityError.message)
     }
 
     // Extract features from message
