@@ -67,7 +67,29 @@ bot.use((ctx, next) => {
 })
 
 bot.use((ctx, next) => {
-  next().catch((error) => {
+  next().catch(async (error) => {
+    const errorMsg = error.message || error.description || ''
+
+    // Self-kick if bot can't write to group
+    if (
+      errorMsg.includes('CHAT_WRITE_FORBIDDEN') ||
+      errorMsg.includes('bot was kicked') ||
+      errorMsg.includes('bot is not a member') ||
+      errorMsg.includes('have no rights to send a message') ||
+      errorMsg.includes('need administrator rights')
+    ) {
+      console.log(`[BOT] Cannot write to chat ${ctx.chat?.id}, leaving...`)
+      try {
+        if (ctx.chat?.id) {
+          await ctx.telegram.leaveChat(ctx.chat.id)
+          console.log(`[BOT] Left chat ${ctx.chat.id} (${ctx.chat.title || 'unknown'})`)
+        }
+      } catch (leaveError) {
+        console.log(`[BOT] Failed to leave chat: ${leaveError.message}`)
+      }
+      return
+    }
+
     console.log('Oops', error)
   })
   return true
