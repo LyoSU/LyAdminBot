@@ -142,6 +142,21 @@ const getUserBio = async (ctx) => {
 }
 
 /**
+ * Get group description from Telegram getChat API
+ */
+const getGroupDescription = async (ctx) => {
+  try {
+    if (!ctx.chat || !ctx.chat.id) return null
+
+    const chatInfo = await ctx.telegram.getChat(ctx.chat.id)
+    return chatInfo.description || null
+  } catch (error) {
+    console.error('[MODERATION] Error getting group description:', error.message)
+    return null
+  }
+}
+
+/**
  * Check message content using OpenAI moderation API
  * Only flags content for categories relevant to Telegram group moderation
  */
@@ -228,8 +243,13 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
 
     // Check with OpenAI moderation first - if flagged, treat as high-priority spam
     const messagePhoto = ctx.message && ctx.message.photo && ctx.message.photo[0] ? ctx.message.photo[0] : null
-    const userAvatarUrl = await getUserProfilePhotoUrl(ctx)
-    const userBio = await getUserBio(ctx)
+
+    // Fetch additional context in parallel
+    const [userAvatarUrl, userBio, groupDescription] = await Promise.all([
+      getUserProfilePhotoUrl(ctx),
+      getUserBio(ctx),
+      getGroupDescription(ctx)
+    ])
 
     // Check text content first
     const textModerationResult = await checkOpenAIModeration(messageText, null, 'text')
@@ -332,6 +352,7 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     // Prepare context for LLM
     const contextInfo = []
     if (ctx.chat && ctx.chat.title) contextInfo.push(`Group: "${ctx.chat.title}"`)
+    if (groupDescription) contextInfo.push(`Topic: "${groupDescription.substring(0, 150)}"`)
     if (userContext.hasUsername) contextInfo.push(`Username: @${ctx.from.username}`)
     if (userContext.isPremium) contextInfo.push('Premium user: Yes')
     if (userContext.isNewAccount) contextInfo.push('New account: Yes')
@@ -391,46 +412,27 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
       }
     }
 
-    const systemPrompt = `You are an expert Telegram spam detection system. Your task is to classify messages as SPAM or CLEAN.
+    // Static system prompt (cacheable, no dynamic data)
+    const systemPrompt = `Telegram spam classifier. Output JSON with reasoning, classification (SPAM/CLEAN), confidence (0-100).
 
-SPAM indicators:
-• Crypto/trading schemes: "free crypto", "guaranteed profit", "trading signals"
-• Adult content: dating sites, escort services, explicit material
-• Scam schemes: fake giveaways, "click here to win", lottery winners
-• Mass promotions: unsolicited advertising, group invitations
-• Phishing: requests for personal data, suspicious links
-• Suspicious user bio: crypto promotions, dating links, spam patterns
-• Suspicious quoted text: spam content being referenced or promoted
-• Suspicious reply patterns: inappropriate replies to legitimate messages
-• External replies: replies to messages from suspicious channels or chats
+SPAM patterns by confidence:
+95-100: Financial scams, unsolicited dating/adult, phishing, mass promo
+85-94: Promo links from new users, generic greeting+DM invite, spam bio
+70-84: Links without context, vague offers
 
-CLEAN indicators:
-• Normal conversation and questions
-• Contextual replies to previous messages that make sense in context
-• Legitimate discussions related to group topic
-• Messages from premium users or established accounts
-• Helpful responses to specific requests (e.g., providing asked-for links, answering questions)
-• Replies that directly address the content of the original message
+NOT SPAM (even if looks suspicious):
+- Links in response to requests
+- New users answering questions helpfully
+- Established users (10+ msgs) sharing content
+- Replies addressing original message
 
-Classification guidelines:
-• SPAM confidence 90-100%: Clear malicious intent, obvious patterns
-• SPAM confidence 80-89%: Strong spam indicators but some uncertainty
-• SPAM confidence 70-79%: Suspicious but borderline cases
-• CLEAN confidence 85-100%: Clearly legitimate content
-• Be conservative - when in doubt, classify as CLEAN to avoid false positives
+Decision: Check reply context first → evaluate intent → trust premium/established users → when uncertain prefer CLEAN`
 
-Special attention to reply context:
-• If message is a reply, analyze if the response makes sense given the original message
-• Links/promotions may be legitimate if they were specifically requested
-• Consider if the reply directly addresses questions or requests in the original message
-• Unsolicited promotions in replies to unrelated messages are suspicious`
+    // Dynamic user prompt with all context
+    const userPrompt = `${messageText}
 
-    const userPrompt = `Message to classify: "${messageText}"
-
-User context:
-${contextInfo.join('\n')}
-
-Analyze and classify this message.`
+---
+${contextInfo.join(' | ')}`
 
     // Use OpenRouter for LLM analysis with structured output
     const response = await openRouter.chat.completions.create({
