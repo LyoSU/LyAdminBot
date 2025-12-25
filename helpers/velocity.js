@@ -540,7 +540,7 @@ const analyzeNetwork = async (userId) => {
   const userLinks = await store.smembers(`vel:user:${userId}:links`)
 
   if (userLinks.length === 0) {
-    return { isPartOfNetwork: false, connections: [] }
+    return { isPartOfNetwork: false, isCoordinated: false, connectionCount: 0, connections: [] }
   }
 
   // Find other users who shared same links

@@ -524,7 +524,14 @@ ${contextInfo.join(' | ')}`
     }
 
     const isSpam = analysis.classification === 'SPAM'
-    const confidence = parseInt(analysis.confidence) || 70
+    let confidence = parseInt(analysis.confidence) || 70
+
+    // Apply velocity boost if suspicious patterns detected
+    if (isSpam && userContext.velocityBoost) {
+      const boostedConfidence = Math.min(99, confidence + userContext.velocityBoost)
+      console.log(`[SPAM CHECK] Velocity boost: +${userContext.velocityBoost.toFixed(1)}% (${userContext.velocityReason})`)
+      confidence = Math.round(boostedConfidence)
+    }
 
     console.log(`[SPAM CHECK] OpenRouter result: ${isSpam ? 'SPAM' : 'CLEAN'} (${confidence}%)`)
 
