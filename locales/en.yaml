@@ -226,6 +226,7 @@ report:
   need_reply: "↩️ Reply to a message to report it"
   cant_report_bot: "🤖 Can't report bots"
   cant_report_self: "🙃 You can't report yourself"
+  cant_report_admin: "👮 Can't report admins"
   rate_limited: "⏳ Too many reports. Wait ${seconds}s"
   spam_check_disabled: "❌ AI spam check is disabled in this group"
   no_content: "📭 No text content to analyze"

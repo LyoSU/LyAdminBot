@@ -251,6 +251,7 @@ const handleReport = async (ctx) => {
 const isBotMentionReport = (ctx) => {
   if (!ctx.message || !ctx.message.text) return false
   if (!ctx.message.reply_to_message) return false
+  if (!ctx.botInfo || !ctx.botInfo.username) return false
 
   const botUsername = ctx.botInfo.username.toLowerCase()
   const text = ctx.message.text.toLowerCase()
