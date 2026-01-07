@@ -1,70 +1,43 @@
 private:
   start: |
-    Hello, <b>${name}</b>! 👋
+    Hey, <b>${name}</b>!
 
-    I'm <b>LyAdminBot</b> - I'll help you administer your group.
+    <b>LyAdminBot</b> — AI-powered moderation for your group.
 
-    🔧 <b>My capabilities:</b>
-    • Member moderation (bans, kicks)
-    • Welcome settings for new members
-    • AI-powered spam protection
-    • Member activity statistics
-    • Extra commands for quick responses
-    • Group sticker pack management
+    🤖 <b>AI automatically removes:</b>
+    • Spam & ads
+    • Scams & fraud
+    • Suspicious links
 
-    📝 Use /help to view all commands
+    Just add to your group and make admin — it works automatically.
 
-    <b>👨🏻‍💻 Developer's blog (Russian):</b> @LyBlog
-  btn_add: Add to the group
+    /help — all commands
+  btn_add: Add to group
 cmd:
   help: |
-    🤖 <b>LyAdminBot</b> - bot for group administration
+    🤖 <b>LyAdminBot</b>
 
-    📋 <b>BASIC COMMANDS:</b>
-    /ping - check bot status and show statistics
-    /mystats - your personal statistics in the group
-    /top - top most active group members
-    /top_banan - top members by ban time 🍌
-    /extras - list of all extra commands in the group
-    /lang - change interface language
+    <b>AI MODERATION:</b>
+    <code>!spam</code> — AI filter settings
+    <code>!spam on/off</code> — enable/disable
+    <code>!spam globalban on/off</code> — global ban
+    <code>!cas</code> — CAS protection
+    <code>!banChannel</code> — ban channels
 
-    ⚖️ <b>MODERATION:</b>
-    /banan - issue a ban (admins only)
-    /kick - remove member from group (admins only)
-    /del - delete message (admins only)
+    <b>MODERATION:</b>
+    /banan — ban  •  /kick — kick  •  /del — delete
 
-    🎉 <b>WELCOME SETTINGS (admins only):</b>
-    <code>!welcome</code> - enable/disable new member greetings
-    <code>!gif</code> - add/remove GIF in reply to message
-    <code>!text</code> - add/remove text in reply to message
-    <code>!gif-reset</code> - clear all greeting GIFs
-    <code>!text-reset</code> - clear all greeting texts
+    <b>STATS:</b>
+    /mystats — your stats
+    /top — most active  •  /top_banan — most banned
 
-    🔧 <b>EXTRA COMMANDS (admins only):</b>
-    <code>!extra name</code> - create extra command #name
-    <code>!extra-max 5</code> - maximum extra commands in one message
+    <b>WELCOME:</b>
+    <code>!welcome</code> — on/off
+    <code>!gif</code> / <code>!text</code> — add content
 
-    🛡️ <b>SPAM PROTECTION (admins only):</b>
-    <code>!spam</code> - show spam filter settings
-    <code>!spam on/off</code> - enable/disable AI checking
-    <code>!spam globalban on/off</code> - global ban for spammers
-    <code>!cas</code> - enable/disable CAS protection
-    <code>!banChannel</code> - ban messages from channels
-
-    ⚙️ <b>SETTINGS (admins only):</b>
-    <code>!json</code> - export group settings
-    <code>!reset</code> - reset all group settings
-    <code>!members</code> - get member list in PM
-
-    💡 <b>ADDITIONAL FEATURES:</b>
-    • Automatic deletion of messages in certain languages
-    • Activity statistics tracking for members
-    • 🍌 ban system with automatic time increase
-    • Group sticker pack support
-
-    <b>👨🏻‍💻 Developer:</b> @LyBlog
-    <b>📂 GitHub:</b> github.com/LyoSU/LyAdminBot
-    <b>GitHub:</b> github.com/LyoSU/LyAdminBot
+    <b>OTHER:</b>
+    <code>!extra name</code> — quick commands #name
+    /extras — list  •  /lang — language  •  /ping — status
   my_stats:
     send_pm: Stats sent in a PM
     chat: |
