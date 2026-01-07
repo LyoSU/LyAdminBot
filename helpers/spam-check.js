@@ -58,6 +58,56 @@ const isTrustedUser = (userId, groupSettings) => {
 }
 
 /**
+ * Escape special regex characters to prevent ReDoS attacks
+ */
+const escapeRegexPattern = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
+ * Apply custom rules to message text
+ * Rules format: "ALLOW: pattern" or "DENY: pattern"
+ * DENY rules have priority over ALLOW rules
+ *
+ * @param {string} messageText - The message text to check
+ * @param {string[]} customRules - Array of custom rules
+ * @returns {Object|null} - { action: 'allow'|'deny', rule: string } or null if no match
+ */
+const applyCustomRules = (messageText, customRules) => {
+  if (!customRules || customRules.length === 0 || !messageText) {
+    return null
+  }
+
+  const textLower = messageText.toLowerCase()
+  let allowMatch = null
+
+  for (const rule of customRules) {
+    const isDeny = rule.startsWith('DENY:')
+    const isAllow = rule.startsWith('ALLOW:')
+
+    if (!isDeny && !isAllow) continue
+
+    // Extract pattern after "ALLOW: " or "DENY: "
+    const pattern = rule.substring(rule.indexOf(':') + 1).trim().toLowerCase()
+    if (!pattern) continue
+
+    // Check if pattern matches (simple substring match, case-insensitive)
+    // For more advanced matching, could use regex but that requires careful escaping
+    const patternMatches = textLower.includes(pattern)
+
+    if (patternMatches) {
+      if (isDeny) {
+        // DENY has priority - return immediately
+        return { action: 'deny', rule: pattern, type: 'DENY' }
+      } else if (isAllow && !allowMatch) {
+        // Store first ALLOW match, but continue checking for DENY
+        allowMatch = { action: 'allow', rule: pattern, type: 'ALLOW' }
+      }
+    }
+  }
+
+  return allowMatch
+}
+
+/**
  * Check if user has user profile (bio, photo, etc)
  */
 const hasUserProfile = (ctx) => {
@@ -283,6 +333,30 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
   try {
     // Initialize cleanup on first run
     initializeCleanup()
+
+    // Apply custom rules first (fastest check)
+    if (groupSettings && groupSettings.customRules) {
+      const ruleResult = applyCustomRules(messageText, groupSettings.customRules)
+      if (ruleResult) {
+        if (ruleResult.action === 'deny') {
+          spamLog.info({ rule: ruleResult.rule }, 'Message blocked by DENY rule')
+          return {
+            isSpam: true,
+            confidence: 95,
+            reason: `Blocked by custom rule: "${ruleResult.rule}"`,
+            source: 'custom_rule_deny'
+          }
+        } else if (ruleResult.action === 'allow') {
+          spamLog.debug({ rule: ruleResult.rule }, 'Message allowed by ALLOW rule')
+          return {
+            isSpam: false,
+            confidence: 95,
+            reason: `Allowed by custom rule: "${ruleResult.rule}"`,
+            source: 'custom_rule_allow'
+          }
+        }
+      }
+    }
 
     // Check with OpenAI moderation first - if flagged, treat as high-priority spam
     const messagePhoto = ctx.message && ctx.message.photo && ctx.message.photo[0] ? ctx.message.photo[0] : null

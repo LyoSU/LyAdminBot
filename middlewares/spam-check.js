@@ -2,6 +2,7 @@ const { userName } = require('../utils')
 const { checkSpam, checkTrustedUser, getSpamSettings } = require('../helpers/spam-check')
 const { saveSpamVector } = require('../helpers/spam-vectors')
 const { generateEmbedding, extractFeatures } = require('../helpers/message-embeddings')
+const { processSpamAction } = require('../helpers/reputation')
 const { spam: spamLog, spamAction, reputation: repLog, notification: notifyLog } = require('../helpers/logger')
 
 /**
@@ -155,16 +156,19 @@ module.exports = async (ctx) => {
     return
   }
 
-  // Skip if user is in trusted whitelist - except in test mode
-  if (!isTestMode && checkTrustedUser(senderId, ctx)) {
-    spamLog.debug({ userId: senderId, userName: userName(senderInfo) }, 'Skipping trusted user')
-    return
-  }
-
-  // Skip if user has trusted global reputation (score >= 75)
+  // Unified trust check: local trusted list OR global reputation 'trusted'
   const userReputation = ctx.session && ctx.session.userInfo && ctx.session.userInfo.reputation
-  if (!isTestMode && userReputation && userReputation.status === 'trusted') {
-    spamLog.debug({ userId: senderId, userName: userName(senderInfo), score: userReputation.score }, 'Skipping globally trusted user')
+  const isLocalTrusted = checkTrustedUser(senderId, ctx)
+  const isGlobalTrusted = userReputation && userReputation.status === 'trusted'
+
+  if (!isTestMode && (isLocalTrusted || isGlobalTrusted)) {
+    const trustSource = isLocalTrusted ? 'local_list' : 'global_reputation'
+    spamLog.debug({
+      userId: senderId,
+      userName: userName(senderInfo),
+      trustSource,
+      score: userReputation ? userReputation.score : 'N/A'
+    }, 'Skipping trusted user')
     return
   }
 
@@ -372,19 +376,32 @@ module.exports = async (ctx) => {
           }
         }
 
-        // Update global reputation stats on spam action
-        if (ctx.session && ctx.session.userInfo) {
-          // Initialize globalStats if needed (schema has defaults, but session copy might not)
-          const stats = ctx.session.userInfo.globalStats || (ctx.session.userInfo.globalStats = {})
-          stats.spamDetections = (stats.spamDetections || 0) + 1
-          if (deleteSuccess) {
-            stats.deletedMessages = (stats.deletedMessages || 0) + 1
+        // Update global reputation stats and apply global ban if needed
+        if (!isChannelPost && ctx.session && ctx.session.userInfo) {
+          const spamResult = processSpamAction(ctx.session.userInfo, {
+            userId: senderId,
+            messageDeleted: deleteSuccess,
+            confidence: result.confidence,
+            reason: result.reason || 'AI-detected spam',
+            muteSuccess: muteSuccess,
+            globalBanEnabled: spamSettings.globalBan !== false
+          })
+
+          if (spamResult.statsUpdated) {
+            repLog.debug({
+              spamDetections: ctx.session.userInfo.globalStats.spamDetections,
+              newScore: spamResult.newReputation ? spamResult.newReputation.score : 'N/A'
+            }, 'Updated spam stats')
           }
-          // Force reputation recalculation on next message
-          if (ctx.session.userInfo.reputation) {
-            ctx.session.userInfo.reputation.lastCalculated = null
+
+          if (spamResult.globalBanApplied) {
+            spamAction.warn({
+              userId: senderId,
+              userName: userDisplayName,
+              reason: result.reason,
+              confidence: result.confidence
+            }, 'Global ban applied')
           }
-          repLog.debug({ spamDetections: stats.spamDetections }, 'Updated spam stats')
         }
 
         // Save to knowledge base after successful action (higher confidence in spam classification)

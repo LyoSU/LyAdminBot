@@ -1,6 +1,6 @@
 const { userName } = require('../utils')
 const { checkSpam, getSpamSettings } = require('../helpers/spam-check')
-const { calculateReputation } = require('../helpers/reputation')
+const { processSpamAction } = require('../helpers/reputation')
 const { report: reportLog } = require('../helpers/logger')
 
 // Rate limiting: max 3 reports per user per 5 minutes
@@ -301,14 +301,26 @@ const handleReport = async (ctx) => {
         reportLog.error({ err: e.message }, 'Failed to delete')
       }
 
-      // Update target's reputation (only for users, not channels)
+      // Update target's reputation and apply global ban if needed (only for users, not channels)
       if (!isChannelPost && mockCtx.session.userInfo) {
-        const stats = mockCtx.session.userInfo.globalStats || (mockCtx.session.userInfo.globalStats = {})
-        stats.spamDetections = (stats.spamDetections || 0) + 1
-        if (deleted) {
-          stats.deletedMessages = (stats.deletedMessages || 0) + 1
+        const spamResult = processSpamAction(mockCtx.session.userInfo, {
+          userId: targetId,
+          messageDeleted: deleted,
+          confidence: result.confidence,
+          reason: result.reason || 'Spam confirmed via report',
+          muteSuccess: actionTaken,
+          globalBanEnabled: spamSettings.globalBan !== false
+        })
+
+        if (spamResult.globalBanApplied) {
+          reportLog.warn({
+            userId: targetId,
+            targetName,
+            reporter: userName(ctx.from),
+            confidence: result.confidence
+          }, 'Global ban applied via report')
         }
-        mockCtx.session.userInfo.reputation = calculateReputation(stats, targetId)
+
         await mockCtx.session.userInfo.save()
       }
 

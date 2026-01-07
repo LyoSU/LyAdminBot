@@ -141,6 +141,9 @@ cmd:
       enabled: "✅ <b>Global ban on</b>\nSpammers from other groups will be banned here too"
       disabled: "❌ <b>Global ban off</b>\nBans only apply to this group"
       error: "Use <code>!spam globalban on</code> or <code>!spam globalban off</code>"
+    threshold:
+      set: "✅ <b>Confidence threshold set:</b> ${value}%\n\nHigher = fewer false positives, but may miss some spam."
+      error: "❌ Invalid value. Must be 50-95.\n\n<b>Example:</b> <code>!spam threshold 75</code>"
     status:
       title: "🛡 <b>Anti-spam settings</b>"
       enabled_text: "✅ On"
@@ -157,6 +160,7 @@ cmd:
         <code>!spam on</code> — enable
         <code>!spam off</code> — disable
         <code>!spam globalban on/off</code> — global ban
+        <code>!spam threshold 50-95</code> — confidence threshold
         <code>!spam trust</code> — trust user (reply)
         <code>!spam untrust</code> — untrust user (reply)
         <code>!spam allow text</code> — allow

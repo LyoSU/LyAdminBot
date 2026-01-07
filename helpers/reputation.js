@@ -81,9 +81,70 @@ const calculateReputation = (globalStats, userId) => {
   }
 }
 
+/**
+ * Update user stats and optionally set global ban after spam detection
+ * Unified logic used by both spam-check middleware and report handler
+ *
+ * @param {Object} userInfo - User info document from session
+ * @param {Object} options - Options object
+ * @param {number} options.userId - User's Telegram ID
+ * @param {boolean} options.messageDeleted - Whether message was deleted
+ * @param {number} options.confidence - Spam confidence level (0-100)
+ * @param {string} options.reason - Spam reason for global ban
+ * @param {boolean} options.muteSuccess - Whether mute was successful
+ * @param {boolean} options.globalBanEnabled - Whether global ban is enabled in group
+ * @returns {Object} - Updated stats and whether global ban was applied
+ */
+const processSpamAction = (userInfo, options) => {
+  const {
+    userId,
+    messageDeleted = false,
+    confidence = 0,
+    reason = 'AI-detected spam',
+    muteSuccess = false,
+    globalBanEnabled = true
+  } = options
+
+  if (!userInfo) {
+    return { statsUpdated: false, globalBanApplied: false }
+  }
+
+  // Initialize globalStats if needed
+  const stats = userInfo.globalStats || (userInfo.globalStats = {})
+  stats.spamDetections = (stats.spamDetections || 0) + 1
+
+  if (messageDeleted) {
+    stats.deletedMessages = (stats.deletedMessages || 0) + 1
+  }
+
+  // Force reputation recalculation
+  if (userInfo.reputation) {
+    userInfo.reputation.lastCalculated = null
+  }
+
+  // Recalculate reputation
+  userInfo.reputation = calculateReputation(stats, userId)
+
+  // Apply global ban for high-confidence spam
+  let globalBanApplied = false
+  if (muteSuccess && confidence >= 90 && globalBanEnabled) {
+    userInfo.isGlobalBanned = true
+    userInfo.globalBanReason = reason
+    userInfo.globalBanDate = new Date()
+    globalBanApplied = true
+  }
+
+  return {
+    statsUpdated: true,
+    globalBanApplied,
+    newReputation: userInfo.reputation
+  }
+}
+
 module.exports = {
   calculateReputationScore,
   getReputationStatus,
   calculateReputation,
-  getAccountAgeMonths
+  getAccountAgeMonths,
+  processSpamAction
 }

@@ -61,8 +61,17 @@ const groupSchema = mongoose.Schema({
         type: Boolean,
         default: true
       },
+      confidenceThreshold: {
+        type: Number,
+        default: 70,
+        min: 50,
+        max: 95
+      },
       customRules: [{
         type: String
+      }],
+      trustedUsers: [{
+        type: Number
       }]
     }
   },

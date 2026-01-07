@@ -55,9 +55,12 @@ const formatStatusMessage = (settings, i18n) => {
     ? i18n.t('cmd.spam_settings.status.globalban_enabled')
     : i18n.t('cmd.spam_settings.status.globalban_disabled')
 
+  const threshold = settings.confidenceThreshold || 70
+
   let message = `${i18n.t('cmd.spam_settings.status.title')}\n\n`
   message += `<b>Статус:</b> ${status}\n`
   message += `<b>Глобальний бан:</b> ${globalBanStatus}\n`
+  message += `<b>Поріг впевненості:</b> ${threshold}%\n`
 
   if (settings.customRules && settings.customRules.length > 0) {
     message += `<b>Правила:</b> ${settings.customRules.length}\n`
@@ -78,6 +81,7 @@ const initializeSettings = (ctx) => {
     ctx.group.info.settings.openaiSpamCheck = {
       enabled: true,
       globalBan: true,
+      confidenceThreshold: 70,
       customRules: [],
       trustedUsers: []
     }
@@ -85,8 +89,15 @@ const initializeSettings = (ctx) => {
 
   const settings = ctx.group.info.settings.openaiSpamCheck
 
+  // Ensure all fields exist (for groups created before these settings)
   if (!settings.trustedUsers) {
     settings.trustedUsers = []
+  }
+  if (!settings.customRules) {
+    settings.customRules = []
+  }
+  if (settings.confidenceThreshold === undefined) {
+    settings.confidenceThreshold = 70
   }
 
   return settings
@@ -162,6 +173,15 @@ const handleSpamCommand = async (ctx) => {
 
     case 'untrust': {
       return handleUntrustCommand(ctx, args, settings)
+    }
+
+    case 'threshold': {
+      const value = parseInt(args[2])
+      if (isNaN(value) || value < 50 || value > 95) {
+        return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.threshold.error'))
+      }
+      settings.confidenceThreshold = value
+      return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.threshold.set', { value }))
     }
 
     default: {
