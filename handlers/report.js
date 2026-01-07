@@ -96,24 +96,102 @@ const handleReport = async (ctx) => {
   const statusMsg = await ctx.reply(ctx.i18n.t('report.analyzing'))
 
   try {
-    // Fetch target user info from database
+    // Fetch or create target user info from database (like updateUser does)
     let targetUserInfo = null
     try {
-      targetUserInfo = await ctx.db.User.findOne({ telegram_id: targetUser.id })
+      targetUserInfo = await ctx.db.User.findOneAndUpdate(
+        { telegram_id: targetUser.id },
+        {
+          $setOnInsert: {
+            first_name: targetUser.first_name,
+            last_name: targetUser.last_name,
+            username: targetUser.username,
+            globalStats: {
+              totalMessages: 0,
+              groupsActive: 0,
+              groupsList: [],
+              firstSeen: new Date(),
+              lastActive: new Date(),
+              spamDetections: 0,
+              deletedMessages: 0,
+              cleanMessages: 0,
+              manualUnbans: 0
+            },
+            reputation: {
+              score: 50,
+              status: 'neutral',
+              lastCalculated: new Date()
+            }
+          }
+        },
+        { upsert: true, new: true }
+      )
     } catch (dbErr) {
       console.error('[REPORT] DB error:', dbErr.message)
     }
 
+    // Ensure globalStats and reputation exist (for users created before reputation system)
+    if (targetUserInfo) {
+      if (!targetUserInfo.globalStats) {
+        targetUserInfo.globalStats = {
+          totalMessages: 0,
+          groupsActive: 0,
+          groupsList: [],
+          firstSeen: new Date(),
+          lastActive: new Date(),
+          spamDetections: 0,
+          deletedMessages: 0,
+          cleanMessages: 0,
+          manualUnbans: 0
+        }
+      }
+      if (!targetUserInfo.reputation) {
+        targetUserInfo.reputation = {
+          score: 50,
+          status: 'neutral',
+          lastCalculated: new Date()
+        }
+      }
+    }
+
+    // Fetch target user's per-group stats (GroupMember)
+    let targetGroupMember = null
+    try {
+      if (ctx.group && ctx.group.info && ctx.group.info._id) {
+        targetGroupMember = await ctx.db.GroupMember.findOne({
+          group: ctx.group.info._id,
+          telegram_id: targetUser.id
+        })
+      }
+    } catch (dbErr) {
+      console.error('[REPORT] GroupMember DB error:', dbErr.message)
+    }
+
     // Create a mock context for checkSpam with the target user's info
+    const mockGroup = ctx.group ? {
+      ...ctx.group,
+      members: {
+        ...ctx.group.members,
+        [targetUser.id]: targetGroupMember || { stats: { messagesCount: 0 } }
+      }
+    } : null
+
     const mockCtx = {
       ...ctx,
       from: targetUser,
       message: replyMsg,
+      group: mockGroup,
       session: {
         ...ctx.session,
         userInfo: targetUserInfo
       }
     }
+
+    // Debug: log user data being checked
+    const globalStats = (targetUserInfo && targetUserInfo.globalStats) || {}
+    const rep = (targetUserInfo && targetUserInfo.reputation) || {}
+    const groupMsgs = (targetGroupMember && targetGroupMember.stats && targetGroupMember.stats.messagesCount) || 0
+    console.log(`[REPORT] Checking user ${targetUser.first_name} (${targetUser.id}): groupMsgs=${groupMsgs}, globalMsgs=${globalStats.totalMessages || 0}, groups=${globalStats.groupsActive || 0}, reputation=${rep.score || 50} (${rep.status || 'neutral'})`)
 
     // Force spam check
     const result = await checkSpam(messageText || '[Media]', mockCtx, spamSettings)

@@ -318,14 +318,24 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
       }
     }
 
+    // Get message counts from actual data sources
+    const perGroupMessageCount = ctx.group && ctx.group.members && ctx.from &&
+      ctx.group.members[ctx.from.id] && ctx.group.members[ctx.from.id].stats &&
+      ctx.group.members[ctx.from.id].stats.messagesCount
+    const globalMessageCount = ctx.session && ctx.session.userInfo &&
+      ctx.session.userInfo.globalStats && ctx.session.userInfo.globalStats.totalMessages
+    const globalStats = (ctx.session && ctx.session.userInfo && ctx.session.userInfo.globalStats) || {}
+
     // Create user context for analysis
     const userContext = {
       isNewAccount: isNewAccount(ctx),
       isPremium: (ctx.from && ctx.from.is_premium) || false,
       hasUsername: !!(ctx.from && ctx.from.username),
       hasProfile: hasUserProfile(ctx),
-      messageCount: (ctx.session && ctx.session.userStats && ctx.session.userStats.messagesCount) || 0,
-      previousWarnings: (ctx.session && ctx.session.userStats && ctx.session.userStats.warningsCount) || 0,
+      messageCount: perGroupMessageCount || 0,
+      globalMessageCount: globalMessageCount || 0,
+      groupsActive: globalStats.groupsActive || 0,
+      previousWarnings: globalStats.spamDetections || 0,
       accountAge: getAccountAge(ctx),
       // Global reputation from cross-group tracking
       globalReputation: (ctx.session && ctx.session.userInfo && ctx.session.userInfo.reputation) || { score: 50, status: 'neutral' }
@@ -413,7 +423,12 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     if (userContext.hasUsername) contextInfo.push(`Username: @${ctx.from.username}`)
     if (userContext.isPremium) contextInfo.push('Premium user: Yes')
     if (userContext.isNewAccount) contextInfo.push('New account: Yes')
-    if (userContext.messageCount !== undefined) contextInfo.push(`Message count: ${userContext.messageCount}`)
+    if (userContext.messageCount > 0) contextInfo.push(`Messages in group: ${userContext.messageCount}`)
+    if (userContext.globalMessageCount > 0) contextInfo.push(`Total messages (all groups): ${userContext.globalMessageCount}`)
+    if (userContext.groupsActive > 1) contextInfo.push(`Active in ${userContext.groupsActive} groups`)
+    if (userContext.globalReputation && userContext.globalReputation.score !== 50) {
+      contextInfo.push(`Reputation: ${userContext.globalReputation.score}/100 (${userContext.globalReputation.status})`)
+    }
     if (userBio && userBio.trim()) contextInfo.push(`User bio: "${userBio.trim()}"`)
     if (ctx.message && ctx.message.quote && ctx.message.quote.text) {
       contextInfo.push(`Quoted text: "${ctx.message.quote.text.trim()}"`)
