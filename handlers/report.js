@@ -51,24 +51,39 @@ const handleReport = async (ctx) => {
     return ctx.reply(ctx.i18n.t('report.need_reply'))
   }
 
-  // Can't report bots or self
-  const targetUser = replyMsg.from
-  if (!targetUser || targetUser.is_bot) {
-    return ctx.reply(ctx.i18n.t('report.cant_report_bot'))
+  // Check if this is a channel post
+  const senderChat = replyMsg.sender_chat
+  const isChannelPost = senderChat && senderChat.type === 'channel'
+  const isAnonymousAdmin = senderChat && senderChat.id === ctx.chat.id
+
+  // Can't report anonymous admins
+  if (isAnonymousAdmin) {
+    return ctx.reply(ctx.i18n.t('report.cant_report_admin'))
   }
 
-  if (targetUser.id === ctx.from.id) {
-    return ctx.reply(ctx.i18n.t('report.cant_report_self'))
-  }
+  // For channel posts, use sender_chat; for regular messages, use from
+  const targetUser = isChannelPost ? senderChat : replyMsg.from
+  const targetId = isChannelPost ? senderChat.id : (replyMsg.from && replyMsg.from.id)
 
-  // Can't report admins
-  try {
-    const targetMember = await ctx.telegram.getChatMember(ctx.chat.id, targetUser.id)
-    if (targetMember && ['creator', 'administrator'].includes(targetMember.status)) {
-      return ctx.reply(ctx.i18n.t('report.cant_report_admin'))
+  // Can't report bots or self (only for non-channel posts)
+  if (!isChannelPost) {
+    if (!targetUser || targetUser.is_bot) {
+      return ctx.reply(ctx.i18n.t('report.cant_report_bot'))
     }
-  } catch (e) {
-    // User might have left - continue anyway
+
+    if (targetId === ctx.from.id) {
+      return ctx.reply(ctx.i18n.t('report.cant_report_self'))
+    }
+
+    // Can't report admins
+    try {
+      const targetMember = await ctx.telegram.getChatMember(ctx.chat.id, targetId)
+      if (targetMember && ['creator', 'administrator'].includes(targetMember.status)) {
+        return ctx.reply(ctx.i18n.t('report.cant_report_admin'))
+      }
+    } catch (e) {
+      // User might have left - continue anyway
+    }
   }
 
   // Check rate limit
@@ -219,19 +234,30 @@ const handleReport = async (ctx) => {
       // High confidence spam - take action
       const muteDuration = result.confidence >= 90 ? 86400 : 3600 // 24h or 1h
 
-      // Try to restrict user
+      // Try to restrict user or ban channel
       let actionTaken = false
       try {
         const botMember = await ctx.telegram.getChatMember(ctx.chat.id, ctx.botInfo.id)
         if (botMember.can_restrict_members) {
-          await ctx.telegram.restrictChatMember(ctx.chat.id, targetUser.id, {
-            can_send_messages: false,
-            can_send_media_messages: false,
-            can_send_other_messages: false,
-            can_add_web_page_previews: false,
-            until_date: Math.floor(Date.now() / 1000) + muteDuration
-          })
-          actionTaken = true
+          if (isChannelPost) {
+            // For channels, use banChatSenderChat
+            await ctx.telegram.callApi('banChatSenderChat', {
+              chat_id: ctx.chat.id,
+              sender_chat_id: targetId
+            })
+            actionTaken = true
+            console.log(`[REPORT] Banned channel "${targetUser.title}" from posting`)
+          } else {
+            // For regular users, use restrictChatMember
+            await ctx.telegram.restrictChatMember(ctx.chat.id, targetId, {
+              can_send_messages: false,
+              can_send_media_messages: false,
+              can_send_other_messages: false,
+              can_add_web_page_previews: false,
+              until_date: Math.floor(Date.now() / 1000) + muteDuration
+            })
+            actionTaken = true
+          }
         }
       } catch (e) {
         console.error('[REPORT] Failed to restrict:', e.message)
@@ -246,18 +272,22 @@ const handleReport = async (ctx) => {
         console.error('[REPORT] Failed to delete:', e.message)
       }
 
-      // Update target's reputation
-      if (mockCtx.session.userInfo) {
+      // Update target's reputation (only for users, not channels)
+      if (!isChannelPost && mockCtx.session.userInfo) {
         const stats = mockCtx.session.userInfo.globalStats || (mockCtx.session.userInfo.globalStats = {})
         stats.spamDetections = (stats.spamDetections || 0) + 1
         if (deleted) {
           stats.deletedMessages = (stats.deletedMessages || 0) + 1
         }
-        mockCtx.session.userInfo.reputation = calculateReputation(stats, targetUser.id)
+        mockCtx.session.userInfo.reputation = calculateReputation(stats, targetId)
         await mockCtx.session.userInfo.save()
       }
 
       // Edit status message
+      const actionText = isChannelPost
+        ? (actionTaken ? (deleted ? '🚫 Channel banned + 🗑 Deleted' : '🚫 Channel banned') : (deleted ? '🗑 Deleted' : '⚠️ No permissions'))
+        : (actionTaken ? (deleted ? '🔇 Muted + 🗑 Deleted' : '🔇 Muted') : (deleted ? '🗑 Deleted' : '⚠️ No permissions'))
+
       await ctx.telegram.editMessageText(
         ctx.chat.id,
         statusMsg.message_id,
@@ -267,7 +297,7 @@ const handleReport = async (ctx) => {
           target: targetName,
           confidence: result.confidence,
           reason: result.reason || 'Spam detected',
-          action: actionTaken ? (deleted ? '🔇 Muted + 🗑 Deleted' : '🔇 Muted') : (deleted ? '🗑 Deleted' : '⚠️ No permissions')
+          action: actionText
         }),
         { parse_mode: 'HTML' }
       )

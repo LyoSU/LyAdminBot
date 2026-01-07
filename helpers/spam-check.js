@@ -342,38 +342,50 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     }
 
     // Get message counts from actual data sources
-    const perGroupMessageCount = ctx.group && ctx.group.members && ctx.from &&
-      ctx.group.members[ctx.from.id] && ctx.group.members[ctx.from.id].stats &&
-      ctx.group.members[ctx.from.id].stats.messagesCount
+    // Check if this is a channel post
+    const senderChat = ctx.message && ctx.message.sender_chat
+    const isChannelPost = senderChat && senderChat.type === 'channel'
+    const senderId = isChannelPost ? senderChat.id : (ctx.from && ctx.from.id)
+
+    const perGroupMessageCount = ctx.group && ctx.group.members && senderId &&
+      ctx.group.members[senderId] && ctx.group.members[senderId].stats &&
+      ctx.group.members[senderId].stats.messagesCount
     const globalMessageCount = ctx.session && ctx.session.userInfo &&
       ctx.session.userInfo.globalStats && ctx.session.userInfo.globalStats.totalMessages
     const globalStats = (ctx.session && ctx.session.userInfo && ctx.session.userInfo.globalStats) || {}
 
     // Create user context for analysis
     const userContext = {
-      isNewAccount: isNewAccount(ctx),
+      isNewAccount: isChannelPost ? true : isNewAccount(ctx), // Treat channels as "new" - no history
       isPremium: (ctx.from && ctx.from.is_premium) || false,
-      hasUsername: !!(ctx.from && ctx.from.username),
-      hasProfile: hasUserProfile(ctx),
+      hasUsername: isChannelPost ? !!(senderChat.username) : !!(ctx.from && ctx.from.username),
+      hasProfile: isChannelPost ? false : hasUserProfile(ctx),
       messageCount: perGroupMessageCount || 0,
-      globalMessageCount: globalMessageCount || 0,
-      groupsActive: globalStats.groupsActive || 0,
+      globalMessageCount: isChannelPost ? 0 : (globalMessageCount || 0), // No global stats for channels
+      groupsActive: isChannelPost ? 0 : (globalStats.groupsActive || 0),
       previousWarnings: globalStats.spamDetections || 0,
-      accountAge: getAccountAge(ctx),
+      accountAge: isChannelPost ? 'unknown' : getAccountAge(ctx),
       // Global reputation from cross-group tracking
-      globalReputation: (ctx.session && ctx.session.userInfo && ctx.session.userInfo.reputation) || { score: 50, status: 'neutral' },
+      globalReputation: isChannelPost
+        ? { score: 30, status: 'suspicious' } // Channels start with lower trust
+        : (ctx.session && ctx.session.userInfo && ctx.session.userInfo.reputation) || { score: 50, status: 'neutral' },
       // Telegram Stars rating (higher = more trusted buyer)
-      telegramRating: userRating // { level, rating } or null
+      telegramRating: userRating, // { level, rating } or null
+      // Channel-specific info
+      isChannelPost: isChannelPost,
+      channelTitle: isChannelPost ? senderChat.title : null,
+      channelUsername: isChannelPost ? senderChat.username : null
     }
 
     // Velocity check - detect cross-chat spam patterns
+    // Use senderId (which handles channel posts correctly)
     try {
-      if (!ctx.from || !ctx.from.id || !ctx.chat || !ctx.chat.id || !ctx.message) {
+      if (!senderId || !ctx.chat || !ctx.chat.id || !ctx.message) {
         throw new Error('Missing context for velocity check')
       }
       const velocityResult = await calculateVelocityScore(
         messageText,
-        ctx.from.id,
+        senderId, // Use senderId instead of ctx.from.id for channel support
         ctx.chat.id,
         ctx.message.message_id
       )

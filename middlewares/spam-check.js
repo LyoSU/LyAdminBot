@@ -122,26 +122,32 @@ module.exports = async (ctx) => {
     return
   }
 
-  // Skip if user ID is Telegram service notifications (777000) - except in test mode
-  if (!isTestMode && senderId === 777000) {
-    console.log('[SPAM CHECK] ⏭️ Skipping Telegram service message (ID 777000)')
+  // Skip Telegram service/system accounts
+  const TELEGRAM_SERVICE_ID = 777000 // Telegram notifications
+  const GROUP_ANONYMOUS_BOT = 1087968824 // Anonymous admin bot
+  const CHANNEL_BOT = 136817688 // Channel bot (legacy)
+
+  if (!isTestMode && (senderId === TELEGRAM_SERVICE_ID || senderId === GROUP_ANONYMOUS_BOT || senderId === CHANNEL_BOT)) {
+    console.log(`[SPAM CHECK] ⏭️ Skipping Telegram system account (ID: ${senderId})`)
     return
   }
 
   // Skip anonymous admins (posting as the group itself)
+  // But DO check channel posts - spammers use channels to bypass detection
   if (!isTestMode && ctx.message && ctx.message.sender_chat) {
     const senderChat = ctx.message.sender_chat
 
-    // Anonymous admin: sender_chat.id === chat.id
+    // Anonymous admin: sender_chat.id === chat.id - these are trusted group admins
     if (senderChat.id === ctx.chat.id) {
       console.log('[SPAM CHECK] 👤 Skipping anonymous admin (posting as group)')
       return
     }
 
-    // Channel posting (linked channel or user posting as their channel)
+    // Channel posts are checked for spam (don't skip!)
+    // Spammers often create channels to post spam
     if (senderChat.type === 'channel') {
-      console.log(`[SPAM CHECK] 📢 Skipping channel post (${senderChat.title || senderChat.id})`)
-      return
+      console.log(`[SPAM CHECK] 📢 Checking channel post from "${senderChat.title || senderChat.id}"`)
+      // Continue to spam check - don't return
     }
   }
 
@@ -188,25 +194,27 @@ module.exports = async (ctx) => {
     }
   }
 
+  // Check if this is a channel post (no member data available)
+  const isChannelPost = ctx.message && ctx.message.sender_chat && ctx.message.sender_chat.type === 'channel'
+
   // Check number of messages from the user (or force check in test mode)
+  // For channel posts, always check (no member history to base decision on)
   const messageCount = (ctx.group.members[senderId] && ctx.group.members[senderId].stats && ctx.group.members[senderId].stats.messagesCount) || 0
-  const shouldCheckSpam = isTestMode || messageCount <= checkLimit
+  const shouldCheckSpam = isTestMode || isChannelPost || messageCount <= checkLimit
 
   // Log when using non-default check limit
-  if (checkLimit !== 5 && shouldCheckSpam) {
+  if (checkLimit !== 5 && shouldCheckSpam && !isChannelPost) {
     const repStatus = userReputation ? userReputation.status : 'unknown'
     const repScore = userReputation ? userReputation.score : 'N/A'
     console.log(`[SPAM CHECK] 🔍 Extended check for ${repStatus} user (score: ${repScore}, limit: ${checkLimit === Infinity ? '∞' : checkLimit}, msg #${messageCount})`)
   }
 
-  if (ctx.group &&
-      ctx.group.members &&
-      ctx.group.members[senderId] &&
-      ctx.group.members[senderId].stats &&
-      shouldCheckSpam
-  ) {
+  // Check if we have member data OR if this is a channel post (always check channels)
+  const hasMemberData = ctx.group && ctx.group.members && ctx.group.members[senderId] && ctx.group.members[senderId].stats
+  if ((hasMemberData || isChannelPost) && shouldCheckSpam) {
     // Skip if user is an administrator (except in test mode)
-    if (!isTestMode) {
+    // Note: Skip admin check for channel posts (senderId is negative channel ID)
+    if (!isTestMode && !isChannelPost) {
       try {
         const chatMember = await ctx.telegram.getChatMember(ctx.chat.id, senderId)
         if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
@@ -216,7 +224,7 @@ module.exports = async (ctx) => {
       } catch (error) {
         console.log(`[SPAM CHECK] ⚠️ Could not check admin status for user ${senderId}: ${error.message}`)
       }
-    } else {
+    } else if (isTestMode) {
       console.log('[SPAM CHECK] 🧪 TEST MODE - Bypassing admin check')
     }
 
@@ -242,9 +250,10 @@ module.exports = async (ctx) => {
         }
       }
 
-      const actualMessageCount = ctx.group.members[senderId].stats.messagesCount
-      const displayMessageCount = isTestMode ? '[TEST: ignored]' : actualMessageCount
-      console.log(`[SPAM CHECK] 🔍 Checking user ${userName(senderInfo)} (ID: ${senderId}) with ${displayMessageCount} messages`)
+      const actualMessageCount = hasMemberData ? ctx.group.members[senderId].stats.messagesCount : 0
+      const displayMessageCount = isTestMode ? '[TEST: ignored]' : (isChannelPost ? '[channel]' : actualMessageCount)
+      const senderType = isChannelPost ? 'channel' : 'user'
+      console.log(`[SPAM CHECK] 🔍 Checking ${senderType} ${userName(senderInfo)} (ID: ${senderId}) with ${displayMessageCount} messages`)
 
       // Build context for spam check
       const context = {
@@ -258,7 +267,9 @@ module.exports = async (ctx) => {
         username: senderInfo.username,
         messageCount: isTestMode ? 1 : actualMessageCount, // Force first message in test mode
         links: extractLinks(messageText),
-        isTestMode: isTestMode
+        isTestMode: isTestMode,
+        isChannelPost: isChannelPost, // Channel posts are higher risk - no user history
+        channelTitle: isChannelPost ? senderInfo.title : null
       }
 
       let result
@@ -266,6 +277,12 @@ module.exports = async (ctx) => {
         result = await checkSpam(messageText, ctx, spamSettings)
       } catch (error) {
         console.error(`[SPAM CHECK] ❌ Failed for ${userName(senderInfo)} (ID: ${senderId}): ${error.message}`)
+        return false
+      }
+
+      // Handle null/undefined result (e.g., empty LLM response)
+      if (!result) {
+        console.log(`[SPAM CHECK] ⚠️ No result for ${userName(senderInfo)} (ID: ${senderId}) - treating as clean`)
         return false
       }
 
@@ -315,21 +332,32 @@ module.exports = async (ctx) => {
         if (action.action === 'mute_and_delete' || action.action === 'warn_and_restrict') {
           if (canRestrictMembers) {
             try {
-              await ctx.telegram.restrictChatMember(
-                ctx.chat.id,
-                senderId,
-                {
-                  can_send_messages: false,
-                  can_send_media_messages: false,
-                  can_send_other_messages: false,
-                  can_add_web_page_previews: false,
-                  until_date: Math.floor(Date.now() / 1000) + muteDuration
-                }
-              )
-              muteSuccess = true
-              console.log(`[SPAM ACTION] ✅ Successfully muted ${userDisplayName} for ${muteDuration}s`)
+              if (isChannelPost) {
+                // For channels, use banChatSenderChat instead of restrictChatMember
+                await ctx.telegram.callApi('banChatSenderChat', {
+                  chat_id: ctx.chat.id,
+                  sender_chat_id: senderId
+                })
+                muteSuccess = true
+                console.log(`[SPAM ACTION] ✅ Successfully banned channel "${senderInfo.title}" from posting`)
+              } else {
+                // For regular users, use restrictChatMember
+                await ctx.telegram.restrictChatMember(
+                  ctx.chat.id,
+                  senderId,
+                  {
+                    can_send_messages: false,
+                    can_send_media_messages: false,
+                    can_send_other_messages: false,
+                    can_add_web_page_previews: false,
+                    until_date: Math.floor(Date.now() / 1000) + muteDuration
+                  }
+                )
+                muteSuccess = true
+                console.log(`[SPAM ACTION] ✅ Successfully muted ${userDisplayName} for ${muteDuration}s`)
+              }
             } catch (error) {
-              console.error(`[SPAM ACTION] ❌ Failed to mute ${userDisplayName} (ID: ${userId}): ${error.message}`)
+              console.error(`[SPAM ACTION] ❌ Failed to ${isChannelPost ? 'ban channel' : 'mute'} ${userDisplayName} (ID: ${userId}): ${error.message}`)
             }
           } else {
             console.error(`[SPAM ACTION] ❌ Bot lacks permission to restrict members in "${ctx.chat.title}"`)
