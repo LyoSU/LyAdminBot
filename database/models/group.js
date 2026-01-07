@@ -14,7 +14,7 @@ const groupSchema = mongoose.Schema({
     welcome: {
       enable: {
         type: Boolean,
-        default: true
+        default: false
       },
       timer: {
         type: Number,
