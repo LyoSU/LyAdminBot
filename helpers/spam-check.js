@@ -89,8 +89,26 @@ const calculateDynamicThreshold = (context, groupSettings) => {
   if (context.accountAge === 'established') baseThreshold += 10
   if (context.accountAge === 'very_new') baseThreshold -= 5
 
-  // More conservative bounds - no actions below 60%
-  return Math.max(60, Math.min(95, baseThreshold))
+  // Global reputation adjustment
+  if (context.globalReputation) {
+    const rep = context.globalReputation
+    if (rep.status === 'trusted') {
+      // Safety net - should be skipped earlier
+      baseThreshold += 25
+    } else if (rep.status === 'neutral' && rep.score > 60) {
+      // Good reputation neutral users get bonus
+      baseThreshold += Math.floor((rep.score - 50) / 5) * 2 // +2 to +10
+    } else if (rep.status === 'suspicious') {
+      // Lower threshold for suspicious users
+      baseThreshold -= 10
+    } else if (rep.status === 'restricted') {
+      // Very aggressive for restricted users
+      baseThreshold -= 20
+    }
+  }
+
+  // Adjusted bounds - lower floor to 50 for restricted users
+  return Math.max(50, Math.min(95, baseThreshold))
 }
 
 /**
@@ -308,7 +326,9 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
       hasProfile: hasUserProfile(ctx),
       messageCount: (ctx.session && ctx.session.userStats && ctx.session.userStats.messagesCount) || 0,
       previousWarnings: (ctx.session && ctx.session.userStats && ctx.session.userStats.warningsCount) || 0,
-      accountAge: getAccountAge(ctx)
+      accountAge: getAccountAge(ctx),
+      // Global reputation from cross-group tracking
+      globalReputation: (ctx.session && ctx.session.userInfo && ctx.session.userInfo.reputation) || { score: 50, status: 'neutral' }
     }
 
     // Velocity check - detect cross-chat spam patterns

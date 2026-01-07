@@ -16,7 +16,33 @@ const userSchema = mongoose.Schema({
     default: false
   },
   globalBanReason: String,
-  globalBanDate: Date
+  globalBanDate: Date,
+
+  // Global statistics (aggregated across all groups)
+  globalStats: {
+    totalMessages: { type: Number, default: 0 },
+    groupsActive: { type: Number, default: 0 },
+    groupsList: [{ type: Number }],
+    firstSeen: { type: Date, default: Date.now },
+    lastActive: { type: Date, default: Date.now },
+    // Negative signals
+    spamDetections: { type: Number, default: 0 },
+    deletedMessages: { type: Number, default: 0 },
+    // Positive signals
+    cleanMessages: { type: Number, default: 0 },
+    manualUnbans: { type: Number, default: 0 }
+  },
+
+  // Computed reputation
+  reputation: {
+    score: { type: Number, default: 50 },
+    status: {
+      type: String,
+      enum: ['trusted', 'neutral', 'suspicious', 'restricted'],
+      default: 'neutral'
+    },
+    lastCalculated: { type: Date, default: Date.now }
+  }
 }, {
   timestamps: true
 })

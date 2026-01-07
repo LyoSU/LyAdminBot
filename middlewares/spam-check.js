@@ -149,6 +149,13 @@ module.exports = async (ctx) => {
     return
   }
 
+  // Skip if user has trusted global reputation (score >= 75)
+  const userReputation = ctx.session && ctx.session.userInfo && ctx.session.userInfo.reputation
+  if (!isTestMode && userReputation && userReputation.status === 'trusted') {
+    console.log(`[SPAM CHECK] 🌟 Skipping globally trusted user ${userName(senderInfo)} (score: ${userReputation.score})`)
+    return
+  }
+
   // Check number of messages from the user (or force check in test mode)
   const messageCount = (ctx.group.members[senderId] && ctx.group.members[senderId].stats && ctx.group.members[senderId].stats.messagesCount) || 0
   const shouldCheckSpam = isTestMode || messageCount <= 5
@@ -315,6 +322,28 @@ module.exports = async (ctx) => {
           }
         }
 
+        // Update global reputation stats on spam action
+        if (ctx.session && ctx.session.userInfo) {
+          if (!ctx.session.userInfo.globalStats) {
+            ctx.session.userInfo.globalStats = {
+              totalMessages: 0, groupsActive: 0, groupsList: [],
+              firstSeen: new Date(), lastActive: new Date(),
+              spamDetections: 0, deletedMessages: 0, cleanMessages: 0, manualUnbans: 0
+            }
+          }
+          ctx.session.userInfo.globalStats.spamDetections =
+            (ctx.session.userInfo.globalStats.spamDetections || 0) + 1
+          if (deleteSuccess) {
+            ctx.session.userInfo.globalStats.deletedMessages =
+              (ctx.session.userInfo.globalStats.deletedMessages || 0) + 1
+          }
+          // Force reputation recalculation on next message
+          if (ctx.session.userInfo.reputation) {
+            ctx.session.userInfo.reputation.lastCalculated = null
+          }
+          console.log(`[SPAM REPUTATION] 📉 Updated spam stats for ${userDisplayName}: detections=${ctx.session.userInfo.globalStats.spamDetections}`)
+        }
+
         // Save to knowledge base after successful action (higher confidence in spam classification)
         if (result.source === 'openrouter_llm' && result.confidence >= 75 && result.confidence < 90) {
           try {
@@ -374,6 +403,19 @@ module.exports = async (ctx) => {
         }
 
         return true // Stop further processing
+      } else if (!result.isSpam && result.confidence < 30) {
+        // Very confident clean message - boost reputation
+        if (ctx.session && ctx.session.userInfo) {
+          if (!ctx.session.userInfo.globalStats) {
+            ctx.session.userInfo.globalStats = {
+              totalMessages: 0, groupsActive: 0, groupsList: [],
+              firstSeen: new Date(), lastActive: new Date(),
+              spamDetections: 0, deletedMessages: 0, cleanMessages: 0, manualUnbans: 0
+            }
+          }
+          ctx.session.userInfo.globalStats.cleanMessages =
+            (ctx.session.userInfo.globalStats.cleanMessages || 0) + 1
+        }
       }
     }
   }
