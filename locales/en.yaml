@@ -1,15 +1,15 @@
 private:
   start: |
-    Hey, <b>${name}</b>!
+    Hey <b>${name}</b>! 👋
 
-    <b>LyAdminBot</b> — AI-powered moderation for your group.
+    <b>LyAdminBot</b> — your group moderation buddy.
 
-    🤖 <b>AI automatically removes:</b>
-    • Spam & ads
-    • Scams & fraud
-    • Suspicious links
+    🛡 <b>What I do:</b>
+    • Catch spam & ads
+    • Ban scammers
+    • Clean suspicious links
 
-    Just add to your group and make admin — it works automatically.
+    Add me to your group and make me admin — I'll handle the rest.
 
     /help — all commands
   btn_add: Add to group
@@ -17,259 +17,256 @@ cmd:
   help: |
     🤖 <b>LyAdminBot</b>
 
-    <b>AI MODERATION:</b>
-    <code>!spam</code> — AI filter settings
-    <code>!spam on/off</code> — enable/disable
+    <b>ANTI-SPAM:</b>
+    <code>!spam</code> — settings
+    <code>!spam on/off</code> — toggle
     <code>!spam globalban on/off</code> — global ban
     <code>!cas</code> — CAS protection
     <code>!banChannel</code> — ban channels
 
     <b>MODERATION:</b>
     /banan — ban  •  /kick — kick  •  /del — delete
-    /report or @admin — check message for spam (reply)
+    /report or @admin — check for spam (reply)
 
     <b>STATS:</b>
     /mystats — your stats
-    /top — most active  •  /top_banan — most banned
+    /top — most active  •  /top_banan — most bans
 
     <b>WELCOME:</b>
-    <code>!welcome</code> — on/off
+    <code>!welcome</code> — toggle
     <code>!gif</code> / <code>!text</code> — add content
 
     <b>OTHER:</b>
     <code>!extra name</code> — quick commands #name
     /extras — list  •  /lang — language  •  /ping — status
   my_stats:
-    send_pm: Stats sent in a PM
+    send_pm: Stats sent to DM 📊
     chat: |
-      📊 Stats ${name} in the chat <b>${chatName}</b>:
+      📊 ${name}'s stats in <b>${chatName}</b>:
 
-      <b>Number of bananas:</b> ${banCount} 🍌
-      <b>Total ban time:</b> ${banTime}
-      <b>Autoban:</b> ${banAutoTime}
+      🍌 <b>Bananas:</b> ${banCount}
+      ⏱ <b>Total ban time:</b> ${banTime}
+      🤖 <b>Autoban:</b> ${banAutoTime}
 
-      <b>Messages:</b> ${messages}
-      <b>Active:</b> ${active}%
-      <b>Flood:</b> ${flood}%
+      💬 <b>Messages:</b> ${messages}
+      📈 <b>Activity:</b> ${active}%
+      🌊 <b>Flood:</b> ${flood}%
 
-      <b>First seen date:</b> ${createdAt}
+      📅 <b>Here since:</b> ${createdAt}
     error:
       blocked: |
-        <b>Error!</b>
-        I can't PM you. Please, text me first.
+        Can't DM you 😅
+        Message me first, then try again.
   top:
     info: |
-      Most active users in <b>${chatName}</b>:
+      🏆 Most active in <b>${chatName}</b>:
       ${top}
   top_banan:
     info: |
-      Top 🍌 in <b>${chatName}</b>:
+      🍌 Top bans in <b>${chatName}</b>:
       ${top}
     error:
-      empty: No one got 🍌 in the group
+      empty: No one got 🍌 here yet
   extras:
     list: |
-      <b>Extras in the chat:</b>
+      📝 <b>Extra commands:</b>
       ${extras}
     error:
       not_found: |
-        This group has no extras.
-        To create one, an admin must send <code>!extra</code>
+        No extra commands yet.
+        Admin can create: <code>!extra name</code>
   ping:
       pong: |
-        🏓 Pong
-        <b>Server response</b> ${sms} ms
-        <b>Telegram response:</b> ${tms} ms
-        <b>Bot works:</b> ${workTime}
+        🏓 Pong!
+        <b>Server:</b> ${sms} ms
+        <b>Telegram:</b> ${tms} ms
+        <b>Uptime:</b> ${workTime}
 
         ${extra}
       delay: |
-        ❗️ <b>Bot didn't work:</b> ${delayTime}
+        ❗️ <b>Bot was offline:</b> ${delayTime}
   welcome:
-    disable: Greetings are disabled
-    enable: Greetings are enabled
+    disable: Welcome messages off 👋
+    enable: Welcome messages on 👋
   gif:
-    push: The gif is successfully added to the welcome list
-    pull: The gif is successfully removed from the welcome list
-    reset: The list of gifs has been cleared
+    push: Gif added ✓
+    pull: Gif removed ✓
+    reset: All gifs cleared ✓
   text:
-    push: The text is successfully added to the list of greetings
-    pull: The text is successfully deleted to the list of greetings
-    error: Error. The text doesn't contain <code>%name%</code>
-    reset: The list of texts has been cleared
+    push: Text added ✓
+    pull: Text removed ✓
+    error: Text must contain <code>%name%</code>
+    reset: All texts cleared ✓
   extra:
-    push: \#${extraName} is successfully saved
-    pull: \#${extraName} is successfully deleted
-    max: The maximum number of extra in the message is set to <b>${maxExtra}</b>
+    push: \#${extraName} saved ✓
+    pull: \#${extraName} deleted ✓
+    max: Max extras per message — <b>${maxExtra}</b>
     error:
       not_found: |
-        <b>Error!</b>
-        The extra \#${extraName} doesn't found.
-        To create a new command you should input the command again in response to the message.
+        \#${extraName} not found.
+        To create — reply to a message with the command.
     set:
   members:
     member: |
       <a href="tg://user?id=${telegram_id}">${telegram_id}</a>
       ${banTime} | a: ${active} | f: ${flood}
   quote: |
-    To create quotes, use the bot @QuotLyBot
+    For quotes use @QuotLyBot
   cas:
-    disable: CAS Ban disabled
-    enable: CAS Ban enabled
+    disable: CAS off
+    enable: CAS on
   banChannel:
-    disable: Ban Channel disabled
-    enable: Ban Channel enabled
+    disable: Channel ban off
+    enable: Channel ban on
   spam_settings:
-    enabled: "✅ <b>Automatic spam check enabled</b>"
-    disabled: "❌ <b>Automatic spam check disabled</b>"
+    enabled: "✅ <b>Anti-spam on</b>"
+    disabled: "❌ <b>Anti-spam off</b>"
     allow:
-      added: "✅ <b>Added allow rule:</b>\n\"${rule}\""
-      error: "❌ <b>Error:</b> Please specify rule text\n\n<b>Example:</b> <code>!spam allow coursework sales</code>"
+      added: "✅ Allowed: \"${rule}\""
+      error: "❌ Specify rule text\n\n<b>Example:</b> <code>!spam allow coursework sales</code>"
     deny:
-      added: "✅ <b>Added deny rule:</b>\n\"${rule}\""
-      error: "❌ <b>Error:</b> Please specify rule text\n\n<b>Example:</b> <code>!spam deny earning schemes</code>"
+      added: "✅ Blocked: \"${rule}\""
+      error: "❌ Specify rule text\n\n<b>Example:</b> <code>!spam deny earning schemes</code>"
     remove:
-      success: "✅ <b>Removed rule:</b>\n\"${rule}\""
-      error: "❌ <b>Error:</b> Invalid rule number\n\nUse <code>!spam</code> to see the list of rules"
-    clear: "✅ <b>All rules cleared</b> (was: ${count})"
+      success: "✅ Rule removed: \"${rule}\""
+      error: "❌ Invalid rule number\n\nCheck list: <code>!spam</code>"
+    clear: "✅ Rules cleared (was: ${count})"
     globalban:
-      enabled: "✅ <b>Global ban enabled</b>\n• Users banned by AI in this group will be banned in all other groups\n• Users banned by AI in other groups will be banned in this group"
-      disabled: "❌ <b>Global ban disabled</b>\n• Users banned by AI in this group will NOT be banned in other groups\n• Users banned by AI in other groups will NOT be banned in this group"
-      error: "❌ <b>Error:</b> Use <code>!spam globalban on</code> or <code>!spam globalban off</code>"
+      enabled: "✅ <b>Global ban on</b>\nSpammers from other groups will be banned here too"
+      disabled: "❌ <b>Global ban off</b>\nBans only apply to this group"
+      error: "Use <code>!spam globalban on</code> or <code>!spam globalban off</code>"
     status:
-      title: "🛡 <b>Automatic spam check settings</b>"
-      enabled_text: "✅ Enabled"
-      disabled_text: "❌ Disabled"
-      globalban_enabled: "✅ Enabled"
-      globalban_disabled: "❌ Disabled"
+      title: "🛡 <b>Anti-spam settings</b>"
+      enabled_text: "✅ On"
+      disabled_text: "❌ Off"
+      globalban_enabled: "✅ Yes"
+      globalban_disabled: "❌ No"
       rules_title: "Rules (${count}):"
-      rules_empty: "Not configured"
+      rules_empty: "Not set"
       rule_allow: "✅ Allow"
-      rule_deny: "❌ Deny"
-      commands_title: "Available commands:"
+      rule_deny: "❌ Block"
+      commands_title: "Commands:"
       trusted_users: "users"
       commands: |
-        <code>!spam on</code> - enable
-        <code>!spam off</code> - disable
-        <code>!spam globalban on/off</code> - global ban
-        <code>!spam trust</code> - trust user (reply)
-        <code>!spam untrust</code> - untrust user (reply)
-        <code>!spam allow text</code> - allow
-        <code>!spam deny text</code> - deny
-        <code>!spam remove N</code> - remove rule
-        <code>!spam clear</code> - clear rules
+        <code>!spam on</code> — enable
+        <code>!spam off</code> — disable
+        <code>!spam globalban on/off</code> — global ban
+        <code>!spam trust</code> — trust user (reply)
+        <code>!spam untrust</code> — untrust user (reply)
+        <code>!spam allow text</code> — allow
+        <code>!spam deny text</code> — block
+        <code>!spam remove N</code> — remove rule
+        <code>!spam clear</code> — clear all
     trust:
-      usage: "📝 <b>Usage:</b>\n• Reply to message: <code>!spam trust</code>\n• By username: <code>!spam trust @username</code>\n• By ID: <code>!spam trust 123456</code>"
+      usage: "📝 <b>How to use:</b>\n• Reply: <code>!spam trust</code>\n• Username: <code>!spam trust @username</code>\n• ID: <code>!spam trust 123456</code>"
       cant_trust_bot: "🤖 Can't trust bots"
-      already_trusted: "✅ ${name} is already trusted"
-      added: "✅ <b>${name}</b> added to trusted list"
-      user_not_found: "❌ User ${username} not found"
+      already_trusted: "✅ ${name} already trusted"
+      added: "✅ ${name} now trusted"
+      user_not_found: "❌ Can't find ${username}"
     untrust:
-      usage: "📝 <b>Usage:</b>\n• Reply to message: <code>!spam untrust</code>\n• By username: <code>!spam untrust @username</code>\n• By ID: <code>!spam untrust 123456</code>"
-      not_trusted: "❌ ${name} is not in trusted list"
-      removed: "✅ <b>${name}</b> removed from trusted list"
-      user_not_found: "❌ User ${username} not found"
-  reset: Settings have been reset
+      usage: "📝 <b>How to use:</b>\n• Reply: <code>!spam untrust</code>\n• Username: <code>!spam untrust @username</code>\n• ID: <code>!spam untrust 123456</code>"
+      not_trusted: "❌ ${name} wasn't trusted anyway"
+      removed: "✅ ${name} no longer trusted"
+      user_not_found: "❌ Can't find ${username}"
+  reset: Settings reset ✓
 settings:
     json:
-      reset: Settings were successfully restored from file
+      reset: Settings restored from file ✓
 banan:
-  show: ${name} shows  🍌
-  suc:  ${name} receives the 🍌\n<b>Time:</b> ${duration}
-  pick: ${name} is deprived of the 🍌\n
-  error: <b>I couldn't give the 🍌</b>\n<pre>${error}</pre>
+  show: ${name} shows 🍌
+  suc:  ${name} gets 🍌\n<b>For:</b> ${duration}
+  pick: ${name} lost 🍌
+  error: <b>Couldn't give 🍌</b>\n<pre>${error}</pre>
 kick:
-  suc: ${name} gets kicked
-  who: Whom to kick?😡
-  error: <b>I can't kick</b>\n<pre>${error}</pre>
+  suc: ${name} gets kicked 👢
+  who: Who to kick? 🤔
+  error: <b>Couldn't kick</b>\n<pre>${error}</pre>
 del:
-  error: <b>I can't delete the message</b>\n<pre>${error}</pre>
+  error: <b>Couldn't delete</b>\n<pre>${error}</pre>
 sticker:
   save:
-    suc: Sticker successfully added to <a href="${link}">group sticker pack</a>.
+    suc: Sticker added to <a href="${link}">group pack</a> ✓
     error:
-      animated: I can't add animated sticker.
-      telegram: <b>I couldn't save this sticker.</b>\n<pre>${error}</pre>
+      animated: Animated stickers not supported 😅
+      telegram: <b>Couldn't save sticker</b>\n<pre>${error}</pre>
   delete:
-    suc: Sticker successfully removed from <a href="${link}">group sticker pack</a>.
+    suc: Sticker removed from <a href="${link}">pack</a> ✓
     error:
-      telegram: <b>I couldn't delete this sticker.</b>\n<pre>${error}</pre>
+      telegram: <b>Couldn't delete sticker</b>\n<pre>${error}</pre>
   empty_forward: |
-    The command must be written in response to a message with a sticker, photo, or photo file.
+    Reply to a sticker, photo, or file with the command.
   only_admin: |
-      The command can only be used by a group administrator.
-      To save a sticker pack to a personal sticker pack, forward the message to the bot @fStikBot
+    Admins only.
+    For personal pack — @fStikBot
 cas:
   banned: |
-    ${name} was banned from the group because they have a CAS ban.
-
-    <a href="${link}">More details</a>
+    ${name} banned — CAS listed.
+    <a href="${link}">Details</a>
 
 spam:
   banned: |
-    ${name} was permanently banned from the group.
+    🚫 ${name} permabanned.
     Reason: ${reason}
   muted: |
-    ${name} was muted for 24 hours.
+    🔇 ${name} muted for 24h.
     Reason: ${reason}
   error:
     mute_failed: |
-      ❌ <b>Failed to mute ${name}</b>
+      ❌ <b>Couldn't mute ${name}</b>
       Reason: ${reason}
     delete_failed: |
-      ❌ <b>Failed to delete spam message from ${name}</b>
+      ❌ <b>Couldn't delete spam from ${name}</b>
       Reason: ${reason}
     partial_success_muted: |
-      ✅ ${name} was muted for spam
+      ✅ ${name} muted for spam
       Reason: ${reason}
-      ⚠️ Could not delete the message
+      ⚠️ Couldn't delete message
     partial_success_deleted: |
-      ✅ Spam message deleted
-      ⚠️ Could not mute ${name}
+      ✅ Spam deleted
+      ⚠️ Couldn't mute ${name}
       Reason: ${reason}
 
-only_group: This command is available only in group
-only_admin: This command can only be used by a group administrator.
+only_group: Groups only
+only_admin: Admins only
 
 global_ban:
-  kicked: "User ${name} has been kicked because they are globally banned by AI. Reason: ${reason}"
+  kicked: "🚫 ${name} kicked — global ban. Reason: ${reason}"
 
 report:
-  only_group: "⚠️ This command only works in groups"
-  need_reply: "↩️ Reply to a message to report it"
-  cant_report_bot: "🤖 Can't report bots"
-  cant_report_self: "🙃 You can't report yourself"
-  cant_report_admin: "👮 Can't report admins"
-  invalid_target: "❌ Cannot identify message sender"
-  rate_limited: "⏳ Too many reports. Wait ${seconds}s"
-  spam_check_disabled: "❌ AI spam check is disabled in this group"
-  no_content: "📭 No text content to analyze"
-  analyzing: "🔍 Analyzing message..."
+  only_group: "⚠️ Groups only"
+  need_reply: "↩️ Reply to a message"
+  cant_report_bot: "🤖 That's a bot"
+  cant_report_self: "🙃 Can't report yourself"
+  cant_report_admin: "👮 That's an admin"
+  invalid_target: "❌ Can't identify sender"
+  rate_limited: "⏳ Wait ${seconds}s"
+  spam_check_disabled: "❌ Anti-spam is off"
+  no_content: "📭 No text to check"
+  analyzing: "🔍 Checking..."
   spam_found: |
-    🚨 <b>Spam detected!</b>
+    🚨 <b>Spam!</b>
 
-    👤 Reported: ${target}
-    📊 Confidence: ${confidence}%
+    👤 ${target}
+    📊 ${confidence}%
     📝 ${reason}
 
     ✅ ${action}
 
-    <i>Reported by ${reporter}</i>
+    <i>Report: ${reporter}</i>
   suspicious: |
-    ⚠️ <b>Suspicious content</b>
+    ⚠️ <b>Suspicious</b>
 
-    👤 User: ${target}
-    📊 Confidence: ${confidence}%
+    👤 ${target}
+    📊 ${confidence}%
     📝 ${reason}
 
-    <i>No action taken. Admins notified.</i>
-    <i>Reported by ${reporter}</i>
+    <i>Admins notified</i>
+    <i>Report: ${reporter}</i>
   clean: |
-    ✅ <b>No spam detected</b>
+    ✅ <b>Clean</b>
 
-    👤 User: ${target}
-    📊 Clean confidence: ${confidence}%
+    👤 ${target}
+    📊 ${confidence}%
 
-    <i>Checked by ${reporter}</i>
-  error: "❌ Error analyzing message. Try again later."
-
+    <i>Checked by: ${reporter}</i>
+  error: "❌ Something went wrong, try later"
