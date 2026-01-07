@@ -178,6 +178,9 @@ const handleReport = async (ctx) => {
 
     const mockCtx = {
       ...ctx,
+      telegram: ctx.telegram, // Explicitly pass telegram API
+      chat: ctx.chat,
+      botInfo: ctx.botInfo,
       from: targetUser,
       message: replyMsg,
       group: mockGroup,

@@ -368,6 +368,9 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
 
     // Velocity check - detect cross-chat spam patterns
     try {
+      if (!ctx.from || !ctx.from.id || !ctx.chat || !ctx.chat.id || !ctx.message) {
+        throw new Error('Missing context for velocity check')
+      }
       const velocityResult = await calculateVelocityScore(
         messageText,
         ctx.from.id,
