@@ -16,12 +16,15 @@ setInterval(() => {
       const lastResponseTimeAvrg = (sumResponseTime / stats.times[time].length) || 0
       stats.responseTimeAvrg = (stats.responseTimeAvrg + lastResponseTimeAvrg) / 2
 
-      statsLog.debug({
-        rpsLast: rps,
-        rpsAvrg: stats.rpsAvrg.toFixed(2),
-        responseTimeLast: lastResponseTimeAvrg.toFixed(2),
-        responseTimeAvrg: stats.responseTimeAvrg.toFixed(2)
-      }, 'Performance metrics')
+      // Only log when there's actual traffic (rps > 0)
+      if (rps > 0) {
+        statsLog.trace({
+          rpsLast: rps,
+          rpsAvrg: stats.rpsAvrg.toFixed(2),
+          responseTimeLast: lastResponseTimeAvrg.toFixed(2),
+          responseTimeAvrg: stats.responseTimeAvrg.toFixed(2)
+        }, 'Performance metrics')
+      }
       delete stats.times[time]
     })
   }
