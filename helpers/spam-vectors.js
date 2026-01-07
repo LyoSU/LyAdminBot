@@ -128,9 +128,6 @@ const findSimilarVectors = async (embedding, threshold = 0.85, limit = 10, featu
       })
     }
 
-    // Add time-based filtering for recent patterns
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-
     // Simplified filter - only use indexed fields until all indexes are created
     if (filterConditions.length > 0) {
       filter = {
