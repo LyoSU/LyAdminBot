@@ -107,6 +107,18 @@ const calculateDynamicThreshold = (context, groupSettings) => {
     }
   }
 
+  // Telegram Stars rating adjustment
+  if (context.telegramRating) {
+    const level = context.telegramRating.level || 0
+    if (level > 0) {
+      // Positive level = trusted buyer, less likely to be spammer
+      baseThreshold += Math.min(15, level * 5) // +5 to +15
+    } else if (level < 0) {
+      // Negative level = suspicious account
+      baseThreshold -= 10
+    }
+  }
+
   // Adjusted bounds - lower floor to 50 for restricted users
   return Math.max(50, Math.min(95, baseThreshold))
 }
@@ -148,18 +160,27 @@ const getUserProfilePhotoUrl = async (ctx) => {
 }
 
 /**
- * Get user bio from Telegram getChat API
+ * Get user info from Telegram getChat API (bio + rating)
  */
-const getUserBio = async (ctx) => {
+const getUserChatInfo = async (ctx) => {
   try {
-    if (!ctx.from || !ctx.from.id) return null
+    if (!ctx.from || !ctx.from.id) return { bio: null, rating: null }
 
     const chatInfo = await ctx.telegram.getChat(ctx.from.id)
-    return chatInfo.bio || null
+    return {
+      bio: chatInfo.bio || null,
+      rating: chatInfo.rating || null // UserRating object: { level, rating, current_level_rating, next_level_rating }
+    }
   } catch (error) {
-    console.error('[MODERATION] Error getting user bio:', error.message)
-    return null
+    console.error('[MODERATION] Error getting user chat info:', error.message)
+    return { bio: null, rating: null }
   }
+}
+
+// Legacy alias
+const getUserBio = async (ctx) => {
+  const info = await getUserChatInfo(ctx)
+  return info.bio
 }
 
 /**
@@ -266,11 +287,13 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     const messagePhoto = ctx.message && ctx.message.photo && ctx.message.photo[0] ? ctx.message.photo[0] : null
 
     // Fetch additional context in parallel
-    const [userAvatarUrl, userBio, groupDescription] = await Promise.all([
+    const [userAvatarUrl, userChatInfo, groupDescription] = await Promise.all([
       getUserProfilePhotoUrl(ctx),
-      getUserBio(ctx),
+      getUserChatInfo(ctx),
       getGroupDescription(ctx)
     ])
+    const userBio = userChatInfo.bio
+    const userRating = userChatInfo.rating // { level, rating, current_level_rating, next_level_rating } or null
 
     // Check text content first
     const textModerationResult = await checkOpenAIModeration(messageText, null, 'text')
@@ -338,7 +361,9 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
       previousWarnings: globalStats.spamDetections || 0,
       accountAge: getAccountAge(ctx),
       // Global reputation from cross-group tracking
-      globalReputation: (ctx.session && ctx.session.userInfo && ctx.session.userInfo.reputation) || { score: 50, status: 'neutral' }
+      globalReputation: (ctx.session && ctx.session.userInfo && ctx.session.userInfo.reputation) || { score: 50, status: 'neutral' },
+      // Telegram Stars rating (higher = more trusted buyer)
+      telegramRating: userRating // { level, rating } or null
     }
 
     // Velocity check - detect cross-chat spam patterns
@@ -429,6 +454,14 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     if (userContext.globalReputation && userContext.globalReputation.score !== 50) {
       contextInfo.push(`Reputation: ${userContext.globalReputation.score}/100 (${userContext.globalReputation.status})`)
     }
+    if (userContext.telegramRating) {
+      const level = userContext.telegramRating.level
+      if (level > 0) {
+        contextInfo.push(`Telegram Stars buyer (level ${level}) - trusted`)
+      } else if (level < 0) {
+        contextInfo.push(`Telegram rating: negative (level ${level})`)
+      }
+    }
     if (userBio && userBio.trim()) contextInfo.push(`User bio: "${userBio.trim()}"`)
     if (ctx.message && ctx.message.quote && ctx.message.quote.text) {
       contextInfo.push(`Quoted text: "${ctx.message.quote.text.trim()}"`)
@@ -485,23 +518,15 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     }
 
     // Static system prompt (cacheable, no dynamic data)
-    const systemPrompt = `Telegram spam classifier. Output JSON with reasoning, classification (SPAM/CLEAN), confidence (0-100).
+    const systemPrompt = `Telegram group spam classifier. Output JSON: reasoning, classification (SPAM/CLEAN), confidence (0-100).
 
-SPAM (ban-worthy):
-95-100: Financial/crypto scams, escort/dating services ads, phishing links, mass advertising
-85-94: Promo links from new users, "DM me" spam, bio with contact info for services (telegram @, website)
-70-84: Suspicious links without context, vague money-making offers
+SPAM = unwanted commercial/scam content: ads, scams, phishing, service promotion, mass messaging.
 
-NOT SPAM (never ban):
-- Trolling, jokes, offensive humor, edgy usernames/bios - this is NOT spam
-- Rude or vulgar language without advertising intent
-- New users asking questions or chatting normally
-- Links shared in context of conversation
-- Replies that address the original message
-- Established users (10+ msgs) sharing anything
+NOT SPAM = normal human behavior: chatting, questions, jokes, trolling, rudeness, arguments, sharing links in context.
 
-CRITICAL: Offensive/trolling profile ≠ spam. Only ban for ACTUAL advertising, scams, or service promotion.
-When uncertain → CLEAN. Prefer false negatives over false positives.`
+Key principle: offensive ≠ spam. Trolls and rude users are annoying but not spammers.
+Trust users with history (messages, reputation, Stars rating).
+When uncertain → CLEAN.`
 
     // Dynamic user prompt with all context
     const userPrompt = `${messageText}
