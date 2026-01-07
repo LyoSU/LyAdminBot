@@ -43,7 +43,9 @@ const {
   handleAdminJsonReset,
   handleAdminReset,
   handleExtra,
-  handleBanAllChannel
+  handleBanAllChannel,
+  handleReport,
+  isBotMentionReport
 } = require('./handlers')
 const {
   updateUser,
@@ -258,6 +260,7 @@ bot.command('top', onlyGroup, handleTop)
 bot.command('top_banan', onlyGroup, handleTopBanan)
 bot.command('mystats', onlyGroup, handleMyStats)
 bot.command('extras', onlyGroup, handleExtraList)
+bot.command('report', onlyGroup, handleReport)
 
 bot.command('banan', onlyGroup, rateLimit({
   window: 3 * 1000,
@@ -287,6 +290,15 @@ bot.hashtag(() => true, rateLimit({ window: 3 * 1000, limit: 1 }), handleExtra)
 
 bot.on('document', handleAdminJsonReset)
 bot.on('new_chat_members', handleWelcome)
+
+// Handle @botusername mentions as report (in reply to a message)
+bot.on('text', (ctx, next) => {
+  if (isBotMentionReport(ctx)) {
+    return handleReport(ctx)
+  }
+  return next()
+})
+
 bot.on('message', handleMessage)
 
 db.connection.once('open', async () => {

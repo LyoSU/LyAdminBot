@@ -28,6 +28,7 @@ const handleAdminJsonReset = require('./admin/json-reset')
 const handleAdminReset = require('./admin/reset')
 const handleExtra = require('./extra')
 const handleBanAllChannel = require('./admin/all-chanell-ban')
+const { handleReport, isBotMentionReport } = require('./report')
 
 module.exports = {
   handleHelp,
@@ -59,5 +60,7 @@ module.exports = {
   handleAdminJsonReset,
   handleAdminReset,
   handleExtra,
-  handleBanAllChannel
+  handleBanAllChannel,
+  handleReport,
+  isBotMentionReport
 }

@@ -156,9 +156,28 @@ module.exports = async (ctx) => {
     return
   }
 
+  // Dynamic check limit based on global reputation
+  let checkLimit = 5 // default for neutral/unknown users
+  if (userReputation) {
+    if (userReputation.status === 'restricted') {
+      checkLimit = Infinity // always check restricted users
+    } else if (userReputation.status === 'suspicious') {
+      checkLimit = 20 // check suspicious users longer
+    } else if (userReputation.status === 'neutral' && userReputation.score < 60) {
+      checkLimit = 10 // slightly more checks for low-neutral users
+    }
+  }
+
   // Check number of messages from the user (or force check in test mode)
   const messageCount = (ctx.group.members[senderId] && ctx.group.members[senderId].stats && ctx.group.members[senderId].stats.messagesCount) || 0
-  const shouldCheckSpam = isTestMode || messageCount <= 5
+  const shouldCheckSpam = isTestMode || messageCount <= checkLimit
+
+  // Log when using non-default check limit
+  if (checkLimit !== 5 && shouldCheckSpam) {
+    const repStatus = userReputation ? userReputation.status : 'unknown'
+    const repScore = userReputation ? userReputation.score : 'N/A'
+    console.log(`[SPAM CHECK] 🔍 Extended check for ${repStatus} user (score: ${repScore}, limit: ${checkLimit === Infinity ? '∞' : checkLimit}, msg #${messageCount})`)
+  }
 
   if (ctx.group &&
       ctx.group.members &&

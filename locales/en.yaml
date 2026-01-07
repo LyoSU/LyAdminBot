@@ -26,6 +26,7 @@ cmd:
 
     <b>MODERATION:</b>
     /banan — ban  •  /kick — kick  •  /del — delete
+    /report or @admin — check message for spam (reply)
 
     <b>STATS:</b>
     /mystats — your stats
@@ -219,4 +220,41 @@ only_admin: This command can only be used by a group administrator.
 
 global_ban:
   kicked: "User ${name} has been kicked because they are globally banned by AI. Reason: ${reason}"
+
+report:
+  only_group: "⚠️ This command only works in groups"
+  need_reply: "↩️ Reply to a message to report it"
+  cant_report_bot: "🤖 Can't report bots"
+  cant_report_self: "🙃 You can't report yourself"
+  rate_limited: "⏳ Too many reports. Wait ${seconds}s"
+  spam_check_disabled: "❌ AI spam check is disabled in this group"
+  no_content: "📭 No text content to analyze"
+  analyzing: "🔍 Analyzing message..."
+  spam_found: |
+    🚨 <b>Spam detected!</b>
+
+    👤 Reported: ${target}
+    📊 Confidence: ${confidence}%
+    📝 ${reason}
+
+    ✅ ${action}
+
+    <i>Reported by ${reporter}</i>
+  suspicious: |
+    ⚠️ <b>Suspicious content</b>
+
+    👤 User: ${target}
+    📊 Confidence: ${confidence}%
+    📝 ${reason}
+
+    <i>No action taken. Admins notified.</i>
+    <i>Reported by ${reporter}</i>
+  clean: |
+    ✅ <b>No spam detected</b>
+
+    👤 User: ${target}
+    📊 Clean confidence: ${confidence}%
+
+    <i>Checked by ${reporter}</i>
+  error: "❌ Error analyzing message. Try again later."
 
