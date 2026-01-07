@@ -15,30 +15,36 @@ private:
   btn_add: Add to group
 cmd:
   help: |
-    🤖 <b>LyAdminBot</b>
+    <b>Moderation</b>
+    /banan — mute (↩️). Again — unmute
+    /banan 5m — mute for 5 min (m/h/d)
+    /kick — remove from chat (↩️)
+    /del — delete message (↩️)
+    /report or @admin — report spam (↩️)
 
-    <b>ANTI-SPAM:</b>
-    <code>!spam</code> — settings
-    <code>!spam on/off</code> — toggle
-    <code>!spam globalban on/off</code> — global ban
-    <code>!cas</code> — CAS protection
-    <code>!banChannel</code> — ban channels
+    <b>Anti-spam</b>
+    <code>!spam</code> — status and all commands
+    <code>!trust</code> / <code>!untrust</code> — trusted users (↩️)
+    <code>!cas</code> — ban CAS-listed spammers
+    <code>!banChannel</code> — ban anonymous channels
 
-    <b>MODERATION:</b>
-    /banan — ban  •  /kick — kick  •  /del — delete
-    /report or @admin — check for spam (reply)
+    <b>Welcome</b>
+    <code>!welcome</code> — on/off
+    <code>!gif</code> — add/remove gif (↩️)
+    <code>!text</code> — text with %name% (↩️)
 
-    <b>STATS:</b>
-    /mystats — your stats
-    /top — most active  •  /top_banan — most bans
+    <b>Stats</b>
+    /mystats — your messages and bans
+    /top — most active in chat
+    /top_banan — most muted users
 
-    <b>WELCOME:</b>
-    <code>!welcome</code> — toggle
-    <code>!gif</code> / <code>!text</code> — add content
+    <b>Extras</b>
+    <code>!extra faq</code> — save as #faq (↩️)
+    /extras — list saved
 
-    <b>OTHER:</b>
-    <code>!extra name</code> — quick commands #name
-    /extras — list  •  /lang — language  •  /ping — status
+    /lang — language · /ping — status
+
+    <i>↩️ = reply to a message</i>
   my_stats:
     send_pm: Stats sent to DM 📊
     chat: |
