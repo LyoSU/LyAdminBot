@@ -29,6 +29,7 @@ const handleAdminReset = require('./admin/reset')
 const handleExtra = require('./extra')
 const handleBanAllChannel = require('./admin/all-chanell-ban')
 const { handleReport, isBotMentionReport } = require('./report')
+const { handleTrust, handleUntrust } = require('./admin/trust')
 
 module.exports = {
   handleHelp,
@@ -62,5 +63,7 @@ module.exports = {
   handleExtra,
   handleBanAllChannel,
   handleReport,
-  isBotMentionReport
+  isBotMentionReport,
+  handleTrust,
+  handleUntrust
 }

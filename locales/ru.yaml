@@ -147,15 +147,28 @@ cmd:
       rule_allow: "✅ Разрешение"
       rule_deny: "❌ Запрет"
       commands_title: "Доступные команды:"
+      trusted_users: "юзеров"
       commands: |
         <code>!spam on</code> - включить
         <code>!spam off</code> - выключить
-        <code>!spam globalban on</code> - включить глобальный бан
-        <code>!spam globalban off</code> - выключить глобальный бан
+        <code>!spam globalban on/off</code> - глобальный бан
+        <code>!spam trust</code> - доверять (в ответ)
+        <code>!spam untrust</code> - не доверять (в ответ)
         <code>!spam allow текст</code> - разрешить
         <code>!spam deny текст</code> - запретить
-        <code>!spam remove номер</code> - удалить правило
-        <code>!spam clear</code> - очистить все правила
+        <code>!spam remove N</code> - удалить правило
+        <code>!spam clear</code> - очистить правила
+    trust:
+      usage: "📝 <b>Как использовать:</b>\n• В ответ: <code>!spam trust</code>\n• По юзернейму: <code>!spam trust @username</code>\n• По ID: <code>!spam trust 123456</code>"
+      cant_trust_bot: "🤖 Ботов нельзя"
+      already_trusted: "✅ ${name} уже в доверенных"
+      added: "✅ <b>${name}</b> добавлен в доверенные"
+      user_not_found: "❌ Юзер ${username} не найден"
+    untrust:
+      usage: "📝 <b>Как использовать:</b>\n• В ответ: <code>!spam untrust</code>\n• По юзернейму: <code>!spam untrust @username</code>\n• По ID: <code>!spam untrust 123456</code>"
+      not_trusted: "❌ ${name} не в доверенных"
+      removed: "✅ <b>${name}</b> убран из доверенных"
+      user_not_found: "❌ Юзер ${username} не найден"
   reset: Настройки были сброшены
 settings:
     json:

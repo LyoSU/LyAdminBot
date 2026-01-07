@@ -7,11 +7,17 @@ module.exports = async (ctx) => {
     ctx.group.info.settings.openaiSpamCheck = {
       enabled: true,
       globalBan: true,
-      customRules: []
+      customRules: [],
+      trustedUsers: []
     }
   }
 
   const settings = ctx.group.info.settings.openaiSpamCheck
+
+  // Ensure trustedUsers array exists
+  if (!settings.trustedUsers) {
+    settings.trustedUsers = []
+  }
 
   switch (command) {
     case 'on':
@@ -67,6 +73,110 @@ module.exports = async (ctx) => {
       settings.customRules = []
       return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.clear', { count: rulesCount }))
 
+    case 'trust': {
+      let targetUser = null
+      let targetId = null
+      let targetName = null
+
+      // Try to get user from reply
+      const replyMsg = ctx.message.reply_to_message
+      if (replyMsg && replyMsg.from) {
+        targetUser = replyMsg.from
+        targetId = targetUser.id
+        targetName = targetUser.first_name
+      } else {
+        // Try to parse from args: !spam trust @username or !spam trust 123456
+        const arg = args[2]
+        if (!arg) {
+          return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.usage'))
+        }
+
+        if (arg.startsWith('@')) {
+          // Username - try to find in DB
+          const username = arg.substring(1).toLowerCase()
+          try {
+            const user = await ctx.db.User.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } })
+            if (user) {
+              targetId = user.telegram_id
+              targetName = user.first_name || `@${username}`
+            } else {
+              return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.user_not_found', { username: arg }))
+            }
+          } catch (e) {
+            return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.user_not_found', { username: arg }))
+          }
+        } else {
+          // Try as numeric ID
+          targetId = parseInt(arg)
+          if (isNaN(targetId)) {
+            return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.usage'))
+          }
+          targetName = `ID:${targetId}`
+        }
+      }
+
+      if (targetUser && targetUser.is_bot) {
+        return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.cant_trust_bot'))
+      }
+
+      // Check if already trusted
+      if (settings.trustedUsers.includes(targetId)) {
+        return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.already_trusted', { name: targetName }))
+      }
+
+      // Add to trusted list
+      settings.trustedUsers.push(targetId)
+      return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.added', { name: targetName }))
+    }
+
+    case 'untrust': {
+      let targetId = null
+      let targetName = null
+
+      // Try to get user from reply
+      const replyMsg = ctx.message.reply_to_message
+      if (replyMsg && replyMsg.from) {
+        targetId = replyMsg.from.id
+        targetName = replyMsg.from.first_name
+      } else {
+        // Try to parse from args
+        const arg = args[2]
+        if (!arg) {
+          return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.untrust.usage'))
+        }
+
+        if (arg.startsWith('@')) {
+          const username = arg.substring(1).toLowerCase()
+          try {
+            const user = await ctx.db.User.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } })
+            if (user) {
+              targetId = user.telegram_id
+              targetName = user.first_name || `@${username}`
+            } else {
+              return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.untrust.user_not_found', { username: arg }))
+            }
+          } catch (e) {
+            return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.untrust.user_not_found', { username: arg }))
+          }
+        } else {
+          targetId = parseInt(arg)
+          if (isNaN(targetId)) {
+            return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.untrust.usage'))
+          }
+          targetName = `ID:${targetId}`
+        }
+      }
+
+      const index = settings.trustedUsers.indexOf(targetId)
+      if (index === -1) {
+        return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.untrust.not_trusted', { name: targetName }))
+      }
+
+      // Remove from trusted list
+      settings.trustedUsers.splice(index, 1)
+      return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.untrust.removed', { name: targetName }))
+    }
+
     default: {
       // Show current settings
       const status = settings.enabled
@@ -94,6 +204,11 @@ module.exports = async (ctx) => {
         ? ctx.i18n.t('cmd.spam_settings.status.globalban_enabled')
         : ctx.i18n.t('cmd.spam_settings.status.globalban_disabled')
       message += `<b>Глобальний бан:</b> ${globalBanStatus}\n`
+
+      // Add trusted users count
+      if (settings.trustedUsers && settings.trustedUsers.length > 0) {
+        message += `<b>Довірені:</b> ${settings.trustedUsers.length} ${ctx.i18n.t('cmd.spam_settings.status.trusted_users')}\n`
+      }
 
       message += `\n<b>${ctx.i18n.t('cmd.spam_settings.status.commands_title')}</b>\n`
       message += ctx.i18n.t('cmd.spam_settings.status.commands')

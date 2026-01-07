@@ -146,15 +146,28 @@ cmd:
       rule_allow: "✅ Дозвіл"
       rule_deny: "❌ Заборона"
       commands_title: "Доступні команди:"
+      trusted_users: "юзерів"
       commands: |
         <code>!spam on</code> - увімкнути
         <code>!spam off</code> - вимкнути
-        <code>!spam globalban on</code> - увімкнути глобальний бан
-        <code>!spam globalban off</code> - вимкнути глобальний бан
+        <code>!spam globalban on/off</code> - глобальний бан
+        <code>!spam trust</code> - довіряти (у відповідь)
+        <code>!spam untrust</code> - не довіряти (у відповідь)
         <code>!spam allow текст</code> - дозволити
         <code>!spam deny текст</code> - заборонити
-        <code>!spam remove номер</code> - видалити правило
-        <code>!spam clear</code> - очистити всі правила
+        <code>!spam remove N</code> - видалити правило
+        <code>!spam clear</code> - очистити правила
+    trust:
+      usage: "📝 <b>Як використовувати:</b>\n• У відповідь: <code>!spam trust</code>\n• По юзернейму: <code>!spam trust @username</code>\n• По ID: <code>!spam trust 123456</code>"
+      cant_trust_bot: "🤖 Ботів не можна"
+      already_trusted: "✅ ${name} вже в довірених"
+      added: "✅ <b>${name}</b> додано в довірені"
+      user_not_found: "❌ Юзер ${username} не знайдений"
+    untrust:
+      usage: "📝 <b>Як використовувати:</b>\n• У відповідь: <code>!spam untrust</code>\n• По юзернейму: <code>!spam untrust @username</code>\n• По ID: <code>!spam untrust 123456</code>"
+      not_trusted: "❌ ${name} не в довірених"
+      removed: "✅ <b>${name}</b> прибрано з довірених"
+      user_not_found: "❌ Юзер ${username} не знайдений"
   reset: Налаштування були скинуті
 settings:
     json:

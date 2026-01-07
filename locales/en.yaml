@@ -147,15 +147,28 @@ cmd:
       rule_allow: "✅ Allow"
       rule_deny: "❌ Deny"
       commands_title: "Available commands:"
+      trusted_users: "users"
       commands: |
         <code>!spam on</code> - enable
         <code>!spam off</code> - disable
-        <code>!spam globalban on</code> - enable global ban
-        <code>!spam globalban off</code> - disable global ban
+        <code>!spam globalban on/off</code> - global ban
+        <code>!spam trust</code> - trust user (reply)
+        <code>!spam untrust</code> - untrust user (reply)
         <code>!spam allow text</code> - allow
         <code>!spam deny text</code> - deny
-        <code>!spam remove number</code> - remove rule
-        <code>!spam clear</code> - clear all rules
+        <code>!spam remove N</code> - remove rule
+        <code>!spam clear</code> - clear rules
+    trust:
+      usage: "📝 <b>Usage:</b>\n• Reply to message: <code>!spam trust</code>\n• By username: <code>!spam trust @username</code>\n• By ID: <code>!spam trust 123456</code>"
+      cant_trust_bot: "🤖 Can't trust bots"
+      already_trusted: "✅ ${name} is already trusted"
+      added: "✅ <b>${name}</b> added to trusted list"
+      user_not_found: "❌ User ${username} not found"
+    untrust:
+      usage: "📝 <b>Usage:</b>\n• Reply to message: <code>!spam untrust</code>\n• By username: <code>!spam untrust @username</code>\n• By ID: <code>!spam untrust 123456</code>"
+      not_trusted: "❌ ${name} is not in trusted list"
+      removed: "✅ <b>${name}</b> removed from trusted list"
+      user_not_found: "❌ User ${username} not found"
   reset: Settings have been reset
 settings:
     json:

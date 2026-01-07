@@ -45,7 +45,9 @@ const {
   handleExtra,
   handleBanAllChannel,
   handleReport,
-  isBotMentionReport
+  isBotMentionReport,
+  handleTrust,
+  handleUntrust
 } = require('./handlers')
 const {
   updateUser,
@@ -276,6 +278,8 @@ bot.hears(/^!extra-max (\d*)/, onlyAdmin, handleAdminMaxExtra)
 bot.hears('!welcome', onlyAdmin, handleAdminWelcome)
 bot.hears('!cas', onlyAdmin, handleAdminCas)
 bot.hears(/^!spam(?:\s(.*))?/, onlyAdmin, handleAdminSpamSettings)
+bot.hears(/^!trust(?:\s(.*))?/, onlyAdmin, handleTrust)
+bot.hears(/^!untrust(?:\s(.*))?/, onlyAdmin, handleUntrust)
 bot.hears('!gif', onlyAdmin, handleAdminWelcomeGif)
 bot.hears('!gif-reset', onlyAdmin, handleAdminWelcomeGifReset)
 bot.hears('!text', onlyAdmin, handleAdminWelcomeText)

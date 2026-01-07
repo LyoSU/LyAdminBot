@@ -487,18 +487,21 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     // Static system prompt (cacheable, no dynamic data)
     const systemPrompt = `Telegram spam classifier. Output JSON with reasoning, classification (SPAM/CLEAN), confidence (0-100).
 
-SPAM patterns by confidence:
-95-100: Financial scams, unsolicited dating/adult, phishing, mass promo
-85-94: Promo links from new users, generic greeting+DM invite, spam bio
-70-84: Links without context, vague offers
+SPAM (ban-worthy):
+95-100: Financial/crypto scams, escort/dating services ads, phishing links, mass advertising
+85-94: Promo links from new users, "DM me" spam, bio with contact info for services (telegram @, website)
+70-84: Suspicious links without context, vague money-making offers
 
-NOT SPAM (even if looks suspicious):
-- Links in response to requests
-- New users answering questions helpfully
-- Established users (10+ msgs) sharing content
-- Replies addressing original message
+NOT SPAM (never ban):
+- Trolling, jokes, offensive humor, edgy usernames/bios - this is NOT spam
+- Rude or vulgar language without advertising intent
+- New users asking questions or chatting normally
+- Links shared in context of conversation
+- Replies that address the original message
+- Established users (10+ msgs) sharing anything
 
-Decision: Check reply context first → evaluate intent → trust premium/established users → when uncertain prefer CLEAN`
+CRITICAL: Offensive/trolling profile ≠ spam. Only ban for ACTUAL advertising, scams, or service promotion.
+When uncertain → CLEAN. Prefer false negatives over false positives.`
 
     // Dynamic user prompt with all context
     const userPrompt = `${messageText}
