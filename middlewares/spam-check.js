@@ -324,24 +324,17 @@ module.exports = async (ctx) => {
 
         // Update global reputation stats on spam action
         if (ctx.session && ctx.session.userInfo) {
-          if (!ctx.session.userInfo.globalStats) {
-            ctx.session.userInfo.globalStats = {
-              totalMessages: 0, groupsActive: 0, groupsList: [],
-              firstSeen: new Date(), lastActive: new Date(),
-              spamDetections: 0, deletedMessages: 0, cleanMessages: 0, manualUnbans: 0
-            }
-          }
-          ctx.session.userInfo.globalStats.spamDetections =
-            (ctx.session.userInfo.globalStats.spamDetections || 0) + 1
+          // Initialize globalStats if needed (schema has defaults, but session copy might not)
+          const stats = ctx.session.userInfo.globalStats || (ctx.session.userInfo.globalStats = {})
+          stats.spamDetections = (stats.spamDetections || 0) + 1
           if (deleteSuccess) {
-            ctx.session.userInfo.globalStats.deletedMessages =
-              (ctx.session.userInfo.globalStats.deletedMessages || 0) + 1
+            stats.deletedMessages = (stats.deletedMessages || 0) + 1
           }
           // Force reputation recalculation on next message
           if (ctx.session.userInfo.reputation) {
             ctx.session.userInfo.reputation.lastCalculated = null
           }
-          console.log(`[SPAM REPUTATION] 📉 Updated spam stats for ${userDisplayName}: detections=${ctx.session.userInfo.globalStats.spamDetections}`)
+          console.log(`[SPAM REPUTATION] 📉 Updated spam stats: detections=${stats.spamDetections}`)
         }
 
         // Save to knowledge base after successful action (higher confidence in spam classification)
@@ -403,18 +396,11 @@ module.exports = async (ctx) => {
         }
 
         return true // Stop further processing
-      } else if (!result.isSpam && result.confidence < 30) {
-        // Very confident clean message - boost reputation
+      } else if (!result.isSpam && result.confidence >= 70) {
+        // High confidence clean message - boost reputation
         if (ctx.session && ctx.session.userInfo) {
-          if (!ctx.session.userInfo.globalStats) {
-            ctx.session.userInfo.globalStats = {
-              totalMessages: 0, groupsActive: 0, groupsList: [],
-              firstSeen: new Date(), lastActive: new Date(),
-              spamDetections: 0, deletedMessages: 0, cleanMessages: 0, manualUnbans: 0
-            }
-          }
-          ctx.session.userInfo.globalStats.cleanMessages =
-            (ctx.session.userInfo.globalStats.cleanMessages || 0) + 1
+          const stats = ctx.session.userInfo.globalStats || (ctx.session.userInfo.globalStats = {})
+          stats.cleanMessages = (stats.cleanMessages || 0) + 1
         }
       }
     }
