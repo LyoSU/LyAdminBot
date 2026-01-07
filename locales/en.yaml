@@ -211,10 +211,10 @@ spam:
     🔇 ${name} muted for 24h.
     Reason: ${reason}
   notification:
-    full: "🤖 Anti-spam triggered\n👤 ${name}\n📝 ${reason}"
-    muted_only: "🤖 Muted for spam\n👤 ${name}\n📝 ${reason}\n⚠️ Couldn't delete message"
-    deleted_only: "🤖 Spam deleted\n📝 ${reason}\n⚠️ Couldn't mute ${name}"
-    no_permissions: "⚠️ <b>Spam detected</b>\n👤 ${name}\n📝 ${reason}\n\n❌ Bot needs admin rights"
+    full: "🚫 ${name} — spam\n${reason}"
+    muted_only: "🔇 ${name} muted\n${reason}\n\n⚠️ Couldn't delete message"
+    deleted_only: "🗑 Spam deleted\n${reason}\n\n⚠️ ${name} not muted"
+    no_permissions: "👀 Looks like spam from ${name}\n${reason}\n\n💡 Make me admin and I'll handle it"
   error:
     mute_failed: |
       ❌ <b>Couldn't mute ${name}</b>

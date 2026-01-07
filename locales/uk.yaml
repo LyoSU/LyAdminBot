@@ -209,10 +209,10 @@ spam:
     🔇 ${name} замучено на 24 години.
     Причина: ${reason}
   notification:
-    full: "🤖 Антиспам спрацював\n👤 ${name}\n📝 ${reason}"
-    muted_only: "🤖 Замучено за спам\n👤 ${name}\n📝 ${reason}\n⚠️ Не вдалось видалити повідомлення"
-    deleted_only: "🤖 Спам видалено\n📝 ${reason}\n⚠️ Не вдалось замутити ${name}"
-    no_permissions: "⚠️ <b>Виявлено спам</b>\n👤 ${name}\n📝 ${reason}\n\n❌ Боту потрібні права адміна"
+    full: "🚫 ${name} — спам\n${reason}"
+    muted_only: "🔇 ${name} замучено\n${reason}\n\n⚠️ Повідомлення не вдалось видалити"
+    deleted_only: "🗑 Спам видалено\n${reason}\n\n⚠️ ${name} не замучено"
+    no_permissions: "👀 Схоже на спам від ${name}\n${reason}\n\n💡 Дайте мені права адміна — сам розберусь"
 
 only_group: Тільки в групі
 only_admin: Тільки для адмінів
