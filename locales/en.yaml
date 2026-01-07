@@ -204,13 +204,13 @@ cas:
     <a href="${link}">Details</a>
 
 spam:
-  banned: "🚫 ${name} permabanned\n${reason}"
-  muted: "🔇 ${name} muted for 24h\n${reason}"
+  banned: "🚫 ${name} permabanned\n<code>${reason}</code>"
+  muted: "🔇 ${name} muted for 24h\n<code>${reason}</code>"
   notification:
-    full: "🚫 ${name} — spam\n${reason}"
-    muted_only: "🔇 ${name} muted\n${reason}\n\n⚠️ Couldn't delete message"
-    deleted_only: "🗑 Spam deleted\n${reason}\n\n⚠️ ${name} not muted"
-    no_permissions: "👀 Looks like spam from ${name}\n${reason}\n\n💡 Make me admin and I'll handle it"
+    full: "🚫 ${name} — spam\n<code>${reason}</code>"
+    muted_only: "🔇 ${name} muted\n<code>${reason}</code>\n\n⚠️ Couldn't delete message"
+    deleted_only: "🗑 Spam deleted\n<code>${reason}</code>\n\n⚠️ ${name} not muted"
+    no_permissions: "👀 Looks like spam from ${name}\n<code>${reason}</code>\n\n💡 Make me admin and I'll handle it"
   error:
     mute_failed: |
       ❌ <b>Couldn't mute ${name}</b>
@@ -231,7 +231,7 @@ only_group: Groups only
 only_admin: Admins only
 
 global_ban:
-  kicked: "🚫 ${name} kicked — global ban. Reason: ${reason}"
+  kicked: "🚫 ${name} kicked — global ban.\n<code>${reason}</code>"
 
 report:
   only_group: "Groups only"
@@ -244,7 +244,7 @@ report:
   spam_check_disabled: "Anti-spam is off in this group"
   no_content: "No text to check"
   analyzing: "🔍 Checking..."
-  spam_found: "🚫 <b>Spam</b> from ${target}\n${reason}\n\n${action}\n\n<i>📣 ${reporter}</i>"
-  suspicious: "🤔 <b>Suspicious</b> — ${target}\n${reason}\n\n<i>📣 ${reporter}</i>"
+  spam_found: "🚫 <b>Spam</b> from ${target}\n<code>${reason}</code>\n\n${action}\n\n<i>📣 ${reporter}</i>"
+  suspicious: "🤔 <b>Suspicious</b> — ${target}\n<code>${reason}</code>\n\n<i>📣 ${reporter}</i>"
   clean: "✅ ${target} — ok"
   error: "Something went wrong"

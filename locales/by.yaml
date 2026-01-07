@@ -160,4 +160,4 @@ del:
   error: <b>Не атрымалася выдаліць</b>\n<pre>${error}</pre>
 
 global_ban:
-  kicked: "🚫 ${name} выключаны — глабальны бан. Прычына: ${reason}"
+  kicked: "🚫 ${name} выключаны — глабальны бан.\n<code>${reason}</code>"

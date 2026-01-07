@@ -306,7 +306,7 @@ const handleReport = async (ctx) => {
           reason: result.reason || 'Spam detected',
           action: actionText
         }),
-        { parse_mode: 'HTML' }
+        { parse_mode: 'HTML', disable_web_page_preview: true }
       )
 
       console.log(`[REPORT] ✅ Spam confirmed: ${targetName} reported by ${reporterName} (${result.confidence}%)`)
@@ -322,7 +322,7 @@ const handleReport = async (ctx) => {
           confidence: result.confidence,
           reason: result.reason || 'Potentially suspicious'
         }),
-        { parse_mode: 'HTML' }
+        { parse_mode: 'HTML', disable_web_page_preview: true }
       )
 
       console.log(`[REPORT] ⚠️ Suspicious: ${targetName} reported by ${reporterName} (${result.confidence}%)`)

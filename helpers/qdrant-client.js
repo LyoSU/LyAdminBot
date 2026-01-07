@@ -1,4 +1,5 @@
 const { QdrantClient } = require('@qdrant/js-client-rest')
+const { qdrant: qdrantLog } = require('./logger')
 
 // Qdrant client configuration
 const client = new QdrantClient({
@@ -55,7 +56,7 @@ const initializeCollection = async () => {
         }
       })
 
-      console.log(`[QDRANT] Created collection: ${SPAM_COLLECTION}`)
+      qdrantLog.info({ collection: SPAM_COLLECTION }, 'Created collection')
 
       // Create payload index for classification field
       await client.createPayloadIndex(SPAM_COLLECTION, {
@@ -98,9 +99,9 @@ const initializeCollection = async () => {
         field_schema: 'bool'
       })
 
-      console.log(`[QDRANT] Created payload indexes for ${SPAM_COLLECTION}`)
+      qdrantLog.info({ collection: SPAM_COLLECTION }, 'Created payload indexes')
     } else {
-      console.log(`[QDRANT] Collection ${SPAM_COLLECTION} already exists`)
+      qdrantLog.debug({ collection: SPAM_COLLECTION }, 'Collection already exists')
 
       // Try to create missing indexes if they don't exist
       try {
@@ -108,7 +109,7 @@ const initializeCollection = async () => {
           field_name: 'hitCount',
           field_schema: 'integer'
         })
-        console.log(`[QDRANT] Added missing hitCount index`)
+        qdrantLog.debug('Added missing hitCount index')
       } catch (indexError) {
         // Index might already exist, that's ok
       }
@@ -118,7 +119,7 @@ const initializeCollection = async () => {
           field_name: 'features.hasLinks',
           field_schema: 'bool'
         })
-        console.log(`[QDRANT] Added missing features.hasLinks index`)
+        qdrantLog.debug('Added missing features.hasLinks index')
       } catch (indexError) {
         // Index might already exist, that's ok
       }
@@ -126,7 +127,7 @@ const initializeCollection = async () => {
 
     return true
   } catch (error) {
-    console.error('[QDRANT] Error initializing collection:', error)
+    qdrantLog.error({ err: error }, 'Error initializing collection')
     return false
   }
 }
@@ -139,7 +140,7 @@ const getCollectionInfo = async () => {
     const info = await client.getCollection(SPAM_COLLECTION)
     return info
   } catch (error) {
-    console.error('[QDRANT] Error getting collection info:', error)
+    qdrantLog.error({ err: error }, 'Error getting collection info')
     return null
   }
 }
@@ -152,7 +153,7 @@ const healthCheck = async () => {
     const health = await client.api('cluster')
     return health.status === 'ok'
   } catch (error) {
-    console.error('[QDRANT] Health check failed:', error)
+    qdrantLog.error({ err: error }, 'Health check failed')
     return false
   }
 }

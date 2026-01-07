@@ -114,4 +114,4 @@ del:
   error: <b>Silemedim</b>\n<pre>${error}</pre>
 
 global_ban:
-  kicked: "🚫 ${name} atıldı — global ban. Sebep: ${reason}"
+  kicked: "🚫 ${name} atıldı — global ban.\n<code>${reason}</code>"

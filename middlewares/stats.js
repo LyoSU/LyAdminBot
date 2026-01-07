@@ -1,3 +1,5 @@
+const { stats: statsLog } = require('../helpers/logger')
+
 const stats = {
   rpsAvrg: 0,
   responseTimeAvrg: 0,
@@ -14,10 +16,12 @@ setInterval(() => {
       const lastResponseTimeAvrg = (sumResponseTime / stats.times[time].length) || 0
       stats.responseTimeAvrg = (stats.responseTimeAvrg + lastResponseTimeAvrg) / 2
 
-      console.log('rps last:', rps)
-      console.log('rps avrg:', stats.rpsAvrg)
-      console.log('response time avrg last:', lastResponseTimeAvrg)
-      console.log('response time avrg total:', stats.responseTimeAvrg)
+      statsLog.debug({
+        rpsLast: rps,
+        rpsAvrg: stats.rpsAvrg.toFixed(2),
+        responseTimeLast: lastResponseTimeAvrg.toFixed(2),
+        responseTimeAvrg: stats.responseTimeAvrg.toFixed(2)
+      }, 'Performance metrics')
       delete stats.times[time]
     })
   }

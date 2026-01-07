@@ -17,6 +17,7 @@ const {
 const {
   calculateVelocityScore
 } = require('./velocity')
+const { spam: spamLog, moderation: modLog, cleanup: cleanupLog, qdrant: qdrantLog } = require('./logger')
 
 // Create OpenRouter client for LLM
 const openRouter = new OpenAI({
@@ -38,10 +39,10 @@ const initializeCleanup = () => {
         const cleanedCount = await cleanupOldVectors()
         const mergedCount = await mergeSimilarVectors()
         if (cleanedCount > 0 || mergedCount > 0) {
-          console.log(`[CLEANUP] Removed ${cleanedCount} old vectors, merged ${mergedCount} similar vectors`)
+          cleanupLog.info({ cleaned: cleanedCount, merged: mergedCount }, 'Vector cleanup completed')
         }
       } catch (err) {
-        console.error('[CLEANUP] Error during cleanup:', err)
+        cleanupLog.error({ err }, 'Error during cleanup')
       }
     }, 24 * 60 * 60 * 1000) // Daily cleanup
     cleanupInitialized = true

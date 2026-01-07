@@ -1,5 +1,6 @@
 const got = require('got')
 const { userName } = require('../utils')
+const { cas: casLog } = require('../helpers/logger')
 
 const extend = got.extend({
   json: true,
@@ -8,36 +9,27 @@ const extend = got.extend({
 })
 
 /**
- * Formats CAS response data for better readability in logs
+ * Formats CAS response data for structured logging
  * @param {Object} data - CAS API response data
- * @returns {String} - Formatted log string
+ * @returns {Object} - Structured data for logging
  */
-const formatCasLog = (data) => {
-  if (!data || !data.ok) return 'No CAS data available'
+const formatCasData = (data) => {
+  if (!data || !data.ok) return null
 
-  let logMessage = '\n[CAS BAN] User banned by CAS system:'
-  logMessage += '\n------------------------------------------------------------'
-  logMessage += `\n🚫 Offenses: ${data.result.offenses}`
-  logMessage += `\n⏰ Added: ${data.result.time_added}`
-  logMessage += `\n🔍 Reasons: ${data.result.reasons.join(', ')}`
+  const result = {
+    offenses: data.result.offenses,
+    timeAdded: data.result.time_added,
+    reasons: data.result.reasons
+  }
 
-  // Format messages if they exist
   if (data.result.messages && data.result.messages.length > 0) {
-    logMessage += '\n\n📝 Flagged messages:'
-    logMessage += '\n------------------------------------------------------------'
-    data.result.messages.forEach((msg, index) => {
-      // Truncate long messages and clean up formatting
+    result.flaggedMessages = data.result.messages.slice(0, 3).map(msg => {
       const cleanMessage = msg.replace(/\n+/g, ' ').trim()
-      const truncatedMessage = cleanMessage.length > 100
-        ? cleanMessage.substring(0, 100) + '...'
-        : cleanMessage
-
-      logMessage += `\n[${index + 1}] ${truncatedMessage}`
+      return cleanMessage.length > 100 ? cleanMessage.substring(0, 100) + '...' : cleanMessage
     })
   }
 
-  logMessage += '\n------------------------------------------------------------'
-  return logMessage
+  return result
 }
 
 module.exports = async (ctx) => {
@@ -47,21 +39,20 @@ module.exports = async (ctx) => {
 
     return extend.get(`https://api.cas.chat/check?user_id=${userId}`).then(({ body }) => {
       if (body.ok === true) {
-        // Log formatted CAS data
-        console.log(formatCasLog(body))
+        const casData = formatCasData(body)
+        casLog.warn({ userId, ...casData }, 'User banned by CAS system')
 
         // Check bot permissions before banning
         ctx.telegram.getChatMember(ctx.chat.id, ctx.botInfo.id)
           .then(botMember => {
             if (botMember.can_restrict_members) {
-              // Ban the user
               ctx.telegram.kickChatMember(ctx.chat.id, userId)
-                .catch(error => console.error(`[GLOBAL BAN ERROR] Failed to kick globally banned user: ${error.message}`))
+                .catch(error => casLog.error({ err: error.message, userId }, 'Failed to kick CAS banned user'))
             } else {
-              console.error(`[GLOBAL BAN ERROR] Bot doesn't have permission to restrict members in chat ${ctx.chat.id}`)
+              casLog.error({ chatId: ctx.chat.id }, 'Bot lacks permission to restrict members')
             }
           })
-          .catch(error => console.error(`[PERMISSION CHECK] Failed to check bot permissions for ban: ${error.message}`))
+          .catch(error => casLog.error({ err: error.message }, 'Failed to check bot permissions'))
 
         // Send notification message with error handling
         ctx.replyWithHTML(ctx.i18n.t('cas.banned', {
@@ -71,26 +62,24 @@ module.exports = async (ctx) => {
           reply_to_message_id: ctx.message.message_id,
           disable_web_page_preview: true
         }).then(notificationMsg => {
-          // Schedule notification message deletion after 25 seconds
           if (notificationMsg) {
             setTimeout(async () => {
               await ctx.telegram.deleteMessage(ctx.chat.id, notificationMsg.message_id)
-                .catch(error => console.error(`[CAS BAN] Failed to delete notification after timeout: ${error.message}`))
-              console.log(`[CAS BAN] Auto-deleted notification message after timeout`)
-            }, 25 * 1000) // 25 seconds
+                .catch(error => casLog.error({ err: error.message }, 'Failed to delete notification'))
+              casLog.debug('Auto-deleted notification message')
+            }, 25 * 1000)
           }
         }).catch(error => {
-          // Check if bot was removed from chat
           if (error.code === 403 && error.description.includes('bot is not a member')) {
-            console.error(`[CAS BAN] Bot was removed from chat ${ctx.chat.id}`)
+            casLog.error({ chatId: ctx.chat.id }, 'Bot was removed from chat')
           } else {
-            console.error(`[CAS BAN] Failed to send notification: ${error.message}`)
+            casLog.error({ err: error.message }, 'Failed to send notification')
           }
         })
 
         // Delete the original message with error handling
         ctx.deleteMessage().catch(error => {
-          console.error(`[CAS BAN] Failed to delete original message: ${error.message}`)
+          casLog.error({ err: error.message }, 'Failed to delete original message')
         })
 
         return true

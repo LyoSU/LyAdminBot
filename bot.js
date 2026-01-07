@@ -3,6 +3,7 @@ const Telegraf = require('telegraf')
 const session = require('telegraf/session')
 const rateLimit = require('telegraf-ratelimit')
 const I18n = require('telegraf-i18n')
+const { bot: botLog, globalBan, db: dbLog } = require('./helpers/logger')
 const {
   db
 } = require('./database')
@@ -66,7 +67,7 @@ const bot = new Telegraf(process.env.BOT_TOKEN, {
 bot.on(['channel_post', 'edited_channel_post'], () => {})
 
 bot.use((ctx, next) => {
-  if (ctx.update.my_chat_member) console.log(ctx.update)
+  if (ctx.update.my_chat_member) botLog.debug({ update: ctx.update }, 'my_chat_member update')
   else return next()
 })
 
@@ -84,19 +85,19 @@ bot.use((ctx, next) => {
     ) {
       const chatId = ctx.chat && ctx.chat.id
       const chatTitle = ctx.chat && ctx.chat.title
-      console.log(`[BOT] Cannot write to chat ${chatId}, leaving...`)
+      botLog.warn({ chatId }, 'Cannot write to chat, leaving...')
       try {
         if (chatId) {
           await ctx.telegram.leaveChat(chatId)
-          console.log(`[BOT] Left chat ${chatId} (${chatTitle || 'unknown'})`)
+          botLog.info({ chatId, chatTitle: chatTitle || 'unknown' }, 'Left chat')
         }
       } catch (leaveError) {
-        console.log(`[BOT] Failed to leave chat: ${leaveError.message}`)
+        botLog.error({ chatId, err: leaveError.message }, 'Failed to leave chat')
       }
       return
     }
 
-    console.log('Oops', error)
+    botLog.error({ err: error }, 'Unhandled error')
   })
   return true
 })
@@ -166,8 +167,8 @@ bot.use(async (ctx, next) => {
         ctx.session.userInfo.isGlobalBanned = false
         ctx.session.userInfo.globalBanReason = undefined
         ctx.session.userInfo.globalBanDate = undefined
-        await ctx.session.userInfo.save().catch(err => console.error('[GLOBAL BAN CLEANUP] Failed to clear expired ban:', err))
-        console.log(`[GLOBAL BAN EXPIRED] Cleared expired global ban for user ${ctx.from.first_name} (ID: ${ctx.from.id})`)
+        await ctx.session.userInfo.save().catch(err => globalBan.error({ err }, 'Failed to clear expired ban'))
+        globalBan.info({ userId: ctx.from.id, firstName: ctx.from.first_name }, 'Cleared expired global ban')
       } else {
         // Check if this group participates in global bans
         const globalBanEnabled = ctx.group &&
@@ -179,7 +180,12 @@ bot.use(async (ctx, next) => {
         if (globalBanEnabled) {
           const banDate = new Date(ctx.session.userInfo.globalBanDate)
           const timeLeft = 24 - ((new Date() - banDate) / (1000 * 60 * 60))
-          console.log(`[GLOBAL BAN] User ${ctx.from.first_name} (ID: ${ctx.from.id}) is globally banned by AI. Reason: ${ctx.session.userInfo.globalBanReason}. Time left: ${timeLeft.toFixed(1)}h. Banning in current group.`)
+          globalBan.warn({
+            userId: ctx.from.id,
+            firstName: ctx.from.first_name,
+            reason: ctx.session.userInfo.globalBanReason,
+            timeLeftHours: timeLeft.toFixed(1)
+          }, 'User globally banned by AI, banning in current group')
           try {
             await ctx.telegram.deleteMessage(ctx.chat.id, ctx.message.message_id)
             await ctx.telegram.kickChatMember(ctx.chat.id, ctx.from.id)
@@ -188,11 +194,15 @@ bot.use(async (ctx, next) => {
               reason: ctx.session.userInfo.globalBanReason
             }))
           } catch (error) {
-            console.error(`[GLOBAL BAN ERROR] Failed to kick globally banned user: ${error.message}`)
+            globalBan.error({ err: error.message, userId: ctx.from.id }, 'Failed to kick globally banned user')
           }
           isSpam = true // Prevents further processing
         } else {
-          console.log(`[GLOBAL BAN] User ${ctx.from.first_name} (ID: ${ctx.from.id}) is globally banned but group "${ctx.chat.title}" has global ban disabled`)
+          globalBan.debug({
+            userId: ctx.from.id,
+            firstName: ctx.from.first_name,
+            groupTitle: ctx.chat.title
+          }, 'User globally banned but group has global ban disabled')
         }
       }
     }
@@ -223,7 +233,7 @@ bot.use(async (ctx, next) => {
         .then(() => { ctx.session.userInfo.isSaving = false })
         .catch((err) => {
           ctx.session.userInfo.isSaving = false
-          console.error('[USER SAVE ERROR]', err)
+          dbLog.error({ err }, 'User save error')
         })
     )
   }
@@ -306,7 +316,7 @@ bot.on('text', (ctx, next) => {
 bot.on('message', handleMessage)
 
 db.connection.once('open', async () => {
-  console.log('Connected to MongoDB')
+  dbLog.info('Connected to MongoDB')
 
   if (process.env.BOT_DOMAIN) {
     bot.launch({
@@ -316,11 +326,11 @@ db.connection.once('open', async () => {
         port: process.env.WEBHOOK_PORT || 2200
       }
     }).then(() => {
-      console.log('bot start webhook')
+      botLog.info({ mode: 'webhook', port: process.env.WEBHOOK_PORT || 2200 }, 'Bot started')
     })
   } else {
     bot.launch().then(() => {
-      console.log('bot start polling')
+      botLog.info({ mode: 'polling' }, 'Bot started')
     })
   }
 })

@@ -1,9 +1,11 @@
+const { bot: botLog } = require('../helpers/logger')
+
 module.exports = async (ctx, next) => {
   if (['supergroup', 'group'].includes(ctx.chat.type)) {
     const chatMember = await ctx.tg.getChatMember(
       ctx.message.chat.id,
       ctx.message.from.id
-    ).catch(console.log)
+    ).catch(err => botLog.error({ err }, 'Failed to get chat member'))
 
     if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
       return next()

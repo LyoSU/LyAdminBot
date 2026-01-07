@@ -1,4 +1,5 @@
 const crypto = require('crypto')
+const { velocity: velocityLog } = require('./logger')
 
 /**
  * Velocity-based spam detection system
@@ -157,8 +158,8 @@ class VelocityStore {
         }
       }
 
-      if (cleanedKeys > 0 || this.data.size > 0) {
-        console.log(`[VELOCITY] Cleanup: ${this.data.size} keys, removed ${cleanedKeys}`)
+      if (cleanedKeys > 0) {
+        velocityLog.debug({ totalKeys: this.data.size, removedKeys: cleanedKeys }, 'Cleanup completed')
       }
     }, CONFIG.CLEANUP_INTERVAL)
   }

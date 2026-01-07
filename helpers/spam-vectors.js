@@ -4,6 +4,7 @@ const {
   SPAM_COLLECTION,
   initializeCollection
 } = require('./qdrant-client')
+const { qdrant: qdrantLog } = require('./logger')
 
 /**
  * Calculate SHA256 hash of message content
@@ -69,7 +70,7 @@ const saveSpamVector = async ({
         points: [pointId]
       })
 
-      console.log(`[QDRANT] Updated existing vector ${pointId} (hit count: ${updatedHitCount})`)
+      qdrantLog.debug({ pointId, hitCount: updatedHitCount }, 'Updated existing vector')
       return pointId
     }
 
@@ -92,10 +93,10 @@ const saveSpamVector = async ({
       points: [point]
     })
 
-    console.log(`[QDRANT] Saved new vector ${pointId} (${classification})`)
+    qdrantLog.debug({ pointId, classification }, 'Saved new vector')
     return pointId
   } catch (error) {
-    console.error('[QDRANT] Error saving spam vector:', error)
+    qdrantLog.error({ err: error }, 'Error saving spam vector')
     throw error
   }
 }
@@ -161,7 +162,7 @@ const findSimilarVectors = async (embedding, threshold = 0.85, limit = 10, featu
 
     return similarities
   } catch (error) {
-    console.error('[QDRANT] Error finding similar vectors:', error)
+    qdrantLog.error({ err: error }, 'Error finding similar vectors')
     // Fallback to simple search without filter
     try {
       const fallbackResult = await client.search(SPAM_COLLECTION, {
@@ -181,7 +182,7 @@ const findSimilarVectors = async (embedding, threshold = 0.85, limit = 10, featu
         lastMatched: point.payload.lastMatched
       }))
     } catch (fallbackError) {
-      console.error('[QDRANT] Fallback search also failed:', fallbackError)
+      qdrantLog.error({ err: fallbackError }, 'Fallback search also failed')
       return []
     }
   }
@@ -266,7 +267,7 @@ const classifyBySimilarity = async (embedding) => {
     // No confident match found
     return null
   } catch (error) {
-    console.error('[QDRANT] Error classifying by similarity:', error)
+    qdrantLog.error({ err: error }, 'Error classifying by similarity')
     return null
   }
 }
@@ -311,13 +312,13 @@ const cleanupOldVectors = async () => {
         points: idsToDelete
       })
 
-      console.log(`[QDRANT] Cleaned up ${idsToDelete.length} old vectors`)
+      qdrantLog.info({ count: idsToDelete.length }, 'Cleaned up old vectors')
       return idsToDelete.length
     }
 
     return 0
   } catch (error) {
-    console.error('[QDRANT] Error cleaning up old vectors:', error)
+    qdrantLog.error({ err: error }, 'Error cleaning up old vectors')
     return 0
   }
 }
@@ -402,12 +403,12 @@ const mergeSimilarVectors = async (threshold = 0.95) => {
       await client.delete(SPAM_COLLECTION, {
         points: toDelete
       })
-      console.log(`[QDRANT] Merged ${mergedCount} similar vectors`)
+      qdrantLog.info({ merged: mergedCount }, 'Merged similar vectors')
     }
 
     return mergedCount
   } catch (error) {
-    console.error('[QDRANT] Error merging similar vectors:', error)
+    qdrantLog.error({ err: error }, 'Error merging similar vectors')
     return 0
   }
 }
@@ -478,7 +479,7 @@ const getKnowledgeStats = async () => {
         : null
     }
   } catch (error) {
-    console.error('[QDRANT] Error getting knowledge stats:', error)
+    qdrantLog.error({ err: error }, 'Error getting knowledge stats')
     return {
       totalPatterns: 0,
       byClassification: []

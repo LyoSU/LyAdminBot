@@ -1,4 +1,5 @@
 const { OpenAI } = require('openai')
+const { moderation: embedLog } = require('./logger')
 
 // Create OpenAI client for embeddings
 const openai = new OpenAI({
@@ -94,7 +95,7 @@ const generateEmbedding = async (text, userContext = {}) => {
 
     return response.data[0].embedding
   } catch (error) {
-    console.error('Error generating embedding:', error.message)
+    embedLog.error({ err: error.message }, 'Error generating embedding')
     return null
   }
 }
@@ -129,7 +130,7 @@ const generateBatchEmbeddings = async (texts) => {
 
     return response.data.map(item => item.embedding)
   } catch (error) {
-    console.error('Error generating batch embeddings:', error.message)
+    embedLog.error({ err: error.message }, 'Error generating batch embeddings')
     return []
   }
 }

@@ -2,6 +2,7 @@ const { userName } = require('../utils')
 const { checkSpam, checkTrustedUser, getSpamSettings } = require('../helpers/spam-check')
 const { saveSpamVector } = require('../helpers/spam-vectors')
 const { generateEmbedding, extractFeatures } = require('../helpers/message-embeddings')
+const { spam: spamLog, spamAction, reputation: repLog, notification: notifyLog } = require('../helpers/logger')
 
 /**
  * Determine appropriate action based on spam confidence and user profile
@@ -110,7 +111,7 @@ module.exports = async (ctx) => {
                      (ctx.message && ctx.message.text && ctx.message.text.includes('#testspam'))
 
   if (isTestMode) {
-    console.log('[SPAM CHECK] 🧪 TEST MODE ENABLED - Bypassing all safety checks')
+    spamLog.info('TEST MODE ENABLED - Bypassing all safety checks')
   }
 
   // Skip if message is a command (except in test mode)
@@ -120,21 +121,21 @@ module.exports = async (ctx) => {
 
   // Skip Telegram service account (forwarded message info)
   if (!isTestMode && senderId === 777000) {
-    console.log('[SPAM CHECK] ⏭️ Skipping Telegram service (ID: 777000)')
+    spamLog.debug({ senderId }, 'Skipping Telegram service')
     return
   }
 
   // Skip anonymous admins (posting as the group itself)
   // Note: When admin posts anonymously, sender_chat.id === chat.id
   if (!isTestMode && hasSenderChat && senderChat.id === ctx.chat.id) {
-    console.log('[SPAM CHECK] 👤 Skipping anonymous admin')
+    spamLog.debug('Skipping anonymous admin')
     return
   }
 
   // Check if this is a channel post (will be spam-checked, not skipped)
   const isChannelPost = hasSenderChat && senderChat.type === 'channel'
   if (isChannelPost) {
-    console.log(`[SPAM CHECK] 📢 Checking channel "${senderChat.title || senderId}"`)
+    spamLog.debug({ channelTitle: senderChat.title || senderId }, 'Checking channel')
   }
 
   // Only check actual user content (whitelist approach)
@@ -157,14 +158,14 @@ module.exports = async (ctx) => {
 
   // Skip if user is in trusted whitelist - except in test mode
   if (!isTestMode && checkTrustedUser(senderId, ctx)) {
-    console.log(`[SPAM CHECK] ⭐ Skipping trusted user ${userName(senderInfo)} (ID: ${senderId})`)
+    spamLog.debug({ userId: senderId, userName: userName(senderInfo) }, 'Skipping trusted user')
     return
   }
 
   // Skip if user has trusted global reputation (score >= 75)
   const userReputation = ctx.session && ctx.session.userInfo && ctx.session.userInfo.reputation
   if (!isTestMode && userReputation && userReputation.status === 'trusted') {
-    console.log(`[SPAM CHECK] 🌟 Skipping globally trusted user ${userName(senderInfo)} (score: ${userReputation.score})`)
+    spamLog.debug({ userId: senderId, userName: userName(senderInfo), score: userReputation.score }, 'Skipping globally trusted user')
     return
   }
 
@@ -189,7 +190,7 @@ module.exports = async (ctx) => {
   if (checkLimit !== 5 && shouldCheckSpam && !isChannelPost) {
     const repStatus = userReputation ? userReputation.status : 'unknown'
     const repScore = userReputation ? userReputation.score : 'N/A'
-    console.log(`[SPAM CHECK] 🔍 Extended check for ${repStatus} user (score: ${repScore}, limit: ${checkLimit === Infinity ? '∞' : checkLimit}, msg #${messageCount})`)
+    spamLog.debug({ repStatus, repScore, checkLimit: checkLimit === Infinity ? 'unlimited' : checkLimit, messageCount }, 'Extended check for user')
   }
 
   // Check if we have member data OR if this is a channel post (always check channels)
@@ -201,14 +202,14 @@ module.exports = async (ctx) => {
       try {
         const chatMember = await ctx.telegram.getChatMember(ctx.chat.id, senderId)
         if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
-          console.log(`[SPAM CHECK] 👮 Skipping admin ${userName(senderInfo)} (ID: ${senderId})`)
+          spamLog.debug({ userId: senderId, userName: userName(senderInfo) }, 'Skipping admin')
           return
         }
       } catch (error) {
-        console.log(`[SPAM CHECK] ⚠️ Could not check admin status for user ${senderId}: ${error.message}`)
+        spamLog.warn({ userId: senderId, err: error.message }, 'Could not check admin status')
       }
     } else if (isTestMode) {
-      console.log('[SPAM CHECK] 🧪 TEST MODE - Bypassing admin check')
+      spamLog.debug('TEST MODE - Bypassing admin check')
     }
 
     // Check message for spam
@@ -234,9 +235,13 @@ module.exports = async (ctx) => {
       }
 
       const actualMessageCount = hasMemberData ? ctx.group.members[senderId].stats.messagesCount : 0
-      const displayMessageCount = isTestMode ? '[TEST: ignored]' : (isChannelPost ? '[channel]' : actualMessageCount)
       const senderType = isChannelPost ? 'channel' : 'user'
-      console.log(`[SPAM CHECK] 🔍 Checking ${senderType} ${userName(senderInfo)} (ID: ${senderId}) with ${displayMessageCount} messages`)
+      spamLog.info({
+        senderType,
+        userName: userName(senderInfo),
+        userId: senderId,
+        messageCount: isTestMode ? 'TEST' : (isChannelPost ? 'channel' : actualMessageCount)
+      }, 'Checking message')
 
       // Build context for spam check
       const context = {
@@ -259,26 +264,31 @@ module.exports = async (ctx) => {
       try {
         result = await checkSpam(messageText, ctx, spamSettings)
       } catch (error) {
-        console.error(`[SPAM CHECK] ❌ Failed for ${userName(senderInfo)} (ID: ${senderId}): ${error.message}`)
+        spamLog.error({ userId: senderId, userName: userName(senderInfo), err: error.message }, 'Check failed')
         return false
       }
 
       // Handle null/undefined result (e.g., empty LLM response)
       if (!result) {
-        console.log(`[SPAM CHECK] ⚠️ No result for ${userName(senderInfo)} (ID: ${senderId}) - treating as clean`)
+        spamLog.warn({ userId: senderId, userName: userName(senderInfo) }, 'No result - treating as clean')
         return false
       }
 
-      console.log(`[SPAM CHECK] Result: ${result.isSpam ? '🚨 SPAM' : '✅ CLEAN'} (${result.confidence}%) - Source: ${result.source}`)
+      spamLog.info({
+        isSpam: result.isSpam,
+        confidence: result.confidence,
+        source: result.source
+      }, result.isSpam ? 'SPAM detected' : 'CLEAN')
 
       if (isTestMode) {
-        console.log('[SPAM CHECK] 🧪 TEST MODE - Message details:')
-        console.log(`  📝 Original: "${originalText.substring(0, 100)}..."`)
-        console.log(`  📝 Processed: "${messageText.substring(0, 100)}..."`)
-        console.log(`  🤖 Classification: ${result.isSpam ? 'SPAM' : 'CLEAN'}`)
-        console.log(`  📊 Confidence: ${result.confidence}%`)
-        console.log(`  💾 Source: ${result.source}`)
-        console.log(`  📄 Reason: ${result.reason}`)
+        spamLog.info({
+          original: originalText.substring(0, 100),
+          processed: messageText.substring(0, 100),
+          classification: result.isSpam ? 'SPAM' : 'CLEAN',
+          confidence: result.confidence,
+          source: result.source,
+          reason: result.reason
+        }, 'TEST MODE - Details')
       }
 
       // Use dynamic confidence threshold and determine action
@@ -291,10 +301,15 @@ module.exports = async (ctx) => {
         const shortMessage = messageText.substring(0, 150)
         const displayMessage = messageText.length > 150 ? `${shortMessage}...` : shortMessage
 
-        console.log(`[SPAM ACTION] 🚨 Taking action against ${userDisplayName} (ID: ${userId})`)
-        console.log(`[SPAM ACTION] 🔨 Action: ${action.action} | Source: ${result.source}`)
-        console.log(`[SPAM ACTION] 💬 Message: "${displayMessage}"`)
-        console.log(`[SPAM ACTION] 📝 Reason: ${action.reason} | 📊 Confidence: ${result.confidence}%`)
+        spamAction.warn({
+          userId,
+          userName: userDisplayName,
+          action: action.action,
+          source: result.source,
+          message: displayMessage,
+          reason: action.reason,
+          confidence: result.confidence
+        }, 'Taking action')
 
         // Get mute duration from action or default
         const muteDuration = action.duration || (senderInfo.is_premium ? 3600 : 86400)
@@ -311,7 +326,7 @@ module.exports = async (ctx) => {
           canDeleteMessages = botMember.can_delete_messages ||
                              (ctx.message.date && (Date.now() / 1000 - ctx.message.date) < 2 * 24 * 60 * 60)
         } catch (error) {
-          console.error(`[SPAM PERMISSIONS] ❌ Failed to check bot permissions: ${error.message}`)
+          spamAction.error({ err: error.message }, 'Failed to check bot permissions')
         }
 
         // Handle mute/restrict action
@@ -325,7 +340,7 @@ module.exports = async (ctx) => {
                   sender_chat_id: senderId
                 })
                 muteSuccess = true
-                console.log(`[SPAM ACTION] ✅ Banned channel "${senderInfo.title}"`)
+                spamAction.info({ channelTitle: senderInfo.title }, 'Banned channel')
               } else {
                 // For users, use restrictChatMember
                 await ctx.telegram.restrictChatMember(ctx.chat.id, senderId, {
@@ -336,13 +351,13 @@ module.exports = async (ctx) => {
                   until_date: Math.floor(Date.now() / 1000) + muteDuration
                 })
                 muteSuccess = true
-                console.log(`[SPAM ACTION] ✅ Muted ${userDisplayName} for ${muteDuration}s`)
+                spamAction.info({ userName: userDisplayName, muteDuration }, 'Muted user')
               }
             } catch (error) {
-              console.error(`[SPAM ACTION] ❌ Failed to ${isChannelPost ? 'ban channel' : 'mute'} ${userDisplayName}: ${error.message}`)
+              spamAction.error({ err: error.message, userName: userDisplayName, action: isChannelPost ? 'ban' : 'mute' }, 'Action failed')
             }
           } else {
-            console.error(`[SPAM ACTION] ❌ No restrict permission in "${ctx.chat.title}"`)
+            spamAction.error({ chatTitle: ctx.chat.title }, 'No restrict permission')
           }
         }
 
@@ -352,12 +367,12 @@ module.exports = async (ctx) => {
             try {
               await ctx.deleteMessage()
               deleteSuccess = true
-              console.log(`[SPAM ACTION] ✅ Successfully deleted message from ${userDisplayName}`)
+              spamAction.info({ userName: userDisplayName }, 'Deleted message')
             } catch (error) {
-              console.error(`[SPAM ACTION] ❌ Failed to delete message from ${userDisplayName} (ID: ${userId}): ${error.message}`)
+              spamAction.error({ err: error.message, userName: userDisplayName, userId }, 'Failed to delete message')
             }
           } else {
-            console.error(`[SPAM ACTION] ❌ Bot lacks permission to delete messages in "${ctx.chat.title}"`)
+            spamAction.error({ chatTitle: ctx.chat.title }, 'No delete permission')
           }
         }
 
@@ -373,7 +388,7 @@ module.exports = async (ctx) => {
           if (ctx.session.userInfo.reputation) {
             ctx.session.userInfo.reputation.lastCalculated = null
           }
-          console.log(`[SPAM REPUTATION] 📉 Updated spam stats: detections=${stats.spamDetections}`)
+          repLog.debug({ spamDetections: stats.spamDetections }, 'Updated spam stats')
         }
 
         // Save to knowledge base after successful action (higher confidence in spam classification)
@@ -399,10 +414,10 @@ module.exports = async (ctx) => {
                 confidence: adjustedConfidence,
                 features
               })
-              console.log(`[SPAM ACTION] Saved vector with boosted confidence: ${(adjustedConfidence * 100).toFixed(1)}%`)
+              spamAction.debug({ confidence: (adjustedConfidence * 100).toFixed(1) }, 'Saved vector with boosted confidence')
             }
           } catch (saveError) {
-            console.error('[SPAM ACTION] Failed to save confirmed pattern:', saveError.message)
+            spamAction.error({ err: saveError.message }, 'Failed to save confirmed pattern')
           }
         }
 
@@ -420,21 +435,21 @@ module.exports = async (ctx) => {
         } else if (!muteSuccess && !deleteSuccess) {
           // Bot detected spam but has no permissions to act
           statusMessage = ctx.i18n.t('spam.notification.no_permissions', notificationParams) + testModeLabel
-          console.log(`[SPAM NOTIFICATION] ⚠️ Spam detected but no permissions to act`)
+          notifyLog.warn('Spam detected but no permissions to act')
         }
 
         if (statusMessage) {
-          const notificationMsg = await ctx.replyWithHTML(statusMessage)
-            .catch(error => console.error(`[SPAM NOTIFICATION] ❌ Failed to send notification: ${error.message}`))
+          const notificationMsg = await ctx.replyWithHTML(statusMessage, { disable_web_page_preview: true })
+            .catch(error => notifyLog.error({ err: error.message }, 'Failed to send notification'))
 
           // Schedule notification message deletion
           if (notificationMsg) {
             const deleteDelay = (muteSuccess || deleteSuccess) ? 25 : 60 // longer for no-permission warnings
-            console.log(`[SPAM NOTIFICATION] 📨 Sent notification, will auto-delete in ${deleteDelay}s`)
+            notifyLog.debug({ deleteDelay }, 'Sent notification, will auto-delete')
             setTimeout(async () => {
               await ctx.telegram.deleteMessage(ctx.chat.id, notificationMsg.message_id)
-                .catch(error => console.error(`[SPAM NOTIFICATION] ❌ Failed to delete notification: ${error.message}`))
-              console.log(`[SPAM NOTIFICATION] 🗑️ Auto-deleted notification message`)
+                .catch(error => notifyLog.error({ err: error.message }, 'Failed to delete notification'))
+              notifyLog.debug('Auto-deleted notification message')
             }, deleteDelay * 1000)
           }
         }
