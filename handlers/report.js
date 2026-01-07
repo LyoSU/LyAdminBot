@@ -1,6 +1,7 @@
 const { userName } = require('../utils')
 const { checkSpam, getSpamSettings } = require('../helpers/spam-check')
 const { calculateReputation } = require('../helpers/reputation')
+const { report: reportLog } = require('../helpers/logger')
 
 // Rate limiting: max 3 reports per user per 5 minutes
 const reportCooldowns = new Map()
@@ -148,7 +149,7 @@ const handleReport = async (ctx) => {
           { upsert: true, new: true }
         )
       } catch (dbErr) {
-        console.error('[REPORT] DB error:', dbErr.message)
+        reportLog.error({ err: dbErr.message }, 'DB error')
       }
     }
 
@@ -185,7 +186,7 @@ const handleReport = async (ctx) => {
           telegram_id: targetId
         })
       } catch (dbErr) {
-        console.error('[REPORT] GroupMember DB error:', dbErr.message)
+        reportLog.error({ err: dbErr.message }, 'GroupMember DB error')
       }
     }
 
@@ -216,7 +217,15 @@ const handleReport = async (ctx) => {
     const globalStats = (targetUserInfo && targetUserInfo.globalStats) || {}
     const rep = (targetUserInfo && targetUserInfo.reputation) || {}
     const groupMsgs = (targetGroupMember && targetGroupMember.stats && targetGroupMember.stats.messagesCount) || 0
-    console.log(`[REPORT] Checking user ${targetUser.first_name} (${targetUser.id}): groupMsgs=${groupMsgs}, globalMsgs=${globalStats.totalMessages || 0}, groups=${globalStats.groupsActive || 0}, reputation=${rep.score || 50} (${rep.status || 'neutral'})`)
+    reportLog.debug({
+      userId: targetUser.id,
+      firstName: targetUser.first_name,
+      groupMsgs,
+      globalMsgs: globalStats.totalMessages || 0,
+      groups: globalStats.groupsActive || 0,
+      reputation: rep.score || 50,
+      status: rep.status || 'neutral'
+    }, 'Checking user')
 
     // Force spam check
     const result = await checkSpam(messageText || '[Media]', mockCtx, spamSettings)
@@ -253,7 +262,7 @@ const handleReport = async (ctx) => {
               sender_chat_id: targetId
             })
             actionTaken = true
-            console.log(`[REPORT] Banned channel "${targetUser.title}" from posting`)
+            reportLog.info({ channelTitle: targetUser.title }, 'Banned channel from posting')
           } else {
             // For regular users, use restrictChatMember
             await ctx.telegram.restrictChatMember(ctx.chat.id, targetId, {
@@ -267,7 +276,7 @@ const handleReport = async (ctx) => {
           }
         }
       } catch (e) {
-        console.error('[REPORT] Failed to restrict:', e.message)
+        reportLog.error({ err: e.message }, 'Failed to restrict')
       }
 
       // Try to delete message
@@ -276,7 +285,7 @@ const handleReport = async (ctx) => {
         await ctx.telegram.deleteMessage(ctx.chat.id, replyMsg.message_id)
         deleted = true
       } catch (e) {
-        console.error('[REPORT] Failed to delete:', e.message)
+        reportLog.error({ err: e.message }, 'Failed to delete')
       }
 
       // Update target's reputation (only for users, not channels)
@@ -309,7 +318,7 @@ const handleReport = async (ctx) => {
         { parse_mode: 'HTML', disable_web_page_preview: true }
       )
 
-      console.log(`[REPORT] ✅ Spam confirmed: ${targetName} reported by ${reporterName} (${result.confidence}%)`)
+      reportLog.info({ target: targetName, reporter: reporterName, confidence: result.confidence }, 'Spam confirmed')
     } else if (result.isSpam && result.confidence >= 50) {
       // Medium confidence - warn but don't act
       await ctx.telegram.editMessageText(
@@ -325,7 +334,7 @@ const handleReport = async (ctx) => {
         { parse_mode: 'HTML', disable_web_page_preview: true }
       )
 
-      console.log(`[REPORT] ⚠️ Suspicious: ${targetName} reported by ${reporterName} (${result.confidence}%)`)
+      reportLog.warn({ target: targetName, reporter: reporterName, confidence: result.confidence }, 'Suspicious')
     } else {
       // Clean message
       await ctx.telegram.editMessageText(
@@ -340,7 +349,7 @@ const handleReport = async (ctx) => {
         { parse_mode: 'HTML' }
       )
 
-      console.log(`[REPORT] ✓ Clean: ${targetName} reported by ${reporterName}`)
+      reportLog.debug({ target: targetName, reporter: reporterName }, 'Clean')
     }
 
     // Auto-delete status message after 30 seconds
@@ -350,7 +359,7 @@ const handleReport = async (ctx) => {
       } catch (e) { /* ignore */ }
     }, 30000)
   } catch (error) {
-    console.error('[REPORT] Error:', error)
+    reportLog.error({ err: error }, 'Report error')
     await ctx.telegram.editMessageText(
       ctx.chat.id,
       statusMsg.message_id,

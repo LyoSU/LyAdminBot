@@ -1,6 +1,7 @@
 const https = require('https')
 const Stream = require('stream').Transform
 const sharp = require('sharp')
+const { bot: botLog } = require('../../helpers/logger')
 
 const downloadFileByUrl = (fileUrl) => new Promise((resolve, reject) => {
   const data = new Stream()
@@ -23,7 +24,7 @@ module.exports = async (ctx) => {
     const chatMember = await ctx.tg.getChatMember(
       ctx.message.chat.id,
       ctx.message.from.id
-    ).catch(console.log)
+    ).catch(err => botLog.error({ err }, 'Failed to get chat member'))
 
     if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
       if (ctx.message.reply_to_message) {

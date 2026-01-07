@@ -134,7 +134,7 @@ const getMessagePhotoUrl = async (ctx, messagePhoto) => {
     const fileLink = await ctx.telegram.getFileLink(messagePhoto.file_id)
     return fileLink
   } catch (error) {
-    console.error('[MODERATION] Error getting message photo:', error.message)
+    modLog.error({ err: error.message }, 'Error getting message photo')
     return null
   }
 }
@@ -155,7 +155,7 @@ const getUserProfilePhotoUrl = async (ctx) => {
     const fileLink = await ctx.telegram.getFileLink(photo.file_id)
     return fileLink
   } catch (error) {
-    console.error('[MODERATION] Error getting user profile photo:', error.message)
+    modLog.error({ err: error.message }, 'Error getting user profile photo')
     return null
   }
 }
@@ -173,7 +173,7 @@ const getUserChatInfo = async (ctx) => {
       rating: chatInfo.rating || null // UserRating object: { level, rating, current_level_rating, next_level_rating }
     }
   } catch (error) {
-    console.error('[MODERATION] Error getting user chat info:', error.message)
+    modLog.error({ err: error.message }, 'Error getting user chat info')
     return { bio: null, rating: null }
   }
 }
@@ -194,7 +194,7 @@ const getGroupDescription = async (ctx) => {
     const chatInfo = await ctx.telegram.getChat(ctx.chat.id)
     return chatInfo.description || null
   } catch (error) {
-    console.error('[MODERATION] Error getting group description:', error.message)
+    modLog.error({ err: error.message }, 'Error getting group description')
     return null
   }
 }
@@ -206,7 +206,7 @@ const getGroupDescription = async (ctx) => {
 const checkOpenAIModeration = async (messageText, imageUrl = null, imageType = 'unknown') => {
   try {
     if (!process.env.OPENAI_API_KEY) {
-      console.log('[MODERATION] OpenAI API key not configured, skipping moderation check')
+      modLog.debug('OpenAI API key not configured, skipping moderation check')
       return null
     }
 
@@ -225,7 +225,7 @@ const checkOpenAIModeration = async (messageText, imageUrl = null, imageType = '
           url: imageUrl
         }
       })
-      console.log(`[MODERATION] Adding ${imageType} to moderation check`)
+      modLog.debug({ imageType }, 'Adding image to moderation check')
     }
 
     if (input.length === 0) {
@@ -258,7 +258,7 @@ const checkOpenAIModeration = async (messageText, imageUrl = null, imageType = '
 
       const highestScore = Math.max(...relevantScores)
 
-      console.log(`[MODERATION] Content flagged: ${flaggedCategories.join(', ')} (highest score: ${(highestScore * 100).toFixed(1)}%)`)
+      modLog.warn({ categories: flaggedCategories, highestScore: (highestScore * 100).toFixed(1) }, 'Content flagged')
 
       return {
         flagged: true,
@@ -268,10 +268,10 @@ const checkOpenAIModeration = async (messageText, imageUrl = null, imageType = '
       }
     }
 
-    console.log('[MODERATION] Content passed moderation check')
+    modLog.debug('Content passed moderation check')
     return { flagged: false }
   } catch (error) {
-    console.error('[MODERATION] Error during moderation check:', error.message)
+    modLog.error({ err: error.message }, 'Error during moderation check')
     return null
   }
 }
@@ -299,7 +299,7 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     // Check text content first
     const textModerationResult = await checkOpenAIModeration(messageText, null, 'text')
     if (textModerationResult && textModerationResult.flagged) {
-      console.log(`[SPAM CHECK] Text flagged by OpenAI moderation: ${textModerationResult.reason}`)
+      spamLog.warn({ reason: textModerationResult.reason }, 'Text flagged by OpenAI moderation')
       return {
         isSpam: true,
         confidence: Math.max(90, textModerationResult.highestScore),
@@ -315,7 +315,7 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
       if (messagePhotoUrl) {
         const photoModerationResult = await checkOpenAIModeration(messageText, messagePhotoUrl, 'message photo')
         if (photoModerationResult && photoModerationResult.flagged) {
-          console.log(`[SPAM CHECK] Message photo flagged by OpenAI moderation: ${photoModerationResult.reason}`)
+          spamLog.warn({ reason: photoModerationResult.reason }, 'Message photo flagged')
           return {
             isSpam: true,
             confidence: Math.max(90, photoModerationResult.highestScore),
@@ -331,7 +331,7 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     if (userAvatarUrl) {
       const avatarModerationResult = await checkOpenAIModeration(messageText, userAvatarUrl, 'user avatar')
       if (avatarModerationResult && avatarModerationResult.flagged) {
-        console.log(`[SPAM CHECK] User avatar flagged by OpenAI moderation: ${avatarModerationResult.reason}`)
+        spamLog.warn({ reason: avatarModerationResult.reason }, 'User avatar flagged')
         return {
           isSpam: true,
           confidence: Math.max(90, avatarModerationResult.highestScore),
@@ -392,12 +392,12 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
       )
 
       if (velocityResult.score > 0) {
-        console.log(`[SPAM CHECK] Velocity score: ${(velocityResult.score * 100).toFixed(1)}% (${velocityResult.dominant})`)
+        spamLog.debug({ velocityScore: (velocityResult.score * 100).toFixed(1), dominant: velocityResult.dominant }, 'Velocity score')
       }
 
       // High velocity = definite spam (cross-chat spam detected)
       if (velocityResult.score >= 0.8) {
-        console.log(`[SPAM CHECK] High velocity spam detected: ${velocityResult.recommendation.reason}`)
+        spamLog.warn({ reason: velocityResult.recommendation.reason }, 'High velocity spam detected')
         return {
           isSpam: true,
           confidence: velocityResult.recommendation.confidence,
@@ -413,7 +413,7 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
         userContext.velocityReason = velocityResult.dominant
       }
     } catch (velocityError) {
-      console.error('[SPAM CHECK] Velocity check error:', velocityError.message)
+      spamLog.error({ err: velocityError.message }, 'Velocity check error')
     }
 
     // Extract features from message
@@ -432,14 +432,14 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
       const localResult = await classifyBySimilarity(embedding)
 
       if (localResult) {
-        console.log(`[SPAM CHECK] Qdrant match: ${localResult.classification} (${(localResult.confidence * 100).toFixed(1)}%)`)
+        qdrantLog.debug({ classification: localResult.classification, confidence: (localResult.confidence * 100).toFixed(1) }, 'Qdrant match found')
 
         // If confidence is high enough, return local result
         const adaptiveThreshold = getAdaptiveThreshold(features)
-        console.log(`[SPAM CHECK] Adaptive threshold: ${(adaptiveThreshold * 100).toFixed(1)}%`)
+        qdrantLog.debug({ threshold: (adaptiveThreshold * 100).toFixed(1) }, 'Adaptive threshold')
 
         if (localResult.confidence >= adaptiveThreshold) {
-          console.log(`[SPAM CHECK] Using Qdrant result (confidence ${(localResult.confidence * 100).toFixed(1)}% >= threshold ${(adaptiveThreshold * 100).toFixed(1)}%)`)
+          qdrantLog.info({ confidence: (localResult.confidence * 100).toFixed(1), threshold: (adaptiveThreshold * 100).toFixed(1) }, 'Using Qdrant result')
           return {
             isSpam: localResult.classification === 'spam',
             confidence: localResult.confidence * 100,
@@ -447,7 +447,7 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
             source: 'qdrant_db'
           }
         } else {
-          console.log(`[SPAM CHECK] Qdrant confidence too low (${(localResult.confidence * 100).toFixed(1)}% < ${(adaptiveThreshold * 100).toFixed(1)}%), checking with LLM`)
+          qdrantLog.debug({ confidence: (localResult.confidence * 100).toFixed(1), threshold: (adaptiveThreshold * 100).toFixed(1) }, 'Qdrant confidence too low, checking with LLM')
         }
       }
     }
@@ -455,7 +455,7 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     // Calculate dynamic threshold for LLM check
     const dynamicThreshold = calculateDynamicThreshold(userContext, groupSettings)
 
-    console.log(`[SPAM CHECK] Checking with OpenRouter LLM (threshold: ${dynamicThreshold}%)`)
+    spamLog.debug({ threshold: dynamicThreshold }, 'Checking with OpenRouter LLM')
 
     // Prepare context for LLM
     const contextInfo = []
@@ -603,8 +603,8 @@ ${contextInfo.join(' | ')}`
       }
       analysis = JSON.parse(content)
     } catch (parseError) {
-      console.error('[SPAM CHECK] JSON parsing error:', parseError.message)
-      console.error('[SPAM CHECK] Raw response content:', response.choices && response.choices[0] && response.choices[0].message && response.choices[0].message.content)
+      const rawContent = (response && response.choices && response.choices[0] && response.choices[0].message) ? response.choices[0].message.content : undefined
+      spamLog.error({ err: parseError.message, rawContent }, 'JSON parsing error')
       return null // Return null to indicate parsing failure
     }
 
@@ -614,11 +614,11 @@ ${contextInfo.join(' | ')}`
     // Apply velocity boost if suspicious patterns detected
     if (isSpam && userContext.velocityBoost) {
       const boostedConfidence = Math.min(99, confidence + userContext.velocityBoost)
-      console.log(`[SPAM CHECK] Velocity boost: +${userContext.velocityBoost.toFixed(1)}% (${userContext.velocityReason})`)
+      spamLog.debug({ boost: userContext.velocityBoost.toFixed(1), reason: userContext.velocityReason }, 'Velocity boost applied')
       confidence = Math.round(boostedConfidence)
     }
 
-    console.log(`[SPAM CHECK] OpenRouter result: ${isSpam ? 'SPAM' : 'CLEAN'} (${confidence}%)`)
+    spamLog.info({ isSpam, confidence, source: 'openrouter_llm' }, 'OpenRouter result')
 
     // Save to knowledge base based on confidence and action taken
     if (embedding) {
@@ -646,9 +646,9 @@ ${contextInfo.join(' | ')}`
             confidence: saveConfidence,
             features
           })
-          console.log(`[SPAM CHECK] Saved vector to Qdrant (confidence: ${confidence}%)`)
+          qdrantLog.debug({ confidence }, 'Saved vector to Qdrant')
         } catch (saveError) {
-          console.error('[SPAM CHECK] Failed to save vector:', saveError.message)
+          qdrantLog.error({ err: saveError.message }, 'Failed to save vector')
         }
       }
     }
@@ -660,7 +660,7 @@ ${contextInfo.join(' | ')}`
       source: 'openrouter_llm'
     }
   } catch (error) {
-    console.error('[SPAM CHECK] Error during spam check:', error)
+    spamLog.error({ err: error }, 'Error during spam check')
     return {
       isSpam: false,
       confidence: 0,
