@@ -1,10 +1,7 @@
 const Composer = require('telegraf/composer')
 const composer = new Composer()
 
-const {
-  onlyAdmin,
-  onlyGroup
-} = require('../../middlewares')
+const { onlyAdmin } = require('../../middlewares')
 
 composer.hears('!banChannel', onlyAdmin, async (ctx, next) => {
   if (ctx.group.info.settings.banChannel === true) {

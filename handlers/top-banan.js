@@ -24,7 +24,7 @@ module.exports = async (ctx) => {
 
     let top = ''
 
-    topMembersSum = topMembers.slice(0, 10)
+    const topMembersSum = topMembers.slice(0, 10)
 
     for (let index = 0; index < topMembersSum.length; index++) {
       const user = await ctx.db.User.findOne({ telegram_id: topMembersSum[index].telegram_id })
@@ -45,7 +45,7 @@ module.exports = async (ctx) => {
 
     top += '\n'
 
-    topMembersNum = topMembers.slice(0, 10)
+    const topMembersNum = topMembers.slice(0, 10)
 
     for (let index = 0; index < topMembersNum.length; index++) {
       const user = await ctx.db.User.findOne({ telegram_id: topMembersNum[index].telegram_id })
