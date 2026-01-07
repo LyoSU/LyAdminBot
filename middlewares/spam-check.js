@@ -406,31 +406,36 @@ module.exports = async (ctx) => {
           }
         }
 
-        // Send success notification
-        if (muteSuccess || deleteSuccess) {
-          let statusMessage = ''
+        // Send notification
+        let statusMessage = ''
+        const testModeLabel = isTestMode ? '\n🧪 TEST MODE' : ''
+        const notificationParams = { name: userName(senderInfo, true), reason: result.reason }
 
-          const testModeLabel = isTestMode ? '\n🧪 TEST MODE' : ''
+        if (muteSuccess && deleteSuccess) {
+          statusMessage = ctx.i18n.t('spam.notification.full', notificationParams) + testModeLabel
+        } else if (muteSuccess && !deleteSuccess) {
+          statusMessage = ctx.i18n.t('spam.notification.muted_only', notificationParams) + testModeLabel
+        } else if (!muteSuccess && deleteSuccess) {
+          statusMessage = ctx.i18n.t('spam.notification.deleted_only', notificationParams) + testModeLabel
+        } else if (!muteSuccess && !deleteSuccess) {
+          // Bot detected spam but has no permissions to act
+          statusMessage = ctx.i18n.t('spam.notification.no_permissions', notificationParams) + testModeLabel
+          console.log(`[SPAM NOTIFICATION] ⚠️ Spam detected but no permissions to act`)
+        }
 
-          if (muteSuccess && deleteSuccess) {
-            statusMessage = `🤖 AI spam protection activated${testModeLabel}\n👤 User: ${userName(senderInfo, true)}\n📝 ${result.reason}`
-          } else if (muteSuccess && !deleteSuccess) {
-            statusMessage = `🤖 AI muted user for spam${testModeLabel}\n👤 User: ${userName(senderInfo, true)}\n📝 ${result.reason}\n⚠️ Could not delete the message`
-          } else if (!muteSuccess && deleteSuccess) {
-            statusMessage = `🤖 AI deleted spam message${testModeLabel}\n📝 ${result.reason}\n⚠️ Could not mute ${userName(senderInfo, true)}`
-          }
-
+        if (statusMessage) {
           const notificationMsg = await ctx.replyWithHTML(statusMessage)
             .catch(error => console.error(`[SPAM NOTIFICATION] ❌ Failed to send notification: ${error.message}`))
 
           // Schedule notification message deletion
           if (notificationMsg) {
-            console.log(`[SPAM NOTIFICATION] 📨 Sent spam action notification, will auto-delete in 25s`)
+            const deleteDelay = (muteSuccess || deleteSuccess) ? 25 : 60 // longer for no-permission warnings
+            console.log(`[SPAM NOTIFICATION] 📨 Sent notification, will auto-delete in ${deleteDelay}s`)
             setTimeout(async () => {
               await ctx.telegram.deleteMessage(ctx.chat.id, notificationMsg.message_id)
                 .catch(error => console.error(`[SPAM NOTIFICATION] ❌ Failed to delete notification: ${error.message}`))
               console.log(`[SPAM NOTIFICATION] 🗑️ Auto-deleted notification message`)
-            }, 25 * 1000)
+            }, deleteDelay * 1000)
           }
         }
 

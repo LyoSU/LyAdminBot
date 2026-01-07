@@ -210,6 +210,11 @@ spam:
   muted: |
     🔇 ${name} muted for 24h.
     Reason: ${reason}
+  notification:
+    full: "🤖 Anti-spam triggered\n👤 ${name}\n📝 ${reason}"
+    muted_only: "🤖 Muted for spam\n👤 ${name}\n📝 ${reason}\n⚠️ Couldn't delete message"
+    deleted_only: "🤖 Spam deleted\n📝 ${reason}\n⚠️ Couldn't mute ${name}"
+    no_permissions: "⚠️ <b>Spam detected</b>\n👤 ${name}\n📝 ${reason}\n\n❌ Bot needs admin rights"
   error:
     mute_failed: |
       ❌ <b>Couldn't mute ${name}</b>

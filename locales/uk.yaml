@@ -208,6 +208,11 @@ spam:
   muted: |
     🔇 ${name} замучено на 24 години.
     Причина: ${reason}
+  notification:
+    full: "🤖 Антиспам спрацював\n👤 ${name}\n📝 ${reason}"
+    muted_only: "🤖 Замучено за спам\n👤 ${name}\n📝 ${reason}\n⚠️ Не вдалось видалити повідомлення"
+    deleted_only: "🤖 Спам видалено\n📝 ${reason}\n⚠️ Не вдалось замутити ${name}"
+    no_permissions: "⚠️ <b>Виявлено спам</b>\n👤 ${name}\n📝 ${reason}\n\n❌ Боту потрібні права адміна"
 
 only_group: Тільки в групі
 only_admin: Тільки для адмінів

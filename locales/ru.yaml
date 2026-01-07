@@ -202,6 +202,12 @@ cas:
   banned: |
     ${name} забанен — есть в базе CAS.
     <a href="${link}">Подробнее</a>
+spam:
+  notification:
+    full: "🤖 Антиспам сработал\n👤 ${name}\n📝 ${reason}"
+    muted_only: "🤖 Замьючен за спам\n👤 ${name}\n📝 ${reason}\n⚠️ Не удалось удалить сообщение"
+    deleted_only: "🤖 Спам удалён\n📝 ${reason}\n⚠️ Не удалось замьютить ${name}"
+    no_permissions: "⚠️ <b>Обнаружен спам</b>\n👤 ${name}\n📝 ${reason}\n\n❌ Боту нужны права админа"
 
 only_group: Только в группе
 only_admin: Только для админов
