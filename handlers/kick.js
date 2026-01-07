@@ -20,8 +20,9 @@ module.exports = async (ctx) => {
         name: userName(kickUser, true)
       }))
     }).catch((error) => {
+      const safeError = error.description || error.message || 'Unknown error'
       return ctx.replyWithHTML(ctx.i18n.t('kick.error', {
-        error
+        error: safeError
       }))
     })
   }

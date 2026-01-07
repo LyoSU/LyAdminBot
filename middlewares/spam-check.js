@@ -106,9 +106,8 @@ module.exports = async (ctx) => {
     return false
   }
 
-  // TEST MODE: Check if test mode is enabled (for development)
-  const isTestMode = process.env.SPAM_TEST_MODE === 'true' ||
-                     (ctx.message && ctx.message.text && ctx.message.text.includes('#testspam'))
+  // TEST MODE: Only via environment variable (not user-controllable)
+  const isTestMode = process.env.SPAM_TEST_MODE === 'true'
 
   if (isTestMode) {
     spamLog.info('TEST MODE ENABLED - Bypassing all safety checks')
@@ -214,10 +213,8 @@ module.exports = async (ctx) => {
 
     // Check message for spam
     if (ctx.message) {
-      let originalText = ctx.message.text || ctx.message.caption || ''
-
-      // Remove test mode hashtag before processing
-      let messageText = originalText.replace(/#testspam/gi, '').trim()
+      const originalText = ctx.message.text || ctx.message.caption || ''
+      let messageText = originalText.trim()
 
       // Handle messages without text/caption
       if (!messageText) {
@@ -282,8 +279,7 @@ module.exports = async (ctx) => {
 
       if (isTestMode) {
         spamLog.info({
-          original: originalText.substring(0, 100),
-          processed: messageText.substring(0, 100),
+          text: messageText.substring(0, 100),
           classification: result.isSpam ? 'SPAM' : 'CLEAN',
           confidence: result.confidence,
           source: result.source,

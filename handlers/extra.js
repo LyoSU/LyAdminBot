@@ -1,4 +1,5 @@
 const replicators = require('telegraf/core/replicators')
+const { escapeRegex } = require('../utils')
 
 module.exports = async (ctx) => {
   const entities = ctx.message.entities || []
@@ -13,8 +14,9 @@ module.exports = async (ctx) => {
 
     if (hashtagNum < entitiesNum && entity.type === 'hashtag') {
       const hashtag = ctx.message.text.substring(entity.offset, entity.offset + entity.length)
+      const safeHashtag = escapeRegex(hashtag.slice(1))
       const groupExtra = ctx.group.info.settings.extras.find((el) => {
-        if (el.name.match(new RegExp(`^${hashtag.slice(1)}$`, 'i'))) return true
+        if (el.name.match(new RegExp(`^${safeHashtag}$`, 'i'))) return true
       })
 
       if (groupExtra) {

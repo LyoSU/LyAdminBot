@@ -8,6 +8,19 @@ const reportCooldowns = new Map()
 const COOLDOWN_MS = 5 * 60 * 1000
 const MAX_REPORTS = 3
 
+// Periodic cleanup of stale cooldown entries (every 10 minutes)
+setInterval(() => {
+  const now = Date.now()
+  for (const [userId, reports] of reportCooldowns) {
+    const recent = reports.filter(time => now - time < COOLDOWN_MS)
+    if (recent.length === 0) {
+      reportCooldowns.delete(userId)
+    } else {
+      reportCooldowns.set(userId, recent)
+    }
+  }
+}, 10 * 60 * 1000)
+
 const isRateLimited = (userId) => {
   const now = Date.now()
   const userReports = reportCooldowns.get(userId) || []

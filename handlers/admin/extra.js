@@ -1,11 +1,13 @@
 const replicators = require('telegraf/core/replicators')
+const { escapeRegex } = require('../../utils')
 
 module.exports = async (ctx) => {
   const extraName = ctx.match[2]
 
   if (extraName) {
+    const safeExtraName = escapeRegex(extraName)
     const groupExtra = ctx.group.info.settings.extras.find((el) => {
-      if (el.name.match(new RegExp(`^${extraName}$`, 'i'))) return true
+      if (el.name.match(new RegExp(`^${safeExtraName}$`, 'i'))) return true
     })
 
     if (groupExtra) {

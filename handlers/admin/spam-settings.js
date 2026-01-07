@@ -175,6 +175,11 @@ const handleSpamCommand = async (ctx) => {
 }
 
 /**
+ * Escape special regex characters to prevent ReDoS/injection
+ */
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
  * Handle trust subcommand
  */
 const handleTrustCommand = async (ctx, args, settings) => {
@@ -194,12 +199,12 @@ const handleTrustCommand = async (ctx, args, settings) => {
     }
 
     if (arg.startsWith('@')) {
-      const username = arg.substring(1).toLowerCase()
+      const username = escapeRegex(arg.substring(1).toLowerCase())
       try {
         const user = await ctx.db.User.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } })
         if (user) {
           targetId = user.telegram_id
-          targetName = user.first_name || `@${username}`
+          targetName = user.first_name || `@${arg.substring(1)}`
         } else {
           return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.user_not_found', { username: arg }))
         }
@@ -245,12 +250,12 @@ const handleUntrustCommand = async (ctx, args, settings) => {
     }
 
     if (arg.startsWith('@')) {
-      const username = arg.substring(1).toLowerCase()
+      const username = escapeRegex(arg.substring(1).toLowerCase())
       try {
         const user = await ctx.db.User.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } })
         if (user) {
           targetId = user.telegram_id
-          targetName = user.first_name || `@${username}`
+          targetName = user.first_name || `@${arg.substring(1)}`
         } else {
           return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.untrust.user_not_found', { username: arg }))
         }

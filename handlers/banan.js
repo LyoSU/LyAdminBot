@@ -127,8 +127,9 @@ module.exports = async (ctx) => {
           }, 15 * 1000)
         }
       }).catch((error) => {
+        const safeError = error.description || error.message || 'Unknown error'
         ctx.replyWithHTML(ctx.i18n.t('banan.error', {
-          error
+          error: safeError
         }))
       })
     } else {
