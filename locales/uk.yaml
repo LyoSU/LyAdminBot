@@ -46,7 +46,7 @@ cmd:
 
       🍌 <b>Бананів:</b> ${banCount}
       ⏱ <b>Всього в бані:</b> ${banTime}
-      🤖 <b>Автобан:</b> ${banAutoTime}
+      ⚡ <b>Автобан:</b> ${banAutoTime}
 
       💬 <b>Повідомлень:</b> ${messages}
       📈 <b>Актив:</b> ${active}%
@@ -157,13 +157,13 @@ cmd:
         <code>!spam remove N</code> — видалити правило
         <code>!spam clear</code> — очистити все
     trust:
-      usage: "📝 <b>Як юзати:</b>\n• У відповідь: <code>!spam trust</code>\n• По юзернейму: <code>!spam trust @username</code>\n• По ID: <code>!spam trust 123456</code>"
+      usage: "<b>Як юзати:</b>\n• У відповідь: <code>!spam trust</code>\n• По юзернейму: <code>!spam trust @username</code>\n• По ID: <code>!spam trust 123456</code>"
       cant_trust_bot: "🤖 Ботів не можна"
       already_trusted: "✅ ${name} вже в довірених"
       added: "✅ ${name} тепер в довірених"
       user_not_found: "❌ Не знайшов ${username}"
     untrust:
-      usage: "📝 <b>Як юзати:</b>\n• У відповідь: <code>!spam untrust</code>\n• По юзернейму: <code>!spam untrust @username</code>\n• По ID: <code>!spam untrust 123456</code>"
+      usage: "<b>Як юзати:</b>\n• У відповідь: <code>!spam untrust</code>\n• По юзернейму: <code>!spam untrust @username</code>\n• По ID: <code>!spam untrust 123456</code>"
       not_trusted: "❌ ${name} і так не в довірених"
       removed: "✅ ${name} більше не в довірених"
       user_not_found: "❌ Не знайшов ${username}"
@@ -202,12 +202,8 @@ cas:
     ${name} забанено — є в базі CAS.
     <a href="${link}">Детальніше</a>
 spam:
-  banned: |
-    🚫 ${name} забанено назавжди.
-    Причина: ${reason}
-  muted: |
-    🔇 ${name} замучено на 24 години.
-    Причина: ${reason}
+  banned: "🚫 ${name} забанено назавжди\n${reason}"
+  muted: "🔇 ${name} замучено на 24 години\n${reason}"
   notification:
     full: "🚫 ${name} — спам\n${reason}"
     muted_only: "🔇 ${name} замучено\n${reason}\n\n⚠️ Повідомлення не вдалось видалити"

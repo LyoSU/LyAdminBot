@@ -46,7 +46,7 @@ cmd:
 
       🍌 <b>Bananas:</b> ${banCount}
       ⏱ <b>Total ban time:</b> ${banTime}
-      🤖 <b>Autoban:</b> ${banAutoTime}
+      ⚡ <b>Autoban:</b> ${banAutoTime}
 
       💬 <b>Messages:</b> ${messages}
       📈 <b>Activity:</b> ${active}%
@@ -158,13 +158,13 @@ cmd:
         <code>!spam remove N</code> — remove rule
         <code>!spam clear</code> — clear all
     trust:
-      usage: "📝 <b>How to use:</b>\n• Reply: <code>!spam trust</code>\n• Username: <code>!spam trust @username</code>\n• ID: <code>!spam trust 123456</code>"
+      usage: "<b>How to use:</b>\n• Reply: <code>!spam trust</code>\n• Username: <code>!spam trust @username</code>\n• ID: <code>!spam trust 123456</code>"
       cant_trust_bot: "🤖 Can't trust bots"
       already_trusted: "✅ ${name} already trusted"
       added: "✅ ${name} now trusted"
       user_not_found: "❌ Can't find ${username}"
     untrust:
-      usage: "📝 <b>How to use:</b>\n• Reply: <code>!spam untrust</code>\n• Username: <code>!spam untrust @username</code>\n• ID: <code>!spam untrust 123456</code>"
+      usage: "<b>How to use:</b>\n• Reply: <code>!spam untrust</code>\n• Username: <code>!spam untrust @username</code>\n• ID: <code>!spam untrust 123456</code>"
       not_trusted: "❌ ${name} wasn't trusted anyway"
       removed: "✅ ${name} no longer trusted"
       user_not_found: "❌ Can't find ${username}"
@@ -204,12 +204,8 @@ cas:
     <a href="${link}">Details</a>
 
 spam:
-  banned: |
-    🚫 ${name} permabanned.
-    Reason: ${reason}
-  muted: |
-    🔇 ${name} muted for 24h.
-    Reason: ${reason}
+  banned: "🚫 ${name} permabanned\n${reason}"
+  muted: "🔇 ${name} muted for 24h\n${reason}"
   notification:
     full: "🚫 ${name} — spam\n${reason}"
     muted_only: "🔇 ${name} muted\n${reason}\n\n⚠️ Couldn't delete message"

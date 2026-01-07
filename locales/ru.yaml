@@ -46,7 +46,7 @@ cmd:
 
       🍌 <b>Бананов:</b> ${banCount}
       ⏱ <b>Всего в бане:</b> ${banTime}
-      🤖 <b>Автобан:</b> ${banAutoTime}
+      ⚡ <b>Автобан:</b> ${banAutoTime}
 
       💬 <b>Сообщений:</b> ${messages}
       📈 <b>Актив:</b> ${active}%
@@ -158,13 +158,13 @@ cmd:
         <code>!spam remove N</code> — удалить правило
         <code>!spam clear</code> — очистить всё
     trust:
-      usage: "📝 <b>Как юзать:</b>\n• В ответ: <code>!spam trust</code>\n• По юзернейму: <code>!spam trust @username</code>\n• По ID: <code>!spam trust 123456</code>"
+      usage: "<b>Как юзать:</b>\n• В ответ: <code>!spam trust</code>\n• По юзернейму: <code>!spam trust @username</code>\n• По ID: <code>!spam trust 123456</code>"
       cant_trust_bot: "🤖 Ботов нельзя"
       already_trusted: "✅ ${name} уже в доверенных"
       added: "✅ ${name} теперь в доверенных"
       user_not_found: "❌ Не нашёл ${username}"
     untrust:
-      usage: "📝 <b>Как юзать:</b>\n• В ответ: <code>!spam untrust</code>\n• По юзернейму: <code>!spam untrust @username</code>\n• По ID: <code>!spam untrust 123456</code>"
+      usage: "<b>Как юзать:</b>\n• В ответ: <code>!spam untrust</code>\n• По юзернейму: <code>!spam untrust @username</code>\n• По ID: <code>!spam untrust 123456</code>"
       not_trusted: "❌ ${name} и так не в доверенных"
       removed: "✅ ${name} больше не в доверенных"
       user_not_found: "❌ Не нашёл ${username}"
