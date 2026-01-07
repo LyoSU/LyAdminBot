@@ -173,6 +173,24 @@ cmd:
       not_trusted: "❌ ${name} і так не в довірених"
       removed: "✅ ${name} більше не в довірених"
       user_not_found: "❌ Не знайшов ${username}"
+    btn:
+      enable: "Увімкнути"
+      disable: "Вимкнути"
+      globalban_on: "Глоб. бан ✓"
+      globalban_off: "Глоб. бан ✗"
+      rules: "Правила"
+      trusted: "Довірені"
+      help: "Команди"
+    cb:
+      enabled: "Увімкнено"
+      disabled: "Вимкнено"
+      globalban_on: "Глобальний бан увімкнено"
+      globalban_off: "Глобальний бан вимкнено"
+      rules_title: "Правила"
+      trusted_title: "Довірені"
+      no_rules: "Правил немає"
+      no_trusted: "Довірених немає"
+      error: "Помилка"
   reset: Налаштування скинуто ✓
 settings:
     json:

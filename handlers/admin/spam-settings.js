@@ -1,8 +1,79 @@
-module.exports = async (ctx) => {
-  const args = ctx.message.text.split(' ')
-  const command = args[1] && args[1].toLowerCase()
+/**
+ * Build inline keyboard for spam settings
+ */
+const buildKeyboard = (settings, i18n) => {
+  const enabled = settings.enabled
+  const globalBan = settings.globalBan !== false
 
-  // Initialize spam settings if they don't exist
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: enabled
+            ? i18n.t('cmd.spam_settings.btn.disable')
+            : i18n.t('cmd.spam_settings.btn.enable'),
+          callback_data: `spam:toggle:${enabled ? 'off' : 'on'}`
+        }
+      ],
+      [
+        {
+          text: globalBan
+            ? i18n.t('cmd.spam_settings.btn.globalban_on')
+            : i18n.t('cmd.spam_settings.btn.globalban_off'),
+          callback_data: `spam:globalban:${globalBan ? 'off' : 'on'}`
+        }
+      ],
+      [
+        {
+          text: i18n.t('cmd.spam_settings.btn.rules'),
+          callback_data: 'spam:rules:show'
+        },
+        {
+          text: i18n.t('cmd.spam_settings.btn.trusted'),
+          callback_data: 'spam:trusted:show'
+        }
+      ],
+      [
+        {
+          text: i18n.t('cmd.spam_settings.btn.help'),
+          callback_data: 'spam:help:show'
+        }
+      ]
+    ]
+  }
+}
+
+/**
+ * Format status message
+ */
+const formatStatusMessage = (settings, i18n) => {
+  const status = settings.enabled
+    ? i18n.t('cmd.spam_settings.status.enabled_text')
+    : i18n.t('cmd.spam_settings.status.disabled_text')
+
+  const globalBanStatus = settings.globalBan !== false
+    ? i18n.t('cmd.spam_settings.status.globalban_enabled')
+    : i18n.t('cmd.spam_settings.status.globalban_disabled')
+
+  let message = `${i18n.t('cmd.spam_settings.status.title')}\n\n`
+  message += `<b>Статус:</b> ${status}\n`
+  message += `<b>Глобальний бан:</b> ${globalBanStatus}\n`
+
+  if (settings.customRules && settings.customRules.length > 0) {
+    message += `<b>Правила:</b> ${settings.customRules.length}\n`
+  }
+
+  if (settings.trustedUsers && settings.trustedUsers.length > 0) {
+    message += `<b>Довірені:</b> ${settings.trustedUsers.length}\n`
+  }
+
+  return message
+}
+
+/**
+ * Initialize spam settings if needed
+ */
+const initializeSettings = (ctx) => {
   if (!ctx.group.info.settings.openaiSpamCheck) {
     ctx.group.info.settings.openaiSpamCheck = {
       enabled: true,
@@ -14,10 +85,21 @@ module.exports = async (ctx) => {
 
   const settings = ctx.group.info.settings.openaiSpamCheck
 
-  // Ensure trustedUsers array exists
   if (!settings.trustedUsers) {
     settings.trustedUsers = []
   }
+
+  return settings
+}
+
+/**
+ * Handle !spam command
+ */
+const handleSpamCommand = async (ctx) => {
+  const args = ctx.message.text.split(' ')
+  const command = args[1] && args[1].toLowerCase()
+
+  const settings = initializeSettings(ctx)
 
   switch (command) {
     case 'on':
@@ -68,152 +150,220 @@ module.exports = async (ctx) => {
       return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.remove.success', { rule: removedRule }))
     }
 
-    case 'clear':
+    case 'clear': {
       const rulesCount = settings.customRules.length
       settings.customRules = []
       return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.clear', { count: rulesCount }))
+    }
 
     case 'trust': {
-      let targetUser = null
-      let targetId = null
-      let targetName = null
-
-      // Try to get user from reply
-      const replyMsg = ctx.message.reply_to_message
-      if (replyMsg && replyMsg.from) {
-        targetUser = replyMsg.from
-        targetId = targetUser.id
-        targetName = targetUser.first_name
-      } else {
-        // Try to parse from args: !spam trust @username or !spam trust 123456
-        const arg = args[2]
-        if (!arg) {
-          return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.usage'))
-        }
-
-        if (arg.startsWith('@')) {
-          // Username - try to find in DB
-          const username = arg.substring(1).toLowerCase()
-          try {
-            const user = await ctx.db.User.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } })
-            if (user) {
-              targetId = user.telegram_id
-              targetName = user.first_name || `@${username}`
-            } else {
-              return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.user_not_found', { username: arg }))
-            }
-          } catch (e) {
-            return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.user_not_found', { username: arg }))
-          }
-        } else {
-          // Try as numeric ID
-          targetId = parseInt(arg)
-          if (isNaN(targetId)) {
-            return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.usage'))
-          }
-          targetName = `ID:${targetId}`
-        }
-      }
-
-      if (targetUser && targetUser.is_bot) {
-        return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.cant_trust_bot'))
-      }
-
-      // Check if already trusted
-      if (settings.trustedUsers.includes(targetId)) {
-        return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.already_trusted', { name: targetName }))
-      }
-
-      // Add to trusted list
-      settings.trustedUsers.push(targetId)
-      return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.added', { name: targetName }))
+      return handleTrustCommand(ctx, args, settings)
     }
 
     case 'untrust': {
-      let targetId = null
-      let targetName = null
-
-      // Try to get user from reply
-      const replyMsg = ctx.message.reply_to_message
-      if (replyMsg && replyMsg.from) {
-        targetId = replyMsg.from.id
-        targetName = replyMsg.from.first_name
-      } else {
-        // Try to parse from args
-        const arg = args[2]
-        if (!arg) {
-          return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.untrust.usage'))
-        }
-
-        if (arg.startsWith('@')) {
-          const username = arg.substring(1).toLowerCase()
-          try {
-            const user = await ctx.db.User.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } })
-            if (user) {
-              targetId = user.telegram_id
-              targetName = user.first_name || `@${username}`
-            } else {
-              return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.untrust.user_not_found', { username: arg }))
-            }
-          } catch (e) {
-            return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.untrust.user_not_found', { username: arg }))
-          }
-        } else {
-          targetId = parseInt(arg)
-          if (isNaN(targetId)) {
-            return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.untrust.usage'))
-          }
-          targetName = `ID:${targetId}`
-        }
-      }
-
-      const index = settings.trustedUsers.indexOf(targetId)
-      if (index === -1) {
-        return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.untrust.not_trusted', { name: targetName }))
-      }
-
-      // Remove from trusted list
-      settings.trustedUsers.splice(index, 1)
-      return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.untrust.removed', { name: targetName }))
+      return handleUntrustCommand(ctx, args, settings)
     }
 
     default: {
-      // Show current settings
-      const status = settings.enabled
-        ? ctx.i18n.t('cmd.spam_settings.status.enabled_text')
-        : ctx.i18n.t('cmd.spam_settings.status.disabled_text')
+      // Show status with inline keyboard
+      const message = formatStatusMessage(settings, ctx.i18n)
+      const keyboard = buildKeyboard(settings, ctx.i18n)
 
-      let message = `${ctx.i18n.t('cmd.spam_settings.status.title')}\n\n`
-      message += `<b>Статус:</b> ${status}\n\n`
+      return ctx.replyWithHTML(message, { reply_markup: keyboard })
+    }
+  }
+}
 
-      if (settings.customRules.length > 0) {
-        message += `<b>${ctx.i18n.t('cmd.spam_settings.status.rules_title', { count: settings.customRules.length })}</b>\n`
+/**
+ * Handle trust subcommand
+ */
+const handleTrustCommand = async (ctx, args, settings) => {
+  let targetUser = null
+  let targetId = null
+  let targetName = null
+
+  const replyMsg = ctx.message.reply_to_message
+  if (replyMsg && replyMsg.from) {
+    targetUser = replyMsg.from
+    targetId = targetUser.id
+    targetName = targetUser.first_name
+  } else {
+    const arg = args[2]
+    if (!arg) {
+      return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.usage'))
+    }
+
+    if (arg.startsWith('@')) {
+      const username = arg.substring(1).toLowerCase()
+      try {
+        const user = await ctx.db.User.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } })
+        if (user) {
+          targetId = user.telegram_id
+          targetName = user.first_name || `@${username}`
+        } else {
+          return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.user_not_found', { username: arg }))
+        }
+      } catch (e) {
+        return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.user_not_found', { username: arg }))
+      }
+    } else {
+      targetId = parseInt(arg)
+      if (isNaN(targetId)) {
+        return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.usage'))
+      }
+      targetName = `ID:${targetId}`
+    }
+  }
+
+  if (targetUser && targetUser.is_bot) {
+    return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.cant_trust_bot'))
+  }
+
+  if (settings.trustedUsers.includes(targetId)) {
+    return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.already_trusted', { name: targetName }))
+  }
+
+  settings.trustedUsers.push(targetId)
+  return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.added', { name: targetName }))
+}
+
+/**
+ * Handle untrust subcommand
+ */
+const handleUntrustCommand = async (ctx, args, settings) => {
+  let targetId = null
+  let targetName = null
+
+  const replyMsg = ctx.message.reply_to_message
+  if (replyMsg && replyMsg.from) {
+    targetId = replyMsg.from.id
+    targetName = replyMsg.from.first_name
+  } else {
+    const arg = args[2]
+    if (!arg) {
+      return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.untrust.usage'))
+    }
+
+    if (arg.startsWith('@')) {
+      const username = arg.substring(1).toLowerCase()
+      try {
+        const user = await ctx.db.User.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } })
+        if (user) {
+          targetId = user.telegram_id
+          targetName = user.first_name || `@${username}`
+        } else {
+          return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.untrust.user_not_found', { username: arg }))
+        }
+      } catch (e) {
+        return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.untrust.user_not_found', { username: arg }))
+      }
+    } else {
+      targetId = parseInt(arg)
+      if (isNaN(targetId)) {
+        return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.untrust.usage'))
+      }
+      targetName = `ID:${targetId}`
+    }
+  }
+
+  const index = settings.trustedUsers.indexOf(targetId)
+  if (index === -1) {
+    return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.untrust.not_trusted', { name: targetName }))
+  }
+
+  settings.trustedUsers.splice(index, 1)
+  return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.untrust.removed', { name: targetName }))
+}
+
+/**
+ * Handle callback queries for spam settings
+ */
+const handleSpamCallback = async (ctx) => {
+  const data = ctx.callbackQuery.data
+  const parts = data.split(':')
+  const action = parts[1]
+  const value = parts[2]
+
+  // Check if user is admin
+  try {
+    const member = await ctx.telegram.getChatMember(ctx.chat.id, ctx.from.id)
+    const isAdmin = ['creator', 'administrator'].includes(member.status)
+    if (!isAdmin) {
+      return ctx.answerCbQuery(ctx.i18n.t('only_admin'), { show_alert: true })
+    }
+  } catch (e) {
+    return ctx.answerCbQuery(ctx.i18n.t('cmd.spam_settings.cb.error'))
+  }
+
+  const settings = initializeSettings(ctx)
+
+  switch (action) {
+    case 'toggle':
+      settings.enabled = value === 'on'
+      await ctx.answerCbQuery(
+        settings.enabled
+          ? ctx.i18n.t('cmd.spam_settings.cb.enabled')
+          : ctx.i18n.t('cmd.spam_settings.cb.disabled')
+      )
+      break
+
+    case 'globalban':
+      settings.globalBan = value === 'on'
+      await ctx.answerCbQuery(
+        settings.globalBan
+          ? ctx.i18n.t('cmd.spam_settings.cb.globalban_on')
+          : ctx.i18n.t('cmd.spam_settings.cb.globalban_off')
+      )
+      break
+
+    case 'rules':
+      if (settings.customRules && settings.customRules.length > 0) {
+        let rulesText = `<b>${ctx.i18n.t('cmd.spam_settings.cb.rules_title')}</b>\n\n`
         settings.customRules.forEach((rule, index) => {
           const type = rule.startsWith('ALLOW:')
             ? ctx.i18n.t('cmd.spam_settings.status.rule_allow')
             : ctx.i18n.t('cmd.spam_settings.status.rule_deny')
           const text = rule.substring(rule.indexOf(':') + 1).trim()
-          message += `${index + 1}. ${type}: ${text}\n`
+          rulesText += `${index + 1}. ${type}: ${text}\n`
         })
-      } else {
-        message += `<b>Правила:</b> ${ctx.i18n.t('cmd.spam_settings.status.rules_empty')}\n`
+        rulesText += `\n<code>!spam remove N</code>`
+        return ctx.answerCbQuery() && ctx.replyWithHTML(rulesText)
       }
+      return ctx.answerCbQuery(ctx.i18n.t('cmd.spam_settings.cb.no_rules'), { show_alert: true })
 
-      // Add global ban status
-      const globalBanStatus = settings.globalBan !== false
-        ? ctx.i18n.t('cmd.spam_settings.status.globalban_enabled')
-        : ctx.i18n.t('cmd.spam_settings.status.globalban_disabled')
-      message += `<b>Глобальний бан:</b> ${globalBanStatus}\n`
-
-      // Add trusted users count
+    case 'trusted':
       if (settings.trustedUsers && settings.trustedUsers.length > 0) {
-        message += `<b>Довірені:</b> ${settings.trustedUsers.length} ${ctx.i18n.t('cmd.spam_settings.status.trusted_users')}\n`
+        let trustedText = `<b>${ctx.i18n.t('cmd.spam_settings.cb.trusted_title')}</b>\n\n`
+        settings.trustedUsers.forEach((id, index) => {
+          trustedText += `${index + 1}. <code>${id}</code>\n`
+        })
+        trustedText += `\n<code>!spam untrust ID</code>`
+        return ctx.answerCbQuery() && ctx.replyWithHTML(trustedText)
       }
+      return ctx.answerCbQuery(ctx.i18n.t('cmd.spam_settings.cb.no_trusted'), { show_alert: true })
 
-      message += `\n<b>${ctx.i18n.t('cmd.spam_settings.status.commands_title')}</b>\n`
-      message += ctx.i18n.t('cmd.spam_settings.status.commands')
+    case 'help':
+      await ctx.answerCbQuery()
+      return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.status.commands'))
 
-      return ctx.replyWithHTML(message)
-    }
+    default:
+      return ctx.answerCbQuery()
+  }
+
+  // Update the message with new keyboard
+  const message = formatStatusMessage(settings, ctx.i18n)
+  const keyboard = buildKeyboard(settings, ctx.i18n)
+
+  try {
+    await ctx.editMessageText(message, {
+      parse_mode: 'HTML',
+      reply_markup: keyboard
+    })
+  } catch (e) {
+    // Message not modified - that's ok
   }
 }
+
+module.exports = handleSpamCommand
+module.exports.handleSpamCallback = handleSpamCallback
+module.exports.initializeSettings = initializeSettings

@@ -174,6 +174,24 @@ cmd:
       not_trusted: "❌ ${name} wasn't trusted anyway"
       removed: "✅ ${name} no longer trusted"
       user_not_found: "❌ Can't find ${username}"
+    btn:
+      enable: "Enable"
+      disable: "Disable"
+      globalban_on: "Global ban ✓"
+      globalban_off: "Global ban ✗"
+      rules: "Rules"
+      trusted: "Trusted"
+      help: "Commands"
+    cb:
+      enabled: "Enabled"
+      disabled: "Disabled"
+      globalban_on: "Global ban on"
+      globalban_off: "Global ban off"
+      rules_title: "Rules"
+      trusted_title: "Trusted users"
+      no_rules: "No rules"
+      no_trusted: "No trusted users"
+      error: "Error"
   reset: Settings reset ✓
 settings:
     json:
