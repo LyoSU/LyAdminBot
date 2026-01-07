@@ -268,7 +268,7 @@ const checkOpenAIModeration = async (messageText, imageUrl = null, imageType = '
       }
     }
 
-    modLog.debug('Content passed moderation check')
+    modLog.debug({ textLength: messageText ? messageText.length : 0, hasImage: !!imageUrl }, 'Content passed moderation')
     return { flagged: false }
   } catch (error) {
     modLog.error({ err: error.message }, 'Error during moderation check')
@@ -455,7 +455,7 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     // Calculate dynamic threshold for LLM check
     const dynamicThreshold = calculateDynamicThreshold(userContext, groupSettings)
 
-    spamLog.debug({ threshold: dynamicThreshold }, 'Checking with OpenRouter LLM')
+    spamLog.debug({ threshold: dynamicThreshold, msgLength: messageText.length, hasLinks: userContext.links && userContext.links.length > 0 }, 'Fallback to OpenRouter LLM')
 
     // Prepare context for LLM
     const contextInfo = []

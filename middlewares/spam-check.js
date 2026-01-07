@@ -128,7 +128,7 @@ module.exports = async (ctx) => {
   // Skip anonymous admins (posting as the group itself)
   // Note: When admin posts anonymously, sender_chat.id === chat.id
   if (!isTestMode && hasSenderChat && senderChat.id === ctx.chat.id) {
-    spamLog.debug('Skipping anonymous admin')
+    spamLog.debug({ chatId: ctx.chat.id, chatTitle: ctx.chat.title }, 'Skipping anonymous admin')
     return
   }
 
@@ -209,7 +209,7 @@ module.exports = async (ctx) => {
         spamLog.warn({ userId: senderId, err: error.message }, 'Could not check admin status')
       }
     } else if (isTestMode) {
-      spamLog.debug('TEST MODE - Bypassing admin check')
+      spamLog.debug({ userId: senderId, userName: userName(senderInfo) }, 'TEST MODE - Bypassing admin check')
     }
 
     // Check message for spam
