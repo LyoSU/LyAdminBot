@@ -65,6 +65,11 @@ const handleReport = async (ctx) => {
   const targetUser = isChannelPost ? senderChat : replyMsg.from
   const targetId = isChannelPost ? senderChat.id : (replyMsg.from && replyMsg.from.id)
 
+  // Validate we have a valid target
+  if (!targetUser || !targetId) {
+    return ctx.reply(ctx.i18n.t('report.invalid_target'))
+  }
+
   // Can't report bots or self (only for non-channel posts)
   if (!isChannelPost) {
     if (!targetUser || targetUser.is_bot) {
@@ -111,38 +116,40 @@ const handleReport = async (ctx) => {
   const statusMsg = await ctx.reply(ctx.i18n.t('report.analyzing'))
 
   try {
-    // Fetch or create target user info from database (like updateUser does)
+    // Fetch or create target user info from database (skip for channels - they're not users)
     let targetUserInfo = null
-    try {
-      targetUserInfo = await ctx.db.User.findOneAndUpdate(
-        { telegram_id: targetUser.id },
-        {
-          $setOnInsert: {
-            first_name: targetUser.first_name,
-            last_name: targetUser.last_name,
-            username: targetUser.username,
-            globalStats: {
-              totalMessages: 0,
-              groupsActive: 0,
-              groupsList: [],
-              firstSeen: new Date(),
-              lastActive: new Date(),
-              spamDetections: 0,
-              deletedMessages: 0,
-              cleanMessages: 0,
-              manualUnbans: 0
-            },
-            reputation: {
-              score: 50,
-              status: 'neutral',
-              lastCalculated: new Date()
+    if (!isChannelPost) {
+      try {
+        targetUserInfo = await ctx.db.User.findOneAndUpdate(
+          { telegram_id: targetId },
+          {
+            $setOnInsert: {
+              first_name: targetUser.first_name,
+              last_name: targetUser.last_name,
+              username: targetUser.username,
+              globalStats: {
+                totalMessages: 0,
+                groupsActive: 0,
+                groupsList: [],
+                firstSeen: new Date(),
+                lastActive: new Date(),
+                spamDetections: 0,
+                deletedMessages: 0,
+                cleanMessages: 0,
+                manualUnbans: 0
+              },
+              reputation: {
+                score: 50,
+                status: 'neutral',
+                lastCalculated: new Date()
+              }
             }
-          }
-        },
-        { upsert: true, new: true }
-      )
-    } catch (dbErr) {
-      console.error('[REPORT] DB error:', dbErr.message)
+          },
+          { upsert: true, new: true }
+        )
+      } catch (dbErr) {
+        console.error('[REPORT] DB error:', dbErr.message)
+      }
     }
 
     // Ensure globalStats and reputation exist (for users created before reputation system)
@@ -169,17 +176,17 @@ const handleReport = async (ctx) => {
       }
     }
 
-    // Fetch target user's per-group stats (GroupMember)
+    // Fetch target user's per-group stats (skip for channels)
     let targetGroupMember = null
-    try {
-      if (ctx.group && ctx.group.info && ctx.group.info._id) {
+    if (!isChannelPost && ctx.group && ctx.group.info && ctx.group.info._id) {
+      try {
         targetGroupMember = await ctx.db.GroupMember.findOne({
           group: ctx.group.info._id,
-          telegram_id: targetUser.id
+          telegram_id: targetId
         })
+      } catch (dbErr) {
+        console.error('[REPORT] GroupMember DB error:', dbErr.message)
       }
-    } catch (dbErr) {
-      console.error('[REPORT] GroupMember DB error:', dbErr.message)
     }
 
     // Create a mock context for checkSpam with the target user's info

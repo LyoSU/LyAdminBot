@@ -460,9 +460,15 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     const contextInfo = []
     if (ctx.chat && ctx.chat.title) contextInfo.push(`Group: "${ctx.chat.title}"`)
     if (groupDescription) contextInfo.push(`Topic: "${groupDescription.substring(0, 150)}"`)
-    if (userContext.hasUsername) contextInfo.push(`Username: @${ctx.from.username}`)
+    if (userContext.isChannelPost) {
+      contextInfo.push(`Sender: Channel "${userContext.channelTitle || 'Unknown'}"`)
+      if (userContext.channelUsername) contextInfo.push(`Channel: @${userContext.channelUsername}`)
+    } else {
+      const username = ctx.from && ctx.from.username
+      if (username) contextInfo.push(`Username: @${username}`)
+    }
     if (userContext.isPremium) contextInfo.push('Premium user: Yes')
-    if (userContext.isNewAccount) contextInfo.push('New account: Yes')
+    if (userContext.isNewAccount && !userContext.isChannelPost) contextInfo.push('New account: Yes')
     if (userContext.messageCount > 0) contextInfo.push(`Messages in group: ${userContext.messageCount}`)
     if (userContext.globalMessageCount > 0) contextInfo.push(`Total messages (all groups): ${userContext.globalMessageCount}`)
     if (userContext.groupsActive > 1) contextInfo.push(`Active in ${userContext.groupsActive} groups`)
