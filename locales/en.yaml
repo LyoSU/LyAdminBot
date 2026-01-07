@@ -238,40 +238,17 @@ global_ban:
   kicked: "🚫 ${name} kicked — global ban. Reason: ${reason}"
 
 report:
-  only_group: "⚠️ Groups only"
+  only_group: "Groups only"
   need_reply: "↩️ Reply to a message"
   cant_report_bot: "🤖 That's a bot"
   cant_report_self: "🙃 Can't report yourself"
   cant_report_admin: "👮 That's an admin"
-  invalid_target: "❌ Can't identify sender"
+  invalid_target: "Can't identify sender"
   rate_limited: "⏳ Wait ${seconds}s"
-  spam_check_disabled: "❌ Anti-spam is off"
-  no_content: "📭 No text to check"
+  spam_check_disabled: "Anti-spam is off in this group"
+  no_content: "No text to check"
   analyzing: "🔍 Checking..."
-  spam_found: |
-    🚨 <b>Spam!</b>
-
-    👤 ${target}
-    📊 ${confidence}%
-    📝 ${reason}
-
-    ✅ ${action}
-
-    <i>Report: ${reporter}</i>
-  suspicious: |
-    ⚠️ <b>Suspicious</b>
-
-    👤 ${target}
-    📊 ${confidence}%
-    📝 ${reason}
-
-    <i>Admins notified</i>
-    <i>Report: ${reporter}</i>
-  clean: |
-    ✅ <b>Clean</b>
-
-    👤 ${target}
-    📊 ${confidence}%
-
-    <i>Checked by: ${reporter}</i>
-  error: "❌ Something went wrong, try later"
+  spam_found: "🚫 <b>Spam</b> from ${target}\n${reason}\n\n${action}\n\n<i>📣 ${reporter}</i>"
+  suspicious: "🤔 <b>Suspicious</b> — ${target}\n${reason}\n\n<i>📣 ${reporter}</i>"
+  clean: "✅ ${target} — ok"
+  error: "Something went wrong"
