@@ -96,9 +96,12 @@ module.exports = async (ctx) => {
     return
   }
 
-  // Get the actual sender ID
-  const senderId = (ctx.message && ctx.message.sender_chat && ctx.message.sender_chat.id) || ctx.from.id
-  const senderInfo = (ctx.message && ctx.message.sender_chat) || ctx.from
+  // Get the actual sender ID and info
+  // Prefer sender_chat only if it has a valid id, otherwise use ctx.from
+  const senderChat = ctx.message && ctx.message.sender_chat
+  const hasSenderChat = senderChat && senderChat.id
+  const senderId = hasSenderChat ? senderChat.id : ctx.from.id
+  const senderInfo = hasSenderChat ? senderChat : ctx.from
 
   // Check if spam check is enabled for this group
   const spamSettings = getSpamSettings(ctx)
@@ -123,6 +126,23 @@ module.exports = async (ctx) => {
   if (!isTestMode && senderId === 777000) {
     console.log('[SPAM CHECK] ⏭️ Skipping Telegram service message (ID 777000)')
     return
+  }
+
+  // Skip anonymous admins (posting as the group itself)
+  if (!isTestMode && ctx.message && ctx.message.sender_chat) {
+    const senderChat = ctx.message.sender_chat
+
+    // Anonymous admin: sender_chat.id === chat.id
+    if (senderChat.id === ctx.chat.id) {
+      console.log('[SPAM CHECK] 👤 Skipping anonymous admin (posting as group)')
+      return
+    }
+
+    // Channel posting (linked channel or user posting as their channel)
+    if (senderChat.type === 'channel') {
+      console.log(`[SPAM CHECK] 📢 Skipping channel post (${senderChat.title || senderChat.id})`)
+      return
+    }
   }
 
   // Only check actual user content (whitelist approach)
