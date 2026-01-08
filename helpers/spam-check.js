@@ -672,13 +672,18 @@ ${contextInfo.join(' | ')}`
     let analysis
     try {
       const content = response.choices[0].message.content
-      if (!content) {
-        throw new Error('Empty response content')
+      const trimmedContent = content && content.trim()
+      if (!trimmedContent) {
+        spamLog.warn({
+          finishReason: response.choices[0].finish_reason,
+          model: response.model
+        }, 'Empty LLM response')
+        return null
       }
-      analysis = JSON.parse(content)
+      analysis = JSON.parse(trimmedContent)
     } catch (parseError) {
       const rawContent = (response && response.choices && response.choices[0] && response.choices[0].message) ? response.choices[0].message.content : undefined
-      spamLog.error({ err: parseError.message, rawContent }, 'JSON parsing error')
+      spamLog.error({ err: parseError.message, rawContent: rawContent && rawContent.substring(0, 100) }, 'JSON parsing error')
       return null // Return null to indicate parsing failure
     }
 
