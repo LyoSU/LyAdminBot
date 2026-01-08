@@ -14,7 +14,12 @@ const saveUserInfo = (ctx) => {
     .then(() => { ctx.session.userInfo.isSaving = false })
     .catch((err) => {
       ctx.session.userInfo.isSaving = false
-      dbLog.error({ err }, 'User save error')
+      // VersionError is expected during parallel requests - data will sync on next save
+      if (err.name === 'VersionError') {
+        dbLog.debug({ userId: ctx.session.userInfo.telegram_id }, 'User save conflict (will sync later)')
+      } else {
+        dbLog.error({ err }, 'User save error')
+      }
     })
 }
 
