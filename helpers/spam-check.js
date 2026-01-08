@@ -726,7 +726,7 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     }
 
     // Static system prompt (cacheable, no dynamic data)
-    const systemPrompt = `Telegram group spam classifier. Output JSON: reasoning, classification (SPAM/CLEAN), confidence (0-100).
+    const systemPrompt = `Telegram group spam classifier. Classify the MESSAGE. Output JSON: reasoning, classification (SPAM/CLEAN), confidence (0-100).
 
 SPAM = unwanted commercial/scam content: ads, scams, phishing, service promotion, mass messaging.
 
@@ -734,13 +734,13 @@ NOT SPAM = normal human behavior: chatting, questions, jokes, trolling, rudeness
 
 Key principle: offensive ≠ spam. Trolls and rude users are annoying but not spammers.
 Trust users with history (messages, reputation, Stars rating).
+CRITICAL: Base reasoning ONLY on actual text provided. Never invent or assume content not present.
 When uncertain → CLEAN.`
 
     // Dynamic user prompt with all context
-    const userPrompt = `${messageText}
+    const userPrompt = `MESSAGE: ${messageText}
 
----
-${contextInfo.join(' | ')}`
+CONTEXT: ${contextInfo.join(' | ')}`
 
     // Use OpenRouter for LLM analysis with retry and fallback
     const llmResult = await callLLMWithRetry(systemPrompt, userPrompt)
