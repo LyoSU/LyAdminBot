@@ -666,7 +666,7 @@ ${contextInfo.join(' | ')}`
           }
         }
       },
-      max_tokens: 1000
+      max_tokens: 150
     })
 
     let analysis
