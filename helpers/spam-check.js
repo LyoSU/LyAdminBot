@@ -30,6 +30,118 @@ const openAI = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 })
 
+// Fallback models for retry logic
+const FALLBACK_MODELS = [
+  process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash',
+  'google/gemini-3-flash-preview'
+]
+
+/**
+ * Sleep helper for exponential backoff
+ */
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+
+/**
+ * Call LLM with retry and fallback logic
+ * @param {string} systemPrompt - System prompt
+ * @param {string} userPrompt - User prompt
+ * @param {number} maxRetries - Maximum retry attempts
+ * @returns {Object|null} - { analysis, model } or null on failure
+ */
+const callLLMWithRetry = async (systemPrompt, userPrompt, maxRetries = 3) => {
+  let lastError = null
+  let modelIndex = 0
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const model = FALLBACK_MODELS[Math.min(modelIndex, FALLBACK_MODELS.length - 1)]
+
+    try {
+      const response = await openRouter.chat.completions.create({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0,
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'spam_analysis',
+            schema: {
+              type: 'object',
+              properties: {
+                reasoning: {
+                  type: 'string',
+                  description: 'Brief explanation of the classification'
+                },
+                classification: {
+                  type: 'string',
+                  enum: ['SPAM', 'CLEAN'],
+                  description: 'Whether the message is spam or clean'
+                },
+                confidence: {
+                  type: 'integer',
+                  minimum: 0,
+                  maximum: 100,
+                  description: 'Confidence level from 0 to 100'
+                }
+              },
+              required: ['reasoning', 'classification', 'confidence'],
+              additionalProperties: false
+            }
+          }
+        },
+        max_tokens: 150
+      })
+
+      const content = response.choices[0].message.content
+      const trimmedContent = content && content.trim()
+
+      if (!trimmedContent) {
+        const finishReason = response.choices[0].finish_reason
+        spamLog.warn({
+          attempt: attempt + 1,
+          model,
+          finishReason
+        }, 'Empty LLM response, retrying')
+
+        // Switch to fallback model on empty response
+        modelIndex++
+        lastError = new Error(`Empty response (finish_reason: ${finishReason})`)
+
+        // Exponential backoff: 100ms, 200ms, 400ms
+        await sleep(100 * Math.pow(2, attempt))
+        continue
+      }
+
+      const analysis = JSON.parse(trimmedContent)
+
+      // Log if we used a fallback model
+      if (attempt > 0) {
+        spamLog.info({ model, attempt: attempt + 1 }, 'LLM succeeded after retry')
+      }
+
+      return { analysis, model }
+    } catch (err) {
+      lastError = err
+      spamLog.warn({
+        attempt: attempt + 1,
+        model,
+        err: err.message
+      }, 'LLM call failed, retrying')
+
+      // Switch to fallback model on error
+      modelIndex++
+
+      // Exponential backoff
+      await sleep(100 * Math.pow(2, attempt))
+    }
+  }
+
+  spamLog.error({ err: lastError?.message, attempts: maxRetries }, 'All LLM retry attempts failed')
+  return null
+}
+
 // Schedule cleanup tasks on startup
 let cleanupInitialized = false
 const initializeCleanup = () => {
@@ -630,62 +742,13 @@ When uncertain → CLEAN.`
 ---
 ${contextInfo.join(' | ')}`
 
-    // Use OpenRouter for LLM analysis with structured output
-    const response = await openRouter.chat.completions.create({
-      model: process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      temperature: 0,
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: 'spam_analysis',
-          schema: {
-            type: 'object',
-            properties: {
-              reasoning: {
-                type: 'string',
-                description: 'Brief explanation of the classification'
-              },
-              classification: {
-                type: 'string',
-                enum: ['SPAM', 'CLEAN'],
-                description: 'Whether the message is spam or clean'
-              },
-              confidence: {
-                type: 'integer',
-                minimum: 0,
-                maximum: 100,
-                description: 'Confidence level from 0 to 100'
-              }
-            },
-            required: ['reasoning', 'classification', 'confidence'],
-            additionalProperties: false
-          }
-        }
-      },
-      max_tokens: 150
-    })
-
-    let analysis
-    try {
-      const content = response.choices[0].message.content
-      const trimmedContent = content && content.trim()
-      if (!trimmedContent) {
-        spamLog.warn({
-          finishReason: response.choices[0].finish_reason,
-          model: response.model
-        }, 'Empty LLM response')
-        return null
-      }
-      analysis = JSON.parse(trimmedContent)
-    } catch (parseError) {
-      const rawContent = (response && response.choices && response.choices[0] && response.choices[0].message) ? response.choices[0].message.content : undefined
-      spamLog.error({ err: parseError.message, rawContent: rawContent && rawContent.substring(0, 100) }, 'JSON parsing error')
-      return null // Return null to indicate parsing failure
+    // Use OpenRouter for LLM analysis with retry and fallback
+    const llmResult = await callLLMWithRetry(systemPrompt, userPrompt)
+    if (!llmResult) {
+      return null // All retries failed
     }
+
+    const { analysis, model: usedModel } = llmResult
 
     const isSpam = analysis.classification === 'SPAM'
     let confidence = parseInt(analysis.confidence) || 70
@@ -697,7 +760,7 @@ ${contextInfo.join(' | ')}`
       confidence = Math.round(boostedConfidence)
     }
 
-    spamLog.info({ isSpam, confidence, source: 'openrouter_llm' }, 'OpenRouter result')
+    spamLog.info({ isSpam, confidence, source: 'openrouter_llm', model: usedModel }, 'OpenRouter result')
 
     // Save to knowledge base based on confidence and action taken
     if (embedding) {
