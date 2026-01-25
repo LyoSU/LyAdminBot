@@ -22,7 +22,11 @@ const { spam: spamLog, moderation: modLog, cleanup: cleanupLog, qdrant: qdrantLo
 // Create OpenRouter client for LLM
 const openRouter = new OpenAI({
   baseURL: process.env.OPENROUTER_API_URL || 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY
+  apiKey: process.env.OPENROUTER_API_KEY,
+  defaultHeaders: {
+    'HTTP-Referer': 'https://LyAdminBot.t.me',
+    'X-Title': 'LyAdminBot Spam Check Helper'
+  },
 })
 
 // Create OpenAI client for moderation
