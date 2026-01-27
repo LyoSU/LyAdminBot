@@ -20,49 +20,34 @@ private:
   start: |
     Hey <b>${name}</b>! 👋
 
-    <b>LyAdminBot</b> — your group moderation buddy.
+    🛡 <b>LyAdminBot</b> — anti-spam for groups.
+    Catching spam, banning scammers, cleaning ads.
 
-    🛡 <b>What I do:</b>
-    • Catch spam & ads
-    • Ban scammers
-    • Clean suspicious links
-
-    Add me to your group and make me admin — I'll handle the rest.
-
-    /help — all commands
+    Add to group → make admin → done.
   btn_add: Add to group
 cmd:
   help: |
     <b>Moderation</b>
     /banan — mute (↩️). Again — unmute
-    /banan 5m — mute for 5 min (m/h/d)
-    /kick — remove from chat (↩️)
-    /del — delete message (↩️)
-    /report or @admin — report spam (↩️)
-
-    <b>Anti-spam</b>
-    <code>!spam</code> — status and all commands
-    <code>!trust</code> / <code>!untrust</code> — trusted users (↩️)
-    <code>!cas</code> — ban CAS-listed spammers
-    <code>!banChannel</code> — ban anonymous channels
-
-    <b>Welcome</b>
-    <code>!welcome</code> — on/off
-    <code>!gif</code> — add/remove gif (↩️)
-    <code>!text</code> — text with %name% (↩️)
+    /banan 5m — timed mute (m/h/d)
+    /kick — remove (↩️)
+    /del — delete (↩️)
+    /report — report spam (↩️)
 
     <b>Stats</b>
-    /mystats — your messages and bans
-    /top — most active in chat
-    /top_banan — most muted users
+    /mystats · /top · /top_banan
 
-    <b>Extras</b>
-    <code>!extra faq</code> — save as #faq (↩️)
-    /extras — list saved
-
+    <b>Other</b>
     /lang — language · /ping — status
+    /extras — saved commands
 
-    <i>↩️ = reply to a message</i>
+    <b>Admins only</b> <code>!</code>
+    <code>!spam</code> — anti-spam settings
+    <code>!trust</code> — trusted users (↩️)
+    <code>!welcome</code> · <code>!gif</code> · <code>!text</code> — welcome
+    <code>!cas</code> · <code>!banChannel</code> — bans
+
+    <i>↩️ = reply to message</i>
   my_stats:
     send_pm: Stats sent to DM 📊
     chat: |
