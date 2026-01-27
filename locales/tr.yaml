@@ -1,17 +1,29 @@
+bot_added:
+  as_admin: |
+    🛡 Korumadayım! Anti-spam çalışıyor.
+    <code>!spam</code> — ayarlar
+  need_admin: |
+    👋 Selam! Spam temizlemek için admin yetkileri ver (mesaj silme + banlama).
+    <code>/help</code> — neler yapabilirim
+  promoted: |
+    🛡 Artık korumadayım. Spam geçemez.
+  demoted: |
+    😴 Admin yetkileri olmadan spamcıları banlayamam. Gerekirse yetkileri geri ver.
+
+group:
+  start: |
+    🛡 Anti-spam bot. Spam yakalıyorum, dolandırıcıları banlıyorum.
+    <code>!spam</code> — ayarlar (adminler)
+    <code>/help</code> — tüm komutlar
+
 private:
   start: |
     Selam <b>${name}</b>! 👋
 
-    <b>LyAdminBot</b> — grup moderasyon yardımcın.
+    🛡 <b>LyAdminBot</b> — gruplar için anti-spam.
+    Spam yakalıyorum, dolandırıcıları banlıyorum, reklamları temizliyorum.
 
-    🛡 <b>Neler yapıyorum:</b>
-    • Spam ve reklamları yakalıyorum
-    • Dolandırıcıları banlıyorum
-    • Şüpheli linkleri temizliyorum
-
-    Beni gruba ekle ve admin yap — gerisini hallederim.
-
-    /help — komut listesi
+    Gruba ekle → admin yap → tamam.
   btn_add: Gruba ekle
 cmd:
   help: |
@@ -105,13 +117,21 @@ banan:
   show: ${name} 🍌 gösteriyor
   suc:  ${name} 🍌 alıyor\n<b>Süre:</b> ${duration}
   pick: ${name} 🍌 kaybetti
-  error: <b>🍌 veremedim</b>\n<pre>${error}</pre>
+  error: "❌ Susturamıyorum"
+  error_admin: "❌ Adminler susturulamaz 😏"
+  error_left: "❌ Zaten gruptan ayrılmış"
+  error_no_rights: "❌ Bana banlama yetkisi ver"
 kick:
   suc: ${name} gruptan atıldı 👢
   who: Kimi atayım? 🤔
-  error: <b>Atamadım</b>\n<pre>${error}</pre>
+  error: "❌ Atamıyorum"
+  error_admin: "❌ Adminler atılamaz"
+  error_left: "❌ Zaten gruptan ayrılmış"
+  error_no_rights: "❌ Bana banlama yetkisi ver"
 del:
-  error: <b>Silemedim</b>\n<pre>${error}</pre>
+  error: "❌ Silemiyorum"
+  error_no_rights: "❌ Bana silme yetkisi ver"
+  error_old: "❌ Mesaj çok eski"
 
 global_ban:
   kicked: "🚫 ${name} atıldı — global ban.\n<code>${reason}</code>"
