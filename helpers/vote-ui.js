@@ -74,6 +74,32 @@ const escapeHtml = (text) => {
 }
 
 /**
+ * Sanitize message preview - remove/mask sensitive info
+ * Hides: @mentions, URLs, emails, phone numbers, crypto addresses
+ */
+const sanitizePreview = (text) => {
+  if (!text) return ''
+  return String(text)
+    // @username mentions
+    .replace(/@[\w]{3,}/g, '@***')
+    // t.me links
+    .replace(/t\.me\/[\w+]+/gi, 't.me/***')
+    // URLs (http/https)
+    .replace(/https?:\/\/[^\s]+/gi, '[link]')
+    // Emails
+    .replace(/[\w.-]+@[\w.-]+\.\w+/g, '***@***')
+    // Phone numbers (various formats)
+    .replace(/\+?\d[\d\s\-()]{8,}\d/g, '[phone]')
+    // Crypto addresses (BTC, ETH-like)
+    .replace(/\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b/g, '[crypto]')
+    .replace(/\b0x[a-fA-F0-9]{40}\b/g, '[crypto]')
+    // TON addresses
+    .replace(/\b(EQ|UQ)[A-Za-z0-9_-]{46,48}\b/g, '[crypto]')
+    // Telegram channel/bot names in text
+    .replace(/(?:канал|channel|бот|bot)[\s:]*@?[\w]+/gi, '[channel]')
+}
+
+/**
  * Build voting notification text
  */
 const buildVoteNotification = (spamVote, i18n) => {
@@ -132,9 +158,10 @@ const buildVoteNotification = (spamVote, i18n) => {
 
   // Message preview
   if (messagePreview) {
-    const preview = messagePreview.length > 80
-      ? messagePreview.substring(0, 80) + '...'
-      : messagePreview
+    const sanitized = sanitizePreview(messagePreview)
+    const preview = sanitized.length > 80
+      ? sanitized.substring(0, 80) + '...'
+      : sanitized
     lines.push(i18n.t('spam_vote.message_preview', { text: escapeHtml(preview) }))
   }
 
