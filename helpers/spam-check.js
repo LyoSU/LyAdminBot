@@ -723,9 +723,14 @@ const checkOpenAIModeration = async (messageText, imageUrl = null, imageType = '
       return null
     }
 
+    // For single text input, send as string; for images or multiple inputs, send as array
+    const apiInput = (input.length === 1 && input[0].type === 'text')
+      ? input[0].text
+      : input
+
     const response = await openAI.moderations.create({
       model: 'omni-moderation-latest',
-      input: input.length === 1 ? input[0].text : input
+      input: apiInput
     })
 
     const result = response.results[0]
