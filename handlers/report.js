@@ -1,6 +1,7 @@
 const { userName } = require('../utils')
 const { checkSpam, getSpamSettings } = require('../helpers/spam-check')
 const { processSpamAction } = require('../helpers/reputation')
+const { createVoteEvent, getAccountAgeDays } = require('../helpers/vote-ui')
 const { report: reportLog } = require('../helpers/logger')
 
 // Rate limiting: max 3 reports per user per 5 minutes
@@ -259,8 +260,8 @@ const handleReport = async (ctx) => {
     const reporterName = userName(ctx.from, true)
     const targetName = userName(targetUser, true)
 
-    if (result.isSpam && result.confidence >= 70) {
-      // High confidence spam - take action
+    if (result.isSpam && result.confidence >= 50) {
+      // Spam detected - take action
       const muteDuration = result.confidence >= 90 ? 86400 : 3600 // 24h or 1h
 
       // Try to restrict user or ban channel
@@ -301,67 +302,99 @@ const handleReport = async (ctx) => {
         reportLog.error({ err: e.message }, 'Failed to delete')
       }
 
-      // Update target's reputation and apply global ban if needed (only for users, not channels)
-      if (!isChannelPost && mockCtx.session.userInfo) {
-        const spamResult = processSpamAction(mockCtx.session.userInfo, {
-          userId: targetId,
-          messageDeleted: deleted,
-          confidence: result.confidence,
-          reason: result.reason || 'Spam confirmed via report',
-          muteSuccess: actionTaken,
-          globalBanEnabled: spamSettings.globalBan !== false
-        })
+      // Delete the "analyzing" status message
+      try {
+        await ctx.telegram.deleteMessage(ctx.chat.id, statusMsg.message_id)
+      } catch (e) { /* ignore */ }
 
-        if (spamResult.globalBanApplied) {
-          reportLog.warn({
-            userId: targetId,
-            targetName,
-            reporter: userName(ctx.from),
+      // If confidence < 90, create vote event for community verification
+      if (result.confidence < 90 && (actionTaken || deleted)) {
+        try {
+          // Create vote context similar to spam-check middleware
+          const voteCtx = {
+            ...ctx,
+            from: targetUser,
+            message: replyMsg,
+            session: mockCtx.session
+          }
+
+          await createVoteEvent(voteCtx, {
+            result,
+            actionTaken: {
+              muteSuccess: actionTaken,
+              deleteSuccess: deleted,
+              muteDuration
+            },
+            messageText: messageText || '[Media]',
+            userContext: {
+              reputationScore: targetUserInfo?.reputation?.score,
+              reputationStatus: targetUserInfo?.reputation?.status,
+              accountAgeDays: !isChannelPost ? getAccountAgeDays(targetId) : 0,
+              messagesInGroup: targetGroupMember?.stats?.messagesCount || 0,
+              groupsActive: targetUserInfo?.globalStats?.groupsActive || 0,
+              signals: result.quickAssessment?.signals || []
+            }
+          })
+
+          reportLog.info({
+            target: targetName,
+            reporter: reporterName,
             confidence: result.confidence
-          }, 'Global ban applied via report')
+          }, 'Created vote event for uncertain spam (via report)')
+        } catch (voteErr) {
+          reportLog.error({ err: voteErr.message }, 'Failed to create vote event')
+        }
+      } else if (result.confidence >= 90) {
+        // High confidence - no voting needed, just update reputation
+        if (!isChannelPost && mockCtx.session.userInfo) {
+          const spamResult = processSpamAction(mockCtx.session.userInfo, {
+            userId: targetId,
+            messageDeleted: deleted,
+            confidence: result.confidence,
+            reason: result.reason || 'Spam confirmed via report',
+            muteSuccess: actionTaken,
+            globalBanEnabled: spamSettings.globalBan !== false
+          })
+
+          if (spamResult.globalBanApplied) {
+            reportLog.warn({
+              userId: targetId,
+              targetName,
+              reporter: userName(ctx.from),
+              confidence: result.confidence
+            }, 'Global ban applied via report')
+          }
+
+          await mockCtx.session.userInfo.save()
         }
 
-        await mockCtx.session.userInfo.save()
+        // Send notification for high confidence spam
+        const actionText = isChannelPost
+          ? (actionTaken ? (deleted ? '🚫 + 🗑' : '🚫') : (deleted ? '🗑' : '⚠️'))
+          : (actionTaken ? (deleted ? '🔇 + 🗑' : '🔇') : (deleted ? '🗑' : '⚠️'))
+
+        const notificationMsg = await ctx.replyWithHTML(
+          ctx.i18n.t('report.spam_found', {
+            reporter: reporterName,
+            target: targetName,
+            confidence: result.confidence,
+            reason: result.reason || 'Spam detected',
+            action: actionText
+          }),
+          { disable_web_page_preview: true }
+        )
+
+        // Auto-delete after 30 seconds
+        setTimeout(async () => {
+          try {
+            await ctx.telegram.deleteMessage(ctx.chat.id, notificationMsg.message_id)
+          } catch (e) { /* ignore */ }
+        }, 30000)
       }
 
-      // Edit status message
-      const actionText = isChannelPost
-        ? (actionTaken ? (deleted ? '🚫 Channel banned + 🗑 Deleted' : '🚫 Channel banned') : (deleted ? '🗑 Deleted' : '⚠️ No permissions'))
-        : (actionTaken ? (deleted ? '🔇 Muted + 🗑 Deleted' : '🔇 Muted') : (deleted ? '🗑 Deleted' : '⚠️ No permissions'))
-
-      await ctx.telegram.editMessageText(
-        ctx.chat.id,
-        statusMsg.message_id,
-        null,
-        ctx.i18n.t('report.spam_found', {
-          reporter: reporterName,
-          target: targetName,
-          confidence: result.confidence,
-          reason: result.reason || 'Spam detected',
-          action: actionText
-        }),
-        { parse_mode: 'HTML', disable_web_page_preview: true }
-      )
-
-      reportLog.info({ target: targetName, reporter: reporterName, confidence: result.confidence }, 'Spam confirmed')
-    } else if (result.isSpam && result.confidence >= 50) {
-      // Medium confidence - warn but don't act
-      await ctx.telegram.editMessageText(
-        ctx.chat.id,
-        statusMsg.message_id,
-        null,
-        ctx.i18n.t('report.suspicious', {
-          reporter: reporterName,
-          target: targetName,
-          confidence: result.confidence,
-          reason: result.reason || 'Potentially suspicious'
-        }),
-        { parse_mode: 'HTML', disable_web_page_preview: true }
-      )
-
-      reportLog.warn({ target: targetName, reporter: reporterName, confidence: result.confidence }, 'Suspicious')
+      reportLog.info({ target: targetName, reporter: reporterName, confidence: result.confidence }, 'Spam action taken')
     } else {
-      // Clean message
+      // Clean message - edit status message
       await ctx.telegram.editMessageText(
         ctx.chat.id,
         statusMsg.message_id,
@@ -375,14 +408,14 @@ const handleReport = async (ctx) => {
       )
 
       reportLog.debug({ target: targetName, reporter: reporterName }, 'Clean')
-    }
 
-    // Auto-delete status message after 30 seconds
-    setTimeout(async () => {
-      try {
-        await ctx.telegram.deleteMessage(ctx.chat.id, statusMsg.message_id)
-      } catch (e) { /* ignore */ }
-    }, 30000)
+      // Auto-delete status message after 15 seconds for clean results
+      setTimeout(async () => {
+        try {
+          await ctx.telegram.deleteMessage(ctx.chat.id, statusMsg.message_id)
+        } catch (e) { /* ignore */ }
+      }, 15000)
+    }
   } catch (error) {
     reportLog.error({ err: error }, 'Report error')
     await ctx.telegram.editMessageText(
