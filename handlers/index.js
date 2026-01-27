@@ -1,3 +1,4 @@
+const handleStart = require('./start')
 const handleHelp = require('./help')
 const handleKick = require('./kick')
 const handlePing = require('./ping')
@@ -31,6 +32,7 @@ const handleExtra = require('./extra')
 const handleBanAllChannel = require('./admin/all-chanell-ban')
 const { handleReport, isBotMentionReport } = require('./report')
 const { handleTrust, handleUntrust } = require('./admin/trust')
+const { handleSpamVoteCallback, processExpiredVotes } = require('./spam-vote')
 
 module.exports = {
   handleHelp,
@@ -67,5 +69,7 @@ module.exports = {
   isBotMentionReport,
   handleTrust,
   handleUntrust,
-  handleSpamCallback
+  handleSpamCallback,
+  handleSpamVoteCallback,
+  processExpiredVotes
 }

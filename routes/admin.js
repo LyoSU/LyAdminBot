@@ -18,7 +18,8 @@ const {
   handleExtra,
   handleBanAllChannel,
   handleTrust,
-  handleUntrust
+  handleUntrust,
+  handleSpamVoteCallback
 } = require('../handlers')
 
 /**
@@ -65,6 +66,9 @@ const registerAdminRoutes = (bot) => {
 
   // Spam settings callback buttons
   bot.action(/^spam:/, handleSpamCallback)
+
+  // Spam vote callback buttons
+  bot.action(/^sv:/, handleSpamVoteCallback)
 }
 
 module.exports = { registerAdminRoutes }

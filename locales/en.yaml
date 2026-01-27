@@ -1,3 +1,21 @@
+bot_added:
+  as_admin: |
+    🛡 On guard! Anti-spam is active.
+    <code>!spam</code> — settings
+  need_admin: |
+    👋 Hey! To clean spam — make me admin (delete messages + ban users).
+    <code>/help</code> — what I can do
+  promoted: |
+    🛡 Now on guard. No spam gets through.
+  demoted: |
+    😴 Can't ban spammers without admin rights. Give them back if needed.
+
+group:
+  start: |
+    🛡 Anti-spam bot. Catching spam, banning scammers.
+    <code>!spam</code> — settings (admins)
+    <code>/help</code> — all commands
+
 private:
   start: |
     Hey <b>${name}</b>! 👋
@@ -260,6 +278,40 @@ only_admin: Admins only
 
 global_ban:
   kicked: "🚫 ${name} kicked — global ban.\n<code>${reason}</code>"
+
+spam_vote:
+  title_blocked: "❌ <b>Blocked</b>"
+  title_spam: "❌ <b>Spam confirmed</b>"
+  title_clean: "↩️ <b>Unblocked</b>"
+  user_info: "👤 ${name}"
+  reputation: "📊 Reputation: ${score}"
+  account_age: "📅 Account: ${age}"
+  messages: "💬 ${count} msgs"
+  in_groups: "in ${count} groups"
+  signals: "⚠️ ${signals}"
+  ai_reason: "🤖 ${confidence}% — ${reason}"
+  message_preview: "📝 \"${text}\""
+  vote_time: "⏱ ${time}"
+  btn_spam: "🚫 Spam"
+  btn_clean: "✓ Clean"
+  voters_spam: "🚫 Spam (${count}):"
+  voters_clean: "✓ Clean (${count}):"
+  voters_empty: " —"
+  voter_line: " ${index}. ${name}${weight}"
+  result: "Result: ${spam} — ${clean}"
+  reputation_change: "📊 ${old} → ${new}"
+  added_to_signatures: "🔒 Added to spam database"
+  status_trusted: "✨ Now trusted"
+  cb:
+    invalid_format: "Invalid format"
+    invalid_vote: "Invalid vote"
+    not_found: "Vote not found"
+    already_finished: "Voting finished"
+    time_expired: "Time expired"
+    no_permission: "Only admins & trusted can vote"
+    already_voted: "Already voted"
+    error: "Recording error"
+    vote_recorded: "Vote recorded"
 
 report:
   only_group: "Groups only"

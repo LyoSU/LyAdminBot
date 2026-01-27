@@ -3,6 +3,7 @@ const { checkSpam, checkTrustedUser, getSpamSettings } = require('../helpers/spa
 const { saveSpamVector } = require('../helpers/spam-vectors')
 const { generateEmbedding, extractFeatures } = require('../helpers/message-embeddings')
 const { processSpamAction } = require('../helpers/reputation')
+const { createVoteEvent, getAccountAgeDays } = require('../helpers/vote-ui')
 const { spam: spamLog, spamAction, reputation: repLog, notification: notifyLog } = require('../helpers/logger')
 
 /**
@@ -473,36 +474,46 @@ module.exports = async (ctx) => {
           }
         }
 
-        // Send notification
-        let statusMessage = ''
-        const testModeLabel = isTestMode ? '\n🧪 TEST MODE' : ''
-        const notificationParams = { name: userName(senderInfo, true), reason: result.reason }
-
-        if (muteSuccess && deleteSuccess) {
-          statusMessage = ctx.i18n.t('spam.notification.full', notificationParams) + testModeLabel
-        } else if (muteSuccess && !deleteSuccess) {
-          statusMessage = ctx.i18n.t('spam.notification.muted_only', notificationParams) + testModeLabel
-        } else if (!muteSuccess && deleteSuccess) {
-          statusMessage = ctx.i18n.t('spam.notification.deleted_only', notificationParams) + testModeLabel
-        } else if (!muteSuccess && !deleteSuccess) {
-          // Bot detected spam but has no permissions to act
-          statusMessage = ctx.i18n.t('spam.notification.no_permissions', notificationParams) + testModeLabel
+        // Create vote event for community moderation
+        if (muteSuccess || deleteSuccess) {
+          try {
+            const voteEvent = await createVoteEvent(ctx, {
+              result,
+              actionTaken: {
+                muteSuccess,
+                deleteSuccess,
+                muteDuration
+              },
+              messageText,
+              userContext: {
+                reputationScore: ctx.session?.userInfo?.reputation?.score,
+                reputationStatus: ctx.session?.userInfo?.reputation?.status,
+                accountAgeDays: getAccountAgeDays(senderId),
+                messagesInGroup: actualMessageCount,
+                groupsActive: ctx.session?.userInfo?.globalStats?.groupsActive || 0,
+                signals: result.quickAssessment?.signals || []
+              }
+            })
+            if (!voteEvent) {
+              notifyLog.warn('Vote event creation returned null - missing sender info')
+            }
+          } catch (voteError) {
+            notifyLog.error({ err: voteError.message }, 'Failed to create vote event')
+          }
+        } else {
+          // Bot detected spam but has no permissions to act - show simple notification
+          const notificationParams = { name: userName(senderInfo, true), reason: result.reason }
+          const statusMessage = ctx.i18n.t('spam.notification.no_permissions', notificationParams)
           notifyLog.warn('Spam detected but no permissions to act')
-        }
 
-        if (statusMessage) {
           const notificationMsg = await ctx.replyWithHTML(statusMessage, { disable_web_page_preview: true })
             .catch(error => notifyLog.error({ err: error.message }, 'Failed to send notification'))
 
-          // Schedule notification message deletion
           if (notificationMsg) {
-            const deleteDelay = (muteSuccess || deleteSuccess) ? 25 : 60 // longer for no-permission warnings
-            notifyLog.debug({ deleteDelay }, 'Sent notification, will auto-delete')
             setTimeout(async () => {
               await ctx.telegram.deleteMessage(ctx.chat.id, notificationMsg.message_id)
-                .catch(error => notifyLog.error({ err: error.message }, 'Failed to delete notification'))
-              notifyLog.debug('Auto-deleted notification message')
-            }, deleteDelay * 1000)
+                .catch(() => {})
+            }, 60 * 1000)
           }
         }
 

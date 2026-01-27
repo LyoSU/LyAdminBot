@@ -6,6 +6,7 @@ const I18n = require('telegraf-i18n')
 
 const { bot: botLog, db: dbLog } = require('./helpers/logger')
 const { db } = require('./database')
+const { processExpiredVotes } = require('./handlers')
 const {
   stats,
   errorHandler,
@@ -73,11 +74,13 @@ const skipChannelPosts = () => {
 }
 
 /**
- * Log my_chat_member updates (bot added/removed from groups)
+ * Handle my_chat_member updates (bot added/removed from groups)
  */
-const logChatMemberUpdates = (ctx, next) => {
+const handleBotAddedToGroup = require('./handlers/bot-added')
+const handleMyChatMemberUpdates = (ctx, next) => {
   if (ctx.update.my_chat_member) {
     botLog.debug({ update: ctx.update }, 'my_chat_member update')
+    return handleBotAddedToGroup(ctx)
   } else {
     return next()
   }
@@ -123,8 +126,8 @@ const registerMiddlewares = (bot, i18n) => {
   // 1. Skip channel posts
   bot.on(['channel_post', 'edited_channel_post'], skipChannelPosts)
 
-  // 2. Log chat member updates
-  bot.use(logChatMemberUpdates)
+  // 2. Handle bot added/removed from groups
+  bot.use(handleMyChatMemberUpdates)
 
   // 3. Global error handler
   bot.use(errorHandler)
@@ -192,6 +195,12 @@ const init = () => {
   db.connection.once('open', async () => {
     dbLog.info('Connected to MongoDB')
     await launchBot(bot)
+
+    // Start spam vote expiration handler (check every minute)
+    setInterval(() => {
+      processExpiredVotes(db, bot.telegram)
+    }, 60 * 1000)
+    botLog.debug('Started spam vote expiration handler')
   })
 }
 

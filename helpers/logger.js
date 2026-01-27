@@ -50,6 +50,7 @@ const db = createChildLogger('DATABASE')
 const stats = createChildLogger('STATS')
 const reputation = createChildLogger('REPUTATION')
 const notification = createChildLogger('NOTIFICATION')
+const spamVote = createChildLogger('SPAM VOTE')
 
 module.exports = {
   // Base logger for custom usage
@@ -70,5 +71,6 @@ module.exports = {
   db,
   stats,
   reputation,
-  notification
+  notification,
+  spamVote
 }
