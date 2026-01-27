@@ -368,6 +368,40 @@ const handleReport = async (ctx) => {
           await mockCtx.session.userInfo.save()
         }
 
+        // Add to SpamSignature (high confidence = direct add as candidate)
+        if (messageText && ctx.db && ctx.db.SpamSignature) {
+          try {
+            const { getExactHash } = require('../helpers/vote-ui')
+            const messageHash = getExactHash(messageText)
+            if (messageHash) {
+              const signature = await ctx.db.SpamSignature.findOneAndUpdate(
+                { exactHash: messageHash },
+                {
+                  $inc: { confirmations: 1 },
+                  $addToSet: { uniqueGroups: ctx.chat.id },
+                  $set: { lastSeenAt: new Date() },
+                  $setOnInsert: {
+                    exactHash: messageHash,
+                    status: 'candidate',
+                    sampleText: messageText.substring(0, 200),
+                    firstSeenAt: new Date()
+                  }
+                },
+                { upsert: true, new: true }
+              )
+
+              // Promote to confirmed if 5+ unique groups
+              if (signature.uniqueGroups.length >= 5 && signature.status === 'candidate') {
+                signature.status = 'confirmed'
+                await signature.save()
+                reportLog.info({ hash: messageHash }, 'Promoted signature to confirmed')
+              }
+            }
+          } catch (sigError) {
+            reportLog.error({ err: sigError.message }, 'Failed to add SpamSignature')
+          }
+        }
+
         // Send notification for high confidence spam
         const actionText = isChannelPost
           ? (actionTaken ? (deleted ? '🚫 + 🗑' : '🚫') : (deleted ? '🗑' : '⚠️'))

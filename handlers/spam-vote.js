@@ -320,6 +320,36 @@ const processExpiredVotes = async (db, telegram) => {
           reason: 'no_votes'
         }, 'Vote expired with no votes, defaulting to spam')
 
+        // Add to SpamSignature (as candidate for future detection)
+        if (vote.messageHash) {
+          try {
+            const signature = await db.SpamSignature.findOneAndUpdate(
+              { exactHash: vote.messageHash },
+              {
+                $inc: { confirmations: 1 },
+                $addToSet: { uniqueGroups: vote.chatId },
+                $set: { lastSeenAt: new Date() },
+                $setOnInsert: {
+                  exactHash: vote.messageHash,
+                  status: 'candidate',
+                  sampleText: vote.messagePreview,
+                  firstSeenAt: new Date()
+                }
+              },
+              { upsert: true, new: true }
+            )
+
+            // Promote to confirmed if 5+ unique groups
+            if (signature.uniqueGroups.length >= 5 && signature.status === 'candidate') {
+              signature.status = 'confirmed'
+              await signature.save()
+              log.info({ hash: vote.messageHash }, 'Promoted signature to confirmed')
+            }
+          } catch (sigError) {
+            log.error({ err: sigError.message }, 'Failed to add SpamSignature on timeout')
+          }
+        }
+
         // Delete the notification message
         if (vote.notificationMessageId && vote.notificationChatId) {
           try {
