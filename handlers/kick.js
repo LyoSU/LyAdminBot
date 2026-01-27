@@ -1,4 +1,5 @@
 const { userName } = require('../utils')
+const { mapTelegramError } = require('../helpers/error-mapper')
 
 module.exports = async (ctx) => {
   const chatMember = await ctx.telegram.getChatMember(ctx.message.chat.id, ctx.message.from.id)
@@ -20,10 +21,8 @@ module.exports = async (ctx) => {
         name: userName(kickUser, true)
       }))
     }).catch((error) => {
-      const safeError = error.description || error.message || 'Unknown error'
-      return ctx.replyWithHTML(ctx.i18n.t('kick.error', {
-        error: safeError
-      }))
+      const errorKey = mapTelegramError(error, 'kick')
+      return ctx.replyWithHTML(ctx.i18n.t(errorKey))
     })
   }
 }

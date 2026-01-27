@@ -160,8 +160,8 @@ cmd:
       disabled: "❌ <b>Global ban off</b>\nBans only apply to this group"
       error: "Use <code>!spam globalban on</code> or <code>!spam globalban off</code>"
     threshold:
-      set: "✅ <b>Confidence threshold set:</b> ${value}%\n\nHigher = fewer false positives, but may miss some spam."
-      error: "❌ Invalid value. Must be 50-95.\n\n<b>Example:</b> <code>!spam threshold 75</code>"
+      set: "✅ <b>Sensitivity:</b> ${value}%\n\nHigher = fewer mistakes, but may miss some spam"
+      error: "❌ Must be 50-95\n\n<code>!spam threshold 75</code>"
     status:
       title: "🛡 <b>Anti-spam settings</b>"
       enabled_text: "✅ On"
@@ -178,7 +178,7 @@ cmd:
         <code>!spam on</code> — enable
         <code>!spam off</code> — disable
         <code>!spam globalban on/off</code> — global ban
-        <code>!spam threshold 50-95</code> — confidence threshold
+        <code>!spam threshold 50-95</code> — sensitivity
         <code>!spam trust</code> — trust user (reply)
         <code>!spam untrust</code> — untrust user (reply)
         <code>!spam allow text</code> — allow
@@ -222,28 +222,33 @@ banan:
   show: ${name} shows 🍌
   suc:  ${name} gets 🍌\n<b>For:</b> ${duration}
   pick: ${name} lost 🍌
-  error: <b>Couldn't give 🍌</b>\n<pre>${error}</pre>
+  error: "❌ Can't mute"
+  error_admin: "❌ Can't mute admins 😏"
+  error_left: "❌ Already left"
+  error_no_rights: "❌ Give me ban permissions"
 kick:
   suc: ${name} gets kicked 👢
   who: Who to kick? 🤔
-  error: <b>Couldn't kick</b>\n<pre>${error}</pre>
+  error: "❌ Can't kick"
+  error_admin: "❌ Can't kick admins"
+  error_left: "❌ Already left"
+  error_no_rights: "❌ Give me ban permissions"
 del:
-  error: <b>Couldn't delete</b>\n<pre>${error}</pre>
+  error: "❌ Can't delete"
+  error_no_rights: "❌ Give me delete permissions"
+  error_old: "❌ Message too old"
 sticker:
   save:
     suc: Sticker added to <a href="${link}">group pack</a> ✓
     error:
-      animated: Animated stickers not supported 😅
-      telegram: <b>Couldn't save sticker</b>\n<pre>${error}</pre>
+      animated: Animated not supported 😅
+      telegram: "❌ Couldn't save"
   delete:
     suc: Sticker removed from <a href="${link}">pack</a> ✓
     error:
-      telegram: <b>Couldn't delete sticker</b>\n<pre>${error}</pre>
-  empty_forward: |
-    Reply to a sticker, photo, or file with the command.
-  only_admin: |
-    Admins only.
-    For personal pack — @fStikBot
+      telegram: "❌ Couldn't delete"
+  empty_forward: "↩️ Reply to a sticker, photo, or file"
+  only_admin: "🔒 Admins only. Personal pack — @fStikBot"
 cas:
   banned: |
     ${name} banned — CAS listed.
@@ -273,8 +278,8 @@ spam:
       ⚠️ Couldn't mute ${name}
       Reason: ${reason}
 
-only_group: Groups only
-only_admin: Admins only
+only_group: "👥 Works in groups only"
+only_admin: "🔒 Group admins only"
 
 global_ban:
   kicked: "🚫 ${name} kicked — global ban.\n<code>${reason}</code>"
@@ -299,7 +304,7 @@ spam_vote:
   voters_empty: " —"
   voter_line: " ${index}. ${name}${weight}"
   result: "Result: ${spam} — ${clean}"
-  reputation_change: "📊 ${old} → ${new}"
+  reputation_change: "📊 ${oldScore} → ${newScore}"
   added_to_signatures: "🔒 Added to spam database"
   status_trusted: "✨ Now trusted"
   cb:
@@ -319,10 +324,10 @@ report:
   cant_report_bot: "🤖 That's a bot"
   cant_report_self: "🙃 Can't report yourself"
   cant_report_admin: "👮 That's an admin"
-  invalid_target: "Can't identify sender"
+  invalid_target: "Who sent this? 🤷"
   rate_limited: "⏳ Wait ${seconds}s"
-  spam_check_disabled: "Anti-spam is off in this group"
-  no_content: "No text to check"
+  spam_check_disabled: "Anti-spam is off. Admin can enable: <code>!spam on</code>"
+  no_content: "Where's the text? 🤷"
   analyzing: "🔍 Checking..."
   spam_found: "🚫 <b>Spam</b> from ${target}\n<code>${reason}</code>\n\n${action}\n\n<i>📣 ${reporter}</i>"
   suspicious: "🤔 <b>Suspicious</b> — ${target}\n<code>${reason}</code>\n\n<i>📣 ${reporter}</i>"

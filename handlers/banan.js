@@ -1,5 +1,6 @@
 const humanizeDuration = require('humanize-duration')
 const { userName, getRandomInt } = require('../utils')
+const { mapTelegramError } = require('../helpers/error-mapper')
 
 module.exports = async (ctx) => {
   const arg = ctx.message.text.split(/ +/)
@@ -127,10 +128,8 @@ module.exports = async (ctx) => {
           }, 15 * 1000)
         }
       }).catch((error) => {
-        const safeError = error.description || error.message || 'Unknown error'
-        ctx.replyWithHTML(ctx.i18n.t('banan.error', {
-          error: safeError
-        }))
+        const errorKey = mapTelegramError(error, 'banan')
+        ctx.replyWithHTML(ctx.i18n.t(errorKey))
       })
     } else {
       await ctx.telegram.restrictChatMember(ctx.chat.id, banUser.id, {

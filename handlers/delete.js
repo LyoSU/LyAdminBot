@@ -1,10 +1,11 @@
+const { mapTelegramError } = require('../helpers/error-mapper')
+
 module.exports = async (ctx) => {
   const chatMember = await ctx.telegram.getChatMember(ctx.message.chat.id, ctx.message.from.id)
 
   await ctx.deleteMessage(ctx.message.message_id).catch((error) => {
-    return ctx.replyWithHTML(ctx.i18n.t('del.error', {
-      error
-    }))
+    const errorKey = mapTelegramError(error, 'del')
+    return ctx.replyWithHTML(ctx.i18n.t(errorKey))
   })
   if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
     if (ctx.message.reply_to_message) {

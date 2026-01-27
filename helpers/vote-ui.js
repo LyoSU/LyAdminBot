@@ -199,8 +199,8 @@ const buildSpamResultNotification = (spamVote, i18n, reputationChange = null) =>
   // Reputation change
   if (reputationChange) {
     lines.push(i18n.t('spam_vote.reputation_change', {
-      old: reputationChange.oldScore,
-      new: reputationChange.newScore
+      oldScore: reputationChange.oldScore,
+      newScore: reputationChange.newScore
     }))
   }
   lines.push(i18n.t('spam_vote.added_to_signatures'))
@@ -269,8 +269,8 @@ const buildCleanResultNotification = (spamVote, i18n, reputationChange = null) =
   // Reputation change
   if (reputationChange) {
     lines.push(i18n.t('spam_vote.reputation_change', {
-      old: reputationChange.oldScore,
-      new: reputationChange.newScore
+      oldScore: reputationChange.oldScore,
+      newScore: reputationChange.newScore
     }) + ' ⭐')
   }
   lines.push(i18n.t('spam_vote.status_trusted'))
@@ -443,7 +443,7 @@ const showResultUI = async (ctx, spamVote, reputationChange = null) => {
         'spam_vote.title_spam': '❌ <b>Spam confirmed</b>',
         'spam_vote.title_clean': '↩️ <b>Unblocked</b>',
         'spam_vote.user_info': `👤 ${params.name || ''}`,
-        'spam_vote.reputation_change': `📊 ${params.old || ''} → ${params.new || ''}`,
+        'spam_vote.reputation_change': `📊 ${params.oldScore || ''} → ${params.newScore || ''}`,
         'spam_vote.added_to_signatures': '🔒 Added to spam database',
         'spam_vote.status_trusted': '✨ Now trusted',
         'spam_vote.voters_spam': `🚫 Spam (${params.count || 0}):`,
