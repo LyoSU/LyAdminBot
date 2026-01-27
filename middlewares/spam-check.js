@@ -1,5 +1,5 @@
 const { userName } = require('../utils')
-const { checkSpam, checkTrustedUser, getSpamSettings } = require('../helpers/spam-check')
+const { checkSpam, checkTrustedUser, getSpamSettings, humanizeReason } = require('../helpers/spam-check')
 const { saveSpamVector } = require('../helpers/spam-vectors')
 const { generateEmbedding, extractFeatures } = require('../helpers/message-embeddings')
 const { processSpamAction } = require('../helpers/reputation')
@@ -508,7 +508,7 @@ module.exports = async (ctx) => {
         } else if ((muteSuccess || deleteSuccess) && !needsVoting) {
           // High confidence - just show brief notification, no voting
           const notificationMsg = await ctx.replyWithHTML(
-            ctx.i18n.t('spam.notification.full', { name: userName(senderInfo, true), reason: result.reason }),
+            ctx.i18n.t('spam.notification.full', { name: userName(senderInfo, true), reason: humanizeReason(result.reason, ctx.i18n) }),
             { disable_web_page_preview: true }
           ).catch(e => notifyLog.error({ err: e.message }, 'Failed to send high-confidence notification'))
 
@@ -532,7 +532,7 @@ module.exports = async (ctx) => {
           notifyLog.info({ confidence: result.confidence, source: result.source }, 'High confidence spam - no voting')
         } else if (!muteSuccess && !deleteSuccess) {
           // Bot detected spam but has no permissions to act - show simple notification
-          const notificationParams = { name: userName(senderInfo, true), reason: result.reason }
+          const notificationParams = { name: userName(senderInfo, true), reason: humanizeReason(result.reason, ctx.i18n) }
           const statusMessage = ctx.i18n.t('spam.notification.no_permissions', notificationParams)
           notifyLog.warn('Spam detected but no permissions to act')
 

@@ -293,6 +293,20 @@ spam_vote:
   added_to_signatures: "🔒 Added to spam database"
   status_trusted: "✨ Now trusted"
   timeout_confirmed: "⏱ <b>Time's up</b>\n\n👤 ${name}\n🔒 Spam confirmed"
+  # User-friendly spam reasons (replace technical terms)
+  reasons:
+    vector_spam: "Similar to known spam"
+    vector_clean: "Similar to legitimate messages"
+    exact_hash: "Identical spam seen before"
+    normalized_hash: "Very similar spam"
+    fuzzy_match: "Matches spam pattern"
+    inappropriate: "Inappropriate content"
+    cross_group: "Mass spam across groups"
+    high_velocity: "Suspicious activity"
+    custom_blocked: "Blocked by rule"
+    custom_allowed: "Allowed by rule"
+    error: "Analysis error"
+    default: "Spam detected"
   cb:
     invalid_format: "Invalid format"
     invalid_vote: "Invalid vote"

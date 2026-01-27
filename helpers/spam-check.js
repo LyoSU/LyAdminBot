@@ -47,6 +47,63 @@ const FALLBACK_MODELS = [
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
 /**
+ * Convert technical spam reasons to user-friendly messages via i18n
+ * Technical reasons are useful for logs but confusing for users
+ *
+ * @param {string} reason - Technical reason string
+ * @param {Object} i18n - i18n context with t() method
+ * @returns {string} - User-friendly reason
+ */
+const humanizeReason = (reason, i18n) => {
+  if (!reason) {
+    return i18n ? i18n.t('spam_vote.reasons.default') : 'Spam detected'
+  }
+
+  // Mapping of technical patterns to i18n keys
+  const patternToKey = {
+    'Vector match: spam': 'spam_vote.reasons.vector_spam',
+    'Vector match: clean': 'spam_vote.reasons.vector_clean',
+    'Exact hash match': 'spam_vote.reasons.exact_hash',
+    'Normalized hash match': 'spam_vote.reasons.normalized_hash',
+    'Fuzzy match': 'spam_vote.reasons.fuzzy_match',
+    'Inappropriate content': 'spam_vote.reasons.inappropriate',
+    'Cross-group spam': 'spam_vote.reasons.cross_group',
+    'High velocity': 'spam_vote.reasons.high_velocity',
+    'Error during analysis': 'spam_vote.reasons.error'
+  }
+
+  // Check exact matches first
+  if (patternToKey[reason] && i18n) {
+    return i18n.t(patternToKey[reason])
+  }
+
+  // Check partial matches for dynamic reasons
+  for (const [pattern, key] of Object.entries(patternToKey)) {
+    if (reason.includes(pattern.split(':')[0]) && i18n) {
+      return i18n.t(key)
+    }
+  }
+
+  // Custom rule matches - extract the rule and show user-friendly
+  if (reason.startsWith('Blocked by custom rule:') && i18n) {
+    const rule = reason.replace('Blocked by custom rule:', '').trim().replace(/"/g, '')
+    return `${i18n.t('spam_vote.reasons.custom_blocked')}: ${rule}`
+  }
+  if (reason.startsWith('Allowed by custom rule:') && i18n) {
+    const rule = reason.replace('Allowed by custom rule:', '').trim().replace(/"/g, '')
+    return `${i18n.t('spam_vote.reasons.custom_allowed')}: ${rule}`
+  }
+
+  // If it's already a human-readable LLM reason (longer text), keep it
+  if (reason.length > 50) {
+    return reason
+  }
+
+  // Fallback - return original if not in mapping
+  return reason
+}
+
+/**
  * Call LLM with retry and fallback logic
  * @param {string} systemPrompt - System prompt
  * @param {string} userPrompt - User prompt
@@ -1186,5 +1243,6 @@ module.exports = {
   checkOpenAIModeration,
   getUserProfilePhotoUrl,
   getMessagePhotoUrl,
-  getUserBio
+  getUserBio,
+  humanizeReason
 }

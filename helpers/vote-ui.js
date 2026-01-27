@@ -3,6 +3,7 @@ const { predictCreationDate } = require('./account-age')
 const { sha256, normalizeLight } = require('./spam-signatures')
 const { spamVote: log } = require('./logger')
 const { scheduleDeletion } = require('./message-cleanup')
+const { humanizeReason } = require('./spam-check')
 
 /**
  * Generate hash of message text (for SpamVote reference)
@@ -151,10 +152,10 @@ const buildVoteNotification = (spamVote, i18n) => {
 
   lines.push('')
 
-  // AI reason
+  // AI reason (humanized for users)
   lines.push(i18n.t('spam_vote.ai_reason', {
     confidence: aiConfidence,
-    reason: aiReason || 'spam detected'
+    reason: humanizeReason(aiReason, i18n)
   }))
 
   // Message preview

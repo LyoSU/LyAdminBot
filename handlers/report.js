@@ -1,5 +1,5 @@
 const { userName } = require('../utils')
-const { checkSpam, getSpamSettings } = require('../helpers/spam-check')
+const { checkSpam, getSpamSettings, humanizeReason } = require('../helpers/spam-check')
 const { processSpamAction } = require('../helpers/reputation')
 const { createVoteEvent, getAccountAgeDays } = require('../helpers/vote-ui')
 const { addSignature } = require('../helpers/spam-signatures')
@@ -389,7 +389,7 @@ const handleReport = async (ctx) => {
             reporter: reporterName,
             target: targetName,
             confidence: result.confidence,
-            reason: result.reason || 'Spam detected',
+            reason: humanizeReason(result.reason, ctx.i18n) || ctx.i18n.t('spam_vote.reasons.default'),
             action: actionText
           }),
           { disable_web_page_preview: true }

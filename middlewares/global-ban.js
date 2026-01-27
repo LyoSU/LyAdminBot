@@ -1,4 +1,5 @@
 const { globalBan: log } = require('../helpers/logger')
+const { humanizeReason } = require('../helpers/spam-check')
 
 const GLOBAL_BAN_DURATION_HOURS = 24
 
@@ -53,7 +54,7 @@ const executeBanActions = async (ctx, reason) => {
     await ctx.telegram.kickChatMember(ctx.chat.id, ctx.from.id)
     await ctx.replyWithHTML(ctx.i18n.t('global_ban.kicked', {
       name: ctx.from.first_name,
-      reason: reason
+      reason: humanizeReason(reason, ctx.i18n)
     }))
   } catch (error) {
     log.error({
