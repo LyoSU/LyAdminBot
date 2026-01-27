@@ -1,5 +1,23 @@
 const { bot: botLog } = require('../helpers/logger')
 
+// Fallback messages when i18n is not available
+const FALLBACK_MESSAGES = {
+  as_admin: '✅ Bot added as admin. Anti-spam protection is now active.',
+  need_admin: '⚠️ Bot needs admin rights with "Ban users" permission to work.',
+  promoted: '✅ Admin rights received. Anti-spam protection is now active.',
+  demoted: '⚠️ Admin rights removed. Anti-spam protection is disabled.'
+}
+
+/**
+ * Get i18n message with fallback
+ */
+const getMessage = (ctx, key) => {
+  if (ctx.i18n && typeof ctx.i18n.t === 'function') {
+    return ctx.i18n.t(`bot_added.${key}`)
+  }
+  return FALLBACK_MESSAGES[key] || `[${key}]`
+}
+
 /**
  * Handle bot being added to a group
  * Sends a short welcome message explaining what the bot does
@@ -32,14 +50,14 @@ module.exports = async (ctx) => {
         // Bot added as admin - ready to work
         await ctx.telegram.sendMessage(
           chat.id,
-          ctx.i18n.t('bot_added.as_admin'),
+          getMessage(ctx, 'as_admin'),
           { parse_mode: 'HTML' }
         )
       } else {
         // Bot added but not as admin - needs permissions
         await ctx.telegram.sendMessage(
           chat.id,
-          ctx.i18n.t('bot_added.need_admin'),
+          getMessage(ctx, 'need_admin'),
           { parse_mode: 'HTML' }
         )
       }
@@ -55,7 +73,7 @@ module.exports = async (ctx) => {
     try {
       await ctx.telegram.sendMessage(
         chat.id,
-        ctx.i18n.t('bot_added.promoted'),
+        getMessage(ctx, 'promoted'),
         { parse_mode: 'HTML' }
       )
       botLog.info({ chatId: chat.id }, 'Bot promoted to admin')
@@ -70,7 +88,7 @@ module.exports = async (ctx) => {
     try {
       await ctx.telegram.sendMessage(
         chat.id,
-        ctx.i18n.t('bot_added.demoted'),
+        getMessage(ctx, 'demoted'),
         { parse_mode: 'HTML' }
       )
       botLog.info({ chatId: chat.id }, 'Bot demoted from admin')
