@@ -4,6 +4,7 @@ const { saveSpamVector } = require('../helpers/spam-vectors')
 const { generateEmbedding, extractFeatures } = require('../helpers/message-embeddings')
 const { processSpamAction } = require('../helpers/reputation')
 const { createVoteEvent, getAccountAgeDays } = require('../helpers/vote-ui')
+const { addSignature } = require('../helpers/spam-signatures')
 const { spam: spamLog, spamAction, reputation: repLog, notification: notifyLog } = require('../helpers/logger')
 
 /**
@@ -474,8 +475,11 @@ module.exports = async (ctx) => {
           }
         }
 
-        // Create vote event for community moderation
-        if (muteSuccess || deleteSuccess) {
+        // Create vote event for community moderation (only for uncertain cases)
+        // High confidence (>=90%) = no voting needed, instant action
+        const needsVoting = result.confidence < 90
+
+        if ((muteSuccess || deleteSuccess) && needsVoting) {
           try {
             const voteEvent = await createVoteEvent(ctx, {
               result,
@@ -500,7 +504,29 @@ module.exports = async (ctx) => {
           } catch (voteError) {
             notifyLog.error({ err: voteError.message }, 'Failed to create vote event')
           }
-        } else {
+        } else if ((muteSuccess || deleteSuccess) && !needsVoting) {
+          // High confidence - just show brief notification, no voting
+          const notificationMsg = await ctx.replyWithHTML(
+            ctx.i18n.t('spam.notification.full', { name: userName(senderInfo, true), reason: result.reason }),
+            { disable_web_page_preview: true }
+          ).catch(e => notifyLog.error({ err: e.message }, 'Failed to send high-confidence notification'))
+
+          // Auto-delete after 30 seconds
+          if (notificationMsg) {
+            setTimeout(async () => {
+              try { await ctx.telegram.deleteMessage(ctx.chat.id, notificationMsg.message_id) } catch {}
+            }, 30000)
+          }
+
+          // Add to signature database for high-confidence cases
+          if (ctx.db) {
+            addSignature(messageText, ctx.db, ctx.chat.id).catch(e =>
+              notifyLog.error({ err: e.message }, 'Failed to add signature for high-confidence spam')
+            )
+          }
+
+          notifyLog.info({ confidence: result.confidence, source: result.source }, 'High confidence spam - no voting')
+        } else if (!muteSuccess && !deleteSuccess) {
           // Bot detected spam but has no permissions to act - show simple notification
           const notificationParams = { name: userName(senderInfo, true), reason: result.reason }
           const statusMessage = ctx.i18n.t('spam.notification.no_permissions', notificationParams)
