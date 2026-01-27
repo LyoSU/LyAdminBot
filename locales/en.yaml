@@ -286,7 +286,7 @@ cas:
     This account is listed in <b>CAS</b> — a global database of Telegram spammers. Users get flagged for mass advertising, scams, or fraud.
 
     <a href="${link}">Details</a> · appeals accepted there.
-
+  no_permissions: "⚠️ ${name} is in CAS spammer database\n\n💡 Give bot admin rights to handle it"
 spam:
   banned: "🚫 ${name} permabanned\n<code>${reason}</code>"
   muted: "🔇 ${name} muted for 24h\n<code>${reason}</code>"

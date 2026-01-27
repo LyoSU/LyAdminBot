@@ -44,50 +44,73 @@ module.exports = async (ctx) => {
         const casData = formatCasData(body)
         casLog.warn({ userId, ...casData }, 'User banned by CAS system')
 
-        // Check bot permissions before banning
+        // Check bot permissions before taking action
         ctx.telegram.getChatMember(ctx.chat.id, ctx.botInfo.id)
-          .then(botMember => {
-            if (botMember.can_restrict_members) {
+          .then(async (botMember) => {
+            const canRestrict = botMember.can_restrict_members
+            const canDelete = botMember.can_delete_messages
+
+            if (canRestrict) {
+              // Has permissions - kick user, send ban notification, delete message
               ctx.telegram.kickChatMember(ctx.chat.id, userId)
                 .catch(error => casLog.error({ err: error.message, userId }, 'Failed to kick CAS banned user'))
+
+              const notificationMsg = await ctx.replyWithHTML(ctx.i18n.t('cas.banned', {
+                name: userName(ctx.from, true),
+                link: `https://cas.chat/query?u=${userId}`
+              }), {
+                reply_to_message_id: ctx.message.message_id,
+                allow_sending_without_reply: true,
+                disable_web_page_preview: true
+              }).catch(error => {
+                casLog.error({ err: error.message }, 'Failed to send notification')
+                return null
+              })
+
+              // Schedule auto-delete after 25 seconds
+              if (notificationMsg && ctx.db) {
+                scheduleDeletion(ctx.db, {
+                  chatId: ctx.chat.id,
+                  messageId: notificationMsg.message_id,
+                  delayMs: 25 * 1000,
+                  source: 'cas_ban',
+                  reference: { type: 'user', id: String(userId) }
+                }, ctx.telegram)
+              }
+
+              // Delete the original message
+              if (canDelete) {
+                ctx.deleteMessage().catch(error => {
+                  casLog.error({ err: error.message }, 'Failed to delete original message')
+                })
+              }
             } else {
-              casLog.error({ chatId: ctx.chat.id }, 'Bot lacks permission to restrict members')
+              // No permissions - send warning notification
+              casLog.warn({ chatId: ctx.chat.id }, 'Bot lacks permission to restrict members')
+
+              const notificationMsg = await ctx.replyWithHTML(ctx.i18n.t('cas.no_permissions', {
+                name: userName(ctx.from, true)
+              }), {
+                reply_to_message_id: ctx.message.message_id,
+                allow_sending_without_reply: true
+              }).catch(error => {
+                casLog.error({ err: error.message }, 'Failed to send no-permission notification')
+                return null
+              })
+
+              // Schedule auto-delete after 60 seconds
+              if (notificationMsg && ctx.db) {
+                scheduleDeletion(ctx.db, {
+                  chatId: ctx.chat.id,
+                  messageId: notificationMsg.message_id,
+                  delayMs: 60 * 1000,
+                  source: 'cas_no_permissions',
+                  reference: { type: 'user', id: String(userId) }
+                }, ctx.telegram)
+              }
             }
           })
           .catch(error => casLog.error({ err: error.message }, 'Failed to check bot permissions'))
-
-        // Send notification message with error handling
-        ctx.replyWithHTML(ctx.i18n.t('cas.banned', {
-          name: userName(ctx.from, true),
-          link: `https://cas.chat/query?u=${userId}`
-        }), {
-          reply_to_message_id: ctx.message.message_id,
-          allow_sending_without_reply: true,
-          disable_web_page_preview: true
-        }).then(notificationMsg => {
-          // Schedule auto-delete after 25 seconds (persistent)
-          if (notificationMsg && ctx.db) {
-            scheduleDeletion(ctx.db, {
-              chatId: ctx.chat.id,
-              messageId: notificationMsg.message_id,
-              delayMs: 25 * 1000,
-              source: 'cas_ban',
-              reference: { type: 'user', id: String(userId) }
-            }, ctx.telegram)
-            casLog.debug('Scheduled notification deletion')
-          }
-        }).catch(error => {
-          if (error.code === 403 && error.description.includes('bot is not a member')) {
-            casLog.error({ chatId: ctx.chat.id }, 'Bot was removed from chat')
-          } else {
-            casLog.error({ err: error.message }, 'Failed to send notification')
-          }
-        })
-
-        // Delete the original message with error handling
-        ctx.deleteMessage().catch(error => {
-          casLog.error({ err: error.message }, 'Failed to delete original message')
-        })
 
         // Add CAS flagged messages to our signature database (learning from CAS)
         if (ctx.db && body.result && body.result.messages && body.result.messages.length > 0) {
