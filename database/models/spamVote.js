@@ -56,6 +56,7 @@ const spamVoteSchema = mongoose.Schema({
   actionTaken: {
     muted: { type: Boolean, default: false },
     deleted: { type: Boolean, default: false },
+    banned: { type: Boolean, default: false }, // Full ban with revoke_messages
     muteDuration: Number // seconds
   },
 

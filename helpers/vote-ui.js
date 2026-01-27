@@ -114,13 +114,15 @@ const buildVoteNotification = (spamVote, i18n) => {
     messagePreview,
     expiresAt,
     voters,
-    voteTally
+    voteTally,
+    actionTaken
   } = spamVote
 
   const lines = []
 
-  // Title
-  lines.push(i18n.t('spam_vote.title_blocked'))
+  // Title - different for ban vs mute
+  const titleKey = actionTaken?.banned ? 'spam_vote.title_banned' : 'spam_vote.title_blocked'
+  lines.push(i18n.t(titleKey))
   lines.push('')
 
   // User info
@@ -392,6 +394,7 @@ const createVoteEvent = async (ctx, options) => {
     actionTaken: {
       muted: actionTaken.muteSuccess || false,
       deleted: actionTaken.deleteSuccess || false,
+      banned: actionTaken.fullBanApplied || false,
       muteDuration: actionTaken.muteDuration
     }
   })

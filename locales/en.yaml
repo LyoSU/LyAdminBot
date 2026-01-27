@@ -76,6 +76,13 @@ cmd:
       ${top}
     error:
       empty: No one got 🍌 here yet
+    titles:
+      1: "👑"
+      2: "🥈"
+      3: "🥉"
+    crown: "👑 Banana King"
+    dominator: "🏆 Mute Dominator"
+    veteran: "🎖 Silence Veteran"
   extras:
     list: |
       📝 <b>Extra commands:</b>
@@ -94,6 +101,21 @@ cmd:
         ${extra}
       delay: |
         ❗️ <b>Bot was offline:</b> ${delayTime}
+      easter:
+        fast: |
+          ⚡ Lightning pong!
+          <b>Server:</b> ${sms} ms
+          <b>Telegram:</b> ${tms} ms
+          <b>Uptime:</b> ${workTime}
+
+          ${extra}
+        slow: |
+          🐌 Pong... finally
+          <b>Server:</b> ${sms} ms
+          <b>Telegram:</b> ${tms} ms
+          <b>Uptime:</b> ${workTime}
+
+          ${extra}
   welcome:
     disable: Welcome messages off 👋
     enable: Welcome messages on 👋
@@ -211,6 +233,17 @@ banan:
   error_admin: "❌ Can't mute admins 😏"
   error_left: "❌ Already left"
   error_no_rights: "❌ Give me ban permissions"
+  easter:
+    nice: "${name} gets 🍌\n<b>For:</b> ${duration}\n\n<i>nice</i>"
+    blaze: "${name} gets 🍌🔥\n<b>For:</b> ${duration}\n\n<i>blaze it</i>"
+    huge: "${name} gets MEGA BANANA 🍌🍌🍌\n<b>For:</b> ${duration}"
+    self: "${name} shows 🍌 to themselves\n<i>respect the decision</i>"
+    self_again: "${name} shows 🍌 to themselves again\n<i>is this a tradition?</i>"
+    self_legend: "${name} shows 🍌 to themselves\n<i>self-moderation legend</i>"
+    first_after_many: "Historic moment! ${name} gets their first 🍌\n<b>For:</b> ${duration}"
+    round_number: "${name} gets milestone 🍌 #${count}\n<b>For:</b> ${duration}"
+    speed_ban: "${name} gets 🍌 speedrun\n<b>For:</b> ${duration}\n<i>that was fast</i>"
+    minute_exact: "${name} gets 🍌 for exactly one minute\n<i>precision is key</i>"
 kick:
   suc: ${name} gets kicked 👢
   who: Who to kick? 🤔
@@ -218,6 +251,9 @@ kick:
   error_admin: "❌ Can't kick admins"
   error_left: "❌ Already left"
   error_no_rights: "❌ Give me ban permissions"
+  easter:
+    self: "${name} kicked themselves 👢\n<i>respect</i>"
+    admin_self: "Admin ${name} kicked themselves 👢\n<i>plot twist</i>"
 del:
   error: "❌ Can't delete"
   error_no_rights: "❌ Give me delete permissions"
@@ -271,6 +307,7 @@ global_ban:
 
 spam_vote:
   title_blocked: "❌ <b>Blocked</b>"
+  title_banned: "⛔ <b>Banned permanently</b>"
   title_spam: "❌ <b>Spam confirmed</b>"
   title_clean: "↩️ <b>Unblocked</b>"
   user_info: "👤 ${name}"

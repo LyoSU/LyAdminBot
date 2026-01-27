@@ -9,6 +9,67 @@ const { spam: spamLog, spamAction, reputation: repLog, notification: notifyLog }
 const { scheduleDeletion } = require('../helpers/message-cleanup')
 
 /**
+ * Determine if user should receive full ban (vs temporary mute)
+ *
+ * Full ban criteria (SAFE - only community-verified):
+ * 1. Confirmed signature match (exact/normalized) - pattern verified by 3+ groups
+ * 2. Community-confirmed repeat spammer - 2+ spam verdicts decided BY VOTES
+ * 3. Restricted reputation status - already heavily penalized (score < 20)
+ *
+ * NOT triggers for ban (unsafe):
+ * - High AI confidence alone
+ * - spamDetections counter (includes unverified)
+ * - Pending votes or timeout verdicts
+ *
+ * @returns {Object} { shouldBan: boolean, reason: string }
+ */
+const shouldFullBan = async (ctx, result, userId) => {
+  // 1. Confirmed signature match = instant ban
+  // These patterns were verified by 3+ different groups
+  if (result.source && (
+    result.source === 'spam_signature_exact' ||
+    result.source === 'spam_signature_normalized'
+  )) {
+    return {
+      shouldBan: true,
+      reason: 'confirmed_signature'
+    }
+  }
+
+  // 2. Community-confirmed repeat spammer
+  // Only count verdicts decided BY VOTES (not timeout, not pending)
+  if (ctx.db?.SpamVote) {
+    try {
+      const confirmedSpamVerdicts = await ctx.db.SpamVote.countDocuments({
+        bannedUserId: userId,
+        result: 'spam',
+        resolvedBy: 'votes' // Community decided, not timeout
+      })
+
+      if (confirmedSpamVerdicts >= 2) {
+        return {
+          shouldBan: true,
+          reason: 'community_confirmed_spammer'
+        }
+      }
+    } catch (err) {
+      spamAction.warn({ err: err.message }, 'Failed to check spam verdicts')
+    }
+  }
+
+  // 3. Already restricted by reputation system (score < 20)
+  const reputation = ctx.session?.userInfo?.reputation
+  if (reputation?.status === 'restricted') {
+    return {
+      shouldBan: true,
+      reason: 'restricted_reputation'
+    }
+  }
+
+  return { shouldBan: false, reason: null }
+}
+
+/**
  * Determine appropriate action based on spam confidence and user profile
  */
 const determineAction = (result, context, threshold) => {
@@ -385,6 +446,7 @@ module.exports = async (ctx) => {
         }
 
         // Handle mute/restrict action
+        let fullBanApplied = false
         if (action.action === 'mute_and_delete' || action.action === 'warn_and_restrict') {
           if (canRestrictMembers) {
             try {
@@ -395,18 +457,37 @@ module.exports = async (ctx) => {
                   sender_chat_id: senderId
                 })
                 muteSuccess = true
+                fullBanApplied = true
                 spamAction.info({ channelTitle: senderInfo.title }, 'Banned channel')
               } else {
-                // For users, use restrictChatMember
-                await ctx.telegram.restrictChatMember(ctx.chat.id, senderId, {
-                  can_send_messages: false,
-                  can_send_media_messages: false,
-                  can_send_other_messages: false,
-                  can_add_web_page_previews: false,
-                  until_date: Math.floor(Date.now() / 1000) + muteDuration
-                })
-                muteSuccess = true
-                spamAction.info({ userName: userDisplayName, muteDuration }, 'Muted user')
+                // Check if user deserves full ban (vs temporary mute)
+                const banDecision = await shouldFullBan(ctx, result, senderId)
+
+                if (banDecision.shouldBan) {
+                  // Full ban with message revocation
+                  await ctx.telegram.callApi('banChatMember', {
+                    chat_id: ctx.chat.id,
+                    user_id: senderId,
+                    revoke_messages: true
+                  })
+                  muteSuccess = true
+                  fullBanApplied = true
+                  spamAction.warn({
+                    userName: userDisplayName,
+                    reason: banDecision.reason
+                  }, 'Full ban applied (messages revoked)')
+                } else {
+                  // Temporary mute
+                  await ctx.telegram.restrictChatMember(ctx.chat.id, senderId, {
+                    can_send_messages: false,
+                    can_send_media_messages: false,
+                    can_send_other_messages: false,
+                    can_add_web_page_previews: false,
+                    until_date: Math.floor(Date.now() / 1000) + muteDuration
+                  })
+                  muteSuccess = true
+                  spamAction.info({ userName: userDisplayName, muteDuration }, 'Muted user')
+                }
               }
             } catch (error) {
               spamAction.error({ err: error.message, userName: userDisplayName, action: isChannelPost ? 'ban' : 'mute' }, 'Action failed')
@@ -500,7 +581,8 @@ module.exports = async (ctx) => {
               actionTaken: {
                 muteSuccess,
                 deleteSuccess,
-                muteDuration
+                muteDuration,
+                fullBanApplied
               },
               messageText,
               userContext: {
