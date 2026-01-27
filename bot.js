@@ -198,7 +198,7 @@ const init = () => {
 
     // Start spam vote expiration handler (check every minute)
     setInterval(() => {
-      processExpiredVotes(db, bot.telegram)
+      processExpiredVotes(db, bot.telegram, i18n)
     }, 60 * 1000)
     botLog.debug('Started spam vote expiration handler')
   })

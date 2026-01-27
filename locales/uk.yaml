@@ -263,7 +263,7 @@ spam_vote:
   in_groups: "в ${count} групах"
   signals: "⚠️ ${signals}"
   ai_reason: "🤖 ${confidence}% — ${reason}"
-  message_preview: "📝 \"${text}\""
+  message_preview: "📝 <code>${text}</code>"
   vote_time: "⏱ ${time}"
   btn_spam: "🚫 Спам"
   btn_clean: "✓ Норм"

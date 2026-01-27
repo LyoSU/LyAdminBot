@@ -302,11 +302,16 @@ const handleSpamVoteCallback = async (ctx) => {
  * Process expired vote events
  * Called periodically to handle votes that timed out
  */
-const processExpiredVotes = async (db, telegram) => {
+const processExpiredVotes = async (db, telegram, i18n) => {
   try {
     const expiredVotes = await db.SpamVote.findExpired(50)
 
     for (const vote of expiredVotes) {
+      // Get group locale for i18n
+      const group = await db.Group.findOne({ group_id: vote.chatId })
+      const locale = group?.locale || 'en'
+      const i18nCtx = i18n.createContext(locale, {})
+
       // If no votes at all, default to spam (keep the ban)
       if (vote.voteTally.spamWeighted + vote.voteTally.cleanWeighted === 0) {
         vote.result = 'spam'
@@ -353,13 +358,7 @@ const processExpiredVotes = async (db, telegram) => {
         // Show timeout result and delete after delay
         if (vote.notificationMessageId && vote.notificationChatId) {
           try {
-            // Get group locale
-            const group = await db.Group.findOne({ group_id: vote.chatId })
-            const isUkrainian = group?.locale === 'uk'
-
-            const timeoutText = isUkrainian
-              ? `⏱ <b>Час вийшов</b>\n\n👤 ${vote.bannedUserName}\n🔒 Спам підтверджено`
-              : `⏱ <b>Time's up</b>\n\n👤 ${vote.bannedUserName}\n🔒 Spam confirmed`
+            const timeoutText = i18nCtx.t('spam_vote.timeout_confirmed', { name: vote.bannedUserName })
 
             await telegram.editMessageText(
               vote.notificationChatId,
@@ -387,7 +386,8 @@ const processExpiredVotes = async (db, telegram) => {
         // Create a minimal context for processVoteResult
         const ctx = {
           db,
-          telegram
+          telegram,
+          i18n: i18nCtx
         }
         await processVoteResult(ctx, vote)
         vote.resolvedBy = 'timeout'

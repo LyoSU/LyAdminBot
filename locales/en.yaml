@@ -280,7 +280,7 @@ spam_vote:
   in_groups: "in ${count} groups"
   signals: "⚠️ ${signals}"
   ai_reason: "🤖 ${confidence}% — ${reason}"
-  message_preview: "📝 \"${text}\""
+  message_preview: "📝 <code>${text}</code>"
   vote_time: "⏱ ${time}"
   btn_spam: "🚫 Spam"
   btn_clean: "✓ Clean"
