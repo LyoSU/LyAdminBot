@@ -196,9 +196,25 @@ module.exports = async (ctx) => {
     spamLog.debug({ repStatus, repScore, checkLimit: checkLimit === Infinity ? 'unlimited' : checkLimit, messageCount }, 'Extended check for user')
   }
 
-  // Check if we have member data OR if this is a channel post (always check channels)
+  // Check spam for:
+  // 1. Users with member data (tracked group members)
+  // 2. Channel posts (always check)
+  // 3. Users WITHOUT member data (commenters, non-members) - important for discussion groups!
   const hasMemberData = ctx.group && ctx.group.members && ctx.group.members[senderId] && ctx.group.members[senderId].stats
-  if ((hasMemberData || isChannelPost) && shouldCheckSpam) {
+  const isNonMember = !hasMemberData && !isChannelPost
+
+  // Log non-member/commenter check
+  if (isNonMember && shouldCheckSpam) {
+    const isTopicMessage = ctx.message && ctx.message.is_topic_message
+    spamLog.debug({
+      userId: senderId,
+      userName: userName(senderInfo),
+      isTopicMessage: !!isTopicMessage
+    }, 'Checking non-member/commenter')
+  }
+
+  // Non-members (commenters) should always be checked - they're unknown users
+  if ((hasMemberData || isChannelPost || isNonMember) && shouldCheckSpam) {
     // Skip if user is an administrator (except in test mode)
     // Note: Skip admin check for channel posts (senderId is negative channel ID)
     if (!isTestMode && !isChannelPost) {
@@ -245,6 +261,7 @@ module.exports = async (ctx) => {
       }, 'Checking message')
 
       // Build context for spam check
+      const isTopicMessage = ctx.message && ctx.message.is_topic_message
       const context = {
         userId: senderId,
         groupName: ctx.chat.title,
@@ -258,7 +275,10 @@ module.exports = async (ctx) => {
         links: extractLinks(messageText),
         isTestMode: isTestMode,
         isChannelPost: isChannelPost, // Channel posts are higher risk - no user history
-        channelTitle: isChannelPost ? senderInfo.title : null
+        channelTitle: isChannelPost ? senderInfo.title : null,
+        // Non-member context (commenters in discussion groups)
+        isNonMember: isNonMember,
+        isTopicMessage: !!isTopicMessage
       }
 
       let result
