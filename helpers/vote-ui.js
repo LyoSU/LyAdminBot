@@ -440,7 +440,6 @@ const createVoteEvent = async (ctx, options) => {
   // Create vote document
   const spamVoteDoc = new ctx.db.SpamVote({
     chatId: ctx.chat.id,
-    chatTitle: ctx.chat.title,
     bannedUserId,
     bannedUserName,
     bannedUserUsername,
@@ -456,7 +455,6 @@ const createVoteEvent = async (ctx, options) => {
     messagePreview: messageText ? messageText.substring(0, 200) : '',
     aiConfidence: result.confidence,
     aiReason: result.reason,
-    aiSource: result.source,
     forwardOrigin: forwardOrigin || null, // { type, hash, identifier } for ForwardBlacklist
     actionTaken: {
       muted: actionTaken.muteSuccess || false,

@@ -28,7 +28,6 @@ const spamVoteSchema = mongoose.Schema({
 
   // Group context
   chatId: { type: Number, required: true, index: true },
-  chatTitle: String,
 
   // Banned user info
   bannedUserId: { type: Number, required: true, index: true },
@@ -50,7 +49,6 @@ const spamVoteSchema = mongoose.Schema({
   messagePreview: { type: String, maxLength: 200 },
   aiConfidence: Number,
   aiReason: String,
-  aiSource: String, // 'openrouter_llm', 'qdrant_db', etc.
 
   // Forward origin info (for ForwardBlacklist tracking)
   forwardOrigin: {
