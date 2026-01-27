@@ -19,7 +19,7 @@ const scheduledDeletionSchema = mongoose.Schema({
   messageId: { type: Number, required: true },
 
   // When to delete
-  deleteAt: { type: Date, required: true, index: true },
+  deleteAt: { type: Date, required: true },  // indexed below (TTL)
 
   // Source for logging/debugging
   source: {
