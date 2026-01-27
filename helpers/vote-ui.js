@@ -205,6 +205,57 @@ const buildVoteNotification = (spamVote, i18n) => {
 }
 
 /**
+ * Get easter egg for vote result based on voting pattern
+ */
+const getVoteEasterEgg = (spamVote, i18n) => {
+  const { voteTally, voters, createdAt, resolvedAt } = spamVote
+  const totalVotes = voters.length
+
+  // No votes = no easter egg
+  if (totalVotes === 0) return null
+
+  // Unanimous decision (all votes same direction)
+  const spamVotes = voters.filter(v => v.vote === 'spam').length
+  const cleanVotes = voters.filter(v => v.vote === 'clean').length
+
+  if (totalVotes >= 2 && (spamVotes === 0 || cleanVotes === 0)) {
+    const key = spamVotes > 0 ? 'spam_vote.result_unanimous_spam' : 'spam_vote.result_unanimous_clean'
+    const text = i18n.t(key)
+    if (text !== key) return text
+  }
+
+  // Close call (difference of 1 weighted vote)
+  const diff = Math.abs(voteTally.spamWeighted - voteTally.cleanWeighted)
+  if (diff <= 1 && totalVotes >= 2) {
+    const text = i18n.t('spam_vote.result_close_call')
+    if (text !== 'spam_vote.result_close_call') return text
+  }
+
+  // Fast decision (< 30 seconds)
+  if (resolvedAt && createdAt) {
+    const timeDiff = new Date(resolvedAt) - new Date(createdAt)
+    if (timeDiff < 30000 && totalVotes >= 1) {
+      const text = i18n.t('spam_vote.result_fast')
+      if (text !== 'spam_vote.result_fast') return text
+    }
+  }
+
+  // Solo hero (single voter decided)
+  if (totalVotes === 1) {
+    const text = i18n.t('spam_vote.result_solo_hero')
+    if (text !== 'spam_vote.result_solo_hero') return text
+  }
+
+  // Landslide (3x difference)
+  if (diff >= 6 && totalVotes >= 3) {
+    const text = i18n.t('spam_vote.result_landslide')
+    if (text !== 'spam_vote.result_landslide') return text
+  }
+
+  return null
+}
+
+/**
  * Build result notification (spam confirmed)
  */
 const buildSpamResultNotification = (spamVote, i18n, reputationChange = null) => {
@@ -219,6 +270,13 @@ const buildSpamResultNotification = (spamVote, i18n, reputationChange = null) =>
 
   // Title
   lines.push(i18n.t('spam_vote.title_spam'))
+
+  // Easter egg
+  const easterEgg = getVoteEasterEgg(spamVote, i18n)
+  if (easterEgg) {
+    lines.push(easterEgg)
+  }
+
   lines.push('')
 
   // User info
@@ -289,6 +347,13 @@ const buildCleanResultNotification = (spamVote, i18n, reputationChange = null) =
 
   // Title
   lines.push(i18n.t('spam_vote.title_clean'))
+
+  // Easter egg
+  const easterEgg = getVoteEasterEgg(spamVote, i18n)
+  if (easterEgg) {
+    lines.push(easterEgg)
+  }
+
   lines.push('')
 
   // User info

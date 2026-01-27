@@ -330,6 +330,13 @@ spam_vote:
   added_to_signatures: "🔒 Added to spam database"
   status_trusted: "✨ Now trusted"
   timeout_confirmed: "⏱ <b>Time's up</b>\n\n👤 ${name}\n🔒 Spam confirmed"
+  # Easter eggs for vote results
+  result_unanimous_spam: "🎯 Unanimous — spam"
+  result_unanimous_clean: "🎯 Unanimous — not spam"
+  result_close_call: "😬 Close call"
+  result_landslide: "🏆 Landslide victory"
+  result_fast: "⚡ Lightning verdict"
+  result_solo_hero: "🦸 One vote decided it all"
   # User-friendly spam reasons (replace technical terms)
   reasons:
     vector_spam: "Similar to known spam"

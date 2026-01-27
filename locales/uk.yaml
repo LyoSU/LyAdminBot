@@ -318,6 +318,13 @@ spam_vote:
   added_to_signatures: "🔒 Додано в базу спаму"
   status_trusted: "✨ Тепер в довірених"
   timeout_confirmed: "⏱ <b>Час вийшов</b>\n\n👤 ${name}\n🔒 Спам підтверджено"
+  # Easter eggs for vote results
+  result_unanimous_spam: "🎯 Одноголосно — спам"
+  result_unanimous_clean: "🎯 Одноголосно — не спам"
+  result_close_call: "😬 На тоненького"
+  result_landslide: "🏆 Впевнена перемога"
+  result_fast: "⚡ Блискавичний вердикт"
+  result_solo_hero: "🦸 Один голос вирішив все"
   # User-friendly spam reasons (replace technical terms)
   reasons:
     vector_spam: "Схоже на відомий спам"

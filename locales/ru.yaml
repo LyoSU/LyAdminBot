@@ -288,6 +288,15 @@ only_admin: "🔒 Только для админов группы"
 global_ban:
   kicked: "🚫 ${name} исключён — глобальный бан.\n<code>${reason}</code>"
 
+spam_vote:
+  # Easter eggs for vote results
+  result_unanimous_spam: "🎯 Единогласно — спам"
+  result_unanimous_clean: "🎯 Единогласно — не спам"
+  result_close_call: "😬 На грани"
+  result_landslide: "🏆 Уверенная победа"
+  result_fast: "⚡ Молниеносный вердикт"
+  result_solo_hero: "🦸 Один голос решил всё"
+
 report:
   only_group: "Только в группах"
   need_reply: "↩️ Ответь на сообщение"
