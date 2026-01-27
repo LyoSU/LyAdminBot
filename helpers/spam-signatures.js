@@ -295,41 +295,79 @@ const checkSignatures = async (text, db, options = {}) => {
 
 /**
  * Add or update spam signature in database
- * Uses atomic findOneAndUpdate to prevent race conditions
+ *
+ * Strategy: Query by exactHash only (matches unique index) for atomic upsert.
+ * Then check if normalizedHash match exists and merge if needed.
  */
 const addSignature = async (text, db, chatId, options = {}) => {
   const signatures = generateSignatures(text)
   if (!signatures) return null
 
-  // Atomic upsert - finds by exactHash OR normalizedHash, updates or creates
-  const result = await db.SpamSignature.findOneAndUpdate(
-    {
-      $or: [
-        { exactHash: signatures.exactHash },
-        { normalizedHash: signatures.normalizedHash }
-      ]
-    },
+  // Step 1: Check if normalizedHash already exists (template match)
+  // This handles case where same spam template has different exact text
+  const existingByNormalized = await db.SpamSignature.findOneAndUpdate(
+    { normalizedHash: signatures.normalizedHash },
     {
       $inc: { confirmations: 1 },
       $addToSet: { uniqueGroups: chatId },
       $set: {
         lastSeenAt: new Date(),
-        // Fill in missing hashes
-        normalizedHash: signatures.normalizedHash,
         fuzzyHash: signatures.fuzzyHash,
         structureHash: signatures.structureHash
-      },
-      $setOnInsert: {
-        exactHash: signatures.exactHash,
-        sampleText: text.substring(0, 200),
-        status: 'candidate',
-        firstSeenAt: new Date()
       }
     },
-    { upsert: true, new: true }
+    { new: true }
   )
 
-  // Check if should promote to confirmed (3+ unique groups)
+  if (existingByNormalized) {
+    // Found by template - promote if enough groups
+    if (existingByNormalized.uniqueGroups.length >= 3 && existingByNormalized.status === 'candidate') {
+      existingByNormalized.status = 'confirmed'
+      await existingByNormalized.save()
+    }
+    return existingByNormalized
+  }
+
+  // Step 2: No template match - upsert by exactHash (unique index ensures no duplicates)
+  let result
+  try {
+    result = await db.SpamSignature.findOneAndUpdate(
+      { exactHash: signatures.exactHash },
+      {
+        $inc: { confirmations: 1 },
+        $addToSet: { uniqueGroups: chatId },
+        $set: {
+          lastSeenAt: new Date(),
+          normalizedHash: signatures.normalizedHash,
+          fuzzyHash: signatures.fuzzyHash,
+          structureHash: signatures.structureHash
+        },
+        $setOnInsert: {
+          sampleText: text.substring(0, 200),
+          status: 'candidate',
+          firstSeenAt: new Date()
+        }
+      },
+      { upsert: true, new: true }
+    )
+  } catch (err) {
+    if (err.code === 11000) {
+      // Race condition: another request inserted first, just update
+      result = await db.SpamSignature.findOneAndUpdate(
+        { exactHash: signatures.exactHash },
+        {
+          $inc: { confirmations: 1 },
+          $addToSet: { uniqueGroups: chatId },
+          $set: { lastSeenAt: new Date() }
+        },
+        { new: true }
+      )
+    } else {
+      throw err
+    }
+  }
+
+  // Promote if enough groups
   if (result.uniqueGroups.length >= 3 && result.status === 'candidate') {
     result.status = 'confirmed'
     await result.save()
