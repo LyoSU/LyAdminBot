@@ -329,8 +329,8 @@ const addSignature = async (text, db, chatId, options = {}) => {
     { upsert: true, new: true }
   )
 
-  // Check if should promote to confirmed (5+ unique groups)
-  if (result.uniqueGroups.length >= 5 && result.status === 'candidate') {
+  // Check if should promote to confirmed (3+ unique groups)
+  if (result.uniqueGroups.length >= 3 && result.status === 'candidate') {
     result.status = 'confirmed'
     await result.save()
   }

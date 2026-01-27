@@ -5,7 +5,7 @@ const mongoose = require('mongoose')
  *
  * Flow:
  * 1. New spam detected → hash created → status: 'candidate'
- * 2. Same hash seen in 5+ unique groups → status: 'confirmed'
+ * 2. Same hash seen in 3+ unique groups → status: 'confirmed'
  * 3. Confirmed match → threshold -= 15 (instant action)
  *
  * TTL: candidates 30d, confirmed 90d (auto-cleanup)
