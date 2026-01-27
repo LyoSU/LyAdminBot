@@ -889,26 +889,30 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
       // Combine message text + user bio for text moderation
       const textToModerate = [messageText, userBio].filter(Boolean).join('\n\n')
 
-      const moderationPromises = [
-        checkOpenAIModeration(textToModerate, null, 'text+bio')
-      ]
+      const moderationPromises = []
+      const moderationSources = []
+
+      // Always check text + bio
+      moderationPromises.push(checkOpenAIModeration(textToModerate, null, 'text+bio'))
+      moderationSources.push('openai_moderation_text')
 
       if (messagePhotoUrl) {
         moderationPromises.push(checkOpenAIModeration(messageText, messagePhotoUrl, 'message photo'))
+        moderationSources.push('openai_moderation_photo')
       }
 
       if (userAvatarUrl) {
         moderationPromises.push(checkOpenAIModeration(null, userAvatarUrl, 'user avatar'))
+        moderationSources.push('openai_moderation_avatar')
       }
 
       const moderationResults = await Promise.all(moderationPromises)
 
       // Check results - first flagged result wins
-      const sources = ['openai_moderation_text', 'openai_moderation_photo', 'openai_moderation_avatar']
       for (let i = 0; i < moderationResults.length; i++) {
         const result = moderationResults[i]
         if (result && result.flagged) {
-          const source = sources[i] || 'openai_moderation'
+          const source = moderationSources[i] || 'openai_moderation'
           spamLog.warn({ reason: result.reason, source }, 'Content flagged by OpenAI moderation')
           return {
             isSpam: true,
