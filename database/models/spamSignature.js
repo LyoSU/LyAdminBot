@@ -12,10 +12,11 @@ const mongoose = require('mongoose')
  */
 const spamSignatureSchema = mongoose.Schema({
   // Multi-layer hashing for different match types
-  exactHash: { type: String, sparse: true },       // Exact text match (indexed below)
-  normalizedHash: { type: String, sparse: true },  // Template match (indexed below)
-  fuzzyHash: { type: String, sparse: true },       // SimHash for similarity (indexed below)
-  structureHash: { type: String, sparse: true },   // Message structure pattern (indexed below)
+  // Note: indexes defined at bottom with sparse option
+  exactHash: { type: String },       // Exact text match
+  normalizedHash: { type: String },  // Template match
+  fuzzyHash: { type: String },       // SimHash for similarity
+  structureHash: { type: String },   // Message structure pattern
 
   // Confirmation status
   status: {
