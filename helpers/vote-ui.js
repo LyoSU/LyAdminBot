@@ -417,7 +417,8 @@ const createVoteEvent = async (ctx, options) => {
     result,
     actionTaken,
     messageText,
-    userContext
+    userContext,
+    forwardOrigin // { type, hash, identifier } from getForwardHash
   } = options
 
   // Get sender info (could be user or channel)
@@ -456,6 +457,7 @@ const createVoteEvent = async (ctx, options) => {
     aiConfidence: result.confidence,
     aiReason: result.reason,
     aiSource: result.source,
+    forwardOrigin: forwardOrigin || null, // { type, hash, identifier } for ForwardBlacklist
     actionTaken: {
       muted: actionTaken.muteSuccess || false,
       deleted: actionTaken.deleteSuccess || false,

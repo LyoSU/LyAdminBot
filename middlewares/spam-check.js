@@ -5,6 +5,7 @@ const { generateEmbedding, extractFeatures } = require('../helpers/message-embed
 const { processSpamAction } = require('../helpers/reputation')
 const { createVoteEvent, getAccountAgeDays } = require('../helpers/vote-ui')
 const { addSignature } = require('../helpers/spam-signatures')
+const { getForwardHash } = require('../helpers/velocity')
 const { spam: spamLog, spamAction, reputation: repLog, notification: notifyLog } = require('../helpers/logger')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
 
@@ -576,6 +577,10 @@ module.exports = async (ctx) => {
 
         if ((muteSuccess || deleteSuccess) && needsVoting) {
           try {
+            // Extract forward origin info for ForwardBlacklist tracking
+            const msgForwardOrigin = message && message.forward_origin
+            const forwardInfo = msgForwardOrigin ? getForwardHash(msgForwardOrigin) : null
+
             const voteEvent = await createVoteEvent(ctx, {
               result,
               actionTaken: {
@@ -585,6 +590,7 @@ module.exports = async (ctx) => {
                 fullBanApplied
               },
               messageText,
+              forwardOrigin: forwardInfo, // For ForwardBlacklist tracking
               userContext: {
                 reputationScore: ctx.session?.userInfo?.reputation?.score,
                 reputationStatus: ctx.session?.userInfo?.reputation?.status,

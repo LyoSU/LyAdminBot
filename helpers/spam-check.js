@@ -15,7 +15,8 @@ const {
   getAccountAge
 } = require('./account-age')
 const {
-  calculateVelocityScore
+  calculateVelocityScore,
+  getForwardHash
 } = require('./velocity')
 const { checkSignatures } = require('./spam-signatures')
 const { spam: spamLog, moderation: modLog, cleanup: cleanupLog, qdrant: qdrantLog } = require('./logger')
@@ -826,6 +827,48 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
         }
       } catch (sigErr) {
         spamLog.warn({ err: sigErr.message }, 'SpamSignature check failed, continuing')
+      }
+    }
+
+    // === PHASE 0.6: Check ForwardBlacklist (for forwarded messages) ===
+    // Persistent tracking of suspicious forward sources
+    const forwardOrigin = ctx.message && ctx.message.forward_origin
+    if (forwardOrigin && ctx.db && ctx.db.ForwardBlacklist) {
+      try {
+        const forwardInfo = getForwardHash(forwardOrigin)
+        if (forwardInfo) {
+          const blacklistEntry = await ctx.db.ForwardBlacklist.checkSource(forwardInfo.hash)
+
+          if (blacklistEntry) {
+            if (blacklistEntry.status === 'blacklisted') {
+              spamLog.info({
+                forwardType: blacklistEntry.forwardType,
+                spamReports: blacklistEntry.spamReports,
+                uniqueGroups: blacklistEntry.uniqueGroups.length
+              }, 'Matched blacklisted forward source')
+
+              return {
+                isSpam: true,
+                confidence: 95,
+                reason: `Blacklisted forward source (${blacklistEntry.forwardType}, ${blacklistEntry.spamReports} reports)`,
+                source: 'forward_blacklist',
+                forwardInfo: {
+                  type: blacklistEntry.forwardType,
+                  hash: forwardInfo.hash,
+                  status: blacklistEntry.status
+                }
+              }
+            } else if (blacklistEntry.status === 'suspicious') {
+              // Add to quick assessment signals later
+              spamLog.debug({
+                forwardType: blacklistEntry.forwardType,
+                spamReports: blacklistEntry.spamReports
+              }, 'Forward from suspicious source')
+            }
+          }
+        }
+      } catch (fwdErr) {
+        spamLog.warn({ err: fwdErr.message }, 'ForwardBlacklist check failed, continuing')
       }
     }
 

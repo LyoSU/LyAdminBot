@@ -139,6 +139,16 @@ const processVoteResult = async (ctx, spamVote) => {
         log.error({ err: error.message, eventId: spamVote.eventId }, 'Failed to update reputation')
       }
     }
+
+    // 3. Update ForwardBlacklist (report false positive)
+    if (spamVote.forwardOrigin && spamVote.forwardOrigin.hash && ctx.db.ForwardBlacklist) {
+      try {
+        await ctx.db.ForwardBlacklist.addCleanReport(spamVote.forwardOrigin.hash)
+        log.debug({ eventId: spamVote.eventId }, 'Reported clean to ForwardBlacklist')
+      } catch (error) {
+        log.warn({ err: error.message, eventId: spamVote.eventId }, 'Failed to report clean to ForwardBlacklist')
+      }
+    }
   } else {
     // CONFIRM SPAM: Community confirmed this was spam
 
@@ -158,7 +168,28 @@ const processVoteResult = async (ctx, spamVote) => {
       }
     }
 
-    // 2. Decrease user reputation (only for real users)
+    // 2. Update ForwardBlacklist (track spam forward sources)
+    if (spamVote.forwardOrigin && spamVote.forwardOrigin.hash && ctx.db.ForwardBlacklist) {
+      try {
+        const blacklistEntry = await ctx.db.ForwardBlacklist.addSpamReport(
+          spamVote.forwardOrigin,
+          spamVote.chatId,
+          spamVote.messagePreview
+        )
+        if (blacklistEntry) {
+          log.info({
+            eventId: spamVote.eventId,
+            forwardType: blacklistEntry.forwardType,
+            status: blacklistEntry.status,
+            spamReports: blacklistEntry.spamReports
+          }, 'Updated ForwardBlacklist')
+        }
+      } catch (error) {
+        log.error({ err: error.message, eventId: spamVote.eventId }, 'Failed to update ForwardBlacklist')
+      }
+    }
+
+    // 3. Decrease user reputation (only for real users)
     if (spamVote.bannedUserId > 0) {
       try {
         const user = await ctx.db.User.findOne({ telegram_id: spamVote.bannedUserId })

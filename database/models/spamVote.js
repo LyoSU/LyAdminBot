@@ -52,6 +52,13 @@ const spamVoteSchema = mongoose.Schema({
   aiReason: String,
   aiSource: String, // 'openrouter_llm', 'qdrant_db', etc.
 
+  // Forward origin info (for ForwardBlacklist tracking)
+  forwardOrigin: {
+    type: { type: String, enum: ['user', 'hidden', 'chat', 'channel'] },
+    hash: String,
+    identifier: String
+  },
+
   // Actions taken
   actionTaken: {
     muted: { type: Boolean, default: false },
