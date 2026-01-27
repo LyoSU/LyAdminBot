@@ -321,6 +321,26 @@ const quickRiskAssessment = (ctx) => {
     signals.push('business_message')
   }
 
+  // 16. Giveaway messages (can be fake giveaways)
+  if (message.giveaway || message.giveaway_winners || message.giveaway_created || message.giveaway_completed) {
+    signals.push('giveaway_message')
+  }
+
+  // 17. User/Chat shared via keyboard button
+  if (message.users_shared || message.chat_shared) {
+    signals.push('shared_entity')
+  }
+
+  // 18. Web app data (could be malicious)
+  if (message.web_app_data) {
+    signals.push('web_app_data')
+  }
+
+  // 19. Invoice/Payment (scam potential)
+  if (message.invoice) {
+    signals.push('invoice_message')
+  }
+
   // ===== TRUST SIGNALS =====
 
   // 1. Reply to another message (engagement = conversation)
@@ -369,7 +389,10 @@ const quickRiskAssessment = (ctx) => {
     'inline_url_buttons', // Any URL buttons
     'phone_number', // Phone in text
     'shared_contact', // Contact card
-    'paid_media' // Premium content promo
+    'paid_media', // Premium content promo
+    'giveaway_message', // Fake giveaways
+    'invoice_message', // Scam invoices
+    'web_app_data' // Potentially malicious web apps
   ]
   const mediumCount = signals.filter(s => mediumSignals.includes(s)).length
 
@@ -534,6 +557,12 @@ const calculateDynamicThreshold = (context, groupSettings) => {
   // Telegram Stars negative rating
   if (context.telegramRating && context.telegramRating.level < 0) {
     baseThreshold -= 10
+  }
+
+  // Edited messages - could be spam added after passing initial check
+  // Be more suspicious of edits from users with few messages
+  if (context.isEditedMessage && context.messageCount <= 5) {
+    baseThreshold -= 8
   }
 
   // ===== BOUNDS =====

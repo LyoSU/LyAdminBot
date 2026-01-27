@@ -84,6 +84,11 @@ const formatUserDetails = (user) => {
  * Spam check middleware using hybrid ML approach
  */
 module.exports = async (ctx) => {
+  // Handle both new messages and edited messages
+  // Edited messages can be used to bypass spam detection (send clean, edit to spam)
+  const message = ctx.message || ctx.editedMessage
+  const isEditedMessage = !!ctx.editedMessage
+
   // Skip if not in a group chat or no user
   if (!ctx.chat || !['supergroup', 'group'].includes(ctx.chat.type) || !ctx.from) {
     return
@@ -96,7 +101,7 @@ module.exports = async (ctx) => {
 
   // Get the actual sender ID and info
   // Prefer sender_chat only if it has a valid id, otherwise use ctx.from
-  const senderChat = ctx.message && ctx.message.sender_chat
+  const senderChat = message && message.sender_chat
   const hasSenderChat = senderChat && senderChat.id
   const senderId = hasSenderChat ? senderChat.id : ctx.from.id
   const senderInfo = hasSenderChat ? senderChat : ctx.from
@@ -115,7 +120,7 @@ module.exports = async (ctx) => {
   }
 
   // Skip if message is a command (except in test mode)
-  if (!isTestMode && ctx.message && ctx.message.text && ctx.message.text.startsWith('/')) {
+  if (!isTestMode && message && message.text && message.text.startsWith('/')) {
     return
   }
 
@@ -139,17 +144,17 @@ module.exports = async (ctx) => {
   }
 
   // Only check actual user content (whitelist approach)
-  const hasUserContent = ctx.message && (
-    ctx.message.text ||
-    ctx.message.caption ||
-    ctx.message.photo ||
-    ctx.message.video ||
-    ctx.message.document ||
-    ctx.message.audio ||
-    ctx.message.voice ||
-    ctx.message.video_note ||
-    ctx.message.sticker ||
-    ctx.message.animation
+  const hasUserContent = message && (
+    message.text ||
+    message.caption ||
+    message.photo ||
+    message.video ||
+    message.document ||
+    message.audio ||
+    message.voice ||
+    message.video_note ||
+    message.sticker ||
+    message.animation
   )
 
   if (!hasUserContent) {
@@ -205,7 +210,7 @@ module.exports = async (ctx) => {
 
   // Log non-member/commenter check
   if (isNonMember && shouldCheckSpam) {
-    const isTopicMessage = ctx.message && ctx.message.is_topic_message
+    const isTopicMessage = message && message.is_topic_message
     spamLog.debug({
       userId: senderId,
       userName: userName(senderInfo),
@@ -232,36 +237,37 @@ module.exports = async (ctx) => {
     }
 
     // Check message for spam
-    if (ctx.message) {
-      const originalText = ctx.message.text || ctx.message.caption || ''
+    if (message) {
+      const originalText = message.text || message.caption || ''
       let messageText = originalText.trim()
 
       // Handle messages without text/caption
       if (!messageText) {
-        if (ctx.message.sticker) {
-          messageText = `[Sticker: ${ctx.message.sticker.emoji || 'unknown'}]`
-        } else if (ctx.message.voice) {
+        if (message.sticker) {
+          messageText = `[Sticker: ${message.sticker.emoji || 'unknown'}]`
+        } else if (message.voice) {
           messageText = '[Voice message]'
-        } else if (ctx.message.photo) {
+        } else if (message.photo) {
           messageText = '[Photo]'
-        } else if (ctx.message.document) {
-          messageText = `[Document: ${ctx.message.document.file_name || 'unknown'}]`
+        } else if (message.document) {
+          messageText = `[Document: ${message.document.file_name || 'unknown'}]`
         } else {
           messageText = '[Media message]'
         }
       }
 
       const actualMessageCount = hasMemberData ? ctx.group.members[senderId].stats.messagesCount : 0
-      const senderType = isChannelPost ? 'channel' : 'user'
+      const senderType = isChannelPost ? 'channel' : (isNonMember ? 'non-member' : 'user')
       spamLog.info({
         senderType,
         userName: userName(senderInfo),
         userId: senderId,
-        messageCount: isTestMode ? 'TEST' : (isChannelPost ? 'channel' : actualMessageCount)
-      }, 'Checking message')
+        messageCount: isTestMode ? 'TEST' : (isChannelPost ? 'channel' : actualMessageCount),
+        isEdited: isEditedMessage || undefined // Only log if true
+      }, isEditedMessage ? 'Checking EDITED message' : 'Checking message')
 
       // Build context for spam check
-      const isTopicMessage = ctx.message && ctx.message.is_topic_message
+      const isTopicMessage = message && message.is_topic_message
       const context = {
         userId: senderId,
         groupName: ctx.chat.title,
@@ -278,7 +284,9 @@ module.exports = async (ctx) => {
         channelTitle: isChannelPost ? senderInfo.title : null,
         // Non-member context (commenters in discussion groups)
         isNonMember: isNonMember,
-        isTopicMessage: !!isTopicMessage
+        isTopicMessage: !!isTopicMessage,
+        // Edited messages - could be spam added after initial clean message
+        isEditedMessage: isEditedMessage
       }
 
       let result
@@ -355,7 +363,7 @@ module.exports = async (ctx) => {
           const botMember = await ctx.telegram.getChatMember(ctx.chat.id, ctx.botInfo.id)
           canRestrictMembers = botMember.can_restrict_members
           canDeleteMessages = botMember.can_delete_messages ||
-                             (ctx.message.date && (Date.now() / 1000 - ctx.message.date) < 2 * 24 * 60 * 60)
+                             (message.date && (Date.now() / 1000 - message.date) < 2 * 24 * 60 * 60)
         } catch (error) {
           spamAction.error({ err: error.message }, 'Failed to check bot permissions')
         }
