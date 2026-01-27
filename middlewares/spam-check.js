@@ -6,6 +6,7 @@ const { processSpamAction } = require('../helpers/reputation')
 const { createVoteEvent, getAccountAgeDays } = require('../helpers/vote-ui')
 const { addSignature } = require('../helpers/spam-signatures')
 const { spam: spamLog, spamAction, reputation: repLog, notification: notifyLog } = require('../helpers/logger')
+const { scheduleDeletion } = require('../helpers/message-cleanup')
 
 /**
  * Determine appropriate action based on spam confidence and user profile
@@ -511,11 +512,14 @@ module.exports = async (ctx) => {
             { disable_web_page_preview: true }
           ).catch(e => notifyLog.error({ err: e.message }, 'Failed to send high-confidence notification'))
 
-          // Auto-delete after 30 seconds
-          if (notificationMsg) {
-            setTimeout(async () => {
-              try { await ctx.telegram.deleteMessage(ctx.chat.id, notificationMsg.message_id) } catch {}
-            }, 30000)
+          // Schedule auto-delete after 30 seconds (persistent)
+          if (notificationMsg && ctx.db) {
+            scheduleDeletion(ctx.db, {
+              chatId: ctx.chat.id,
+              messageId: notificationMsg.message_id,
+              delayMs: 30000,
+              source: 'spam_high_confidence'
+            }, ctx.telegram)
           }
 
           // Add to signature database for high-confidence cases
@@ -535,11 +539,14 @@ module.exports = async (ctx) => {
           const notificationMsg = await ctx.replyWithHTML(statusMessage, { disable_web_page_preview: true })
             .catch(error => notifyLog.error({ err: error.message }, 'Failed to send notification'))
 
-          if (notificationMsg) {
-            setTimeout(async () => {
-              await ctx.telegram.deleteMessage(ctx.chat.id, notificationMsg.message_id)
-                .catch(() => {})
-            }, 60 * 1000)
+          // Schedule auto-delete after 60 seconds (persistent)
+          if (notificationMsg && ctx.db) {
+            scheduleDeletion(ctx.db, {
+              chatId: ctx.chat.id,
+              messageId: notificationMsg.message_id,
+              delayMs: 60 * 1000,
+              source: 'spam_no_permissions'
+            }, ctx.telegram)
           }
         }
 

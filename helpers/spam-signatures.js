@@ -295,54 +295,47 @@ const checkSignatures = async (text, db, options = {}) => {
 
 /**
  * Add or update spam signature in database
+ * Uses atomic findOneAndUpdate to prevent race conditions
  */
 const addSignature = async (text, db, chatId, options = {}) => {
   const signatures = generateSignatures(text)
   if (!signatures) return null
 
-  // Try to find existing by any hash type
-  let existing = await db.SpamSignature.findOne({
-    $or: [
-      { exactHash: signatures.exactHash },
-      { normalizedHash: signatures.normalizedHash }
-    ]
-  })
+  // Atomic upsert - finds by exactHash OR normalizedHash, updates or creates
+  const result = await db.SpamSignature.findOneAndUpdate(
+    {
+      $or: [
+        { exactHash: signatures.exactHash },
+        { normalizedHash: signatures.normalizedHash }
+      ]
+    },
+    {
+      $inc: { confirmations: 1 },
+      $addToSet: { uniqueGroups: chatId },
+      $set: {
+        lastSeenAt: new Date(),
+        // Fill in missing hashes
+        normalizedHash: signatures.normalizedHash,
+        fuzzyHash: signatures.fuzzyHash,
+        structureHash: signatures.structureHash
+      },
+      $setOnInsert: {
+        exactHash: signatures.exactHash,
+        sampleText: text.substring(0, 200),
+        status: 'candidate',
+        firstSeenAt: new Date()
+      }
+    },
+    { upsert: true, new: true }
+  )
 
-  if (existing) {
-    // Update existing
-    existing.confirmations += 1
-    existing.lastSeenAt = new Date()
-    if (!existing.uniqueGroups.includes(chatId)) {
-      existing.uniqueGroups.push(chatId)
-    }
-
-    // Promote to confirmed if enough unique groups
-    if (existing.uniqueGroups.length >= 5 && existing.status === 'candidate') {
-      existing.status = 'confirmed'
-    }
-
-    // Update hashes if missing
-    if (!existing.normalizedHash) existing.normalizedHash = signatures.normalizedHash
-    if (!existing.fuzzyHash) existing.fuzzyHash = signatures.fuzzyHash
-    if (!existing.structureHash) existing.structureHash = signatures.structureHash
-
-    await existing.save()
-    return existing
+  // Check if should promote to confirmed (5+ unique groups)
+  if (result.uniqueGroups.length >= 5 && result.status === 'candidate') {
+    result.status = 'confirmed'
+    await result.save()
   }
 
-  // Create new signature
-  const newSignature = new db.SpamSignature({
-    exactHash: signatures.exactHash,
-    normalizedHash: signatures.normalizedHash,
-    fuzzyHash: signatures.fuzzyHash,
-    structureHash: signatures.structureHash,
-    sampleText: text.substring(0, 200),
-    uniqueGroups: [chatId],
-    status: 'candidate'
-  })
-
-  await newSignature.save()
-  return newSignature
+  return result
 }
 
 module.exports = {

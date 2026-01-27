@@ -2,6 +2,7 @@ const { userName } = require('../utils')
 const { predictCreationDate } = require('./account-age')
 const { sha256, normalizeLight } = require('./spam-signatures')
 const { spamVote: log } = require('./logger')
+const { scheduleDeletion } = require('./message-cleanup')
 
 /**
  * Generate hash of message text (for SpamVote reference)
@@ -499,15 +500,17 @@ const showResultUI = async (ctx, spamVote, reputationChange = null) => {
       }
     )
 
-    // Auto-delete after 2 minutes
-    setTimeout(async () => {
-      try {
-        await ctx.telegram.deleteMessage(spamVote.notificationChatId, spamVote.notificationMessageId)
-        log.debug({ eventId: spamVote.eventId }, 'Auto-deleted result notification')
-      } catch {
-        // Ignore delete errors
-      }
-    }, 2 * 60 * 1000)
+    // Schedule auto-delete after 2 minutes (persistent)
+    if (ctx.db) {
+      await scheduleDeletion(ctx.db, {
+        chatId: spamVote.notificationChatId,
+        messageId: spamVote.notificationMessageId,
+        delayMs: 2 * 60 * 1000,
+        source: 'vote_result',
+        reference: { type: 'spam_vote', id: spamVote.eventId }
+      }, ctx.telegram)
+      log.debug({ eventId: spamVote.eventId }, 'Scheduled result notification deletion')
+    }
   } catch (error) {
     log.error({ err: error.message, eventId: spamVote.eventId }, 'Failed to show result UI')
   }

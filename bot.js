@@ -7,6 +7,7 @@ const I18n = require('telegraf-i18n')
 const { bot: botLog, db: dbLog } = require('./helpers/logger')
 const { db } = require('./database')
 const { processExpiredVotes } = require('./handlers')
+const { processStartupCleanup, startCleanupInterval } = require('./helpers/message-cleanup')
 const {
   stats,
   errorHandler,
@@ -195,6 +196,13 @@ const init = () => {
   db.connection.once('open', async () => {
     dbLog.info('Connected to MongoDB')
     await launchBot(bot)
+
+    // Process any pending message deletions from before restart
+    await processStartupCleanup(db, bot.telegram)
+
+    // Start periodic message cleanup (every 30 seconds)
+    startCleanupInterval(db, bot.telegram, 30 * 1000)
+    botLog.debug('Started message cleanup service')
 
     // Start spam vote expiration handler (check every minute)
     setInterval(() => {

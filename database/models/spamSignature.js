@@ -55,6 +55,9 @@ spamSignatureSchema.pre('save', function (next) {
   next()
 })
 
+// Unique index on exactHash to prevent duplicates
+spamSignatureSchema.index({ exactHash: 1 }, { unique: true, sparse: true })
+
 // Compound indexes for efficient lookups
 spamSignatureSchema.index({ exactHash: 1, status: 1 })
 spamSignatureSchema.index({ normalizedHash: 1, status: 1 })

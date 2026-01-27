@@ -1,6 +1,7 @@
 const { updateVoteUI, showResultUI } = require('../helpers/vote-ui')
 const { addSignature } = require('../helpers/spam-signatures')
 const { spamVote: log } = require('../helpers/logger')
+const { scheduleDeletion } = require('../helpers/message-cleanup')
 
 /**
  * Check if a user is eligible to vote on spam decisions
@@ -326,14 +327,16 @@ const processExpiredVotes = async (db, telegram, i18n) => {
               { parse_mode: 'HTML' }
             )
 
-            // Delete after 30 seconds
-            setTimeout(async () => {
-              try {
-                await telegram.deleteMessage(vote.notificationChatId, vote.notificationMessageId)
-              } catch { /* ignore */ }
-            }, 30000)
+            // Schedule deletion after 30 seconds (persistent)
+            await scheduleDeletion(db, {
+              chatId: vote.notificationChatId,
+              messageId: vote.notificationMessageId,
+              delayMs: 30000,
+              source: 'vote_timeout',
+              reference: { type: 'spam_vote', id: vote.eventId }
+            }, telegram)
           } catch {
-            // If edit fails, try to delete
+            // If edit fails, try to delete immediately
             try {
               await telegram.deleteMessage(vote.notificationChatId, vote.notificationMessageId)
             } catch { /* ignore */ }

@@ -1,6 +1,8 @@
 const got = require('got')
 const { userName } = require('../utils')
 const { cas: casLog } = require('../helpers/logger')
+const { scheduleDeletion } = require('../helpers/message-cleanup')
+const { addSignature } = require('../helpers/spam-signatures')
 
 const extend = got.extend({
   json: true,
@@ -63,12 +65,16 @@ module.exports = async (ctx) => {
           allow_sending_without_reply: true,
           disable_web_page_preview: true
         }).then(notificationMsg => {
-          if (notificationMsg) {
-            setTimeout(async () => {
-              await ctx.telegram.deleteMessage(ctx.chat.id, notificationMsg.message_id)
-                .catch(error => casLog.error({ err: error.message }, 'Failed to delete notification'))
-              casLog.debug('Auto-deleted notification message')
-            }, 25 * 1000)
+          // Schedule auto-delete after 25 seconds (persistent)
+          if (notificationMsg && ctx.db) {
+            scheduleDeletion(ctx.db, {
+              chatId: ctx.chat.id,
+              messageId: notificationMsg.message_id,
+              delayMs: 25 * 1000,
+              source: 'cas_ban',
+              reference: { type: 'user', id: String(userId) }
+            }, ctx.telegram)
+            casLog.debug('Scheduled notification deletion')
           }
         }).catch(error => {
           if (error.code === 403 && error.description.includes('bot is not a member')) {
@@ -82,6 +88,27 @@ module.exports = async (ctx) => {
         ctx.deleteMessage().catch(error => {
           casLog.error({ err: error.message }, 'Failed to delete original message')
         })
+
+        // Add CAS flagged messages to our signature database (learning from CAS)
+        if (ctx.db && body.result && body.result.messages && body.result.messages.length > 0) {
+          const messages = body.result.messages.slice(0, 5) // Max 5 samples
+          for (const msg of messages) {
+            if (msg && msg.length > 20) { // Skip very short messages
+              addSignature(msg, ctx.db, ctx.chat.id).catch(err =>
+                casLog.debug({ err: err.message }, 'Failed to add CAS message to signatures')
+              )
+            }
+          }
+          casLog.debug({ count: messages.length }, 'Added CAS flagged messages to signatures')
+        }
+
+        // Also add the current message to signatures
+        const messageText = ctx.message.text || ctx.message.caption
+        if (ctx.db && messageText && messageText.length > 20) {
+          addSignature(messageText, ctx.db, ctx.chat.id).catch(err =>
+            casLog.debug({ err: err.message }, 'Failed to add current message to signatures')
+          )
+        }
 
         return true
       }
