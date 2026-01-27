@@ -150,7 +150,7 @@ const callLLMWithRetry = async (systemPrompt, userPrompt, maxRetries = 3) => {
             }
           }
         },
-        max_tokens: 150
+        max_tokens: 1024
       })
 
       const content = response.choices[0].message.content
