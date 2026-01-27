@@ -81,7 +81,7 @@ const determineAction = (result, context, threshold) => {
   const confidence = result.confidence || 0
 
   // Very high confidence - immediate mute and delete
-  if (confidence >= 90) {
+  if (confidence >= 85) {
     return {
       action: 'mute_and_delete',
       duration: context.isPremium ? 3600 : 86400, // 1h for premium, 24h for regular
@@ -542,7 +542,7 @@ module.exports = async (ctx) => {
         }
 
         // Save to knowledge base after successful action (higher confidence in spam classification)
-        if (result.source === 'openrouter_llm' && result.confidence >= 75 && result.confidence < 90) {
+        if (result.source === 'openrouter_llm' && result.confidence >= 70 && result.confidence < 85) {
           try {
             const embedding = await generateEmbedding(messageText)
             const features = extractFeatures(messageText, context)
@@ -572,8 +572,8 @@ module.exports = async (ctx) => {
         }
 
         // Create vote event for community moderation (only for uncertain cases)
-        // High confidence (>=90%) = no voting needed, instant action
-        const needsVoting = result.confidence < 90
+        // High confidence (>=85%) = no voting needed, instant action
+        const needsVoting = result.confidence < 85
 
         if ((muteSuccess || deleteSuccess) && needsVoting) {
           try {

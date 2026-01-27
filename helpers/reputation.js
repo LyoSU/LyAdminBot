@@ -127,7 +127,7 @@ const processSpamAction = (userInfo, options) => {
 
   // Apply global ban for high-confidence spam
   let globalBanApplied = false
-  if (muteSuccess && confidence >= 90 && globalBanEnabled) {
+  if (muteSuccess && confidence >= 85 && globalBanEnabled) {
     userInfo.isGlobalBanned = true
     userInfo.globalBanReason = reason
     userInfo.globalBanDate = new Date()

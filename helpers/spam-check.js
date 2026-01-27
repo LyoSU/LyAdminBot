@@ -138,10 +138,10 @@ const callLLMWithRetry = async (systemPrompt, userPrompt, maxRetries = 3) => {
                   description: 'Short explanation for admins (1-2 sentences)'
                 },
                 spamScore: {
-                  type: 'integer',
+                  type: 'number',
                   minimum: 0,
-                  maximum: 100,
-                  description: 'Probability this is spam (0=clean, 100=definitely spam)'
+                  maximum: 1,
+                  description: 'Probability this is spam (0.0=clean, 1.0=definitely spam)'
                 }
               },
               required: ['reason', 'spamScore'],
@@ -1206,12 +1206,12 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
 SPAM = ads, scams, phishing, crypto schemes, service promotion, mass messaging.
 NOT SPAM = chatting, questions, jokes, trolling, rudeness, arguments.
 
-spamScore (0-100) = probability this is spam:
-  0-30: definitely not spam (normal chat, questions, even rude)
-  30-50: unlikely spam (suspicious but probably ok)
-  50-70: uncertain (could go either way)
-  70-90: likely spam (promotional, sketchy links, solicitation)
-  90-100: definitely spam (clear ads, scams, known patterns)
+spamScore (0.0-1.0) = probability this is spam:
+  0.0-0.3: definitely not spam (normal chat, questions, even rude)
+  0.3-0.5: unlikely spam (suspicious but probably ok)
+  0.5-0.7: uncertain (could go either way)
+  0.7-0.85: likely spam (promotional, sketchy links, solicitation)
+  0.85-1.0: definitely spam (clear ads, scams, known patterns)
 
 Rules:
 - offensive ≠ spam (trolls annoy, spammers advertise)
@@ -1231,37 +1231,36 @@ CONTEXT: ${contextInfo.join(' | ')}`
 
     const { analysis, model: usedModel } = llmResult
 
-    // spamScore: 0-100 where 0=clean, 100=definitely spam
-    let spamScore = parseInt(analysis.spamScore) || 50
-    const isSpam = spamScore >= 70 // Threshold for considering it spam
+    // spamScore: 0.0-1.0 where 0=clean, 1=definitely spam (like OpenAI moderation)
+    let spamScore = parseFloat(analysis.spamScore) || 0.5
+    spamScore = Math.max(0, Math.min(1, spamScore)) // Clamp to 0-1
+    const isSpam = spamScore >= 0.7 // Threshold for considering it spam
 
-    // Apply velocity boost if suspicious patterns detected
+    // Apply velocity boost if suspicious patterns detected (boost is in 0-100 scale, convert)
     if (isSpam && userContext.velocityBoost) {
-      spamScore = Math.min(99, Math.round(spamScore + userContext.velocityBoost))
+      spamScore = Math.min(0.99, spamScore + userContext.velocityBoost / 100)
       spamLog.debug({ boost: userContext.velocityBoost.toFixed(1), reason: userContext.velocityReason }, 'Velocity boost applied')
     }
 
-    // Apply suspicious forward source boost
+    // Apply suspicious forward source boost (boost is in 0-100 scale, convert)
     if (isSpam && suspiciousForwardBoost > 0) {
-      spamScore = Math.min(99, Math.round(spamScore + suspiciousForwardBoost))
+      spamScore = Math.min(0.99, spamScore + suspiciousForwardBoost / 100)
       spamLog.debug({ boost: suspiciousForwardBoost }, 'Suspicious forward boost applied')
     }
 
-    spamLog.info({ isSpam, spamScore, source: 'openrouter_llm', model: usedModel }, 'OpenRouter result')
+    spamLog.info({ isSpam, spamScore: spamScore.toFixed(2), source: 'openrouter_llm', model: usedModel }, 'OpenRouter result')
 
     // Save to knowledge base based on spamScore
     if (embedding) {
       let shouldSave = false
-      // For Qdrant: use normalized score where 1.0 = spam, 0.0 = clean
-      const qdrantConfidence = spamScore / 100
 
       // High spam score - save as spam
-      if (spamScore >= 90) {
+      if (spamScore >= 0.85) {
         shouldSave = true
-      } else if (spamScore >= 75) {
+      } else if (spamScore >= 0.7) {
         // Medium spam score - save in middleware after action confirmed
         shouldSave = false
-      } else if (spamScore <= 30) {
+      } else if (spamScore <= 0.3) {
         // Low spam score = high confidence clean - save as clean
         shouldSave = true
       }
@@ -1272,19 +1271,22 @@ CONTEXT: ${contextInfo.join(' | ')}`
             text: messageText,
             embedding,
             classification: isSpam ? 'spam' : 'clean',
-            confidence: qdrantConfidence,
+            confidence: spamScore, // Qdrant uses 0-1
             features
           })
-          qdrantLog.debug({ spamScore }, 'Saved vector to Qdrant')
+          qdrantLog.debug({ spamScore: spamScore.toFixed(2) }, 'Saved vector to Qdrant')
         } catch (saveError) {
           qdrantLog.error({ err: saveError.message }, 'Failed to save vector')
         }
       }
     }
 
+    // Convert to 0-100 for compatibility with rest of system (middleware thresholds)
+    const confidence = Math.round(spamScore * 100)
+
     return {
       isSpam,
-      confidence: spamScore, // Keep as 'confidence' for compatibility with rest of system
+      confidence, // 0-100 for backward compatibility
       reason: analysis.reason,
       source: 'openrouter_llm'
     }

@@ -264,7 +264,7 @@ const handleReport = async (ctx) => {
 
     if (result.isSpam && result.confidence >= 50) {
       // Spam detected - take action
-      const muteDuration = result.confidence >= 90 ? 86400 : 3600 // 24h or 1h
+      const muteDuration = result.confidence >= 85 ? 86400 : 3600 // 24h or 1h
 
       // Try to restrict user or ban channel
       let actionTaken = false
@@ -309,8 +309,8 @@ const handleReport = async (ctx) => {
         await ctx.telegram.deleteMessage(ctx.chat.id, statusMsg.message_id)
       } catch (e) { /* ignore */ }
 
-      // If confidence < 90, create vote event for community verification
-      if (result.confidence < 90 && (actionTaken || deleted)) {
+      // If confidence < 85, create vote event for community verification
+      if (result.confidence < 85 && (actionTaken || deleted)) {
         try {
           // Create vote context similar to spam-check middleware
           const voteCtx = {
@@ -346,7 +346,7 @@ const handleReport = async (ctx) => {
         } catch (voteErr) {
           reportLog.error({ err: voteErr.message }, 'Failed to create vote event')
         }
-      } else if (result.confidence >= 90) {
+      } else if (result.confidence >= 85) {
         // High confidence - no voting needed, just update reputation
         if (!isChannelPost && mockCtx.session.userInfo) {
           const spamResult = processSpamAction(mockCtx.session.userInfo, {
