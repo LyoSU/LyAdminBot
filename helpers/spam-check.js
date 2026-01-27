@@ -833,6 +833,8 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     // === PHASE 0.6: Check ForwardBlacklist (for forwarded messages) ===
     // Persistent tracking of suspicious forward sources
     const forwardOrigin = ctx.message && ctx.message.forward_origin
+    let suspiciousForwardBoost = 0 // Will be added to confidence later
+
     if (forwardOrigin && ctx.db && ctx.db.ForwardBlacklist) {
       try {
         const forwardInfo = getForwardHash(forwardOrigin)
@@ -859,11 +861,13 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
                 }
               }
             } else if (blacklistEntry.status === 'suspicious') {
-              // Add to quick assessment signals later
+              // Boost confidence for spam from suspicious sources (+10-15%)
+              suspiciousForwardBoost = Math.min(15, 5 + blacklistEntry.spamReports * 2)
               spamLog.debug({
                 forwardType: blacklistEntry.forwardType,
-                spamReports: blacklistEntry.spamReports
-              }, 'Forward from suspicious source')
+                spamReports: blacklistEntry.spamReports,
+                boost: suspiciousForwardBoost
+              }, 'Forward from suspicious source - will boost confidence')
             }
           }
         }
@@ -1240,6 +1244,13 @@ CONTEXT: ${contextInfo.join(' | ')}`
     if (isSpam && userContext.velocityBoost) {
       const boostedConfidence = Math.min(99, confidence + userContext.velocityBoost)
       spamLog.debug({ boost: userContext.velocityBoost.toFixed(1), reason: userContext.velocityReason }, 'Velocity boost applied')
+      confidence = Math.round(boostedConfidence)
+    }
+
+    // Apply suspicious forward source boost
+    if (isSpam && suspiciousForwardBoost > 0) {
+      const boostedConfidence = Math.min(99, confidence + suspiciousForwardBoost)
+      spamLog.debug({ boost: suspiciousForwardBoost }, 'Suspicious forward boost applied')
       confidence = Math.round(boostedConfidence)
     }
 

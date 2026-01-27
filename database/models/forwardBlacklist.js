@@ -141,33 +141,57 @@ forwardBlacklistSchema.statics.checkSource = async function (forwardHash) {
 }
 
 /**
- * Static method to report spam with upsert
+ * Static method to report spam with upsert (atomic operation)
  */
 forwardBlacklistSchema.statics.addSpamReport = async function (forwardInfo, groupId, sampleText = null) {
   if (!forwardInfo || !forwardInfo.hash || !forwardInfo.type) {
     return null
   }
 
-  let entry = await this.findOne({ forwardHash: forwardInfo.hash })
+  const thresholds = THRESHOLDS[forwardInfo.type] || THRESHOLDS.user
 
-  if (entry) {
-    entry.reportSpam(groupId, sampleText)
-    await entry.save()
-  } else {
-    // Create new entry
-    entry = new this({
+  // Atomic upsert - increment spamReports and add to uniqueGroups
+  const updateOps = {
+    $inc: { spamReports: 1 },
+    $set: {
+      lastSeenAt: new Date(),
+      forwardType: forwardInfo.type
+    },
+    $setOnInsert: {
       forwardHash: forwardInfo.hash,
-      forwardType: forwardInfo.type,
       sourceIdentifier: forwardInfo.identifier || forwardInfo.hash.substring(0, 16),
-      spamReports: 1,
-      uniqueGroups: groupId ? [groupId] : [],
-      sampleText: sampleText ? sampleText.substring(0, 200) : null
-    })
-    // Check initial status
-    const thresholds = THRESHOLDS[forwardInfo.type] || THRESHOLDS.user
-    if (entry.spamReports >= thresholds.suspicious) {
-      entry.status = 'suspicious'
+      firstSeenAt: new Date(),
+      status: 'clean'
     }
+  }
+
+  if (groupId) {
+    updateOps.$addToSet = { uniqueGroups: groupId }
+  }
+
+  if (sampleText) {
+    updateOps.$set.sampleText = sampleText.substring(0, 200)
+  }
+
+  const entry = await this.findOneAndUpdate(
+    { forwardHash: forwardInfo.hash },
+    updateOps,
+    { upsert: true, new: true }
+  )
+
+  // Update status based on new spamReports count
+  let statusChanged = false
+  if (entry.spamReports >= thresholds.blacklisted && entry.status !== 'blacklisted') {
+    entry.status = 'blacklisted'
+    entry.expiresAt = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000)
+    statusChanged = true
+  } else if (entry.spamReports >= thresholds.suspicious && entry.status === 'clean') {
+    entry.status = 'suspicious'
+    entry.expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
+    statusChanged = true
+  }
+
+  if (statusChanged) {
     await entry.save()
   }
 
@@ -175,14 +199,38 @@ forwardBlacklistSchema.statics.addSpamReport = async function (forwardInfo, grou
 }
 
 /**
- * Static method to report clean verdict
+ * Static method to report clean verdict (atomic operation)
  */
 forwardBlacklistSchema.statics.addCleanReport = async function (forwardHash) {
-  const entry = await this.findOne({ forwardHash })
-  if (entry) {
-    entry.reportClean()
+  // Atomic increment of cleanReports
+  const entry = await this.findOneAndUpdate(
+    { forwardHash },
+    { $inc: { cleanReports: 1 } },
+    { new: true }
+  )
+
+  if (!entry) return null
+
+  // Recalculate status based on effective spam count
+  // Clean reports counteract spam reports (2:1 ratio)
+  const effectiveSpam = Math.max(0, entry.spamReports - Math.floor(entry.cleanReports / 2))
+  const thresholds = THRESHOLDS[entry.forwardType] || THRESHOLDS.user
+
+  let statusChanged = false
+  if (effectiveSpam < thresholds.suspicious && entry.status !== 'clean') {
+    entry.status = 'clean'
+    entry.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+    statusChanged = true
+  } else if (effectiveSpam < thresholds.blacklisted && entry.status === 'blacklisted') {
+    entry.status = 'suspicious'
+    entry.expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
+    statusChanged = true
+  }
+
+  if (statusChanged) {
     await entry.save()
   }
+
   return entry
 }
 
