@@ -321,25 +321,13 @@ const quickRiskAssessment = (ctx) => {
     signals.push('business_message')
   }
 
-  // 16. Giveaway messages (can be fake giveaways)
+  // 16. Giveaway messages (can be fake/scam giveaways in groups/channels)
   if (message.giveaway || message.giveaway_winners || message.giveaway_created || message.giveaway_completed) {
     signals.push('giveaway_message')
   }
 
-  // 17. User/Chat shared via keyboard button
-  if (message.users_shared || message.chat_shared) {
-    signals.push('shared_entity')
-  }
-
-  // 18. Web app data (could be malicious)
-  if (message.web_app_data) {
-    signals.push('web_app_data')
-  }
-
-  // 19. Invoice/Payment (scam potential)
-  if (message.invoice) {
-    signals.push('invoice_message')
-  }
+  // Note: invoice, web_app_data, users_shared, chat_shared are NOT relevant
+  // for supergroups - they only occur in private chats with bots
 
   // ===== TRUST SIGNALS =====
 
@@ -390,9 +378,7 @@ const quickRiskAssessment = (ctx) => {
     'phone_number', // Phone in text
     'shared_contact', // Contact card
     'paid_media', // Premium content promo
-    'giveaway_message', // Fake giveaways
-    'invoice_message', // Scam invoices
-    'web_app_data' // Potentially malicious web apps
+    'giveaway_message' // Fake/scam giveaways
   ]
   const mediumCount = signals.filter(s => mediumSignals.includes(s)).length
 
