@@ -133,23 +133,18 @@ const callLLMWithRetry = async (systemPrompt, userPrompt, maxRetries = 3) => {
             schema: {
               type: 'object',
               properties: {
-                reasoning: {
+                reason: {
                   type: 'string',
-                  description: 'Brief explanation of the classification'
+                  description: 'Short explanation for admins (1-2 sentences)'
                 },
-                classification: {
-                  type: 'string',
-                  enum: ['SPAM', 'CLEAN'],
-                  description: 'Whether the message is spam or clean'
-                },
-                confidence: {
+                spamScore: {
                   type: 'integer',
                   minimum: 0,
                   maximum: 100,
-                  description: 'Confidence level from 0 to 100'
+                  description: 'Probability this is spam (0=clean, 100=definitely spam)'
                 }
               },
-              required: ['reasoning', 'classification', 'confidence'],
+              required: ['reason', 'spamScore'],
               additionalProperties: false
             }
           }
@@ -1206,23 +1201,22 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     }
 
     // Static system prompt (cacheable, no dynamic data)
-    const systemPrompt = `Telegram group spam classifier. Output JSON: reasoning, classification (SPAM/CLEAN), confidence (0-100).
+    const systemPrompt = `Telegram spam classifier. Output JSON: reason, spamScore.
 
 SPAM = ads, scams, phishing, crypto schemes, service promotion, mass messaging.
-NOT SPAM = chatting, questions, jokes, trolling, rudeness, arguments, contextual links.
+NOT SPAM = chatting, questions, jokes, trolling, rudeness, arguments.
+
+spamScore (0-100) = probability this is spam:
+  0-30: definitely not spam (normal chat, questions, even rude)
+  30-50: unlikely spam (suspicious but probably ok)
+  50-70: uncertain (could go either way)
+  70-90: likely spam (promotional, sketchy links, solicitation)
+  90-100: definitely spam (clear ads, scams, known patterns)
 
 Rules:
-- offensive ≠ spam (trolls are annoying, not spammers)
-- Trust users with history (messages, reputation, Stars rating)
-- Base reasoning ONLY on actual text provided
-
-Confidence guide:
-- 90-100: Obviously spam (clear ads, scam patterns)
-- 70-89: Likely spam but has some legitimate elements
-- 50-69: Suspicious, could go either way
-- 0-49: Likely clean or just rude/trolling
-
-When genuinely uncertain between spam/clean → use 50-70 confidence, not extremes.`
+- offensive ≠ spam (trolls annoy, spammers advertise)
+- Trust users with message history and reputation
+- reason = short explanation for group admins`
 
     // Dynamic user prompt with all context
     const userPrompt = `MESSAGE: ${messageText}
@@ -1237,39 +1231,38 @@ CONTEXT: ${contextInfo.join(' | ')}`
 
     const { analysis, model: usedModel } = llmResult
 
-    const isSpam = analysis.classification === 'SPAM'
-    let confidence = parseInt(analysis.confidence) || 70
+    // spamScore: 0-100 where 0=clean, 100=definitely spam
+    let spamScore = parseInt(analysis.spamScore) || 50
+    const isSpam = spamScore >= 70 // Threshold for considering it spam
 
     // Apply velocity boost if suspicious patterns detected
     if (isSpam && userContext.velocityBoost) {
-      const boostedConfidence = Math.min(99, confidence + userContext.velocityBoost)
+      spamScore = Math.min(99, Math.round(spamScore + userContext.velocityBoost))
       spamLog.debug({ boost: userContext.velocityBoost.toFixed(1), reason: userContext.velocityReason }, 'Velocity boost applied')
-      confidence = Math.round(boostedConfidence)
     }
 
     // Apply suspicious forward source boost
     if (isSpam && suspiciousForwardBoost > 0) {
-      const boostedConfidence = Math.min(99, confidence + suspiciousForwardBoost)
+      spamScore = Math.min(99, Math.round(spamScore + suspiciousForwardBoost))
       spamLog.debug({ boost: suspiciousForwardBoost }, 'Suspicious forward boost applied')
-      confidence = Math.round(boostedConfidence)
     }
 
-    spamLog.info({ isSpam, confidence, source: 'openrouter_llm', model: usedModel }, 'OpenRouter result')
+    spamLog.info({ isSpam, spamScore, source: 'openrouter_llm', model: usedModel }, 'OpenRouter result')
 
-    // Save to knowledge base based on confidence and action taken
+    // Save to knowledge base based on spamScore
     if (embedding) {
       let shouldSave = false
-      let saveConfidence = confidence / 100
+      // For Qdrant: use normalized score where 1.0 = spam, 0.0 = clean
+      const qdrantConfidence = spamScore / 100
 
-      // High confidence from LLM - always save
-      if (confidence >= 90) {
+      // High spam score - save as spam
+      if (spamScore >= 90) {
         shouldSave = true
-      } else if (confidence >= 75) {
-        // Medium confidence - save only if resulted in mute/ban (high certainty action)
-        // We'll check this after actions are taken - move saving logic to middleware
-        shouldSave = false // Don't save here, save in middleware after action
-      } else if (!isSpam && confidence >= 85) {
-        // Clean messages with high confidence - always save
+      } else if (spamScore >= 75) {
+        // Medium spam score - save in middleware after action confirmed
+        shouldSave = false
+      } else if (spamScore <= 30) {
+        // Low spam score = high confidence clean - save as clean
         shouldSave = true
       }
 
@@ -1279,10 +1272,10 @@ CONTEXT: ${contextInfo.join(' | ')}`
             text: messageText,
             embedding,
             classification: isSpam ? 'spam' : 'clean',
-            confidence: saveConfidence,
+            confidence: qdrantConfidence,
             features
           })
-          qdrantLog.debug({ confidence }, 'Saved vector to Qdrant')
+          qdrantLog.debug({ spamScore }, 'Saved vector to Qdrant')
         } catch (saveError) {
           qdrantLog.error({ err: saveError.message }, 'Failed to save vector')
         }
@@ -1291,8 +1284,8 @@ CONTEXT: ${contextInfo.join(' | ')}`
 
     return {
       isSpam,
-      confidence,
-      reason: analysis.reasoning,
+      confidence: spamScore, // Keep as 'confidence' for compatibility with rest of system
+      reason: analysis.reason,
       source: 'openrouter_llm'
     }
   } catch (error) {
