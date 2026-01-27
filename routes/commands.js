@@ -1,6 +1,7 @@
 const rateLimit = require('telegraf-ratelimit')
 const { onlyGroup } = require('../middlewares')
 const {
+  handleStart,
   handleHelp,
   handlePing,
   handleSetLanguage,
@@ -32,6 +33,7 @@ const bananRateLimit = rateLimit({
  */
 const registerCommands = (bot) => {
   // Basic commands (any chat)
+  bot.command('start', handleStart)
   bot.command('help', handleHelp)
   bot.command('ping', handlePing)
   bot.command('lang', handleSetLanguage)

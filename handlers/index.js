@@ -35,6 +35,7 @@ const { handleTrust, handleUntrust } = require('./admin/trust')
 const { handleSpamVoteCallback, processExpiredVotes } = require('./spam-vote')
 
 module.exports = {
+  handleStart,
   handleHelp,
   handleKick,
   handlePing,
