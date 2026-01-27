@@ -17,10 +17,16 @@ const getFile = (url) => {
 }
 
 module.exports = async (ctx) => {
-  const chatMember = await ctx.tg.getChatMember(
-    ctx.message.chat.id,
-    ctx.message.from.id
-  )
+  let chatMember
+  try {
+    chatMember = await ctx.tg.getChatMember(
+      ctx.message.chat.id,
+      ctx.message.from.id
+    )
+  } catch (err) {
+    // Bot is not admin in this chat, can't check member status
+    return
+  }
 
   if (
     ['creator', 'administrator'].includes(chatMember.status) &&
