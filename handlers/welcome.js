@@ -1,4 +1,5 @@
 const { userName } = require('../utils')
+const { scheduleDeletion } = require('../helpers/message-cleanup')
 
 module.exports = async (ctx) => {
   if (ctx.group.info.settings.welcome.enable === true) {
@@ -31,10 +32,14 @@ module.exports = async (ctx) => {
       })
     }
 
-    if (message) {
-      setTimeout(() => {
-        ctx.deleteMessage(message.message_id)
-      }, ctx.group.info.settings.welcome.timer * 1000)
+    if (message && ctx.db) {
+      const delayMs = ctx.group.info.settings.welcome.timer * 1000
+      scheduleDeletion(ctx.db, {
+        chatId: ctx.chat.id,
+        messageId: message.message_id,
+        delayMs,
+        source: 'cmd_welcome'
+      }, ctx.telegram)
     }
   }
 }

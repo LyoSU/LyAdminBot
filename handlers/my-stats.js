@@ -1,6 +1,7 @@
 const humanizeDuration = require('humanize-duration')
 const dateFormat = require('dateformat')
 const { userName } = require('../utils')
+const { scheduleDeletion } = require('../helpers/message-cleanup')
 
 module.exports = async (ctx) => {
   if (['supergroup', 'group'].includes(ctx.chat.type)) {
@@ -42,11 +43,22 @@ module.exports = async (ctx) => {
       })
     }
 
-    if (gMessage) {
-      setTimeout(() => {
-        ctx.deleteMessage(gMessage.message_id)
-        ctx.deleteMessage()
-      }, 3 * 1000)
+    if (gMessage && ctx.db) {
+      const delayMs = 3 * 1000
+      // Delete bot's response
+      scheduleDeletion(ctx.db, {
+        chatId: ctx.chat.id,
+        messageId: gMessage.message_id,
+        delayMs,
+        source: 'cmd_stats'
+      }, ctx.telegram)
+      // Delete user's command
+      scheduleDeletion(ctx.db, {
+        chatId: ctx.chat.id,
+        messageId: ctx.message.message_id,
+        delayMs,
+        source: 'cmd_stats'
+      }, ctx.telegram)
     }
   }
 }

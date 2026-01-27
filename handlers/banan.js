@@ -1,6 +1,7 @@
 const humanizeDuration = require('humanize-duration')
 const { userName, getRandomInt } = require('../utils')
 const { mapTelegramError } = require('../helpers/error-mapper')
+const { scheduleDeletion } = require('../helpers/message-cleanup')
 
 module.exports = async (ctx) => {
   const arg = ctx.message.text.split(/ +/)
@@ -121,11 +122,22 @@ module.exports = async (ctx) => {
         }
         if (autoBan) banMember.banan.stack += 1
 
-        if (ctx.from.id === banUser.id) {
-          setTimeout(() => {
-            ctx.deleteMessage(message.message_id)
-            ctx.deleteMessage()
-          }, 15 * 1000)
+        if (ctx.from.id === banUser.id && ctx.db) {
+          const delayMs = 15 * 1000
+          // Delete bot's response
+          scheduleDeletion(ctx.db, {
+            chatId: ctx.chat.id,
+            messageId: message.message_id,
+            delayMs,
+            source: 'cmd_banan'
+          }, ctx.telegram)
+          // Delete user's command
+          scheduleDeletion(ctx.db, {
+            chatId: ctx.chat.id,
+            messageId: ctx.message.message_id,
+            delayMs,
+            source: 'cmd_banan'
+          }, ctx.telegram)
         }
       }).catch((error) => {
         const errorKey = mapTelegramError(error, 'banan')

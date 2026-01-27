@@ -2,6 +2,7 @@ const humanizeDuration = require('humanize-duration')
 const { version } = require('../package.json')
 const spawn = require('child_process').spawn
 const os = require('os')
+const { scheduleDeletion } = require('../helpers/message-cleanup')
 
 function getTempPi () {
   return new Promise((resolve) => {
@@ -61,8 +62,22 @@ module.exports = async (ctx) => {
     { parse_mode: 'HTML' }
   )
 
-  setTimeout(() => {
-    ctx.deleteMessage(message.message_id)
-    ctx.deleteMessage()
-  }, 5 * 1000)
+  // Schedule auto-delete after 5 seconds (persistent)
+  if (ctx.db) {
+    const delayMs = 5 * 1000
+    // Delete bot's response
+    scheduleDeletion(ctx.db, {
+      chatId: ctx.chat.id,
+      messageId: message.message_id,
+      delayMs,
+      source: 'cmd_ping'
+    }, ctx.telegram)
+    // Delete user's command
+    scheduleDeletion(ctx.db, {
+      chatId: ctx.chat.id,
+      messageId: ctx.message.message_id,
+      delayMs,
+      source: 'cmd_ping'
+    }, ctx.telegram)
+  }
 }

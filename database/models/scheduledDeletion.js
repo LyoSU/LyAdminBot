@@ -24,7 +24,24 @@ const scheduledDeletionSchema = mongoose.Schema({
   // Source for logging/debugging
   source: {
     type: String,
-    enum: ['vote_result', 'cas_ban', 'spam_high_confidence', 'spam_no_permissions', 'vote_timeout', 'other'],
+    enum: [
+      // Spam-related
+      'vote_result',
+      'cas_ban',
+      'spam_high_confidence',
+      'spam_no_permissions',
+      'vote_timeout',
+      'report_spam',
+      'report_clean',
+      // Command responses
+      'cmd_ping',
+      'cmd_help',
+      'cmd_stats',
+      'cmd_banan',
+      'cmd_welcome',
+      // Generic
+      'other'
+    ],
     default: 'other'
   },
 
