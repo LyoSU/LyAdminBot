@@ -17,7 +17,18 @@ module.exports = async (ctx) => {
 
   if (kickUser) {
     await ctx.telegram.unbanChatMember(ctx.chat.id, kickUser.id).then(() => {
-      ctx.replyWithHTML(ctx.i18n.t('kick.suc', {
+      // Self-kick easter egg
+      const isSelfKick = ctx.from.id === kickUser.id
+      const isAdmin = chatMember && ['creator', 'administrator'].includes(chatMember.status)
+      let msgKey = 'kick.suc'
+
+      if (isSelfKick && isAdmin) {
+        msgKey = 'kick.easter.admin_self'
+      } else if (isSelfKick) {
+        msgKey = 'kick.easter.self'
+      }
+
+      ctx.replyWithHTML(ctx.i18n.t(msgKey, {
         name: userName(kickUser, true)
       }))
     }).catch((error) => {

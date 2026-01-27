@@ -38,7 +38,13 @@ module.exports = async (ctx) => {
         }
       )
 
-      top += `\n${index + 1}. ${userName(user)} — ${banan}`
+      // Add title/medal for top 3
+      const position = index + 1
+      const titleKey = `cmd.top_banan.titles.${position}`
+      const title = ctx.i18n.t(titleKey)
+      const medal = title !== titleKey ? `${title} ` : ''
+
+      top += `\n${medal}${position}. ${userName(user)} — ${banan}`
     }
 
     topMembers.sort((a, b) => b.banan.num - a.banan.num)
@@ -51,7 +57,13 @@ module.exports = async (ctx) => {
       const user = await ctx.db.User.findOne({ telegram_id: topMembersNum[index].telegram_id })
       const banan = topMembersNum[index].banan.num
 
-      top += `\n${index + 1}. ${userName(user)} — ${banan} 🍌`
+      // Add title/medal for top 3
+      const position = index + 1
+      const titleKey = `cmd.top_banan.titles.${position}`
+      const title = ctx.i18n.t(titleKey)
+      const medal = title !== titleKey ? `${title} ` : ''
+
+      top += `\n${medal}${position}. ${userName(user)} — ${banan} 🍌`
     }
 
     result = ctx.i18n.t('cmd.top_banan.info', {

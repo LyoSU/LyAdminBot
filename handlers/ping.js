@@ -56,9 +56,18 @@ module.exports = async (ctx) => {
 
   extra += delay
 
+  // Easter egg for fast/slow response
+  let pingKey = 'cmd.ping.pong'
+  const totalMs = sms + tms
+  if (totalMs < 50) {
+    pingKey = 'cmd.ping.easter.fast'
+  } else if (totalMs > 2000 || dt > 5) {
+    pingKey = 'cmd.ping.easter.slow'
+  }
+
   await ctx.telegram.editMessageText(
     message.chat.id, message.message_id, null,
-    ctx.i18n.t('cmd.ping.pong', { sms, tms, workTime, extra }),
+    ctx.i18n.t(pingKey, { sms, tms, workTime, extra }),
     { parse_mode: 'HTML' }
   )
 

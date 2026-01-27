@@ -77,6 +77,11 @@ cmd:
       ${top}
     error:
       empty: Тут яшчэ ніхто не атрымліваў 🍌
+    titles:
+      1: "👑"
+      2: "🥈"
+      3: "🥉"
+    crown: "👑 Бананавы кароль"
   extras:
     list: |
       📝 <b>Extra каманды:</b>
@@ -167,6 +172,13 @@ banan:
   error_admin: "❌ Адмінаў не муцяць 😏"
   error_left: "❌ Ужо не ў чаце"
   error_no_rights: "❌ Дай мне правы баніць"
+  easter:
+    nice: "${name} атрымлівае 🍌\n<b>На:</b> ${duration}\n\n<i>nice</i>"
+    blaze: "${name} атрымлівае 🍌🔥\n<b>На:</b> ${duration}\n\n<i>blaze it</i>"
+    huge: "${name} атрымлівае БАНАНІШЧА 🍌🍌🍌\n<b>На:</b> ${duration}"
+    self: "${name} паказвае 🍌 сам сабе\n<i>паважаю рашэнне</i>"
+    self_again: "${name} зноў паказвае 🍌 сам сабе\n<i>гэта ўжо традыцыя?</i>"
+    self_legend: "${name} паказвае 🍌 сам сабе\n<i>легенда самамадэрацыі</i>"
 kick:
   suc: ${name} вылятае з чата 👢
   who: Каго кікнуць? 🤔
@@ -174,6 +186,8 @@ kick:
   error_admin: "❌ Адмінаў не кікаюць"
   error_left: "❌ Ужо не ў чаце"
   error_no_rights: "❌ Дай мне правы баніць"
+  easter:
+    self: "${name} сам сябе кікнуў 👢\n<i>паважаю</i>"
 del:
   error: "❌ Не магу выдаліць"
   error_no_rights: "❌ Дай мне правы выдаляць"

@@ -3,6 +3,44 @@ const { userName, getRandomInt } = require('../utils')
 const { mapTelegramError } = require('../helpers/error-mapper')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
 
+/**
+ * Get easter egg key based on ban context
+ */
+function getEasterEggKey (ctx, banTime, banUser, banMember) {
+  const isSelfBan = ctx.from.id === banUser.id
+  const selfBanCount = banMember?.banan?.num || 0
+
+  // 69 or 420 easter eggs
+  if (banTime === 69 || banTime === 69 * 60) return 'banan.easter.nice'
+  if (banTime === 420 || banTime === 420 * 60) return 'banan.easter.blaze'
+
+  // Huge ban (> 7 days)
+  if (banTime > 7 * 24 * 60 * 60) return 'banan.easter.huge'
+
+  // Exactly 60 seconds
+  if (banTime === 60) return 'banan.easter.minute_exact'
+
+  // Self-ban variants
+  if (isSelfBan) {
+    if (selfBanCount >= 5) return 'banan.easter.self_legend'
+    if (selfBanCount >= 2) return 'banan.easter.self_again'
+    return 'banan.easter.self'
+  }
+
+  // First ban after many messages (> 100)
+  if (banMember && banMember.banan.num === 0 && banMember.stats?.textTotal > 100) {
+    return 'banan.easter.first_after_many'
+  }
+
+  // Round number bans (10, 25, 50, 100...)
+  const roundNumbers = [10, 25, 50, 100, 200, 500, 1000]
+  if (banMember && roundNumbers.includes(banMember.banan.num + 1)) {
+    return 'banan.easter.round_number'
+  }
+
+  return null // No easter egg
+}
+
 module.exports = async (ctx) => {
   const arg = ctx.message.text.split(/ +/)
   const chatMember = await ctx.telegram.getChatMember(ctx.message.chat.id, ctx.message.from.id)
@@ -95,10 +133,16 @@ module.exports = async (ctx) => {
           })
         }
 
-        const message = await ctx.replyWithHTML(ctx.i18n.t('banan.suc', {
+        // Check for easter egg
+        const easterKey = getEasterEggKey(ctx, banTime, banUser, banMember)
+        const msgKey = easterKey || 'banan.suc'
+        const msgParams = {
           name: userName(banUser, true),
-          duration: banDuration
-        }))
+          duration: banDuration,
+          count: (banMember?.banan?.num || 0) + 1
+        }
+
+        const message = await ctx.replyWithHTML(ctx.i18n.t(msgKey, msgParams))
 
         // const replyBanMember = await ctx.telegram.getChatMember(
         //   ctx.message.chat.id,
@@ -166,7 +210,16 @@ module.exports = async (ctx) => {
     banMember.banan.time = Date.now()
     await banMember.save()
   } else {
-    await ctx.replyWithHTML(ctx.i18n.t('banan.show', {
+    // Self-show - check for easter egg variant
+    let showKey = 'banan.show'
+    if (ctx.group?.members?.[ctx.from.id]) {
+      const member = ctx.group.members[ctx.from.id]
+      const selfCount = member?.banan?.num || 0
+      if (selfCount >= 5) showKey = 'banan.easter.self_legend'
+      else if (selfCount >= 2) showKey = 'banan.easter.self_again'
+    }
+
+    await ctx.replyWithHTML(ctx.i18n.t(showKey, {
       name: userName(ctx.from, true)
     }))
   }

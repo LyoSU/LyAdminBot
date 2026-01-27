@@ -121,6 +121,12 @@ banan:
   error_admin: "❌ Adminler susturulamaz 😏"
   error_left: "❌ Zaten gruptan ayrılmış"
   error_no_rights: "❌ Bana banlama yetkisi ver"
+  easter:
+    nice: "${name} 🍌 alıyor\n<b>Süre:</b> ${duration}\n\n<i>nice</i>"
+    blaze: "${name} 🍌🔥 alıyor\n<b>Süre:</b> ${duration}\n\n<i>blaze it</i>"
+    huge: "${name} DEV MUZ 🍌🍌🍌 alıyor\n<b>Süre:</b> ${duration}"
+    self: "${name} kendine 🍌 gösteriyor\n<i>karara saygı</i>"
+    self_again: "${name} yine kendine 🍌 gösteriyor\n<i>bu artık gelenek mi?</i>"
 kick:
   suc: ${name} gruptan atıldı 👢
   who: Kimi atayım? 🤔
@@ -128,6 +134,8 @@ kick:
   error_admin: "❌ Adminler atılamaz"
   error_left: "❌ Zaten gruptan ayrılmış"
   error_no_rights: "❌ Bana banlama yetkisi ver"
+  easter:
+    self: "${name} kendini attı 👢\n<i>saygılar</i>"
 del:
   error: "❌ Silemiyorum"
   error_no_rights: "❌ Bana silme yetkisi ver"
