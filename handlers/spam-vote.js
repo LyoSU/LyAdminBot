@@ -350,12 +350,36 @@ const processExpiredVotes = async (db, telegram) => {
           }
         }
 
-        // Delete the notification message
+        // Show timeout result and delete after delay
         if (vote.notificationMessageId && vote.notificationChatId) {
           try {
-            await telegram.deleteMessage(vote.notificationChatId, vote.notificationMessageId)
+            // Get group locale
+            const group = await db.Group.findOne({ group_id: vote.chatId })
+            const isUkrainian = group?.locale === 'uk'
+
+            const timeoutText = isUkrainian
+              ? `⏱ <b>Час вийшов</b>\n\n👤 ${vote.bannedUserName}\n🔒 Спам підтверджено`
+              : `⏱ <b>Time's up</b>\n\n👤 ${vote.bannedUserName}\n🔒 Spam confirmed`
+
+            await telegram.editMessageText(
+              vote.notificationChatId,
+              vote.notificationMessageId,
+              null,
+              timeoutText,
+              { parse_mode: 'HTML' }
+            )
+
+            // Delete after 30 seconds
+            setTimeout(async () => {
+              try {
+                await telegram.deleteMessage(vote.notificationChatId, vote.notificationMessageId)
+              } catch { /* ignore */ }
+            }, 30000)
           } catch {
-            // Ignore delete errors
+            // If edit fails, try to delete
+            try {
+              await telegram.deleteMessage(vote.notificationChatId, vote.notificationMessageId)
+            } catch { /* ignore */ }
           }
         }
       } else {

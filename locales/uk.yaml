@@ -275,6 +275,7 @@ spam_vote:
   reputation_change: "📊 ${oldScore} → ${newScore}"
   added_to_signatures: "🔒 Додано в базу спаму"
   status_trusted: "✨ Тепер в довірених"
+  timeout_confirmed: "⏱ <b>Час вийшов</b>\n\n👤 ${name}\n🔒 Спам підтверджено"
   cb:
     invalid_format: "Невірний формат"
     invalid_vote: "Невірний голос"

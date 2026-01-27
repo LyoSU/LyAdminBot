@@ -292,6 +292,7 @@ spam_vote:
   reputation_change: "📊 ${oldScore} → ${newScore}"
   added_to_signatures: "🔒 Added to spam database"
   status_trusted: "✨ Now trusted"
+  timeout_confirmed: "⏱ <b>Time's up</b>\n\n👤 ${name}\n🔒 Spam confirmed"
   cb:
     invalid_format: "Invalid format"
     invalid_vote: "Invalid vote"
