@@ -55,32 +55,45 @@ const processVoteResult = async (ctx, spamVote) => {
   if (winner === 'clean') {
     // UNBAN: Community decided this was not spam
 
-    // 1. Unmute the user (remove restrictions)
+    // 1. Unban/unmute the user
     try {
       if (spamVote.bannedUserId > 0) {
-        // Remove restrictions by granting all permissions
-        await ctx.telegram.restrictChatMember(spamVote.chatId, spamVote.bannedUserId, {
-          permissions: {
-            can_send_messages: true,
-            can_send_audios: true,
-            can_send_documents: true,
-            can_send_photos: true,
-            can_send_videos: true,
-            can_send_video_notes: true,
-            can_send_voice_notes: true,
-            can_send_polls: true,
-            can_send_other_messages: true,
-            can_add_web_page_previews: true,
-            can_change_info: false,
-            can_invite_users: true,
-            can_pin_messages: false,
-            can_manage_topics: false
-          }
-        })
-        log.info({
-          eventId: spamVote.eventId,
-          userId: spamVote.bannedUserId
-        }, 'Unmuted user by community vote')
+        if (spamVote.actionTaken?.banned) {
+          // User was fully banned - use unbanChatMember
+          await ctx.telegram.callApi('unbanChatMember', {
+            chat_id: spamVote.chatId,
+            user_id: spamVote.bannedUserId,
+            only_if_banned: true
+          })
+          log.info({
+            eventId: spamVote.eventId,
+            userId: spamVote.bannedUserId
+          }, 'Unbanned user by community vote')
+        } else {
+          // User was muted - remove restrictions
+          await ctx.telegram.restrictChatMember(spamVote.chatId, spamVote.bannedUserId, {
+            permissions: {
+              can_send_messages: true,
+              can_send_audios: true,
+              can_send_documents: true,
+              can_send_photos: true,
+              can_send_videos: true,
+              can_send_video_notes: true,
+              can_send_voice_notes: true,
+              can_send_polls: true,
+              can_send_other_messages: true,
+              can_add_web_page_previews: true,
+              can_change_info: false,
+              can_invite_users: true,
+              can_pin_messages: false,
+              can_manage_topics: false
+            }
+          })
+          log.info({
+            eventId: spamVote.eventId,
+            userId: spamVote.bannedUserId
+          }, 'Unmuted user by community vote')
+        }
       } else {
         // For channels, use unbanChatSenderChat
         await ctx.telegram.callApi('unbanChatSenderChat', {
@@ -93,7 +106,7 @@ const processVoteResult = async (ctx, spamVote) => {
         }, 'Unbanned channel by community vote')
       }
     } catch (error) {
-      log.error({ err: error.message, eventId: spamVote.eventId }, 'Failed to unmute')
+      log.error({ err: error.message, eventId: spamVote.eventId }, 'Failed to unban/unmute')
     }
 
     // 2. Set user as trusted (only for real users, not channels)
