@@ -1070,16 +1070,23 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     }
 
     // Static system prompt (cacheable, no dynamic data)
-    const systemPrompt = `Telegram group spam classifier. Classify the MESSAGE. Output JSON: reasoning, classification (SPAM/CLEAN), confidence (0-100).
+    const systemPrompt = `Telegram group spam classifier. Output JSON: reasoning, classification (SPAM/CLEAN), confidence (0-100).
 
-SPAM = unwanted commercial/scam content: ads, scams, phishing, service promotion, mass messaging.
+SPAM = ads, scams, phishing, crypto schemes, service promotion, mass messaging.
+NOT SPAM = chatting, questions, jokes, trolling, rudeness, arguments, contextual links.
 
-NOT SPAM = normal human behavior: chatting, questions, jokes, trolling, rudeness, arguments, sharing links in context.
+Rules:
+- offensive ≠ spam (trolls are annoying, not spammers)
+- Trust users with history (messages, reputation, Stars rating)
+- Base reasoning ONLY on actual text provided
 
-Key principle: offensive ≠ spam. Trolls and rude users are annoying but not spammers.
-Trust users with history (messages, reputation, Stars rating).
-CRITICAL: Base reasoning ONLY on actual text provided. Never invent or assume content not present.
-When uncertain → CLEAN.`
+Confidence guide:
+- 90-100: Obviously spam (clear ads, scam patterns)
+- 70-89: Likely spam but has some legitimate elements
+- 50-69: Suspicious, could go either way
+- 0-49: Likely clean or just rude/trolling
+
+When genuinely uncertain between spam/clean → use 50-70 confidence, not extremes.`
 
     // Dynamic user prompt with all context
     const userPrompt = `MESSAGE: ${messageText}
