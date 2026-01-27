@@ -275,11 +275,22 @@ module.exports = async (ctx) => {
         return false
       }
 
-      spamLog.info({
+      // Log result with quick assessment info if available
+      const logData = {
         isSpam: result.isSpam,
         confidence: result.confidence,
         source: result.source
-      }, result.isSpam ? 'SPAM detected' : 'CLEAN')
+      }
+
+      // Include quick assessment in log if present
+      if (result.quickAssessment) {
+        logData.quickRisk = result.quickAssessment.risk
+        if (result.quickAssessment.signals && result.quickAssessment.signals.length > 0) {
+          logData.quickSignals = result.quickAssessment.signals
+        }
+      }
+
+      spamLog.info(logData, result.isSpam ? 'SPAM detected' : 'CLEAN')
 
       if (isTestMode) {
         spamLog.info({

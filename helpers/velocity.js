@@ -351,6 +351,147 @@ const calculateWordEntropy = (text) => {
 }
 
 // ============================================================================
+// FORWARD TRACKING
+// ============================================================================
+
+/**
+ * Generate hash for forward origin
+ * Different forward types get different hash prefixes for tracking
+ */
+const getForwardHash = (forwardOrigin) => {
+  if (!forwardOrigin) return null
+
+  let identifier = ''
+  let type = 'unknown'
+
+  switch (forwardOrigin.type) {
+    case 'user':
+      // Forward from regular user
+      type = 'user'
+      identifier = (forwardOrigin.sender_user && forwardOrigin.sender_user.id)
+        ? forwardOrigin.sender_user.id.toString()
+        : ''
+      break
+    case 'hidden_user':
+      // Forward from hidden user - use sender_user_name as identifier
+      type = 'hidden'
+      identifier = forwardOrigin.sender_user_name || 'unknown_hidden'
+      break
+    case 'chat':
+      // Forward from group/supergroup
+      type = 'chat'
+      identifier = (forwardOrigin.sender_chat && forwardOrigin.sender_chat.id)
+        ? forwardOrigin.sender_chat.id.toString()
+        : ''
+      break
+    case 'channel':
+      // Forward from channel
+      type = 'channel'
+      if (forwardOrigin.chat && forwardOrigin.chat.id) {
+        identifier = forwardOrigin.chat.id.toString()
+      } else if (forwardOrigin.message_id) {
+        identifier = forwardOrigin.message_id.toString()
+      } else {
+        identifier = ''
+      }
+      break
+    default:
+      return null
+  }
+
+  if (!identifier) return null
+
+  const hash = crypto.createHash('sha256')
+    .update(`${type}:${identifier}`)
+    .digest('hex')
+    .substring(0, 16)
+
+  return { type, hash, identifier }
+}
+
+/**
+ * Record forward occurrence for velocity tracking
+ * Tracks forwards across chats to detect spam campaigns
+ *
+ * @param {Object} forwardOrigin - Telegram forward_origin object
+ * @param {number} userId - User who sent the forward
+ * @param {number} chatId - Chat where forward was sent
+ * @param {number} messageId - Message ID
+ */
+const recordForwardOrigin = async (forwardOrigin, userId, chatId, messageId) => {
+  if (!forwardOrigin) return null
+
+  const forwardInfo = getForwardHash(forwardOrigin)
+  if (!forwardInfo) return null
+
+  const now = Date.now()
+  const member = `${userId}:${chatId}:${messageId}`
+
+  // Record by forward type and hash
+  const key = `vel:forward:${forwardInfo.type}:${forwardInfo.hash}`
+  await store.zadd(key, now, member)
+
+  // Track user's forward activity
+  await store.hincrby(`vel:user:${userId}:stats`, 'totalForwards', 1)
+  await store.sadd(`vel:user:${userId}:forward_sources`, forwardInfo.hash)
+
+  velocityLog.debug({
+    type: forwardInfo.type,
+    hash: forwardInfo.hash.substring(0, 8)
+  }, 'Recorded forward')
+
+  return forwardInfo
+}
+
+/**
+ * Get velocity score for a specific forward origin
+ * Checks how many unique chats received the same forward
+ *
+ * @param {Object} forwardOrigin - Telegram forward_origin object
+ * @param {number} window - Time window in ms (default: 1 hour)
+ * @returns {Object} { count, uniqueChats, uniqueUsers, score }
+ */
+const getForwardVelocity = async (forwardOrigin, window = CONFIG.WINDOWS.MEDIUM) => {
+  if (!forwardOrigin) {
+    return { count: 0, uniqueChats: 0, uniqueUsers: 0, score: 0 }
+  }
+
+  const forwardInfo = getForwardHash(forwardOrigin)
+  if (!forwardInfo) {
+    return { count: 0, uniqueChats: 0, uniqueUsers: 0, score: 0 }
+  }
+
+  const now = Date.now()
+  const key = `vel:forward:${forwardInfo.type}:${forwardInfo.hash}`
+  const entries = await store.zrangebyscore(key, now - window, now)
+
+  // Count unique chats and users
+  const chats = new Set()
+  const users = new Set()
+
+  for (const entry of entries) {
+    const parts = entry.member.split(':')
+    users.add(parts[0])
+    chats.add(parts[1])
+  }
+
+  // Different thresholds based on forward type
+  // Hidden forwards are more suspicious, require fewer occurrences
+  const threshold = forwardInfo.type === 'hidden' ? 3 : 4
+
+  const score = Math.min(1, (chats.size - 1) / threshold)
+
+  return {
+    count: entries.length,
+    uniqueChats: chats.size,
+    uniqueUsers: users.size,
+    score,
+    type: forwardInfo.type,
+    hash: forwardInfo.hash
+  }
+}
+
+// ============================================================================
 // VELOCITY TRACKING
 // ============================================================================
 
@@ -601,7 +742,7 @@ const getDecayedCount = async (key, window) => {
 // MAIN SCORING ENGINE
 // ============================================================================
 
-const calculateVelocityScore = async (text, userId, chatId, messageId) => {
+const calculateVelocityScore = async (text, userId, chatId, messageId, forwardOrigin = null) => {
   // Skip very short messages
   if (!text || text.length < 5) {
     return { score: 0, confidence: 0, dominated: 'skip', signals: {} }
@@ -609,6 +750,11 @@ const calculateVelocityScore = async (text, userId, chatId, messageId) => {
 
   // Record this occurrence
   const hashes = await recordOccurrence(text, userId, chatId, messageId)
+
+  // Record forward if present
+  if (forwardOrigin) {
+    await recordForwardOrigin(forwardOrigin, userId, chatId, messageId)
+  }
 
   // Collect all signals
   const signals = {}
@@ -652,7 +798,20 @@ const calculateVelocityScore = async (text, userId, chatId, messageId) => {
     signals.linkVelocity = { score: 0, linkCount: 0 }
   }
 
-  // 5. User behavior
+  // 5. Forward velocity (NEW - tracks forwarded content across chats)
+  if (forwardOrigin) {
+    const forwardVel = await getForwardVelocity(forwardOrigin)
+    signals.forwardVelocity = {
+      count: forwardVel.count,
+      uniqueChats: forwardVel.uniqueChats,
+      type: forwardVel.type,
+      score: forwardVel.score
+    }
+  } else {
+    signals.forwardVelocity = { score: 0, count: 0, uniqueChats: 0 }
+  }
+
+  // 6. User behavior
   const behavior = await analyzeUserBehavior(userId)
   signals.userBehavior = {
     ...behavior,
@@ -660,21 +819,21 @@ const calculateVelocityScore = async (text, userId, chatId, messageId) => {
     botScore: behavior.isBotLike ? 0.8 : 0
   }
 
-  // 6. Temporal analysis
+  // 7. Temporal analysis
   const temporal = await analyzeTemporalPattern(userId)
   signals.temporal = {
     ...temporal,
     score: temporal.isNatural ? 0 : 0.5
   }
 
-  // 7. Network analysis
+  // 8. Network analysis
   const network = await analyzeNetwork(userId)
   signals.network = {
     ...network,
     score: network.isCoordinated ? 0.9 : (network.isPartOfNetwork ? 0.5 : 0)
   }
 
-  // 8. Content entropy
+  // 9. Content entropy
   const charEntropy = calculateEntropy(text)
   const wordEntropy = calculateWordEntropy(text)
   signals.entropy = {
@@ -685,14 +844,16 @@ const calculateVelocityScore = async (text, userId, chatId, messageId) => {
   }
 
   // Calculate weighted final score
+  // Updated weights with forwardVelocity and rebalanced for less false positives
   const weights = {
-    exactMatch: 0.30,
-    fuzzyMatch: 0.15,
-    structureMatch: 0.10,
-    linkVelocity: 0.20,
+    exactMatch: 0.25, // Reduced from 0.30
+    fuzzyMatch: 0.12, // Reduced from 0.15
+    structureMatch: 0.08,
+    linkVelocity: 0.18, // Reduced from 0.20
+    forwardVelocity: 0.15, // NEW - important for forward spam
     userBehavior: 0.10,
-    temporal: 0.05,
-    network: 0.08,
+    temporal: 0.04, // Reduced from 0.05
+    network: 0.06, // Reduced from 0.08
     entropy: 0.02
   }
 
@@ -701,6 +862,7 @@ const calculateVelocityScore = async (text, userId, chatId, messageId) => {
   totalScore += signals.fuzzyMatch.score * weights.fuzzyMatch
   totalScore += signals.structureMatch.score * weights.structureMatch
   totalScore += signals.linkVelocity.score * weights.linkVelocity
+  totalScore += signals.forwardVelocity.score * weights.forwardVelocity
   totalScore += (signals.userBehavior.burstScore + signals.userBehavior.botScore) / 2 * weights.userBehavior
   totalScore += signals.temporal.score * weights.temporal
   totalScore += signals.network.score * weights.network
@@ -729,6 +891,16 @@ const getRecommendation = (score, signals) => {
   // Hard rules
   if (signals.exactMatch.uniqueChats >= 5) {
     return { action: 'MUTE_AND_DELETE', reason: 'Exact message in 5+ chats', confidence: 95 }
+  }
+
+  // Forward velocity - same forward in multiple chats
+  if (signals.forwardVelocity && signals.forwardVelocity.uniqueChats >= 4) {
+    const forwardType = signals.forwardVelocity.type === 'hidden' ? 'hidden user' : 'source'
+    return {
+      action: 'MUTE_AND_DELETE',
+      reason: `Forward from ${forwardType} in ${signals.forwardVelocity.uniqueChats}+ chats`,
+      confidence: 92
+    }
   }
 
   if (signals.network.isCoordinated) {
@@ -765,6 +937,11 @@ module.exports = {
   analyzeUserBehavior,
   analyzeNetwork,
   getHashVelocity,
+
+  // Forward tracking
+  recordForwardOrigin,
+  getForwardVelocity,
+  getForwardHash,
 
   // Hash functions (for testing/debugging)
   getExactHash,

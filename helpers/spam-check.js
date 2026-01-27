@@ -26,7 +26,7 @@ const openRouter = new OpenAI({
   defaultHeaders: {
     'HTTP-Referer': 'https://LyAdminBot.t.me',
     'X-Title': 'LyAdminBot Spam Check Helper'
-  },
+  }
 })
 
 // Create OpenAI client for moderation
@@ -142,7 +142,7 @@ const callLLMWithRetry = async (systemPrompt, userPrompt, maxRetries = 3) => {
     }
   }
 
-  spamLog.error({ err: lastError?.message, attempts: maxRetries }, 'All LLM retry attempts failed')
+  spamLog.error({ err: lastError && lastError.message, attempts: maxRetries }, 'All LLM retry attempts failed')
   return null
 }
 
@@ -174,9 +174,227 @@ const isTrustedUser = (userId, groupSettings) => {
 }
 
 /**
- * Escape special regex characters to prevent ReDoS attacks
+ * Quick risk assessment based on Telegram-specific signals
+ * Returns risk level: 'skip' | 'low' | 'medium' | 'high'
+ *
+ * This function analyzes metadata BEFORE expensive API calls to:
+ * 1. Skip checks entirely for obviously clean messages
+ * 2. Skip OpenAI moderation for low-risk messages
+ * 3. Flag high-risk signals for closer inspection
+ *
+ * @param {Object} ctx - Telegram context
+ * @returns {Object} { risk: string, signals: string[], trustSignals: string[] }
  */
-const escapeRegexPattern = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const quickRiskAssessment = (ctx) => {
+  const message = ctx.message
+  if (!message) return { risk: 'medium', signals: [], trustSignals: [] }
+
+  const signals = [] // Suspicious signals
+  const trustSignals = [] // Trust signals
+
+  // ===== HIGH RISK SIGNALS =====
+
+  // 1. Forward from hidden user (common spam pattern)
+  if (message.forward_origin) {
+    if (message.forward_origin.type === 'hidden_user') {
+      signals.push('forward_hidden_user')
+    } else if (message.forward_origin.type === 'channel') {
+      // Forward from channel - moderate risk
+      signals.push('forward_channel')
+    }
+  }
+
+  // 2. Inline keyboard with URLs (promo buttons)
+  if (message.reply_markup && message.reply_markup.inline_keyboard) {
+    const buttons = message.reply_markup.inline_keyboard.flat()
+    const urlButtons = buttons.filter(btn => btn.url)
+    if (urlButtons.length > 0) {
+      signals.push('inline_url_buttons')
+      // Multiple URL buttons = higher risk
+      if (urlButtons.length >= 3) {
+        signals.push('many_url_buttons')
+      }
+    }
+  }
+
+  // 3. Suspicious entities in text
+  const entities = message.entities || message.caption_entities || []
+  const text = message.text || message.caption || ''
+
+  for (const entity of entities) {
+    // Cashtags ($BTC, $ETH) - crypto spam
+    if (entity.type === 'cashtag') {
+      signals.push('cashtag')
+    }
+    // Hidden text links (text says one thing, links to another)
+    if (entity.type === 'text_link') {
+      const linkText = text.substring(entity.offset, entity.offset + entity.length)
+      // Check if link text looks like a different URL
+      if (/^(https?:\/\/|www\.|t\.me)/i.test(linkText) && linkText !== entity.url) {
+        signals.push('hidden_url')
+      }
+    }
+    // Phone numbers in first message - often spam
+    if (entity.type === 'phone_number') {
+      signals.push('phone_number')
+    }
+  }
+
+  // 4. Via bot (might be automated)
+  if (message.via_bot) {
+    signals.push('via_bot')
+  }
+
+  // 5. Web preview without link in text (bot-added preview)
+  // Bots can add link_preview_options with URL not present in message text
+  if (message.link_preview_options && message.link_preview_options.url) {
+    const previewUrl = message.link_preview_options.url.toLowerCase()
+    const textLower = text.toLowerCase()
+    // Check if preview URL is NOT in the message text
+    if (!textLower.includes(previewUrl.replace(/^https?:\/\//, '').split('/')[0])) {
+      signals.push('hidden_preview')
+    }
+  }
+
+  // 6. Contact sharing (phone number as contact, not text)
+  if (message.contact) {
+    signals.push('shared_contact')
+    // Contact with different user_id than sender = suspicious
+    if (message.contact.user_id && ctx.from && message.contact.user_id !== ctx.from.id) {
+      signals.push('foreign_contact')
+    }
+  }
+
+  // 7. Location sharing (often used in scams)
+  if (message.location && !message.venue) {
+    // Raw location without venue context
+    signals.push('raw_location')
+  }
+
+  // 8. Dice/Game messages - suspicious only if NOT a reply
+  // Dice as reply to conversation = having fun, not spam
+  if ((message.dice || message.game) && !message.reply_to_message) {
+    signals.push('game_message')
+  }
+
+  // 9. Voice/Video message - suspicious only if NOT a reply
+  // Voice reply = real conversation
+  if ((message.voice || message.video_note) && !message.reply_to_message) {
+    signals.push('voice_video_note')
+  }
+
+  // 10. Poll/Quiz (can be used for engagement farming)
+  if (message.poll) {
+    signals.push('poll_message')
+  }
+
+  // 11. Premium emoji in name (common spam pattern)
+  const user = ctx.from
+  if (user) {
+    const name = `${user.first_name || ''} ${user.last_name || ''}`
+    // Check for excessive emojis in name (more than 2)
+    // Extended emoji ranges
+    const emojiRegex = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}]/gu
+    const emojiCount = (name.match(emojiRegex) || []).length
+    if (emojiCount > 2) {
+      signals.push('emoji_name')
+    }
+  }
+
+  // 12. Story mention/forward (new TG feature, can be abused)
+  if (message.story) {
+    signals.push('story_forward')
+  }
+
+  // 13. Paid media (premium content promotion)
+  if (message.paid_media) {
+    signals.push('paid_media')
+  }
+
+  // 14. Effect ID (message effects - sometimes used to grab attention)
+  if (message.effect_id) {
+    signals.push('message_effect')
+  }
+
+  // 15. Business connection (business account messages)
+  if (message.business_connection_id) {
+    signals.push('business_message')
+  }
+
+  // ===== TRUST SIGNALS =====
+
+  // 1. Reply to another message (engagement = conversation)
+  if (message.reply_to_message) {
+    trustSignals.push('is_reply')
+    // Reply to recent message (within 1 hour) = even more trust
+    // Safety: check both dates exist before calculating
+    if (message.date && message.reply_to_message.date) {
+      const replyAge = message.date - message.reply_to_message.date
+      if (replyAge >= 0 && replyAge < 3600) { // 1 hour, and positive (not future)
+        trustSignals.push('recent_reply')
+      }
+    }
+  }
+
+  // 2. Quote (user is referencing specific text)
+  if (message.quote) {
+    trustSignals.push('has_quote')
+  }
+
+  // 3. Sticker/GIF only (rarely spam)
+  if ((message.sticker || message.animation) && !text) {
+    trustSignals.push('media_only')
+  }
+
+  // 4. Short text replies (conversational)
+  if (text.length < 50 && !signals.length) {
+    trustSignals.push('short_message')
+  }
+
+  // ===== RISK CALCULATION =====
+
+  // Critical signals = instant high risk
+  const criticalSignals = [
+    'forward_hidden_user', // Hidden forward source
+    'hidden_url', // Deceptive text links
+    'hidden_preview', // Bot-added link preview
+    'many_url_buttons', // 3+ URL buttons
+    'foreign_contact' // Sharing someone else's contact
+  ]
+  const hasCritical = signals.some(s => criticalSignals.includes(s))
+
+  // Medium-weight signals (suspicious but not critical alone)
+  const mediumSignals = [
+    'cashtag', // Crypto mentions
+    'inline_url_buttons', // Any URL buttons
+    'phone_number', // Phone in text
+    'shared_contact', // Contact card
+    'paid_media' // Premium content promo
+  ]
+  const mediumCount = signals.filter(s => mediumSignals.includes(s)).length
+
+  if (hasCritical || signals.length >= 3 || mediumCount >= 2) {
+    return { risk: 'high', signals, trustSignals }
+  }
+
+  // Skip: strong trust signals with no suspicious signals
+  if (signals.length === 0 && trustSignals.length >= 2) {
+    return { risk: 'skip', signals, trustSignals }
+  }
+
+  // Low: trust signals outweigh risk, or just media
+  if (trustSignals.length > signals.length || trustSignals.includes('media_only')) {
+    return { risk: 'low', signals, trustSignals }
+  }
+
+  // Medium: some signals but not critical
+  if (signals.length > 0) {
+    return { risk: 'medium', signals, trustSignals }
+  }
+
+  // Default: low risk for clean messages
+  return { risk: 'low', signals, trustSignals }
+}
 
 /**
  * Apply custom rules to message text
@@ -232,62 +450,96 @@ const hasUserProfile = (ctx) => {
 }
 
 /**
- * Calculate dynamic threshold for LLM - Professional approach to minimize false positives
+ * Calculate dynamic threshold for LLM - Balanced approach to minimize false positives
+ *
+ * Philosophy: Don't penalize "newness" alone. Only adjust threshold based on:
+ * 1. POSITIVE signals (trust indicators)
+ * 2. SUSPICIOUS signals from quick assessment
+ * 3. Historical reputation data
+ *
+ * Higher threshold = harder to trigger spam action = more lenient
  */
 const calculateDynamicThreshold = (context, groupSettings) => {
-  let baseThreshold = (groupSettings && groupSettings.confidenceThreshold) || 75 // Increased from 70
+  let baseThreshold = (groupSettings && groupSettings.confidenceThreshold) || 75
 
-  // More conservative approach for new accounts
-  if (context.isNewAccount && context.messageCount <= 1) {
-    baseThreshold -= 10 // Reduced from -20
-  }
+  // ===== TRUST INDICATORS (raise threshold = more lenient) =====
 
-  if (context.messageCount <= 1 && !context.isNewAccount) {
-    baseThreshold -= 5 // Reduced from -15
-  }
+  // Premium users are unlikely to be spammers
+  if (context.isPremium) baseThreshold += 20
 
-  // Trust indicators
-  if (context.isPremium) baseThreshold += 20 // Increased from 15
-  if (context.hasProfile) baseThreshold += 15 // Increased from 10
-  if (context.hasUsername) baseThreshold += 10 // Increased from 5
-  if (context.messageCount > 10) baseThreshold += 15 // Increased from 10
+  // Profile indicators
+  if (context.hasProfile) baseThreshold += 10
+  if (context.hasUsername) baseThreshold += 8
 
-  // Account age matters
+  // Message history in this group
+  if (context.messageCount > 10) baseThreshold += 15
+  else if (context.messageCount > 5) baseThreshold += 10
+  else if (context.messageCount > 2) baseThreshold += 5
+
+  // Account age (only BOOST for established, don't penalize new)
   if (context.accountAge === 'established') baseThreshold += 10
-  if (context.accountAge === 'very_new') baseThreshold -= 5
 
-  // Global reputation adjustment
+  // Reply context - strong trust signal!
+  // User is engaging in conversation, not broadcasting
+  if (context.isReply) {
+    baseThreshold += 12 // Significant boost for replies
+    // Recent replies (within 1 hour) get extra trust
+    if (context.replyAge && context.replyAge < 3600) {
+      baseThreshold += 5
+    }
+  }
+
+  // Global reputation (from cross-group tracking)
   if (context.globalReputation) {
     const rep = context.globalReputation
     if (rep.status === 'trusted') {
-      // Safety net - should be skipped earlier
-      baseThreshold += 25
+      baseThreshold += 25 // Should be skipped earlier, but safety net
     } else if (rep.status === 'neutral' && rep.score > 60) {
-      // Good reputation neutral users get bonus
       baseThreshold += Math.floor((rep.score - 50) / 5) * 2 // +2 to +10
-    } else if (rep.status === 'suspicious') {
-      // Lower threshold for suspicious users
+    }
+  }
+
+  // Telegram Stars rating (paid = trusted)
+  if (context.telegramRating) {
+    const level = context.telegramRating.level || 0
+    if (level > 0) {
+      baseThreshold += Math.min(15, level * 5) // +5 to +15
+    }
+  }
+
+  // ===== SUSPICIOUS SIGNALS (lower threshold = stricter) =====
+
+  // Only penalize based on ACTUAL suspicious signals, not "newness"
+  if (context.quickAssessment) {
+    const qa = context.quickAssessment
+    if (qa.risk === 'high') {
+      // High risk from quick assessment - be stricter
+      baseThreshold -= 10
+    } else if (qa.risk === 'medium' && qa.signals && qa.signals.length >= 2) {
+      // Multiple medium-risk signals
+      baseThreshold -= 5
+    }
+  }
+
+  // Reputation-based penalties (historical bad behavior)
+  if (context.globalReputation) {
+    const rep = context.globalReputation
+    if (rep.status === 'suspicious') {
       baseThreshold -= 10
     } else if (rep.status === 'restricted') {
-      // Very aggressive for restricted users
       baseThreshold -= 20
     }
   }
 
-  // Telegram Stars rating adjustment
-  if (context.telegramRating) {
-    const level = context.telegramRating.level || 0
-    if (level > 0) {
-      // Positive level = trusted buyer, less likely to be spammer
-      baseThreshold += Math.min(15, level * 5) // +5 to +15
-    } else if (level < 0) {
-      // Negative level = suspicious account
-      baseThreshold -= 10
-    }
+  // Telegram Stars negative rating
+  if (context.telegramRating && context.telegramRating.level < 0) {
+    baseThreshold -= 10
   }
 
-  // Adjusted bounds - lower floor to 50 for restricted users
-  return Math.max(50, Math.min(95, baseThreshold))
+  // ===== BOUNDS =====
+  // Min 60 (was 50) - avoid over-aggressive blocking
+  // Max 95 - always allow some spam detection
+  return Math.max(60, Math.min(95, baseThreshold))
 }
 
 /**
@@ -474,10 +726,39 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
       }
     }
 
-    // Check with OpenAI moderation first - if flagged, treat as high-priority spam
+    // === PHASE 1: Quick Risk Assessment ===
+    // Analyze Telegram-specific signals BEFORE expensive API calls
+    let quickAssessment = { risk: 'medium', signals: [], trustSignals: [] }
+    try {
+      quickAssessment = quickRiskAssessment(ctx)
+
+      if (quickAssessment.signals.length > 0 || quickAssessment.trustSignals.length > 0) {
+        spamLog.debug({
+          risk: quickAssessment.risk,
+          signals: quickAssessment.signals,
+          trustSignals: quickAssessment.trustSignals
+        }, 'Quick assessment')
+      }
+
+      // Skip all checks for obviously clean messages (strong trust signals, no risk)
+      if (quickAssessment.risk === 'skip') {
+        spamLog.debug({ trustSignals: quickAssessment.trustSignals }, 'Skipping checks - low risk message')
+        return {
+          isSpam: false,
+          confidence: 80,
+          reason: 'Skipped by quick assessment (trust signals)',
+          source: 'quick_assessment',
+          quickAssessment
+        }
+      }
+    } catch (quickAssessErr) {
+      // If quick assessment fails, continue with standard flow
+      spamLog.warn({ err: quickAssessErr.message }, 'Quick assessment error, continuing with standard flow')
+    }
+
+    // === Fetch additional context in parallel ===
     const messagePhoto = ctx.message && ctx.message.photo && ctx.message.photo[0] ? ctx.message.photo[0] : null
 
-    // Fetch additional context in parallel
     const [userAvatarUrl, userChatInfo, groupDescription] = await Promise.all([
       getUserProfilePhotoUrl(ctx),
       getUserChatInfo(ctx),
@@ -486,50 +767,50 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     const userBio = userChatInfo.bio
     const userRating = userChatInfo.rating // { level, rating, current_level_rating, next_level_rating } or null
 
-    // Check text content first
-    const textModerationResult = await checkOpenAIModeration(messageText, null, 'text')
-    if (textModerationResult && textModerationResult.flagged) {
-      spamLog.warn({ reason: textModerationResult.reason }, 'Text flagged by OpenAI moderation')
-      return {
-        isSpam: true,
-        confidence: Math.max(90, textModerationResult.highestScore),
-        reason: textModerationResult.reason,
-        source: 'openai_moderation_text',
-        categories: textModerationResult.categories
-      }
-    }
+    // === PHASE 2: Parallel OpenAI Moderation ===
+    // Skip OpenAI moderation for low-risk messages (saves ~400ms and API costs)
+    const shouldRunModeration = quickAssessment.risk !== 'low'
 
-    // Check message photo if present
-    if (messagePhoto && messagePhoto.file_id) {
-      const messagePhotoUrl = await getMessagePhotoUrl(ctx, messagePhoto)
+    if (shouldRunModeration) {
+      // Get message photo URL if needed
+      const messagePhotoUrl = messagePhoto && messagePhoto.file_id
+        ? await getMessagePhotoUrl(ctx, messagePhoto)
+        : null
+
+      // Run all moderation checks in parallel (3x faster than sequential)
+      const moderationPromises = [
+        checkOpenAIModeration(messageText, null, 'text')
+      ]
+
       if (messagePhotoUrl) {
-        const photoModerationResult = await checkOpenAIModeration(messageText, messagePhotoUrl, 'message photo')
-        if (photoModerationResult && photoModerationResult.flagged) {
-          spamLog.warn({ reason: photoModerationResult.reason }, 'Message photo flagged')
+        moderationPromises.push(checkOpenAIModeration(messageText, messagePhotoUrl, 'message photo'))
+      }
+
+      if (userAvatarUrl) {
+        moderationPromises.push(checkOpenAIModeration(messageText, userAvatarUrl, 'user avatar'))
+      }
+
+      const moderationResults = await Promise.all(moderationPromises)
+
+      // Check results - first flagged result wins
+      const sources = ['openai_moderation_text', 'openai_moderation_photo', 'openai_moderation_avatar']
+      for (let i = 0; i < moderationResults.length; i++) {
+        const result = moderationResults[i]
+        if (result && result.flagged) {
+          const source = sources[i] || 'openai_moderation'
+          spamLog.warn({ reason: result.reason, source }, 'Content flagged by OpenAI moderation')
           return {
             isSpam: true,
-            confidence: Math.max(90, photoModerationResult.highestScore),
-            reason: photoModerationResult.reason,
-            source: 'openai_moderation_photo',
-            categories: photoModerationResult.categories
+            confidence: Math.max(90, result.highestScore),
+            reason: result.reason,
+            source,
+            categories: result.categories,
+            quickAssessment
           }
         }
       }
-    }
-
-    // Check user avatar if present
-    if (userAvatarUrl) {
-      const avatarModerationResult = await checkOpenAIModeration(messageText, userAvatarUrl, 'user avatar')
-      if (avatarModerationResult && avatarModerationResult.flagged) {
-        spamLog.warn({ reason: avatarModerationResult.reason }, 'User avatar flagged')
-        return {
-          isSpam: true,
-          confidence: Math.max(90, avatarModerationResult.highestScore),
-          reason: avatarModerationResult.reason,
-          source: 'openai_moderation_avatar',
-          categories: avatarModerationResult.categories
-        }
-      }
+    } else {
+      spamLog.debug('Skipping OpenAI moderation for low-risk message')
     }
 
     // Get message counts from actual data sources
@@ -544,6 +825,13 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     const globalMessageCount = ctx.session && ctx.session.userInfo &&
       ctx.session.userInfo.globalStats && ctx.session.userInfo.globalStats.totalMessages
     const globalStats = (ctx.session && ctx.session.userInfo && ctx.session.userInfo.globalStats) || {}
+
+    // Calculate reply context for trust signals
+    const replyToMessage = ctx.message && ctx.message.reply_to_message
+    const isReply = !!replyToMessage
+    const replyAge = replyToMessage
+      ? (ctx.message.date - replyToMessage.date)
+      : null
 
     // Create user context for analysis
     const userContext = {
@@ -565,7 +853,12 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
       // Channel-specific info
       isChannelPost: isChannelPost,
       channelTitle: isChannelPost ? senderChat.title : null,
-      channelUsername: isChannelPost ? senderChat.username : null
+      channelUsername: isChannelPost ? senderChat.username : null,
+      // Reply context - strong trust signal (Phase 5)
+      isReply,
+      replyAge,
+      // Quick assessment results (Phase 1)
+      quickAssessment
     }
 
     // Velocity check - detect cross-chat spam patterns
@@ -574,11 +867,16 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
       if (!senderId || !ctx.chat || !ctx.chat.id || !ctx.message) {
         throw new Error('Missing context for velocity check')
       }
+
+      // Get forward_origin for forward velocity tracking
+      const forwardOrigin = ctx.message.forward_origin || null
+
       const velocityResult = await calculateVelocityScore(
         messageText,
         senderId, // Use senderId instead of ctx.from.id for channel support
         ctx.chat.id,
-        ctx.message.message_id
+        ctx.message.message_id,
+        forwardOrigin // Pass forward origin for forward velocity tracking
       )
 
       if (velocityResult.score > 0) {
