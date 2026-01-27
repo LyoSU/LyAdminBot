@@ -60,6 +60,7 @@ module.exports = async (ctx) => {
           link: `https://cas.chat/query?u=${userId}`
         }), {
           reply_to_message_id: ctx.message.message_id,
+          allow_sending_without_reply: true,
           disable_web_page_preview: true
         }).then(notificationMsg => {
           if (notificationMsg) {
