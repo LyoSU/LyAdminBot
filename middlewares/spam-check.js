@@ -234,6 +234,19 @@ module.exports = async (ctx) => {
         }
       } catch (error) {
         spamLog.warn({ userId: senderId, err: error.message }, 'Could not check admin status')
+        // Fallback: if we can't verify admin status, trust established users
+        // High message count (>50) or good reputation (>70) = likely not a spammer
+        const repScore = userReputation ? userReputation.score : 50
+        if (messageCount > 50 || repScore > 70) {
+          spamLog.debug({
+            userId: senderId,
+            userName: userName(senderInfo),
+            messageCount,
+            repScore,
+            reason: 'admin_check_failed_but_established'
+          }, 'Skipping established user (admin check failed)')
+          return
+        }
       }
     } else if (isTestMode) {
       spamLog.debug({ userId: senderId, userName: userName(senderInfo) }, 'TEST MODE - Bypassing admin check')
