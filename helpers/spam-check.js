@@ -17,7 +17,7 @@ const {
 const {
   calculateVelocityScore
 } = require('./velocity')
-const { getExactHash } = require('./vote-ui')
+const { checkSignatures } = require('./spam-signatures')
 const { spam: spamLog, moderation: modLog, cleanup: cleanupLog, qdrant: qdrantLog } = require('./logger')
 
 // Create OpenRouter client for LLM
@@ -743,24 +743,23 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     }
 
     // === PHASE 0.5: Check SpamSignature (community-confirmed patterns) ===
-    // Instant detection for known spam patterns
+    // Multi-layer signature matching: exact, normalized, fuzzy, structure
     if (ctx.db && ctx.db.SpamSignature) {
       try {
-        const messageHash = getExactHash(messageText)
-        if (messageHash) {
-          const signature = await ctx.db.SpamSignature.findOne({
-            status: 'confirmed',
-            exactHash: messageHash
-          })
+        const signatureMatch = await checkSignatures(messageText, ctx.db)
 
-          if (signature) {
-            spamLog.info({ hash: messageHash }, 'Matched confirmed spam signature')
-            return {
-              isSpam: true,
-              confidence: 95,
-              reason: 'Known spam pattern (community confirmed)',
-              source: 'spam_signature'
-            }
+        if (signatureMatch) {
+          spamLog.info({
+            matchType: signatureMatch.match,
+            confidence: signatureMatch.confidence,
+            distance: signatureMatch.distance
+          }, 'Matched spam signature')
+
+          return {
+            isSpam: true,
+            confidence: signatureMatch.confidence,
+            reason: signatureMatch.reason,
+            source: `spam_signature_${signatureMatch.match}`
           }
         }
       } catch (sigErr) {

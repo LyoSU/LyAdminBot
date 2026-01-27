@@ -1,4 +1,5 @@
 const { updateVoteUI, showResultUI } = require('../helpers/vote-ui')
+const { addSignature } = require('../helpers/spam-signatures')
 const { spamVote: log } = require('../helpers/logger')
 
 /**
@@ -127,39 +128,17 @@ const processVoteResult = async (ctx, spamVote) => {
   } else {
     // CONFIRM SPAM: Community confirmed this was spam
 
-    // 1. Add to SpamSignature (for future instant detection)
-    if (spamVote.messageHash) {
+    // 1. Add to SpamSignature (multi-layer hashing for future detection)
+    if (spamVote.messagePreview) {
       try {
-        const signature = await ctx.db.SpamSignature.findOneAndUpdate(
-          { exactHash: spamVote.messageHash },
-          {
-            $inc: { confirmations: 1 },
-            $addToSet: { uniqueGroups: spamVote.chatId },
-            $set: { lastSeenAt: new Date() },
-            $setOnInsert: {
-              exactHash: spamVote.messageHash,
-              status: 'candidate',
-              sampleText: spamVote.messagePreview,
-              firstSeenAt: new Date()
-            }
-          },
-          { upsert: true, new: true }
-        )
-
-        // Check if should promote to confirmed (5+ unique groups)
-        if (signature.uniqueGroups.length >= 5 && signature.status === 'candidate') {
-          signature.status = 'confirmed'
-          await signature.save()
+        const signature = await addSignature(spamVote.messagePreview, ctx.db, spamVote.chatId)
+        if (signature) {
           log.info({
-            hash: spamVote.messageHash,
+            eventId: spamVote.eventId,
+            status: signature.status,
             uniqueGroups: signature.uniqueGroups.length
-          }, 'Promoted signature to confirmed')
+          }, 'Added to SpamSignature')
         }
-
-        log.info({
-          eventId: spamVote.eventId,
-          hash: spamVote.messageHash
-        }, 'Added to SpamSignature')
       } catch (error) {
         log.error({ err: error.message, eventId: spamVote.eventId }, 'Failed to add SpamSignature')
       }
@@ -325,31 +304,10 @@ const processExpiredVotes = async (db, telegram, i18n) => {
           reason: 'no_votes'
         }, 'Vote expired with no votes, defaulting to spam')
 
-        // Add to SpamSignature (as candidate for future detection)
-        if (vote.messageHash) {
+        // Add to SpamSignature (multi-layer hashing for future detection)
+        if (vote.messagePreview) {
           try {
-            const signature = await db.SpamSignature.findOneAndUpdate(
-              { exactHash: vote.messageHash },
-              {
-                $inc: { confirmations: 1 },
-                $addToSet: { uniqueGroups: vote.chatId },
-                $set: { lastSeenAt: new Date() },
-                $setOnInsert: {
-                  exactHash: vote.messageHash,
-                  status: 'candidate',
-                  sampleText: vote.messagePreview,
-                  firstSeenAt: new Date()
-                }
-              },
-              { upsert: true, new: true }
-            )
-
-            // Promote to confirmed if 5+ unique groups
-            if (signature.uniqueGroups.length >= 5 && signature.status === 'candidate') {
-              signature.status = 'confirmed'
-              await signature.save()
-              log.info({ hash: vote.messageHash }, 'Promoted signature to confirmed')
-            }
+            await addSignature(vote.messagePreview, db, vote.chatId)
           } catch (sigError) {
             log.error({ err: sigError.message }, 'Failed to add SpamSignature on timeout')
           }

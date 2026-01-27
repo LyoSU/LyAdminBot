@@ -1,14 +1,14 @@
-const crypto = require('crypto')
 const { userName } = require('../utils')
 const { predictCreationDate } = require('./account-age')
+const { sha256, normalizeLight } = require('./spam-signatures')
 const { spamVote: log } = require('./logger')
 
 /**
- * Generate MD5 hash of message text (for SpamSignature matching)
+ * Generate hash of message text (for SpamVote reference)
  */
 const getExactHash = (text) => {
   if (!text) return null
-  return crypto.createHash('md5').update(text.trim().toLowerCase()).digest('hex')
+  return sha256(normalizeLight(text))
 }
 
 /**
