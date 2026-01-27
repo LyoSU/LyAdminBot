@@ -62,10 +62,19 @@ cmd:
       🌊 <b>Флуд:</b> ${flood}%
 
       📅 <b>Тут с:</b> ${createdAt}
+      ${badge}
     error:
       blocked: |
         Не могу написать тебе в личку 😅
         Напиши мне первым, и тогда попробуй снова.
+    badge:
+      exemplary: "\n🏅 <i>Образцовый гражданин</i>"
+      collector: "\n🍌 <i>Коллекционер бананов</i>"
+      soul: "\n🎭 <i>Душа компании</i>"
+      flood_master: "\n🌊 <i>Мастер потока</i>"
+      silent: "\n🤫 <i>Тихий наблюдатель</i>"
+      veteran: "\n🎖 <i>Ветеран чата</i>"
+      newbie: "\n🐣 <i>Новичок</i>"
   top:
     info: |
       🏆 Топ активных в <b>${chatName}</b>:
@@ -273,8 +282,11 @@ sticker:
   only_admin: "🔒 Только админы. Свой пак — @fStikBot"
 cas:
   banned: |
-    ${name} забанен — есть в базе CAS.
-    <a href="${link}">Подробнее</a>
+    ⛔ ${name} забанен
+
+    Этот аккаунт есть в <b>CAS</b> — глобальной базе спамеров Telegram. Туда попадают за массовую рассылку рекламы, скам или мошенничество.
+
+    Если это ошибка — <a href="${link}">обжаловать тут</a>.
 spam:
   notification:
     full: "🚫 ${name} — спам\n<code>${reason}</code>"
@@ -312,3 +324,6 @@ report:
   suspicious: "🤔 <b>Подозрительно</b> — ${target}\n<code>${reason}</code>\n\n<i>📣 ${reporter}</i>"
   clean: "✅ ${target} — ок"
   error: "Что-то пошло не так"
+  clean_thanks: "✅ ${target} — ок\n<i>спасибо за бдительность! 👀</i>"
+  clean_false_alarm: "✅ ${target} — ок\n<i>ложная тревога 📢</i>"
+  clean_all_good: "✅ ${target} — ок\n<i>тут всё чисто ✨</i>"

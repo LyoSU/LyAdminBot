@@ -62,10 +62,19 @@ cmd:
       🌊 <b>Flood:</b> ${flood}%
 
       📅 <b>Here since:</b> ${createdAt}
+      ${badge}
     error:
       blocked: |
         Can't DM you 😅
         Message me first, then try again.
+    badge:
+      exemplary: "\n🏅 <i>Model citizen</i>"
+      collector: "\n🍌 <i>Banana collector</i>"
+      soul: "\n🎭 <i>Life of the party</i>"
+      flood_master: "\n🌊 <i>Flood master</i>"
+      silent: "\n🤫 <i>Silent observer</i>"
+      veteran: "\n🎖 <i>Chat veteran</i>"
+      newbie: "\n🐣 <i>Newbie</i>"
   top:
     info: |
       🏆 Most active in <b>${chatName}</b>:
@@ -272,8 +281,11 @@ sticker:
   only_admin: "🔒 Admins only. Personal pack — @fStikBot"
 cas:
   banned: |
-    ${name} banned — CAS listed.
-    <a href="${link}">Details</a>
+    ⛔ ${name} banned
+
+    This account is listed in <b>CAS</b> — a global database of Telegram spammers. Users get flagged for mass advertising, scams, or fraud.
+
+    If this is a mistake — <a href="${link}">appeal here</a>.
 
 spam:
   banned: "🚫 ${name} permabanned\n<code>${reason}</code>"
@@ -377,3 +389,6 @@ report:
   suspicious: "🤔 <b>Suspicious</b> — ${target}\n<code>${reason}</code>\n\n<i>📣 ${reporter}</i>"
   clean: "✅ ${target} — ok"
   error: "Something went wrong"
+  clean_thanks: "✅ ${target} — ok\n<i>thanks for watching! 👀</i>"
+  clean_false_alarm: "✅ ${target} — ok\n<i>false alarm 📢</i>"
+  clean_all_good: "✅ ${target} — ok\n<i>all clear here ✨</i>"

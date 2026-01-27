@@ -408,12 +408,15 @@ const handleReport = async (ctx) => {
 
       reportLog.info({ target: targetName, reporter: reporterName, confidence: result.confidence }, 'Spam action taken')
     } else {
-      // Clean message - edit status message
+      // Clean message - pick a random fun response
+      const cleanVariants = ['report.clean', 'report.clean_thanks', 'report.clean_false_alarm', 'report.clean_all_good']
+      const randomKey = cleanVariants[Math.floor(Math.random() * cleanVariants.length)]
+
       await ctx.telegram.editMessageText(
         ctx.chat.id,
         statusMsg.message_id,
         null,
-        ctx.i18n.t('report.clean', {
+        ctx.i18n.t(randomKey, {
           reporter: reporterName,
           target: targetName,
           confidence: 100 - (result.confidence || 0)
