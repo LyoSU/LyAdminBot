@@ -1042,12 +1042,23 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
         qdrantLog.debug({ threshold: (adaptiveThreshold * 100).toFixed(1) }, 'Adaptive threshold')
 
         if (localResult.confidence >= adaptiveThreshold) {
-          qdrantLog.info({ confidence: (localResult.confidence * 100).toFixed(1), threshold: (adaptiveThreshold * 100).toFixed(1) }, 'Using Qdrant result')
-          return {
-            isSpam: localResult.classification === 'spam',
-            confidence: localResult.confidence * 100,
-            reason: `Vector match: ${localResult.classification}`,
-            source: 'qdrant_db'
+          // For new users (messageCount <= 1), don't trust Qdrant "clean" results
+          // because their bio might contain spam even if the message itself is clean
+          const perGroupMsgCount = ctx.group && ctx.group.members && ctx.from &&
+            ctx.group.members[ctx.from.id] && ctx.group.members[ctx.from.id].stats &&
+            ctx.group.members[ctx.from.id].stats.messagesCount
+          const isFirstMessage = (perGroupMsgCount || 0) <= 1
+
+          if (isFirstMessage && localResult.classification === 'clean') {
+            qdrantLog.debug({ confidence: (localResult.confidence * 100).toFixed(1) }, 'New user - not trusting Qdrant clean result, checking with LLM for bio context')
+          } else {
+            qdrantLog.info({ confidence: (localResult.confidence * 100).toFixed(1), threshold: (adaptiveThreshold * 100).toFixed(1) }, 'Using Qdrant result')
+            return {
+              isSpam: localResult.classification === 'spam',
+              confidence: localResult.confidence * 100,
+              reason: `Vector match: ${localResult.classification}`,
+              source: 'qdrant_db'
+            }
           }
         } else {
           qdrantLog.debug({ confidence: (localResult.confidence * 100).toFixed(1), threshold: (adaptiveThreshold * 100).toFixed(1) }, 'Qdrant confidence too low, checking with LLM')
