@@ -125,7 +125,8 @@ const callLLMWithRetry = async (systemPrompt, userPrompt, maxRetries = 3) => {
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        temperature: 0,
+        temperature: 1.0,
+        reasoning_effort: 'high',
         response_format: {
           type: 'json_schema',
           json_schema: {
