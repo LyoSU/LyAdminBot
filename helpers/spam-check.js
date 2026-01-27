@@ -839,8 +839,16 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
       }
 
       // Skip all checks for obviously clean messages (strong trust signals, no risk)
-      if (quickAssessment.risk === 'skip') {
-        spamLog.debug({ trustSignals: quickAssessment.trustSignals }, 'Skipping checks - low risk message')
+      // BUT: Don't skip for new users (messageCount <= 1) - they could be spam accounts
+      // sending innocent first messages before the actual spam
+      const senderChat = ctx.message && ctx.message.sender_chat
+      const isChannelPostHere = senderChat && senderChat.type === 'channel'
+      const senderIdHere = isChannelPostHere ? senderChat.id : (ctx.from && ctx.from.id)
+      const memberDataHere = ctx.group && ctx.group.members && ctx.group.members[senderIdHere]
+      const messageCountHere = (memberDataHere && memberDataHere.stats && memberDataHere.stats.messagesCount) || 0
+
+      if (quickAssessment.risk === 'skip' && messageCountHere > 1) {
+        spamLog.debug({ trustSignals: quickAssessment.trustSignals, messageCount: messageCountHere }, 'Skipping checks - low risk message from established user')
         return {
           isSpam: false,
           confidence: 80,
@@ -848,6 +856,8 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
           source: 'quick_assessment',
           quickAssessment
         }
+      } else if (quickAssessment.risk === 'skip' && messageCountHere <= 1) {
+        spamLog.debug({ trustSignals: quickAssessment.trustSignals, messageCount: messageCountHere }, 'New user with trust signals - running full check anyway')
       }
     } catch (quickAssessErr) {
       // If quick assessment fails, continue with standard flow
@@ -876,8 +886,11 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
         : null
 
       // Run all moderation checks in parallel (3x faster than sequential)
+      // Combine message text + user bio for text moderation
+      const textToModerate = [messageText, userBio].filter(Boolean).join('\n\n')
+
       const moderationPromises = [
-        checkOpenAIModeration(messageText, null, 'text')
+        checkOpenAIModeration(textToModerate, null, 'text+bio')
       ]
 
       if (messagePhotoUrl) {
@@ -885,7 +898,7 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
       }
 
       if (userAvatarUrl) {
-        moderationPromises.push(checkOpenAIModeration(messageText, userAvatarUrl, 'user avatar'))
+        moderationPromises.push(checkOpenAIModeration(null, userAvatarUrl, 'user avatar'))
       }
 
       const moderationResults = await Promise.all(moderationPromises)
