@@ -13,14 +13,14 @@ const { generateSignatures } = require('./spam-signatures')
  * - Deduplication via existing spam-signatures system
  */
 
-// Configuration with defaults
+// Configuration with defaults and validation
 const CONFIG = {
   enabled: process.env.CAS_SYNC_ENABLED === 'true',
-  intervalHours: parseInt(process.env.CAS_SYNC_INTERVAL_HOURS) || 6,
-  batchSize: parseInt(process.env.CAS_SYNC_BATCH_SIZE) || 1000,
-  concurrency: parseInt(process.env.CAS_SYNC_CONCURRENCY) || 10,
-  maxUsers: parseInt(process.env.CAS_SYNC_MAX_USERS) || 50000,
-  requestDelay: parseInt(process.env.CAS_SYNC_REQUEST_DELAY) || 100 // ms between requests
+  intervalHours: Math.max(1, parseInt(process.env.CAS_SYNC_INTERVAL_HOURS, 10) || 6),
+  batchSize: Math.max(10, parseInt(process.env.CAS_SYNC_BATCH_SIZE, 10) || 1000),
+  concurrency: Math.max(1, parseInt(process.env.CAS_SYNC_CONCURRENCY, 10) || 10),
+  maxUsers: Math.max(100, parseInt(process.env.CAS_SYNC_MAX_USERS, 10) || 50000),
+  requestDelay: Math.max(0, parseInt(process.env.CAS_SYNC_REQUEST_DELAY, 10) || 100)
 }
 
 // Base URL for CAS API
@@ -28,7 +28,7 @@ const CAS_API_BASE = 'https://api.cas.chat'
 
 // HTTP client with reasonable timeouts (got v9 compatible)
 const casApi = got.extend({
-  timeout: 10000,
+  timeout: 5000, // 5s for individual requests
   retries: 2,
   throwHttpErrors: false
 })
@@ -38,7 +38,7 @@ let stopRequested = false
 
 /**
  * Fetch CAS export CSV and parse user IDs
- * Returns array of user IDs (numbers)
+ * @returns {Promise<number[]>} Array of user IDs
  */
 async function fetchCasExport () {
   log.info('Fetching CAS export...')
@@ -68,7 +68,8 @@ async function fetchCasExport () {
 
 /**
  * Fetch user info and messages from CAS API
- * Returns { ok: boolean, messages: string[] }
+ * @param {number} userId
+ * @returns {Promise<{ok: boolean, messages: string[]}>}
  */
 async function fetchUserMessages (userId) {
   try {
@@ -92,7 +93,13 @@ async function fetchUserMessages (userId) {
       reasons: body.result.reasons || []
     }
   } catch (error) {
-    log.debug({ userId, err: error.message }, 'Failed to fetch user')
+    // Log network errors at warn level, others at debug
+    const isNetworkError = ['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED'].includes(error.code)
+    if (isNetworkError) {
+      log.warn({ userId, err: error.message, code: error.code }, 'Network error fetching user')
+    } else {
+      log.debug({ userId, err: error.message }, 'Failed to fetch user')
+    }
     return { ok: false, messages: [] }
   }
 }
@@ -100,6 +107,9 @@ async function fetchUserMessages (userId) {
 /**
  * Add a CAS message to signatures collection
  * CAS messages are auto-confirmed with synthetic chatId
+ * @param {string} text
+ * @param {Object} db
+ * @returns {Promise<{isNew: boolean}|null>}
  */
 async function addCasMessage (text, db) {
   if (!text || text.length < 20) return null
@@ -121,7 +131,6 @@ async function addCasMessage (text, db) {
           lastSeenAt: new Date(),
           fuzzyHash: signatures.fuzzyHash,
           structureHash: signatures.structureHash,
-          // CAS imports are immediately confirmed
           status: 'confirmed'
         },
         $setOnInsert: {
@@ -134,66 +143,99 @@ async function addCasMessage (text, db) {
       { upsert: true, new: true }
     )
 
-    return result
+    // Return whether it was newly created
+    return { isNew: result.confirmations === 1 }
   } catch (err) {
     if (err.code === 11000) {
-      // Duplicate - this is fine, just update
-      return db.SpamSignature.findOneAndUpdate(
+      // Duplicate key - update existing
+      await db.SpamSignature.updateOne(
         { normalizedHash: signatures.normalizedHash },
         {
           $inc: { confirmations: 1 },
           $set: { lastSeenAt: new Date(), status: 'confirmed' }
-        },
-        { new: true }
+        }
       )
+      return { isNew: false }
     }
     throw err
   }
 }
 
 /**
- * Process a batch of user IDs concurrently
+ * Process a single user and return stats
+ * @param {number} userId
+ * @param {Object} db
+ * @returns {Promise<{usersWithMessages: number, messagesProcessed: number, signaturesAdded: number, signaturesUpdated: number}>}
  */
-async function processBatch (userIds, db, stats) {
-  const promises = userIds.map(async (userId) => {
-    if (stopRequested) return
+async function processUser (userId, db) {
+  const result = {
+    usersWithMessages: 0,
+    messagesProcessed: 0,
+    signaturesAdded: 0,
+    signaturesUpdated: 0
+  }
 
-    const userData = await fetchUserMessages(userId)
+  if (stopRequested) return result
 
-    if (userData.ok && userData.messages.length > 0) {
-      stats.usersWithMessages++
+  const userData = await fetchUserMessages(userId)
 
-      for (const message of userData.messages.slice(0, 10)) { // Max 10 per user
-        if (stopRequested) break
+  if (userData.ok && userData.messages.length > 0) {
+    result.usersWithMessages = 1
 
-        try {
-          const result = await addCasMessage(message, db)
-          if (result) {
-            stats.messagesProcessed++
-            // Check if it was new or updated
-            if (result.confirmations === 1) {
-              stats.signaturesAdded++
-            } else {
-              stats.signaturesUpdated++
-            }
+    for (const message of userData.messages.slice(0, 10)) {
+      if (stopRequested) break
+
+      try {
+        const addResult = await addCasMessage(message, db)
+        if (addResult) {
+          result.messagesProcessed++
+          if (addResult.isNew) {
+            result.signaturesAdded++
           } else {
-            stats.duplicatesSkipped++
+            result.signaturesUpdated++
           }
-        } catch (err) {
-          log.debug({ err: err.message }, 'Failed to add message')
         }
+      } catch (err) {
+        log.debug({ err: err.message }, 'Failed to add message')
       }
     }
+  }
 
-    // Tiny delay to avoid rate limiting
-    await delay(CONFIG.requestDelay)
+  await delay(CONFIG.requestDelay)
+  return result
+}
+
+/**
+ * Process a batch of user IDs concurrently
+ * Returns aggregated stats (no shared mutation)
+ * @param {number[]} userIds
+ * @param {Object} db
+ * @returns {Promise<Object>} Aggregated stats
+ */
+async function processBatch (userIds, db) {
+  const results = await Promise.all(
+    userIds.map(userId => processUser(userId, db))
+  )
+
+  // Aggregate results safely (no race conditions)
+  return results.reduce((acc, r) => ({
+    usersWithMessages: acc.usersWithMessages + r.usersWithMessages,
+    messagesProcessed: acc.messagesProcessed + r.messagesProcessed,
+    signaturesAdded: acc.signaturesAdded + r.signaturesAdded,
+    signaturesUpdated: acc.signaturesUpdated + r.signaturesUpdated
+  }), {
+    usersWithMessages: 0,
+    messagesProcessed: 0,
+    signaturesAdded: 0,
+    signaturesUpdated: 0
   })
-
-  await Promise.all(promises)
 }
 
 /**
  * Run the full CAS synchronization
+ * @param {Object} db
+ * @param {Object} options
+ * @returns {Promise<{status: string, stats?: Object, error?: string}>}
  */
 async function runSync (db, options = {}) {
   const {
@@ -220,7 +262,13 @@ async function runSync (db, options = {}) {
       const state = await db.CasSyncState.getState()
       if (state.lastProcessedUserId > 0) {
         const resumeIndex = allUserIds.indexOf(state.lastProcessedUserId)
-        if (resumeIndex > 0) {
+        if (resumeIndex === -1) {
+          // Resume point not found in current export
+          log.warn(
+            { lastProcessedUserId: state.lastProcessedUserId },
+            'Resume point not found in CAS export, starting from beginning'
+          )
+        } else if (resumeIndex > 0) {
           startIndex = resumeIndex + 1
           log.info({ resumeFrom: state.lastProcessedUserId, index: startIndex }, 'Resuming sync')
         }
@@ -245,36 +293,51 @@ async function runSync (db, options = {}) {
       usersWithMessages: 0,
       messagesProcessed: 0,
       signaturesAdded: 0,
-      signaturesUpdated: 0,
-      duplicatesSkipped: 0
+      signaturesUpdated: 0
     }
+
+    let lastProcessedUserId = 0
+    let processedCount = 0
 
     // Process in batches
     for (let i = 0; i < userIds.length; i += CONFIG.batchSize) {
       if (stopRequested) {
-        log.info({ processedCount: i }, 'Sync stopped by request')
+        // Persist progress before stopping
+        log.info({ processedCount }, 'Sync stopped by request')
+        await db.CasSyncState.updateProgress(lastProcessedUserId, {
+          ...stats,
+          processedCount
+        })
         await db.CasSyncState.setStatus('stopped')
-        return { status: 'stopped', stats }
+        return { status: 'stopped', stats, processedCount }
       }
 
       const batch = userIds.slice(i, i + CONFIG.batchSize)
-      const lastUserId = batch[batch.length - 1]
 
       // Process batch with concurrency limit
       for (let j = 0; j < batch.length; j += CONFIG.concurrency) {
         if (stopRequested) break
         const chunk = batch.slice(j, j + CONFIG.concurrency)
-        await processBatch(chunk, db, stats)
+        const batchStats = await processBatch(chunk, db)
+
+        // Aggregate stats
+        stats.usersWithMessages += batchStats.usersWithMessages
+        stats.messagesProcessed += batchStats.messagesProcessed
+        stats.signaturesAdded += batchStats.signaturesAdded
+        stats.signaturesUpdated += batchStats.signaturesUpdated
       }
 
+      lastProcessedUserId = batch[batch.length - 1]
+      processedCount = i + batch.length
+
       // Update progress
-      await db.CasSyncState.updateProgress(lastUserId, {
+      await db.CasSyncState.updateProgress(lastProcessedUserId, {
         ...stats,
-        processedCount: i + batch.length
+        processedCount
       })
 
       log.debug(
-        { processed: i + batch.length, total: userIds.length, ...stats },
+        { processed: processedCount, total: userIds.length, ...stats },
         'Batch progress'
       )
     }
@@ -285,7 +348,7 @@ async function runSync (db, options = {}) {
 
     return { status: 'completed', stats }
   } catch (error) {
-    log.error({ err: error.message }, 'CAS sync failed')
+    log.error({ err: error.message, stack: error.stack }, 'CAS sync failed')
     await db.CasSyncState.setStatus('failed', error.message)
     return { status: 'failed', error: error.message }
   }
@@ -293,6 +356,8 @@ async function runSync (db, options = {}) {
 
 /**
  * Get current sync statistics
+ * @param {Object} db
+ * @returns {Promise<Object>}
  */
 async function getStats (db) {
   const state = await db.CasSyncState.getState()
@@ -315,6 +380,8 @@ function stopSync () {
 
 /**
  * Start periodic sync with interval
+ * @param {Object} db
+ * @returns {NodeJS.Timeout|null}
  */
 function startPeriodicSync (db) {
   if (!CONFIG.enabled) {
@@ -343,7 +410,11 @@ function startPeriodicSync (db) {
   return intervalId
 }
 
-// Utility
+/**
+ * Delay utility
+ * @param {number} ms
+ * @returns {Promise<void>}
+ */
 function delay (ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
