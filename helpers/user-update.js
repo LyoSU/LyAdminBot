@@ -1,9 +1,40 @@
 const { calculateReputation } = require('./reputation')
 
+/**
+ * Check if session reputation is stale compared to DB
+ * This catches cross-session updates (e.g., spam detected in another group)
+ */
+const isReputationStale = async (ctx, sessionUser) => {
+  if (!sessionUser?.reputation?.lastCalculated) return true
+
+  try {
+    // Quick check: fetch only reputation timestamp from DB
+    const dbUser = await ctx.db.User.findOne(
+      { telegram_id: ctx.from.id },
+      { 'reputation.lastCalculated': 1, 'globalStats.spamDetections': 1 }
+    ).lean()
+
+    if (!dbUser?.reputation?.lastCalculated) return false
+
+    const sessionTime = new Date(sessionUser.reputation.lastCalculated).getTime()
+    const dbTime = new Date(dbUser.reputation.lastCalculated).getTime()
+
+    // Stale if DB was updated after session load
+    // Also check if spamDetections increased (critical change)
+    const dbSpam = dbUser.globalStats?.spamDetections || 0
+    const sessionSpam = sessionUser.globalStats?.spamDetections || 0
+
+    return dbTime > sessionTime || dbSpam > sessionSpam
+  } catch (error) {
+    return false // On error, don't force refresh
+  }
+}
+
 module.exports = async (ctx) => {
   if (!ctx.from) return
 
   let user
+  let needsDbRefresh = false
 
   if (!ctx.session.userInfo) {
     const now = Math.floor(new Date().getTime() / 1000)
@@ -31,6 +62,26 @@ module.exports = async (ctx) => {
     )
   } else {
     user = ctx.session.userInfo
+
+    // Check for cross-session reputation updates (spam detected in other groups)
+    // Only check periodically to avoid DB overhead (every 30 seconds)
+    const lastStaleCheck = ctx.session._reputationStaleCheck || 0
+    const staleCheckInterval = 30 * 1000
+
+    if (Date.now() - lastStaleCheck > staleCheckInterval) {
+      ctx.session._reputationStaleCheck = Date.now()
+      needsDbRefresh = await isReputationStale(ctx, user)
+    }
+
+    if (needsDbRefresh) {
+      // Refresh full user data from DB
+      const freshUser = await ctx.db.User.findOne({ telegram_id: ctx.from.id })
+      if (freshUser) {
+        user = freshUser
+        ctx.session.userInfo = user
+      }
+    }
+
     user.first_name = ctx.from.first_name
     user.last_name = ctx.from.last_name
     user.username = ctx.from.username

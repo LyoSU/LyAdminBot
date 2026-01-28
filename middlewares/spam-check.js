@@ -652,11 +652,19 @@ module.exports = async (ctx) => {
         }
 
         return true // Stop further processing
-      } else if (!result.isSpam && result.confidence >= 70) {
-        // High confidence clean message - boost reputation
-        if (ctx.session && ctx.session.userInfo) {
+      } else {
+        // Message passed spam check - count as clean for reputation
+        // Count if: (1) not spam with any confidence, or (2) spam but below threshold
+        const passedCheck = !result.isSpam || result.confidence < baseThreshold
+        if (passedCheck && ctx.session && ctx.session.userInfo && !isChannelPost) {
           const stats = ctx.session.userInfo.globalStats || (ctx.session.userInfo.globalStats = {})
           stats.cleanMessages = (stats.cleanMessages || 0) + 1
+
+          // Force reputation recalculation if cleanMessages milestone reached
+          // This helps users build trusted status faster with legitimate activity
+          if (stats.cleanMessages % 10 === 0 && ctx.session.userInfo.reputation) {
+            ctx.session.userInfo.reputation.lastCalculated = null
+          }
         }
       }
     }

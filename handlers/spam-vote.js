@@ -1,5 +1,6 @@
 const { updateVoteUI, showResultUI } = require('../helpers/vote-ui')
 const { addSignature } = require('../helpers/spam-signatures')
+const { getReputationStatus } = require('../helpers/reputation')
 const { spamVote: log, nlp: nlpLog } = require('../helpers/logger')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
 const nlpClient = require('../helpers/nlp-client')
@@ -127,32 +128,44 @@ const processVoteResult = async (ctx, spamVote) => {
       log.error({ err: error.message, eventId: spamVote.eventId }, 'Failed to unban/unmute')
     }
 
-    // 2. Set user as trusted (only for real users, not channels)
+    // 2. Boost reputation (only for real users, not channels)
+    // Clean vote gives +20 bonus but doesn't grant instant trusted status
+    // User must still meet activity requirements for trusted
     if (spamVote.bannedUserId > 0) {
       try {
         const user = await ctx.db.User.findOne({ telegram_id: spamVote.bannedUserId })
         const oldScore = user?.reputation?.score || 50
+        const globalStats = user?.globalStats || {}
+
+        // Bonus for false positive, but cap at 74 (neutral max)
+        // Trusted status must be earned through activity, not single vote
+        const newScore = Math.min(74, oldScore + 20)
+        const newStatus = getReputationStatus(newScore, globalStats)
 
         await ctx.db.User.findOneAndUpdate(
           { telegram_id: spamVote.bannedUserId },
           {
             $set: {
-              'reputation.status': 'trusted',
-              'reputation.score': 75,
+              'reputation.status': newStatus,
+              'reputation.score': newScore,
               'reputation.lastCalculated': new Date()
             },
-            $inc: { 'globalStats.manualUnbans': 1 }
+            $inc: {
+              'globalStats.manualUnbans': 1,
+              'globalStats.cleanMessages': 5 // Bonus clean checks for false positive
+            }
           },
           { upsert: true }
         )
 
-        reputationChange = { oldScore, newScore: 75 }
+        reputationChange = { oldScore, newScore }
         log.info({
           eventId: spamVote.eventId,
           userId: spamVote.bannedUserId,
           oldScore,
-          newScore: 75
-        }, 'Set user as trusted')
+          newScore,
+          newStatus
+        }, 'Boosted reputation after clean vote')
       } catch (error) {
         log.error({ err: error.message, eventId: spamVote.eventId }, 'Failed to update reputation')
       }
@@ -217,12 +230,11 @@ const processVoteResult = async (ctx, spamVote) => {
       try {
         const user = await ctx.db.User.findOne({ telegram_id: spamVote.bannedUserId })
         const oldScore = user?.reputation?.score || 50
+        const globalStats = user?.globalStats || {}
         const newScore = Math.max(0, oldScore - 15)
 
-        // Determine new status based on score
-        let newStatus = 'neutral'
-        if (newScore < 20) newStatus = 'restricted'
-        else if (newScore < 40) newStatus = 'suspicious'
+        // Use centralized status calculation (includes activity requirements)
+        const newStatus = getReputationStatus(newScore, globalStats)
 
         await ctx.db.User.findOneAndUpdate(
           { telegram_id: spamVote.bannedUserId },
@@ -231,7 +243,8 @@ const processVoteResult = async (ctx, spamVote) => {
               'reputation.score': newScore,
               'reputation.status': newStatus,
               'reputation.lastCalculated': new Date()
-            }
+            },
+            $inc: { 'globalStats.spamDetections': 1 }
           }
         )
 
@@ -240,7 +253,8 @@ const processVoteResult = async (ctx, spamVote) => {
           eventId: spamVote.eventId,
           userId: spamVote.bannedUserId,
           oldScore,
-          newScore
+          newScore,
+          newStatus
         }, 'Decreased user reputation')
       } catch (error) {
         log.error({ err: error.message, eventId: spamVote.eventId }, 'Failed to decrease reputation')

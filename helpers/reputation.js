@@ -74,14 +74,48 @@ const calculateReputationScore = (globalStats, accountAge) => {
 }
 
 /**
- * Get reputation status from score
- * - trusted (75+): Skip spam check entirely
+ * Minimum requirements to achieve trusted status
+ * Prevents gaming the system by just joining groups without activity
+ */
+const TRUSTED_REQUIREMENTS = {
+  minMessages: 50,      // Must have sent at least 50 messages
+  minCleanChecks: 5,    // Must have passed at least 5 spam checks
+  minGroups: 2,         // Must be active in at least 2 groups
+  minScore: 75          // Must have score >= 75
+}
+
+/**
+ * Check if user meets minimum requirements for trusted status
+ */
+const meetsTrustedRequirements = (globalStats) => {
+  if (!globalStats) return false
+  const { totalMessages = 0, cleanMessages = 0, groupsActive = 0 } = globalStats
+  return (
+    totalMessages >= TRUSTED_REQUIREMENTS.minMessages &&
+    cleanMessages >= TRUSTED_REQUIREMENTS.minCleanChecks &&
+    groupsActive >= TRUSTED_REQUIREMENTS.minGroups
+  )
+}
+
+/**
+ * Get reputation status from score and activity
+ * - trusted (75+): Skip spam check entirely (requires minimum activity)
  * - neutral (40-74): Normal checks
  * - suspicious (20-39): Lower threshold (more aggressive)
  * - restricted (0-19): Very aggressive
+ *
+ * @param {number} score - Reputation score (0-100)
+ * @param {Object} globalStats - Optional stats to check trusted requirements
  */
-const getReputationStatus = (score) => {
-  if (score >= 75) return 'trusted'
+const getReputationStatus = (score, globalStats = null) => {
+  // trusted requires both high score AND minimum activity
+  if (score >= TRUSTED_REQUIREMENTS.minScore) {
+    if (globalStats && meetsTrustedRequirements(globalStats)) {
+      return 'trusted'
+    }
+    // High score but insufficient activity = neutral (capped)
+    return 'neutral'
+  }
   if (score >= 40) return 'neutral'
   if (score >= 20) return 'suspicious'
   return 'restricted'
@@ -91,11 +125,12 @@ const getReputationStatus = (score) => {
  * Calculate full reputation object for a user
  */
 const calculateReputation = (globalStats, userId) => {
+  const stats = globalStats || {}
   const accountAgeMonths = getAccountAgeMonths(userId)
-  const score = calculateReputationScore(globalStats || {}, accountAgeMonths)
+  const score = calculateReputationScore(stats, accountAgeMonths)
   return {
     score,
-    status: getReputationStatus(score),
+    status: getReputationStatus(score, stats),
     lastCalculated: new Date()
   }
 }
@@ -165,5 +200,7 @@ module.exports = {
   getReputationStatus,
   calculateReputation,
   getAccountAgeMonths,
-  processSpamAction
+  processSpamAction,
+  meetsTrustedRequirements,
+  TRUSTED_REQUIREMENTS
 }
