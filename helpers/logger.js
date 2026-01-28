@@ -46,6 +46,7 @@ const cleanup = createChildLogger('CLEANUP')
 const report = createChildLogger('REPORT')
 const globalBan = createChildLogger('GLOBAL BAN')
 const cas = createChildLogger('CAS BAN')
+const casSync = createChildLogger('CAS SYNC')
 const db = createChildLogger('DATABASE')
 const stats = createChildLogger('STATS')
 const reputation = createChildLogger('REPUTATION')
@@ -68,6 +69,7 @@ module.exports = {
   report,
   globalBan,
   cas,
+  casSync,
   db,
   stats,
   reputation,

@@ -8,6 +8,7 @@ const { bot: botLog, db: dbLog } = require('./helpers/logger')
 const { db } = require('./database')
 const { processExpiredVotes } = require('./handlers')
 const { processStartupCleanup, startCleanupInterval } = require('./helpers/message-cleanup')
+const { startPeriodicSync: startCasSync } = require('./helpers/cas-sync')
 const {
   stats,
   errorHandler,
@@ -209,6 +210,9 @@ const init = () => {
       processExpiredVotes(db, bot.telegram, i18n)
     }, 60 * 1000)
     botLog.debug('Started spam vote expiration handler')
+
+    // Start CAS (Combot Anti-Spam) sync if enabled
+    startCasSync(db)
   })
 }
 

@@ -13,10 +13,10 @@ const mongoose = require('mongoose')
 const spamSignatureSchema = mongoose.Schema({
   // Multi-layer hashing for different match types
   // Note: indexes defined at bottom with sparse option
-  exactHash: { type: String },       // Exact text match
-  normalizedHash: { type: String },  // Template match
-  fuzzyHash: { type: String },       // SimHash for similarity
-  structureHash: { type: String },   // Message structure pattern
+  exactHash: { type: String }, // Exact text match
+  normalizedHash: { type: String }, // Template match
+  fuzzyHash: { type: String }, // SimHash for similarity
+  structureHash: { type: String }, // Message structure pattern
 
   // Confirmation status
   status: {
@@ -31,6 +31,13 @@ const spamSignatureSchema = mongoose.Schema({
 
   // Sample for debugging/review
   sampleText: { type: String, maxLength: 200 },
+
+  // Source of the signature (for tracking)
+  source: {
+    type: String,
+    enum: ['user_report', 'ai_detection', 'cas_import', 'cas_ban', 'manual'],
+    default: 'ai_detection'
+  },
 
   // Timestamps
   firstSeenAt: { type: Date, default: Date.now },
@@ -64,5 +71,6 @@ spamSignatureSchema.index({ exactHash: 1, status: 1 })
 spamSignatureSchema.index({ normalizedHash: 1, status: 1 })
 spamSignatureSchema.index({ fuzzyHash: 1, status: 1 })
 spamSignatureSchema.index({ structureHash: 1, status: 1, confirmations: 1 })
+spamSignatureSchema.index({ source: 1, status: 1 })
 
 module.exports = spamSignatureSchema
