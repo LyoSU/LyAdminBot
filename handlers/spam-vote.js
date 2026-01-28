@@ -9,11 +9,14 @@ const nlpClient = require('../helpers/nlp-client')
  *
  * Eligibility:
  * - Admins: always can vote, weight ×3
- * - Trusted users: can vote, weight ×1
+ * - Trusted users: can vote, weight ×2
+ * - Active members (10+ messages in chat): can vote, weight ×1
  * - Regular users: cannot vote
  *
  * @returns {Object} { canVote: boolean, weight: number, isAdmin: boolean }
  */
+const MIN_MESSAGES_TO_VOTE = 10
+
 const checkVoteEligibility = async (ctx, chatId, userId) => {
   // 1. Check if user is admin
   try {
@@ -29,13 +32,27 @@ const checkVoteEligibility = async (ctx, chatId, userId) => {
   try {
     const user = await ctx.db.User.findOne({ telegram_id: userId })
     if (user && user.reputation && user.reputation.status === 'trusted') {
-      return { canVote: true, weight: 1, isAdmin: false }
+      return { canVote: true, weight: 2, isAdmin: false }
     }
   } catch (error) {
     log.warn({ err: error.message, userId }, 'Could not check user reputation')
   }
 
-  // 3. Regular users cannot vote
+  // 3. Check if user has enough messages in this chat
+  try {
+    const group = await ctx.db.Group.findOne({ group_id: chatId })
+    if (group && group.members && group.members[userId]) {
+      const memberStats = group.members[userId].stats
+      const messageCount = (memberStats && memberStats.messagesCount) || 0
+      if (messageCount >= MIN_MESSAGES_TO_VOTE) {
+        return { canVote: true, weight: 1, isAdmin: false }
+      }
+    }
+  } catch (error) {
+    log.warn({ err: error.message, userId, chatId }, 'Could not check message count')
+  }
+
+  // 4. Regular users cannot vote
   return { canVote: false, weight: 0, isAdmin: false }
 }
 
