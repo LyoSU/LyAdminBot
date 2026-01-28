@@ -1,7 +1,8 @@
 const { updateVoteUI, showResultUI } = require('../helpers/vote-ui')
 const { addSignature } = require('../helpers/spam-signatures')
-const { spamVote: log } = require('../helpers/logger')
+const { spamVote: log, nlp: nlpLog } = require('../helpers/logger')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
+const nlpClient = require('../helpers/nlp-client')
 
 /**
  * Check if a user is eligible to vote on spam decisions
@@ -162,6 +163,11 @@ const processVoteResult = async (ctx, spamVote) => {
             status: signature.status,
             uniqueGroups: signature.uniqueGroups.length
           }, 'Added to SpamSignature')
+
+          // Step 4: NLP background integration - extract metadata asynchronously
+          if (nlpClient.CONFIG.enabled) {
+            extractNlpMetadata(spamVote.messagePreview, signature, ctx.db)
+          }
         }
       } catch (error) {
         log.error({ err: error.message, eventId: spamVote.eventId }, 'Failed to add SpamSignature')
@@ -413,6 +419,52 @@ const processExpiredVotes = async (db, telegram, i18n) => {
   } catch (error) {
     log.error({ err: error.message }, 'Error processing expired votes')
   }
+}
+
+/**
+ * Extract NLP metadata asynchronously for analytics
+ * This runs in background after spam is confirmed - doesn't block vote processing
+ *
+ * @param {string} text - The spam message text
+ * @param {Object} signature - The SpamSignature document
+ * @param {Object} db - Database connection
+ */
+const extractNlpMetadata = (text, signature, db) => {
+  // Fix: Use signature._id directly instead of regenerating hashes
+  // Regenerating hashes could fail if text was truncated or modified
+  const signatureId = signature._id
+
+  setImmediate(async () => {
+    try {
+      const nlpResult = await nlpClient.extract(text)
+      if (!nlpResult) {
+        nlpLog.debug({ signatureId }, 'NLP extraction returned null')
+        return
+      }
+
+      // Update signature with NLP metadata using _id (stable reference)
+      await db.SpamSignature.updateOne(
+        { _id: signatureId },
+        {
+          $set: {
+            nlpMetadata: {
+              lang: nlpResult.lang,
+              posSignature: nlpResult.pos.slice(0, 10).join('-'),
+              topBigrams: nlpResult.bigrams.slice(0, 5)
+            }
+          }
+        }
+      )
+
+      nlpLog.info({
+        signatureId,
+        lang: nlpResult.lang,
+        posCount: nlpResult.pos.length
+      }, 'NLP metadata extracted for spam signature')
+    } catch (err) {
+      nlpLog.warn({ err: err.message, signatureId }, 'NLP metadata extraction failed')
+    }
+  })
 }
 
 module.exports = {

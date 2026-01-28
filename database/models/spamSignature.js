@@ -35,8 +35,18 @@ const spamSignatureSchema = mongoose.Schema({
   // Source of the signature (for tracking)
   source: {
     type: String,
-    enum: ['user_report', 'ai_detection', 'cas_import', 'cas_ban', 'manual'],
+    enum: ['user_report', 'ai_detection', 'cas_import', 'cas_ban', 'manual', 'vector_promotion'],
     default: 'ai_detection'
+  },
+
+  // Whether this signature has been saved to Qdrant vector DB
+  vectorSaved: { type: Boolean, default: false },
+
+  // NLP metadata (extracted asynchronously for analytics)
+  nlpMetadata: {
+    lang: { type: String },
+    posSignature: { type: String }, // First 10 POS tags joined by '-'
+    topBigrams: [{ type: String }] // Top 5 POS bigrams
   },
 
   // Timestamps

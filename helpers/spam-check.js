@@ -18,7 +18,7 @@ const {
   calculateVelocityScore,
   getForwardHash
 } = require('./velocity')
-const { checkSignatures } = require('./spam-signatures')
+const { checkSignatures, addSignature } = require('./spam-signatures')
 const { spam: spamLog, moderation: modLog, cleanup: cleanupLog, qdrant: qdrantLog } = require('./logger')
 
 // Create OpenRouter client for LLM
@@ -826,6 +826,34 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
       }
     }
 
+    // Check for candidate signatures (not confirmed yet) for confidence boosting
+    // These don't trigger immediate action but boost LLM confidence later
+    let candidateSignatureBoost = 0
+    if (ctx.db && ctx.db.SpamSignature) {
+      try {
+        const candidateMatch = await checkSignatures(messageText, ctx.db, { requireConfirmed: false })
+        if (candidateMatch && candidateMatch.signature && candidateMatch.signature.status === 'candidate') {
+          // Fix: Only boost if candidate has multiple confirmations (reduces false positives)
+          // A signature with only 1 confirmation from 1 group shouldn't boost confidence
+          const hasEnoughConfirmations = candidateMatch.signature.confirmations >= 2 ||
+            candidateMatch.signature.uniqueGroups.length >= 2
+
+          // Fuzzy/structure matches from candidates boost confidence
+          if ((candidateMatch.match === 'fuzzy' || candidateMatch.match === 'structure') && hasEnoughConfirmations) {
+            candidateSignatureBoost = 8
+            spamLog.debug({
+              matchType: candidateMatch.match,
+              confirmations: candidateMatch.signature.confirmations,
+              uniqueGroups: candidateMatch.signature.uniqueGroups.length,
+              boost: candidateSignatureBoost
+            }, 'Candidate signature match - will boost confidence')
+          }
+        }
+      } catch (sigErr) {
+        // Silent fail for candidate check - it's just a boost
+      }
+    }
+
     // === PHASE 0.6: Check ForwardBlacklist (for forwarded messages) ===
     // Persistent tracking of suspicious forward sources
     const forwardOrigin = ctx.message && ctx.message.forward_origin
@@ -1101,6 +1129,34 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
             qdrantLog.debug({ confidence: (localResult.confidence * 100).toFixed(1) }, 'New user - not trusting Qdrant clean result, checking with LLM for bio context')
           } else {
             qdrantLog.info({ confidence: (localResult.confidence * 100).toFixed(1), threshold: (adaptiveThreshold * 100).toFixed(1) }, 'Using Qdrant result')
+
+            // Krок 1: Promote high-hit vectors to SpamSignature for O(1) lookup
+            // When a vector has been matched many times with high confidence,
+            // it's a confirmed pattern worth adding to the signature database
+            if (
+              localResult.classification === 'spam' &&
+              localResult.hitCount >= 5 &&
+              localResult.confidence >= 0.9 &&
+              ctx.db && ctx.db.SpamSignature &&
+              ctx.chat && ctx.chat.id
+            ) {
+              // Async promotion - don't block the response
+              setImmediate(async () => {
+                try {
+                  const signature = await addSignature(messageText, ctx.db, ctx.chat.id, { source: 'vector_promotion' })
+                  if (signature) {
+                    qdrantLog.info({
+                      hitCount: localResult.hitCount,
+                      status: signature.status,
+                      uniqueGroups: signature.uniqueGroups.length
+                    }, 'Promoted vector to SpamSignature')
+                  }
+                } catch (err) {
+                  qdrantLog.warn({ err: err.message }, 'Vector promotion failed')
+                }
+              })
+            }
+
             return {
               isSpam: localResult.classification === 'spam',
               confidence: localResult.confidence * 100,
@@ -1247,6 +1303,12 @@ CONTEXT: ${contextInfo.join(' | ')}`
     if (isSpam && suspiciousForwardBoost > 0) {
       spamScore = Math.min(0.99, spamScore + suspiciousForwardBoost / 100)
       spamLog.debug({ boost: suspiciousForwardBoost }, 'Suspicious forward boost applied')
+    }
+
+    // Apply candidate signature boost (fuzzy match with non-confirmed signatures)
+    if (isSpam && candidateSignatureBoost > 0) {
+      spamScore = Math.min(0.99, spamScore + candidateSignatureBoost / 100)
+      spamLog.debug({ boost: candidateSignatureBoost }, 'Candidate signature boost applied')
     }
 
     spamLog.info({ isSpam, spamScore: spamScore.toFixed(2), source: 'openrouter_llm', model: usedModel }, 'OpenRouter result')

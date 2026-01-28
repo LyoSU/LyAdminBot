@@ -213,7 +213,8 @@ const classifyBySimilarity = async (embedding) => {
         classification: bestMatch.classification,
         confidence: Math.max(bestMatch.similarity, bestMatch.confidence * 0.95),
         source: 'qdrant_db',
-        matchedPattern: bestMatch.id
+        matchedPattern: bestMatch.id,
+        hitCount: (bestMatch.hitCount || 1) + 1 // Fix: Return post-increment value
       }
     }
 
@@ -237,7 +238,8 @@ const classifyBySimilarity = async (embedding) => {
         classification: 'clean',
         confidence: Math.max(bestMatch.similarity * 0.95, bestMatch.confidence * 0.9),
         source: 'qdrant_db',
-        matchedPattern: bestMatch.id
+        matchedPattern: bestMatch.id,
+        hitCount: (bestMatch.hitCount || 1) + 1 // Fix: Return post-increment value
       }
     }
 
@@ -257,7 +259,8 @@ const classifyBySimilarity = async (embedding) => {
         classification: 'spam',
         confidence: Math.min(bestMatch.confidence, bestMatch.similarity) * 0.95,
         source: 'qdrant_db',
-        matchedPattern: bestMatch.id
+        matchedPattern: bestMatch.id,
+        hitCount: (bestMatch.hitCount || 1) + 1 // Fix: Return post-increment value
       }
     }
 

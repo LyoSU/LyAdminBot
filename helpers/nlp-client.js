@@ -162,28 +162,10 @@ async function getNgrams (text) {
   }
 }
 
-/**
- * Get spam-relevant features
- * @param {string} text - Text to analyze
- * @returns {Promise<Object|null>}
- */
-async function getSpamFeatures (text) {
-  const result = await extract(text)
-  if (!result) return null
-
-  return {
-    lang: result.lang,
-    features: result.features,
-    posSignature: result.pos.slice(0, 10).join('-'),
-    bigramSignature: result.bigrams.slice(0, 5).join('|')
-  }
-}
-
 module.exports = {
   checkHealth,
   extract,
   extractBatch,
   getNgrams,
-  getSpamFeatures,
   CONFIG
 }

@@ -1,4 +1,7 @@
 const crypto = require('crypto')
+const { generateEmbedding } = require('./message-embeddings')
+const { saveSpamVector } = require('./spam-vectors')
+const { qdrant: sigLog } = require('./logger')
 
 /**
  * Spam Signature System
@@ -213,7 +216,7 @@ const generateSignatures = (text) => {
  */
 const checkSignatures = async (text, db, options = {}) => {
   const {
-    maxHammingDistance = 8,  // Max bits different for fuzzy match
+    maxHammingDistance = 8, // Max bits different for fuzzy match
     requireConfirmed = true
   } = options
 
@@ -294,6 +297,57 @@ const checkSignatures = async (text, db, options = {}) => {
 }
 
 /**
+ * Save confirmed signature to Qdrant for vector similarity matching
+ * Runs asynchronously to avoid blocking the main flow
+ */
+const saveSignatureToQdrant = (signature, db) => {
+  setImmediate(async () => {
+    try {
+      const text = signature.sampleText
+      if (!text || text.length < 10) return
+
+      // Generate embedding for the sample text
+      const embedding = await generateEmbedding(text, {
+        isNewAccount: true, // Treat as high-risk for embedding context
+        messageCount: 0,
+        hasCaption: false
+      })
+
+      if (!embedding) {
+        sigLog.warn({ signatureId: signature._id }, 'Failed to generate embedding for signature')
+        return
+      }
+
+      // Save to Qdrant with high confidence (confirmed signature)
+      await saveSpamVector({
+        text,
+        embedding,
+        classification: 'spam',
+        confidence: 0.95, // High confidence for confirmed signatures
+        features: {
+          fromSignature: true,
+          signatureStatus: 'confirmed',
+          uniqueGroups: signature.uniqueGroups.length
+        }
+      })
+
+      // Update signature to mark as saved to vector DB
+      await db.SpamSignature.updateOne(
+        { _id: signature._id },
+        { $set: { vectorSaved: true } }
+      )
+
+      sigLog.info({
+        signatureId: signature._id,
+        uniqueGroups: signature.uniqueGroups.length
+      }, 'Saved confirmed signature to Qdrant')
+    } catch (err) {
+      sigLog.warn({ err: err.message, signatureId: signature._id }, 'Failed to save signature to Qdrant')
+    }
+  })
+}
+
+/**
  * Add or update spam signature in database
  *
  * Strategy: Query by exactHash only (matches unique index) for atomic upsert.
@@ -323,7 +377,20 @@ const addSignature = async (text, db, chatId, options = {}) => {
     // Found by template - promote if enough groups
     if (existingByNormalized.uniqueGroups.length >= 3 && existingByNormalized.status === 'candidate') {
       existingByNormalized.status = 'confirmed'
+
+      // Fix: Set vectorSaved synchronously BEFORE async operation to prevent race condition
+      // Two concurrent requests could both see vectorSaved=false and trigger duplicate saves
+      const shouldSaveToQdrant = !existingByNormalized.vectorSaved
+      if (shouldSaveToQdrant) {
+        existingByNormalized.vectorSaved = true // Mark sync to prevent race
+      }
+
       await existingByNormalized.save()
+
+      // Now trigger async save - flag already persisted
+      if (shouldSaveToQdrant) {
+        saveSignatureToQdrant(existingByNormalized, db)
+      }
     }
     return existingByNormalized
   }
@@ -345,16 +412,18 @@ const addSignature = async (text, db, chatId, options = {}) => {
         $setOnInsert: {
           sampleText: text.substring(0, 200),
           status: 'candidate',
-          firstSeenAt: new Date()
+          firstSeenAt: new Date(),
+          source: options.source || 'ai_detection'
         }
       },
       { upsert: true, new: true }
     )
   } catch (err) {
     if (err.code === 11000) {
-      // Race condition: another request inserted first, just update
+      // Race condition: another request inserted first
+      // Try to find by normalizedHash first (handles template match race)
       result = await db.SpamSignature.findOneAndUpdate(
-        { exactHash: signatures.exactHash },
+        { $or: [{ exactHash: signatures.exactHash }, { normalizedHash: signatures.normalizedHash }] },
         {
           $inc: { confirmations: 1 },
           $addToSet: { uniqueGroups: chatId },
@@ -362,6 +431,18 @@ const addSignature = async (text, db, chatId, options = {}) => {
         },
         { new: true }
       )
+
+      // If still null, another concurrent request may have just created it - retry once
+      if (!result) {
+        result = await db.SpamSignature.findOne({
+          $or: [{ exactHash: signatures.exactHash }, { normalizedHash: signatures.normalizedHash }]
+        })
+      }
+
+      // If still nothing, something unexpected happened
+      if (!result) {
+        throw new Error('Race condition recovery failed: signature not found after duplicate key error')
+      }
     } else {
       throw err
     }
@@ -370,7 +451,19 @@ const addSignature = async (text, db, chatId, options = {}) => {
   // Promote if enough groups
   if (result.uniqueGroups.length >= 3 && result.status === 'candidate') {
     result.status = 'confirmed'
+
+    // Fix: Set vectorSaved synchronously BEFORE async operation to prevent race condition
+    const shouldSaveToQdrant = !result.vectorSaved
+    if (shouldSaveToQdrant) {
+      result.vectorSaved = true // Mark sync to prevent race
+    }
+
     await result.save()
+
+    // Now trigger async save - flag already persisted
+    if (shouldSaveToQdrant) {
+      saveSignatureToQdrant(result, db)
+    }
   }
 
   return result
