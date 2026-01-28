@@ -1,7 +1,8 @@
 const crypto = require('crypto')
 const { generateEmbedding } = require('./message-embeddings')
 const { saveSpamVector } = require('./spam-vectors')
-const { qdrant: sigLog } = require('./logger')
+const { qdrant: sigLog, nlp: nlpLog } = require('./logger')
+const nlpClient = require('./nlp-client')
 
 /**
  * Spam Signature System
@@ -342,6 +343,48 @@ const saveSignatureToQdrant = (signature, db) => {
 }
 
 /**
+ * Extract NLP metadata for a signature asynchronously
+ * Called when signature is first created to populate lang, posSignature, topBigrams
+ */
+const extractNlpForSignature = (signature, db) => {
+  if (!nlpClient.CONFIG.enabled) return
+
+  const text = signature.sampleText
+  if (!text || text.length < 10) return
+
+  setImmediate(async () => {
+    try {
+      const nlpResult = await nlpClient.extract(text)
+      if (!nlpResult) {
+        nlpLog.debug({ signatureId: signature._id }, 'NLP extraction returned null')
+        return
+      }
+
+      await db.SpamSignature.updateOne(
+        { _id: signature._id },
+        {
+          $set: {
+            nlpMetadata: {
+              lang: nlpResult.lang,
+              posSignature: nlpResult.pos.slice(0, 10).join('-'),
+              topBigrams: nlpResult.bigrams.slice(0, 5)
+            }
+          }
+        }
+      )
+
+      nlpLog.info({
+        signatureId: signature._id,
+        lang: nlpResult.lang,
+        bigrams: nlpResult.bigrams.length
+      }, 'NLP metadata extracted for signature')
+    } catch (err) {
+      nlpLog.warn({ err: err.message, signatureId: signature._id }, 'NLP extraction failed')
+    }
+  })
+}
+
+/**
  * Add or update spam signature in database
  *
  * Strategy: Query by exactHash only (matches unique index) for atomic upsert.
@@ -450,6 +493,11 @@ const addSignature = async (text, db, chatId, options = {}) => {
     } else {
       throw err
     }
+  }
+
+  // Extract NLP metadata for new signatures (confirmations === 1 means just created)
+  if (result.confirmations === 1 && !result.nlpMetadata?.lang) {
+    extractNlpForSignature(result, db)
   }
 
   // Promote if enough groups - use atomic update for multi-worker safety
