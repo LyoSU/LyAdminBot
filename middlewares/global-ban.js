@@ -3,6 +3,7 @@ const { humanizeReason } = require('../helpers/spam-check')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
 
 const GLOBAL_BAN_DURATION_HOURS = 24
+const NOTIFICATION_DELETE_DELAY_MS = 30 * 1000
 
 /**
  * Check if global ban has expired
@@ -90,12 +91,12 @@ const executeBanActions = async (ctx, reason) => {
       }))
       results.notified = true
 
-      // Auto-delete notification after 30 seconds to keep chat clean
+      // Auto-delete notification to keep chat clean
       if (notificationMsg && ctx.db) {
         scheduleDeletion(ctx.db, {
           chatId: ctx.chat.id,
           messageId: notificationMsg.message_id,
-          delayMs: 30 * 1000,
+          delayMs: NOTIFICATION_DELETE_DELAY_MS,
           source: 'global_ban_notification'
         }, ctx.telegram)
       }

@@ -652,11 +652,10 @@ module.exports = async (ctx) => {
         }
 
         return true // Stop further processing
-      } else {
-        // Message passed spam check - count as clean for reputation
-        // Count if: (1) not spam with any confidence, or (2) spam but below threshold
-        const passedCheck = !result.isSpam || result.confidence < baseThreshold
-        if (passedCheck && ctx.session && ctx.session.userInfo && !isChannelPost) {
+      } else if (!result.isSpam) {
+        // Message confirmed clean by AI - count for reputation
+        // Only count if AI explicitly said NOT spam (don't count borderline cases)
+        if (ctx.session && ctx.session.userInfo && !isChannelPost) {
           const stats = ctx.session.userInfo.globalStats || (ctx.session.userInfo.globalStats = {})
           stats.cleanMessages = (stats.cleanMessages || 0) + 1
 

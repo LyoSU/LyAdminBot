@@ -152,7 +152,7 @@ const processVoteResult = async (ctx, spamVote) => {
             },
             $inc: {
               'globalStats.manualUnbans': 1,
-              'globalStats.cleanMessages': 5 // Bonus clean checks for false positive
+              'globalStats.spamDetections': -1 // Reverse the false positive
             }
           },
           { upsert: true }
@@ -236,6 +236,8 @@ const processVoteResult = async (ctx, spamVote) => {
         // Use centralized status calculation (includes activity requirements)
         const newStatus = getReputationStatus(newScore, globalStats)
 
+        // Note: spamDetections already incremented when spam was first detected
+        // Don't increment again here - just update reputation
         await ctx.db.User.findOneAndUpdate(
           { telegram_id: spamVote.bannedUserId },
           {
@@ -243,8 +245,7 @@ const processVoteResult = async (ctx, spamVote) => {
               'reputation.score': newScore,
               'reputation.status': newStatus,
               'reputation.lastCalculated': new Date()
-            },
-            $inc: { 'globalStats.spamDetections': 1 }
+            }
           }
         )
 
