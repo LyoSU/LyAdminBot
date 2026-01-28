@@ -376,21 +376,31 @@ const addSignature = async (text, db, chatId, options = {}) => {
   if (existingByNormalized) {
     // Found by template - promote if enough groups
     if (existingByNormalized.uniqueGroups.length >= 3 && existingByNormalized.status === 'candidate') {
-      existingByNormalized.status = 'confirmed'
+      // Fix: Use atomic findOneAndUpdate with condition to prevent race condition
+      // In multi-worker environments, synchronous flag setting doesn't help
+      // because workers read from DB, not shared memory
+      const promoted = await db.SpamSignature.findOneAndUpdate(
+        {
+          _id: existingByNormalized._id,
+          status: 'candidate', // Only promote if still candidate
+          vectorSaved: { $ne: true } // Only if not already saved to Qdrant
+        },
+        {
+          $set: {
+            status: 'confirmed',
+            vectorSaved: true
+          }
+        },
+        { new: true }
+      )
 
-      // Fix: Set vectorSaved synchronously BEFORE async operation to prevent race condition
-      // Two concurrent requests could both see vectorSaved=false and trigger duplicate saves
-      const shouldSaveToQdrant = !existingByNormalized.vectorSaved
-      if (shouldSaveToQdrant) {
-        existingByNormalized.vectorSaved = true // Mark sync to prevent race
+      // If we got the document back, we won the race - save to Qdrant
+      if (promoted) {
+        saveSignatureToQdrant(promoted, db)
+        return promoted
       }
-
-      await existingByNormalized.save()
-
-      // Now trigger async save - flag already persisted
-      if (shouldSaveToQdrant) {
-        saveSignatureToQdrant(existingByNormalized, db)
-      }
+      // If null, another worker already promoted it - return fresh data
+      return db.SpamSignature.findById(existingByNormalized._id)
     }
     return existingByNormalized
   }
@@ -448,22 +458,29 @@ const addSignature = async (text, db, chatId, options = {}) => {
     }
   }
 
-  // Promote if enough groups
+  // Promote if enough groups - use atomic update for multi-worker safety
   if (result.uniqueGroups.length >= 3 && result.status === 'candidate') {
-    result.status = 'confirmed'
+    const promoted = await db.SpamSignature.findOneAndUpdate(
+      {
+        _id: result._id,
+        status: 'candidate',
+        vectorSaved: { $ne: true }
+      },
+      {
+        $set: {
+          status: 'confirmed',
+          vectorSaved: true
+        }
+      },
+      { new: true }
+    )
 
-    // Fix: Set vectorSaved synchronously BEFORE async operation to prevent race condition
-    const shouldSaveToQdrant = !result.vectorSaved
-    if (shouldSaveToQdrant) {
-      result.vectorSaved = true // Mark sync to prevent race
+    if (promoted) {
+      saveSignatureToQdrant(promoted, db)
+      return promoted
     }
-
-    await result.save()
-
-    // Now trigger async save - flag already persisted
-    if (shouldSaveToQdrant) {
-      saveSignatureToQdrant(result, db)
-    }
+    // Another worker already promoted - return fresh data
+    return db.SpamSignature.findById(result._id)
   }
 
   return result

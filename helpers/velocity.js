@@ -151,10 +151,29 @@ class VelocityStore {
             this.data.delete(key)
             cleanedKeys++
           }
-        } else if (value instanceof Set && value.size > 100) {
-          // Clean old sets (user links, chats) - keep max 100 items
-          const arr = Array.from(value).slice(-100)
-          this.data.set(key, new Set(arr))
+        } else if (value instanceof Set) {
+          // Clean Sets associated with inactive users
+          // Extract userId from key like "vel:user:123:links"
+          const userMatch = key.match(/^vel:user:(\d+):/)
+          if (userMatch) {
+            const userId = userMatch[1]
+            const statsKey = `vel:user:${userId}:stats`
+            const userStats = this.data.get(statsKey)
+            const lastActivity = userStats && userStats.lastActivity
+
+            // If user has no stats or is inactive for MAX_AGE, delete their sets
+            if (!userStats || !lastActivity || (Date.now() - lastActivity > CONFIG.MAX_AGE)) {
+              this.data.delete(key)
+              cleanedKeys++
+              return // continue forEach
+            }
+          }
+
+          // Trim large sets to 100 items
+          if (value.size > 100) {
+            const arr = Array.from(value).slice(-100)
+            this.data.set(key, new Set(arr))
+          }
         }
       }
 
@@ -433,6 +452,7 @@ const recordForwardOrigin = async (forwardOrigin, userId, chatId, messageId) => 
 
   // Track user's forward activity
   await store.hincrby(`vel:user:${userId}:stats`, 'totalForwards', 1)
+  await store.hset(`vel:user:${userId}:stats`, 'lastActivity', now) // Fix: Required for cleanup
   await store.sadd(`vel:user:${userId}:forward_sources`, forwardInfo.hash)
 
   velocityLog.debug({

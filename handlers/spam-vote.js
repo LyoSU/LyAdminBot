@@ -430,8 +430,21 @@ const processExpiredVotes = async (db, telegram, i18n) => {
  * @param {Object} db - Database connection
  */
 const extractNlpMetadata = (text, signature, db) => {
-  // Fix: Use signature._id directly instead of regenerating hashes
-  // Regenerating hashes could fail if text was truncated or modified
+  // Fix: Validate inputs before async operation
+  // Prevents silent failures and makes debugging easier
+  if (!signature || !signature._id) {
+    nlpLog.warn('extractNlpMetadata called without valid signature')
+    return
+  }
+  if (!text || text.length < 10) {
+    nlpLog.debug({ signatureId: signature._id }, 'Text too short for NLP extraction')
+    return
+  }
+  if (!db || !db.SpamSignature) {
+    nlpLog.warn('extractNlpMetadata called without valid db')
+    return
+  }
+
   const signatureId = signature._id
 
   setImmediate(async () => {

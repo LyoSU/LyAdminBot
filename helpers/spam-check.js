@@ -1283,7 +1283,15 @@ CONTEXT: ${contextInfo.join(' | ')}`
     // Use OpenRouter for LLM analysis with retry and fallback
     const llmResult = await callLLMWithRetry(systemPrompt, userPrompt)
     if (!llmResult) {
-      return null // All retries failed
+      // Fix: Safe fallback instead of null - don't block on LLM failure
+      // but also don't save to Qdrant (no confidence in result)
+      spamLog.warn('LLM failed, using safe fallback')
+      return {
+        isSpam: false,
+        confidence: 0,
+        reason: 'LLM unavailable - manual review recommended',
+        source: 'llm_fallback'
+      }
     }
 
     const { analysis, model: usedModel } = llmResult
