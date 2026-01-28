@@ -277,21 +277,15 @@ const checkSignatures = async (text, db, options = {}) => {
     }
   }
 
-  // 4. Check structure hash (catches reformatted spam)
-  const structureMatch = await db.SpamSignature.findOne({
-    structureHash: signatures.structureHash,
-    confirmations: { $gte: 10 }, // Require more confirmations for structure
-    ...statusQuery
-  })
-
-  if (structureMatch) {
-    return {
-      match: 'structure',
-      confidence: 70,
-      signature: structureMatch,
-      reason: 'Matches spam message structure'
-    }
-  }
+  // 4. Structure hash - TOO GENERIC for direct action
+  // Structure matching causes false positives because it only captures
+  // message "shape" (length, punctuation patterns), not semantic content.
+  // Two completely different messages can have the same structure.
+  //
+  // DISABLED: Structure matches should only be used for confidence boosting
+  // in spam-check.js candidateSignatureBoost, not for direct spam detection.
+  //
+  // If re-enabled, use confidence <= 50 (below action threshold)
 
   return null
 }
