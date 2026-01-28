@@ -10,12 +10,8 @@ const NOTIFICATION_DELETE_DELAY_MS = 30 * 1000
  */
 const isGlobalBanExpired = (globalBanDate) => {
   if (!globalBanDate) return true
-
-  const now = new Date()
-  const banTime = new Date(globalBanDate)
-  const hoursDiff = (now - banTime) / (1000 * 60 * 60)
-
-  return hoursDiff >= GLOBAL_BAN_DURATION_HOURS
+  const hoursSinceBan = (Date.now() - new Date(globalBanDate).getTime()) / (1000 * 60 * 60)
+  return hoursSinceBan >= GLOBAL_BAN_DURATION_HOURS
 }
 
 /**
@@ -28,23 +24,16 @@ const clearExpiredBan = async (ctx) => {
   userInfo.globalBanReason = undefined
   userInfo.globalBanDate = undefined
 
-  await userInfo.save().catch(err => log.error({ err }, 'Failed to clear expired ban'))
+  await userInfo.save().catch(err => log.error({ err: err.message }, 'Failed to clear expired ban'))
 
-  log.info({
-    userId: ctx.from.id,
-    firstName: ctx.from.first_name
-  }, 'Cleared expired global ban')
+  log.info({ userId: ctx.from.id }, 'Cleared expired global ban')
 }
 
 /**
  * Check if group has global ban enabled
  */
 const isGlobalBanEnabledInGroup = (ctx) => {
-  return ctx.group &&
-         ctx.group.info &&
-         ctx.group.info.settings &&
-         ctx.group.info.settings.openaiSpamCheck &&
-         ctx.group.info.settings.openaiSpamCheck.globalBan !== false
+  return ctx.group?.info?.settings?.openaiSpamCheck?.globalBan !== false
 }
 
 /**
@@ -52,100 +41,72 @@ const isGlobalBanEnabledInGroup = (ctx) => {
  * Each operation is independent - failures don't block other actions
  */
 const executeBanActions = async (ctx, reason) => {
-  const results = {
-    deleted: false,
-    kicked: false,
-    notified: false
-  }
+  const userId = ctx.from.id
+  const chatId = ctx.chat.id
 
-  // 1. Delete the spam message (independent, don't block on failure)
+  let deleted = false
+  let kicked = false
+
+  // 1. Delete the spam message
   try {
-    await ctx.telegram.deleteMessage(ctx.chat.id, ctx.message.message_id)
-    results.deleted = true
-  } catch (error) {
-    log.warn({
-      err: error.message,
-      userId: ctx.from.id,
-      messageId: ctx.message.message_id
-    }, 'Failed to delete message from globally banned user')
+    await ctx.telegram.deleteMessage(chatId, ctx.message.message_id)
+    deleted = true
+  } catch (err) {
+    log.warn({ err: err.message, userId }, 'Failed to delete message')
   }
 
-  // 2. Kick the user (most important action)
+  // 2. Kick the user (critical action)
   try {
-    await ctx.telegram.kickChatMember(ctx.chat.id, ctx.from.id)
-    results.kicked = true
-  } catch (error) {
-    log.error({
-      err: error.message,
-      userId: ctx.from.id,
-      chatId: ctx.chat.id
-    }, 'Failed to kick globally banned user')
+    await ctx.telegram.kickChatMember(chatId, userId)
+    kicked = true
+  } catch (err) {
+    log.error({ err: err.message, userId, chatId }, 'Failed to kick user')
   }
 
-  // 3. Notify the group (only if kick succeeded)
-  if (results.kicked) {
+  // 3. Notify group and schedule auto-delete (only if kick succeeded)
+  if (kicked) {
     try {
-      const notificationMsg = await ctx.replyWithHTML(ctx.i18n.t('global_ban.kicked', {
+      const msg = await ctx.replyWithHTML(ctx.i18n.t('global_ban.kicked', {
         name: ctx.from.first_name,
         reason: humanizeReason(reason, ctx.i18n)
       }))
-      results.notified = true
 
-      // Auto-delete notification to keep chat clean
-      if (notificationMsg && ctx.db) {
+      if (msg && ctx.db) {
         scheduleDeletion(ctx.db, {
-          chatId: ctx.chat.id,
-          messageId: notificationMsg.message_id,
+          chatId,
+          messageId: msg.message_id,
           delayMs: NOTIFICATION_DELETE_DELAY_MS,
-          source: 'global_ban_notification'
-        }, ctx.telegram)
+          source: 'global_ban'
+        }, ctx.telegram).catch(err => log.warn({ err: err.message }, 'Failed to schedule notification deletion'))
       }
-    } catch (error) {
-      log.warn({
-        err: error.message,
-        userId: ctx.from.id
-      }, 'Failed to send global ban notification')
+    } catch (err) {
+      log.warn({ err: err.message, userId }, 'Failed to send notification')
     }
   }
 
-  // Log summary if any action failed
-  if (!results.deleted || !results.kicked) {
-    log.warn({
-      userId: ctx.from.id,
-      userName: ctx.from.first_name,
-      deleted: results.deleted,
-      kicked: results.kicked,
-      notified: results.notified
-    }, 'Global ban actions partially failed')
+  // Log if critical action failed
+  if (!kicked) {
+    log.warn({ userId, deleted, kicked }, 'Global ban incomplete')
   }
 
-  return results
+  return { deleted, kicked }
 }
 
 /**
  * Handle active global ban
- * Returns true if user was banned
  */
 const handleActiveBan = async (ctx) => {
-  const userInfo = ctx.session.userInfo
-  const banDate = new Date(userInfo.globalBanDate)
-  const timeLeft = GLOBAL_BAN_DURATION_HOURS - ((new Date() - banDate) / (1000 * 60 * 60))
-
   if (!isGlobalBanEnabledInGroup(ctx)) {
-    log.debug({
-      userId: ctx.from.id,
-      firstName: ctx.from.first_name,
-      groupTitle: ctx.chat.title
-    }, 'User globally banned but group has global ban disabled')
+    log.debug({ userId: ctx.from.id, group: ctx.chat.title }, 'Global ban disabled in group')
     return false
   }
 
+  const userInfo = ctx.session.userInfo
+
   log.warn({
     userId: ctx.from.id,
-    firstName: ctx.from.first_name,
-    reason: userInfo.globalBanReason,
-    timeLeftHours: timeLeft.toFixed(1)
-  }, 'User globally banned by AI, banning in current group')
+    reason: userInfo.globalBanReason
+  }, 'Enforcing global ban')
 
   await executeBanActions(ctx, userInfo.globalBanReason)
   return true
@@ -153,39 +114,34 @@ const handleActiveBan = async (ctx) => {
 
 /**
  * Global ban check middleware
- * Checks if user is globally banned and handles accordingly
- *
- * Sets ctx.state.isSpam = true if user was banned
+ * Blocks globally banned users from participating in groups
  */
-const globalBanCheck = async (ctx, next) => {
-  // Only check messages from users
-  if (!ctx.message || !ctx.from || !ctx.session || !ctx.session.userInfo) {
-    return next(ctx)
+module.exports = async (ctx, next) => {
+  // Skip non-message contexts or missing session
+  if (!ctx.message || !ctx.from || !ctx.session?.userInfo) {
+    return next()
   }
 
   const userInfo = ctx.session.userInfo
 
-  // Not globally banned - continue
+  // Not banned - continue
   if (!userInfo.isGlobalBanned) {
-    return next(ctx)
+    return next()
   }
 
-  // Check if ban expired
+  // Ban expired - clear and continue
   if (isGlobalBanExpired(userInfo.globalBanDate)) {
     await clearExpiredBan(ctx)
-    return next(ctx)
+    return next()
   }
 
-  // Handle active ban
+  // Enforce ban
   const wasBanned = await handleActiveBan(ctx)
 
   if (wasBanned) {
-    // Initialize state if needed
-    if (!ctx.state) ctx.state = {}
+    ctx.state = ctx.state || {}
     ctx.state.isSpam = true
   }
 
-  return next(ctx)
+  return next()
 }
-
-module.exports = globalBanCheck
