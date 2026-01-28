@@ -1,5 +1,6 @@
 const { globalBan: log } = require('../helpers/logger')
 const { humanizeReason } = require('../helpers/spam-check')
+const { scheduleDeletion } = require('../helpers/message-cleanup')
 
 const GLOBAL_BAN_DURATION_HOURS = 24
 
@@ -47,21 +48,77 @@ const isGlobalBanEnabledInGroup = (ctx) => {
 
 /**
  * Execute ban actions: delete message, kick user, notify
+ * Each operation is independent - failures don't block other actions
  */
 const executeBanActions = async (ctx, reason) => {
+  const results = {
+    deleted: false,
+    kicked: false,
+    notified: false
+  }
+
+  // 1. Delete the spam message (independent, don't block on failure)
   try {
     await ctx.telegram.deleteMessage(ctx.chat.id, ctx.message.message_id)
+    results.deleted = true
+  } catch (error) {
+    log.warn({
+      err: error.message,
+      userId: ctx.from.id,
+      messageId: ctx.message.message_id
+    }, 'Failed to delete message from globally banned user')
+  }
+
+  // 2. Kick the user (most important action)
+  try {
     await ctx.telegram.kickChatMember(ctx.chat.id, ctx.from.id)
-    await ctx.replyWithHTML(ctx.i18n.t('global_ban.kicked', {
-      name: ctx.from.first_name,
-      reason: humanizeReason(reason, ctx.i18n)
-    }))
+    results.kicked = true
   } catch (error) {
     log.error({
       err: error.message,
-      userId: ctx.from.id
+      userId: ctx.from.id,
+      chatId: ctx.chat.id
     }, 'Failed to kick globally banned user')
   }
+
+  // 3. Notify the group (only if kick succeeded)
+  if (results.kicked) {
+    try {
+      const notificationMsg = await ctx.replyWithHTML(ctx.i18n.t('global_ban.kicked', {
+        name: ctx.from.first_name,
+        reason: humanizeReason(reason, ctx.i18n)
+      }))
+      results.notified = true
+
+      // Auto-delete notification after 30 seconds to keep chat clean
+      if (notificationMsg && ctx.db) {
+        scheduleDeletion(ctx.db, {
+          chatId: ctx.chat.id,
+          messageId: notificationMsg.message_id,
+          delayMs: 30 * 1000,
+          source: 'global_ban_notification'
+        }, ctx.telegram)
+      }
+    } catch (error) {
+      log.warn({
+        err: error.message,
+        userId: ctx.from.id
+      }, 'Failed to send global ban notification')
+    }
+  }
+
+  // Log summary if any action failed
+  if (!results.deleted || !results.kicked) {
+    log.warn({
+      userId: ctx.from.id,
+      userName: ctx.from.first_name,
+      deleted: results.deleted,
+      kicked: results.kicked,
+      notified: results.notified
+    }, 'Global ban actions partially failed')
+  }
+
+  return results
 }
 
 /**
