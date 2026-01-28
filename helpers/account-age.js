@@ -133,21 +133,51 @@ const parseRegistrationTime = (prefix, regTime) => {
 }
 
 const predictCreationDate = (id) => {
-  for (let i = 1; i < entries.length; i++) {
+  const n = entries.length
+  const nowUnix = Math.floor(Date.now() / 1000)
+
+  // Invalid or missing ID - treat as brand new
+  if (!id || typeof id !== 'number' || id <= 0) {
+    return parseRegistrationTime('?', nowUnix)
+  }
+
+  // Interpolation for IDs within known range
+  for (let i = 1; i < n; i++) {
     if (id >= entries[i - 1][0] && id <= entries[i][0]) {
       const t = (id - entries[i - 1][0]) / (entries[i][0] - entries[i - 1][0])
       const regTime = Math.floor(
         entries[i - 1][1] + t * (entries[i][1] - entries[i - 1][1])
       )
-      return parseRegistrationTime('~', regTime)
+      // Sanity check: can't be in the future
+      return parseRegistrationTime('~', Math.min(regTime, nowUnix))
     }
   }
 
-  if (id <= 1000000) {
-    return parseRegistrationTime('<', 1380326400)
-  } else {
-    return parseRegistrationTime('>', 1701192327)
+  // Very old accounts (before first known entry)
+  if (id <= entries[0][0]) {
+    return parseRegistrationTime('<', entries[0][1])
   }
+
+  // Extrapolation for IDs beyond known range (newer accounts)
+  // Calculate growth rate from last ~10 entries for stability
+  const windowSize = Math.min(10, n - 1)
+  const startEntry = entries[n - 1 - windowSize]
+  const endEntry = entries[n - 1]
+
+  const idGrowth = endEntry[0] - startEntry[0]
+  const timeGrowth = endEntry[1] - startEntry[1]
+
+  // Fallback rate if data is inconsistent (~100 IDs/sec is conservative)
+  const growthRate = timeGrowth > 0 ? idGrowth / timeGrowth : 100
+
+  // Extrapolate forward from last known entry
+  const idBeyond = id - endEntry[0]
+  const extrapolatedTime = endEntry[1] + Math.floor(idBeyond / growthRate)
+
+  // Cap at current time (account can't be from the future)
+  const estimatedTime = Math.min(extrapolatedTime, nowUnix)
+
+  return parseRegistrationTime('>', estimatedTime)
 }
 
 /**

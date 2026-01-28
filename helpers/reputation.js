@@ -2,11 +2,18 @@ const { predictCreationDate } = require('./account-age')
 
 /**
  * Calculate account age in months from Telegram user ID
+ * Returns { months, isExtrapolated } for proper handling of uncertain estimates
  */
 const getAccountAgeMonths = (userId) => {
-  const [, creationDate] = predictCreationDate(userId)
+  if (!userId || typeof userId !== 'number' || userId <= 0) {
+    return { months: 0, isExtrapolated: true }
+  }
+  const [prefix, creationDate] = predictCreationDate(userId)
   const now = new Date()
-  return (now - creationDate) / (1000 * 60 * 60 * 24 * 30)
+  const months = Math.max(0, (now - creationDate) / (1000 * 60 * 60 * 24 * 30))
+  // '>' means extrapolated beyond known data, '?' means invalid/unknown
+  const isExtrapolated = prefix === '>' || prefix === '?'
+  return { months, isExtrapolated }
 }
 
 /**
@@ -16,39 +23,51 @@ const getAccountAgeMonths = (userId) => {
  * - 50 = Neutral (new user, no data)
  * - 0 = Known spammer
  */
-const calculateReputationScore = (globalStats, accountAgeMonths) => {
+const calculateReputationScore = (globalStats, accountAge) => {
+  // Handle both old format (number) and new format ({ months, isExtrapolated })
+  const ageMonths = typeof accountAge === 'number' ? accountAge : (accountAge?.months || 0)
+  const isExtrapolated = typeof accountAge === 'object' ? accountAge.isExtrapolated : false
+
   let score = 50 // Start neutral
 
   // === POSITIVE FACTORS (max +50) ===
 
   // Longevity bonus: +2 per month, max +20
-  score += Math.min(20, Math.floor(accountAgeMonths * 2))
+  // BUT: cap at +10 for extrapolated ages (uncertain data)
+  const maxAgeBonus = isExtrapolated ? 10 : 20
+  score += Math.min(maxAgeBonus, Math.floor(ageMonths * 2))
 
   // Multi-group activity: +5 per group, max +15
-  score += Math.min(15, (globalStats.groupsActive || 0) * 5)
+  const groupsActive = Math.max(0, globalStats.groupsActive || 0)
+  score += Math.min(15, groupsActive * 5)
 
   // Message volume: +1 per 100 messages, max +10
-  score += Math.min(10, Math.floor((globalStats.totalMessages || 0) / 100))
+  const totalMessages = Math.max(0, globalStats.totalMessages || 0)
+  score += Math.min(10, Math.floor(totalMessages / 100))
 
   // Clean message ratio bonus: up to +5
-  const totalChecked = (globalStats.cleanMessages || 0) + (globalStats.spamDetections || 0)
+  const cleanMessages = Math.max(0, globalStats.cleanMessages || 0)
+  const spamDetections = Math.max(0, globalStats.spamDetections || 0)
+  const totalChecked = cleanMessages + spamDetections
   if (totalChecked > 10) {
-    const cleanRatio = globalStats.cleanMessages / totalChecked
+    const cleanRatio = cleanMessages / totalChecked
     score += Math.floor(cleanRatio * 5)
   }
 
   // === NEGATIVE FACTORS (can go deeply negative) ===
 
   // Spam detections: -15 per detection
-  score -= (globalStats.spamDetections || 0) * 15
+  score -= spamDetections * 15
 
   // Deleted messages: -5 per deletion
-  score -= (globalStats.deletedMessages || 0) * 5
+  const deletedMessages = Math.max(0, globalStats.deletedMessages || 0)
+  score -= deletedMessages * 5
 
   // === RECOVERY FACTORS ===
 
   // Manual unbans (admin corrected false positive): +10 each
-  score += (globalStats.manualUnbans || 0) * 10
+  const manualUnbans = Math.max(0, globalStats.manualUnbans || 0)
+  score += manualUnbans * 10
 
   // Bound to 0-100
   return Math.max(0, Math.min(100, score))
