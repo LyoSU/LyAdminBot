@@ -433,9 +433,23 @@ const createVoteEvent = async (ctx, options) => {
     return null
   }
 
-  const bannedUserId = isChannelPost ? senderChat.id : ctx.from.id
+  // Get bannedUserId with defensive checks
+  const bannedUserId = isChannelPost
+    ? senderChat?.id
+    : (ctx.from?.id || senderInfo?.id)
+
+  if (!bannedUserId) {
+    log.error({
+      isChannelPost,
+      hasSenderChat: !!senderChat,
+      hasFrom: !!ctx.from,
+      fromId: ctx.from?.id
+    }, 'Missing bannedUserId for vote event')
+    return null
+  }
+
   const bannedUserName = userName(senderInfo)
-  const bannedUserUsername = isChannelPost ? senderChat.username : ctx.from?.username
+  const bannedUserUsername = isChannelPost ? senderChat?.username : ctx.from?.username
 
   // Create vote document
   const spamVoteDoc = new ctx.db.SpamVote({

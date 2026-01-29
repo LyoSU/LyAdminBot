@@ -313,9 +313,10 @@ const handleReport = async (ctx) => {
       if (result.confidence < 85 && (actionTaken || deleted)) {
         try {
           // Create vote context similar to spam-check middleware
+          // Ensure from has id property for createVoteEvent
           const voteCtx = {
             ...ctx,
-            from: targetUser,
+            from: { ...targetUser, id: targetId },
             message: replyMsg,
             session: mockCtx.session
           }
