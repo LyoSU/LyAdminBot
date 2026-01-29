@@ -21,9 +21,15 @@ module.exports = async (ctx) => {
   let result = ''
 
   if (['supergroup', 'group'].includes(ctx.chat.type)) {
+    // Check admin status of the actual user (ctx.from), not sender_chat
+    // This correctly handles commands sent "as channel" - we still verify the human is admin
+    if (!ctx.from || !ctx.from.id) {
+      return // No user context (shouldn't happen normally)
+    }
+
     const chatMember = await ctx.tg.getChatMember(
       ctx.message.chat.id,
-      ctx.message.from.id
+      ctx.from.id
     ).catch(err => botLog.error({ err }, 'Failed to get chat member'))
 
     if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {

@@ -15,8 +15,16 @@ const getExactHash = (text) => {
 
 /**
  * Estimate account age in days from user ID
+ * Returns 0 for channels (negative IDs) since they don't have account age
+ *
+ * @param {number} userId - User or channel ID
+ * @returns {number} - Account age in days (0 for channels or invalid IDs)
  */
 const getAccountAgeDays = (userId) => {
+  // Channel IDs are negative - no account age concept
+  if (!userId || typeof userId !== 'number' || userId < 0) {
+    return 0
+  }
   const [, creationDate] = predictCreationDate(userId)
   const now = new Date()
   return Math.floor((now - creationDate) / (1000 * 60 * 60 * 24))

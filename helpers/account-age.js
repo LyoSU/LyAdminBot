@@ -137,7 +137,13 @@ const predictCreationDate = (id) => {
   const nowUnix = Math.floor(Date.now() / 1000)
 
   // Invalid or missing ID - treat as brand new
-  if (!id || typeof id !== 'number' || id <= 0) {
+  if (!id || typeof id !== 'number') {
+    return parseRegistrationTime('?', nowUnix)
+  }
+
+  // Channel IDs are negative - no creation date available
+  // Return current time with '?' prefix to indicate unknown
+  if (id < 0) {
     return parseRegistrationTime('?', nowUnix)
   }
 

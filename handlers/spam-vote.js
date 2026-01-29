@@ -62,12 +62,20 @@ const checkVoteEligibility = async (ctx, chatId, userId) => {
  *
  * - clean wins: unban user, set reputation to trusted
  * - spam wins: add to SpamSignature, decrease reputation
+ *
+ * @param {Object} ctx - Telegraf context
+ * @param {Object} spamVote - SpamVote document
+ * @param {boolean} skipSave - If true, don't save (already saved atomically)
  */
-const processVoteResult = async (ctx, spamVote) => {
-  const winner = spamVote.getWinner()
-  spamVote.result = winner
-  spamVote.resolvedAt = new Date()
-  spamVote.resolvedBy = 'votes'
+const processVoteResult = async (ctx, spamVote, skipSave = false) => {
+  const winner = spamVote.result || spamVote.getWinner()
+
+  // Only set these if not already set (for backwards compatibility)
+  if (!skipSave) {
+    spamVote.result = winner
+    spamVote.resolvedAt = new Date()
+    spamVote.resolvedBy = 'votes'
+  }
 
   let reputationChange = null
 
@@ -263,7 +271,10 @@ const processVoteResult = async (ctx, spamVote) => {
     }
   }
 
-  await spamVote.save()
+  // Save only if not already saved atomically
+  if (!skipSave) {
+    await spamVote.save()
+  }
 
   // Update UI to show result
   await showResultUI(ctx, spamVote, reputationChange)
@@ -323,21 +334,40 @@ const handleSpamVoteCallback = async (ctx) => {
     return ctx.answerCbQuery(ctx.i18n.t('spam_vote.cb.already_voted'))
   }
 
-  // Record the vote
-  const voteAdded = spamVote.addVote({
+  // Prepare vote data
+  const voteData = {
     userId: ctx.from.id,
     username: ctx.from.username,
     displayName: ctx.from.first_name,
     vote,
     weight: eligibility.weight,
-    isAdmin: eligibility.isAdmin
-  })
-
-  if (!voteAdded) {
-    return ctx.answerCbQuery(ctx.i18n.t('spam_vote.cb.error'))
+    isAdmin: eligibility.isAdmin,
+    votedAt: new Date()
   }
 
-  await spamVote.save()
+  // Atomically add vote and update tallies using findOneAndUpdate
+  // This prevents race conditions when multiple users vote simultaneously
+  const tallyUpdate = vote === 'spam'
+    ? { 'voteTally.spamCount': 1, 'voteTally.spamWeighted': eligibility.weight }
+    : { 'voteTally.cleanCount': 1, 'voteTally.cleanWeighted': eligibility.weight }
+
+  const updatedVote = await ctx.db.SpamVote.findOneAndUpdate(
+    {
+      _id: spamVote._id,
+      result: 'pending',
+      'voters.userId': { $ne: ctx.from.id } // Guard: not already voted
+    },
+    {
+      $push: { voters: voteData },
+      $inc: tallyUpdate
+    },
+    { new: true }
+  )
+
+  if (!updatedVote) {
+    // Either already voted, or vote already resolved
+    return ctx.answerCbQuery(ctx.i18n.t('spam_vote.cb.already_voted'))
+  }
 
   log.info({
     eventId,
@@ -349,11 +379,30 @@ const handleSpamVoteCallback = async (ctx) => {
   }, 'Vote recorded')
 
   // Check if enough votes to decide
-  if (spamVote.canResolve()) {
-    await processVoteResult(ctx, spamVote)
+  if (updatedVote.canResolve()) {
+    // Atomically try to claim resolution (prevents double processing)
+    const resolvedVote = await ctx.db.SpamVote.findOneAndUpdate(
+      {
+        _id: updatedVote._id,
+        result: 'pending' // Guard: only one resolver wins
+      },
+      {
+        $set: {
+          result: updatedVote.getWinner(),
+          resolvedAt: new Date(),
+          resolvedBy: 'votes'
+        }
+      },
+      { new: true }
+    )
+
+    if (resolvedVote) {
+      // We won the race - process the result
+      await processVoteResult(ctx, resolvedVote, true) // skipSave=true since already saved
+    }
   } else {
     // Update UI to show current state
-    await updateVoteUI(ctx, spamVote)
+    await updateVoteUI(ctx, updatedVote)
   }
 
   const voteEmoji = vote === 'spam' ? '🚫' : '✓'

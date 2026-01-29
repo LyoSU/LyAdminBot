@@ -1027,7 +1027,7 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     // Create user context for analysis
     const userContext = {
       isNewAccount: isChannelPost ? true : isNewAccount(ctx), // Treat channels as "new" - no history
-      isPremium: (ctx.from && ctx.from.is_premium) || false,
+      isPremium: isChannelPost ? false : ((ctx.from && ctx.from.is_premium) || false), // Channels don't have premium
       hasUsername: isChannelPost ? !!(senderChat.username) : !!(ctx.from && ctx.from.username),
       hasProfile: isChannelPost ? false : hasUserProfile(ctx),
       messageCount: perGroupMessageCount || 0,
@@ -1120,9 +1120,10 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
         if (localResult.confidence >= adaptiveThreshold) {
           // For new users (messageCount <= 1), don't trust Qdrant "clean" results
           // because their bio might contain spam even if the message itself is clean
-          const perGroupMsgCount = ctx.group && ctx.group.members && ctx.from &&
-            ctx.group.members[ctx.from.id] && ctx.group.members[ctx.from.id].stats &&
-            ctx.group.members[ctx.from.id].stats.messagesCount
+          // Use senderId (not ctx.from.id) to correctly handle channel posts
+          const perGroupMsgCount = ctx.group && ctx.group.members && senderId &&
+            ctx.group.members[senderId] && ctx.group.members[senderId].stats &&
+            ctx.group.members[senderId].stats.messagesCount
           const isFirstMessage = (perGroupMsgCount || 0) <= 1
 
           if (isFirstMessage && localResult.classification === 'clean') {

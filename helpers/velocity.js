@@ -433,7 +433,7 @@ const getForwardHash = (forwardOrigin) => {
  * Tracks forwards across chats to detect spam campaigns
  *
  * @param {Object} forwardOrigin - Telegram forward_origin object
- * @param {number} userId - User who sent the forward
+ * @param {number} userId - User/channel ID who sent the forward (negative for channels)
  * @param {number} chatId - Chat where forward was sent
  * @param {number} messageId - Message ID
  */
@@ -446,18 +446,24 @@ const recordForwardOrigin = async (forwardOrigin, userId, chatId, messageId) => 
   const now = Date.now()
   const member = `${userId}:${chatId}:${messageId}`
 
-  // Record by forward type and hash
+  // Check if this is a channel (negative ID)
+  const isChannel = userId < 0
+
+  // Record by forward type and hash (for all senders including channels)
   const key = `vel:forward:${forwardInfo.type}:${forwardInfo.hash}`
   await store.zadd(key, now, member)
 
-  // Track user's forward activity
-  await store.hincrby(`vel:user:${userId}:stats`, 'totalForwards', 1)
-  await store.hset(`vel:user:${userId}:stats`, 'lastActivity', now) // Fix: Required for cleanup
-  await store.sadd(`vel:user:${userId}:forward_sources`, forwardInfo.hash)
+  // Skip user-specific forward tracking for channels
+  if (!isChannel) {
+    await store.hincrby(`vel:user:${userId}:stats`, 'totalForwards', 1)
+    await store.hset(`vel:user:${userId}:stats`, 'lastActivity', now)
+    await store.sadd(`vel:user:${userId}:forward_sources`, forwardInfo.hash)
+  }
 
   velocityLog.debug({
     type: forwardInfo.type,
-    hash: forwardInfo.hash.substring(0, 8)
+    hash: forwardInfo.hash.substring(0, 8),
+    isChannel
   }, 'Recorded forward')
 
   return forwardInfo
@@ -517,11 +523,18 @@ const getForwardVelocity = async (forwardOrigin, window = CONFIG.WINDOWS.MEDIUM)
 
 /**
  * Record message occurrence across all tracking layers
+ * @param {string} text - Message text
+ * @param {number} userId - User/channel ID (negative for channels)
+ * @param {number} chatId - Chat ID
+ * @param {number} messageId - Message ID
  */
 const recordOccurrence = async (text, userId, chatId, messageId) => {
   const now = Date.now()
   const member = `${userId}:${chatId}:${messageId}`
   const userChatMember = `${userId}:${chatId}`
+
+  // Check if this is a channel (negative ID) - skip user-specific tracking
+  const isChannel = userId < 0
 
   // Generate all hashes
   const exactHash = getExactHash(text)
@@ -529,7 +542,7 @@ const recordOccurrence = async (text, userId, chatId, messageId) => {
   const structHash = getStructureHash(text)
   const links = extractLinks(text)
 
-  // Record exact message
+  // Record exact message (for all senders including channels)
   await store.zadd(`vel:exact:${exactHash}`, now, member)
 
   // Record fuzzy (simhash)
@@ -542,17 +555,21 @@ const recordOccurrence = async (text, userId, chatId, messageId) => {
   for (const link of links) {
     const linkHash = getExactHash(link)
     await store.zadd(`vel:link:${linkHash}`, now, userChatMember)
-    await store.sadd(`vel:user:${userId}:links`, linkHash)
+    // Skip user-specific link tracking for channels
+    if (!isChannel) {
+      await store.sadd(`vel:user:${userId}:links`, linkHash)
+    }
   }
 
-  // Record user activity
-  await store.zadd(`vel:user:${userId}:activity`, now, `${chatId}:msg`)
-  await store.hincrby(`vel:user:${userId}:stats`, 'totalMessages', 1)
-  await store.hset(`vel:user:${userId}:stats`, 'lastActivity', now)
-  await store.sadd(`vel:user:${userId}:chats`, chatId)
-
-  // Record chat activity from this user
-  await store.zadd(`vel:chat:${chatId}:user:${userId}`, now, messageId)
+  // Skip user-specific activity tracking for channels
+  // Channels don't have "user behavior" to track
+  if (!isChannel) {
+    await store.zadd(`vel:user:${userId}:activity`, now, `${chatId}:msg`)
+    await store.hincrby(`vel:user:${userId}:stats`, 'totalMessages', 1)
+    await store.hset(`vel:user:${userId}:stats`, 'lastActivity', now)
+    await store.sadd(`vel:user:${userId}:chats`, chatId)
+    await store.zadd(`vel:chat:${chatId}:user:${userId}`, now, messageId)
+  }
 
   return { exactHash, simHash, structHash, links }
 }
@@ -831,26 +848,39 @@ const calculateVelocityScore = async (text, userId, chatId, messageId, forwardOr
     signals.forwardVelocity = { score: 0, count: 0, uniqueChats: 0 }
   }
 
-  // 6. User behavior
-  const behavior = await analyzeUserBehavior(userId)
-  signals.userBehavior = {
-    ...behavior,
-    burstScore: Math.min(1, behavior.microBurst / CONFIG.THRESHOLDS.BURST_PER_MINUTE),
-    botScore: behavior.isBotLike ? 0.8 : 0
+  // 6. User behavior (skip for channels - they don't have user behavior)
+  const isChannel = userId < 0
+  if (!isChannel) {
+    const behavior = await analyzeUserBehavior(userId)
+    signals.userBehavior = {
+      ...behavior,
+      burstScore: Math.min(1, behavior.microBurst / CONFIG.THRESHOLDS.BURST_PER_MINUTE),
+      botScore: behavior.isBotLike ? 0.8 : 0
+    }
+  } else {
+    signals.userBehavior = { burstScore: 0, botScore: 0, microBurst: 0, isBotLike: false }
   }
 
-  // 7. Temporal analysis
-  const temporal = await analyzeTemporalPattern(userId)
-  signals.temporal = {
-    ...temporal,
-    score: temporal.isNatural ? 0 : 0.5
+  // 7. Temporal analysis (skip for channels)
+  if (!isChannel) {
+    const temporal = await analyzeTemporalPattern(userId)
+    signals.temporal = {
+      ...temporal,
+      score: temporal.isNatural ? 0 : 0.5
+    }
+  } else {
+    signals.temporal = { score: 0, isNatural: true }
   }
 
-  // 8. Network analysis
-  const network = await analyzeNetwork(userId)
-  signals.network = {
-    ...network,
-    score: network.isCoordinated ? 0.9 : (network.isPartOfNetwork ? 0.5 : 0)
+  // 8. Network analysis (skip for channels)
+  if (!isChannel) {
+    const network = await analyzeNetwork(userId)
+    signals.network = {
+      ...network,
+      score: network.isCoordinated ? 0.9 : (network.isPartOfNetwork ? 0.5 : 0)
+    }
+  } else {
+    signals.network = { score: 0, isCoordinated: false, isPartOfNetwork: false }
   }
 
   // 9. Content entropy
