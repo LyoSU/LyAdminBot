@@ -172,6 +172,7 @@ banan:
   error_admin: "❌ Адмінаў не муцяць 😏"
   error_left: "❌ Ужо не ў чаце"
   error_no_rights: "❌ Дай мне правы баніць"
+  cant_ban_linked_channel: "❌ Нельга баніць прывязаны канал"
   easter:
     nice: "${name} атрымлівае 🍌\n<b>На:</b> ${duration}\n\n<i>nice</i>"
     blaze: "${name} атрымлівае 🍌🔥\n<b>На:</b> ${duration}\n\n<i>blaze it</i>"

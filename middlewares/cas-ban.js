@@ -36,6 +36,11 @@ const formatCasData = (data) => {
 
 module.exports = async (ctx) => {
   if (ctx.group && ctx.group.info.settings.cas === true) {
+    // Skip linked channel posts (automatic forwards from discussion channel)
+    if (ctx.message.is_automatic_forward) {
+      return
+    }
+
     let userId = ctx.from.id
     if (ctx.message.sender_chat && ctx.message.sender_chat.id) userId = ctx.message.sender_chat.id
 

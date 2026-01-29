@@ -1,3 +1,6 @@
+// How often to refresh linked_chat_id (24 hours)
+const LINKED_CHAT_REFRESH_INTERVAL = 24 * 60 * 60 * 1000
+
 module.exports = async (ctx) => {
   let group
 
@@ -28,6 +31,21 @@ module.exports = async (ctx) => {
 
   if ((group.updatedAt.getTime() + updateInterval) < Date.now()) {
     group.updatedAt = new Date()
+
+    // Refresh linked_chat_id periodically (not cached or stale)
+    const needsLinkedChatRefresh = group.linked_chat_id === undefined ||
+      !group._linkedChatCheckedAt ||
+      (Date.now() - group._linkedChatCheckedAt > LINKED_CHAT_REFRESH_INTERVAL)
+
+    if (needsLinkedChatRefresh) {
+      try {
+        const chatInfo = await ctx.telegram.getChat(ctx.chat.id)
+        group.linked_chat_id = chatInfo.linked_chat_id || null
+        group._linkedChatCheckedAt = Date.now()
+      } catch {
+        // Ignore errors, keep existing value
+      }
+    }
   }
 
   return group

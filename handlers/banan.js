@@ -106,9 +106,18 @@ module.exports = async (ctx) => {
         { language: ctx.i18n.locale(), fallbacks: ['en'] }
       )
       if (ctx.message.reply_to_message && ctx.message.reply_to_message.sender_chat) {
+        const replySenderChat = ctx.message.reply_to_message.sender_chat
+        const linkedChatId = ctx.group && ctx.group.info && ctx.group.info.linked_chat_id
+
+        // Don't ban linked channel (discussion channel attached to the group)
+        if (ctx.message.reply_to_message.is_automatic_forward ||
+            (linkedChatId && replySenderChat.id === linkedChatId)) {
+          return ctx.replyWithHTML(ctx.i18n.t('banan.cant_ban_linked_channel'))
+        }
+
         await ctx.tg.callApi('banChatSenderChat', {
           chat_id: ctx.chat.id,
-          sender_chat_id: ctx.message.reply_to_message.sender_chat.id,
+          sender_chat_id: replySenderChat.id,
           until_date: banTime
         })
 

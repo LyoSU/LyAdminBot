@@ -121,6 +121,7 @@ banan:
   error_admin: "❌ Adminler susturulamaz 😏"
   error_left: "❌ Zaten gruptan ayrılmış"
   error_no_rights: "❌ Bana banlama yetkisi ver"
+  cant_ban_linked_channel: "❌ Bağlı kanal engellenemez"
   easter:
     nice: "${name} 🍌 alıyor\n<b>Süre:</b> ${duration}\n\n<i>nice</i>"
     blaze: "${name} 🍌🔥 alıyor\n<b>Süre:</b> ${duration}\n\n<i>blaze it</i>"

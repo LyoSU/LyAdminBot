@@ -202,6 +202,18 @@ module.exports = async (ctx) => {
     return
   }
 
+  // Skip linked channel (the channel attached to this group for discussions)
+  // Check both: is_automatic_forward (reliable) and cached linked_chat_id (fallback)
+  if (!isTestMode && hasSenderChat) {
+    const isAutoForward = message && message.is_automatic_forward
+    const linkedChatId = ctx.group && ctx.group.info && ctx.group.info.linked_chat_id
+
+    if (isAutoForward || (linkedChatId && senderChat.id === linkedChatId)) {
+      spamLog.debug({ channelId: senderChat.id, channelTitle: senderChat.title, isAutoForward }, 'Skipping linked channel')
+      return
+    }
+  }
+
   // Check if this is a channel post (will be spam-checked, not skipped)
   const isChannelPost = hasSenderChat && senderChat.type === 'channel'
   if (isChannelPost) {

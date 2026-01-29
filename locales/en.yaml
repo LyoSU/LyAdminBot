@@ -242,6 +242,7 @@ banan:
   error_admin: "❌ Can't mute admins 😏"
   error_left: "❌ Already left"
   error_no_rights: "❌ Give me ban permissions"
+  cant_ban_linked_channel: "❌ Can't ban the linked channel"
   easter:
     nice: "${name} gets 🍌\n<b>For:</b> ${duration}\n\n<i>nice</i>"
     blaze: "${name} gets 🍌🔥\n<b>For:</b> ${duration}\n\n<i>blaze it</i>"

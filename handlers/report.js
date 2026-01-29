@@ -78,6 +78,13 @@ const handleReport = async (ctx) => {
     return ctx.reply(ctx.i18n.t('report.cant_report_admin'))
   }
 
+  // Can't report linked channel (discussion channel attached to the group)
+  const linkedChatId = ctx.group && ctx.group.info && ctx.group.info.linked_chat_id
+  const isLinkedChannel = replyMsg.is_automatic_forward || (linkedChatId && senderChat && senderChat.id === linkedChatId)
+  if (isLinkedChannel) {
+    return ctx.reply(ctx.i18n.t('report.cant_report_admin'))
+  }
+
   // For channel posts, use sender_chat; for regular messages, use from
   const targetUser = isChannelPost ? senderChat : replyMsg.from
   const targetId = isChannelPost ? senderChat.id : (replyMsg.from && replyMsg.from.id)

@@ -91,6 +91,10 @@ const groupSchema = mongoose.Schema({
       type: Boolean,
       default: false
     }
+  },
+  linked_chat_id: {
+    type: Number,
+    default: null
   }
 }, {
   timestamps: true
