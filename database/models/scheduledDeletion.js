@@ -35,6 +35,7 @@ const scheduledDeletionSchema = mongoose.Schema({
       'vote_timeout',
       'report_spam',
       'report_clean',
+      'global_ban',
       // Command responses
       'cmd_ping',
       'cmd_help',
