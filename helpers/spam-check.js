@@ -769,497 +769,528 @@ const checkOpenAIModeration = async (messageText, imageUrl = null, imageType = '
   }
 }
 
+// ========== PHASE FUNCTIONS ==========
+
 /**
- * Main spam check function using hybrid approach
+ * PHASE 0: Check custom rules (fastest check)
+ * @returns {Object|null} Result if rule matched, null to continue
  */
-const checkSpam = async (messageText, ctx, groupSettings) => {
+const checkCustomRulesPhase = (messageText, groupSettings) => {
+  if (!groupSettings || !groupSettings.customRules) return null
+
+  const ruleResult = applyCustomRules(messageText, groupSettings.customRules)
+  if (!ruleResult) return null
+
+  if (ruleResult.action === 'deny') {
+    spamLog.info({ rule: ruleResult.rule }, 'Message blocked by DENY rule')
+    return {
+      isSpam: true,
+      confidence: 95,
+      reason: `Blocked by custom rule: "${ruleResult.rule}"`,
+      source: 'custom_rule_deny'
+    }
+  }
+
+  if (ruleResult.action === 'allow') {
+    spamLog.debug({ rule: ruleResult.rule }, 'Message allowed by ALLOW rule')
+    return {
+      isSpam: false,
+      confidence: 95,
+      reason: `Allowed by custom rule: "${ruleResult.rule}"`,
+      source: 'custom_rule_allow'
+    }
+  }
+
+  return null
+}
+
+/**
+ * PHASE 0.5: Check SpamSignature (community-confirmed patterns)
+ * @returns {Object} { result: Object|null, candidateBoost: number }
+ */
+const checkSpamSignaturesPhase = async (messageText, ctx) => {
+  if (!ctx.db || !ctx.db.SpamSignature) {
+    return { result: null, candidateBoost: 0 }
+  }
+
+  // Check confirmed signatures first
   try {
-    // Initialize cleanup on first run
-    initializeCleanup()
+    const signatureMatch = await checkSignatures(messageText, ctx.db)
+    if (signatureMatch) {
+      spamLog.info({
+        matchType: signatureMatch.match,
+        confidence: signatureMatch.confidence,
+        distance: signatureMatch.distance
+      }, 'Matched spam signature')
 
-    // Apply custom rules first (fastest check)
-    if (groupSettings && groupSettings.customRules) {
-      const ruleResult = applyCustomRules(messageText, groupSettings.customRules)
-      if (ruleResult) {
-        if (ruleResult.action === 'deny') {
-          spamLog.info({ rule: ruleResult.rule }, 'Message blocked by DENY rule')
-          return {
-            isSpam: true,
-            confidence: 95,
-            reason: `Blocked by custom rule: "${ruleResult.rule}"`,
-            source: 'custom_rule_deny'
-          }
-        } else if (ruleResult.action === 'allow') {
-          spamLog.debug({ rule: ruleResult.rule }, 'Message allowed by ALLOW rule')
-          return {
-            isSpam: false,
-            confidence: 95,
-            reason: `Allowed by custom rule: "${ruleResult.rule}"`,
-            source: 'custom_rule_allow'
-          }
-        }
+      return {
+        result: {
+          isSpam: true,
+          confidence: signatureMatch.confidence,
+          reason: signatureMatch.reason,
+          source: `spam_signature_${signatureMatch.match}`
+        },
+        candidateBoost: 0
       }
     }
+  } catch (sigErr) {
+    spamLog.warn({ err: sigErr.message }, 'SpamSignature check failed, continuing')
+  }
 
-    // === PHASE 0.5: Check SpamSignature (community-confirmed patterns) ===
-    // Multi-layer signature matching: exact, normalized, fuzzy, structure
-    if (ctx.db && ctx.db.SpamSignature) {
-      try {
-        const signatureMatch = await checkSignatures(messageText, ctx.db)
+  // Check candidate signatures for confidence boosting
+  let candidateBoost = 0
+  try {
+    const candidateMatch = await checkSignatures(messageText, ctx.db, { requireConfirmed: false })
+    if (candidateMatch && candidateMatch.signature && candidateMatch.signature.status === 'candidate') {
+      const hasEnoughConfirmations = candidateMatch.signature.confirmations >= 2 ||
+        candidateMatch.signature.uniqueGroups.length >= 2
 
-        if (signatureMatch) {
-          spamLog.info({
-            matchType: signatureMatch.match,
-            confidence: signatureMatch.confidence,
-            distance: signatureMatch.distance
-          }, 'Matched spam signature')
-
-          return {
-            isSpam: true,
-            confidence: signatureMatch.confidence,
-            reason: signatureMatch.reason,
-            source: `spam_signature_${signatureMatch.match}`
-          }
-        }
-      } catch (sigErr) {
-        spamLog.warn({ err: sigErr.message }, 'SpamSignature check failed, continuing')
-      }
-    }
-
-    // Check for candidate signatures (not confirmed yet) for confidence boosting
-    // These don't trigger immediate action but boost LLM confidence later
-    let candidateSignatureBoost = 0
-    if (ctx.db && ctx.db.SpamSignature) {
-      try {
-        const candidateMatch = await checkSignatures(messageText, ctx.db, { requireConfirmed: false })
-        if (candidateMatch && candidateMatch.signature && candidateMatch.signature.status === 'candidate') {
-          // Fix: Only boost if candidate has multiple confirmations (reduces false positives)
-          // A signature with only 1 confirmation from 1 group shouldn't boost confidence
-          const hasEnoughConfirmations = candidateMatch.signature.confirmations >= 2 ||
-            candidateMatch.signature.uniqueGroups.length >= 2
-
-          // Fuzzy/structure matches from candidates boost confidence
-          if ((candidateMatch.match === 'fuzzy' || candidateMatch.match === 'structure') && hasEnoughConfirmations) {
-            candidateSignatureBoost = 8
-            spamLog.debug({
-              matchType: candidateMatch.match,
-              confirmations: candidateMatch.signature.confirmations,
-              uniqueGroups: candidateMatch.signature.uniqueGroups.length,
-              boost: candidateSignatureBoost
-            }, 'Candidate signature match - will boost confidence')
-          }
-        }
-      } catch (sigErr) {
-        // Silent fail for candidate check - it's just a boost
-      }
-    }
-
-    // === PHASE 0.6: Check ForwardBlacklist (for forwarded messages) ===
-    // Persistent tracking of suspicious forward sources
-    const forwardOrigin = ctx.message && ctx.message.forward_origin
-    let suspiciousForwardBoost = 0 // Will be added to confidence later
-
-    if (forwardOrigin && ctx.db && ctx.db.ForwardBlacklist) {
-      try {
-        const forwardInfo = getForwardHash(forwardOrigin)
-        if (forwardInfo) {
-          const blacklistEntry = await ctx.db.ForwardBlacklist.checkSource(forwardInfo.hash)
-
-          if (blacklistEntry) {
-            if (blacklistEntry.status === 'blacklisted') {
-              spamLog.info({
-                forwardType: blacklistEntry.forwardType,
-                spamReports: blacklistEntry.spamReports,
-                uniqueGroups: blacklistEntry.uniqueGroups.length
-              }, 'Matched blacklisted forward source')
-
-              return {
-                isSpam: true,
-                confidence: 95,
-                reason: `Blacklisted forward source (${blacklistEntry.forwardType}, ${blacklistEntry.spamReports} reports)`,
-                source: 'forward_blacklist',
-                forwardInfo: {
-                  type: blacklistEntry.forwardType,
-                  hash: forwardInfo.hash,
-                  status: blacklistEntry.status
-                }
-              }
-            } else if (blacklistEntry.status === 'suspicious') {
-              // Boost confidence for spam from suspicious sources (+10-15%)
-              suspiciousForwardBoost = Math.min(15, 5 + blacklistEntry.spamReports * 2)
-              spamLog.debug({
-                forwardType: blacklistEntry.forwardType,
-                spamReports: blacklistEntry.spamReports,
-                boost: suspiciousForwardBoost
-              }, 'Forward from suspicious source - will boost confidence')
-            }
-          }
-        }
-      } catch (fwdErr) {
-        spamLog.warn({ err: fwdErr.message }, 'ForwardBlacklist check failed, continuing')
-      }
-    }
-
-    // === PHASE 1: Quick Risk Assessment ===
-    // Analyze Telegram-specific signals BEFORE expensive API calls
-    let quickAssessment = { risk: 'medium', signals: [], trustSignals: [] }
-    try {
-      quickAssessment = quickRiskAssessment(ctx)
-
-      if (quickAssessment.signals.length > 0 || quickAssessment.trustSignals.length > 0) {
+      if ((candidateMatch.match === 'fuzzy' || candidateMatch.match === 'structure') && hasEnoughConfirmations) {
+        candidateBoost = 8
         spamLog.debug({
-          risk: quickAssessment.risk,
-          signals: quickAssessment.signals,
-          trustSignals: quickAssessment.trustSignals
-        }, 'Quick assessment')
+          matchType: candidateMatch.match,
+          confirmations: candidateMatch.signature.confirmations,
+          uniqueGroups: candidateMatch.signature.uniqueGroups.length,
+          boost: candidateBoost
+        }, 'Candidate signature match - will boost confidence')
       }
+    }
+  } catch (sigErr) {
+    // Silent fail for candidate check
+  }
 
-      // Skip all checks for obviously clean messages (strong trust signals, no risk)
-      // BUT: Don't skip for new users (messageCount <= 1) - they could be spam accounts
-      // sending innocent first messages before the actual spam
-      const senderChat = ctx.message && ctx.message.sender_chat
-      const isChannelPostHere = senderChat && senderChat.type === 'channel'
-      const senderIdHere = isChannelPostHere ? senderChat.id : (ctx.from && ctx.from.id)
-      const memberDataHere = ctx.group && ctx.group.members && ctx.group.members[senderIdHere]
-      const messageCountHere = (memberDataHere && memberDataHere.stats && memberDataHere.stats.messagesCount) || 0
+  return { result: null, candidateBoost }
+}
 
-      if (quickAssessment.risk === 'skip' && messageCountHere > 1) {
-        spamLog.debug({ trustSignals: quickAssessment.trustSignals, messageCount: messageCountHere }, 'Skipping checks - low risk message from established user')
-        return {
+/**
+ * PHASE 0.6: Check ForwardBlacklist (for forwarded messages)
+ * @returns {Object} { result: Object|null, suspiciousBoost: number }
+ */
+const checkForwardBlacklistPhase = async (ctx) => {
+  const forwardOrigin = ctx.message && ctx.message.forward_origin
+  if (!forwardOrigin || !ctx.db || !ctx.db.ForwardBlacklist) {
+    return { result: null, suspiciousBoost: 0 }
+  }
+
+  try {
+    const forwardInfo = getForwardHash(forwardOrigin)
+    if (!forwardInfo) return { result: null, suspiciousBoost: 0 }
+
+    const blacklistEntry = await ctx.db.ForwardBlacklist.checkSource(forwardInfo.hash)
+    if (!blacklistEntry) return { result: null, suspiciousBoost: 0 }
+
+    if (blacklistEntry.status === 'blacklisted') {
+      spamLog.info({
+        forwardType: blacklistEntry.forwardType,
+        spamReports: blacklistEntry.spamReports,
+        uniqueGroups: blacklistEntry.uniqueGroups.length
+      }, 'Matched blacklisted forward source')
+
+      return {
+        result: {
+          isSpam: true,
+          confidence: 95,
+          reason: `Blacklisted forward source (${blacklistEntry.forwardType}, ${blacklistEntry.spamReports} reports)`,
+          source: 'forward_blacklist',
+          forwardInfo: {
+            type: blacklistEntry.forwardType,
+            hash: forwardInfo.hash,
+            status: blacklistEntry.status
+          }
+        },
+        suspiciousBoost: 0
+      }
+    }
+
+    if (blacklistEntry.status === 'suspicious') {
+      const boost = Math.min(15, 5 + blacklistEntry.spamReports * 2)
+      spamLog.debug({
+        forwardType: blacklistEntry.forwardType,
+        spamReports: blacklistEntry.spamReports,
+        boost
+      }, 'Forward from suspicious source - will boost confidence')
+      return { result: null, suspiciousBoost: boost }
+    }
+  } catch (fwdErr) {
+    spamLog.warn({ err: fwdErr.message }, 'ForwardBlacklist check failed, continuing')
+  }
+
+  return { result: null, suspiciousBoost: 0 }
+}
+
+/**
+ * PHASE 1: Quick Risk Assessment
+ * @returns {Object} { result: Object|null, quickAssessment: Object }
+ */
+const runQuickAssessmentPhase = (ctx) => {
+  let quickAssessment = { risk: 'medium', signals: [], trustSignals: [] }
+
+  try {
+    quickAssessment = quickRiskAssessment(ctx)
+
+    if (quickAssessment.signals.length > 0 || quickAssessment.trustSignals.length > 0) {
+      spamLog.debug({
+        risk: quickAssessment.risk,
+        signals: quickAssessment.signals,
+        trustSignals: quickAssessment.trustSignals
+      }, 'Quick assessment')
+    }
+
+    // Get message count for skip decision
+    const senderChat = ctx.message && ctx.message.sender_chat
+    const isChannelPost = senderChat && senderChat.type === 'channel'
+    const senderId = isChannelPost ? senderChat.id : (ctx.from && ctx.from.id)
+    const memberData = ctx.group && ctx.group.members && ctx.group.members[senderId]
+    const messageCount = (memberData && memberData.stats && memberData.stats.messagesCount) || 0
+
+    if (quickAssessment.risk === 'skip' && messageCount > 1) {
+      spamLog.debug({ trustSignals: quickAssessment.trustSignals, messageCount }, 'Skipping checks - low risk message from established user')
+      return {
+        result: {
           isSpam: false,
           confidence: 80,
           reason: 'Skipped by quick assessment (trust signals)',
           source: 'quick_assessment',
           quickAssessment
+        },
+        quickAssessment
+      }
+    }
+
+    if (quickAssessment.risk === 'skip' && messageCount <= 1) {
+      spamLog.debug({ trustSignals: quickAssessment.trustSignals, messageCount }, 'New user with trust signals - running full check anyway')
+    }
+  } catch (quickAssessErr) {
+    spamLog.warn({ err: quickAssessErr.message }, 'Quick assessment error, continuing with standard flow')
+  }
+
+  return { result: null, quickAssessment }
+}
+
+/**
+ * PHASE 2: OpenAI Moderation Check
+ * @returns {Object|null} Result if content flagged, null to continue
+ */
+const runModerationPhase = async (ctx, messageText, quickAssessment, userBio, userAvatarUrl) => {
+  if (quickAssessment.risk === 'low') {
+    spamLog.debug('Skipping OpenAI moderation for low-risk message')
+    return null
+  }
+
+  const messagePhoto = ctx.message && ctx.message.photo && ctx.message.photo[0]
+  const messagePhotoUrl = messagePhoto && messagePhoto.file_id
+    ? await getMessagePhotoUrl(ctx, messagePhoto)
+    : null
+
+  const textToModerate = [messageText, userBio].filter(Boolean).join('\n\n')
+  const moderationPromises = []
+  const moderationSources = []
+
+  moderationPromises.push(checkOpenAIModeration(textToModerate, null, 'text+bio'))
+  moderationSources.push('openai_moderation_text')
+
+  if (messagePhotoUrl) {
+    moderationPromises.push(checkOpenAIModeration(messageText, messagePhotoUrl, 'message photo'))
+    moderationSources.push('openai_moderation_photo')
+  }
+
+  if (userAvatarUrl) {
+    moderationPromises.push(checkOpenAIModeration(null, userAvatarUrl, 'user avatar'))
+    moderationSources.push('openai_moderation_avatar')
+  }
+
+  const moderationResults = await Promise.all(moderationPromises)
+
+  for (let i = 0; i < moderationResults.length; i++) {
+    const result = moderationResults[i]
+    if (result && result.flagged) {
+      const source = moderationSources[i] || 'openai_moderation'
+      spamLog.warn({ reason: result.reason, source }, 'Content flagged by OpenAI moderation')
+      return {
+        isSpam: true,
+        confidence: Math.max(90, result.highestScore),
+        reason: result.reason,
+        source,
+        categories: result.categories,
+        quickAssessment
+      }
+    }
+  }
+
+  return null
+}
+
+/**
+ * Build user context object for analysis
+ */
+const buildUserContext = (ctx, userRating, quickAssessment) => {
+  const senderChat = ctx.message && ctx.message.sender_chat
+  const isChannelPost = senderChat && senderChat.type === 'channel'
+  const senderId = isChannelPost ? senderChat.id : (ctx.from && ctx.from.id)
+
+  const perGroupMessageCount = ctx.group && ctx.group.members && senderId &&
+    ctx.group.members[senderId] && ctx.group.members[senderId].stats &&
+    ctx.group.members[senderId].stats.messagesCount
+  const globalMessageCount = ctx.session && ctx.session.userInfo &&
+    ctx.session.userInfo.globalStats && ctx.session.userInfo.globalStats.totalMessages
+  const globalStats = (ctx.session && ctx.session.userInfo && ctx.session.userInfo.globalStats) || {}
+
+  const replyToMessage = ctx.message && ctx.message.reply_to_message
+  const isReply = !!replyToMessage
+  const replyAge = replyToMessage ? (ctx.message.date - replyToMessage.date) : null
+
+  return {
+    isNewAccount: isChannelPost ? true : isNewAccount(ctx),
+    isPremium: isChannelPost ? false : ((ctx.from && ctx.from.is_premium) || false),
+    hasUsername: isChannelPost ? !!(senderChat.username) : !!(ctx.from && ctx.from.username),
+    hasProfile: isChannelPost ? false : hasUserProfile(ctx),
+    messageCount: perGroupMessageCount || 0,
+    globalMessageCount: isChannelPost ? 0 : (globalMessageCount || 0),
+    groupsActive: isChannelPost ? 0 : (globalStats.groupsActive || 0),
+    previousWarnings: globalStats.spamDetections || 0,
+    accountAge: isChannelPost ? 'unknown' : getAccountAge(ctx),
+    globalReputation: isChannelPost
+      ? { score: 30, status: 'suspicious' }
+      : (ctx.session && ctx.session.userInfo && ctx.session.userInfo.reputation) || { score: 50, status: 'neutral' },
+    telegramRating: userRating,
+    isChannelPost,
+    channelTitle: isChannelPost ? senderChat.title : null,
+    channelUsername: isChannelPost ? senderChat.username : null,
+    isReply,
+    replyAge,
+    quickAssessment,
+    // Will be set by velocity check
+    velocityBoost: 0,
+    velocityReason: null
+  }
+}
+
+/**
+ * PHASE 3: Velocity Check
+ * @returns {Object|null} Result if high velocity spam, null to continue
+ */
+const runVelocityPhase = async (messageText, ctx, userContext) => {
+  const senderChat = ctx.message && ctx.message.sender_chat
+  const isChannelPost = senderChat && senderChat.type === 'channel'
+  const senderId = isChannelPost ? senderChat.id : (ctx.from && ctx.from.id)
+
+  try {
+    if (!senderId || !ctx.chat || !ctx.chat.id || !ctx.message) {
+      throw new Error('Missing context for velocity check')
+    }
+
+    const forwardOrigin = ctx.message.forward_origin || null
+    const velocityResult = await calculateVelocityScore(
+      messageText,
+      senderId,
+      ctx.chat.id,
+      ctx.message.message_id,
+      forwardOrigin
+    )
+
+    if (velocityResult.score > 0) {
+      spamLog.debug({ velocityScore: (velocityResult.score * 100).toFixed(1), dominant: velocityResult.dominant }, 'Velocity score')
+    }
+
+    if (velocityResult.score >= 0.8) {
+      spamLog.warn({ reason: velocityResult.recommendation.reason }, 'High velocity spam detected')
+      return {
+        isSpam: true,
+        confidence: velocityResult.recommendation.confidence,
+        reason: velocityResult.recommendation.reason,
+        source: 'velocity',
+        velocitySignals: velocityResult.signals
+      }
+    }
+
+    if (velocityResult.score >= 0.4) {
+      userContext.velocityBoost = velocityResult.score * 20
+      userContext.velocityReason = velocityResult.dominant
+    }
+  } catch (velocityError) {
+    spamLog.error({ err: velocityError.message }, 'Velocity check error')
+  }
+
+  return null
+}
+
+/**
+ * PHASE 4: Qdrant Vector Check
+ * @returns {Object|null} Result if confident match, null to continue
+ */
+const runQdrantPhase = async (messageText, ctx, userContext) => {
+  const hasCaption = messageText !== ctx.message.text && !!ctx.message.caption
+  const embedding = await generateEmbedding(messageText, {
+    isNewAccount: userContext.isNewAccount,
+    messageCount: userContext.messageCount,
+    hasCaption
+  })
+
+  if (!embedding) return { result: null, embedding: null, features: null }
+
+  const features = extractFeatures(messageText, userContext)
+  const localResult = await classifyBySimilarity(embedding)
+
+  if (!localResult) return { result: null, embedding, features }
+
+  qdrantLog.debug({ classification: localResult.classification, confidence: (localResult.confidence * 100).toFixed(1) }, 'Qdrant match found')
+
+  const adaptiveThreshold = getAdaptiveThreshold(features)
+  qdrantLog.debug({ threshold: (adaptiveThreshold * 100).toFixed(1) }, 'Adaptive threshold')
+
+  if (localResult.confidence < adaptiveThreshold) {
+    qdrantLog.debug({ confidence: (localResult.confidence * 100).toFixed(1), threshold: (adaptiveThreshold * 100).toFixed(1) }, 'Qdrant confidence too low, checking with LLM')
+    return { result: null, embedding, features }
+  }
+
+  // Check if new user with clean result - don't trust, need LLM for bio context
+  const senderChat = ctx.message && ctx.message.sender_chat
+  const isChannelPost = senderChat && senderChat.type === 'channel'
+  const senderId = isChannelPost ? senderChat.id : (ctx.from && ctx.from.id)
+  const perGroupMsgCount = ctx.group && ctx.group.members && senderId &&
+    ctx.group.members[senderId] && ctx.group.members[senderId].stats &&
+    ctx.group.members[senderId].stats.messagesCount
+  const isFirstMessage = (perGroupMsgCount || 0) <= 1
+
+  if (isFirstMessage && localResult.classification === 'clean') {
+    qdrantLog.debug({ confidence: (localResult.confidence * 100).toFixed(1) }, 'New user - not trusting Qdrant clean result, checking with LLM for bio context')
+    return { result: null, embedding, features }
+  }
+
+  qdrantLog.info({ confidence: (localResult.confidence * 100).toFixed(1), threshold: (adaptiveThreshold * 100).toFixed(1) }, 'Using Qdrant result')
+
+  // Promote high-hit spam vectors to SpamSignature
+  if (
+    localResult.classification === 'spam' &&
+    localResult.hitCount >= 5 &&
+    localResult.confidence >= 0.9 &&
+    ctx.db && ctx.db.SpamSignature &&
+    ctx.chat && ctx.chat.id
+  ) {
+    setImmediate(async () => {
+      try {
+        const signature = await addSignature(messageText, ctx.db, ctx.chat.id, { source: 'vector_promotion' })
+        if (signature) {
+          qdrantLog.info({
+            hitCount: localResult.hitCount,
+            status: signature.status,
+            uniqueGroups: signature.uniqueGroups.length
+          }, 'Promoted vector to SpamSignature')
         }
-      } else if (quickAssessment.risk === 'skip' && messageCountHere <= 1) {
-        spamLog.debug({ trustSignals: quickAssessment.trustSignals, messageCount: messageCountHere }, 'New user with trust signals - running full check anyway')
+      } catch (err) {
+        qdrantLog.warn({ err: err.message }, 'Vector promotion failed')
       }
-    } catch (quickAssessErr) {
-      // If quick assessment fails, continue with standard flow
-      spamLog.warn({ err: quickAssessErr.message }, 'Quick assessment error, continuing with standard flow')
-    }
-
-    // === Fetch additional context in parallel ===
-    const messagePhoto = ctx.message && ctx.message.photo && ctx.message.photo[0] ? ctx.message.photo[0] : null
-
-    const [userAvatarUrl, userChatInfo, groupDescription] = await Promise.all([
-      getUserProfilePhotoUrl(ctx),
-      getUserChatInfo(ctx),
-      getGroupDescription(ctx)
-    ])
-    const userBio = userChatInfo.bio
-    const userRating = userChatInfo.rating // { level, rating, current_level_rating, next_level_rating } or null
-
-    // === PHASE 2: Parallel OpenAI Moderation ===
-    // Skip OpenAI moderation for low-risk messages (saves ~400ms and API costs)
-    const shouldRunModeration = quickAssessment.risk !== 'low'
-
-    if (shouldRunModeration) {
-      // Get message photo URL if needed
-      const messagePhotoUrl = messagePhoto && messagePhoto.file_id
-        ? await getMessagePhotoUrl(ctx, messagePhoto)
-        : null
-
-      // Run all moderation checks in parallel (3x faster than sequential)
-      // Combine message text + user bio for text moderation
-      const textToModerate = [messageText, userBio].filter(Boolean).join('\n\n')
-
-      const moderationPromises = []
-      const moderationSources = []
-
-      // Always check text + bio
-      moderationPromises.push(checkOpenAIModeration(textToModerate, null, 'text+bio'))
-      moderationSources.push('openai_moderation_text')
-
-      if (messagePhotoUrl) {
-        moderationPromises.push(checkOpenAIModeration(messageText, messagePhotoUrl, 'message photo'))
-        moderationSources.push('openai_moderation_photo')
-      }
-
-      if (userAvatarUrl) {
-        moderationPromises.push(checkOpenAIModeration(null, userAvatarUrl, 'user avatar'))
-        moderationSources.push('openai_moderation_avatar')
-      }
-
-      const moderationResults = await Promise.all(moderationPromises)
-
-      // Check results - first flagged result wins
-      for (let i = 0; i < moderationResults.length; i++) {
-        const result = moderationResults[i]
-        if (result && result.flagged) {
-          const source = moderationSources[i] || 'openai_moderation'
-          spamLog.warn({ reason: result.reason, source }, 'Content flagged by OpenAI moderation')
-          return {
-            isSpam: true,
-            confidence: Math.max(90, result.highestScore),
-            reason: result.reason,
-            source,
-            categories: result.categories,
-            quickAssessment
-          }
-        }
-      }
-    } else {
-      spamLog.debug('Skipping OpenAI moderation for low-risk message')
-    }
-
-    // Get message counts from actual data sources
-    // Check if this is a channel post
-    const senderChat = ctx.message && ctx.message.sender_chat
-    const isChannelPost = senderChat && senderChat.type === 'channel'
-    const senderId = isChannelPost ? senderChat.id : (ctx.from && ctx.from.id)
-
-    const perGroupMessageCount = ctx.group && ctx.group.members && senderId &&
-      ctx.group.members[senderId] && ctx.group.members[senderId].stats &&
-      ctx.group.members[senderId].stats.messagesCount
-    const globalMessageCount = ctx.session && ctx.session.userInfo &&
-      ctx.session.userInfo.globalStats && ctx.session.userInfo.globalStats.totalMessages
-    const globalStats = (ctx.session && ctx.session.userInfo && ctx.session.userInfo.globalStats) || {}
-
-    // Calculate reply context for trust signals
-    const replyToMessage = ctx.message && ctx.message.reply_to_message
-    const isReply = !!replyToMessage
-    const replyAge = replyToMessage
-      ? (ctx.message.date - replyToMessage.date)
-      : null
-
-    // Create user context for analysis
-    const userContext = {
-      isNewAccount: isChannelPost ? true : isNewAccount(ctx), // Treat channels as "new" - no history
-      isPremium: isChannelPost ? false : ((ctx.from && ctx.from.is_premium) || false), // Channels don't have premium
-      hasUsername: isChannelPost ? !!(senderChat.username) : !!(ctx.from && ctx.from.username),
-      hasProfile: isChannelPost ? false : hasUserProfile(ctx),
-      messageCount: perGroupMessageCount || 0,
-      globalMessageCount: isChannelPost ? 0 : (globalMessageCount || 0), // No global stats for channels
-      groupsActive: isChannelPost ? 0 : (globalStats.groupsActive || 0),
-      previousWarnings: globalStats.spamDetections || 0,
-      accountAge: isChannelPost ? 'unknown' : getAccountAge(ctx),
-      // Global reputation from cross-group tracking
-      globalReputation: isChannelPost
-        ? { score: 30, status: 'suspicious' } // Channels start with lower trust
-        : (ctx.session && ctx.session.userInfo && ctx.session.userInfo.reputation) || { score: 50, status: 'neutral' },
-      // Telegram Stars rating (higher = more trusted buyer)
-      telegramRating: userRating, // { level, rating } or null
-      // Channel-specific info
-      isChannelPost: isChannelPost,
-      channelTitle: isChannelPost ? senderChat.title : null,
-      channelUsername: isChannelPost ? senderChat.username : null,
-      // Reply context - strong trust signal (Phase 5)
-      isReply,
-      replyAge,
-      // Quick assessment results (Phase 1)
-      quickAssessment
-    }
-
-    // Velocity check - detect cross-chat spam patterns
-    // Use senderId (which handles channel posts correctly)
-    try {
-      if (!senderId || !ctx.chat || !ctx.chat.id || !ctx.message) {
-        throw new Error('Missing context for velocity check')
-      }
-
-      // Get forward_origin for forward velocity tracking
-      const forwardOrigin = ctx.message.forward_origin || null
-
-      const velocityResult = await calculateVelocityScore(
-        messageText,
-        senderId, // Use senderId instead of ctx.from.id for channel support
-        ctx.chat.id,
-        ctx.message.message_id,
-        forwardOrigin // Pass forward origin for forward velocity tracking
-      )
-
-      if (velocityResult.score > 0) {
-        spamLog.debug({ velocityScore: (velocityResult.score * 100).toFixed(1), dominant: velocityResult.dominant }, 'Velocity score')
-      }
-
-      // High velocity = definite spam (cross-chat spam detected)
-      if (velocityResult.score >= 0.8) {
-        spamLog.warn({ reason: velocityResult.recommendation.reason }, 'High velocity spam detected')
-        return {
-          isSpam: true,
-          confidence: velocityResult.recommendation.confidence,
-          reason: velocityResult.recommendation.reason,
-          source: 'velocity',
-          velocitySignals: velocityResult.signals
-        }
-      }
-
-      // Medium velocity = boost other spam signals
-      if (velocityResult.score >= 0.4) {
-        userContext.velocityBoost = velocityResult.score * 20 // Up to +8% boost
-        userContext.velocityReason = velocityResult.dominant
-      }
-    } catch (velocityError) {
-      spamLog.error({ err: velocityError.message }, 'Velocity check error')
-    }
-
-    // Extract features from message
-    const features = extractFeatures(messageText, userContext)
-
-    // Generate embedding for the message with context
-    const hasCaption = messageText !== ctx.message.text && !!ctx.message.caption
-    const embedding = await generateEmbedding(messageText, {
-      isNewAccount: userContext.isNewAccount,
-      messageCount: userContext.messageCount,
-      hasCaption
     })
+  }
 
-    if (embedding) {
-      // Try to classify using local database first
-      const localResult = await classifyBySimilarity(embedding)
+  return {
+    result: {
+      isSpam: localResult.classification === 'spam',
+      confidence: localResult.confidence * 100,
+      reason: `Vector match: ${localResult.classification}`,
+      source: 'qdrant_db'
+    },
+    embedding,
+    features
+  }
+}
 
-      if (localResult) {
-        qdrantLog.debug({ classification: localResult.classification, confidence: (localResult.confidence * 100).toFixed(1) }, 'Qdrant match found')
+/**
+ * Build LLM context info array
+ */
+const buildLLMContext = (ctx, userContext, groupDescription, userBio) => {
+  const contextInfo = []
 
-        // If confidence is high enough, return local result
-        const adaptiveThreshold = getAdaptiveThreshold(features)
-        qdrantLog.debug({ threshold: (adaptiveThreshold * 100).toFixed(1) }, 'Adaptive threshold')
+  if (ctx.chat && ctx.chat.title) contextInfo.push(`Group: "${ctx.chat.title}"`)
+  if (groupDescription) contextInfo.push(`Topic: "${groupDescription.substring(0, 150)}"`)
 
-        if (localResult.confidence >= adaptiveThreshold) {
-          // For new users (messageCount <= 1), don't trust Qdrant "clean" results
-          // because their bio might contain spam even if the message itself is clean
-          // Use senderId (not ctx.from.id) to correctly handle channel posts
-          const perGroupMsgCount = ctx.group && ctx.group.members && senderId &&
-            ctx.group.members[senderId] && ctx.group.members[senderId].stats &&
-            ctx.group.members[senderId].stats.messagesCount
-          const isFirstMessage = (perGroupMsgCount || 0) <= 1
+  if (userContext.isChannelPost) {
+    contextInfo.push(`Sender: Channel "${userContext.channelTitle || 'Unknown'}"`)
+    if (userContext.channelUsername) contextInfo.push(`Channel: @${userContext.channelUsername}`)
+  } else {
+    const username = ctx.from && ctx.from.username
+    if (username) contextInfo.push(`Username: @${username}`)
+  }
 
-          if (isFirstMessage && localResult.classification === 'clean') {
-            qdrantLog.debug({ confidence: (localResult.confidence * 100).toFixed(1) }, 'New user - not trusting Qdrant clean result, checking with LLM for bio context')
-          } else {
-            qdrantLog.info({ confidence: (localResult.confidence * 100).toFixed(1), threshold: (adaptiveThreshold * 100).toFixed(1) }, 'Using Qdrant result')
+  if (userContext.isPremium) contextInfo.push('Premium user: Yes')
+  if (userContext.isNewAccount && !userContext.isChannelPost) contextInfo.push('New account: Yes')
+  if (userContext.messageCount > 0) contextInfo.push(`Messages in group: ${userContext.messageCount}`)
+  if (userContext.globalMessageCount > 0) contextInfo.push(`Total messages (all groups): ${userContext.globalMessageCount}`)
+  if (userContext.groupsActive > 1) contextInfo.push(`Active in ${userContext.groupsActive} groups`)
 
-            // Krок 1: Promote high-hit vectors to SpamSignature for O(1) lookup
-            // When a vector has been matched many times with high confidence,
-            // it's a confirmed pattern worth adding to the signature database
-            if (
-              localResult.classification === 'spam' &&
-              localResult.hitCount >= 5 &&
-              localResult.confidence >= 0.9 &&
-              ctx.db && ctx.db.SpamSignature &&
-              ctx.chat && ctx.chat.id
-            ) {
-              // Async promotion - don't block the response
-              setImmediate(async () => {
-                try {
-                  const signature = await addSignature(messageText, ctx.db, ctx.chat.id, { source: 'vector_promotion' })
-                  if (signature) {
-                    qdrantLog.info({
-                      hitCount: localResult.hitCount,
-                      status: signature.status,
-                      uniqueGroups: signature.uniqueGroups.length
-                    }, 'Promoted vector to SpamSignature')
-                  }
-                } catch (err) {
-                  qdrantLog.warn({ err: err.message }, 'Vector promotion failed')
-                }
-              })
-            }
+  if (userContext.globalReputation && userContext.globalReputation.score !== 50) {
+    contextInfo.push(`Reputation: ${userContext.globalReputation.score}/100 (${userContext.globalReputation.status})`)
+  }
 
-            return {
-              isSpam: localResult.classification === 'spam',
-              confidence: localResult.confidence * 100,
-              reason: `Vector match: ${localResult.classification}`,
-              source: 'qdrant_db'
-            }
-          }
-        } else {
-          qdrantLog.debug({ confidence: (localResult.confidence * 100).toFixed(1), threshold: (adaptiveThreshold * 100).toFixed(1) }, 'Qdrant confidence too low, checking with LLM')
-        }
+  if (userContext.telegramRating) {
+    const level = userContext.telegramRating.level
+    if (level > 0) contextInfo.push(`Telegram Stars buyer (level ${level}) - trusted`)
+    else if (level < 0) contextInfo.push(`Telegram rating: negative (level ${level})`)
+  }
+
+  if (userBio && userBio.trim()) contextInfo.push(`User bio: "${userBio.trim()}"`)
+  if (ctx.message && ctx.message.quote && ctx.message.quote.text) {
+    contextInfo.push(`Quoted text: "${ctx.message.quote.text.trim()}"`)
+  }
+
+  // Regular reply context
+  if (ctx.message && ctx.message.reply_to_message) {
+    const replyTo = ctx.message.reply_to_message
+    const replyInfo = []
+
+    if (replyTo.from) {
+      const replyToUser = replyTo.from.username ? `@${replyTo.from.username}` : replyTo.from.first_name
+      replyInfo.push(`Reply to: ${replyToUser}`)
+    }
+
+    if (replyTo.text && replyTo.text.trim()) {
+      const snippet = replyTo.text.trim().substring(0, 200)
+      replyInfo.push(`Original message: "${snippet}${replyTo.text.length > 200 ? '...' : ''}"`)
+    } else if (replyTo.caption && replyTo.caption.trim()) {
+      const snippet = replyTo.caption.trim().substring(0, 200)
+      replyInfo.push(`Original caption: "${snippet}${replyTo.caption.length > 200 ? '...' : ''}"`)
+    }
+
+    if (replyInfo.length > 0) contextInfo.push(`Reply context: ${replyInfo.join(', ')}`)
+  }
+
+  // External reply context
+  if (ctx.message && ctx.message.external_reply) {
+    const externalReply = ctx.message.external_reply
+    const replyInfo = []
+
+    if (externalReply.origin) {
+      if (externalReply.origin.type === 'user' && externalReply.origin.sender_user) {
+        replyInfo.push(`Reply to user: @${externalReply.origin.sender_user.username || externalReply.origin.sender_user.first_name}`)
+      } else if (externalReply.origin.type === 'channel' && externalReply.origin.chat) {
+        replyInfo.push(`Reply to channel: ${externalReply.origin.chat.title || externalReply.origin.chat.username}`)
+      } else if (externalReply.origin.type === 'chat' && externalReply.origin.sender_chat) {
+        replyInfo.push(`Reply to chat: ${externalReply.origin.sender_chat.title}`)
       }
     }
 
-    // Calculate dynamic threshold for LLM check
-    const dynamicThreshold = calculateDynamicThreshold(userContext, groupSettings)
-
-    spamLog.debug({ threshold: dynamicThreshold, msgLength: messageText.length, hasLinks: userContext.links && userContext.links.length > 0 }, 'Fallback to OpenRouter LLM')
-
-    // Prepare context for LLM
-    const contextInfo = []
-    if (ctx.chat && ctx.chat.title) contextInfo.push(`Group: "${ctx.chat.title}"`)
-    if (groupDescription) contextInfo.push(`Topic: "${groupDescription.substring(0, 150)}"`)
-    if (userContext.isChannelPost) {
-      contextInfo.push(`Sender: Channel "${userContext.channelTitle || 'Unknown'}"`)
-      if (userContext.channelUsername) contextInfo.push(`Channel: @${userContext.channelUsername}`)
-    } else {
-      const username = ctx.from && ctx.from.username
-      if (username) contextInfo.push(`Username: @${username}`)
-    }
-    if (userContext.isPremium) contextInfo.push('Premium user: Yes')
-    if (userContext.isNewAccount && !userContext.isChannelPost) contextInfo.push('New account: Yes')
-    if (userContext.messageCount > 0) contextInfo.push(`Messages in group: ${userContext.messageCount}`)
-    if (userContext.globalMessageCount > 0) contextInfo.push(`Total messages (all groups): ${userContext.globalMessageCount}`)
-    if (userContext.groupsActive > 1) contextInfo.push(`Active in ${userContext.groupsActive} groups`)
-    if (userContext.globalReputation && userContext.globalReputation.score !== 50) {
-      contextInfo.push(`Reputation: ${userContext.globalReputation.score}/100 (${userContext.globalReputation.status})`)
-    }
-    if (userContext.telegramRating) {
-      const level = userContext.telegramRating.level
-      if (level > 0) {
-        contextInfo.push(`Telegram Stars buyer (level ${level}) - trusted`)
-      } else if (level < 0) {
-        contextInfo.push(`Telegram rating: negative (level ${level})`)
-      }
-    }
-    if (userBio && userBio.trim()) contextInfo.push(`User bio: "${userBio.trim()}"`)
-    if (ctx.message && ctx.message.quote && ctx.message.quote.text) {
-      contextInfo.push(`Quoted text: "${ctx.message.quote.text.trim()}"`)
+    if (externalReply.chat && externalReply.chat.title) {
+      replyInfo.push(`Original chat: "${externalReply.chat.title}"`)
     }
 
-    // Add regular reply info if present
-    if (ctx.message && ctx.message.reply_to_message) {
-      const replyTo = ctx.message.reply_to_message
-      const replyInfo = []
+    if (replyInfo.length > 0) contextInfo.push(`External reply: ${replyInfo.join(', ')}`)
+  }
 
-      // Add info about the user being replied to
-      if (replyTo.from) {
-        const replyToUser = replyTo.from.username ? `@${replyTo.from.username}` : replyTo.from.first_name
-        replyInfo.push(`Reply to: ${replyToUser}`)
-      }
+  return contextInfo
+}
 
-      // Add snippet of original message text if available (longer for better context)
-      if (replyTo.text && replyTo.text.trim()) {
-        const snippet = replyTo.text.trim().substring(0, 200)
-        replyInfo.push(`Original message: "${snippet}${replyTo.text.length > 200 ? '...' : ''}"`)
-      } else if (replyTo.caption && replyTo.caption.trim()) {
-        const snippet = replyTo.caption.trim().substring(0, 200)
-        replyInfo.push(`Original caption: "${snippet}${replyTo.caption.length > 200 ? '...' : ''}"`)
-      }
+/**
+ * PHASE 5: LLM Analysis
+ */
+const runLLMPhase = async (messageText, ctx, userContext, groupSettings, groupDescription, userBio, boosts, embedding, features) => {
+  const { candidateBoost, suspiciousForwardBoost } = boosts
 
-      if (replyInfo.length > 0) {
-        contextInfo.push(`Reply context: ${replyInfo.join(', ')}`)
-      }
-    }
+  const dynamicThreshold = calculateDynamicThreshold(userContext, groupSettings)
+  spamLog.debug({ threshold: dynamicThreshold, msgLength: messageText.length }, 'Fallback to OpenRouter LLM')
 
-    if (ctx.message && ctx.message.external_reply) {
-      const externalReply = ctx.message.external_reply
-      const replyInfo = []
+  const contextInfo = buildLLMContext(ctx, userContext, groupDescription, userBio)
 
-      // Add origin information
-      if (externalReply.origin) {
-        if (externalReply.origin.type === 'user' && externalReply.origin.sender_user) {
-          replyInfo.push(`Reply to user: @${externalReply.origin.sender_user.username || externalReply.origin.sender_user.first_name}`)
-        } else if (externalReply.origin.type === 'channel' && externalReply.origin.chat) {
-          replyInfo.push(`Reply to channel: ${externalReply.origin.chat.title || externalReply.origin.chat.username}`)
-        } else if (externalReply.origin.type === 'chat' && externalReply.origin.sender_chat) {
-          replyInfo.push(`Reply to chat: ${externalReply.origin.sender_chat.title}`)
-        }
-      }
-
-      // Add chat info if available
-      if (externalReply.chat && externalReply.chat.title) {
-        replyInfo.push(`Original chat: "${externalReply.chat.title}"`)
-      }
-
-      if (replyInfo.length > 0) {
-        contextInfo.push(`External reply: ${replyInfo.join(', ')}`)
-      }
-    }
-
-    // Static system prompt (cacheable, no dynamic data)
-    const systemPrompt = `Telegram spam classifier. Output JSON: reason, spamScore.
+  const systemPrompt = `Telegram spam classifier. Output JSON: reason, spamScore.
 
 SPAM = ads, scams, phishing, crypto schemes, service promotion, mass messaging.
 NOT SPAM = chatting, questions, jokes, trolling, rudeness, arguments.
@@ -1276,92 +1307,134 @@ Rules:
 - Trust users with message history and reputation
 - reason = short explanation for group admins`
 
-    // Dynamic user prompt with all context
-    const userPrompt = `MESSAGE: ${messageText}
+  const userPrompt = `MESSAGE: ${messageText}
 
 CONTEXT: ${contextInfo.join(' | ')}`
 
-    // Use OpenRouter for LLM analysis with retry and fallback
-    const llmResult = await callLLMWithRetry(systemPrompt, userPrompt)
-    if (!llmResult) {
-      // Fix: Safe fallback instead of null - don't block on LLM failure
-      // but also don't save to Qdrant (no confidence in result)
-      spamLog.warn('LLM failed, using safe fallback')
-      return {
-        isSpam: false,
-        confidence: 0,
-        reason: 'LLM unavailable - manual review recommended',
-        source: 'llm_fallback'
-      }
-    }
-
-    const { analysis, model: usedModel } = llmResult
-
-    // spamScore: 0.0-1.0 where 0=clean, 1=definitely spam (like OpenAI moderation)
-    let spamScore = parseFloat(analysis.spamScore) || 0.5
-    spamScore = Math.max(0, Math.min(1, spamScore)) // Clamp to 0-1
-    const isSpam = spamScore >= 0.7 // Threshold for considering it spam
-
-    // Apply velocity boost if suspicious patterns detected (boost is in 0-100 scale, convert)
-    if (isSpam && userContext.velocityBoost) {
-      spamScore = Math.min(0.99, spamScore + userContext.velocityBoost / 100)
-      spamLog.debug({ boost: userContext.velocityBoost.toFixed(1), reason: userContext.velocityReason }, 'Velocity boost applied')
-    }
-
-    // Apply suspicious forward source boost (boost is in 0-100 scale, convert)
-    if (isSpam && suspiciousForwardBoost > 0) {
-      spamScore = Math.min(0.99, spamScore + suspiciousForwardBoost / 100)
-      spamLog.debug({ boost: suspiciousForwardBoost }, 'Suspicious forward boost applied')
-    }
-
-    // Apply candidate signature boost (fuzzy match with non-confirmed signatures)
-    if (isSpam && candidateSignatureBoost > 0) {
-      spamScore = Math.min(0.99, spamScore + candidateSignatureBoost / 100)
-      spamLog.debug({ boost: candidateSignatureBoost }, 'Candidate signature boost applied')
-    }
-
-    spamLog.info({ isSpam, spamScore: spamScore.toFixed(2), source: 'openrouter_llm', model: usedModel }, 'OpenRouter result')
-
-    // Save to knowledge base based on spamScore
-    if (embedding) {
-      let shouldSave = false
-
-      // High spam score - save as spam
-      if (spamScore >= 0.85) {
-        shouldSave = true
-      } else if (spamScore >= 0.7) {
-        // Medium spam score - save in middleware after action confirmed
-        shouldSave = false
-      } else if (spamScore <= 0.3) {
-        // Low spam score = high confidence clean - save as clean
-        shouldSave = true
-      }
-
-      if (shouldSave) {
-        try {
-          await saveSpamVector({
-            text: messageText,
-            embedding,
-            classification: isSpam ? 'spam' : 'clean',
-            confidence: spamScore, // Qdrant uses 0-1
-            features
-          })
-          qdrantLog.debug({ spamScore: spamScore.toFixed(2) }, 'Saved vector to Qdrant')
-        } catch (saveError) {
-          qdrantLog.error({ err: saveError.message }, 'Failed to save vector')
-        }
-      }
-    }
-
-    // Convert to 0-100 for compatibility with rest of system (middleware thresholds)
-    const confidence = Math.round(spamScore * 100)
-
+  const llmResult = await callLLMWithRetry(systemPrompt, userPrompt)
+  if (!llmResult) {
+    spamLog.warn('LLM failed, using safe fallback')
     return {
-      isSpam,
-      confidence, // 0-100 for backward compatibility
-      reason: analysis.reason,
-      source: 'openrouter_llm'
+      isSpam: false,
+      confidence: 0,
+      reason: 'LLM unavailable - manual review recommended',
+      source: 'llm_fallback'
     }
+  }
+
+  const { analysis, model: usedModel } = llmResult
+
+  let spamScore = parseFloat(analysis.spamScore) || 0.5
+  spamScore = Math.max(0, Math.min(1, spamScore))
+  const isSpam = spamScore >= 0.7
+
+  // Apply boosts
+  if (isSpam && userContext.velocityBoost) {
+    spamScore = Math.min(0.99, spamScore + userContext.velocityBoost / 100)
+    spamLog.debug({ boost: userContext.velocityBoost.toFixed(1), reason: userContext.velocityReason }, 'Velocity boost applied')
+  }
+
+  if (isSpam && suspiciousForwardBoost > 0) {
+    spamScore = Math.min(0.99, spamScore + suspiciousForwardBoost / 100)
+    spamLog.debug({ boost: suspiciousForwardBoost }, 'Suspicious forward boost applied')
+  }
+
+  if (isSpam && candidateBoost > 0) {
+    spamScore = Math.min(0.99, spamScore + candidateBoost / 100)
+    spamLog.debug({ boost: candidateBoost }, 'Candidate signature boost applied')
+  }
+
+  spamLog.info({ isSpam, spamScore: spamScore.toFixed(2), source: 'openrouter_llm', model: usedModel }, 'OpenRouter result')
+
+  // Save to Qdrant
+  if (embedding) {
+    const shouldSave = spamScore >= 0.85 || spamScore <= 0.3
+
+    if (shouldSave) {
+      try {
+        await saveSpamVector({
+          text: messageText,
+          embedding,
+          classification: isSpam ? 'spam' : 'clean',
+          confidence: spamScore,
+          features
+        })
+        qdrantLog.debug({ spamScore: spamScore.toFixed(2) }, 'Saved vector to Qdrant')
+      } catch (saveError) {
+        qdrantLog.error({ err: saveError.message }, 'Failed to save vector')
+      }
+    }
+  }
+
+  return {
+    isSpam,
+    confidence: Math.round(spamScore * 100),
+    reason: analysis.reason,
+    source: 'openrouter_llm'
+  }
+}
+
+// ========== MAIN FUNCTION ==========
+
+/**
+ * Main spam check function using hybrid approach
+ */
+const checkSpam = async (messageText, ctx, groupSettings) => {
+  try {
+    initializeCleanup()
+
+    // PHASE 0: Custom rules (fastest)
+    const customRuleResult = checkCustomRulesPhase(messageText, groupSettings)
+    if (customRuleResult) return customRuleResult
+
+    // PHASE 0.5: SpamSignature check
+    const { result: sigResult, candidateBoost } = await checkSpamSignaturesPhase(messageText, ctx)
+    if (sigResult) return sigResult
+
+    // PHASE 0.6: ForwardBlacklist check
+    const { result: fwdResult, suspiciousBoost } = await checkForwardBlacklistPhase(ctx)
+    if (fwdResult) return fwdResult
+
+    // PHASE 1: Quick risk assessment
+    const { result: qaResult, quickAssessment } = runQuickAssessmentPhase(ctx)
+    if (qaResult) return qaResult
+
+    // Fetch additional context in parallel
+    const [userAvatarUrl, userChatInfo, groupDescription] = await Promise.all([
+      getUserProfilePhotoUrl(ctx),
+      getUserChatInfo(ctx),
+      getGroupDescription(ctx)
+    ])
+    const userBio = userChatInfo.bio
+    const userRating = userChatInfo.rating
+
+    // PHASE 2: OpenAI Moderation
+    const modResult = await runModerationPhase(ctx, messageText, quickAssessment, userBio, userAvatarUrl)
+    if (modResult) return modResult
+
+    // Build user context
+    const userContext = buildUserContext(ctx, userRating, quickAssessment)
+
+    // PHASE 3: Velocity check
+    const velocityResult = await runVelocityPhase(messageText, ctx, userContext)
+    if (velocityResult) return velocityResult
+
+    // PHASE 4: Qdrant vector check
+    const { result: qdrantResult, embedding, features } = await runQdrantPhase(messageText, ctx, userContext)
+    if (qdrantResult) return qdrantResult
+
+    // PHASE 5: LLM analysis (final fallback)
+    return await runLLMPhase(
+      messageText,
+      ctx,
+      userContext,
+      groupSettings,
+      groupDescription,
+      userBio,
+      { candidateBoost, suspiciousForwardBoost: suspiciousBoost },
+      embedding,
+      features
+    )
   } catch (error) {
     spamLog.error({ err: error }, 'Error during spam check')
     return {
