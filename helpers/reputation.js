@@ -2,20 +2,15 @@ const { predictCreationDate } = require('./account-age')
 
 /**
  * Calculate account age in months from Telegram user ID
- * Returns { months, isExtrapolated, isChannel } for proper handling
+ * Returns 0 months for channels (negative IDs) or invalid IDs
  *
  * @param {number} userId - User or channel ID
- * @returns {{ months: number, isExtrapolated: boolean, isChannel: boolean }}
+ * @returns {{ months: number, isExtrapolated: boolean }}
  */
 const getAccountAgeMonths = (userId) => {
-  // Invalid ID
-  if (!userId || typeof userId !== 'number') {
-    return { months: 0, isExtrapolated: true, isChannel: false }
-  }
-
-  // Channel ID (negative) - no account age concept
-  if (userId < 0) {
-    return { months: 0, isExtrapolated: true, isChannel: true }
+  // Invalid ID or channel (negative) - return 0 months
+  if (!userId || typeof userId !== 'number' || userId < 0) {
+    return { months: 0, isExtrapolated: true }
   }
 
   const [prefix, creationDate] = predictCreationDate(userId)
@@ -23,7 +18,7 @@ const getAccountAgeMonths = (userId) => {
   const months = Math.max(0, (now - creationDate) / (1000 * 60 * 60 * 24 * 30))
   // '>' means extrapolated beyond known data, '?' means invalid/unknown
   const isExtrapolated = prefix === '>' || prefix === '?'
-  return { months, isExtrapolated, isChannel: false }
+  return { months, isExtrapolated }
 }
 
 /**

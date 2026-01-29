@@ -214,16 +214,8 @@ const getAccountAge = (ctx) => {
   return 'established'
 }
 
-/**
- * Get exact predicted creation date for a user ID
- */
-const getAccountCreationDate = (userId) => {
-  return predictCreationDate(userId)
-}
-
 module.exports = {
   isNewAccount,
   getAccountAge,
-  getAccountCreationDate,
   predictCreationDate
 }

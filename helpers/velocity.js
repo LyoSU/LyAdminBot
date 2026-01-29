@@ -848,39 +848,33 @@ const calculateVelocityScore = async (text, userId, chatId, messageId, forwardOr
     signals.forwardVelocity = { score: 0, count: 0, uniqueChats: 0 }
   }
 
-  // 6. User behavior (skip for channels - they don't have user behavior)
+  // 6-8. User behavior, temporal, and network analysis
+  // Skip all for channels - they don't have user behavior patterns
   const isChannel = userId < 0
-  if (!isChannel) {
-    const behavior = await analyzeUserBehavior(userId)
+  if (isChannel) {
+    signals.userBehavior = { burstScore: 0, botScore: 0, microBurst: 0, isBotLike: false }
+    signals.temporal = { score: 0, isNatural: true }
+    signals.network = { score: 0, isCoordinated: false, isPartOfNetwork: false }
+  } else {
+    const [behavior, temporal, network] = await Promise.all([
+      analyzeUserBehavior(userId),
+      analyzeTemporalPattern(userId),
+      analyzeNetwork(userId)
+    ])
+
     signals.userBehavior = {
       ...behavior,
       burstScore: Math.min(1, behavior.microBurst / CONFIG.THRESHOLDS.BURST_PER_MINUTE),
       botScore: behavior.isBotLike ? 0.8 : 0
     }
-  } else {
-    signals.userBehavior = { burstScore: 0, botScore: 0, microBurst: 0, isBotLike: false }
-  }
-
-  // 7. Temporal analysis (skip for channels)
-  if (!isChannel) {
-    const temporal = await analyzeTemporalPattern(userId)
     signals.temporal = {
       ...temporal,
       score: temporal.isNatural ? 0 : 0.5
     }
-  } else {
-    signals.temporal = { score: 0, isNatural: true }
-  }
-
-  // 8. Network analysis (skip for channels)
-  if (!isChannel) {
-    const network = await analyzeNetwork(userId)
     signals.network = {
       ...network,
       score: network.isCoordinated ? 0.9 : (network.isPartOfNetwork ? 0.5 : 0)
     }
-  } else {
-    signals.network = { score: 0, isCoordinated: false, isPartOfNetwork: false }
   }
 
   // 9. Content entropy
