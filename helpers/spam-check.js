@@ -1292,8 +1292,8 @@ const runLLMPhase = async (messageText, ctx, userContext, groupSettings, groupDe
 
   const systemPrompt = `Telegram spam classifier. Output JSON: reason, spamScore.
 
-SPAM = ads, scams, phishing, crypto schemes, service promotion, mass messaging.
-NOT SPAM = chatting, questions, jokes, trolling, rudeness, arguments.
+SPAM = ads, scams, phishing, crypto schemes, service promotion, mass messaging, romantic/dating bots (suggestive phrases to lure into private chat).
+NOT SPAM = genuine chatting, questions, jokes, trolling, rudeness, arguments.
 
 spamScore (0.0-1.0) = probability this is spam:
   0.0-0.3: definitely not spam (normal chat, questions, even rude)
