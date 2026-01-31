@@ -543,9 +543,9 @@ const calculateDynamicThreshold = (context, groupSettings) => {
   // Account age (only BOOST for established, don't penalize new)
   if (context.accountAge === 'established') baseThreshold += 10
 
-  // Reply context - strong trust signal!
-  // User is engaging in conversation, not broadcasting
-  if (context.isReply) {
+  // Reply context - trust signal for established users only
+  // New users (0-1 messages) don't get reply bonus - spam bots abuse this
+  if (context.isReply && context.messageCount > 1) {
     baseThreshold += 12 // Significant boost for replies
     // Recent replies (within 1 hour) get extra trust
     if (context.replyAge && context.replyAge < 3600) {
