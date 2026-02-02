@@ -295,6 +295,18 @@ const quickRiskAssessment = (ctx) => {
     }
   }
 
+  // 3.5. Plain text URLs (t.me links, other external links)
+  // Spammers often use plain text URLs that don't create entities
+  const urlRegex = /(?:https?:\/\/|t\.me\/|bit\.ly\/|goo\.gl\/|tinyurl\.com\/|choko\.link\/|wa\.me\/|telegram\.me\/)/i
+  if (urlRegex.test(text)) {
+    signals.push('text_url')
+  }
+
+  // 3.6. Long promotional text (> 200 chars) - unlikely to be casual conversation
+  if (text.length > 200) {
+    signals.push('long_text')
+  }
+
   // 4. Via bot (might be automated)
   if (message.via_bot) {
     signals.push('via_bot')
@@ -387,14 +399,20 @@ const quickRiskAssessment = (ctx) => {
   // ===== TRUST SIGNALS =====
 
   // 1. Reply to another message (engagement = conversation)
+  // But NOT if replying to own message (spammers reply to themselves)
   if (message.reply_to_message) {
-    trustSignals.push('is_reply')
-    // Reply to recent message (within 1 hour) = even more trust
-    // Safety: check both dates exist before calculating
-    if (message.date && message.reply_to_message.date) {
-      const replyAge = message.date - message.reply_to_message.date
-      if (replyAge >= 0 && replyAge < 3600) { // 1 hour, and positive (not future)
-        trustSignals.push('recent_reply')
+    const replyToFrom = message.reply_to_message.from
+    const isReplyToSelf = user && replyToFrom && replyToFrom.id === user.id
+    
+    if (!isReplyToSelf) {
+      trustSignals.push('is_reply')
+      // Reply to recent message (within 1 hour) = even more trust
+      // Safety: check both dates exist before calculating
+      if (message.date && message.reply_to_message.date) {
+        const replyAge = message.date - message.reply_to_message.date
+        if (replyAge >= 0 && replyAge < 3600) { // 1 hour, and positive (not future)
+          trustSignals.push('recent_reply')
+        }
       }
     }
   }
@@ -936,30 +954,8 @@ const runQuickAssessmentPhase = (ctx) => {
       }, 'Quick assessment')
     }
 
-    // Get message count for skip decision
-    const senderChat = ctx.message && ctx.message.sender_chat
-    const isChannelPost = senderChat && senderChat.type === 'channel'
-    const senderId = isChannelPost ? senderChat.id : (ctx.from && ctx.from.id)
-    const memberData = ctx.group && ctx.group.members && ctx.group.members[senderId]
-    const messageCount = (memberData && memberData.stats && memberData.stats.messagesCount) || 0
-
-    if (quickAssessment.risk === 'skip' && messageCount > 1) {
-      spamLog.debug({ trustSignals: quickAssessment.trustSignals, messageCount }, 'Skipping checks - low risk message from established user')
-      return {
-        result: {
-          isSpam: false,
-          confidence: 80,
-          reason: 'Skipped by quick assessment (trust signals)',
-          source: 'quick_assessment',
-          quickAssessment
-        },
-        quickAssessment
-      }
-    }
-
-    if (quickAssessment.risk === 'skip' && messageCount <= 1) {
-      spamLog.debug({ trustSignals: quickAssessment.trustSignals, messageCount }, 'New user with trust signals - running full check anyway')
-    }
+    // Quick assessment is now only used for signal collection, not for skipping
+    // All messages go through Qdrant check (it's fast) to catch known spam patterns
   } catch (quickAssessErr) {
     spamLog.warn({ err: quickAssessErr.message }, 'Quick assessment error, continuing with standard flow')
   }

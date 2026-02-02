@@ -406,6 +406,9 @@ module.exports = async (ctx) => {
         if (result.quickAssessment.signals && result.quickAssessment.signals.length > 0) {
           logData.quickSignals = result.quickAssessment.signals
         }
+        if (result.quickAssessment.trustSignals && result.quickAssessment.trustSignals.length > 0) {
+          logData.trustSignals = result.quickAssessment.trustSignals
+        }
       }
 
       spamLog.info(logData, result.isSpam ? 'SPAM detected' : 'CLEAN')
