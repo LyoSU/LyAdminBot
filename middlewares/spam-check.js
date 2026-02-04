@@ -519,7 +519,7 @@ module.exports = async (ctx) => {
               spamAction.error({ err: error.message, userName: userDisplayName, action: isChannelPost ? 'ban' : 'mute' }, 'Action failed')
             }
           } else {
-            spamAction.error({ chatTitle: ctx.chat.title }, 'No restrict permission')
+            spamAction.warn({ chatTitle: ctx.chat.title }, 'No restrict permission')
           }
         }
 
