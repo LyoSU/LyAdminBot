@@ -138,10 +138,24 @@ casSyncStateSchema.statics.completeSync = async function (stats = {}) {
 
 /**
  * Check if sync is currently running
+ * Returns false if sync has been "running" for more than 2 hours (stale)
  */
 casSyncStateSchema.statics.isRunning = async function () {
   const state = await this.findOne()
-  return state?.status === 'running'
+  if (state?.status !== 'running') {
+    return false
+  }
+
+  // Check for stale sync (running for more than 2 hours)
+  const STALE_TIMEOUT_MS = 2 * 60 * 60 * 1000 // 2 hours
+  const startedAt = state.currentBatch?.startedAt
+  if (startedAt && (Date.now() - startedAt.getTime() > STALE_TIMEOUT_MS)) {
+    // Reset stale sync state
+    await this.setStatus('idle', 'Reset from stale running state')
+    return false
+  }
+
+  return true
 }
 
 module.exports = casSyncStateSchema
