@@ -41,8 +41,10 @@ const handleLeaveChat = async (ctx) => {
  * Global error handler middleware
  * Catches all errors and handles them appropriately
  */
-const errorHandler = (ctx, next) => {
-  next().catch(async (error) => {
+const errorHandler = async (ctx, next) => {
+  try {
+    await next()
+  } catch (error) {
     const errorMsg = error.message || error.description || ''
 
     if (shouldLeaveChat(errorMsg)) {
@@ -51,9 +53,7 @@ const errorHandler = (ctx, next) => {
     }
 
     botLog.error({ err: error }, 'Unhandled error')
-  })
-
-  return true
+  }
 }
 
 module.exports = errorHandler

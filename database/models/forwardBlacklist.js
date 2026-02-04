@@ -180,12 +180,14 @@ forwardBlacklistSchema.statics.addSpamReport = async function (forwardInfo, grou
   )
 
   // Update status based on new spamReports count
+  // Check blacklisted first (higher priority), then suspicious
   let statusChanged = false
   if (entry.spamReports >= thresholds.blacklisted && entry.status !== 'blacklisted') {
     entry.status = 'blacklisted'
     entry.expiresAt = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000)
     statusChanged = true
-  } else if (entry.spamReports >= thresholds.suspicious && entry.status === 'clean') {
+  } else if (entry.spamReports >= thresholds.suspicious && entry.status !== 'suspicious' && entry.status !== 'blacklisted') {
+    // Only upgrade to suspicious if currently clean (not already suspicious or blacklisted)
     entry.status = 'suspicious'
     entry.expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
     statusChanged = true

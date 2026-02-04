@@ -33,6 +33,7 @@ const CONFIG = {
 
   // Cleanup
   MAX_ENTRIES_PER_KEY: 1000,
+  MAX_TOTAL_KEYS: 50000, // Maximum total keys in store to prevent memory leak
   CLEANUP_INTERVAL: 60 * 60 * 1000, // 1 hour
   MAX_AGE: 7 * 24 * 60 * 60 * 1000 // 7 days
 }
@@ -44,7 +45,29 @@ const CONFIG = {
 class VelocityStore {
   constructor () {
     this.data = new Map()
+    this.keyAccessOrder = [] // Track access order for LRU eviction
     this.startCleanup()
+  }
+
+  // Track key access for LRU eviction
+  trackAccess (key) {
+    // Remove from current position if exists
+    const idx = this.keyAccessOrder.indexOf(key)
+    if (idx > -1) {
+      this.keyAccessOrder.splice(idx, 1)
+    }
+    // Add to end (most recently used)
+    this.keyAccessOrder.push(key)
+  }
+
+  // Evict oldest keys if over limit
+  evictIfNeeded () {
+    while (this.data.size > CONFIG.MAX_TOTAL_KEYS && this.keyAccessOrder.length > 0) {
+      const oldestKey = this.keyAccessOrder.shift()
+      if (this.data.has(oldestKey)) {
+        this.data.delete(oldestKey)
+      }
+    }
   }
 
   // Get entries for a key (sorted set simulation)
@@ -59,7 +82,9 @@ class VelocityStore {
   async zadd (key, score, member) {
     if (!this.data.has(key)) {
       this.data.set(key, [])
+      this.evictIfNeeded()
     }
+    this.trackAccess(key)
     const entries = this.data.get(key)
 
     // Check if member exists
@@ -87,7 +112,9 @@ class VelocityStore {
   async hincrby (key, field, increment) {
     if (!this.data.has(key)) {
       this.data.set(key, {})
+      this.evictIfNeeded()
     }
+    this.trackAccess(key)
     const hash = this.data.get(key)
     hash[field] = (hash[field] || 0) + increment
     return hash[field]
@@ -108,7 +135,9 @@ class VelocityStore {
   async hset (key, field, value) {
     if (!this.data.has(key)) {
       this.data.set(key, {})
+      this.evictIfNeeded()
     }
+    this.trackAccess(key)
     const hash = this.data.get(key)
     hash[field] = value
   }
@@ -117,7 +146,9 @@ class VelocityStore {
   async sadd (key, ...members) {
     if (!this.data.has(key)) {
       this.data.set(key, new Set())
+      this.evictIfNeeded()
     }
+    this.trackAccess(key)
     const set = this.data.get(key)
     members.forEach(m => set.add(m))
   }
@@ -177,7 +208,9 @@ class VelocityStore {
         }
       }
 
+      // Sync keyAccessOrder with data (remove deleted keys)
       if (cleanedKeys > 0) {
+        this.keyAccessOrder = this.keyAccessOrder.filter(k => this.data.has(k))
         velocityLog.debug({ totalKeys: this.data.size, removedKeys: cleanedKeys }, 'Cleanup completed')
       }
     }, CONFIG.CLEANUP_INTERVAL)

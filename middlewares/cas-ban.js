@@ -44,78 +44,83 @@ module.exports = async (ctx) => {
     let userId = ctx.from.id
     if (ctx.message.sender_chat && ctx.message.sender_chat.id) userId = ctx.message.sender_chat.id
 
-    return extend.get(`https://api.cas.chat/check?user_id=${userId}`).then(({ body }) => {
+    return extend.get(`https://api.cas.chat/check?user_id=${userId}`).then(async ({ body }) => {
       if (body.ok === true) {
         const casData = formatCasData(body)
         casLog.warn({ userId, ...casData }, 'User banned by CAS system')
 
         // Check bot permissions before taking action
-        ctx.telegram.getChatMember(ctx.chat.id, ctx.botInfo.id)
-          .then(async (botMember) => {
-            const canRestrict = botMember.can_restrict_members
-            const canDelete = botMember.can_delete_messages
+        try {
+          const botMember = await ctx.telegram.getChatMember(ctx.chat.id, ctx.botInfo.id)
+          const canRestrict = botMember.can_restrict_members
+          const canDelete = botMember.can_delete_messages
 
-            if (canRestrict) {
-              // Has permissions - kick user, send ban notification, delete message
-              ctx.telegram.kickChatMember(ctx.chat.id, userId)
-                .catch(error => casLog.error({ err: error.message, userId }, 'Failed to kick CAS banned user'))
+          if (canRestrict) {
+            // Has permissions - kick user, send ban notification, delete message
+            ctx.telegram.kickChatMember(ctx.chat.id, userId)
+              .catch(error => casLog.error({ err: error.message, userId }, 'Failed to kick CAS banned user'))
 
-              const notificationMsg = await ctx.replyWithHTML(ctx.i18n.t('cas.banned', {
+            let notificationMsg = null
+            try {
+              notificationMsg = await ctx.replyWithHTML(ctx.i18n.t('cas.banned', {
                 name: userName(ctx.from, true),
                 link: `https://cas.chat/query?u=${userId}`
               }), {
                 reply_to_message_id: ctx.message.message_id,
                 allow_sending_without_reply: true,
                 disable_web_page_preview: true
-              }).catch(error => {
-                casLog.error({ err: error.message }, 'Failed to send notification')
-                return null
               })
+            } catch (error) {
+              casLog.error({ err: error.message }, 'Failed to send notification')
+            }
 
-              // Schedule auto-delete after 25 seconds
-              if (notificationMsg && ctx.db) {
-                scheduleDeletion(ctx.db, {
-                  chatId: ctx.chat.id,
-                  messageId: notificationMsg.message_id,
-                  delayMs: 25 * 1000,
-                  source: 'cas_ban',
-                  reference: { type: 'user', id: String(userId) }
-                }, ctx.telegram)
-              }
+            // Schedule auto-delete after 25 seconds
+            if (notificationMsg && ctx.db) {
+              scheduleDeletion(ctx.db, {
+                chatId: ctx.chat.id,
+                messageId: notificationMsg.message_id,
+                delayMs: 25 * 1000,
+                source: 'cas_ban',
+                reference: { type: 'user', id: String(userId) }
+              }, ctx.telegram)
+            }
 
-              // Delete the original message
-              if (canDelete) {
-                ctx.deleteMessage().catch(error => {
-                  casLog.error({ err: error.message }, 'Failed to delete original message')
-                })
-              }
-            } else {
-              // No permissions - send warning notification
-              casLog.warn({ chatId: ctx.chat.id }, 'Bot lacks permission to restrict members')
+            // Delete the original message
+            if (canDelete) {
+              ctx.deleteMessage().catch(error => {
+                casLog.error({ err: error.message }, 'Failed to delete original message')
+              })
+            }
+          } else {
+            // No permissions - send warning notification
+            casLog.warn({ chatId: ctx.chat.id }, 'Bot lacks permission to restrict members')
 
-              const notificationMsg = await ctx.replyWithHTML(ctx.i18n.t('cas.no_permissions', {
+            let notificationMsg = null
+            try {
+              notificationMsg = await ctx.replyWithHTML(ctx.i18n.t('cas.no_permissions', {
                 name: userName(ctx.from, true)
               }), {
                 reply_to_message_id: ctx.message.message_id,
                 allow_sending_without_reply: true
-              }).catch(error => {
-                casLog.error({ err: error.message }, 'Failed to send no-permission notification')
-                return null
               })
-
-              // Schedule auto-delete after 60 seconds
-              if (notificationMsg && ctx.db) {
-                scheduleDeletion(ctx.db, {
-                  chatId: ctx.chat.id,
-                  messageId: notificationMsg.message_id,
-                  delayMs: 60 * 1000,
-                  source: 'cas_no_permissions',
-                  reference: { type: 'user', id: String(userId) }
-                }, ctx.telegram)
-              }
+            } catch (error) {
+              casLog.error({ err: error.message }, 'Failed to send no-permission notification')
             }
-          })
-          .catch(error => casLog.error({ err: error.message }, 'Failed to check bot permissions'))
+
+            // Schedule auto-delete after 60 seconds
+            if (notificationMsg && ctx.db) {
+              scheduleDeletion(ctx.db, {
+                chatId: ctx.chat.id,
+                messageId: notificationMsg.message_id,
+                delayMs: 60 * 1000,
+                source: 'cas_no_permissions',
+                reference: { type: 'user', id: String(userId) }
+              }, ctx.telegram)
+            }
+          }
+        } catch (error) {
+          casLog.error({ err: error.message }, 'Failed to check bot permissions')
+        }
 
         // Add CAS flagged messages to our signature database (learning from CAS)
         if (ctx.db && body.result && body.result.messages && body.result.messages.length > 0) {
