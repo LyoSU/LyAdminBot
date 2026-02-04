@@ -92,30 +92,39 @@ module.exports = async (ctx) => {
               })
             }
           } else {
-            // No permissions - send warning notification
+            // No restrict permissions - but still try to delete the message
             casLog.warn({ chatId: ctx.chat.id }, 'Bot lacks permission to restrict members')
 
-            let notificationMsg = null
+            // Try to delete the spam message anyway
             try {
-              notificationMsg = await ctx.replyWithHTML(ctx.i18n.t('cas.no_permissions', {
-                name: userName(ctx.from, true)
-              }), {
-                reply_to_message_id: ctx.message.message_id,
-                allow_sending_without_reply: true
-              })
+              await ctx.deleteMessage()
+              casLog.info('Deleted CAS user message (no restrict permission)')
             } catch (error) {
-              casLog.error({ err: error.message }, 'Failed to send no-permission notification')
-            }
+              casLog.warn({ err: error.message }, 'Cannot delete CAS user message - no permission')
 
-            // Schedule auto-delete after 60 seconds
-            if (notificationMsg && ctx.db) {
-              scheduleDeletion(ctx.db, {
-                chatId: ctx.chat.id,
-                messageId: notificationMsg.message_id,
-                delayMs: 60 * 1000,
-                source: 'cas_no_permissions',
-                reference: { type: 'user', id: String(userId) }
-              }, ctx.telegram)
+              // Only show notification if we couldn't delete
+              let notificationMsg = null
+              try {
+                notificationMsg = await ctx.replyWithHTML(ctx.i18n.t('cas.no_permissions', {
+                  name: userName(ctx.from, true)
+                }), {
+                  reply_to_message_id: ctx.message.message_id,
+                  allow_sending_without_reply: true
+                })
+              } catch (notifyError) {
+                casLog.error({ err: notifyError.message }, 'Failed to send no-permission notification')
+              }
+
+              // Schedule auto-delete after 60 seconds
+              if (notificationMsg && ctx.db) {
+                scheduleDeletion(ctx.db, {
+                  chatId: ctx.chat.id,
+                  messageId: notificationMsg.message_id,
+                  delayMs: 60 * 1000,
+                  source: 'cas_no_permissions',
+                  reference: { type: 'user', id: String(userId) }
+                }, ctx.telegram)
+              }
             }
           }
         } catch (error) {

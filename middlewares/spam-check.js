@@ -524,18 +524,20 @@ module.exports = async (ctx) => {
           }
         }
 
-        // Handle delete action
+        // Handle delete action - always try to delete spam, even without restrict permission
+        // It's better to at least remove the spam message even if we can't ban the user
         if (action.action === 'mute_and_delete' || action.action === 'delete_only' || action.action === 'warn_and_restrict') {
-          if (canDeleteMessages) {
-            try {
-              await ctx.deleteMessage()
-              deleteSuccess = true
-              spamAction.info({ userName: userDisplayName }, 'Deleted message')
-            } catch (error) {
+          try {
+            await ctx.deleteMessage()
+            deleteSuccess = true
+            spamAction.info({ userName: userDisplayName }, 'Deleted message')
+          } catch (error) {
+            // Only log as error if we expected to have permission
+            if (canDeleteMessages) {
               spamAction.error({ err: error.message, userName: userDisplayName, userId }, 'Failed to delete message')
+            } else {
+              spamAction.warn({ err: error.message, chatTitle: ctx.chat.title }, 'Cannot delete - no permission')
             }
-          } else {
-            spamAction.error({ chatTitle: ctx.chat.title }, 'No delete permission')
           }
         }
 
