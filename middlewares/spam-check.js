@@ -466,8 +466,7 @@ module.exports = async (ctx) => {
         try {
           const botMember = await ctx.telegram.getChatMember(ctx.chat.id, ctx.botInfo.id)
           canRestrictMembers = botMember.can_restrict_members
-          canDeleteMessages = botMember.can_delete_messages ||
-                             (message.date && (Date.now() / 1000 - message.date) < 2 * 24 * 60 * 60)
+          canDeleteMessages = botMember.can_delete_messages
         } catch (error) {
           spamAction.error({ err: error.message }, 'Failed to check bot permissions')
         }
