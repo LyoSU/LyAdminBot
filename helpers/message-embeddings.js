@@ -102,12 +102,23 @@ const generateEmbedding = async (text, userContext = {}) => {
 
 /**
  * Check if text is just a placeholder for media without meaningful content
+ * These should never be used for spam signatures or embeddings
  */
 const isPlaceholderMediaText = (text) => {
-  const placeholders = [
-    '[Photo]', '[Voice message]', '[Media message]', '[Video]', '[Audio]'
+  if (!text) return false
+  const normalized = text.toLowerCase().trim()
+  
+  // Exact match placeholders
+  const exactPlaceholders = [
+    '[photo]', '[voice message]', '[media message]', '[video]', '[audio]'
   ]
-  return placeholders.includes(text)
+  if (exactPlaceholders.includes(normalized)) return true
+  
+  // Dynamic placeholders with variable content
+  if (normalized.startsWith('[sticker:')) return true
+  if (normalized.startsWith('[document:')) return true
+  
+  return false
 }
 
 /**
@@ -172,5 +183,6 @@ module.exports = {
   extractFeatures,
   generateEmbedding,
   generateBatchEmbeddings,
-  getAdaptiveThreshold
+  getAdaptiveThreshold,
+  isPlaceholderMediaText
 }

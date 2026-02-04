@@ -1,5 +1,5 @@
 const crypto = require('crypto')
-const { generateEmbedding } = require('./message-embeddings')
+const { generateEmbedding, isPlaceholderMediaText } = require('./message-embeddings')
 const { saveSpamVector } = require('./spam-vectors')
 const { qdrant: sigLog, nlp: nlpLog } = require('./logger')
 const nlpClient = require('./nlp-client')
@@ -175,20 +175,6 @@ const hammingDistance = (hash1, hash2) => {
 // ============================================================================
 // SIGNATURE GENERATION
 // ============================================================================
-
-/**
- * Check if text is a placeholder for media without meaningful content
- * These should never be used for signatures as they would match ALL media of that type
- */
-const isPlaceholderMediaText = (text) => {
-  if (!text) return false
-  const normalized = text.toLowerCase().trim()
-  const placeholders = [
-    '[photo]', '[voice message]', '[media message]', '[video]', '[audio]',
-    '[sticker:', '[document:'  // Partial matches for dynamic placeholders
-  ]
-  return placeholders.some(p => normalized === p || normalized.startsWith(p))
-}
 
 /**
  * Generate all signature hashes for a message
