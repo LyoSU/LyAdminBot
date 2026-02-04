@@ -9,7 +9,10 @@ module.exports = async (ctx) => {
   })
   if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
     if (ctx.message.reply_to_message) {
-      await ctx.deleteMessage(ctx.message.reply_to_message.message_id)
+      await ctx.deleteMessage(ctx.message.reply_to_message.message_id).catch((error) => {
+        const errorKey = mapTelegramError(error, 'del')
+        return ctx.replyWithHTML(ctx.i18n.t(errorKey))
+      })
     }
   }
 }

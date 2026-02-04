@@ -25,7 +25,7 @@ const bananRateLimit = rateLimit({
   window: 3 * 1000,
   limit: 1,
   keyGenerator: (ctx) => ctx.chat.id,
-  onLimitExceeded: (ctx) => ctx.deleteMessage()
+  onLimitExceeded: (ctx) => ctx.deleteMessage().catch(() => {})
 })
 
 /**

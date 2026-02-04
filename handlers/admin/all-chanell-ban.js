@@ -18,7 +18,7 @@ composer.on('message', async (ctx, next) => {
       ctx.group.info.settings.banChannel &&
       !ctx.message.is_automatic_forward &&
       ctx.message.sender_chat.id !== ctx.chat.id) {
-    await ctx.deleteMessage()
+    await ctx.deleteMessage().catch(() => {})
 
     return ctx.tg.callApi('banChatSenderChat', {
       chat_id: ctx.chat.id,

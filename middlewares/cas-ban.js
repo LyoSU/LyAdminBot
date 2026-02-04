@@ -85,12 +85,10 @@ module.exports = async (ctx) => {
               }, ctx.telegram)
             }
 
-            // Delete the original message
-            if (canDelete) {
-              ctx.deleteMessage().catch(error => {
-                casLog.error({ err: error.message }, 'Failed to delete original message')
-              })
-            }
+            // Delete the original message - always try, even without explicit permission
+            ctx.deleteMessage().catch(error => {
+              casLog.warn({ err: error.message }, 'Failed to delete original message')
+            })
           } else {
             // No restrict permissions - but still try to delete the message
             casLog.warn({ chatId: ctx.chat.id }, 'Bot lacks permission to restrict members')

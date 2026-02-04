@@ -15,7 +15,9 @@ module.exports = async (ctx) => {
 
     if (detect.length > 0 && detect[0][1] > 0.3) {
       if (ctx.group.info.settings.removeLng.indexOf(detect[0][0]) >= 0) {
-        await ctx.deleteMessage()
+        await ctx.deleteMessage().catch(() => {
+          // Silently fail if no delete permission
+        })
       }
     }
   }
