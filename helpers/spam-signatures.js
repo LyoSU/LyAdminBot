@@ -177,11 +177,32 @@ const hammingDistance = (hash1, hash2) => {
 // ============================================================================
 
 /**
+ * Check if text is a placeholder for media without meaningful content
+ * These should never be used for signatures as they would match ALL media of that type
+ */
+const isPlaceholderMediaText = (text) => {
+  if (!text) return false
+  const normalized = text.toLowerCase().trim()
+  const placeholders = [
+    '[photo]', '[voice message]', '[media message]', '[video]', '[audio]',
+    '[sticker:', '[document:'  // Partial matches for dynamic placeholders
+  ]
+  return placeholders.some(p => normalized === p || normalized.startsWith(p))
+}
+
+/**
  * Generate all signature hashes for a message
  * Returns object with multiple hash types for storage
  */
 const generateSignatures = (text) => {
   if (!text || text.length < 10) return null
+
+  // CRITICAL: Never create signatures for media placeholders
+  // This would cause ALL media of that type to be flagged as spam
+  if (isPlaceholderMediaText(text)) {
+    sigLog.debug({ text }, 'Skipping signature for placeholder media text')
+    return null
+  }
 
   const lightNorm = normalizeLight(text)
   const heavyNorm = normalizeHeavy(text)
