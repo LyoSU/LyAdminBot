@@ -431,8 +431,8 @@ const addSignature = async (text, db, chatId, options = {}) => {
         },
         {
           $set: {
-            status: 'confirmed',
-            vectorSaved: true
+            status: 'confirmed'
+            // NOTE: vectorSaved is set by saveSignatureToQdrant AFTER successful save
           }
         },
         { new: true }
@@ -517,8 +517,8 @@ const addSignature = async (text, db, chatId, options = {}) => {
       },
       {
         $set: {
-          status: 'confirmed',
-          vectorSaved: true
+          status: 'confirmed'
+          // NOTE: vectorSaved is set by saveSignatureToQdrant AFTER successful save
         }
       },
       { new: true }
