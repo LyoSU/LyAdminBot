@@ -436,14 +436,9 @@ const processExpiredVotes = async (db, telegram, i18n) => {
           reason: 'no_votes'
         }, 'Vote expired with no votes, defaulting to spam')
 
-        // Add to SpamSignature (multi-layer hashing for future detection)
-        if (vote.messagePreview) {
-          try {
-            await addSignature(vote.messagePreview, db, vote.chatId)
-          } catch (sigError) {
-            log.error({ err: sigError.message }, 'Failed to add SpamSignature on timeout')
-          }
-        }
+        // NOTE: We intentionally DON'T add to SpamSignature when no votes were cast
+        // This prevents false positives from polluting the signature database
+        // Only human-confirmed spam (via actual votes) should be added to signatures
 
         // Show timeout result and delete after delay
         if (vote.notificationMessageId && vote.notificationChatId) {

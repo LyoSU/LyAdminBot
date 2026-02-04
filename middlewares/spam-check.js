@@ -332,15 +332,26 @@ module.exports = async (ctx) => {
       let messageText = originalText.trim()
 
       // Handle messages without text/caption
+      // IMPORTANT: Include file_unique_id to prevent all media of same type
+      // from being treated as identical (which would cause false spam detection)
       if (!messageText) {
         if (message.sticker) {
-          messageText = `[Sticker: ${message.sticker.emoji || 'unknown'}]`
+          messageText = `[Sticker: ${message.sticker.file_unique_id}]`
+        } else if (message.animation) {
+          messageText = `[Animation: ${message.animation.file_unique_id}]`
+        } else if (message.video) {
+          messageText = `[Video: ${message.video.file_unique_id}]`
+        } else if (message.video_note) {
+          messageText = `[VideoNote: ${message.video_note.file_unique_id}]`
         } else if (message.voice) {
-          messageText = '[Voice message]'
+          messageText = `[Voice: ${message.voice.file_unique_id}]`
+        } else if (message.audio) {
+          messageText = `[Audio: ${message.audio.file_unique_id}]`
         } else if (message.photo) {
-          messageText = '[Photo]'
+          const photo = message.photo[message.photo.length - 1]
+          messageText = `[Photo: ${photo.file_unique_id}]`
         } else if (message.document) {
-          messageText = `[Document: ${message.document.file_name || 'unknown'}]`
+          messageText = `[Document: ${message.document.file_unique_id}]`
         } else {
           messageText = '[Media message]'
         }

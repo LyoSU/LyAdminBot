@@ -103,20 +103,31 @@ const generateEmbedding = async (text, userContext = {}) => {
 /**
  * Check if text is just a placeholder for media without meaningful content
  * These should never be used for spam signatures or embeddings
+ * 
+ * Format: [MediaType: file_unique_id] or [Media message] for unknown types
  */
 const isPlaceholderMediaText = (text) => {
   if (!text) return false
   const normalized = text.toLowerCase().trim()
   
-  // Exact match placeholders
-  const exactPlaceholders = [
-    '[photo]', '[voice message]', '[media message]', '[video]', '[audio]'
-  ]
-  if (exactPlaceholders.includes(normalized)) return true
+  // Catch-all placeholder for unknown media types
+  if (normalized === '[media message]') return true
   
-  // Dynamic placeholders with variable content
-  if (normalized.startsWith('[sticker:')) return true
-  if (normalized.startsWith('[document:')) return true
+  // All media placeholders follow pattern: [Type: file_unique_id]
+  const mediaTypes = [
+    'sticker', 'animation', 'video', 'videonote', 'voice', 
+    'audio', 'photo', 'document'
+  ]
+  
+  for (const type of mediaTypes) {
+    if (normalized.startsWith(`[${type}:`)) return true
+  }
+  
+  // Legacy patterns (for backwards compatibility)
+  const legacyPlaceholders = [
+    '[photo]', '[voice message]', '[video]', '[audio]'
+  ]
+  if (legacyPlaceholders.includes(normalized)) return true
   
   return false
 }
