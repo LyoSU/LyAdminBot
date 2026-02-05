@@ -1,5 +1,6 @@
 const crypto = require('crypto')
 const { velocity: velocityLog } = require('./logger')
+const { hasTextualContent } = require('./text-utils')
 
 /**
  * Velocity-based spam detection system
@@ -218,23 +219,6 @@ class VelocityStore {
 }
 
 const store = new VelocityStore()
-
-// ============================================================================
-// CONTENT DETECTION
-// ============================================================================
-
-/**
- * Check if text has meaningful textual content for hashing.
- * Emoji-only messages collapse to identical hashes causing false velocity alerts.
- */
-const hasTextualContent = (text) => {
-  if (!text) return false
-  const stripped = text
-    .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FE0F}]|[\u{200D}]|[\u{20E3}]|[\u{1FA00}-\u{1FAFF}]|[\u{2300}-\u{23FF}]|[\u{2B05}-\u{2B07}]|[\u{2B1B}-\u{2B1C}]|[\u{3030}]|[\u{303D}]|[\u{3297}]|[\u{3299}]|[\u{E0020}-\u{E007F}]/gu, '')
-    .replace(/\s+/g, '')
-    .trim()
-  return stripped.length >= 5
-}
 
 // ============================================================================
 // HASH FUNCTIONS

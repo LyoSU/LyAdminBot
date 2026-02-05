@@ -1,5 +1,6 @@
 const { OpenAI } = require('openai')
 const { moderation: embedLog } = require('./logger')
+const { isEmojiOnly } = require('./text-utils')
 
 // Create OpenAI client for embeddings
 const openai = new OpenAI({
@@ -107,20 +108,6 @@ const generateEmbedding = async (text, userContext = {}) => {
 }
 
 /**
- * Check if text is emoji-only (no meaningful textual content).
- * Emoji-only messages normalize to identical strings like "emoji_spam",
- * causing all of them to share the same embedding vector.
- */
-const isEmojiOnly = (text) => {
-  if (!text) return false
-  const stripped = text
-    .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FE0F}]|[\u{200D}]|[\u{20E3}]|[\u{1FA00}-\u{1FAFF}]|[\u{2300}-\u{23FF}]|[\u{2B05}-\u{2B07}]|[\u{2B1B}-\u{2B1C}]|[\u{3030}]|[\u{303D}]|[\u{3297}]|[\u{3299}]|[\u{E0020}-\u{E007F}]/gu, '')
-    .replace(/\s+/g, '')
-    .trim()
-  return stripped.length < 5
-}
-
-/**
  * Check if text is just a placeholder for media without meaningful content
  * These should never be used for spam signatures or embeddings
  *
@@ -215,6 +202,5 @@ module.exports = {
   generateEmbedding,
   generateBatchEmbeddings,
   getAdaptiveThreshold,
-  isPlaceholderMediaText,
-  isEmojiOnly
+  isPlaceholderMediaText
 }

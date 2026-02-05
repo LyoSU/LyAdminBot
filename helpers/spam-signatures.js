@@ -3,6 +3,7 @@ const { generateEmbedding, isPlaceholderMediaText } = require('./message-embeddi
 const { saveSpamVector } = require('./spam-vectors')
 const { qdrant: sigLog, nlp: nlpLog } = require('./logger')
 const nlpClient = require('./nlp-client')
+const { hasTextualContent, stripEmoji } = require('./text-utils')
 
 /**
  * Spam Signature System
@@ -44,8 +45,8 @@ const normalizeHeavy = (text) => {
     .replace(/t\.me\/[\w+]+/gi, '_URL_')
     // Remove numbers (prices, phone numbers, etc.)
     .replace(/\d+([.,]\d+)?/g, '_NUM_')
-    // Remove emojis
-    .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '')
+    // Remove emojis (uses shared EMOJI_REGEX ranges via stripEmoji)
+    .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FE0F}]|[\u{200D}]|[\u{20E3}]|[\u{1FA00}-\u{1FAFF}]|[\u{2300}-\u{23FF}]|[\u{2B05}-\u{2B07}]|[\u{2B1B}-\u{2B1C}]|[\u{3030}]|[\u{303D}]|[\u{3297}]|[\u{3299}]|[\u{E0020}-\u{E007F}]/gu, '')
     // Remove currency symbols
     .replace(/[$€£₴₽¥]/g, '_CUR_')
     // Collapse multiple spaces/newlines
@@ -175,22 +176,6 @@ const hammingDistance = (hash1, hash2) => {
 // ============================================================================
 // SIGNATURE GENERATION
 // ============================================================================
-
-/**
- * Check if text has meaningful textual content for signature matching.
- * Returns false for emoji-only, sticker placeholders, pure whitespace, etc.
- * Signature matching is only reliable on actual text content.
- */
-const hasTextualContent = (text) => {
-  if (!text) return false
-  // Strip all emoji, variation selectors, zero-width joiners, and whitespace
-  const stripped = text
-    .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FE0F}]|[\u{200D}]|[\u{20E3}]|[\u{1FA00}-\u{1FAFF}]|[\u{2300}-\u{23FF}]|[\u{2B05}-\u{2B07}]|[\u{2B1B}-\u{2B1C}]|[\u{3030}]|[\u{303D}]|[\u{3297}]|[\u{3299}]|[\u{E0020}-\u{E007F}]/gu, '')
-    .replace(/\s+/g, '')
-    .trim()
-  // Need at least 5 non-emoji characters to be considered textual
-  return stripped.length >= 5
-}
 
 const generateSignatures = (text) => {
   if (!text || text.length < 10) return null
@@ -582,9 +567,6 @@ module.exports = {
   sha256,
   simHash,
   hammingDistance,
-
-  // Content detection
-  hasTextualContent,
 
   // High-level API
   generateSignatures,

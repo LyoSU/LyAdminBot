@@ -2,9 +2,9 @@ const { OpenAI } = require('openai')
 const {
   extractFeatures,
   generateEmbedding,
-  getAdaptiveThreshold,
-  isEmojiOnly
+  getAdaptiveThreshold
 } = require('./message-embeddings')
+const { isEmojiOnly } = require('./text-utils')
 const {
   saveSpamVector,
   classifyBySimilarity,
