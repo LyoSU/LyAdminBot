@@ -220,6 +220,23 @@ class VelocityStore {
 const store = new VelocityStore()
 
 // ============================================================================
+// CONTENT DETECTION
+// ============================================================================
+
+/**
+ * Check if text has meaningful textual content for hashing.
+ * Emoji-only messages collapse to identical hashes causing false velocity alerts.
+ */
+const hasTextualContent = (text) => {
+  if (!text) return false
+  const stripped = text
+    .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FE0F}]|[\u{200D}]|[\u{20E3}]|[\u{1FA00}-\u{1FAFF}]|[\u{2300}-\u{23FF}]|[\u{2B05}-\u{2B07}]|[\u{2B1B}-\u{2B1C}]|[\u{3030}]|[\u{303D}]|[\u{3297}]|[\u{3299}]|[\u{E0020}-\u{E007F}]/gu, '')
+    .replace(/\s+/g, '')
+    .trim()
+  return stripped.length >= 5
+}
+
+// ============================================================================
 // HASH FUNCTIONS
 // ============================================================================
 
@@ -571,18 +588,26 @@ const recordOccurrence = async (text, userId, chatId, messageId) => {
 
   // Generate all hashes
   const exactHash = getExactHash(text)
-  const simHash = getSimHash(text)
-  const structHash = getStructureHash(text)
   const links = extractLinks(text)
+
+  // Skip fuzzy/structure hashing for non-textual messages (emoji-only)
+  // These collapse to identical hashes causing false cross-group velocity alerts
+  const textual = hasTextualContent(text)
+  const simHash = textual ? getSimHash(text) : null
+  const structHash = textual ? getStructureHash(text) : null
 
   // Record exact message (for all senders including channels)
   await store.zadd(`vel:exact:${exactHash}`, now, member)
 
-  // Record fuzzy (simhash)
-  await store.zadd(`vel:fuzzy:${simHash}`, now, member)
+  // Record fuzzy (simhash) - only for textual messages
+  if (simHash) {
+    await store.zadd(`vel:fuzzy:${simHash}`, now, member)
+  }
 
-  // Record structure
-  await store.zadd(`vel:struct:${structHash}`, now, member)
+  // Record structure - only for textual messages
+  if (structHash) {
+    await store.zadd(`vel:struct:${structHash}`, now, member)
+  }
 
   // Record links
   for (const link of links) {
@@ -838,20 +863,28 @@ const calculateVelocityScore = async (text, userId, chatId, messageId, forwardOr
     score: Math.min(1, (exactVelocity.uniqueChats - 1) / CONFIG.THRESHOLDS.EXACT_MATCH_CHATS)
   }
 
-  // 2. Fuzzy message velocity (simhash)
-  const fuzzyVelocity = await getHashVelocity('fuzzy', hashes.simHash)
-  signals.fuzzyMatch = {
-    count: fuzzyVelocity.count,
-    uniqueChats: fuzzyVelocity.uniqueChats,
-    score: Math.min(1, (fuzzyVelocity.uniqueChats - 1) / CONFIG.THRESHOLDS.FUZZY_MATCH_CHATS)
+  // 2. Fuzzy message velocity (simhash) - skip if hash is null (emoji-only)
+  if (hashes.simHash) {
+    const fuzzyVelocity = await getHashVelocity('fuzzy', hashes.simHash)
+    signals.fuzzyMatch = {
+      count: fuzzyVelocity.count,
+      uniqueChats: fuzzyVelocity.uniqueChats,
+      score: Math.min(1, (fuzzyVelocity.uniqueChats - 1) / CONFIG.THRESHOLDS.FUZZY_MATCH_CHATS)
+    }
+  } else {
+    signals.fuzzyMatch = { count: 0, uniqueChats: 0, score: 0 }
   }
 
-  // 3. Structure velocity
-  const structVelocity = await getHashVelocity('struct', hashes.structHash)
-  signals.structureMatch = {
-    count: structVelocity.count,
-    uniqueChats: structVelocity.uniqueChats,
-    score: Math.min(1, (structVelocity.uniqueChats - 1) / CONFIG.THRESHOLDS.STRUCTURE_MATCH_CHATS)
+  // 3. Structure velocity - skip if hash is null (emoji-only)
+  if (hashes.structHash) {
+    const structVelocity = await getHashVelocity('struct', hashes.structHash)
+    signals.structureMatch = {
+      count: structVelocity.count,
+      uniqueChats: structVelocity.uniqueChats,
+      score: Math.min(1, (structVelocity.uniqueChats - 1) / CONFIG.THRESHOLDS.STRUCTURE_MATCH_CHATS)
+    }
+  } else {
+    signals.structureMatch = { count: 0, uniqueChats: 0, score: 0 }
   }
 
   // 4. Link velocity

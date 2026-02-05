@@ -70,12 +70,18 @@ const extractFeatures = (text, userContext = {}) => {
  */
 const generateEmbedding = async (text, userContext = {}) => {
   try {
-    let processedText = normalizeMessage(text)
-
     // Skip embedding for placeholder media text without captions
     if (isPlaceholderMediaText(text) && !userContext.hasCaption) {
       return null
     }
+
+    // Skip emoji-only messages - they normalize to identical "emoji_spam"
+    // causing all emoji messages to share the same embedding vector
+    if (isEmojiOnly(text)) {
+      return null
+    }
+
+    let processedText = normalizeMessage(text)
 
     // Skip if message is too short or empty after normalization
     if (processedText.length < 3) {
@@ -101,9 +107,23 @@ const generateEmbedding = async (text, userContext = {}) => {
 }
 
 /**
+ * Check if text is emoji-only (no meaningful textual content).
+ * Emoji-only messages normalize to identical strings like "emoji_spam",
+ * causing all of them to share the same embedding vector.
+ */
+const isEmojiOnly = (text) => {
+  if (!text) return false
+  const stripped = text
+    .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FE0F}]|[\u{200D}]|[\u{20E3}]|[\u{1FA00}-\u{1FAFF}]|[\u{2300}-\u{23FF}]|[\u{2B05}-\u{2B07}]|[\u{2B1B}-\u{2B1C}]|[\u{3030}]|[\u{303D}]|[\u{3297}]|[\u{3299}]|[\u{E0020}-\u{E007F}]/gu, '')
+    .replace(/\s+/g, '')
+    .trim()
+  return stripped.length < 5
+}
+
+/**
  * Check if text is just a placeholder for media without meaningful content
  * These should never be used for spam signatures or embeddings
- * 
+ *
  * Format: [MediaType: file_unique_id] or [Media message] for unknown types
  */
 const isPlaceholderMediaText = (text) => {
@@ -195,5 +215,6 @@ module.exports = {
   generateEmbedding,
   generateBatchEmbeddings,
   getAdaptiveThreshold,
-  isPlaceholderMediaText
+  isPlaceholderMediaText,
+  isEmojiOnly
 }

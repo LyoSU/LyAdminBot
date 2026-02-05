@@ -2,7 +2,8 @@ const { OpenAI } = require('openai')
 const {
   extractFeatures,
   generateEmbedding,
-  getAdaptiveThreshold
+  getAdaptiveThreshold,
+  isEmojiOnly
 } = require('./message-embeddings')
 const {
   saveSpamVector,
@@ -427,6 +428,11 @@ const quickRiskAssessment = (ctx) => {
     trustSignals.push('media_only')
   }
 
+  // 3b. Emoji-only text (rarely spam, commonly used in conversations)
+  if (text && isEmojiOnly(text)) {
+    trustSignals.push('emoji_only')
+  }
+
   // 4. Short text replies (conversational)
   if (text.length < 50 && !signals.length) {
     trustSignals.push('short_message')
@@ -464,8 +470,8 @@ const quickRiskAssessment = (ctx) => {
     return { risk: 'skip', signals, trustSignals }
   }
 
-  // Low: trust signals outweigh risk, or just media
-  if (trustSignals.length > signals.length || trustSignals.includes('media_only')) {
+  // Low: trust signals outweigh risk, or just media/emoji
+  if (trustSignals.length > signals.length || trustSignals.includes('media_only') || trustSignals.includes('emoji_only')) {
     return { risk: 'low', signals, trustSignals }
   }
 
