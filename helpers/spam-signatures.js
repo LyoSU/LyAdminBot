@@ -177,9 +177,21 @@ const hammingDistance = (hash1, hash2) => {
 // ============================================================================
 
 /**
- * Generate all signature hashes for a message
- * Returns object with multiple hash types for storage
+ * Check if text has meaningful textual content for signature matching.
+ * Returns false for emoji-only, sticker placeholders, pure whitespace, etc.
+ * Signature matching is only reliable on actual text content.
  */
+const hasTextualContent = (text) => {
+  if (!text) return false
+  // Strip all emoji, variation selectors, zero-width joiners, and whitespace
+  const stripped = text
+    .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FE0F}]|[\u{200D}]|[\u{20E3}]|[\u{1FA00}-\u{1FAFF}]|[\u{2300}-\u{23FF}]|[\u{2B05}-\u{2B07}]|[\u{2B1B}-\u{2B1C}]|[\u{3030}]|[\u{303D}]|[\u{3297}]|[\u{3299}]|[\u{E0020}-\u{E007F}]/gu, '')
+    .replace(/\s+/g, '')
+    .trim()
+  // Need at least 5 non-emoji characters to be considered textual
+  return stripped.length >= 5
+}
+
 const generateSignatures = (text) => {
   if (!text || text.length < 10) return null
 
@@ -190,19 +202,31 @@ const generateSignatures = (text) => {
     return null
   }
 
+  // Skip signature matching for non-textual messages (emoji-only, etc.)
+  // These messages don't have meaningful content for template matching
+  // and cause hash collisions (all emoji normalize to empty string)
+  if (!hasTextualContent(text)) {
+    sigLog.debug({ textLength: text.length }, 'Skipping signature for non-textual message (emoji-only)')
+    return null
+  }
+
   const lightNorm = normalizeLight(text)
   const heavyNorm = normalizeHeavy(text)
   const structure = extractStructure(text)
+
+  // Safety net: if heavy normalization still collapsed text too much,
+  // skip normalizedHash/fuzzyHash to prevent collisions
+  const hasEnoughNormalized = heavyNorm.length >= 5
 
   return {
     // Exact match (light normalization only)
     exactHash: sha256(lightNorm),
 
-    // Template match (heavy normalization)
-    normalizedHash: sha256(heavyNorm),
+    // Template match (heavy normalization) - only if text survived normalization
+    normalizedHash: hasEnoughNormalized ? sha256(heavyNorm) : null,
 
-    // Fuzzy match (simhash of normalized text)
-    fuzzyHash: simHash(heavyNorm),
+    // Fuzzy match (simhash of normalized text) - only if text survived normalization
+    fuzzyHash: hasEnoughNormalized ? simHash(heavyNorm) : null,
 
     // Structure match (what the message "looks like")
     structureHash: md5(structure),
@@ -249,38 +273,43 @@ const checkSignatures = async (text, db, options = {}) => {
   }
 
   // 2. Check normalized hash (catches variable substitutions)
-  const normalizedMatch = await db.SpamSignature.findOne({
-    normalizedHash: signatures.normalizedHash,
-    ...statusQuery
-  })
+  // Skip if normalizedHash is null (text collapsed during normalization)
+  if (signatures.normalizedHash) {
+    const normalizedMatch = await db.SpamSignature.findOne({
+      normalizedHash: signatures.normalizedHash,
+      ...statusQuery
+    })
 
-  if (normalizedMatch) {
-    return {
-      match: 'normalized',
-      confidence: 95,
-      signature: normalizedMatch,
-      reason: 'Spam template match (numbers/links varied)'
+    if (normalizedMatch) {
+      return {
+        match: 'normalized',
+        confidence: 95,
+        signature: normalizedMatch,
+        reason: 'Spam template match (numbers/links varied)'
+      }
     }
   }
 
   // 3. Check fuzzy hash with Hamming distance
-  // This requires fetching candidates and comparing
-  const fuzzyCandidates = await db.SpamSignature.find({
-    fuzzyHash: { $exists: true },
-    ...statusQuery
-  }).limit(1000).select('fuzzyHash sampleText confirmations')
+  // Skip if fuzzyHash is null (text collapsed during normalization)
+  if (signatures.fuzzyHash) {
+    const fuzzyCandidates = await db.SpamSignature.find({
+      fuzzyHash: { $exists: true, $ne: null },
+      ...statusQuery
+    }).limit(1000).select('fuzzyHash sampleText confirmations')
 
-  for (const candidate of fuzzyCandidates) {
-    const distance = hammingDistance(signatures.fuzzyHash, candidate.fuzzyHash)
-    if (distance <= maxHammingDistance) {
-      // Confidence decreases with distance
-      const confidence = Math.max(75, 95 - distance * 2)
-      return {
-        match: 'fuzzy',
-        confidence,
-        distance,
-        signature: candidate,
-        reason: `Similar to known spam (${distance} bits different)`
+    for (const candidate of fuzzyCandidates) {
+      const distance = hammingDistance(signatures.fuzzyHash, candidate.fuzzyHash)
+      if (distance <= maxHammingDistance) {
+        // Confidence decreases with distance
+        const confidence = Math.max(75, 95 - distance * 2)
+        return {
+          match: 'fuzzy',
+          confidence,
+          distance,
+          signature: candidate,
+          reason: `Similar to known spam (${distance} bits different)`
+        }
       }
     }
   }
@@ -403,19 +432,22 @@ const addSignature = async (text, db, chatId, options = {}) => {
 
   // Step 1: Check if normalizedHash already exists (template match)
   // This handles case where same spam template has different exact text
-  const existingByNormalized = await db.SpamSignature.findOneAndUpdate(
-    { normalizedHash: signatures.normalizedHash },
-    {
-      $inc: { confirmations: 1 },
-      $addToSet: { uniqueGroups: chatId },
-      $set: {
-        lastSeenAt: new Date(),
-        fuzzyHash: signatures.fuzzyHash,
-        structureHash: signatures.structureHash
-      }
-    },
-    { new: true }
-  )
+  // Skip if normalizedHash is null (text collapsed during normalization - would match wrong records)
+  const existingByNormalized = signatures.normalizedHash
+    ? await db.SpamSignature.findOneAndUpdate(
+      { normalizedHash: signatures.normalizedHash },
+      {
+        $inc: { confirmations: 1 },
+        $addToSet: { uniqueGroups: chatId },
+        $set: {
+          lastSeenAt: new Date(),
+          fuzzyHash: signatures.fuzzyHash,
+          structureHash: signatures.structureHash
+        }
+      },
+      { new: true }
+    )
+    : null
 
   if (existingByNormalized) {
     // Found by template - promote if enough groups
@@ -450,6 +482,11 @@ const addSignature = async (text, db, chatId, options = {}) => {
   }
 
   // Step 2: No template match - upsert by exactHash (unique index ensures no duplicates)
+  // Only store normalizedHash/fuzzyHash if they're not null (collapsed text)
+  const hashFields = { structureHash: signatures.structureHash }
+  if (signatures.normalizedHash) hashFields.normalizedHash = signatures.normalizedHash
+  if (signatures.fuzzyHash) hashFields.fuzzyHash = signatures.fuzzyHash
+
   let result
   try {
     result = await db.SpamSignature.findOneAndUpdate(
@@ -459,9 +496,7 @@ const addSignature = async (text, db, chatId, options = {}) => {
         $addToSet: { uniqueGroups: chatId },
         $set: {
           lastSeenAt: new Date(),
-          normalizedHash: signatures.normalizedHash,
-          fuzzyHash: signatures.fuzzyHash,
-          structureHash: signatures.structureHash
+          ...hashFields
         },
         $setOnInsert: {
           sampleText: text.substring(0, 200),
@@ -475,9 +510,12 @@ const addSignature = async (text, db, chatId, options = {}) => {
   } catch (err) {
     if (err.code === 11000) {
       // Race condition: another request inserted first
-      // Try to find by normalizedHash first (handles template match race)
+      // Try to find by exactHash or normalizedHash (handles template match race)
+      const orConditions = [{ exactHash: signatures.exactHash }]
+      if (signatures.normalizedHash) orConditions.push({ normalizedHash: signatures.normalizedHash })
+
       result = await db.SpamSignature.findOneAndUpdate(
-        { $or: [{ exactHash: signatures.exactHash }, { normalizedHash: signatures.normalizedHash }] },
+        { $or: orConditions },
         {
           $inc: { confirmations: 1 },
           $addToSet: { uniqueGroups: chatId },
@@ -488,9 +526,7 @@ const addSignature = async (text, db, chatId, options = {}) => {
 
       // If still null, another concurrent request may have just created it - retry once
       if (!result) {
-        result = await db.SpamSignature.findOne({
-          $or: [{ exactHash: signatures.exactHash }, { normalizedHash: signatures.normalizedHash }]
-        })
+        result = await db.SpamSignature.findOne({ $or: orConditions })
       }
 
       // If still nothing, something unexpected happened
@@ -546,6 +582,9 @@ module.exports = {
   sha256,
   simHash,
   hammingDistance,
+
+  // Content detection
+  hasTextualContent,
 
   // High-level API
   generateSignatures,
