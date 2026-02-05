@@ -68,7 +68,11 @@ const checkVoteEligibility = async (ctx, chatId, userId) => {
  * @param {boolean} skipSave - If true, don't save (already saved atomically)
  */
 const processVoteResult = async (ctx, spamVote, skipSave = false) => {
-  const winner = spamVote.result || spamVote.getWinner()
+  // Fix: 'pending' is truthy, so we must explicitly check for resolved states
+  // Otherwise votes stay pending forever and get reprocessed repeatedly
+  const winner = ['spam', 'clean'].includes(spamVote.result)
+    ? spamVote.result
+    : spamVote.getWinner()
 
   // Only set these if not already set (for backwards compatibility)
   if (!skipSave) {
