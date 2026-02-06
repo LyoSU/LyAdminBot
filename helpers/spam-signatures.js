@@ -199,9 +199,14 @@ const generateSignatures = (text) => {
   const heavyNorm = normalizeHeavy(text)
   const structure = extractStructure(text)
 
-  // Safety net: if heavy normalization still collapsed text too much,
-  // skip normalizedHash/fuzzyHash to prevent collisions
-  const hasEnoughNormalized = heavyNorm.length >= 5
+  // Safety net: short normalized templates are too generic for reliable matching.
+  // "шо за дс? _URL_" (3 real words) matches any message with the same short phrase + any link.
+  // Require enough meaningful (non-placeholder) words for the template to be distinctive.
+  const PLACEHOLDERS = ['_URL_', '_NUM_', '@_', '_CUR_']
+  const meaningfulWords = heavyNorm
+    .split(/\s+/)
+    .filter(w => w.length > 1 && !PLACEHOLDERS.includes(w))
+  const hasEnoughNormalized = heavyNorm.length >= 5 && meaningfulWords.length >= 4
 
   return {
     // Exact match (light normalization only)
