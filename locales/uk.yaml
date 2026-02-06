@@ -301,6 +301,9 @@ spam:
     muted_only: "🔇 ${name} замучено\n<code>${reason}</code>\n\n⚠️ Повідомлення не вдалось видалити"
     deleted_only: "🗑 Спам видалено\n<code>${reason}</code>\n\n⚠️ ${name} не замучено"
     no_permissions: "👀 Схоже на спам від ${name}\n<code>${reason}</code>\n\n💡 Дайте мені права адміна — сам розберусь"
+  btn_not_spam: "✅ Не спам"
+  admin_override: "✅ <b>Скасовано ${admin}</b>\n\n👤 ${name} розблоковано"
+  admin_override_not_admin: "Тільки для адмінів групи"
 
 only_group: "👥 Працює тільки в групах"
 only_admin: "🔒 Тільки для адмінів групи"

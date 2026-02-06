@@ -47,4 +47,7 @@ const userSchema = mongoose.Schema({
   timestamps: true
 })
 
+userSchema.index({ isGlobalBanned: 1 }, { sparse: true })
+userSchema.index({ 'reputation.status': 1 }, { sparse: true })
+
 module.exports = userSchema

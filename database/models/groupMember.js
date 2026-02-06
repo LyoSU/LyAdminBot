@@ -53,4 +53,6 @@ const groupMemberSchema = mongoose.Schema({
   timestamps: true
 })
 
+groupMemberSchema.index({ group: 1, telegram_id: 1 }, { unique: true })
+
 module.exports = groupMemberSchema

@@ -61,8 +61,14 @@ const calculateReputationScore = (globalStats, accountAge) => {
 
   // === NEGATIVE FACTORS (can go deeply negative) ===
 
-  // Spam detections: -15 per detection
-  score -= spamDetections * 15
+  // Spam detections: -15 per detection, with decay for rehabilitated users
+  const rawPenalty = spamDetections * 15
+  const cleanToSpamRatio = spamDetections > 0 ? cleanMessages / spamDetections : Infinity
+  let decayMultiplier = 1.0
+  if (cleanToSpamRatio > 20) decayMultiplier = 0.25
+  else if (cleanToSpamRatio > 10) decayMultiplier = 0.5
+  else if (cleanToSpamRatio > 5) decayMultiplier = 0.75
+  score -= Math.floor(rawPenalty * decayMultiplier)
 
   // Deleted messages: -5 per deletion
   const deletedMessages = Math.max(0, globalStats.deletedMessages || 0)

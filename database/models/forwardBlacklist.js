@@ -81,6 +81,8 @@ const forwardBlacklistSchema = mongoose.Schema({
   }
 }, { timestamps: true })
 
+forwardBlacklistSchema.index({ status: 1, forwardType: 1 })
+
 /**
  * Report spam from this forward source
  * Automatically updates status based on thresholds

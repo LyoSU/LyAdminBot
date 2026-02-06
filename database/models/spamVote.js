@@ -115,6 +115,7 @@ spamVoteSchema.index({ createdAt: 1 }, { expireAfterSeconds: 24 * 60 * 60 })
 // Compound indexes for queries
 spamVoteSchema.index({ chatId: 1, result: 1 })
 spamVoteSchema.index({ bannedUserId: 1, result: 1 })
+spamVoteSchema.index({ result: 1, expiresAt: 1 })
 
 /**
  * Check if a user has already voted

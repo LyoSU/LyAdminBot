@@ -13,6 +13,8 @@
 
 const { cleanup: log } = require('./logger')
 
+const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+
 // In-memory timers for recent deletions (optimization: avoid DB polling for short delays)
 const pendingTimers = new Map()
 
@@ -167,6 +169,9 @@ const processCleanupQueue = async (db, telegram) => {
       } catch (dbError) {
         log.error({ err: dbError.message, id: deletion._id }, 'Failed to remove from queue')
       }
+
+      // Rate limit: ~10 deletions/sec to avoid Telegram 429 errors
+      await sleep(100)
     }
 
     if (stats.processed > 0) {

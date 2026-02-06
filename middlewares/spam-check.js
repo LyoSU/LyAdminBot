@@ -1,7 +1,21 @@
+// Admin cache: Map<chatId, { adminIds: Set<number>, cachedAt: number }>
+const adminCache = new Map()
+const ADMIN_CACHE_TTL = 60 * 60 * 1000 // 1 hour
+
+const getCachedAdminIds = async (telegram, chatId) => {
+  const cached = adminCache.get(chatId)
+  if (cached && Date.now() - cached.cachedAt < ADMIN_CACHE_TTL) {
+    return cached.adminIds
+  }
+
+  const admins = await telegram.getChatAdministrators(chatId)
+  const adminIds = new Set(admins.map(a => a.user.id))
+  adminCache.set(chatId, { adminIds, cachedAt: Date.now() })
+  return adminIds
+}
+
 const { userName } = require('../utils')
 const { checkSpam, checkTrustedUser, getSpamSettings, humanizeReason } = require('../helpers/spam-check')
-const { saveSpamVector } = require('../helpers/spam-vectors')
-const { generateEmbedding, extractFeatures } = require('../helpers/message-embeddings')
 const { processSpamAction } = require('../helpers/reputation')
 const { createVoteEvent, getAccountAgeDays } = require('../helpers/vote-ui')
 const { addSignature } = require('../helpers/spam-signatures')
@@ -301,26 +315,16 @@ module.exports = async (ctx) => {
     // Note: Skip admin check for channel posts (senderId is negative channel ID)
     if (!isTestMode && !isChannelPost) {
       try {
-        const chatMember = await ctx.telegram.getChatMember(ctx.chat.id, senderId)
-        if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
+        const adminIds = await getCachedAdminIds(ctx.telegram, ctx.chat.id)
+        if (adminIds.has(senderId)) {
           spamLog.debug({ userId: senderId, userName: userName(senderInfo) }, 'Skipping admin')
           return
         }
       } catch (error) {
-        spamLog.warn({ userId: senderId, err: error.message }, 'Could not check admin status')
-        // Fallback: if we can't verify admin status, trust established users
-        // High message count (>50) or good reputation (>70) = likely not a spammer
-        const repScore = userReputation ? userReputation.score : 50
-        if (messageCount > 50 || repScore > 70) {
-          spamLog.debug({
-            userId: senderId,
-            userName: userName(senderInfo),
-            messageCount,
-            repScore,
-            reason: 'admin_check_failed_but_established'
-          }, 'Skipping established user (admin check failed)')
-          return
-        }
+        // When admin check fails, always skip spam check to avoid false positives.
+        // Transient API failures should not cause legitimate users to be flagged.
+        spamLog.warn({ userId: senderId, err: error.message }, 'Admin check failed — skipping spam check')
+        return
       }
     } else if (isTestMode) {
       spamLog.debug({ userId: senderId, userName: userName(senderInfo) }, 'TEST MODE - Bypassing admin check')
@@ -568,35 +572,9 @@ module.exports = async (ctx) => {
           }
         }
 
-        // Save to knowledge base after successful action (higher confidence in spam classification)
-        if (result.source === 'openrouter_llm' && result.confidence >= 70 && result.confidence < 85) {
-          try {
-            const embedding = await generateEmbedding(messageText)
-            const features = extractFeatures(messageText, context)
-
-            let adjustedConfidence = result.confidence / 100
-
-            // Increase confidence if strong action was taken (mute + delete)
-            if (muteSuccess && deleteSuccess) {
-              adjustedConfidence = Math.min(0.95, adjustedConfidence + 0.1) // Boost by 10%
-            } else if (muteSuccess || deleteSuccess) {
-              adjustedConfidence = Math.min(0.9, adjustedConfidence + 0.05) // Boost by 5%
-            }
-
-            if (embedding) {
-              await saveSpamVector({
-                text: messageText,
-                embedding,
-                classification: result.isSpam ? 'spam' : 'clean',
-                confidence: adjustedConfidence,
-                features
-              })
-              spamAction.debug({ confidence: (adjustedConfidence * 100).toFixed(1) }, 'Saved vector with boosted confidence')
-            }
-          } catch (saveError) {
-            spamAction.error({ err: saveError.message }, 'Failed to save confirmed pattern')
-          }
-        }
+        // Vectors for 70-85% confidence LLM results are NOT saved here.
+        // They are only saved after community vote confirms spam (in handlers/spam-vote.js)
+        // to prevent a feedback loop of uncertain classifications reinforcing themselves.
 
         // Create vote event for community moderation (only for uncertain cases)
         // High confidence (>=85%) = no voting needed, instant action
@@ -634,18 +612,25 @@ module.exports = async (ctx) => {
             notifyLog.error({ err: voteError.message }, 'Failed to create vote event')
           }
         } else if ((muteSuccess || deleteSuccess) && !needsVoting) {
-          // High confidence - just show brief notification, no voting
+          // High confidence - show notification with admin override button
           const notificationMsg = await ctx.replyWithHTML(
             ctx.i18n.t('spam.notification.full', { name: userName(senderInfo, true), reason: humanizeReason(result.reason, ctx.i18n) }),
-            { disable_web_page_preview: true }
+            {
+              disable_web_page_preview: true,
+              reply_markup: {
+                inline_keyboard: [[
+                  { text: ctx.i18n.t('spam.btn_not_spam'), callback_data: `ns:${senderId}` }
+                ]]
+              }
+            }
           ).catch(e => notifyLog.error({ err: e.message }, 'Failed to send high-confidence notification'))
 
-          // Schedule auto-delete after 30 seconds (persistent)
+          // Schedule auto-delete after 5 minutes (give admins time to see & act)
           if (notificationMsg && ctx.db) {
             scheduleDeletion(ctx.db, {
               chatId: ctx.chat.id,
               messageId: notificationMsg.message_id,
-              delayMs: 30000,
+              delayMs: 5 * 60 * 1000,
               source: 'spam_high_confidence'
             }, ctx.telegram)
           }

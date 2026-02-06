@@ -202,6 +202,21 @@ const callLLMWithRetry = async (systemPrompt, userPrompt, maxRetries = 3) => {
   return null
 }
 
+// LLM rate limiter: max 20 calls/hour per group
+const llmRateLimits = new Map() // Map<chatId, number[]> (timestamps)
+const LLM_RATE_LIMIT = 20
+const LLM_RATE_WINDOW = 60 * 60 * 1000 // 1 hour
+
+const checkLLMRateLimit = (chatId) => {
+  const now = Date.now()
+  const timestamps = llmRateLimits.get(chatId) || []
+  const recent = timestamps.filter(t => now - t < LLM_RATE_WINDOW)
+  llmRateLimits.set(chatId, recent)
+  if (recent.length >= LLM_RATE_LIMIT) return false
+  recent.push(now)
+  return true
+}
+
 // Schedule cleanup tasks on startup
 let cleanupInitialized = false
 const initializeCleanup = () => {
@@ -631,9 +646,9 @@ const calculateDynamicThreshold = (context, groupSettings) => {
   }
 
   // ===== BOUNDS =====
-  // Min 60 (was 50) - avoid over-aggressive blocking
-  // Max 95 - always allow some spam detection
-  return Math.max(60, Math.min(95, baseThreshold))
+  // Min 68 - protect new users from false positives
+  // Max 90 - premium users no longer practically immune
+  return Math.max(68, Math.min(90, baseThreshold))
 }
 
 /**
@@ -888,20 +903,22 @@ const checkSpamSignaturesPhase = async (messageText, ctx) => {
 
 /**
  * PHASE 0.6: Check ForwardBlacklist (for forwarded messages)
- * @returns {Object} { result: Object|null, suspiciousBoost: number }
+ * Blacklisted sources are blocked immediately.
+ * Suspicious sources are logged but handled via quickAssessment signals + dynamic threshold.
+ * @returns {Object|null} Result if blacklisted, null to continue
  */
 const checkForwardBlacklistPhase = async (ctx) => {
   const forwardOrigin = ctx.message && ctx.message.forward_origin
   if (!forwardOrigin || !ctx.db || !ctx.db.ForwardBlacklist) {
-    return { result: null, suspiciousBoost: 0 }
+    return null
   }
 
   try {
     const forwardInfo = getForwardHash(forwardOrigin)
-    if (!forwardInfo) return { result: null, suspiciousBoost: 0 }
+    if (!forwardInfo) return null
 
     const blacklistEntry = await ctx.db.ForwardBlacklist.checkSource(forwardInfo.hash)
-    if (!blacklistEntry) return { result: null, suspiciousBoost: 0 }
+    if (!blacklistEntry) return null
 
     if (blacklistEntry.status === 'blacklisted') {
       spamLog.info({
@@ -911,35 +928,29 @@ const checkForwardBlacklistPhase = async (ctx) => {
       }, 'Matched blacklisted forward source')
 
       return {
-        result: {
-          isSpam: true,
-          confidence: 95,
-          reason: `Blacklisted forward source (${blacklistEntry.forwardType}, ${blacklistEntry.spamReports} reports)`,
-          source: 'forward_blacklist',
-          forwardInfo: {
-            type: blacklistEntry.forwardType,
-            hash: forwardInfo.hash,
-            status: blacklistEntry.status
-          }
-        },
-        suspiciousBoost: 0
+        isSpam: true,
+        confidence: 95,
+        reason: `Blacklisted forward source (${blacklistEntry.forwardType}, ${blacklistEntry.spamReports} reports)`,
+        source: 'forward_blacklist',
+        forwardInfo: {
+          type: blacklistEntry.forwardType,
+          hash: forwardInfo.hash,
+          status: blacklistEntry.status
+        }
       }
     }
 
     if (blacklistEntry.status === 'suspicious') {
-      const boost = Math.min(15, 5 + blacklistEntry.spamReports * 2)
       spamLog.debug({
         forwardType: blacklistEntry.forwardType,
-        spamReports: blacklistEntry.spamReports,
-        boost
-      }, 'Forward from suspicious source - will boost confidence')
-      return { result: null, suspiciousBoost: boost }
+        spamReports: blacklistEntry.spamReports
+      }, 'Forward from suspicious source')
     }
   } catch (fwdErr) {
     spamLog.warn({ err: fwdErr.message }, 'ForwardBlacklist check failed, continuing')
   }
 
-  return { result: null, suspiciousBoost: 0 }
+  return null
 }
 
 /**
@@ -1210,7 +1221,7 @@ const buildLLMContext = (ctx, userContext, groupDescription, userBio) => {
     contextInfo.push(`Sender: Channel "${userContext.channelTitle || 'Unknown'}"`)
     if (userContext.channelUsername) contextInfo.push(`Channel: @${userContext.channelUsername}`)
   } else {
-    const username = ctx.from && ctx.from.username
+    const username = ctx.from?.username
     if (username) contextInfo.push(`Username: @${username}`)
   }
 
@@ -1231,7 +1242,7 @@ const buildLLMContext = (ctx, userContext, groupDescription, userBio) => {
   }
 
   if (userBio && userBio.trim()) contextInfo.push(`User bio: "${userBio.trim()}"`)
-  if (ctx.message && ctx.message.quote && ctx.message.quote.text) {
+  if (ctx.message?.quote?.text) {
     contextInfo.push(`Quoted text: "${ctx.message.quote.text.trim()}"`)
   }
 
@@ -1241,7 +1252,7 @@ const buildLLMContext = (ctx, userContext, groupDescription, userBio) => {
     const replyInfo = []
 
     if (replyTo.from) {
-      const replyToUser = replyTo.from.username ? `@${replyTo.from.username}` : replyTo.from.first_name
+      const replyToUser = replyTo.from.username ? `@${replyTo.from.username}` : (replyTo.from.first_name || 'Unknown')
       replyInfo.push(`Reply to: ${replyToUser}`)
     }
 
@@ -1263,11 +1274,11 @@ const buildLLMContext = (ctx, userContext, groupDescription, userBio) => {
 
     if (externalReply.origin) {
       if (externalReply.origin.type === 'user' && externalReply.origin.sender_user) {
-        replyInfo.push(`Reply to user: @${externalReply.origin.sender_user.username || externalReply.origin.sender_user.first_name}`)
+        replyInfo.push(`Reply to user: @${externalReply.origin.sender_user?.username || externalReply.origin.sender_user?.first_name || 'Unknown'}`)
       } else if (externalReply.origin.type === 'channel' && externalReply.origin.chat) {
-        replyInfo.push(`Reply to channel: ${externalReply.origin.chat.title || externalReply.origin.chat.username}`)
+        replyInfo.push(`Reply to channel: ${externalReply.origin.chat?.title || externalReply.origin.chat?.username || 'Unknown'}`)
       } else if (externalReply.origin.type === 'chat' && externalReply.origin.sender_chat) {
-        replyInfo.push(`Reply to chat: ${externalReply.origin.sender_chat.title}`)
+        replyInfo.push(`Reply to chat: ${externalReply.origin.sender_chat?.title || 'Unknown'}`)
       }
     }
 
@@ -1285,7 +1296,14 @@ const buildLLMContext = (ctx, userContext, groupDescription, userBio) => {
  * PHASE 5: LLM Analysis
  */
 const runLLMPhase = async (messageText, ctx, userContext, groupSettings, groupDescription, userBio, boosts, embedding, features) => {
-  const { candidateBoost, suspiciousForwardBoost } = boosts
+  const { candidateBoost } = boosts
+
+  // Rate limit LLM calls per group
+  const chatId = ctx.chat && ctx.chat.id
+  if (chatId && !checkLLMRateLimit(chatId)) {
+    spamLog.warn({ chatId }, 'LLM rate limit exceeded for group')
+    return { isSpam: false, confidence: 0, source: 'rate_limited' }
+  }
 
   const dynamicThreshold = calculateDynamicThreshold(userContext, groupSettings)
   spamLog.debug({ threshold: dynamicThreshold, msgLength: messageText.length }, 'Fallback to OpenRouter LLM')
@@ -1334,11 +1352,6 @@ CONTEXT: ${contextInfo.join(' | ')}`
   if (isSpam && userContext.velocityBoost) {
     spamScore = Math.min(0.99, spamScore + userContext.velocityBoost / 100)
     spamLog.debug({ boost: userContext.velocityBoost.toFixed(1), reason: userContext.velocityReason }, 'Velocity boost applied')
-  }
-
-  if (isSpam && suspiciousForwardBoost > 0) {
-    spamScore = Math.min(0.99, spamScore + suspiciousForwardBoost / 100)
-    spamLog.debug({ boost: suspiciousForwardBoost }, 'Suspicious forward boost applied')
   }
 
   if (isSpam && candidateBoost > 0) {
@@ -1394,7 +1407,7 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     if (sigResult) return sigResult
 
     // PHASE 0.6: ForwardBlacklist check
-    const { result: fwdResult, suspiciousBoost } = await checkForwardBlacklistPhase(ctx)
+    const fwdResult = await checkForwardBlacklistPhase(ctx)
     if (fwdResult) return fwdResult
 
     // PHASE 1: Quick risk assessment
@@ -1433,7 +1446,7 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
       groupSettings,
       groupDescription,
       userBio,
-      { candidateBoost, suspiciousForwardBoost: suspiciousBoost },
+      { candidateBoost },
       embedding,
       features
     )

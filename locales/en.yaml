@@ -296,6 +296,9 @@ spam:
     muted_only: "🔇 ${name} muted\n<code>${reason}</code>\n\n⚠️ Couldn't delete message"
     deleted_only: "🗑 Spam deleted\n<code>${reason}</code>\n\n⚠️ ${name} not muted"
     no_permissions: "👀 Looks like spam from ${name}\n<code>${reason}</code>\n\n💡 Make me admin and I'll handle it"
+  btn_not_spam: "✅ Not spam"
+  admin_override: "✅ <b>Overridden by ${admin}</b>\n\n👤 ${name} unblocked"
+  admin_override_not_admin: "Only group admins can do this"
   error:
     mute_failed: |
       ❌ <b>Couldn't mute ${name}</b>

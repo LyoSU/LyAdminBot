@@ -560,8 +560,183 @@ const extractNlpMetadata = (text, signature, db) => {
   })
 }
 
+/**
+ * Handle admin "Not spam" override for high-confidence auto-actions
+ * Callback data format: ns:<bannedUserId>
+ *
+ * This reverses the bot's auto-action: unbans/unmutes the user,
+ * boosts reputation, adds to group trusted list, removes global ban.
+ * Only group admins can use this.
+ */
+const handleAdminOverride = async (ctx) => {
+  const callbackData = ctx.callbackQuery.data
+  const parts = callbackData.split(':')
+
+  if (parts.length !== 2 || parts[0] !== 'ns') {
+    return ctx.answerCbQuery(ctx.i18n.t('spam_vote.cb.invalid_format'))
+  }
+
+  const bannedUserId = Number(parts[1])
+  if (!bannedUserId || isNaN(bannedUserId)) {
+    return ctx.answerCbQuery(ctx.i18n.t('spam_vote.cb.invalid_format'))
+  }
+
+  const chatId = ctx.chat.id
+  const adminId = ctx.from.id
+
+  // 1. Verify presser is admin
+  try {
+    const chatMember = await ctx.telegram.getChatMember(chatId, adminId)
+    if (!['creator', 'administrator'].includes(chatMember.status)) {
+      return ctx.answerCbQuery(ctx.i18n.t('spam.admin_override_not_admin'), { show_alert: true })
+    }
+  } catch (error) {
+    log.warn({ err: error.message, adminId, chatId }, 'Could not verify admin status for override')
+    return ctx.answerCbQuery(ctx.i18n.t('spam.admin_override_not_admin'), { show_alert: true })
+  }
+
+  // 2. Unban + unmute (idempotent — try both regardless of original action)
+  try {
+    if (bannedUserId > 0) {
+      // Try unban (no-op if not banned)
+      await ctx.telegram.callApi('unbanChatMember', {
+        chat_id: chatId,
+        user_id: bannedUserId,
+        only_if_banned: true
+      }).catch(e => log.debug({ err: e.message, bannedUserId }, 'Unban no-op'))
+
+      // Try unmute (no-op if not muted)
+      await ctx.telegram.restrictChatMember(chatId, bannedUserId, {
+        permissions: {
+          can_send_messages: true,
+          can_send_audios: true,
+          can_send_documents: true,
+          can_send_photos: true,
+          can_send_videos: true,
+          can_send_video_notes: true,
+          can_send_voice_notes: true,
+          can_send_polls: true,
+          can_send_other_messages: true,
+          can_add_web_page_previews: true,
+          can_change_info: false,
+          can_invite_users: true,
+          can_pin_messages: false,
+          can_manage_topics: false
+        }
+      }).catch(e => log.debug({ err: e.message, bannedUserId }, 'Unmute no-op'))
+
+      log.info({ adminId, bannedUserId, chatId }, 'Admin override: unbanned/unmuted user')
+    } else {
+      // Channel — use unbanChatSenderChat
+      await ctx.telegram.callApi('unbanChatSenderChat', {
+        chat_id: chatId,
+        sender_chat_id: bannedUserId
+      }).catch(e => log.debug({ err: e.message, channelId: bannedUserId }, 'Channel unban no-op'))
+
+      log.info({ adminId, channelId: bannedUserId, chatId }, 'Admin override: unbanned channel')
+    }
+  } catch (error) {
+    log.error({ err: error.message, adminId, bannedUserId, chatId }, 'Admin override: unban/unmute failed')
+  }
+
+  // 3. Remove global ban (only for real users)
+  if (bannedUserId > 0 && ctx.db) {
+    try {
+      await ctx.db.User.findOneAndUpdate(
+        { telegram_id: bannedUserId },
+        {
+          $unset: { isGlobalBanned: 1, globalBanReason: 1, globalBanDate: 1 }
+        }
+      )
+    } catch (error) {
+      log.warn({ err: error.message, bannedUserId }, 'Admin override: failed to remove global ban')
+    }
+
+    // 4. Reputation boost (+20, capped at 74) + stats adjustment
+    try {
+      const user = await ctx.db.User.findOne({ telegram_id: bannedUserId })
+      const oldScore = user?.reputation?.score || 50
+      const globalStats = user?.globalStats || {}
+      const newScore = Math.min(74, oldScore + 20)
+      const newStatus = getReputationStatus(newScore, globalStats)
+
+      await ctx.db.User.findOneAndUpdate(
+        { telegram_id: bannedUserId },
+        {
+          $set: {
+            'reputation.status': newStatus,
+            'reputation.score': newScore,
+            'reputation.lastCalculated': new Date()
+          },
+          $inc: {
+            'globalStats.manualUnbans': 1,
+            'globalStats.spamDetections': -1
+          }
+        },
+        { upsert: true }
+      )
+
+      log.info({ adminId, bannedUserId, oldScore, newScore, newStatus }, 'Admin override: reputation boosted')
+    } catch (error) {
+      log.error({ err: error.message, bannedUserId }, 'Admin override: failed to update reputation')
+    }
+
+    // 5. Add to group's trustedUsers (per-group only, not global)
+    try {
+      const group = await ctx.db.Group.findOne({ group_id: chatId })
+      if (group && group.settings && group.settings.spamProtection) {
+        if (!group.settings.spamProtection.trustedUsers) {
+          group.settings.spamProtection.trustedUsers = []
+        }
+        if (!group.settings.spamProtection.trustedUsers.includes(bannedUserId)) {
+          group.settings.spamProtection.trustedUsers.push(bannedUserId)
+          group.markModified('settings.spamProtection.trustedUsers')
+          await group.save()
+          log.info({ bannedUserId, chatId }, 'Admin override: added to group trusted list')
+        }
+      }
+    } catch (error) {
+      log.warn({ err: error.message, bannedUserId, chatId }, 'Admin override: failed to add to trusted list')
+    }
+  }
+
+  // 6. Edit notification to show override result + remove button
+  const adminName = ctx.from.first_name || ctx.from.username || `${adminId}`
+  let bannedUserName = `${bannedUserId}`
+  if (bannedUserId > 0 && ctx.db) {
+    try {
+      const user = await ctx.db.User.findOne({ telegram_id: bannedUserId })
+      if (user && user.first_name) {
+        bannedUserName = user.first_name
+      }
+    } catch { /* use ID as fallback */ }
+  }
+
+  try {
+    await ctx.editMessageText(
+      ctx.i18n.t('spam.admin_override', { admin: adminName, name: bannedUserName }),
+      { parse_mode: 'HTML' }
+    )
+  } catch (error) {
+    log.warn({ err: error.message }, 'Admin override: failed to edit notification')
+  }
+
+  // 7. Schedule deletion of updated notification (30s)
+  if (ctx.callbackQuery.message && ctx.db) {
+    scheduleDeletion(ctx.db, {
+      chatId,
+      messageId: ctx.callbackQuery.message.message_id,
+      delayMs: 30000,
+      source: 'admin_override'
+    }, ctx.telegram)
+  }
+
+  return ctx.answerCbQuery('✅')
+}
+
 module.exports = {
   handleSpamVoteCallback,
+  handleAdminOverride,
   processExpiredVotes,
   checkVoteEligibility,
   processVoteResult
