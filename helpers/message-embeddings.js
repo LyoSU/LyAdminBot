@@ -89,6 +89,13 @@ const generateEmbedding = async (text, userContext = {}) => {
       return null
     }
 
+    // Skip messages that are only URL/link placeholders after normalization.
+    // "https://example.com" → "url", "t.me/ch https://x.com" → "telegram_link url"
+    // These produce identical embeddings for ALL URL-only messages (same bug as emoji-only).
+    if (/^(\s*(url|telegram_link|emoji_spam)\s*)+$/.test(processedText)) {
+      return null
+    }
+
     // Add minimal context for better embeddings (only for edge cases)
     if (userContext.isNewAccount && userContext.messageCount <= 1) {
       processedText = `first message: ${processedText}`
