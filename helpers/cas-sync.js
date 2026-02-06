@@ -383,10 +383,21 @@ function stopSync () {
  * @param {Object} db
  * @returns {NodeJS.Timeout|null}
  */
-function startPeriodicSync (db) {
+async function startPeriodicSync (db) {
   if (!CONFIG.enabled) {
     log.info('CAS sync is disabled')
     return null
+  }
+
+  // Reset stale "running" state from previous bot crash
+  try {
+    const state = await db.CasSyncState.getState()
+    if (state.status === 'running') {
+      await db.CasSyncState.setStatus('idle', 'Reset on bot restart')
+      log.info('Reset stale CAS sync state from previous crash')
+    }
+  } catch (err) {
+    log.warn({ err: err.message }, 'Failed to reset CAS sync state')
   }
 
   const intervalMs = CONFIG.intervalHours * 60 * 60 * 1000
