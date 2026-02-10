@@ -1,33 +1,33 @@
 bot_added:
   as_admin: |
-    🛡 Korumadayım! Anti-spam çalışıyor.
+    ${e.shield} Korumadayım! Anti-spam çalışıyor.
     <code>!spam</code> — ayarlar
   need_admin: |
-    👋 Selam! Spam temizlemek için admin yetkileri ver (mesaj silme + banlama).
+    ${e.wave} Selam! Spam temizlemek için admin yetkileri ver (mesaj silme + banlama).
     <code>/help</code> — neler yapabilirim
   promoted: |
-    🛡 Artık korumadayım. Spam geçemez.
+    ${e.shield} Artık korumadayım. Spam geçemez.
   demoted: |
     😴 Admin yetkileri olmadan spamcıları banlayamam. Gerekirse yetkileri geri ver.
 
 group:
   start: |
-    🛡 Anti-spam bot. Spam yakalıyorum, dolandırıcıları banlıyorum.
+    ${e.shield} Anti-spam bot. Spam yakalıyorum, dolandırıcıları banlıyorum.
     <code>!spam</code> — ayarlar (adminler)
     <code>/help</code> — tüm komutlar
 
 private:
   start: |
-    Selam <b>${name}</b>! 👋
+    Selam <b>${name}</b>! ${e.wave}
 
-    🛡 <b>LyAdminBot</b> — gruplar için anti-spam.
+    ${e.shield} <b>LyAdminBot</b> — gruplar için anti-spam.
     Spam yakalıyorum, dolandırıcıları banlıyorum, reklamları temizliyorum.
 
     Gruba ekle → admin yap → tamam.
   btn_add: Gruba ekle
 cmd:
   help: |
-    🤖 <b>LyAdminBot</b>
+    ${e.robot} <b>LyAdminBot</b>
 
     <b>ANTİ-SPAM:</b>
     <code>!spam</code> — ayarlar
@@ -60,8 +60,8 @@ cmd:
       delay: |
         ❗️ <b>Bot çevrimdışıydı:</b> ${delayTime}
   welcome:
-    disable: Karşılama kapalı 👋
-    enable: Karşılama açık 👋
+    disable: Karşılama kapalı ${e.wave}
+    enable: Karşılama açık ${e.wave}
   gif:
     push: Gif eklendi ✓
     pull: Gif silindi ✓
@@ -77,32 +77,32 @@ cmd:
         \#${extraName} bulunamadı.
         Oluşturmak için — mesaja yanıt olarak komutu yaz.
   spam_settings:
-    enabled: "✅ <b>Anti-spam açık</b>"
-    disabled: "❌ <b>Anti-spam kapalı</b>"
+    enabled: "${e.check} <b>Anti-spam açık</b>"
+    disabled: "${e.cross} <b>Anti-spam kapalı</b>"
     allow:
-      added: "✅ İzin verildi: \"${rule}\""
-      error: "❌ Kural metnini belirt\n\n<b>Örnek:</b> <code>!spam allow ödev satışı</code>"
+      added: "${e.check} İzin verildi: \"${rule}\""
+      error: "${e.cross} Kural metnini belirt\n\n<b>Örnek:</b> <code>!spam allow ödev satışı</code>"
     deny:
-      added: "✅ Yasaklandı: \"${rule}\""
-      error: "❌ Kural metnini belirt\n\n<b>Örnek:</b> <code>!spam deny kazanç reklamları</code>"
+      added: "${e.check} Yasaklandı: \"${rule}\""
+      error: "${e.cross} Kural metnini belirt\n\n<b>Örnek:</b> <code>!spam deny kazanç reklamları</code>"
     remove:
-      success: "✅ Kural silindi: \"${rule}\""
-      error: "❌ Geçersiz kural numarası\n\nListeye bak: <code>!spam</code>"
-    clear: "✅ Kurallar temizlendi (eski: ${count})"
+      success: "${e.check} Kural silindi: \"${rule}\""
+      error: "${e.cross} Geçersiz kural numarası\n\nListeye bak: <code>!spam</code>"
+    clear: "${e.check} Kurallar temizlendi (eski: ${count})"
     globalban:
-      enabled: "✅ <b>Global ban açık</b>\nDiğer gruplardaki spamcılar burada da banlanacak"
-      disabled: "❌ <b>Global ban kapalı</b>\nBanlar sadece bu grupta geçerli"
+      enabled: "${e.check} <b>Global ban açık</b>\nDiğer gruplardaki spamcılar burada da banlanacak"
+      disabled: "${e.cross} <b>Global ban kapalı</b>\nBanlar sadece bu grupta geçerli"
       error: "<code>!spam globalban on</code> veya <code>!spam globalban off</code> kullan"
     status:
-      title: "🛡 <b>Anti-spam ayarları</b>"
-      enabled_text: "✅ Açık"
-      disabled_text: "❌ Kapalı"
-      globalban_enabled: "✅ Evet"
-      globalban_disabled: "❌ Hayır"
+      title: "${e.shield} <b>Anti-spam ayarları</b>"
+      enabled_text: "${e.check} Açık"
+      disabled_text: "${e.cross} Kapalı"
+      globalban_enabled: "${e.check} Evet"
+      globalban_disabled: "${e.cross} Hayır"
       rules_title: "Kurallar (${count}):"
       rules_empty: "Ayarlanmamış"
-      rule_allow: "✅ İzin ver"
-      rule_deny: "❌ Yasak"
+      rule_allow: "${e.check} İzin ver"
+      rule_deny: "${e.cross} Yasak"
       commands_title: "Komutlar:"
       commands: |
         <code>!spam on</code> — aç
@@ -114,33 +114,33 @@ cmd:
         <code>!spam clear</code> — tüm kuralları temizle
   reset: Ayarlar sıfırlandı ✓
 banan:
-  show: ${name} 🍌 gösteriyor
-  suc:  ${name} 🍌 alıyor\n<b>Süre:</b> ${duration}
-  pick: ${name} 🍌 kaybetti
-  error: "❌ Susturamıyorum"
-  error_admin: "❌ Adminler susturulamaz 😏"
-  error_left: "❌ Zaten gruptan ayrılmış"
-  error_no_rights: "❌ Bana banlama yetkisi ver"
-  cant_ban_linked_channel: "❌ Bağlı kanal engellenemez"
+  show: ${name} ${e.banana} gösteriyor
+  suc:  ${name} ${e.banana} alıyor\n<b>Süre:</b> ${duration}
+  pick: ${name} ${e.banana} kaybetti
+  error: "${e.cross} Susturamıyorum"
+  error_admin: "${e.cross} Adminler susturulamaz 😏"
+  error_left: "${e.cross} Zaten gruptan ayrılmış"
+  error_no_rights: "${e.cross} Bana banlama yetkisi ver"
+  cant_ban_linked_channel: "${e.cross} Bağlı kanal engellenemez"
   easter:
-    nice: "${name} 🍌 alıyor\n<b>Süre:</b> ${duration}\n\n<i>nice</i>"
-    blaze: "${name} 🍌🔥 alıyor\n<b>Süre:</b> ${duration}\n\n<i>blaze it</i>"
-    huge: "${name} DEV MUZ 🍌🍌🍌 alıyor\n<b>Süre:</b> ${duration}"
-    self: "${name} kendine 🍌 gösteriyor\n<i>karara saygı</i>"
-    self_again: "${name} yine kendine 🍌 gösteriyor\n<i>bu artık gelenek mi?</i>"
+    nice: "${name} ${e.banana} alıyor\n<b>Süre:</b> ${duration}\n\n<i>nice</i>"
+    blaze: "${name} ${e.banana}${e.fire} alıyor\n<b>Süre:</b> ${duration}\n\n<i>blaze it</i>"
+    huge: "${name} DEV MUZ ${e.banana}${e.banana}${e.banana} alıyor\n<b>Süre:</b> ${duration}"
+    self: "${name} kendine ${e.banana} gösteriyor\n<b>Süre:</b> ${duration}\n<i>karara saygı</i>"
+    self_again: "${name} yine kendine ${e.banana} gösteriyor\n<b>Süre:</b> ${duration}\n<i>bu artık gelenek mi?</i>"
 kick:
   suc: ${name} gruptan atıldı 👢
   who: Kimi atayım? 🤔
-  error: "❌ Atamıyorum"
-  error_admin: "❌ Adminler atılamaz"
-  error_left: "❌ Zaten gruptan ayrılmış"
-  error_no_rights: "❌ Bana banlama yetkisi ver"
+  error: "${e.cross} Atamıyorum"
+  error_admin: "${e.cross} Adminler atılamaz"
+  error_left: "${e.cross} Zaten gruptan ayrılmış"
+  error_no_rights: "${e.cross} Bana banlama yetkisi ver"
   easter:
     self: "${name} kendini attı 👢\n<i>saygılar</i>"
 del:
-  error: "❌ Silemiyorum"
-  error_no_rights: "❌ Bana silme yetkisi ver"
-  error_old: "❌ Mesaj çok eski"
+  error: "${e.cross} Silemiyorum"
+  error_no_rights: "${e.cross} Bana silme yetkisi ver"
+  error_old: "${e.cross} Mesaj çok eski"
 
 global_ban:
-  kicked: "🚫 ${name} atıldı — global ban.\n<code>${reason}</code>"
+  kicked: "${e.ban} ${name} atıldı — global ban.\n<code>${reason}</code>"

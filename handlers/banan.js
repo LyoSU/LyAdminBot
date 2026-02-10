@@ -20,19 +20,19 @@ function getEasterEggKey (ctx, banTime, banUser, banMember) {
   // Exactly 60 seconds
   if (banTime === 60) return 'banan.easter.minute_exact'
 
-  // Self-ban variants
-  if (isSelfBan) {
+  // Self-ban variants (~30% chance)
+  if (isSelfBan && Math.random() < 0.3) {
     if (selfBanCount >= 5) return 'banan.easter.self_legend'
     if (selfBanCount >= 2) return 'banan.easter.self_again'
     return 'banan.easter.self'
   }
 
-  // First ban after many messages (> 100)
+  // First ban after many messages (> 100) — always show, it's rare
   if (banMember && banMember.banan.num === 0 && banMember.stats?.textTotal > 100) {
     return 'banan.easter.first_after_many'
   }
 
-  // Round number bans (10, 25, 50, 100...)
+  // Round number bans (10, 25, 50, 100...) — always show, it's a milestone
   const roundNumbers = [10, 25, 50, 100, 200, 500, 1000]
   if (banMember && roundNumbers.includes(banMember.banan.num + 1)) {
     return 'banan.easter.round_number'

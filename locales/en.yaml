@@ -1,26 +1,26 @@
 bot_added:
   as_admin: |
-    🛡 On guard! Anti-spam is active.
+    ${e.shield} On guard! Anti-spam is active.
     <code>!spam</code> — settings
   need_admin: |
-    👋 Hey! To clean spam — make me admin (delete messages + ban users).
+    ${e.wave} Hey! To clean spam — make me admin (delete messages + ban users).
     <code>/help</code> — what I can do
   promoted: |
-    🛡 Now on guard. No spam gets through.
+    ${e.shield} Now on guard. No spam gets through.
   demoted: |
     😴 Can't ban spammers without admin rights. Give them back if needed.
 
 group:
   start: |
-    🛡 Anti-spam bot. Catching spam, banning scammers.
+    ${e.shield} Anti-spam bot. Catching spam, banning scammers.
     <code>!spam</code> — settings (admins)
     <code>/help</code> — all commands
 
 private:
   start: |
-    Hey <b>${name}</b>! 👋
+    Hey <b>${name}</b>! ${e.wave}
 
-    🛡 <b>LyAdminBot</b> — anti-spam for groups.
+    ${e.shield} <b>LyAdminBot</b> — anti-spam for groups.
     Catching spam, banning scammers, cleaning ads.
 
     Add to group → make admin → done.
@@ -49,19 +49,19 @@ cmd:
 
     <i>↩️ = reply to message</i>
   my_stats:
-    send_pm: Stats sent to DM 📊
+    send_pm: Stats sent to DM ${e.chart}
     chat: |
-      📊 ${name}'s stats in <b>${chatName}</b>:
+      ${e.chart} ${name}'s stats in <b>${chatName}</b>:
 
-      🍌 <b>Bananas:</b> ${banCount}
-      ⏱ <b>Total ban time:</b> ${banTime}
-      ⚡ <b>Autoban:</b> ${banAutoTime}
+      ${e.banana} <b>Bananas:</b> ${banCount}
+      ${e.clock} <b>Total ban time:</b> ${banTime}
+      ${e.zap} <b>Autoban:</b> ${banAutoTime}
 
-      💬 <b>Messages:</b> ${messages}
-      📈 <b>Activity:</b> ${active}%
+      ${e.chat} <b>Messages:</b> ${messages}
+      ${e.chart_up} <b>Activity:</b> ${active}%
       🌊 <b>Flood:</b> ${flood}%
 
-      📅 <b>Here since:</b> ${createdAt}
+      ${e.calendar} <b>Here since:</b> ${createdAt}
       ${badge}
     error:
       blocked: |
@@ -69,32 +69,32 @@ cmd:
         Message me first, then try again.
     badge:
       exemplary: "\n🏅 <i>Model citizen</i>"
-      collector: "\n🍌 <i>Banana collector</i>"
-      soul: "\n🎭 <i>Life of the party</i>"
+      collector: "\n${e.banana} <i>Banana collector</i>"
+      soul: "\n${e.masks} <i>Life of the party</i>"
       flood_master: "\n🌊 <i>Flood master</i>"
       silent: "\n🤫 <i>Silent observer</i>"
       veteran: "\n🎖 <i>Chat veteran</i>"
       newbie: "\n🐣 <i>Newbie</i>"
   top:
     info: |
-      🏆 Most active in <b>${chatName}</b>:
+      ${e.trophy} Most active in <b>${chatName}</b>:
       ${top}
   top_banan:
     info: |
-      🍌 Top bans in <b>${chatName}</b>:
+      ${e.banana} Top bans in <b>${chatName}</b>:
       ${top}
     error:
-      empty: No one got 🍌 here yet
+      empty: No one got ${e.banana} here yet
     titles:
-      1: "👑"
+      1: "${e.crown}"
       2: "🥈"
       3: "🥉"
-    crown: "👑 Banana King"
-    dominator: "🏆 Mute Dominator"
+    crown: "${e.crown} Banana King"
+    dominator: "${e.trophy} Mute Dominator"
     veteran: "🎖 Silence Veteran"
   extras:
     list: |
-      📝 <b>Extra commands:</b>
+      ${e.notes} <b>Extra commands:</b>
       ${extras}
     error:
       not_found: |
@@ -112,7 +112,7 @@ cmd:
         ❗️ <b>Bot was offline:</b> ${delayTime}
       easter:
         fast: |
-          ⚡ Lightning pong!
+          ${e.zap} Lightning pong!
           <b>Server:</b> ${sms} ms
           <b>Telegram:</b> ${tms} ms
           <b>Uptime:</b> ${workTime}
@@ -126,8 +126,8 @@ cmd:
 
           ${extra}
   welcome:
-    disable: Welcome messages off 👋
-    enable: Welcome messages on 👋
+    disable: Welcome messages off ${e.wave}
+    enable: Welcome messages on ${e.wave}
   gif:
     push: Gif added ✓
     pull: Gif removed ✓
@@ -159,35 +159,35 @@ cmd:
     disable: Channel ban off
     enable: Channel ban on
   spam_settings:
-    enabled: "✅ <b>Anti-spam on</b>"
-    disabled: "❌ <b>Anti-spam off</b>"
+    enabled: "${e.check} <b>Anti-spam on</b>"
+    disabled: "${e.cross} <b>Anti-spam off</b>"
     allow:
-      added: "✅ Allowed: \"${rule}\""
-      error: "❌ Specify rule text\n\n<b>Example:</b> <code>!spam allow coursework sales</code>"
+      added: "${e.check} Allowed: \"${rule}\""
+      error: "${e.cross} Specify rule text\n\n<b>Example:</b> <code>!spam allow coursework sales</code>"
     deny:
-      added: "✅ Blocked: \"${rule}\""
-      error: "❌ Specify rule text\n\n<b>Example:</b> <code>!spam deny earning schemes</code>"
+      added: "${e.check} Blocked: \"${rule}\""
+      error: "${e.cross} Specify rule text\n\n<b>Example:</b> <code>!spam deny earning schemes</code>"
     remove:
-      success: "✅ Rule removed: \"${rule}\""
-      error: "❌ Invalid rule number\n\nCheck list: <code>!spam</code>"
-    clear: "✅ Rules cleared (was: ${count})"
+      success: "${e.check} Rule removed: \"${rule}\""
+      error: "${e.cross} Invalid rule number\n\nCheck list: <code>!spam</code>"
+    clear: "${e.check} Rules cleared (was: ${count})"
     globalban:
-      enabled: "✅ <b>Global ban on</b>\nSpammers from other groups will be banned here too"
-      disabled: "❌ <b>Global ban off</b>\nBans only apply to this group"
+      enabled: "${e.check} <b>Global ban on</b>\nSpammers from other groups will be banned here too"
+      disabled: "${e.cross} <b>Global ban off</b>\nBans only apply to this group"
       error: "Use <code>!spam globalban on</code> or <code>!spam globalban off</code>"
     threshold:
-      set: "✅ <b>Sensitivity:</b> ${value}%\n\nHigher = fewer mistakes, but may miss some spam"
-      error: "❌ Must be 50-95\n\n<code>!spam threshold 75</code>"
+      set: "${e.check} <b>Sensitivity:</b> ${value}%\n\nHigher = fewer mistakes, but may miss some spam"
+      error: "${e.cross} Must be 50-95\n\n<code>!spam threshold 75</code>"
     status:
-      title: "🛡 <b>Anti-spam settings</b>"
-      enabled_text: "✅ On"
-      disabled_text: "❌ Off"
-      globalban_enabled: "✅ Yes"
-      globalban_disabled: "❌ No"
+      title: "${e.shield} <b>Anti-spam settings</b>"
+      enabled_text: "${e.check} On"
+      disabled_text: "${e.cross} Off"
+      globalban_enabled: "${e.check} Yes"
+      globalban_disabled: "${e.cross} No"
       rules_title: "Rules (${count}):"
       rules_empty: "Not set"
-      rule_allow: "✅ Allow"
-      rule_deny: "❌ Block"
+      rule_allow: "${e.check} Allow"
+      rule_deny: "${e.cross} Block"
       commands_title: "Commands:"
       trusted_users: "users"
       commands: |
@@ -203,15 +203,15 @@ cmd:
         <code>!spam clear</code> — clear all
     trust:
       usage: "<b>How to use:</b>\n• Reply: <code>!spam trust</code>\n• Username: <code>!spam trust @username</code>\n• ID: <code>!spam trust 123456</code>"
-      cant_trust_bot: "🤖 Can't trust bots"
-      already_trusted: "✅ ${name} already trusted"
-      added: "✅ ${name} now trusted"
-      user_not_found: "❌ Can't find ${username}"
+      cant_trust_bot: "${e.robot} Can't trust bots"
+      already_trusted: "${e.check} ${name} already trusted"
+      added: "${e.check} ${name} now trusted"
+      user_not_found: "${e.cross} Can't find ${username}"
     untrust:
       usage: "<b>How to use:</b>\n• Reply: <code>!spam untrust</code>\n• Username: <code>!spam untrust @username</code>\n• ID: <code>!spam untrust 123456</code>"
-      not_trusted: "❌ ${name} wasn't trusted anyway"
-      removed: "✅ ${name} no longer trusted"
-      user_not_found: "❌ Can't find ${username}"
+      not_trusted: "${e.cross} ${name} wasn't trusted anyway"
+      removed: "${e.check} ${name} no longer trusted"
+      user_not_found: "${e.cross} Can't find ${username}"
     btn:
       enable: "Enable"
       disable: "Disable"
@@ -235,51 +235,51 @@ settings:
     json:
       reset: Settings restored from file ✓
 banan:
-  show: ${name} shows 🍌
-  suc:  ${name} gets 🍌\n<b>For:</b> ${duration}
-  pick: ${name} lost 🍌
-  error: "❌ Can't mute"
-  error_admin: "❌ Can't mute admins 😏"
-  error_left: "❌ Already left"
-  error_no_rights: "❌ Give me ban permissions"
-  cant_ban_linked_channel: "❌ Can't ban the linked channel"
+  show: ${name} shows ${e.banana}
+  suc:  ${name} gets ${e.banana}\n<b>For:</b> ${duration}
+  pick: ${name} lost ${e.banana}
+  error: "${e.cross} Can't mute"
+  error_admin: "${e.cross} Can't mute admins 😏"
+  error_left: "${e.cross} Already left"
+  error_no_rights: "${e.cross} Give me ban permissions"
+  cant_ban_linked_channel: "${e.cross} Can't ban the linked channel"
   easter:
-    nice: "${name} gets 🍌\n<b>For:</b> ${duration}\n\n<i>nice</i>"
-    blaze: "${name} gets 🍌🔥\n<b>For:</b> ${duration}\n\n<i>blaze it</i>"
-    huge: "${name} gets MEGA BANANA 🍌🍌🍌\n<b>For:</b> ${duration}"
-    self: "${name} shows 🍌 to themselves\n<i>respect the decision</i>"
-    self_again: "${name} shows 🍌 to themselves again\n<i>is this a tradition?</i>"
-    self_legend: "${name} shows 🍌 to themselves\n<i>self-moderation legend</i>"
-    first_after_many: "Historic moment! ${name} gets their first 🍌\n<b>For:</b> ${duration}"
-    round_number: "${name} gets milestone 🍌 #${count}\n<b>For:</b> ${duration}"
-    speed_ban: "${name} gets 🍌 speedrun\n<b>For:</b> ${duration}\n<i>that was fast</i>"
-    minute_exact: "${name} gets 🍌 for exactly one minute\n<i>precision is key</i>"
+    nice: "${name} gets ${e.banana}\n<b>For:</b> ${duration}\n\n<i>nice</i>"
+    blaze: "${name} gets ${e.banana}${e.fire}\n<b>For:</b> ${duration}\n\n<i>blaze it</i>"
+    huge: "${name} gets MEGA BANANA ${e.banana}${e.banana}${e.banana}\n<b>For:</b> ${duration}"
+    self: "${name} shows ${e.banana} to themselves\n<b>For:</b> ${duration}\n<i>respect the decision</i>"
+    self_again: "${name} shows ${e.banana} to themselves again\n<b>For:</b> ${duration}\n<i>is this a tradition?</i>"
+    self_legend: "${name} shows ${e.banana} to themselves\n<b>For:</b> ${duration}\n<i>self-moderation legend</i>"
+    first_after_many: "Historic moment! ${name} gets their first ${e.banana}\n<b>For:</b> ${duration}"
+    round_number: "${name} gets milestone ${e.banana} #${count}\n<b>For:</b> ${duration}"
+    speed_ban: "${name} gets ${e.banana} speedrun\n<b>For:</b> ${duration}\n<i>that was fast</i>"
+    minute_exact: "${name} gets ${e.banana} for exactly one minute\n<i>precision is key</i>"
 kick:
   suc: ${name} gets kicked 👢
   who: Who to kick? 🤔
-  error: "❌ Can't kick"
-  error_admin: "❌ Can't kick admins"
-  error_left: "❌ Already left"
-  error_no_rights: "❌ Give me ban permissions"
+  error: "${e.cross} Can't kick"
+  error_admin: "${e.cross} Can't kick admins"
+  error_left: "${e.cross} Already left"
+  error_no_rights: "${e.cross} Give me ban permissions"
   easter:
     self: "${name} kicked themselves 👢\n<i>respect</i>"
     admin_self: "Admin ${name} kicked themselves 👢\n<i>plot twist</i>"
 del:
-  error: "❌ Can't delete"
-  error_no_rights: "❌ Give me delete permissions"
-  error_old: "❌ Message too old"
+  error: "${e.cross} Can't delete"
+  error_no_rights: "${e.cross} Give me delete permissions"
+  error_old: "${e.cross} Message too old"
 sticker:
   save:
     suc: Sticker added to <a href="${link}">group pack</a> ✓
     error:
       animated: Animated not supported 😅
-      telegram: "❌ Couldn't save"
+      telegram: "${e.cross} Couldn't save"
   delete:
     suc: Sticker removed from <a href="${link}">pack</a> ✓
     error:
-      telegram: "❌ Couldn't delete"
+      telegram: "${e.cross} Couldn't delete"
   empty_forward: "↩️ Reply to a sticker, photo, or file"
-  only_admin: "🔒 Admins only. Personal pack — @fStikBot"
+  only_admin: "${e.lock} Admins only. Personal pack — @fStikBot"
 cas:
   banned: |
     ⛔ ${name} banned
@@ -287,71 +287,71 @@ cas:
     This account is listed in <b>CAS</b> — a global database of Telegram spammers. Users get flagged for mass advertising, scams, or fraud.
 
     <a href="${link}">Details</a> · appeals accepted there.
-  no_permissions: "⚠️ ${name} is in CAS spammer database\n\n💡 Give bot admin rights to handle it"
+  no_permissions: "${e.warn} ${name} is in CAS spammer database\n\n${e.bulb} Give bot admin rights to handle it"
 spam:
-  banned: "🚫 ${name} permabanned\n<code>${reason}</code>"
-  muted: "🔇 ${name} muted for 24h\n<code>${reason}</code>"
+  banned: "${e.ban} ${name} permabanned\n<code>${reason}</code>"
+  muted: "${e.mute} ${name} muted for 24h\n<code>${reason}</code>"
   notification:
-    full: "🚫 ${name} — spam\n<code>${reason}</code>"
-    muted_only: "🔇 ${name} muted\n<code>${reason}</code>\n\n⚠️ Couldn't delete message"
-    deleted_only: "🗑 Spam deleted\n<code>${reason}</code>\n\n⚠️ ${name} not muted"
-    no_permissions: "👀 Looks like spam from ${name}\n<code>${reason}</code>\n\n💡 Make me admin and I'll handle it"
-  btn_not_spam: "✅ Not spam"
-  admin_override: "✅ <b>Overridden by ${admin}</b>\n\n👤 ${name} unblocked"
+    full: "${e.ban} ${name} — spam\n<code>${reason}</code>"
+    muted_only: "${e.mute} ${name} muted\n<code>${reason}</code>\n\n${e.warn} Couldn't delete message"
+    deleted_only: "${e.trash} Spam deleted\n<code>${reason}</code>\n\n${e.warn} ${name} not muted"
+    no_permissions: "👀 Looks like spam from ${name}\n<code>${reason}</code>\n\n${e.bulb} Make me admin and I'll handle it"
+  btn_not_spam: "${e.check} Not spam"
+  admin_override: "${e.check} <b>Overridden by ${admin}</b>\n\n${e.user} ${name} unblocked"
   admin_override_not_admin: "Only group admins can do this"
   error:
     mute_failed: |
-      ❌ <b>Couldn't mute ${name}</b>
+      ${e.cross} <b>Couldn't mute ${name}</b>
       Reason: ${reason}
     delete_failed: |
-      ❌ <b>Couldn't delete spam from ${name}</b>
+      ${e.cross} <b>Couldn't delete spam from ${name}</b>
       Reason: ${reason}
     partial_success_muted: |
-      ✅ ${name} muted for spam
+      ${e.check} ${name} muted for spam
       Reason: ${reason}
-      ⚠️ Couldn't delete message
+      ${e.warn} Couldn't delete message
     partial_success_deleted: |
-      ✅ Spam deleted
-      ⚠️ Couldn't mute ${name}
+      ${e.check} Spam deleted
+      ${e.warn} Couldn't mute ${name}
       Reason: ${reason}
 
-only_group: "👥 Works in groups only"
-only_admin: "🔒 Group admins only"
+only_group: "${e.group} Works in groups only"
+only_admin: "${e.lock} Group admins only"
 
 global_ban:
-  kicked: "🚫 ${name} kicked — global ban.\n<code>${reason}</code>"
+  kicked: "${e.ban} ${name} kicked — global ban.\n<code>${reason}</code>"
 
 spam_vote:
-  title_blocked: "❌ <b>Blocked</b>"
+  title_blocked: "${e.cross} <b>Blocked</b>"
   title_banned: "⛔ <b>Banned permanently</b>"
-  title_spam: "❌ <b>Spam confirmed</b>"
-  title_clean: "↩️ <b>Unblocked</b>"
-  user_info: "👤 ${name}"
-  reputation: "📊 Reputation: ${score}"
-  account_age: "📅 Account: ${age}"
-  messages: "💬 ${count} msgs"
+  title_spam: "${e.cross} <b>Spam confirmed</b>"
+  title_clean: "${e.reply} <b>Unblocked</b>"
+  user_info: "${e.user} ${name}"
+  reputation: "${e.chart} Reputation: ${score}"
+  account_age: "${e.calendar} Account: ${age}"
+  messages: "${e.chat} ${count} msgs"
   in_groups: "in ${count} groups"
-  signals: "⚠️ ${signals}"
-  ai_reason: "🤖 ${confidence}% — ${reason}"
-  message_preview: "📝 <code>${text}</code>"
-  vote_time: "⏱ ${time}"
-  btn_spam: "🚫 Spam"
+  signals: "${e.warn} ${signals}"
+  ai_reason: "${e.robot} ${confidence}% — ${reason}"
+  message_preview: "${e.notes} <code>${text}</code>"
+  vote_time: "${e.clock} ${time}"
+  btn_spam: "${e.ban} Spam"
   btn_clean: "✓ Clean"
-  voters_spam: "🚫 Spam (${count}):"
+  voters_spam: "${e.ban} Spam (${count}):"
   voters_clean: "✓ Clean (${count}):"
   voters_empty: " —"
   voter_line: " ${index}. ${name}${weight}"
   result: "Result: ${spam} — ${clean}"
-  reputation_change: "📊 ${oldScore} → ${newScore}"
-  added_to_signatures: "🔒 Added to spam database"
+  reputation_change: "${e.chart} ${oldScore} → ${newScore}"
+  added_to_signatures: "${e.lock} Added to spam database"
   status_trusted: "✨ Now trusted"
-  timeout_confirmed: "⏱ <b>Time's up</b>\n\n👤 ${name}\n🔒 Spam confirmed"
+  timeout_confirmed: "${e.clock} <b>Time's up</b>\n\n${e.user} ${name}\n${e.lock} Spam confirmed"
   # Easter eggs for vote results
-  result_unanimous_spam: "🎯 Unanimous — spam"
-  result_unanimous_clean: "🎯 Unanimous — not spam"
+  result_unanimous_spam: "${e.target} Unanimous — spam"
+  result_unanimous_clean: "${e.target} Unanimous — not spam"
   result_close_call: "😬 Close call"
-  result_landslide: "🏆 Landslide victory"
-  result_fast: "⚡ Lightning verdict"
+  result_landslide: "${e.trophy} Landslide victory"
+  result_fast: "${e.zap} Lightning verdict"
   result_solo_hero: "🦸 One vote decided it all"
   # User-friendly spam reasons (replace technical terms)
   reasons:
@@ -381,18 +381,18 @@ spam_vote:
 report:
   only_group: "Groups only"
   need_reply: "↩️ Reply to a message"
-  cant_report_bot: "🤖 That's a bot"
+  cant_report_bot: "${e.robot} That's a bot"
   cant_report_self: "🙃 Can't report yourself"
   cant_report_admin: "👮 That's an admin"
   invalid_target: "Who sent this? 🤷"
   rate_limited: "⏳ Wait ${seconds}s"
   spam_check_disabled: "Anti-spam is off. Admin can enable: <code>!spam on</code>"
   no_content: "Where's the text? 🤷"
-  analyzing: "🔍 Checking..."
-  spam_found: "🚫 <b>Spam</b> from ${target}\n<code>${reason}</code>\n\n${action}\n\n<i>📣 ${reporter}</i>"
-  suspicious: "🤔 <b>Suspicious</b> — ${target}\n<code>${reason}</code>\n\n<i>📣 ${reporter}</i>"
-  clean: "✅ ${target} — ok"
+  analyzing: "${e.search} Checking..."
+  spam_found: "${e.ban} <b>Spam</b> from ${target}\n<code>${reason}</code>\n\n${action}\n\n<i>${e.megaphone} ${reporter}</i>"
+  suspicious: "🤔 <b>Suspicious</b> — ${target}\n<code>${reason}</code>\n\n<i>${e.megaphone} ${reporter}</i>"
+  clean: "${e.check} ${target} — ok"
   error: "Something went wrong"
-  clean_thanks: "✅ ${target} — ok\n<i>thanks for watching! 👀</i>"
-  clean_false_alarm: "✅ ${target} — ok\n<i>false alarm 📢</i>"
-  clean_all_good: "✅ ${target} — ok\n<i>all clear here ✨</i>"
+  clean_thanks: "${e.check} ${target} — ok\n<i>thanks for watching! 👀</i>"
+  clean_false_alarm: "${e.check} ${target} — ok\n<i>false alarm ${e.megaphone}</i>"
+  clean_all_good: "${e.check} ${target} — ok\n<i>all clear here ✨</i>"
