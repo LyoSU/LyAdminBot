@@ -219,16 +219,7 @@ module.exports = async (ctx) => {
     banMember.banan.time = Date.now()
     await banMember.save()
   } else {
-    // Self-show - check for easter egg variant
-    let showKey = 'banan.show'
-    if (ctx.group?.members?.[ctx.from.id]) {
-      const member = ctx.group.members[ctx.from.id]
-      const selfCount = member?.banan?.num || 0
-      if (selfCount >= 5) showKey = 'banan.easter.self_legend'
-      else if (selfCount >= 2) showKey = 'banan.easter.self_again'
-    }
-
-    await ctx.replyWithHTML(ctx.i18n.t(showKey, {
+    await ctx.replyWithHTML(ctx.i18n.t('banan.show', {
       name: userName(ctx.from, true)
     }))
   }
