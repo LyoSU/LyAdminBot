@@ -1,5 +1,6 @@
 const humanizeDuration = require('humanize-duration')
 const { userName } = require('../utils')
+const e = require('../helpers/emoji-map')
 
 module.exports = async (ctx) => {
   let result = ''
@@ -63,7 +64,7 @@ module.exports = async (ctx) => {
       const title = ctx.i18n.t(titleKey)
       const medal = title !== titleKey ? `${title} ` : ''
 
-      top += `\n${medal}${position}. ${userName(user)} — ${banan} 🍌`
+      top += `\n${medal}${position}. ${userName(user)} — ${banan} ${e.banana}`
     }
 
     result = ctx.i18n.t('cmd.top_banan.info', {

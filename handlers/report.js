@@ -3,6 +3,7 @@ const { checkSpam, getSpamSettings, humanizeReason } = require('../helpers/spam-
 const { processSpamAction } = require('../helpers/reputation')
 const { createVoteEvent, getAccountAgeDays } = require('../helpers/vote-ui')
 const { addSignature } = require('../helpers/spam-signatures')
+const e = require('../helpers/emoji-map')
 const { report: reportLog } = require('../helpers/logger')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
 
@@ -389,8 +390,8 @@ const handleReport = async (ctx) => {
 
         // Send notification for high confidence spam
         const actionText = isChannelPost
-          ? (actionTaken ? (deleted ? '🚫 + 🗑' : '🚫') : (deleted ? '🗑' : '⚠️'))
-          : (actionTaken ? (deleted ? '🔇 + 🗑' : '🔇') : (deleted ? '🗑' : '⚠️'))
+          ? (actionTaken ? (deleted ? `${e.ban} + ${e.trash}` : `${e.ban}`) : (deleted ? `${e.trash}` : `${e.warn}`))
+          : (actionTaken ? (deleted ? `${e.mute} + ${e.trash}` : `${e.mute}`) : (deleted ? `${e.trash}` : `${e.warn}`))
 
         const notificationMsg = await ctx.replyWithHTML(
           ctx.i18n.t('report.spam_found', {

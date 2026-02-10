@@ -3,6 +3,7 @@ const { addSignature } = require('../helpers/spam-signatures')
 const { getReputationStatus } = require('../helpers/reputation')
 const { spamVote: log, nlp: nlpLog } = require('../helpers/logger')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
+const e = require('../helpers/emoji-map')
 const nlpClient = require('../helpers/nlp-client')
 
 /**
@@ -409,7 +410,7 @@ const handleSpamVoteCallback = async (ctx) => {
     await updateVoteUI(ctx, updatedVote)
   }
 
-  const voteEmoji = vote === 'spam' ? '🚫' : '✓'
+  const voteEmoji = vote === 'spam' ? e.ban : '✓'
   return ctx.answerCbQuery(`${voteEmoji} ${ctx.i18n.t('spam_vote.cb.vote_recorded')}`)
 }
 
