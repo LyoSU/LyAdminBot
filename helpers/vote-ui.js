@@ -1,4 +1,5 @@
 const { userName } = require('../utils')
+const e = require('./emoji-map')
 const { predictCreationDate } = require('./account-age')
 const { sha256, normalizeLight } = require('./spam-signatures')
 const { spamVote: log } = require('./logger')
@@ -541,13 +542,13 @@ const showResultUI = async (ctx, spamVote, reputationChange = null) => {
     t: (key, params = {}) => {
       // Minimal English fallback for expiration handler
       const fallbacks = {
-        'spam_vote.title_spam': '❌ <b>Spam confirmed</b>',
-        'spam_vote.title_clean': '↩️ <b>Unblocked</b>',
-        'spam_vote.user_info': `👤 ${params.name || ''}`,
-        'spam_vote.reputation_change': `📊 ${params.oldScore || ''} → ${params.newScore || ''}`,
-        'spam_vote.added_to_signatures': '🔒 Added to spam database',
+        'spam_vote.title_spam': `${e.cross} <b>Spam confirmed</b>`,
+        'spam_vote.title_clean': `${e.reply} <b>Unblocked</b>`,
+        'spam_vote.user_info': `${e.user} ${params.name || ''}`,
+        'spam_vote.reputation_change': `${e.chart} ${params.oldScore || ''} → ${params.newScore || ''}`,
+        'spam_vote.added_to_signatures': `${e.lock} Added to spam database`,
         'spam_vote.status_trusted': '✨ Now trusted',
-        'spam_vote.voters_spam': `🚫 Spam (${params.count || 0}):`,
+        'spam_vote.voters_spam': `${e.ban} Spam (${params.count || 0}):`,
         'spam_vote.voters_clean': `✓ Clean (${params.count || 0}):`,
         'spam_vote.voters_empty': ' —',
         'spam_vote.voter_line': ` ${params.index || ''}. ${params.name || ''}${params.weight || ''}`,

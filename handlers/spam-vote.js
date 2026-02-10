@@ -732,7 +732,7 @@ const handleAdminOverride = async (ctx) => {
     }, ctx.telegram)
   }
 
-  return ctx.answerCbQuery('✅')
+  return ctx.answerCbQuery(e.check)
 }
 
 module.exports = {
