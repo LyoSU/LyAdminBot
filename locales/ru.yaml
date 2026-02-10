@@ -27,27 +27,27 @@ private:
   btn_add: Добавить в группу
 cmd:
   help: |
-    <b>Модерация</b>
-    /banan — мут (↩️). Ещё раз — размут
+    ${e.shield} <b>Модерация</b>
+    /banan — мут (${e.reply}). Ещё раз — размут
     /banan 5m — мут на время (m/h/d)
-    /kick — выгнать (↩️)
-    /del — удалить (↩️)
-    /report — жалоба на спам (↩️)
+    /kick — выгнать (${e.reply})
+    /del — удалить (${e.reply})
+    /report — жалоба на спам (${e.reply})
 
-    <b>Стата</b>
+    ${e.chart} <b>Стата</b>
     /mystats · /top · /top_banan
 
-    <b>Прочее</b>
+    ${e.gear} <b>Прочее</b>
     /lang — язык · /ping — статус
     /extras — сохранённые команды
 
-    <b>Для админов</b> <code>!</code>
+    ${e.lock} <b>Для админов</b> <code>!</code>
     <code>!spam</code> — антиспам настройки
-    <code>!trust</code> — доверенные юзеры (↩️)
+    <code>!trust</code> — доверенные юзеры (${e.reply})
     <code>!welcome</code> · <code>!gif</code> · <code>!text</code> — приветствия
     <code>!cas</code> · <code>!banChannel</code> — баны
 
-    <i>↩️ = в ответ</i>
+    <i>${e.reply} = в ответ</i>
   my_stats:
     send_pm: Стату скинул в личку ${e.chart}
     chat: |

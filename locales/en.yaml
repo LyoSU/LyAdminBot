@@ -27,27 +27,27 @@ private:
   btn_add: Add to group
 cmd:
   help: |
-    <b>Moderation</b>
-    /banan — mute (↩️). Again — unmute
+    ${e.shield} <b>Moderation</b>
+    /banan — mute (${e.reply}). Again — unmute
     /banan 5m — timed mute (m/h/d)
-    /kick — remove (↩️)
-    /del — delete (↩️)
-    /report — report spam (↩️)
+    /kick — remove (${e.reply})
+    /del — delete (${e.reply})
+    /report — report spam (${e.reply})
 
-    <b>Stats</b>
+    ${e.chart} <b>Stats</b>
     /mystats · /top · /top_banan
 
-    <b>Other</b>
+    ${e.gear} <b>Other</b>
     /lang — language · /ping — status
     /extras — saved commands
 
-    <b>Admins only</b> <code>!</code>
+    ${e.lock} <b>Admins only</b> <code>!</code>
     <code>!spam</code> — anti-spam settings
-    <code>!trust</code> — trusted users (↩️)
+    <code>!trust</code> — trusted users (${e.reply})
     <code>!welcome</code> · <code>!gif</code> · <code>!text</code> — welcome
     <code>!cas</code> · <code>!banChannel</code> — bans
 
-    <i>↩️ = reply to message</i>
+    <i>${e.reply} = reply to message</i>
   my_stats:
     send_pm: Stats sent to DM ${e.chart}
     chat: |

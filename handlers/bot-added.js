@@ -1,11 +1,12 @@
 const { bot: botLog } = require('../helpers/logger')
+const e = require('../helpers/emoji-map')
 
 // Fallback messages when i18n is not available
 const FALLBACK_MESSAGES = {
-  as_admin: '✅ Bot added as admin. Anti-spam protection is now active.',
-  need_admin: '⚠️ Bot needs admin rights with "Ban users" permission to work.',
-  promoted: '✅ Admin rights received. Anti-spam protection is now active.',
-  demoted: '⚠️ Admin rights removed. Anti-spam protection is disabled.'
+  as_admin: `${e.check} Bot added as admin. Anti-spam protection is now active.`,
+  need_admin: `${e.warn} Bot needs admin rights with "Ban users" permission to work.`,
+  promoted: `${e.check} Admin rights received. Anti-spam protection is now active.`,
+  demoted: `${e.warn} Admin rights removed. Anti-spam protection is disabled.`
 }
 
 /**

@@ -29,24 +29,24 @@ cmd:
   help: |
     ${e.robot} <b>LyAdminBot</b>
 
-    <b>ANTİ-SPAM:</b>
+    ${e.shield} <b>ANTİ-SPAM:</b>
     <code>!spam</code> — ayarlar
     <code>!spam on/off</code> — aç/kapa
     <code>!spam globalban on/off</code> — global ban
 
-    <b>MODERASYON:</b>
+    ${e.banana} <b>MODERASYON:</b>
     /banan — ban  •  /kick — at  •  /del — sil
     /ping — durum
 
-    <b>İSTATİSTİKLER:</b>
+    ${e.chart} <b>İSTATİSTİKLER:</b>
     /mystats — senin istatistiklerin
     /top — en aktifler  •  /top_banan — en çok ban alanlar
 
-    <b>KARŞILAMA:</b>
+    ${e.wave} <b>KARŞILAMA:</b>
     <code>!welcome</code> — aç/kapa
     <code>!gif</code> / <code>!text</code> — içerik ekle
 
-    <b>DİĞER:</b>
+    ${e.gear} <b>DİĞER:</b>
     <code>!extra isim</code> — hızlı komutlar #isim
     /extras — liste  •  /lang — dil
   ping:

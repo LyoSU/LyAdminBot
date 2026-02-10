@@ -29,24 +29,24 @@ cmd:
   help: |
     ${e.robot} <b>LyAdminBot</b>
 
-    <b>АНТЫСПАМ:</b>
+    ${e.shield} <b>АНТЫСПАМ:</b>
     <code>!spam</code> — налады
     <code>!spam on/off</code> — укл/выкл
     <code>!spam globalban on/off</code> — глабальны бан
 
-    <b>МАДЭРАЦЫЯ:</b>
+    ${e.banana} <b>МАДЭРАЦЫЯ:</b>
     /banan — бан  •  /kick — кік  •  /del — выдаліць
     /ping — статус
 
-    <b>СТАТЫСТЫКА:</b>
+    ${e.chart} <b>СТАТЫСТЫКА:</b>
     /mystats — твая стата
     /top — топ актыўных  •  /top_banan — топ банаў
 
-    <b>ПРЫВІТАННІ:</b>
+    ${e.wave} <b>ПРЫВІТАННІ:</b>
     <code>!welcome</code> — укл/выкл
     <code>!gif</code> / <code>!text</code> — дадаць кантэнт
 
-    <b>ІНШАЕ:</b>
+    ${e.gear} <b>ІНШАЕ:</b>
     <code>!extra назва</code> — хуткія каманды #назва
     /extras — спіс  •  /lang — мова
   my_stats:
