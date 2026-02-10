@@ -56,7 +56,7 @@ cmd:
 
       ${e.banana} <b>Бананаў:</b> ${banCount}
       ${e.clock} <b>Усяго ў бане:</b> ${banTime}
-      ${e.robot} <b>Аўтабан:</b> ${banAutoTime}
+      ${e.zap} <b>Аўтабан:</b> ${banAutoTime}
 
       ${e.chat} <b>Вестак:</b> ${messages}
       ${e.chart_up} <b>Актыў:</b> ${active}%

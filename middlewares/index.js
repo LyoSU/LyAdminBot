@@ -7,6 +7,7 @@ const errorHandler = require('./error-handler')
 const contextLoader = require('./context-loader')
 const globalBanCheck = require('./global-ban')
 const dataPersistence = require('./data-persistence')
+const emojiInject = require('./emoji-inject')
 
 module.exports = {
   stats,
@@ -17,5 +18,6 @@ module.exports = {
   errorHandler,
   contextLoader,
   globalBanCheck,
-  dataPersistence
+  dataPersistence,
+  emojiInject
 }

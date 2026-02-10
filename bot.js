@@ -16,7 +16,8 @@ const {
   globalBanCheck,
   casBan,
   spamCheck,
-  dataPersistence
+  dataPersistence,
+  emojiInject
 } = require('./middlewares')
 const { registerAllRoutes } = require('./routes')
 
@@ -145,6 +146,9 @@ const registerMiddlewares = (bot, i18n) => {
 
   // 7. Internationalization
   bot.use(i18n.middleware())
+
+  // 7.5. Inject custom emoji map into i18n
+  bot.use(emojiInject)
 
   // 8. Load context (user, group, member data)
   bot.use(contextLoader)

@@ -3,6 +3,7 @@ const { version } = require('../package.json')
 const spawn = require('child_process').spawn
 const os = require('os')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
+const e = require('../helpers/emoji-map')
 
 function getTempPi () {
   return new Promise((resolve) => {
@@ -47,7 +48,7 @@ module.exports = async (ctx) => {
 
   extra += `Version: ${version}\n\n`
 
-  extra += `💡 Server info:\n`
+  extra += `${e.bulb} Server info:\n`
   extra += `<b>RAM:</b> ${usemem}/${totalmem} MB\n`
   extra += `<b>CPU Load:</b> ${os.loadavg()[0].toFixed(2)}\n`
   if (!tmpPi.error) extra += `<b>Temp:</b> ${(tmpPi / 1000).toFixed(2)} ℃\n`

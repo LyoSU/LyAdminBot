@@ -300,7 +300,7 @@ spam:
     full: "${e.ban} ${name} — спам\n<code>${reason}</code>"
     muted_only: "${e.mute} ${name} замучено\n<code>${reason}</code>\n\n${e.warn} Повідомлення не вдалось видалити"
     deleted_only: "${e.trash} Спам видалено\n<code>${reason}</code>\n\n${e.warn} ${name} не замучено"
-    no_permissions: "${e.user} Схоже на спам від ${name}\n<code>${reason}</code>\n\n${e.bulb} Дайте мені права адміна — сам розберусь"
+    no_permissions: "👀 Схоже на спам від ${name}\n<code>${reason}</code>\n\n${e.bulb} Дайте мені права адміна — сам розберусь"
   btn_not_spam: "${e.check} Не спам"
   admin_override: "${e.check} <b>Скасовано ${admin}</b>\n\n${e.user} ${name} розблоковано"
   admin_override_not_admin: "Тільки для адмінів групи"
