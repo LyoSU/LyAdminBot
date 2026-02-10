@@ -300,7 +300,7 @@ spam:
     full: "${e.ban} ${name} — спам\n<code>${reason}</code>"
     muted_only: "${e.mute} ${name} замучено\n<code>${reason}</code>\n\n${e.warn} Повідомлення не вдалось видалити"
     deleted_only: "${e.trash} Спам видалено\n<code>${reason}</code>\n\n${e.warn} ${name} не замучено"
-    no_permissions: "👀 Схоже на спам від ${name}\n<code>${reason}</code>\n\n${e.bulb} Дайте мені права адміна — сам розберусь"
+    no_permissions: "${e.eyes} Схоже на спам від ${name}\n<code>${reason}</code>\n\n${e.bulb} Дайте мені права адміна — сам розберусь"
   btn_not_spam: "${e.check} Не спам"
   admin_override: "${e.check} <b>Скасовано ${admin}</b>\n\n${e.user} ${name} розблоковано"
   admin_override_not_admin: "Тільки для адмінів групи"
@@ -384,6 +384,6 @@ report:
   clean: "${e.check} ${target} — ок"
   error: "Щось пішло не так"
   # Easter eggs for clean reports
-  clean_thanks: "${e.check} ${target} — ок\n<i>дякую за пильність! 👀</i>"
+  clean_thanks: "${e.check} ${target} — ок\n<i>дякую за пильність! ${e.eyes}</i>"
   clean_false_alarm: "${e.check} ${target} — ок\n<i>фальшива тривога ${e.megaphone}</i>"
   clean_all_good: "${e.check} ${target} — ок\n<i>все чисто тут ✨</i>"
