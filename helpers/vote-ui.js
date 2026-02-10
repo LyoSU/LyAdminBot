@@ -81,7 +81,7 @@ const getRemainingTime = (expiresAt) => {
  */
 const escapeHtml = (text) => {
   if (!text) return ''
-  return String(text).replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return String(text).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/@/g, '&#64;')
 }
 
 /**
@@ -95,7 +95,7 @@ const formatVoterList = (voters, i18n) => {
     return [i18n.t('spam_vote.voters_empty')]
   }
   return voters.map((v, i) => {
-    const name = v.username ? `@${v.username}` : escapeHtml(v.displayName)
+    const name = v.username ? `&#64;${escapeHtml(v.username)}` : escapeHtml(v.displayName)
     const weight = v.weight > 1 ? ` (×${v.weight})` : ''
     return i18n.t('spam_vote.voter_line', { index: i + 1, name, weight })
   })
@@ -106,7 +106,7 @@ const formatVoterList = (voters, i18n) => {
  */
 const formatUserDisplay = (name, username) => {
   return username
-    ? `${escapeHtml(name)} @${username}`
+    ? `${escapeHtml(name)} &#64;${escapeHtml(username)}`
     : escapeHtml(name)
 }
 
@@ -161,9 +161,7 @@ const buildVoteNotification = (spamVote, i18n) => {
   lines.push('')
 
   // User info
-  const userDisplay = bannedUserUsername
-    ? `${escapeHtml(bannedUserName)} @${bannedUserUsername}`
-    : escapeHtml(bannedUserName)
+  const userDisplay = formatUserDisplay(bannedUserName, bannedUserUsername)
   lines.push(i18n.t('spam_vote.user_info', { name: userDisplay }))
 
   // User context
@@ -189,10 +187,10 @@ const buildVoteNotification = (spamVote, i18n) => {
 
   lines.push('')
 
-  // AI reason (humanized for users)
+  // AI reason (humanized for users, escape to prevent clickable @mentions)
   lines.push(i18n.t('spam_vote.ai_reason', {
     confidence: aiConfidence,
-    reason: humanizeReason(aiReason, i18n)
+    reason: escapeHtml(humanizeReason(aiReason, i18n))
   }))
 
   // Message preview
@@ -217,7 +215,7 @@ const buildVoteNotification = (spamVote, i18n) => {
     lines.push('')
     lines.push(i18n.t('spam_vote.voters_spam', { count: voteTally.spamWeighted }))
     spamVoters.forEach((v, i) => {
-      const name = v.username ? `@${v.username}` : escapeHtml(v.displayName)
+      const name = v.username ? `&#64;${escapeHtml(v.username)}` : escapeHtml(v.displayName)
       const weight = v.weight > 1 ? ` (×${v.weight})` : ''
       lines.push(i18n.t('spam_vote.voter_line', { index: i + 1, name, weight }))
     })
@@ -227,7 +225,7 @@ const buildVoteNotification = (spamVote, i18n) => {
     lines.push('')
     lines.push(i18n.t('spam_vote.voters_clean', { count: voteTally.cleanWeighted }))
     cleanVoters.forEach((v, i) => {
-      const name = v.username ? `@${v.username}` : escapeHtml(v.displayName)
+      const name = v.username ? `&#64;${escapeHtml(v.username)}` : escapeHtml(v.displayName)
       const weight = v.weight > 1 ? ` (×${v.weight})` : ''
       lines.push(i18n.t('spam_vote.voter_line', { index: i + 1, name, weight }))
     })

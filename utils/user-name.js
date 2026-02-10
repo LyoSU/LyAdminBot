@@ -13,7 +13,7 @@ module.exports = (user, url = false) => {
   if (user.last_name) name += ` ${user.last_name}`
 
   // Escape HTML characters
-  name = String(name).replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  name = String(name).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/@/g, '&#64;')
 
   if (url && user.id) return `<a href="tg://user?id=${user.id}">${name}</a>`
   return name
