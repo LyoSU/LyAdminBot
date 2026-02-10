@@ -295,7 +295,7 @@ spam:
     muted_only: "${e.mute} ${name} замьючен\n<code>${reason}</code>\n\n${e.warn} Сообщение не удалось удалить"
     deleted_only: "${e.trash} Спам удалён\n<code>${reason}</code>\n\n${e.warn} ${name} не замьючен"
     no_permissions: "${e.eyes} Похоже на спам от ${name}\n<code>${reason}</code>\n\n${e.bulb} Дайте мне права админа — сам разберусь"
-  btn_not_spam: "${e.check} Не спам"
+  btn_not_spam: "✅ Не спам"
   admin_override: "${e.check} <b>Отменено ${admin}</b>\n\n${e.user} ${name} разблокирован"
   admin_override_not_admin: "Только для админов группы"
 

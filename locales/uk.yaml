@@ -301,7 +301,7 @@ spam:
     muted_only: "${e.mute} ${name} замучено\n<code>${reason}</code>\n\n${e.warn} Повідомлення не вдалось видалити"
     deleted_only: "${e.trash} Спам видалено\n<code>${reason}</code>\n\n${e.warn} ${name} не замучено"
     no_permissions: "${e.eyes} Схоже на спам від ${name}\n<code>${reason}</code>\n\n${e.bulb} Дайте мені права адміна — сам розберусь"
-  btn_not_spam: "${e.check} Не спам"
+  btn_not_spam: "✅ Не спам"
   admin_override: "${e.check} <b>Скасовано ${admin}</b>\n\n${e.user} ${name} розблоковано"
   admin_override_not_admin: "Тільки для адмінів групи"
 
@@ -325,7 +325,7 @@ spam_vote:
   ai_reason: "${e.robot} ${confidence}% — ${reason}"
   message_preview: "${e.notes} <code>${text}</code>"
   vote_time: "${e.clock} ${time}"
-  btn_spam: "${e.ban} Спам"
+  btn_spam: "🚫 Спам"
   btn_clean: "✓ Норм"
   voters_spam: "${e.ban} Спам (${count}):"
   voters_clean: "✓ Норм (${count}):"

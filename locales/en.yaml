@@ -296,7 +296,7 @@ spam:
     muted_only: "${e.mute} ${name} muted\n<code>${reason}</code>\n\n${e.warn} Couldn't delete message"
     deleted_only: "${e.trash} Spam deleted\n<code>${reason}</code>\n\n${e.warn} ${name} not muted"
     no_permissions: "${e.eyes} Looks like spam from ${name}\n<code>${reason}</code>\n\n${e.bulb} Make me admin and I'll handle it"
-  btn_not_spam: "${e.check} Not spam"
+  btn_not_spam: "✅ Not spam"
   admin_override: "${e.check} <b>Overridden by ${admin}</b>\n\n${e.user} ${name} unblocked"
   admin_override_not_admin: "Only group admins can do this"
   error:
@@ -335,7 +335,7 @@ spam_vote:
   ai_reason: "${e.robot} ${confidence}% — ${reason}"
   message_preview: "${e.notes} <code>${text}</code>"
   vote_time: "${e.clock} ${time}"
-  btn_spam: "${e.ban} Spam"
+  btn_spam: "🚫 Spam"
   btn_clean: "✓ Clean"
   voters_spam: "${e.ban} Spam (${count}):"
   voters_clean: "✓ Clean (${count}):"
