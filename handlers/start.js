@@ -1,5 +1,5 @@
-const Extra = require('telegraf/extra')
 const { userName } = require('../utils')
+const { btnIcons } = require('../helpers/emoji-map')
 
 /**
  * Handle /start command in both private and group chats
@@ -13,12 +13,17 @@ module.exports = async (ctx) => {
       ctx.i18n.t('private.start', {
         name: userName(ctx.from)
       }),
-      Extra.HTML().markup((m) => m.inlineKeyboard([
-        m.urlButton(
-          ctx.i18n.t('private.btn_add'),
-          `https://t.me/${ctx.botInfo.username}?startgroup=add`
-        )
-      ]))
+      {
+        reply_markup: {
+          inline_keyboard: [[
+            {
+              text: ctx.i18n.t('private.btn_add'),
+              url: `https://t.me/${ctx.botInfo.username}?startgroup=add`,
+              icon_custom_emoji_id: btnIcons.addToGroup
+            }
+          ]]
+        }
+      }
     )
   } else {
     // Group chat - short info about the bot
