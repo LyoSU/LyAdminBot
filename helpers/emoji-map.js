@@ -36,5 +36,21 @@ module.exports = {
   notes: '<tg-emoji emoji-id="5886330010054168711">📝</tg-emoji>',
   masks: '<tg-emoji emoji-id="6032625495328165724">🎭</tg-emoji>',
   trophy: '<tg-emoji emoji-id="5089144476023128742">🏆</tg-emoji>',
-  target: '<tg-emoji emoji-id="6032949275732742941">🎯</tg-emoji>'
+  target: '<tg-emoji emoji-id="6032949275732742941">🎯</tg-emoji>',
+  play: '<tg-emoji emoji-id="5773626993010546707">▶️</tg-emoji>',
+  question: '<tg-emoji emoji-id="6030848053177486888">❓</tg-emoji>'
+}
+
+// Raw custom emoji IDs for inline keyboard button icons (icon_custom_emoji_id)
+// These are used in InlineKeyboardButton objects, not in HTML text
+module.exports.btnIcons = {
+  spam: '5922712343011135025',       // 🚫
+  clean: '5805532930662996322',      // ✅
+  enable: '5773626993010546707',     // ▶️
+  disable: '5774077015388852135',    // ❌
+  globalBan: '5926783847453692661',  // 🛡
+  rules: '6008090211181923982',      // 📝
+  trusted: '6032994772321309200',    // 👤
+  help: '6030848053177486888',       // ❓
+  notSpam: '5805532930662996322'     // ✅
 }

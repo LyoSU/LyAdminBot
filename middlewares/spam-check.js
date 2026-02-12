@@ -1,3 +1,5 @@
+const { btnIcons } = require('../helpers/emoji-map')
+
 // Admin cache: Map<chatId, { adminIds: Set<number>, cachedAt: number }>
 const adminCache = new Map()
 const ADMIN_CACHE_TTL = 60 * 60 * 1000 // 1 hour
@@ -619,7 +621,7 @@ module.exports = async (ctx) => {
               disable_web_page_preview: true,
               reply_markup: {
                 inline_keyboard: [[
-                  { text: ctx.i18n.t('spam.btn_not_spam'), callback_data: `ns:${senderId}` }
+                  { text: ctx.i18n.t('spam.btn_not_spam'), callback_data: `ns:${senderId}`, icon_custom_emoji_id: btnIcons.notSpam }
                 ]]
               }
             }

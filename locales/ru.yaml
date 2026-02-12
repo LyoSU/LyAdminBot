@@ -215,8 +215,8 @@ cmd:
     btn:
       enable: "Включить"
       disable: "Выключить"
-      globalban_on: "Глоб. бан ✓"
-      globalban_off: "Глоб. бан ✗"
+      globalban_on: "Глоб. бан: вкл"
+      globalban_off: "Глоб. бан: выкл"
       rules: "Правила"
       trusted: "Доверенные"
       help: "Команды"
@@ -295,7 +295,7 @@ spam:
     muted_only: "${e.mute} ${name} замьючен\n<code>${reason}</code>\n\n${e.warn} Сообщение не удалось удалить"
     deleted_only: "${e.trash} Спам удалён\n<code>${reason}</code>\n\n${e.warn} ${name} не замьючен"
     no_permissions: "${e.eyes} Похоже на спам от ${name}\n<code>${reason}</code>\n\n${e.bulb} Дайте мне права админа — сам разберусь"
-  btn_not_spam: "✅ Не спам"
+  btn_not_spam: "Не спам"
   admin_override: "${e.check} <b>Отменено ${admin}</b>\n\n${e.user} ${name} разблокирован"
   admin_override_not_admin: "Только для админов группы"
 

@@ -1,3 +1,5 @@
+const { btnIcons } = require('../../helpers/emoji-map')
+
 /**
  * Build inline keyboard for spam settings
  */
@@ -12,7 +14,8 @@ const buildKeyboard = (settings, i18n) => {
           text: enabled
             ? i18n.t('cmd.spam_settings.btn.disable')
             : i18n.t('cmd.spam_settings.btn.enable'),
-          callback_data: `spam:toggle:${enabled ? 'off' : 'on'}`
+          callback_data: `spam:toggle:${enabled ? 'off' : 'on'}`,
+          icon_custom_emoji_id: enabled ? btnIcons.disable : btnIcons.enable
         }
       ],
       [
@@ -20,23 +23,27 @@ const buildKeyboard = (settings, i18n) => {
           text: globalBan
             ? i18n.t('cmd.spam_settings.btn.globalban_on')
             : i18n.t('cmd.spam_settings.btn.globalban_off'),
-          callback_data: `spam:globalban:${globalBan ? 'off' : 'on'}`
+          callback_data: `spam:globalban:${globalBan ? 'off' : 'on'}`,
+          icon_custom_emoji_id: btnIcons.globalBan
         }
       ],
       [
         {
           text: i18n.t('cmd.spam_settings.btn.rules'),
-          callback_data: 'spam:rules:show'
+          callback_data: 'spam:rules:show',
+          icon_custom_emoji_id: btnIcons.rules
         },
         {
           text: i18n.t('cmd.spam_settings.btn.trusted'),
-          callback_data: 'spam:trusted:show'
+          callback_data: 'spam:trusted:show',
+          icon_custom_emoji_id: btnIcons.trusted
         }
       ],
       [
         {
           text: i18n.t('cmd.spam_settings.btn.help'),
-          callback_data: 'spam:help:show'
+          callback_data: 'spam:help:show',
+          icon_custom_emoji_id: btnIcons.help
         }
       ]
     ]

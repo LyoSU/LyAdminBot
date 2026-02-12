@@ -1,5 +1,6 @@
 const { userName } = require('../utils')
 const e = require('./emoji-map')
+const { btnIcons } = require('./emoji-map')
 const { predictCreationDate } = require('./account-age')
 const { sha256, normalizeLight } = require('./spam-signatures')
 const { spamVote: log } = require('./logger')
@@ -59,8 +60,8 @@ const buildVoteKeyboard = (eventId, voteTally, i18n) => {
 
   return {
     inline_keyboard: [[
-      { text: spamLabel, callback_data: `sv:${eventId}:spam` },
-      { text: cleanLabel, callback_data: `sv:${eventId}:clean` }
+      { text: spamLabel, callback_data: `sv:${eventId}:spam`, icon_custom_emoji_id: btnIcons.spam },
+      { text: cleanLabel, callback_data: `sv:${eventId}:clean`, icon_custom_emoji_id: btnIcons.clean }
     ]]
   }
 }
