@@ -448,6 +448,11 @@ const quickRiskAssessment = (ctx) => {
     trustSignals.push('emoji_only')
   }
 
+  // 3c. Message is only t.me / telegram.me links (internal Telegram links, not external promo)
+  if (text && /^[\s\n]*(https?:\/\/)?(t\.me|telegram\.me)\/\S+[\s\n]*$/i.test(text)) {
+    trustSignals.push('internal_link_only')
+  }
+
   // 4. Short text replies (conversational)
   if (text.length < 50 && !signals.length) {
     trustSignals.push('short_message')
@@ -485,8 +490,8 @@ const quickRiskAssessment = (ctx) => {
     return { risk: 'skip', signals, trustSignals }
   }
 
-  // Low: trust signals outweigh risk, or just media/emoji
-  if (trustSignals.length > signals.length || trustSignals.includes('media_only') || trustSignals.includes('emoji_only')) {
+  // Low: trust signals outweigh risk, or just media/emoji/internal links
+  if (trustSignals.length > signals.length || trustSignals.includes('media_only') || trustSignals.includes('emoji_only') || trustSignals.includes('internal_link_only')) {
     return { risk: 'low', signals, trustSignals }
   }
 
@@ -1063,7 +1068,7 @@ const buildUserContext = (ctx, userRating, quickAssessment) => {
     previousWarnings: globalStats.spamDetections || 0,
     accountAge: isChannelPost ? 'unknown' : getAccountAge(ctx),
     globalReputation: isChannelPost
-      ? { score: 30, status: 'suspicious' }
+      ? { score: 50, status: 'neutral' }
       : (ctx.session && ctx.session.userInfo && ctx.session.userInfo.reputation) || { score: 50, status: 'neutral' },
     telegramRating: userRating,
     isChannelPost,
@@ -1287,6 +1292,11 @@ const buildLLMContext = (ctx, userContext, groupDescription, userBio) => {
     }
 
     if (replyInfo.length > 0) contextInfo.push(`External reply: ${replyInfo.join(', ')}`)
+  }
+
+  // Include trust signals so LLM knows about positive indicators
+  if (userContext.quickAssessment && userContext.quickAssessment.trustSignals && userContext.quickAssessment.trustSignals.length > 0) {
+    contextInfo.push(`Trust signals: ${userContext.quickAssessment.trustSignals.join(', ')}`)
   }
 
   return contextInfo
