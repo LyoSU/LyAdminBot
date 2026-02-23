@@ -1,5 +1,5 @@
 const { globalBan: log } = require('../helpers/logger')
-const { humanizeReason } = require('../helpers/spam-check')
+const { humanizeReason, checkTrustedUser } = require('../helpers/spam-check')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
 
 const GLOBAL_BAN_DURATION_HOURS = 24
@@ -132,6 +132,12 @@ module.exports = async (ctx, next) => {
   // Ban expired - clear and continue
   if (isGlobalBanExpired(userInfo.globalBanDate)) {
     await clearExpiredBan(ctx)
+    return next()
+  }
+
+  // Trusted users in this group are exempt from global ban
+  if (checkTrustedUser(ctx.from.id, ctx)) {
+    log.info({ userId: ctx.from.id, group: ctx.chat.title }, 'Skipping global ban for trusted user')
     return next()
   }
 

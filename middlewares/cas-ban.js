@@ -3,6 +3,7 @@ const { userName } = require('../utils')
 const { cas: casLog } = require('../helpers/logger')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
 const { addSignature } = require('../helpers/spam-signatures')
+const { checkTrustedUser } = require('../helpers/spam-check')
 
 const extend = got.extend({
   json: true,
@@ -43,6 +44,12 @@ module.exports = async (ctx) => {
 
     let userId = ctx.from.id
     if (ctx.message.sender_chat && ctx.message.sender_chat.id) userId = ctx.message.sender_chat.id
+
+    // Trusted users in this group are exempt from CAS ban
+    if (checkTrustedUser(userId, ctx)) {
+      casLog.info({ userId }, 'Skipping CAS check for trusted user')
+      return
+    }
 
     return extend.get(`https://api.cas.chat/check?user_id=${userId}`).then(async ({ body }) => {
       if (body.ok === true) {
