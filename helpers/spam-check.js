@@ -26,6 +26,7 @@ const { spam: spamLog, moderation: modLog, cleanup: cleanupLog, qdrant: qdrantLo
 const openRouter = new OpenAI({
   baseURL: process.env.OPENROUTER_API_URL || 'https://openrouter.ai/api/v1',
   apiKey: process.env.OPENROUTER_API_KEY,
+  timeout: 30000,
   defaultHeaders: {
     'HTTP-Referer': 'https://LyAdminBot.t.me',
     'X-Title': 'LyAdminBot Spam Check Helper'
@@ -34,7 +35,8 @@ const openRouter = new OpenAI({
 
 // Create OpenAI client for moderation
 const openAI = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+  apiKey: process.env.OPENAI_API_KEY,
+  timeout: 30000
 })
 
 // Fallback models for retry logic
@@ -1096,6 +1098,7 @@ const buildUserContext = (ctx, userRating, quickAssessment) => {
     channelUsername: isChannelPost ? senderChat.username : null,
     isReply,
     replyAge,
+    isEditedMessage: !!ctx.editedMessage,
     quickAssessment,
     // Will be set by velocity check
     velocityBoost: 0,
@@ -1314,6 +1317,8 @@ const buildLLMContext = (ctx, userContext, groupDescription, userBio) => {
     if (replyInfo.length > 0) contextInfo.push(`External reply: ${replyInfo.join(', ')}`)
   }
 
+  if (userContext.isEditedMessage) contextInfo.push('Edited message: Yes')
+
   // Include trust signals so LLM knows about positive indicators
   if (userContext.quickAssessment && userContext.quickAssessment.trustSignals && userContext.quickAssessment.trustSignals.length > 0) {
     contextInfo.push(`Trust signals: ${userContext.quickAssessment.trustSignals.join(', ')}`)
@@ -1358,7 +1363,9 @@ Rules:
 - reason = short explanation for group admins
 - If an image is attached, analyze its visual content for spam indicators (promotional text, QR codes, crypto logos, contact info overlays, adult content ads)`
 
-  const userPrompt = `MESSAGE: ${messageText}
+  const userPrompt = `<message>
+${messageText}
+</message>
 
 CONTEXT: ${contextInfo.join(' | ')}`
 
@@ -1375,7 +1382,8 @@ CONTEXT: ${contextInfo.join(' | ')}`
 
   const { analysis, model: usedModel } = llmResult
 
-  let spamScore = parseFloat(analysis.spamScore) || 0.5
+  const parsedScore = parseFloat(analysis.spamScore)
+  let spamScore = Number.isFinite(parsedScore) ? parsedScore : 0.5
   spamScore = Math.max(0, Math.min(1, spamScore))
   const isSpam = spamScore >= 0.7
 

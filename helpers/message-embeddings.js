@@ -4,7 +4,8 @@ const { isEmojiOnly } = require('./text-utils')
 
 // Create OpenAI client for embeddings
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+  apiKey: process.env.OPENAI_API_KEY,
+  timeout: 30000
 })
 
 /**
