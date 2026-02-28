@@ -22,11 +22,14 @@ const {
 const { checkSignatures, addSignature } = require('./spam-signatures')
 const { spam: spamLog, moderation: modLog, cleanup: cleanupLog, qdrant: qdrantLog } = require('./logger')
 
+// 30s timeout for all AI API calls (SDK default is 10 minutes)
+const API_TIMEOUT_MS = 30000
+
 // Create OpenRouter client for LLM
 const openRouter = new OpenAI({
   baseURL: process.env.OPENROUTER_API_URL || 'https://openrouter.ai/api/v1',
   apiKey: process.env.OPENROUTER_API_KEY,
-  timeout: 30000,
+  timeout: API_TIMEOUT_MS,
   defaultHeaders: {
     'HTTP-Referer': 'https://LyAdminBot.t.me',
     'X-Title': 'LyAdminBot Spam Check Helper'
@@ -36,7 +39,7 @@ const openRouter = new OpenAI({
 // Create OpenAI client for moderation
 const openAI = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-  timeout: 30000
+  timeout: API_TIMEOUT_MS
 })
 
 // Fallback models for retry logic
