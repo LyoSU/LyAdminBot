@@ -46,7 +46,11 @@ const saveGroupMember = (ctx) => {
     return null
   }
 
-  const member = ctx.group.members[ctx.from.id]
+  // Mirror context-loader: channels are keyed by senderChat.id, users by ctx.from.id
+  const message = ctx.message || ctx.editedMessage
+  const senderChat = message && message.sender_chat
+  const memberId = (senderChat && senderChat.type === 'channel') ? senderChat.id : ctx.from.id
+  const member = ctx.group.members[memberId]
 
   if (!member || member.isSaving) {
     return null

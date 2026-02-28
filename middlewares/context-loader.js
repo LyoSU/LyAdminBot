@@ -27,7 +27,16 @@ const loadGroupContext = async (ctx) => {
     ctx.group.members = []
   }
 
-  ctx.group.members[ctx.from.id] = await updateGroupMember(ctx)
+  // For messages on behalf of a channel, track stats by senderChat.id instead of fake ctx.from
+  const message = ctx.message || ctx.editedMessage
+  const senderChat = message && message.sender_chat
+  const isChannelPost = senderChat && senderChat.type === 'channel'
+
+  if (isChannelPost) {
+    ctx.group.members[senderChat.id] = await updateGroupMember(ctx, senderChat.id)
+  } else {
+    ctx.group.members[ctx.from.id] = await updateGroupMember(ctx)
+  }
 
   // Group locale overrides user locale
   if (ctx.group.info.settings.locale) {

@@ -1,19 +1,20 @@
-module.exports = (ctx) => new Promise(async (resolve, reject) => {
+module.exports = (ctx, targetId) => new Promise(async (resolve, reject) => {
   try {
+    const memberId = targetId || ctx.from.id
     let groupMember
 
-    if (!ctx.group.members[ctx.from.id]) {
+    if (!ctx.group.members[memberId]) {
       groupMember = await ctx.db.GroupMember.findOne({
         group: ctx.group.info.id,
-        telegram_id: ctx.from.id
+        telegram_id: memberId
       })
-    } else groupMember = ctx.group.members[ctx.from.id]
+    } else groupMember = ctx.group.members[memberId]
 
     if (!groupMember) {
       groupMember = new ctx.db.GroupMember()
 
       groupMember.group = ctx.group.info.id
-      groupMember.telegram_id = ctx.from.id
+      groupMember.telegram_id = memberId
       groupMember.updatedAt = 0
     }
 

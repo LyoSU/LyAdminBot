@@ -41,6 +41,30 @@ const { scheduleDeletion } = require('../helpers/message-cleanup')
  * @returns {Object} { shouldBan: boolean, reason: string }
  */
 const shouldFullBan = async (ctx, result, userId) => {
+  // Safety net: never full-ban trusted users or established members
+  // For channels (negative userId), ctx.session belongs to ctx.from — not the channel itself.
+  // Skip session-based reputation for channels to avoid using unrelated user's trust status.
+  const isChannel = userId < 0
+  const isLocalTrusted = checkTrustedUser(userId, ctx)
+  const userReputation = !isChannel ? ctx.session?.userInfo?.reputation : null
+  const isGlobalTrusted = userReputation?.status === 'trusted'
+  const messageCount = ctx.group?.members?.[userId]?.stats?.messagesCount || 0
+
+  const banExemptReason = isLocalTrusted ? 'local_trusted'
+    : isGlobalTrusted ? 'global_trusted'
+    : messageCount >= 10 ? 'tenure'
+    : null
+
+  if (banExemptReason) {
+    spamAction.info({
+      userId,
+      messageCount,
+      source: result.source,
+      reason: banExemptReason
+    }, 'Skipping full ban for exempt user')
+    return { shouldBan: false, reason: null }
+  }
+
   // 1. Confirmed signature match = instant ban
   // These patterns were verified by 3+ different groups
   if (result.source && (
@@ -75,8 +99,7 @@ const shouldFullBan = async (ctx, result, userId) => {
   }
 
   // 3. Already restricted by reputation system (score < 20)
-  const reputation = ctx.session?.userInfo?.reputation
-  if (reputation?.status === 'restricted') {
+  if (userReputation?.status === 'restricted') {
     return {
       shouldBan: true,
       reason: 'restricted_reputation'
@@ -257,7 +280,8 @@ module.exports = async (ctx) => {
   }
 
   // Unified trust check: local trusted list OR global reputation 'trusted'
-  const userReputation = ctx.session && ctx.session.userInfo && ctx.session.userInfo.reputation
+  // For channel posts, ctx.from is a fake user — don't use its session/reputation
+  const userReputation = !isChannelPost && ctx.session && ctx.session.userInfo && ctx.session.userInfo.reputation
   const isLocalTrusted = checkTrustedUser(senderId, ctx)
   const isGlobalTrusted = userReputation && userReputation.status === 'trusted'
 
@@ -373,7 +397,7 @@ module.exports = async (ctx) => {
         senderType,
         userName: userName(senderInfo),
         userId: senderId,
-        messageCount: isTestMode ? 'TEST' : (isChannelPost ? 'channel' : actualMessageCount),
+        messageCount: isTestMode ? 'TEST' : actualMessageCount,
         isEdited: isEditedMessage || undefined // Only log if true
       }, isEditedMessage ? 'Checking EDITED message' : 'Checking message')
 
@@ -487,14 +511,22 @@ module.exports = async (ctx) => {
           if (canRestrictMembers) {
             try {
               if (isChannelPost) {
-                // For channels, use banChatSenderChat
-                await ctx.telegram.callApi('banChatSenderChat', {
-                  chat_id: ctx.chat.id,
-                  sender_chat_id: senderId
-                })
-                muteSuccess = true
-                fullBanApplied = true
-                spamAction.info({ channelTitle: senderInfo.title }, 'Banned channel')
+                // For channels: banChatSenderChat doesn't support until_date,
+                // so only ban on confirmed spam (signature/community votes).
+                // Otherwise just delete the message and let community vote.
+                const banDecision = await shouldFullBan(ctx, result, senderId)
+                if (banDecision.shouldBan) {
+                  await ctx.telegram.callApi('banChatSenderChat', {
+                    chat_id: ctx.chat.id,
+                    sender_chat_id: senderId
+                  })
+                  muteSuccess = true
+                  fullBanApplied = true
+                  spamAction.info({ channelTitle: senderInfo.title, reason: banDecision.reason }, 'Banned channel')
+                } else {
+                  // No temporary restriction available for channels — delete only
+                  spamAction.info({ channelTitle: senderInfo.title }, 'Channel spam detected — delete only, awaiting vote')
+                }
               } else {
                 // Check if user deserves full ban (vs temporary mute)
                 const banDecision = await shouldFullBan(ctx, result, senderId)
