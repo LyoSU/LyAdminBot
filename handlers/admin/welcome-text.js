@@ -13,7 +13,7 @@ module.exports = async (ctx) => {
         return
       }
 
-      delete ctx.group.info.settings.welcome.texts[groupText]
+      ctx.group.info.settings.welcome.texts.splice(groupText, 1)
       ctx.replyWithHTML(ctx.i18n.t('cmd.text.pull'))
     } else {
       ctx.replyWithHTML(ctx.i18n.t('cmd.text.error'))
