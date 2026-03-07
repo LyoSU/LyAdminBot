@@ -311,9 +311,8 @@ module.exports = async (ctx) => {
   // Check number of messages from the user (or force check in test mode)
   // For channel posts, always check (no member history to base decision on)
   const messageCount = (ctx.group.members[senderId] && ctx.group.members[senderId].stats && ctx.group.members[senderId].stats.messagesCount) || 0
-  // Always check edited messages regardless of message count —
-  // spammers send clean messages first, then edit them to spam after passing the gate
-  const shouldCheckSpam = isTestMode || isChannelPost || isEditedMessage || messageCount <= checkLimit
+  // Edited messages follow the same messageCount rules as regular messages
+  const shouldCheckSpam = isTestMode || isChannelPost || messageCount <= checkLimit
 
   // Log when using non-default check limit
   if (checkLimit !== 5 && shouldCheckSpam && !isChannelPost) {
