@@ -364,7 +364,7 @@ const handleReport = async (ctx) => {
             confidence: result.confidence,
             reason: result.reason || 'Spam confirmed via report',
             muteSuccess: actionTaken,
-            globalBanEnabled: spamSettings.globalBan !== false
+            globalBanEnabled: false // never global ban from /report
           })
 
           if (spamResult.globalBanApplied) {
