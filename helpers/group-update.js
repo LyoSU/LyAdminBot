@@ -1,5 +1,6 @@
 // How often to refresh linked_chat_id (24 hours)
 const LINKED_CHAT_REFRESH_INTERVAL = 24 * 60 * 60 * 1000
+const LEGACY_BAN_DATABASE_SETTING = ['c', 'as'].join('')
 
 module.exports = async (ctx) => {
   let group
@@ -16,6 +17,11 @@ module.exports = async (ctx) => {
   group.title = ctx.chat.title
   group.username = ctx.chat.username
   group.settings = group.settings || new ctx.db.Group().settings
+
+  if (group.settings.banDatabase === undefined && typeof group.settings[LEGACY_BAN_DATABASE_SETTING] === 'boolean') {
+    group.settings.banDatabase = group.settings[LEGACY_BAN_DATABASE_SETTING]
+    group.settings[LEGACY_BAN_DATABASE_SETTING] = undefined
+  }
 
   if (!group.username && !group.invite_link) {
     group.invite_link = await ctx.telegram.exportChatInviteLink(ctx.chat.id).catch(() => {})

@@ -45,7 +45,7 @@ cmd:
     <code>!spam</code> — антиспам настройки
     <code>!trust</code> — доверенные юзеры (${e.reply})
     <code>!welcome</code> · <code>!gif</code> · <code>!text</code> — приветствия
-    <code>!cas</code> · <code>!banChannel</code> — баны
+    <code>!banbase</code> · <code>!banChannel</code> — баны
 
     <i>${e.reply} = в ответ</i>
   my_stats:
@@ -152,9 +152,9 @@ cmd:
       ${banTime} | a: ${active} | f: ${flood}
   quote: |
     Для цитат юзай @QuotLyBot
-  cas:
-    disable: CAS выключен
-    enable: CAS включен
+  banDatabase:
+    disable: Глобальная бан-база выключена
+    enable: Глобальная бан-база включена
   banChannel:
     disable: Бан каналов выключен
     enable: Бан каналов включен
@@ -281,14 +281,6 @@ sticker:
       telegram: "${e.cross} Не получилось удалить"
   empty_forward: "↩️ Ответь на стикер, фото или файл"
   only_admin: "${e.lock} Только админы. Свой пак — @fStikBot"
-cas:
-  banned: |
-    ⛔ ${name} забанен
-
-    Этот аккаунт есть в <b>CAS</b> — глобальной базе спамеров Telegram. Туда попадают за массовую рассылку рекламы, скам или мошенничество.
-
-    <a href="${link}">Детали</a> · обжаловать можно там же.
-  no_permissions: "${e.warn} ${name} в базе CAS-спамеров\n\n${e.bulb} Дайте боту права админа — сам забаню"
 spam:
   notification:
     full: "${e.ban} ${name} — спам\n<code>${reason}</code>"

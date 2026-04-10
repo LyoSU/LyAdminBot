@@ -5,7 +5,7 @@ const SpamSignature = require('./spamSignature')
 const SpamVote = require('./spamVote')
 const ScheduledDeletion = require('./scheduledDeletion')
 const ForwardBlacklist = require('./forwardBlacklist')
-const CasSyncState = require('./casSyncState')
+const BanDatabaseSyncState = require('./banDatabaseSyncState')
 
 module.exports = {
   User,
@@ -15,5 +15,5 @@ module.exports = {
   SpamVote,
   ScheduledDeletion,
   ForwardBlacklist,
-  CasSyncState
+  BanDatabaseSyncState
 }

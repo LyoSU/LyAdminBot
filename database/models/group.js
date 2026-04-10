@@ -44,7 +44,7 @@ const groupSchema = mongoose.Schema({
     }],
     removeLng: Array,
     locale: String,
-    cas: {
+    banDatabase: {
       type: Boolean,
       default: true
     },

@@ -13,7 +13,7 @@
 
 const { cleanup: log } = require('./logger')
 
-const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
 // In-memory timers for recent deletions (optimization: avoid DB polling for short delays)
 const pendingTimers = new Map()
@@ -29,7 +29,7 @@ let cleanupIntervalId = null
  * @param {number} options.chatId - Telegram chat ID
  * @param {number} options.messageId - Telegram message ID
  * @param {number} options.delayMs - Delay in milliseconds before deletion
- * @param {string} options.source - Source identifier ('vote_result', 'cas_ban', etc.)
+ * @param {string} options.source - Source identifier ('vote_result', 'ban_database', etc.)
  * @param {Object} options.reference - Optional reference { type, id }
  * @param {Object} telegram - Telegram API instance (for immediate short delays)
  */

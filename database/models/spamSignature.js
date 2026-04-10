@@ -35,7 +35,7 @@ const spamSignatureSchema = mongoose.Schema({
   // Source of the signature (for tracking)
   source: {
     type: String,
-    enum: ['user_report', 'ai_detection', 'cas_import', 'cas_ban', 'manual', 'vector_promotion'],
+    enum: ['user_report', 'ai_detection', 'ban_database', 'ban_database_sync', 'manual', 'vector_promotion'],
     default: 'ai_detection'
   },
 

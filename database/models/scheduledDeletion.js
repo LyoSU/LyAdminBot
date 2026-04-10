@@ -8,8 +8,8 @@ const mongoose = require('mongoose')
  *
  * Use cases:
  * - Vote result notifications (delete after 2 min)
- * - CAS ban notifications (delete after 25 sec)
- * - CAS no-permissions warnings (delete after 60 sec)
+ * - Ban database notifications (delete after 25 sec)
+ * - Ban database no-permissions warnings (delete after 60 sec)
  * - High-confidence spam notifications (delete after 30 sec)
  * - Spam no-permissions warnings (delete after 60 sec)
  * - Vote timeout notifications (delete after 30 sec)
@@ -20,7 +20,7 @@ const scheduledDeletionSchema = mongoose.Schema({
   messageId: { type: Number, required: true },
 
   // When to delete
-  deleteAt: { type: Date, required: true },  // indexed below (TTL)
+  deleteAt: { type: Date, required: true }, // indexed below (TTL)
 
   // Source for logging/debugging
   source: {
@@ -28,8 +28,8 @@ const scheduledDeletionSchema = mongoose.Schema({
     enum: [
       // Spam-related
       'vote_result',
-      'cas_ban',
-      'cas_no_permissions',
+      'ban_database',
+      'ban_database_no_permissions',
       'spam_high_confidence',
       'spam_no_permissions',
       'vote_timeout',

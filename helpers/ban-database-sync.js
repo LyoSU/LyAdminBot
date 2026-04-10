@@ -1,33 +1,39 @@
 const got = require('got')
-const { casSync: log } = require('./logger')
+const { banDatabaseSync: log } = require('./logger')
 const { generateSignatures } = require('./spam-signatures')
 
 /**
- * CAS (Combot Anti-Spam) Synchronization System
+ * Global ban database synchronization system.
  *
- * Imports spam patterns from CAS database into local SpamSignature collection.
+ * Imports spam patterns from the upstream database into local SpamSignature collection.
  * Features:
- * - Bulk import from CAS export
+ * - Bulk import from upstream export
  * - Resumable sync (tracks lastProcessedUserId)
  * - Rate limiting and batching
  * - Deduplication via existing spam-signatures system
  */
 
-// Configuration with defaults and validation
-const CONFIG = {
-  enabled: process.env.CAS_SYNC_ENABLED === 'true',
-  intervalHours: Math.max(1, parseInt(process.env.CAS_SYNC_INTERVAL_HOURS, 10) || 6),
-  batchSize: Math.max(10, parseInt(process.env.CAS_SYNC_BATCH_SIZE, 10) || 1000),
-  concurrency: Math.max(1, parseInt(process.env.CAS_SYNC_CONCURRENCY, 10) || 10),
-  maxUsers: Math.max(100, parseInt(process.env.CAS_SYNC_MAX_USERS, 10) || 50000),
-  requestDelay: Math.max(0, parseInt(process.env.CAS_SYNC_REQUEST_DELAY, 10) || 100)
+const SYNC_ENV_PREFIX = 'BAN_DATABASE_SYNC'
+const LEGACY_SYNC_ENV_PREFIX = 'CAS_SYNC'
+
+const readSyncEnv = (name) => {
+  return process.env[`${SYNC_ENV_PREFIX}_${name}`] || process.env[`${LEGACY_SYNC_ENV_PREFIX}_${name}`]
 }
 
-// Base URL for CAS API
-const CAS_API_BASE = 'https://api.cas.chat'
+// Configuration with defaults and validation
+const CONFIG = {
+  enabled: readSyncEnv('ENABLED') === 'true',
+  intervalHours: Math.max(1, parseInt(readSyncEnv('INTERVAL_HOURS'), 10) || 6),
+  batchSize: Math.max(10, parseInt(readSyncEnv('BATCH_SIZE'), 10) || 1000),
+  concurrency: Math.max(1, parseInt(readSyncEnv('CONCURRENCY'), 10) || 10),
+  maxUsers: Math.max(100, parseInt(readSyncEnv('MAX_USERS'), 10) || 50000),
+  requestDelay: Math.max(0, parseInt(readSyncEnv('REQUEST_DELAY'), 10) || 100)
+}
+
+const SYNC_API_BASE = 'https://api.cas.chat'
 
 // HTTP client with reasonable timeouts (got v9 compatible)
-const casApi = got.extend({
+const syncApi = got.extend({
   timeout: 5000, // 5s for individual requests
   retries: 2,
   throwHttpErrors: false
@@ -37,19 +43,19 @@ const casApi = got.extend({
 let stopRequested = false
 
 /**
- * Fetch CAS export CSV and parse user IDs
+ * Fetch upstream export CSV and parse user IDs.
  * @returns {Promise<number[]>} Array of user IDs
  */
-async function fetchCasExport () {
-  log.info('Fetching CAS export...')
+async function fetchBanDatabaseExport () {
+  log.info('Fetching ban database export')
 
   try {
-    const response = await casApi.get(`${CAS_API_BASE}/export.csv`, {
+    const response = await syncApi.get(`${SYNC_API_BASE}/export.csv`, {
       timeout: 60000 // 1 minute for large file
     })
 
     if (response.statusCode !== 200) {
-      throw new Error(`CAS export returned status ${response.statusCode}`)
+      throw new Error(`Ban database export returned status ${response.statusCode}`)
     }
 
     // Parse CSV - format is simple: one user ID per line
@@ -58,22 +64,22 @@ async function fetchCasExport () {
       .map(line => parseInt(line.trim(), 10))
       .filter(id => !isNaN(id) && id > 0)
 
-    log.info({ totalUsers: userIds.length }, 'Parsed CAS export')
+    log.info({ totalUsers: userIds.length }, 'Parsed ban database export')
     return userIds
   } catch (error) {
-    log.error({ err: error.message }, 'Failed to fetch CAS export')
+    log.error({ err: error.message }, 'Failed to fetch ban database export')
     throw error
   }
 }
 
 /**
- * Fetch user info and messages from CAS API
+ * Fetch user info and messages from upstream API.
  * @param {number} userId
  * @returns {Promise<{ok: boolean, messages: string[]}>}
  */
 async function fetchUserMessages (userId) {
   try {
-    const response = await casApi.get(`${CAS_API_BASE}/check?user_id=${userId}`, {
+    const response = await syncApi.get(`${SYNC_API_BASE}/check?user_id=${userId}`, {
       json: true
     })
 
@@ -105,28 +111,27 @@ async function fetchUserMessages (userId) {
 }
 
 /**
- * Add a CAS message to signatures collection
- * CAS messages are auto-confirmed with synthetic chatId
+ * Add an upstream database message to signatures collection.
+ * Imported messages are auto-confirmed with a synthetic chatId.
  * @param {string} text
  * @param {Object} db
  * @returns {Promise<{isNew: boolean}|null>}
  */
-async function addCasMessage (text, db) {
+async function addBanDatabaseMessage (text, db) {
   if (!text || text.length < 20) return null
 
-  // Use special chatId for CAS imports (-1 reserved for CAS)
-  const CAS_CHAT_ID = -1
+  const SYNC_CHAT_ID = -1
 
   const signatures = generateSignatures(text)
   if (!signatures) return null
 
   try {
-    // Upsert with CAS-specific handling
+    // Upsert with upstream-import handling.
     const result = await db.SpamSignature.findOneAndUpdate(
       { normalizedHash: signatures.normalizedHash },
       {
         $inc: { confirmations: 1 },
-        $addToSet: { uniqueGroups: CAS_CHAT_ID },
+        $addToSet: { uniqueGroups: SYNC_CHAT_ID },
         $set: {
           lastSeenAt: new Date(),
           fuzzyHash: signatures.fuzzyHash,
@@ -137,7 +142,7 @@ async function addCasMessage (text, db) {
           exactHash: signatures.exactHash,
           sampleText: text.substring(0, 200),
           firstSeenAt: new Date(),
-          source: 'cas_import'
+          source: 'ban_database_sync'
         }
       },
       { upsert: true, new: true }
@@ -186,7 +191,7 @@ async function processUser (userId, db) {
       if (stopRequested) break
 
       try {
-        const addResult = await addCasMessage(message, db)
+        const addResult = await addBanDatabaseMessage(message, db)
         if (addResult) {
           result.messagesProcessed++
           if (addResult.isNew) {
@@ -232,7 +237,7 @@ async function processBatch (userIds, db) {
 }
 
 /**
- * Run the full CAS synchronization
+ * Run the full ban database synchronization.
  * @param {Object} db
  * @param {Object} options
  * @returns {Promise<{status: string, stats?: Object, error?: string}>}
@@ -244,7 +249,7 @@ async function runSync (db, options = {}) {
   } = options
 
   // Check if already running
-  const isRunning = await db.CasSyncState.isRunning()
+  const isRunning = await db.BanDatabaseSyncState.isRunning()
   if (isRunning) {
     log.warn('Sync already running, skipping')
     return { status: 'skipped', reason: 'already_running' }
@@ -254,19 +259,19 @@ async function runSync (db, options = {}) {
 
   try {
     // Fetch user IDs
-    const allUserIds = await fetchCasExport()
+    const allUserIds = await fetchBanDatabaseExport()
 
     // Get resume point if enabled
     let startIndex = 0
     if (resume) {
-      const state = await db.CasSyncState.getState()
+      const state = await db.BanDatabaseSyncState.getState()
       if (state.lastProcessedUserId > 0) {
         const resumeIndex = allUserIds.indexOf(state.lastProcessedUserId)
         if (resumeIndex === -1) {
           // Resume point not found in current export
           log.warn(
             { lastProcessedUserId: state.lastProcessedUserId },
-            'Resume point not found in CAS export, starting from beginning'
+            'Resume point not found in ban database export, starting from beginning'
           )
         } else if (resumeIndex > 0) {
           startIndex = resumeIndex + 1
@@ -280,13 +285,13 @@ async function runSync (db, options = {}) {
 
     if (userIds.length === 0) {
       log.info('No users to process')
-      await db.CasSyncState.completeSync({ totalUsers: allUserIds.length })
+      await db.BanDatabaseSyncState.completeSync({ totalUsers: allUserIds.length })
       return { status: 'completed', reason: 'no_users' }
     }
 
     // Start sync
-    await db.CasSyncState.startSync(userIds.length)
-    log.info({ totalUsers: userIds.length, startIndex }, 'Starting CAS sync')
+    await db.BanDatabaseSyncState.startSync(userIds.length)
+    log.info({ totalUsers: userIds.length, startIndex }, 'Starting ban database sync')
 
     const stats = {
       totalUsers: allUserIds.length,
@@ -298,17 +303,18 @@ async function runSync (db, options = {}) {
 
     let lastProcessedUserId = 0
     let processedCount = 0
+    let currentIndex = 0
 
     // Process in batches
     for (let i = 0; i < userIds.length; i += CONFIG.batchSize) {
       if (stopRequested) {
         // Persist progress before stopping
         log.info({ processedCount }, 'Sync stopped by request')
-        await db.CasSyncState.updateProgress(lastProcessedUserId, {
+        await db.BanDatabaseSyncState.updateProgress(lastProcessedUserId, {
           ...stats,
           processedCount
         })
-        await db.CasSyncState.setStatus('stopped')
+        await db.BanDatabaseSyncState.setStatus('stopped')
         return { status: 'stopped', stats, processedCount }
       }
 
@@ -325,13 +331,14 @@ async function runSync (db, options = {}) {
         stats.messagesProcessed += batchStats.messagesProcessed
         stats.signaturesAdded += batchStats.signaturesAdded
         stats.signaturesUpdated += batchStats.signaturesUpdated
+
+        lastProcessedUserId = chunk[chunk.length - 1]
+        processedCount += chunk.length
+        currentIndex = i + j + chunk.length
       }
 
-      lastProcessedUserId = batch[batch.length - 1]
-      processedCount = i + batch.length
-
       // Update progress
-      await db.CasSyncState.updateProgress(lastProcessedUserId, {
+      await db.BanDatabaseSyncState.updateProgress(lastProcessedUserId, {
         ...stats,
         processedCount
       })
@@ -340,16 +347,24 @@ async function runSync (db, options = {}) {
         { processed: processedCount, total: userIds.length, ...stats },
         'Batch progress'
       )
+
+      if (stopRequested) {
+        log.info({ processedCount }, 'Sync stopped by request')
+        await db.BanDatabaseSyncState.setStatus('stopped')
+        return { status: 'stopped', stats, processedCount }
+      }
+
+      if (currentIndex >= userIds.length) break
     }
 
     // Complete sync
-    await db.CasSyncState.completeSync(stats)
-    log.info(stats, 'CAS sync completed')
+    await db.BanDatabaseSyncState.completeSync(stats)
+    log.info(stats, 'Ban database sync completed')
 
     return { status: 'completed', stats }
   } catch (error) {
-    log.error({ err: error.message, stack: error.stack }, 'CAS sync failed')
-    await db.CasSyncState.setStatus('failed', error.message)
+    log.error({ err: error.message, stack: error.stack }, 'Ban database sync failed')
+    await db.BanDatabaseSyncState.setStatus('failed', error.message)
     return { status: 'failed', error: error.message }
   }
 }
@@ -360,7 +375,7 @@ async function runSync (db, options = {}) {
  * @returns {Promise<Object>}
  */
 async function getStats (db) {
-  const state = await db.CasSyncState.getState()
+  const state = await db.BanDatabaseSyncState.getState()
   return {
     status: state.status,
     lastSyncAt: state.lastSyncAt,
@@ -385,19 +400,19 @@ function stopSync () {
  */
 async function startPeriodicSync (db) {
   if (!CONFIG.enabled) {
-    log.info('CAS sync is disabled')
+    log.info('Ban database sync is disabled')
     return null
   }
 
   // Reset stale "running" state from previous bot crash
   try {
-    const state = await db.CasSyncState.getState()
+    const state = await db.BanDatabaseSyncState.getState()
     if (state.status === 'running') {
-      await db.CasSyncState.setStatus('idle', 'Reset on bot restart')
-      log.info('Reset stale CAS sync state from previous crash')
+      await db.BanDatabaseSyncState.setStatus('idle', 'Reset on bot restart')
+      log.info('Reset stale ban database sync state from previous crash')
     }
   } catch (err) {
-    log.warn({ err: err.message }, 'Failed to reset CAS sync state')
+    log.warn({ err: err.message }, 'Failed to reset ban database sync state')
   }
 
   const intervalMs = CONFIG.intervalHours * 60 * 60 * 1000
@@ -416,7 +431,7 @@ async function startPeriodicSync (db) {
     })
   }, intervalMs)
 
-  log.info({ intervalHours: CONFIG.intervalHours }, 'Started periodic CAS sync')
+  log.info({ intervalHours: CONFIG.intervalHours }, 'Started periodic ban database sync')
 
   return intervalId
 }
@@ -436,8 +451,8 @@ module.exports = {
   stopSync,
   startPeriodicSync,
   // For testing
-  fetchCasExport,
+  fetchBanDatabaseExport,
   fetchUserMessages,
-  addCasMessage,
+  addBanDatabaseMessage,
   CONFIG
 }

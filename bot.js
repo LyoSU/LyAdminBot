@@ -8,13 +8,13 @@ const { bot: botLog, db: dbLog } = require('./helpers/logger')
 const { db } = require('./database')
 const { processExpiredVotes } = require('./handlers')
 const { processStartupCleanup, startCleanupInterval } = require('./helpers/message-cleanup')
-const { startPeriodicSync: startCasSync } = require('./helpers/cas-sync')
+const { startPeriodicSync: startBanDatabaseSync } = require('./helpers/ban-database-sync')
 const {
   stats,
   errorHandler,
   contextLoader,
   globalBanCheck,
-  casBan,
+  banDatabase,
   spamCheck,
   dataPersistence,
   emojiInject
@@ -91,7 +91,7 @@ const handleMyChatMemberUpdates = (ctx, next) => {
 
 /**
  * Spam check orchestrator middleware
- * Coordinates CAS ban and AI spam check
+ * Coordinates global ban database and AI spam checks
  */
 const spamCheckOrchestrator = async (ctx, next) => {
   // Check both new messages and edited messages
@@ -101,7 +101,7 @@ const spamCheckOrchestrator = async (ctx, next) => {
   }
 
   // Normalize ctx.message for edited messages so all downstream code
-  // (CAS ban, spam check, quickRiskAssessment, etc.) works uniformly.
+  // (ban database, spam check, quickRiskAssessment, etc.) works uniformly.
   // Must set ctx.update.message (not ctx.message) because Telegraf v3
   // defines ctx.message as a read-only getter for ctx.update.message
   if (ctx.editedMessage && !ctx.message) {
@@ -113,9 +113,9 @@ const spamCheckOrchestrator = async (ctx, next) => {
     return next(ctx)
   }
 
-  // CAS ban check
-  const casBanned = await casBan(ctx)
-  if (casBanned) {
+  // Global ban database check
+  const globallyListed = await banDatabase(ctx)
+  if (globallyListed) {
     if (!ctx.state) ctx.state = {}
     ctx.state.isSpam = true
     return next(ctx)
@@ -165,7 +165,7 @@ const registerMiddlewares = (bot, i18n) => {
   // 9. Global ban check
   bot.use(globalBanCheck)
 
-  // 10. Spam checks (CAS + AI)
+  // 10. Spam checks (global ban database + AI)
   bot.use(spamCheckOrchestrator)
 
   // 11. Data persistence (runs after handlers)
@@ -246,8 +246,8 @@ const init = () => {
     }, 60 * 1000)
     botLog.debug('Started spam vote expiration handler')
 
-    // Start CAS (Combot Anti-Spam) sync if enabled
-    startCasSync(db)
+    // Start global ban database signature sync if enabled
+    startBanDatabaseSync(db)
   })
 }
 

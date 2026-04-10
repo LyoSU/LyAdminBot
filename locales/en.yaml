@@ -45,7 +45,7 @@ cmd:
     <code>!spam</code> — anti-spam settings
     <code>!trust</code> — trusted users (${e.reply})
     <code>!welcome</code> · <code>!gif</code> · <code>!text</code> — welcome
-    <code>!cas</code> · <code>!banChannel</code> — bans
+    <code>!banbase</code> · <code>!banChannel</code> — bans
 
     <i>${e.reply} = reply to message</i>
   my_stats:
@@ -152,9 +152,9 @@ cmd:
       ${banTime} | a: ${active} | f: ${flood}
   quote: |
     For quotes use @QuotLyBot
-  cas:
-    disable: CAS off
-    enable: CAS on
+  banDatabase:
+    disable: Global ban database off
+    enable: Global ban database on
   banChannel:
     disable: Channel ban off
     enable: Channel ban on
@@ -280,14 +280,6 @@ sticker:
       telegram: "${e.cross} Couldn't delete"
   empty_forward: "↩️ Reply to a sticker, photo, or file"
   only_admin: "${e.lock} Admins only. Personal pack — @fStikBot"
-cas:
-  banned: |
-    ⛔ ${name} banned
-
-    This account is listed in <b>CAS</b> — a global database of Telegram spammers. Users get flagged for mass advertising, scams, or fraud.
-
-    <a href="${link}">Details</a> · appeals accepted there.
-  no_permissions: "${e.warn} ${name} is in CAS spammer database\n\n${e.bulb} Give bot admin rights to handle it"
 spam:
   banned: "${e.ban} ${name} permabanned\n<code>${reason}</code>"
   muted: "${e.mute} ${name} muted for 24h\n<code>${reason}</code>"

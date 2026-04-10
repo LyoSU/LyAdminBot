@@ -8,7 +8,7 @@ const {
   handleAdminWelcomeTextReset,
   handleAdminExtra,
   handleAdminMaxExtra,
-  handleAdminCas,
+  handleAdminBanDatabase,
   handleAdminSpamSettings,
   handleSpamCallback,
   handleSendMembers,
@@ -51,7 +51,7 @@ const registerAdminRoutes = (bot) => {
   bot.hears('!text-reset', onlyAdmin, handleAdminWelcomeTextReset)
 
   // Moderation settings
-  bot.hears('!cas', onlyAdmin, handleAdminCas)
+  bot.hears('!banbase', onlyAdmin, handleAdminBanDatabase)
   bot.hears(/^!spam(?:\s(.*))?/, onlyAdmin, handleAdminSpamSettings)
   bot.hears(/^!trust(?:\s(.*))?/, onlyAdmin, handleTrust)
   bot.hears(/^!untrust(?:\s(.*))?/, onlyAdmin, handleUntrust)

@@ -45,8 +45,8 @@ const velocity = createChildLogger('VELOCITY')
 const cleanup = createChildLogger('CLEANUP')
 const report = createChildLogger('REPORT')
 const globalBan = createChildLogger('GLOBAL BAN')
-const cas = createChildLogger('CAS BAN')
-const casSync = createChildLogger('CAS SYNC')
+const banDatabase = createChildLogger('BAN DATABASE')
+const banDatabaseSync = createChildLogger('BAN DATABASE SYNC')
 const nlp = createChildLogger('NLP')
 const db = createChildLogger('DATABASE')
 const stats = createChildLogger('STATS')
@@ -69,8 +69,8 @@ module.exports = {
   cleanup,
   report,
   globalBan,
-  cas,
-  casSync,
+  banDatabase,
+  banDatabaseSync,
   nlp,
   db,
   stats,

@@ -1,12 +1,12 @@
 const mongoose = require('mongoose')
 
 /**
- * CasSyncState - Tracks CAS (Combot Anti-Spam) synchronization state
+ * BanDatabaseSyncState - Tracks global ban database synchronization state.
  *
  * This is a singleton collection - only one document exists at a time.
  * Manages resumable sync with progress tracking and error recovery.
  */
-const casSyncStateSchema = mongoose.Schema({
+const banDatabaseSyncStateSchema = mongoose.Schema({
   // Last successful sync completion
   lastSyncAt: { type: Date },
 
@@ -44,7 +44,7 @@ const casSyncStateSchema = mongoose.Schema({
 /**
  * Get or create the singleton sync state document
  */
-casSyncStateSchema.statics.getState = async function () {
+banDatabaseSyncStateSchema.statics.getState = async function () {
   let state = await this.findOne()
   if (!state) {
     state = await this.create({})
@@ -55,7 +55,7 @@ casSyncStateSchema.statics.getState = async function () {
 /**
  * Update status with optional error
  */
-casSyncStateSchema.statics.setStatus = async function (status, error = null) {
+banDatabaseSyncStateSchema.statics.setStatus = async function (status, error = null) {
   const update = { status }
   if (error) update.error = error
   if (status === 'idle') update.error = null
@@ -70,7 +70,7 @@ casSyncStateSchema.statics.setStatus = async function (status, error = null) {
 /**
  * Update progress during sync
  */
-casSyncStateSchema.statics.updateProgress = async function (lastUserId, stats = {}) {
+banDatabaseSyncStateSchema.statics.updateProgress = async function (lastUserId, stats = {}) {
   const update = {
     lastProcessedUserId: lastUserId,
     'currentBatch.processedCount': stats.processedCount || 0
@@ -93,7 +93,7 @@ casSyncStateSchema.statics.updateProgress = async function (lastUserId, stats = 
 /**
  * Mark sync as started
  */
-casSyncStateSchema.statics.startSync = async function (totalUsers = 0) {
+banDatabaseSyncStateSchema.statics.startSync = async function (totalUsers = 0) {
   return this.findOneAndUpdate(
     {},
     {
@@ -117,7 +117,7 @@ casSyncStateSchema.statics.startSync = async function (totalUsers = 0) {
 /**
  * Mark sync as completed
  */
-casSyncStateSchema.statics.completeSync = async function (stats = {}) {
+banDatabaseSyncStateSchema.statics.completeSync = async function (stats = {}) {
   return this.findOneAndUpdate(
     {},
     {
@@ -140,7 +140,7 @@ casSyncStateSchema.statics.completeSync = async function (stats = {}) {
  * Check if sync is currently running
  * Returns false if sync has been "running" for more than 2 hours (stale)
  */
-casSyncStateSchema.statics.isRunning = async function () {
+banDatabaseSyncStateSchema.statics.isRunning = async function () {
   const state = await this.findOne()
   if (state?.status !== 'running') {
     return false
@@ -158,4 +158,4 @@ casSyncStateSchema.statics.isRunning = async function () {
   return true
 }
 
-module.exports = casSyncStateSchema
+module.exports = banDatabaseSyncStateSchema

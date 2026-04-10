@@ -1,7 +1,7 @@
 const stats = require('./stats')
 const onlyGroup = require('./only-group')
 const onlyAdmin = require('./only-admin')
-const casBan = require('./cas-ban')
+const banDatabase = require('./ban-database')
 const spamCheck = require('./spam-check')
 const errorHandler = require('./error-handler')
 const contextLoader = require('./context-loader')
@@ -13,7 +13,7 @@ module.exports = {
   stats,
   onlyGroup,
   onlyAdmin,
-  casBan,
+  banDatabase,
   spamCheck,
   errorHandler,
   contextLoader,
