@@ -87,7 +87,14 @@ const mediaFingerprintSchema = mongoose.Schema({
   },
   // Optional flag set once the fingerprint crossed a spam threshold — lets
   // us short-circuit future sightings without recomputing.
-  flaggedAsSpam: { type: Boolean, default: false }
+  flaggedAsSpam: { type: Boolean, default: false },
+  // Perceptual hash (dhash, 16 hex chars = 64 bits). Populated for photo
+  // and animation types only — other media either don't benefit from it
+  // (stickers dedup fine on file_unique_id) or are too heavy to hash on
+  // every message. Used by helpers/media-fingerprint.js to find
+  // near-duplicate images posted by different accounts even when the
+  // file_unique_id differs (reupload / screenshot / crop).
+  perceptualHash: { type: String, default: null, index: true }
 }, {
   timestamps: true
 })

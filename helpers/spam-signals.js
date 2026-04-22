@@ -2,7 +2,7 @@ const { normalizeHeavy, sha256 } = require('./spam-signatures')
 const { hasTextualContent } = require('./text-utils')
 const { spam: spamLog } = require('./logger')
 const { getAccountAgeParadox } = require('./account-age')
-const { getLengthStdDev, getReplyRatio, getHourZeroCount, getTopLanguage, detectLanguage } = require('./user-stats')
+const { getLengthStdDev, getReplyRatio, getHourZeroCount, getTopLanguage, getHiddenUrlRatio, detectLanguage } = require('./user-stats')
 
 /**
  * Unified signal layer for the antispam pipeline.
@@ -205,6 +205,7 @@ const buildUserSignals = (userInfo, from) => {
   const hourZeros = getHourZeroCount(userInfo)
   const topLang = getTopLanguage(userInfo)
   const avgLen = userInfo?.globalStats?.messageStats?.avgLength || 0
+  const hiddenUrlRatio = getHiddenUrlRatio(userInfo)
 
   return {
     userId: from?.id || (userInfo && userInfo.telegram_id),
@@ -241,7 +242,11 @@ const buildUserSignals = (userInfo, from) => {
     lengthStdDev: Math.round(lengthStdDev),
     hourZeroCount: hourZeros,
     topLanguage: topLang,
-    uiLanguage: userInfo?.languageCode || from?.language_code || null
+    uiLanguage: userInfo?.languageCode || from?.language_code || null,
+    // Evasion pattern: fraction of the user's historical URLs that were
+    // hidden behind text_link entities (visible text ≠ target URL).
+    // Null when sample size too small to be meaningful.
+    hiddenUrlRatio
   }
 }
 
@@ -457,6 +462,92 @@ const computeDeterministicVerdict = ({ userSignals, quickAssessment, userContext
       rule: 'custom_emoji_network_promo',
       confidence: 88,
       reason: 'New user shares custom emoji IDs with a cluster of suspicious accounts'
+    }
+  }
+
+  // Sticker-pack cluster rule. 3+ distinct users from the same set_name
+  // within 24h is already a meaningful signal (scam packs are small and
+  // rarely shared). Combined with a new-user profile or a promo signal
+  // it's a coordinated campaign.
+  if (
+    signals.includes('sticker_pack_cluster') &&
+    (userSignals.totalMessages <= 5 || hasPromoSignal || strongPromo)
+  ) {
+    return {
+      decision: 'spam',
+      rule: 'sticker_pack_network',
+      confidence: 85,
+      reason: 'User sent a sticker from a pack reused across multiple suspicious accounts'
+    }
+  }
+
+  // Profile-photo pHash cluster rule. 3+ accounts sharing the same face/
+  // avatar image (within Hamming 10) is an identity-farm fingerprint.
+  // Combined with any promo/high-risk signal on the current message it's
+  // a deterministic ban.
+  if (
+    signals.includes('profile_photo_cluster') &&
+    userSignals.totalMessages <= 5 &&
+    (hasHighRiskSignal || strongPromo || hasPromoSignal)
+  ) {
+    return {
+      decision: 'spam',
+      rule: 'profile_photo_cluster_promo',
+      confidence: 90,
+      reason: 'Profile photo matches 3+ other accounts (stolen/reused avatar farm) and the message contains promo content'
+    }
+  }
+
+  // Perceptual-hash duplicate image rule. Even when file_unique_id
+  // differs (reupload / re-encode), the dhash match says "this is
+  // essentially the same image another account posted". New-to-us user
+  // + perceptual duplicate + any promo signal = campaign re-distribution.
+  if (
+    signals.includes('media_perceptual_duplicate') &&
+    userSignals.totalMessages <= 3 &&
+    (hasHighRiskSignal || hasPromoSignal || strongPromo)
+  ) {
+    return {
+      decision: 'spam',
+      rule: 'media_perceptual_duplicate_promo',
+      confidence: 88,
+      reason: 'Image visually matches one previously posted by another account (pHash duplicate) with promo content'
+    }
+  }
+
+  // Graph-neighbourhood coordinated-join rule. User shares 2+ chats AND
+  // first-saw-at-us within 1h of a recently-banned spammer. That's the
+  // "next account from the same farm" pattern. Combined with any promo
+  // signal we act decisively.
+  if (
+    signals.includes('graph_coordinated_join') &&
+    userSignals.totalMessages <= 5 &&
+    (hasHighRiskSignal || hasPromoSignal || strongPromo)
+  ) {
+    return {
+      decision: 'spam',
+      rule: 'graph_coordinated_farm_join',
+      confidence: 90,
+      reason: 'User joined the same chats within 1 hour of a recently-banned spammer and is posting promo content'
+    }
+  }
+
+  // Hidden-URL evasion rule. User's history shows >=50% of URLs are
+  // hidden behind text_link entities, the sample size is meaningful,
+  // AND the current message contains a promo / high-risk signal. Real
+  // users almost never bother with `text_link` for their own posts —
+  // scammers use it to bypass regex-based filters with visible text
+  // that looks harmless.
+  if (
+    userSignals.hiddenUrlRatio !== null && userSignals.hiddenUrlRatio >= 0.5 &&
+    userSignals.totalMessages >= 5 &&
+    (hasPromoSignal || hasHighRiskSignal)
+  ) {
+    return {
+      decision: 'spam',
+      rule: 'hidden_url_evasion_pattern',
+      confidence: 82,
+      reason: `User posts URLs predominantly via hidden text_link entities (${Math.round(userSignals.hiddenUrlRatio * 100)}%) — evasion pattern`
     }
   }
 

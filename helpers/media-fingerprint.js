@@ -1,4 +1,5 @@
 const { spam: spamLog } = require('./logger')
+const { dhashFromFileId, hammingDistance } = require('./image-hash')
 
 /**
  * Media fingerprint helper — extraction + DB-backed velocity lookup.
@@ -90,7 +91,7 @@ const extractFingerprint = (message) => {
  *   isNew: boolean
  * }>}
  */
-const recordAndAssess = async (db, message, { userId, chatId }) => {
+const recordAndAssess = async (db, message, { userId, chatId, telegram }) => {
   if (!db || !db.MediaFingerprint) return null
   const fp = extractFingerprint(message)
   if (!fp) return null
@@ -109,6 +110,52 @@ const recordAndAssess = async (db, message, { userId, chatId }) => {
 
     const verdict = db.MediaFingerprint.classifyVelocity(entry)
 
+    // For images (photo + animation) also compute a perceptual hash on
+    // FIRST sighting — so future reuploads by different accounts dedup
+    // against the visual content even when file_unique_id differs.
+    // We only hash on first sighting to avoid repeated work: once a
+    // fingerprint exists, subsequent sightings share the same pHash.
+    let perceptualHash = entry.perceptualHash || null
+    let perceptualClusterSize = null
+    let perceptualMatched = null
+    if (telegram && (fp.mediaType === 'photo' || fp.mediaType === 'animation')) {
+      if (!perceptualHash) {
+        try {
+          const fileIdForHash = fp.mediaType === 'photo'
+            ? (message.photo[message.photo.length - 1].file_id)
+            : (message.animation && message.animation.file_id)
+          const h = await dhashFromFileId(telegram, fileIdForHash)
+          if (h) {
+            entry.perceptualHash = h
+            perceptualHash = h
+            await entry.save().catch(() => {})
+          }
+        } catch (_err) { /* non-fatal */ }
+      }
+      // Near-duplicate scan: look for other recent fingerprints of same
+      // media type whose pHash is within Hamming 10 bits.
+      if (perceptualHash) {
+        const nearby = await db.MediaFingerprint.find({
+          mediaType: fp.mediaType,
+          perceptualHash: { $exists: true, $ne: null },
+          fileUniqueId: { $ne: fp.fileUniqueId }
+        })
+          .sort({ lastSeenAt: -1 })
+          .limit(500)
+          .select('perceptualHash uniqueUsers uniqueChats fileUniqueId')
+          .lean()
+        for (const other of nearby) {
+          if (hammingDistance(perceptualHash, other.perceptualHash) <= 10) {
+            const otherUsers = (other.uniqueUsers || []).length
+            const otherChats = (other.uniqueChats || []).length
+            perceptualClusterSize = otherUsers + (entry.uniqueUsers || []).length
+            perceptualMatched = { fileUniqueId: other.fileUniqueId, otherUsers, otherChats }
+            break
+          }
+        }
+      }
+    }
+
     return {
       fileUniqueId: fp.fileUniqueId,
       mediaType: fp.mediaType,
@@ -118,6 +165,9 @@ const recordAndAssess = async (db, message, { userId, chatId }) => {
       velocityExceeded: verdict.exceeded,
       velocityReason: verdict.reason,
       firstSeenAt: entry.firstSeenAt,
+      perceptualHash,
+      perceptualClusterSize,
+      perceptualMatched,
       // Heuristic "isNew": if firstSeenAt is within the same request window
       // we treat this as the first sighting (99% of the time correct).
       isNew: entry.occurrences === 1 ||

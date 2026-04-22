@@ -33,7 +33,14 @@ const {
 } = require('./user-stats')
 const { evaluateProfileChurn } = require('./profile-churn')
 const llmCache = require('./llm-cache')
-const { recordCustomEmojiUse, recordChatFirstMessage, queryEmojiCluster } = require('./network-detectors')
+const {
+  recordCustomEmojiUse,
+  recordChatFirstMessage,
+  queryEmojiCluster,
+  recordStickerPack,
+  fetchAndClusterProfilePhoto
+} = require('./network-detectors')
+const { queryNeighbourhood: queryGraphNeighbourhood } = require('./graph-neighbourhood')
 
 // 30s timeout for all AI API calls (SDK default is 10 minutes)
 const API_TIMEOUT_MS = 30000
@@ -1090,7 +1097,8 @@ const runMediaFingerprintPhase = async (ctx) => {
   try {
     const assessment = await recordMediaFingerprint(ctx.db, message, {
       userId: ctx.from?.id,
-      chatId: ctx.chat?.id
+      chatId: ctx.chat?.id,
+      telegram: ctx.telegram
     })
     if (!assessment) return { result: null, signalTag: null, fingerprint: null }
 
@@ -1128,6 +1136,15 @@ const runMediaFingerprintPhase = async (ctx) => {
     // Feeds into deterministic verdict combinations downstream.
     if (assessment.uniqueChats >= 2 && assessment.uniqueUsers >= 2) {
       return { result: null, signalTag: 'media_multi_chat_reuse', fingerprint: assessment }
+    }
+
+    // Perceptual-hash near-duplicate: a visually-similar image already
+    // exists in our DB from a DIFFERENT file_unique_id. The image was
+    // reposted (reupload / screenshot / crop). Treat as soft signal —
+    // combined with other context, this is a campaign-distribution
+    // fingerprint.
+    if (assessment.perceptualMatched) {
+      return { result: null, signalTag: 'media_perceptual_duplicate', fingerprint: assessment }
     }
 
     return { result: null, signalTag: null, fingerprint: assessment }
@@ -1842,6 +1859,59 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
           quickAssessment.signals.push('chat_new_user_burst')
           quickAssessment.chatBurst = burst
         }
+      }
+
+      // Sticker-pack cluster: if the message is a sticker, record the
+      // set_name and check whether 3+ distinct users shared the same pack
+      // within 24h. Real users send stickers from huge popular packs;
+      // scam packs are small and novel — cross-user reuse is a rare event
+      // that correlates with farm activity.
+      const stickerMsg = (ctx.message && ctx.message.sticker) || null
+      if (stickerMsg && stickerMsg.set_name && ctx.from?.id) {
+        const stickerCluster = recordStickerPack(ctx.from.id, stickerMsg.set_name)
+        if (stickerCluster && !quickAssessment.signals.includes('sticker_pack_cluster')) {
+          quickAssessment.signals.push('sticker_pack_cluster')
+          quickAssessment.stickerPackCluster = stickerCluster
+        }
+      }
+
+      // Graph-neighbourhood taint. Cheap in-memory query: does this user
+      // share chats with any recently-banned user AND join close in time?
+      // We query on every message for low-tenure users (totalMessages <= 5)
+      // — more than enough to catch "next account from the same farm".
+      const totalForGraph = ctx.session?.userInfo?.globalStats?.totalMessages || 0
+      if (!isChannelPostEarly && ctx.from?.id && totalForGraph <= 5) {
+        const neighbourhood = queryGraphNeighbourhood({
+          userId: ctx.from.id,
+          chats: ctx.session?.userInfo?.globalStats?.groupsList || [],
+          firstSeenAt: ctx.session?.userInfo?.globalStats?.firstSeen
+        })
+        if (neighbourhood) {
+          const tag = neighbourhood.tier === 'coordinated'
+            ? 'graph_coordinated_join'
+            : 'graph_neighbour_recent_ban'
+          if (!quickAssessment.signals.includes(tag)) {
+            quickAssessment.signals.push(tag)
+            quickAssessment.graphNeighbourhood = neighbourhood
+          }
+        }
+      }
+
+      // Profile-photo pHash cluster: only fetched ONCE per user (cached).
+      // Skipped for channel posts and for users we already hashed. The
+      // fetchAndClusterProfilePhoto helper handles caching internally.
+      // Heavy operation (HTTP download) — only triggered when the user is
+      // genuinely new to us (totalMessages <= 3) to keep network cost
+      // bounded.
+      const totalMsgs = ctx.session?.userInfo?.globalStats?.totalMessages || 0
+      if (!isChannelPostEarly && ctx.from?.id && ctx.telegram && totalMsgs <= 3) {
+        try {
+          const photoCluster = await fetchAndClusterProfilePhoto(ctx.telegram, ctx.from.id)
+          if (photoCluster && !quickAssessment.signals.includes('profile_photo_cluster')) {
+            quickAssessment.signals.push('profile_photo_cluster')
+            quickAssessment.profilePhotoCluster = photoCluster
+          }
+        } catch (_err) { /* non-fatal */ }
       }
     } catch (netErr) {
       spamLog.warn({ err: netErr.message }, 'Network detectors failed, continuing')

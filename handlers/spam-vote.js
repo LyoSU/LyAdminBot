@@ -4,6 +4,7 @@ const { getReputationStatus } = require('../helpers/reputation')
 const { spamVote: log, nlp: nlpLog } = require('../helpers/logger')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
 const nlpClient = require('../helpers/nlp-client')
+const adminFeedback = require('../helpers/admin-feedback')
 
 /**
  * Check if a user is eligible to vote on spam decisions
@@ -583,6 +584,10 @@ const handleAdminOverride = async (ctx) => {
 
   const chatId = ctx.chat.id
   const adminId = ctx.from.id
+
+  // Attribute this override to the source/rule that triggered the ban.
+  // Done BEFORE the unban work so we capture intent even if unban fails.
+  try { adminFeedback.registerOverride(chatId, bannedUserId) } catch (_err) { /* non-fatal */ }
 
   // 1. Verify presser is admin
   try {

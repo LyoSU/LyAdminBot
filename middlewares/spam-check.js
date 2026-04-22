@@ -26,6 +26,7 @@ const { spam: spamLog, spamAction, reputation: repLog, notification: notifyLog }
 const { scheduleDeletion } = require('../helpers/message-cleanup')
 const { logSpamDecision, buildUserSignals } = require('../helpers/spam-signals')
 const { snapshotMessage, analyzeEdit } = require('../helpers/edit-diff')
+const adminFeedback = require('../helpers/admin-feedback')
 
 /**
  * Determine if user should receive full ban (vs temporary mute)
@@ -551,6 +552,20 @@ module.exports = async (ctx) => {
           reason: action.reason,
           confidence: result.confidence
         }, 'Taking action')
+
+        // Register this auto-action in the admin-feedback buffer so that
+        // if an admin later clicks "Not Spam" we can attribute the false
+        // positive to the exact rule/source that fired here.
+        try {
+          adminFeedback.recordAction(ctx.chat.id, userId, {
+            source: result.source,
+            rule: (result.source && result.source.includes(':'))
+              ? result.source.split(':').slice(1).join(':')
+              : null,
+            confidence: result.confidence,
+            reason: action.reason
+          })
+        } catch (_err) { /* non-fatal */ }
 
         // Get mute duration from action or default
         const muteDuration = action.duration || (senderInfo.is_premium ? 3600 : 86400)

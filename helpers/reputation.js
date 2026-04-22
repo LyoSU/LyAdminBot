@@ -1,4 +1,5 @@
 const { predictCreationDate } = require('./account-age')
+const graphNeighbourhood = require('./graph-neighbourhood')
 
 /**
  * Calculate account age in months from Telegram user ID
@@ -261,6 +262,17 @@ const processSpamAction = (userInfo, options) => {
       userInfo.globalBanReason = banReason
       userInfo.globalBanDate = new Date()
       globalBanApplied = true
+
+      // Register the ban in the graph-neighbourhood buffer so that the NEXT
+      // incoming user who shares chats with this one can be soft-tainted
+      // as "sibling of a freshly-banned farm account". No persistence —
+      // the buffer is in-memory with short TTL.
+      try {
+        graphNeighbourhood.registerBan(userId, {
+          chats: stats.groupsList || [],
+          firstSeenAt: stats.firstSeen
+        })
+      } catch (_err) { /* non-fatal */ }
     }
   }
 

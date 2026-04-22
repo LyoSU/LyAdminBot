@@ -401,6 +401,27 @@ const getTopLanguage = (user) => {
   return list[0]?.code || null
 }
 
+/**
+ * Ratio of hidden text_link URLs to total URLs the user has ever posted.
+ *
+ * Spammers prefer `text_link` entities because the VISIBLE text differs
+ * from the actual URL ("click here" → scam.com), bypassing simple regex
+ * filters. A legitimate user's link posting tends to be a plain URL most
+ * of the time; a >= 0.5 ratio over enough samples is an evasion pattern.
+ *
+ * Returns null when sample size is too small to be meaningful.
+ */
+const HIDDEN_URL_RATIO_MIN_SAMPLES = 5
+const getHiddenUrlRatio = (user) => {
+  const ec = user?.globalStats?.messageStats?.entityCounts
+  if (!ec) return null
+  const textLinks = ec.text_link || 0
+  const plain = ec.url || 0
+  const total = textLinks + plain
+  if (total < HIDDEN_URL_RATIO_MIN_SAMPLES) return null
+  return textLinks / total
+}
+
 module.exports = {
   // Message-level ingestion
   recordMessageStats,
@@ -418,6 +439,7 @@ module.exports = {
   getReplyRatio,
   getHourZeroCount,
   getTopLanguage,
+  getHiddenUrlRatio,
 
   // Exposed for tests
   welfordUpdate,

@@ -30,6 +30,7 @@
 const { velocity: velocityLog } = require('./logger')
 const { getSimHash } = require('./velocity')
 const { hasTextualContent } = require('./text-utils')
+const { dhashFromFileId, hammingDistance: dhashHamming } = require('./image-hash')
 
 // ---------------------------------------------------------------------------
 // Custom emoji cluster
@@ -221,9 +222,165 @@ if (typeof setInterval === 'function') {
 // Test helpers (exported only for test / ops use; not imported in prod code)
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Sticker pack fingerprint
+// ---------------------------------------------------------------------------
+//
+// Telegram sticker messages carry `sticker.set_name` — a stable identifier
+// for the pack the sticker belongs to. Spam/scam operators often create
+// dedicated packs (e.g. "earn_money_pack", "scam_crypto") and seed them
+// across their account farm. Tracking cross-user set_name reuse surfaces
+// the network without needing to hash individual stickers.
+//
+// Behaviour: Map<setName, Set<userId>>. 24h window. Cluster threshold 3
+// distinct users — the same pack from 3+ "different" users within a day
+// is a strong pack-as-identifier signal. Real human sharing of popular
+// packs is rarer than you'd think: most users stick to default packs that
+// change content over time, so novel set_name values repeated quickly are
+// suspicious by themselves.
+
+const STICKER_PACK_WINDOW_MS = 24 * 60 * 60 * 1000
+const STICKER_PACK_USER_THRESHOLD = 3
+const stickerPackClusters = new Map()
+
+const recordStickerPack = (userId, setName) => {
+  if (!userId || !setName) return null
+  const now = Date.now()
+  let entry = stickerPackClusters.get(setName)
+  if (!entry) {
+    entry = { users: new Set(), firstSeenAt: now, lastSeenAt: now }
+    stickerPackClusters.set(setName, entry)
+  }
+  if (now - entry.lastSeenAt > STICKER_PACK_WINDOW_MS) {
+    entry.users = new Set()
+    entry.firstSeenAt = now
+  }
+  entry.users.add(userId)
+  entry.lastSeenAt = now
+  if (entry.users.size >= STICKER_PACK_USER_THRESHOLD) {
+    return { setName, users: entry.users.size, windowMs: now - entry.firstSeenAt }
+  }
+  return null
+}
+
+const queryStickerPack = (setName) => {
+  if (!setName) return { clustered: false, userCount: 0 }
+  const entry = stickerPackClusters.get(setName)
+  if (!entry) return { clustered: false, userCount: 0 }
+  return {
+    clustered: entry.users.size >= STICKER_PACK_USER_THRESHOLD,
+    userCount: entry.users.size
+  }
+}
+
+if (typeof setInterval === 'function') {
+  setInterval(() => {
+    const now = Date.now()
+    for (const [name, entry] of stickerPackClusters) {
+      if (now - entry.lastSeenAt > 2 * STICKER_PACK_WINDOW_MS) stickerPackClusters.delete(name)
+    }
+  }, 6 * 60 * 60 * 1000).unref()
+}
+
+// ---------------------------------------------------------------------------
+// Profile photo perceptual hash clustering
+// ---------------------------------------------------------------------------
+//
+// Account farms often reuse stolen or AI-generated profile photos across
+// dozens of accounts. We capture the first-sighted user's profile photo,
+// dhash it, and maintain an in-memory index. When a new user first appears
+// and their photo's dhash matches (Hamming <= 10) an existing cluster, we
+// emit a signal.
+//
+// Cost amortisation: profile photo is fetched ONCE per user (cached in
+// profilePhotoByUser). The actual dhash is cheap; the network hop to
+// download the image is the cost, which we only pay for unseen users.
+//
+// Time bound: entries expire 7d after last sighting to prevent unbounded
+// memory growth for long-running instances.
+
+const PROFILE_PHOTO_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const PROFILE_PHOTO_CLUSTER_THRESHOLD = 3
+const PROFILE_PHOTO_MATCH_HAMMING = 10
+
+// Map<userId, { hash, seenAt }>
+const profilePhotoByUser = new Map()
+// Array of cluster entries: { hash, users: Set<userId>, seenAt }
+const profilePhotoClusters = []
+
+const recordProfilePhotoHash = (userId, hash) => {
+  if (!userId || typeof hash !== 'string') return null
+  const now = Date.now()
+  profilePhotoByUser.set(userId, { hash, seenAt: now })
+
+  // Find or create cluster
+  let targetCluster = null
+  for (const c of profilePhotoClusters) {
+    if (dhashHamming(c.hash, hash) <= PROFILE_PHOTO_MATCH_HAMMING) {
+      targetCluster = c
+      break
+    }
+  }
+  if (!targetCluster) {
+    targetCluster = { hash, users: new Set(), seenAt: now }
+    profilePhotoClusters.push(targetCluster)
+  }
+  targetCluster.users.add(userId)
+  targetCluster.seenAt = now
+
+  if (targetCluster.users.size >= PROFILE_PHOTO_CLUSTER_THRESHOLD) {
+    return { clusterUsers: targetCluster.users.size, hash: targetCluster.hash }
+  }
+  return null
+}
+
+/**
+ * Attempt to cache + cluster this user's profile photo. Called on first
+ * sighting of a user (expensive — network hop). Returns a cluster verdict
+ * if the user's photo matches 3+ others.
+ */
+const fetchAndClusterProfilePhoto = async (telegram, userId) => {
+  if (!telegram || !userId) return null
+  // Short-circuit if we already hashed this user recently.
+  const cached = profilePhotoByUser.get(userId)
+  if (cached && Date.now() - cached.seenAt < PROFILE_PHOTO_TTL_MS) {
+    return null
+  }
+  try {
+    const photos = await telegram.getUserProfilePhotos(userId, 0, 1)
+    if (!photos || !photos.photos || photos.photos.length === 0) return null
+    const smallest = photos.photos[0][0]
+    if (!smallest || !smallest.file_id) return null
+    const hash = await dhashFromFileId(telegram, smallest.file_id)
+    if (!hash) return null
+    return recordProfilePhotoHash(userId, hash)
+  } catch (_err) {
+    return null
+  }
+}
+
+if (typeof setInterval === 'function') {
+  setInterval(() => {
+    const now = Date.now()
+    for (const [uid, entry] of profilePhotoByUser) {
+      if (now - entry.seenAt > 2 * PROFILE_PHOTO_TTL_MS) profilePhotoByUser.delete(uid)
+    }
+    // Prune stale clusters
+    const alive = []
+    for (const c of profilePhotoClusters) {
+      if (now - c.seenAt <= 2 * PROFILE_PHOTO_TTL_MS) alive.push(c)
+    }
+    profilePhotoClusters.length = 0
+    profilePhotoClusters.push(...alive)
+  }, 12 * 60 * 60 * 1000).unref()
+}
+
 const _resetForTests = () => {
   emojiClusters.clear()
   chatBurstQueue.clear()
+  stickerPackClusters.clear()
+  profilePhotoByUser.clear()
+  profilePhotoClusters.length = 0
 }
 
 try { if (velocityLog) { /* touch for coverage */ } } catch (_e) { /* ignore */ }
@@ -240,6 +397,19 @@ module.exports = {
   BURST_WINDOW_MS,
   BURST_USER_THRESHOLD,
   BURST_SIMHASH_HAMMING_THRESHOLD,
+
+  // Sticker pack fingerprint
+  recordStickerPack,
+  queryStickerPack,
+  STICKER_PACK_WINDOW_MS,
+  STICKER_PACK_USER_THRESHOLD,
+
+  // Profile photo pHash clustering
+  recordProfilePhotoHash,
+  fetchAndClusterProfilePhoto,
+  PROFILE_PHOTO_TTL_MS,
+  PROFILE_PHOTO_CLUSTER_THRESHOLD,
+  PROFILE_PHOTO_MATCH_HAMMING,
 
   // Tests
   _resetForTests
