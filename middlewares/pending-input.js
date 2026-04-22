@@ -33,6 +33,15 @@ const pendingInputMiddleware = async (ctx, next) => {
   } catch (err) {
     log.error({ err: err.message, type: pi.type }, 'pending-input handler error')
   }
+
+  // Persist mutations (we skipped next(), so dataPersistence never runs).
+  // Mirrors the save semantics of middlewares/data-persistence.js saveGroupInfo().
+  if (ctx.group && ctx.group.info && typeof ctx.group.info.save === 'function' && !ctx.group.info.isSaving) {
+    ctx.group.info.isSaving = true
+    try { await ctx.group.info.save() }
+    catch (err) { log.debug({ err: err.message, type: pi.type }, 'pending-input: group save failed') }
+    finally { ctx.group.info.isSaving = false }
+  }
   // Intentionally do NOT call next — the message was consumed
 }
 

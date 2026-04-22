@@ -113,6 +113,34 @@ test('passes through when pendingInput is expired', async () => {
   assert.strictEqual(nextCalled, true)
 })
 
+test('group.info.save is called after successful handler (persistence)', async () => {
+  const mod = fresh()
+  let saveCalled = false
+  mod.registerInputHandler('t', async () => {})
+  const ctx = mkCtx({
+    pendingInput: { userId: 1, type: 't', screen: 's', promptMsgId: 7, expiresAt: new Date(Date.now() + 60_000) },
+    replyToBotPromptId: 7
+  })
+  ctx.group.info.save = async () => { saveCalled = true }
+  let nextCalled = false
+  await mod.pendingInputMiddleware(ctx, async () => { nextCalled = true })
+  assert.strictEqual(saveCalled, true, 'should persist group changes')
+  assert.strictEqual(nextCalled, false, 'still claims the message (no next)')
+})
+
+test('group.info.save is still called after handler error', async () => {
+  const mod = fresh()
+  let saveCalled = false
+  mod.registerInputHandler('t', async () => { throw new Error('boom') })
+  const ctx = mkCtx({
+    pendingInput: { userId: 1, type: 't', screen: 's', promptMsgId: 7, expiresAt: new Date(Date.now() + 60_000) },
+    replyToBotPromptId: 7
+  })
+  ctx.group.info.save = async () => { saveCalled = true }
+  await mod.pendingInputMiddleware(ctx, async () => {})
+  assert.strictEqual(saveCalled, true, 'should persist even when handler throws (cleared pendingInput must reach DB)')
+})
+
 test('handler errors do not bubble up; next is NOT called', async () => {
   const mod = fresh()
   mod.registerInputHandler('t', async () => { throw new Error('boom') })
