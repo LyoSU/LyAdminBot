@@ -73,6 +73,22 @@ const groupSchema = mongoose.Schema({
       trustedUsers: [{
         type: Number
       }]
+    },
+    menuState: {
+      type: [{
+        userId: { type: Number },
+        screen: { type: String },
+        data: { type: mongoose.Schema.Types.Mixed },
+        expiresAt: { type: Date }
+      }],
+      default: []
+    },
+    pendingInput: {
+      userId: { type: Number },
+      type: { type: String },
+      screen: { type: String },
+      expiresAt: { type: Date },
+      promptMsgId: { type: Number }
     }
   },
   stats: {
