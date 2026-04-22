@@ -79,6 +79,13 @@ const updateUniqueness = (userInfo, text) => {
   stats.uniqueMessageHashes = distinctInWindow
   stats.uniquenessRatio = ratio
 
+  // Mongoose doesn't always notice mutations on nested-object array paths
+  // (especially the first time the field is created). Mark explicitly.
+  if (typeof userInfo.markModified === 'function') {
+    userInfo.markModified('globalStats.uniquenessSamples')
+    userInfo.markModified('globalStats.uniquenessRatio')
+  }
+
   return { hash, uniquenessRatio: ratio, trackedMessages: stats.trackedMessages }
 }
 
@@ -122,6 +129,12 @@ const trackIdentity = (userInfo, from) => {
   const nameChanged = pushHistoryIfChanged(userInfo.nameHistory, displayName, NAME_HISTORY_LIMIT)
   const usernameChanged = pushHistoryIfChanged(userInfo.usernameHistory, from.username || '', USERNAME_HISTORY_LIMIT)
 
+  // Make Mongoose persist the subdocument array changes.
+  if (typeof userInfo.markModified === 'function') {
+    if (nameChanged) userInfo.markModified('nameHistory')
+    if (usernameChanged) userInfo.markModified('usernameHistory')
+  }
+
   return { nameChanged, usernameChanged }
 }
 
@@ -131,9 +144,15 @@ const trackIdentity = (userInfo, from) => {
 
 /**
  * Count identity-change events inside the last NAME_CHURN_WINDOW_MS.
+ *
+ * The very first entry seeded for a user is NOT a change — it is just our
+ * baseline observation of their current identity. So a history of length 1
+ * always reports 0 churn, even if seeded today. Only when at least 2
+ * entries exist (an actual transition happened) do we count entries within
+ * the window.
  */
 const countRecentChanges = (history) => {
-  if (!Array.isArray(history) || history.length === 0) return 0
+  if (!Array.isArray(history) || history.length < 2) return 0
   const cutoff = Date.now() - NAME_CHURN_WINDOW_MS
   let count = 0
   for (const entry of history) {

@@ -222,16 +222,14 @@ const processSpamAction = (userInfo, options) => {
     stats.deletedMessages = (stats.deletedMessages || 0) + 1
   }
 
-  // Force reputation recalculation
+  // Force reputation recalculation marker
   if (userInfo.reputation) {
     userInfo.reputation.lastCalculated = null
   }
 
-  // Recalculate reputation (now includes external ban + ban state)
-  userInfo.reputation = calculateReputation(stats, userId, {
-    isGlobalBanned: userInfo.isGlobalBanned,
-    externalBan: userInfo.externalBan
-  })
+  // NOTE: reputation calculation is deferred until AFTER potentially setting
+  // isGlobalBanned below, so the hard ceiling (score <= 10 when banned) is
+  // applied immediately on the very first detection that triggers a ban.
 
   // Apply global ban — three triggers:
   //   1. High-confidence single detection (existing behavior)
@@ -265,6 +263,12 @@ const processSpamAction = (userInfo, options) => {
       globalBanApplied = true
     }
   }
+
+  // Now compute reputation with the freshly-set ban state in scope.
+  userInfo.reputation = calculateReputation(stats, userId, {
+    isGlobalBanned: userInfo.isGlobalBanned,
+    externalBan: userInfo.externalBan
+  })
 
   return {
     statsUpdated: true,

@@ -84,9 +84,8 @@ const checkBanDatabase = async (userId) => {
 const cacheLolsResult = (ctx, body) => {
   if (!ctx || !ctx.session || !ctx.session.userInfo || !body || body.ok !== true) return
   const userInfo = ctx.session.userInfo
-  if (!userInfo.externalBan) userInfo.externalBan = {}
 
-  const previous = userInfo.externalBan.lols || {}
+  const previous = (userInfo.externalBan && userInfo.externalBan.lols) || {}
   const next = {
     banned: Boolean(body.banned),
     offenses: Number.isFinite(body.offenses) ? body.offenses : (previous.offenses || 0),
@@ -97,7 +96,16 @@ const cacheLolsResult = (ctx, body) => {
     checkedAt: new Date()
   }
 
-  userInfo.externalBan.lols = next
+  // Reassign the whole subtree so Mongoose registers the path change.
+  // Mutating a deeply-nested key in-place on a plain-object schema branch
+  // is not always tracked, especially if externalBan was undefined before.
+  userInfo.externalBan = {
+    ...(userInfo.externalBan ? userInfo.externalBan.toObject ? userInfo.externalBan.toObject() : userInfo.externalBan : {}),
+    lols: next
+  }
+  if (typeof userInfo.markModified === 'function') {
+    userInfo.markModified('externalBan')
+  }
 }
 
 const banSender = async (ctx, userId, isSenderChat) => {

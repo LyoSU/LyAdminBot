@@ -105,13 +105,20 @@ module.exports = async (ctx) => {
   if (ctx.chat && ['group', 'supergroup'].includes(ctx.chat.type)) {
     const groupId = ctx.chat.id
 
-    // Initialize globalStats if not exists
+    // Initialize globalStats if not exists.
+    // firstSeen seed: prefer the document's true age over "now" — otherwise
+    // every existing 1M-user record we never tracked before would look like
+    // it just appeared today, falsely triggering the sleeper-account rule.
     if (!user.globalStats) {
+      const firstActMs = user.first_act ? user.first_act * 1000 : null
+      const seededFirstSeen = user.createdAt ? new Date(user.createdAt)
+        : firstActMs ? new Date(firstActMs)
+          : new Date()
       user.globalStats = {
         totalMessages: 0,
         groupsActive: 0,
         groupsList: [],
-        firstSeen: new Date(),
+        firstSeen: seededFirstSeen,
         lastActive: new Date(),
         spamDetections: 0,
         deletedMessages: 0,

@@ -1034,11 +1034,11 @@ const runQuickAssessmentPhase = (ctx) => {
     quickAssessment = quickRiskAssessment(ctx)
 
     // Merge profile-signal detectors. analyzeProfile is cheap (regex over
-    // text + name + bio if cached) and runs without external calls. Bio
-    // comes from a previous getChat round-trip when available.
+    // text + name) and runs without external calls. Bio-derived signals
+    // are only computed in the LLM phase where chatInfo is fetched, since
+    // this phase intentionally avoids any network round-trip.
     const userInfo = ctx.session?.userInfo
-    const cachedChatInfo = ctx.session?._cachedChatInfo // populated later in pipeline
-    const profile = analyzeProfile(ctx, userInfo, cachedChatInfo)
+    const profile = analyzeProfile(ctx, userInfo, null)
     const { signals: pSignals, trustSignals: pTrust } = profileTags(profile)
     for (const s of pSignals) if (!quickAssessment.signals.includes(s)) quickAssessment.signals.push(s)
     for (const t of pTrust) if (!quickAssessment.trustSignals.includes(t)) quickAssessment.trustSignals.push(t)
@@ -1391,8 +1391,15 @@ GUIDANCE
       is_premium: Boolean(ctx.from?.is_premium),
       language_code: ctx.from?.language_code || null,
       bio: userBio ? userBio.substring(0, 300) : null,
+      // is_new_account = Telegram account ID indicates registration < ~6 mo
       is_new_account: Boolean(userContext.isNewAccount),
-      messages_in_group: userContext.messageCount || 0,
+      // The two counts BELOW include the message currently being analyzed
+      // (incremented in contextLoader before this phase). Explicit naming
+      // prevents the model from second-guessing whether "1" means "0 prior".
+      messages_in_this_group_including_current: userContext.messageCount || 0,
+      messages_globally_including_current: userContext.globalMessageCount || 0,
+      is_first_message_in_this_group: (userContext.messageCount || 0) <= 1,
+      is_first_message_ever_seen: (userContext.globalMessageCount || 0) <= 1,
       telegram_rating_level: userContext.telegramRating?.level || 0,
       channel: channelInfo
     },
@@ -1521,7 +1528,12 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     // PHASE 1.5: Deterministic verdict — short-circuit when signals are
     // overwhelming. Conservative by design: every rule must be high-precision
     // so we never short-circuit a genuine user. Falls through to LLM otherwise.
-    {
+    //
+    // Skipped for channel posts: ctx.session.userInfo belongs to whoever
+    // triggered the update (often an unrelated user), so user-history rules
+    // would mix wrong data. Channels still go through the rest of the pipeline.
+    const isChannelPostEarly = !!(ctx.message?.sender_chat?.type === 'channel')
+    if (!isChannelPostEarly) {
       const userSignalsEarly = buildUserSignals(ctx.session?.userInfo, ctx.from)
       const userContextEarly = buildUserContext(ctx, null, quickAssessment)
       const verdict = computeDeterministicVerdict({
