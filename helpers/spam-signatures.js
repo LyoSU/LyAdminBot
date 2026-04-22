@@ -71,9 +71,12 @@ const extractStructure = (text) => {
   if (/[\u{1F300}-\u{1F9FF}]/u.test(text)) patterns.push('EMOJI')
   if (/[!?]{2,}/.test(text)) patterns.push('EXCLAIM')
   if (/[A-Z]{5,}/.test(text)) patterns.push('CAPS')
-  if (/крипт|crypto|bitcoin|btc|eth|ton|usdt/i.test(text)) patterns.push('CRYPTO')
-  if (/заробі|заработ|earn|profit|income|дохід/i.test(text)) patterns.push('MONEY')
-  if (/бот|bot|канал|channel/i.test(text)) patterns.push('PROMO')
+  // Structural markers only (no keyword lists). "Bot-style tags" covers
+  // cashtags ($BTC, $USDT) which Telegram ties to its cashtag entity but
+  // we detect structurally here because this function works on raw text.
+  if (/\$[A-Za-z]{2,10}\b/.test(text)) patterns.push('CASHTAG')
+  // Digit-run inside price-like bracket: "+$500", "5000₴", "10k USDT"
+  if (/\b\d+\s*k\b/i.test(text) || /\b\d{3,}\b.*[$€£₴₽¥]/m.test(text)) patterns.push('BIGPRICE')
 
   // Add word count bucket
   const words = text.split(/\s+/).length
