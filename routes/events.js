@@ -4,7 +4,8 @@ const {
   handleAdminJsonReset,
   handleReport,
   isBotMentionReport,
-  handleChatMember
+  handleChatMember,
+  handleMessageReaction
 } = require('../handlers')
 
 /**
@@ -19,6 +20,11 @@ const registerEvents = (bot) => {
   // Registered BEFORE 'new_chat_members' because telegraf fires both for
   // legacy-group joins; chat_member is the richer payload.
   bot.on('chat_member', handleChatMember)
+
+  // message_reaction — crowd-sourced spam-feedback signal (see
+  // handlers/message-reaction.js). 3+ distinct trusted users hitting a
+  // message with 👎💩🤮🤬🤡 within 5min triggers retroactive delete.
+  bot.on('message_reaction', handleMessageReaction)
 
   // New chat members welcome (legacy `new_chat_members` message event)
   bot.on('new_chat_members', handleWelcome)

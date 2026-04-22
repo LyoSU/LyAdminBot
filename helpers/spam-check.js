@@ -1158,16 +1158,19 @@ const runQuickAssessmentPhase = (ctx) => {
     for (const t of pTrust) if (!quickAssessment.trustSignals.includes(t)) quickAssessment.trustSignals.push(t)
     quickAssessment.profile = profile
 
-    // Fast-post-after-join signal. If we captured the chat_member join event
-    // and the user posted their first message within 30 seconds, push a
-    // quick-assessment tag. Bot farms are the main source — humans usually
-    // take at least a few minutes to orient themselves in a new chat.
+    // Fast-post-after-join signal. firstMessageLatencyMs is a persistent
+    // trait, so we only surface this signal while the user is still
+    // genuinely "new" in this chat — once they have >5 messages the
+    // historical latency no longer tells us anything useful about the
+    // current message. Otherwise a veteran who once joined fast would
+    // keep bleeding a spam signal forever.
     const memberStatsQA = ctx.group && ctx.group.members && ctx.from &&
       ctx.group.members[ctx.from.id] && ctx.group.members[ctx.from.id].stats
     const latencyQA = memberStatsQA && Number.isFinite(memberStatsQA.firstMessageLatencyMs)
       ? memberStatsQA.firstMessageLatencyMs
       : null
-    if (latencyQA !== null && latencyQA < 30 * 1000) {
+    const memberMsgCount = (memberStatsQA && memberStatsQA.messagesCount) || 0
+    if (latencyQA !== null && latencyQA < 30 * 1000 && memberMsgCount <= 5) {
       if (!quickAssessment.signals.includes('fast_post_after_join')) {
         quickAssessment.signals.push('fast_post_after_join')
       }

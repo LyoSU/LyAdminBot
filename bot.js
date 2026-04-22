@@ -177,10 +177,20 @@ const registerMiddlewares = (bot, i18n) => {
 //
 //   chat_member            — join/leave events (used for first-message-latency
 //                            detection: joinedAt vs firstMessageAt delta).
+//                            REQUIRES explicit subscription: default excludes.
 //   message_reaction       — emoji reactions on other users' messages. Feeds
 //                            the crowd-sourced spam-signal layer (3+ negative
 //                            reactions from trusted users → auto-escalate).
-//   message_reaction_count — aggregated reaction counts for popular posts.
+//                            REQUIRES explicit subscription AND bot must be an
+//                            ADMIN of the chat — Telegram does NOT deliver this
+//                            update to regular bot members. No admin → the
+//                            reaction-feedback layer silently degrades to no-op.
+//   message_reaction_count — aggregated anonymous reaction counts for large
+//                            chats (>50 members). Same admin rule applies.
+//
+// Per Bot API: "Specify an empty list to receive all update types EXCEPT
+// chat_member, message_reaction, and message_reaction_count (default)."
+// i.e. these three MUST be listed explicitly — they never arrive by default.
 const ALLOWED_UPDATES = [
   'message',
   'edited_message',

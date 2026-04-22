@@ -34,6 +34,7 @@ const { handleReport, isBotMentionReport } = require('./report')
 const { handleTrust, handleUntrust } = require('./admin/trust')
 const { handleSpamVoteCallback, handleAdminOverride, processExpiredVotes } = require('./spam-vote')
 const handleChatMember = require('./chat-member')
+const handleMessageReaction = require('./message-reaction')
 
 module.exports = {
   handleStart,
@@ -75,5 +76,6 @@ module.exports = {
   handleSpamVoteCallback,
   handleAdminOverride,
   processExpiredVotes,
-  handleChatMember
+  handleChatMember,
+  handleMessageReaction
 }

@@ -54,14 +54,13 @@ module.exports = async (ctx) => {
     })
 
     if (existing) {
-      // Don't overwrite a pre-existing joinedAt — the first recorded join is
-      // what matters for latency. If firstMessageAt was already set (user
-      // left, rejoined, and our earlier session recorded their first post),
-      // reset it so rejoin→first-post latency is recomputed for the new era.
-      if (!existing.stats.joinedAt) {
+      // Only stamp joinedAt if it's empty AND we haven't already observed
+      // a first-message from this user. Otherwise the stats are misleading:
+      //   - joinedAt unset + firstMessageAt set = user was here before we
+      //     subscribed to chat_member; latency is unknowable, don't fabricate
+      //   - joinedAt already set = earliest recorded join wins
+      if (!existing.stats.joinedAt && !existing.stats.firstMessageAt) {
         existing.stats.joinedAt = now
-        existing.stats.firstMessageAt = null
-        existing.stats.firstMessageLatencyMs = null
         await existing.save()
       }
     } else {

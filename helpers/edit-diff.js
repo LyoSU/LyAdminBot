@@ -38,12 +38,15 @@ const SNAPSHOT_MAX = 20000
 // Map<chatId:messageId, { text, ts }>
 const snapshots = new Map()
 
+// Local structural patterns. Shortener / private-invite / bot-deeplink
+// detection is delegated to profile-signals.analyzeUrls so there is a
+// single source of truth — adding a new shortener or invite shape there
+// automatically improves edit-diff detection without duplicated lists.
 const urlRegex = /(?:https?:\/\/|t\.me\/|telegram\.me\/|wa\.me\/)[^\s<>]+/gi
 const mentionRegex = /@[A-Za-z0-9_]{3,}/g
-const privateInviteRegex = /(?:t|telegram)\.me\/(?:\+[\w-]+|joinchat\/[\w-]+)/i
-const shortenerShapeRegex = /\b(?:bit\.ly|tinyurl\.com|t\.co|is\.gd|goo\.gl|cutt\.ly|rebrand\.ly|choko\.link|wa\.me)\b/i
-const botDeeplinkRegex = /t\.me\/[\w_]+bot\?start=/i
 const INVISIBLE = /[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g
+
+const { analyzeUrls } = require('./profile-signals')
 
 const countMatches = (text, re) => {
   if (!text || typeof text !== 'string') return 0
@@ -94,6 +97,13 @@ const analyzeEdit = (chatId, messageId, newText) => {
   const oldText = prior.text || ''
   const newT = (newText || '').toString()
 
+  // Delegate shortener / private-invite / bot-deeplink / punycode to
+  // profile-signals.analyzeUrls so we keep ONE source of truth for what
+  // counts as a promo-link family. The "appeared" flags express the
+  // semantic delta "this class was NOT in the old text but IS now".
+  const oldUrls = analyzeUrls(oldText)
+  const newUrls = analyzeUrls(newT)
+
   const delta = {
     snapshotMissed: false,
     oldLen: oldText.length,
@@ -101,9 +111,10 @@ const analyzeEdit = (chatId, messageId, newText) => {
     urlAdded: countMatches(newT, urlRegex) - countMatches(oldText, urlRegex),
     mentionAdded: countMatches(newT, mentionRegex) - countMatches(oldText, mentionRegex),
     invisibleAdded: countMatches(newT, INVISIBLE) - countMatches(oldText, INVISIBLE),
-    privateInviteAppeared: privateInviteRegex.test(newT) && !privateInviteRegex.test(oldText),
-    shortenerAppeared: shortenerShapeRegex.test(newT) && !shortenerShapeRegex.test(oldText),
-    botDeeplinkAppeared: botDeeplinkRegex.test(newT) && !botDeeplinkRegex.test(oldText)
+    privateInviteAppeared: newUrls.privateInvites > 0 && oldUrls.privateInvites === 0,
+    shortenerAppeared: newUrls.shorteners > 0 && oldUrls.shorteners === 0,
+    botDeeplinkAppeared: newUrls.botDeeplinks > 0 && oldUrls.botDeeplinks === 0,
+    punycodeAppeared: newUrls.punycode > 0 && oldUrls.punycode === 0
   }
 
   delta.injected = Boolean(
@@ -112,7 +123,8 @@ const analyzeEdit = (chatId, messageId, newText) => {
     delta.invisibleAdded > 0 ||
     delta.privateInviteAppeared ||
     delta.shortenerAppeared ||
-    delta.botDeeplinkAppeared
+    delta.botDeeplinkAppeared ||
+    delta.punycodeAppeared
   )
 
   // Update snapshot with the post-edit text so further edits diff from the

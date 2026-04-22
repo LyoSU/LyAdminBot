@@ -480,12 +480,17 @@ const computeDeterministicVerdict = ({ userSignals, quickAssessment, userContext
   // Fast-post-after-join + promo. We observed the chat_member join event,
   // the user started posting within 30s, AND the message carries a promo
   // signal. Human users almost never meet both conditions at once.
-  // FP guard: require NOT already-trusted (reputation > 60) to avoid
-  // accidentally catching eager long-time members.
+  //
+  // Double FP guard:
+  //   - reputation.score < 60      (not yet locally-trusted)
+  //   - totalMessages <= 20        (still in the "new to us" regime — an
+  //                                 established veteran who once happened to
+  //                                 join fast shouldn't keep firing this)
   if (
     signals.includes('fast_post_after_join') &&
     (hasPromoSignal || hasHighRiskSignal || strongPromo) &&
-    (userSignals.reputation?.score || 0) < 60
+    (userSignals.reputation?.score || 0) < 60 &&
+    userSignals.totalMessages <= 20
   ) {
     return {
       decision: 'spam',
