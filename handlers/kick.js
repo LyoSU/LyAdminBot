@@ -1,11 +1,12 @@
 const { userName } = require('../utils')
 const { mapTelegramError } = require('../helpers/error-mapper')
+const { isSenderAdmin } = require('../helpers/is-sender-admin')
 
 module.exports = async (ctx) => {
-  const chatMember = await ctx.telegram.getChatMember(ctx.message.chat.id, ctx.message.from.id)
+  const isAdmin = await isSenderAdmin(ctx)
   let kickUser
 
-  if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
+  if (isAdmin) {
     if (ctx.message.reply_to_message) {
       kickUser = ctx.message.reply_to_message.from
     } else {
@@ -19,7 +20,6 @@ module.exports = async (ctx) => {
     await ctx.telegram.unbanChatMember(ctx.chat.id, kickUser.id).then(() => {
       // Self-kick easter egg
       const isSelfKick = ctx.from.id === kickUser.id
-      const isAdmin = chatMember && ['creator', 'administrator'].includes(chatMember.status)
       let msgKey = 'kick.suc'
 
       if (isSelfKick && isAdmin) {

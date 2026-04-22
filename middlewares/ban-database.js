@@ -3,6 +3,7 @@ const { userName } = require('../utils')
 const { banDatabase: banDatabaseLog } = require('../helpers/logger')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
 const { addSignature } = require('../helpers/spam-signatures')
+const { isSystemSenderId } = require('../helpers/system-senders')
 const { checkTrustedUser } = require('../helpers/spam-check')
 
 const BAN_DATABASE_API = 'https://api.lols.bot/account'
@@ -126,9 +127,15 @@ module.exports = async (ctx) => {
       return
     }
 
-    let userId = ctx.from.id
     const isSenderChat = Boolean(ctx.message.sender_chat && ctx.message.sender_chat.id)
-    if (isSenderChat) userId = ctx.message.sender_chat.id
+    let userId = isSenderChat ? ctx.message.sender_chat.id : ctx.from.id
+
+    // Anonymous admin (sender_chat.id === chat.id) or any system
+    // placeholder (777000 / 1087968824 / 136817688) — nothing useful
+    // to look up, and writing a check for these pollutes logs on every
+    // auto-forward / anonymous post.
+    if (isSenderChat && ctx.message.sender_chat.id === ctx.chat.id) return
+    if (!isSenderChat && isSystemSenderId(userId)) return
 
     // Trusted users in this group are exempt from the global ban database.
     if (checkTrustedUser(userId, ctx)) {

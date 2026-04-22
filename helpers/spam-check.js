@@ -5,6 +5,7 @@ const {
   getAdaptiveThreshold
 } = require('./message-embeddings')
 const { isEmojiOnly } = require('./text-utils')
+const { isSystemSenderId } = require('./system-senders')
 const {
   saveSpamVector,
   classifyBySimilarity,
@@ -752,6 +753,10 @@ const getMessagePhotoUrl = async (ctx, messagePhoto) => {
 const getUserProfilePhotoUrl = async (ctx) => {
   try {
     if (!ctx.from || !ctx.from.id) return null
+    // System placeholder ids (777000 etc.) have no profile — calling
+    // getUserProfilePhotos on them returns the bot's own photos or
+    // fails, neither of which is useful for moderation.
+    if (isSystemSenderId(ctx.from.id)) return null
 
     const userProfilePhotos = await ctx.telegram.getUserProfilePhotos(ctx.from.id, 0, 1)
     if (!userProfilePhotos.photos || userProfilePhotos.photos.length === 0) {
@@ -797,6 +802,9 @@ const getUserChatInfo = async (ctx) => {
   }
   try {
     if (!ctx.from || !ctx.from.id) return empty
+    // Same rationale as getUserProfilePhotoUrl — no real profile data
+    // behind system placeholder ids.
+    if (isSystemSenderId(ctx.from.id)) return empty
 
     const chatInfo = await ctx.telegram.getChat(ctx.from.id)
     return {

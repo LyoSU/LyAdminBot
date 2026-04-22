@@ -1,4 +1,5 @@
 const { db: dbLog } = require('../helpers/logger')
+const { isSystemSender } = require('../helpers/system-senders')
 
 /**
  * Save user info with conflict prevention
@@ -39,25 +40,36 @@ const saveGroupInfo = (ctx) => {
 }
 
 /**
- * Save group member info with conflict prevention
+ * Save group member info with conflict prevention.
+ *
+ * Member-id resolution mirrors context-loader.loadGroupContext:
+ *   - anonymous admin (sender_chat.id === chat.id)  → no member
+ *   - external channel crosspost                    → sender_chat.id
+ *   - system placeholder without sender_chat        → no member
+ *   - ordinary user                                 → ctx.from.id
  */
 const saveGroupMember = (ctx) => {
   if (!ctx.group || !ctx.group.members || !ctx.from) {
     return null
   }
 
-  // Mirror context-loader: channels are keyed by senderChat.id, users by ctx.from.id
   const message = ctx.message || ctx.editedMessage
   const senderChat = message && message.sender_chat
-  const memberId = (senderChat && senderChat.type === 'channel') ? senderChat.id : ctx.from.id
-  const member = ctx.group.members[memberId]
-
-  if (!member || member.isSaving) {
+  let memberId
+  if (senderChat && senderChat.id === ctx.chat.id) {
     return null
+  } else if (senderChat && senderChat.type === 'channel') {
+    memberId = senderChat.id
+  } else if (isSystemSender(ctx)) {
+    return null
+  } else {
+    memberId = ctx.from.id
   }
 
-  member.isSaving = true
+  const member = ctx.group.members[memberId]
+  if (!member || member.isSaving) return null
 
+  member.isSaving = true
   return member.save()
     .then(() => { member.isSaving = false })
     .catch(() => { member.isSaving = false })

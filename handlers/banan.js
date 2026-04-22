@@ -2,6 +2,7 @@ const humanizeDuration = require('humanize-duration')
 const { userName, getRandomInt } = require('../utils')
 const { mapTelegramError } = require('../helpers/error-mapper')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
+const { isSenderAdmin } = require('../helpers/is-sender-admin')
 
 const BAN_UNITS = { m: 60, h: 3600, d: 86400 }
 const MAX_BAN = 364 * 24 * 60 * 60
@@ -135,8 +136,7 @@ async function parseAdminBan (ctx, arg) {
 
 module.exports = async (ctx) => {
   const arg = ctx.message.text.split(/ +/)
-  const chatMember = await ctx.telegram.getChatMember(ctx.message.chat.id, ctx.message.from.id)
-  const isAdmin = chatMember && ['creator', 'administrator'].includes(chatMember.status)
+  const isAdmin = await isSenderAdmin(ctx)
 
   let banTime = getRandomInt(60, 600)
   let banUser = ctx.from
