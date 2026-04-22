@@ -58,10 +58,13 @@ const updateUniqueness = (userInfo, text) => {
 
   const hash = getContentHash(text)
   if (!hash) {
-    const ratio = stats.trackedMessages > 0
-      ? (stats.uniqueMessageHashes || 0) / stats.trackedMessages
-      : 1
-    stats.uniquenessRatio = ratio
+    // C1 (review): when this message is non-textual (emoji-only, sticker, …)
+    // we must NOT recompute or write the ratio. The previous code divided
+    // (uniqueMessageHashes || 0) / trackedMessages which yields 0 for any
+    // legacy user (uniqueMessageHashes was undefined), wrongly reporting
+    // a 0% uniqueness on what is actually an unmeasured message. We just
+    // return the existing value untouched (default 1 if never tracked).
+    const ratio = Number.isFinite(stats.uniquenessRatio) ? stats.uniquenessRatio : 1
     return { hash: null, uniquenessRatio: ratio, trackedMessages: stats.trackedMessages }
   }
 
@@ -282,18 +285,25 @@ const computeDeterministicVerdict = ({ userSignals, quickAssessment, userContext
 
   // ===== SPAM rules =====
 
+  // I2 (review): tightened. Both isNewAccount AND totalMessages < 20 required —
+  // lols.bot has known FPs on rehabilitated/compromised accounts; a long-time
+  // lurker with high spam_factor should not auto-ban without local evidence.
   const lols = userSignals?.lols
-  if (lols && lols.spamFactor >= 0.8 && (userContext?.isNewAccount || userSignals.totalMessages < 20)) {
+  if (lols && lols.spamFactor >= 0.8 && userContext?.isNewAccount && userSignals.totalMessages < 20) {
     return { decision: 'spam', rule: RULE_SPAM_LOLS_HIGH_FACTOR.name, confidence: RULE_SPAM_LOLS_HIGH_FACTOR.confidence, reason: RULE_SPAM_LOLS_HIGH_FACTOR.reason }
   }
-  if (lols && lols.banned && userContext?.isNewAccount) {
+  if (lols && lols.banned && userContext?.isNewAccount && userSignals.totalMessages < 20) {
     return { decision: 'spam', rule: RULE_SPAM_LOLS_BANNED_NEW.name, confidence: RULE_SPAM_LOLS_BANNED_NEW.confidence, reason: RULE_SPAM_LOLS_BANNED_NEW.reason }
   }
 
+  // I1 (review): mass-blast — added groupsActive >= 3 to exclude single-group
+  // power users (FAQ bots, support staff) who legitimately repeat answers.
+  // Real blasters spread across many groups; intra-group repeaters do not.
   if (
     userSignals.trackedMessages >= UNIQUENESS_MIN_SAMPLES &&
     userSignals.uniquenessRatio <= 0.12 &&
     userSignals.totalMessages >= 50 &&
+    userSignals.groupsActive >= 3 &&
     userSignals.spamDetections === 0 &&
     hasPromoSignal
   ) {
@@ -317,12 +327,17 @@ const computeDeterministicVerdict = ({ userSignals, quickAssessment, userContext
   ) {
     return { decision: 'spam', rule: 'new_user_private_invite', confidence: 92, reason: 'Private invite link from a new/low-history account' }
   }
-  // sleeper account (old ID, first message ever) + promotional signal — classic raid pattern.
+  // I3 (review): "sleeper" name was misleading — the detector fires on first
+  // observation, not on a true wake-up from idle. Added an extra requirement:
+  // the user must have given us at least one earlier observation (>= 1 prior
+  // message tracked) before a "wake-up + promo" verdict. Otherwise this is
+  // simply a lurker's first message and we shouldn't auto-ban.
   if (
     signals.includes('sleeper_account') &&
+    userSignals.totalMessages >= 2 &&
     (hasPromoSignal || signals.includes('private_invite_link') || signals.includes('url_shortener'))
   ) {
-    return { decision: 'spam', rule: 'sleeper_with_promo', confidence: 90, reason: 'Sleeper account waking up with promotional content' }
+    return { decision: 'spam', rule: 'sleeper_with_promo', confidence: 90, reason: 'Old account with low history, suddenly posting promotional content' }
   }
   // homoglyph name + new account + promo signal — fake-identity scammer profile.
   if (
@@ -333,24 +348,37 @@ const computeDeterministicVerdict = ({ userSignals, quickAssessment, userContext
     return { decision: 'spam', rule: 'fake_identity_promo', confidence: 90, reason: 'Homoglyph identity with promotional content' }
   }
 
-  // Compromised / stolen account pattern: established account (old, established
-  // history) but identity changed in the last 24h AND posting promo content now.
-  // The recent rename is the takeover signal — real users almost never rebrand
-  // simultaneously with starting promotional posting.
+  // C3 (review): compromised-account rule was firing on benign single
+  // username changes plus any link. Real takeovers almost always involve
+  // multiple identity changes (attacker iterates) AND high-risk content
+  // signals, not just any text URL. Tightened all three: require >=2
+  // distinct churn events, require either high-risk signal or a strong
+  // promo signal (private invite / shortener / bot deeplink), and lower
+  // confidence to 80 so it goes through the warn-and-restrict tier (votable).
+  const totalChurn = (userSignals.nameChurn24h || 0) + (userSignals.usernameChurn24h || 0)
+  const strongPromo = signals.includes('private_invite_link') ||
+    signals.includes('url_shortener') ||
+    signals.includes('bot_deeplink') ||
+    signals.includes('many_url_buttons')
   if (
     !userContext?.isNewAccount &&
     userSignals.totalMessages >= 30 &&
     userSignals.spamDetections === 0 &&
-    (userSignals.nameChurn24h >= 1 || userSignals.usernameChurn24h >= 1) &&
-    (hasPromoSignal || signals.includes('private_invite_link') || signals.includes('url_shortener'))
+    totalChurn >= 2 &&
+    (hasHighRiskSignal || strongPromo)
   ) {
-    return { decision: 'spam', rule: 'compromised_account_rebrand', confidence: 88, reason: 'Established account renamed and started promotional posting (likely compromised)' }
+    return { decision: 'spam', rule: 'compromised_account_rebrand', confidence: 80, reason: 'Established account with multiple recent identity changes and promotional content (likely compromised)' }
   }
 
   // ===== CLEAN rules =====
 
+  // C4 (review): trusted-bypass must NOT short-circuit a message that
+  // already shows promotional intent. A compromised trusted account would
+  // otherwise post a `text_url` + `cashtag` and get a 98%-clean verdict
+  // skipping every downstream check. Promo-bearing messages from trusted
+  // users still go through the full pipeline.
   const rep = userSignals.reputation
-  if (rep?.status === 'trusted' && !hasHighRiskSignal && qa.risk !== 'high') {
+  if (rep?.status === 'trusted' && !hasHighRiskSignal && !hasPromoSignal && qa.risk !== 'high') {
     return { decision: 'clean', rule: RULE_CLEAN_TRUSTED.name, confidence: 98, reason: RULE_CLEAN_TRUSTED.reason }
   }
 

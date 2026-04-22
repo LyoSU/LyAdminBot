@@ -2,10 +2,20 @@ const { OpenAI } = require('openai')
 const { moderation: embedLog } = require('./logger')
 const { isEmojiOnly } = require('./text-utils')
 
-// Create OpenAI client for embeddings
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  timeout: 30000
+// Lazy OpenAI client. Constructed on first use so requiring this module in
+// tests / scripts doesn't crash when OPENAI_API_KEY is unset. Pure helpers
+// (normalization, hashing) remain importable in any environment.
+let _openai = null
+const openai = new Proxy({}, {
+  get (_target, prop) {
+    if (!_openai) {
+      _openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
+        timeout: 30000
+      })
+    }
+    return _openai[prop]
+  }
 })
 
 /**

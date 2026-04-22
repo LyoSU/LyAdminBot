@@ -27,21 +27,33 @@ const { analyzeMessage: analyzeProfile, toSignalTags: profileTags } = require('.
 // 30s timeout for all AI API calls (SDK default is 10 minutes)
 const API_TIMEOUT_MS = 30000
 
-// Create OpenRouter client for LLM
-const openRouter = new OpenAI({
-  baseURL: process.env.OPENROUTER_API_URL || 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY,
-  timeout: API_TIMEOUT_MS,
-  defaultHeaders: {
-    'HTTP-Referer': 'https://LyAdminBot.t.me',
-    'X-Title': 'LyAdminBot Spam Check Helper'
+// Lazy clients (see message-embeddings.js for rationale): require() of this
+// file from tests / scripts must not crash when API keys are unset.
+let _openRouter = null
+const openRouter = new Proxy({}, {
+  get (_t, prop) {
+    if (!_openRouter) {
+      _openRouter = new OpenAI({
+        baseURL: process.env.OPENROUTER_API_URL || 'https://openrouter.ai/api/v1',
+        apiKey: process.env.OPENROUTER_API_KEY,
+        timeout: API_TIMEOUT_MS,
+        defaultHeaders: {
+          'HTTP-Referer': 'https://LyAdminBot.t.me',
+          'X-Title': 'LyAdminBot Spam Check Helper'
+        }
+      })
+    }
+    return _openRouter[prop]
   }
 })
-
-// Create OpenAI client for moderation
-const openAI = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  timeout: API_TIMEOUT_MS
+let _openAI = null
+const openAI = new Proxy({}, {
+  get (_t, prop) {
+    if (!_openAI) {
+      _openAI = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: API_TIMEOUT_MS })
+    }
+    return _openAI[prop]
+  }
 })
 
 // Fallback models for retry logic
@@ -1458,16 +1470,24 @@ GUIDANCE
     spamScore = Math.min(0.99, spamScore + candidateBoost / 100)
   }
 
-  // dynamicThreshold (0-100) is the calibrated per-user gate. Replaces the
-  // previously-hardcoded 0.7 so the +20 premium / +12 reply / +25 trusted
-  // bonuses computed by calculateDynamicThreshold actually take effect.
-  const llmThreshold = Math.max(0.5, Math.min(0.95, dynamicThreshold / 100))
+  // dynamicThreshold (0-100) is the per-user calibrated gate. To avoid the
+  // two-threshold collision where the LLM gate (dynamic) and the action gate
+  // (admin's group setting) fight each other, the LLM threshold here is the
+  // STRICTER of the two. Admin's chosen confidenceThreshold is the floor —
+  // dynamic bonuses can only RAISE the bar (be more lenient), never lower it
+  // below what the admin asked for. This way an admin who set 90 will never
+  // see action triggered at confidence 75, regardless of dynamic adjustments.
+  const adminThreshold = (groupSettings && groupSettings.confidenceThreshold) || 70
+  const effectiveThreshold = Math.max(adminThreshold, dynamicThreshold)
+  const llmThreshold = Math.max(0.5, Math.min(0.95, effectiveThreshold / 100))
   const finalIsSpam = spamScore >= llmThreshold
 
   spamLog.info({
     isSpam: finalIsSpam,
     spamScore: spamScore.toFixed(2),
     threshold: llmThreshold.toFixed(2),
+    adminThreshold,
+    dynamicThreshold,
     source: 'openrouter_llm',
     model: usedModel
   }, 'OpenRouter result')

@@ -460,7 +460,9 @@ module.exports = async (ctx) => {
 
       // Unified decision log — single line per message, machine-parseable.
       // Pasting these from production lets us reconstruct any false positive
-      // without rerunning the bot.
+      // without rerunning the bot. Text snippet (first 120 chars) is included
+      // so debug analysis can correlate the verdict with what was actually said.
+      const textSnippet = (messageText || '').substring(0, 120)
       logSpamDecision({
         phase: 'final',
         decision: result.isSpam ? 'spam' : 'clean',
@@ -472,7 +474,12 @@ module.exports = async (ctx) => {
         signals: result.quickAssessment?.signals,
         trustSignals: result.quickAssessment?.trustSignals,
         userSignals: !isChannelPost ? buildUserSignals(ctx.session?.userInfo, ctx.from) : null,
-        extras: { source: result.source, editedMessage: isEditedMessage }
+        extras: {
+          source: result.source,
+          editedMessage: isEditedMessage,
+          textSnippet,
+          textLen: (messageText || '').length
+        }
       })
 
       if (isTestMode) {

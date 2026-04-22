@@ -206,6 +206,133 @@ test('verdict: mass-blast (low uniqueness, many messages) → spam', () => {
   assert.strictEqual(verdict.decision, 'spam')
 })
 
+// --------------------------------------------------------------------------
+// Review-driven regression tests
+// --------------------------------------------------------------------------
+
+test('verdict (C4): trusted user posting promo content does NOT get clean shortcut', () => {
+  // A compromised trusted account posting a text URL or cashtag must fall
+  // through to LLM/vector phases — not get a 98%-clean rubber-stamp.
+  const userSignals = buildUserSignals(cleanUser, { id: cleanUser.telegram_id })
+  const verdict = computeDeterministicVerdict({
+    userSignals,
+    quickAssessment: { risk: 'medium', signals: ['text_url'], trustSignals: [] },
+    userContext: { isNewAccount: false, messageCount: 30, isReply: false },
+    text: 'check my new project https://example.com'
+  })
+  // Either no verdict or definitely NOT a trusted-clean shortcut.
+  if (verdict) {
+    assert.notStrictEqual(verdict.rule, 'trusted_reputation', 'trusted-bypass must not fire on promo content')
+  }
+})
+
+test('verdict (C3): single benign username change + plain link does NOT trigger compromised rule', () => {
+  // Pre-fix this would FP: user changes their username (legitimate), posts
+  // a normal link → confidence 88 ban. Now requires 2+ churn events AND a
+  // strong promo signal (private invite / shortener / bot deeplink).
+  const benignRename = {
+    globalStats: { totalMessages: 50, groupsActive: 3, spamDetections: 0, cleanMessages: 20, uniquenessRatio: 0.95, trackedMessages: 50 },
+    reputation: { score: 65, status: 'neutral' },
+    nameHistory: [
+      { value: 'Maria N', seenAt: new Date(Date.now() - 1 * 3600 * 1000) },
+      { value: 'Maria', seenAt: new Date(Date.now() - 365 * 24 * 3600 * 1000) }
+    ],
+    usernameHistory: [
+      { value: 'maria_new', seenAt: new Date(Date.now() - 1 * 3600 * 1000) },
+      { value: 'maria_old', seenAt: new Date(Date.now() - 365 * 24 * 3600 * 1000) }
+    ],
+    externalBan: null,
+    telegram_id: 123
+  }
+  const userSignals = buildUserSignals(benignRename, { id: 123 })
+  const verdict = computeDeterministicVerdict({
+    userSignals,
+    quickAssessment: { risk: 'medium', signals: ['text_url'], trustSignals: [] },
+    userContext: { isNewAccount: false, messageCount: 10, isReply: false },
+    text: 'дивіться мій новий блог https://example.com'
+  })
+  if (verdict) {
+    assert.notStrictEqual(verdict.rule, 'compromised_account_rebrand',
+      'single benign rename + plain link must not be flagged as takeover')
+  }
+})
+
+test('verdict (C3): compromised rule still fires on multi-rename + private invite', () => {
+  // The strict version should still catch real takeovers.
+  const compromised = {
+    globalStats: { totalMessages: 200, groupsActive: 5, spamDetections: 0, cleanMessages: 100, uniquenessRatio: 0.9, trackedMessages: 50 },
+    reputation: { score: 70, status: 'neutral' },
+    nameHistory: [
+      { value: 'PROMO_BOT', seenAt: new Date(Date.now() - 1 * 3600 * 1000) },
+      { value: 'СрочнЫе_Кредиты', seenAt: new Date(Date.now() - 5 * 3600 * 1000) },
+      { value: 'Олена', seenAt: new Date(Date.now() - 365 * 24 * 3600 * 1000) }
+    ],
+    usernameHistory: [
+      { value: 'promo_2026', seenAt: new Date(Date.now() - 1 * 3600 * 1000) },
+      { value: 'olena_real', seenAt: new Date(Date.now() - 365 * 24 * 3600 * 1000) }
+    ],
+    externalBan: null,
+    telegram_id: 456
+  }
+  const userSignals = buildUserSignals(compromised, { id: 456 })
+  const verdict = computeDeterministicVerdict({
+    userSignals,
+    quickAssessment: { risk: 'medium', signals: ['private_invite_link'], trustSignals: [] },
+    userContext: { isNewAccount: false, messageCount: 50, isReply: false },
+    text: 'крутий проект https://t.me/+abcDEF'
+  })
+  assert.ok(verdict, 'real takeover must trigger a verdict')
+  assert.strictEqual(verdict.rule, 'compromised_account_rebrand')
+})
+
+test('verdict (I1): mass-blast does NOT misfire on intra-group power user', () => {
+  // Single-group repeater (FAQ bot, support staff) shouldn't be flagged.
+  const supportUser = {
+    globalStats: { totalMessages: 200, groupsActive: 1, spamDetections: 0, cleanMessages: 100, uniquenessRatio: 0.05, trackedMessages: 50 },
+    reputation: { score: 65, status: 'neutral' },
+    nameHistory: [],
+    usernameHistory: [],
+    externalBan: null,
+    telegram_id: 789
+  }
+  const userSignals = buildUserSignals(supportUser, { id: 789 })
+  const verdict = computeDeterministicVerdict({
+    userSignals,
+    quickAssessment: { risk: 'medium', signals: ['text_url'], trustSignals: [] },
+    userContext: { isNewAccount: false, messageCount: 100, isReply: false },
+    text: 'see https://docs.example.com'
+  })
+  if (verdict) {
+    assert.notStrictEqual(verdict.rule, 'mass_blast_low_uniqueness',
+      'single-group repeater must not be flagged as blast spam')
+  }
+})
+
+test('verdict (I2): lols high spamFactor on long-time lurker does NOT auto-ban', () => {
+  // Pre-fix: <20 messages OR new account → SPAM. Now requires BOTH.
+  // A 3-year-old account that lurked then started chatting has totalMessages
+  // around 5 but isNewAccount=false. lols may have a stale flag on them.
+  const lurker = {
+    globalStats: { totalMessages: 5, groupsActive: 2, spamDetections: 0, cleanMessages: 0, uniquenessRatio: 1, trackedMessages: 0 },
+    reputation: { score: 60, status: 'neutral' },
+    nameHistory: [],
+    usernameHistory: [],
+    externalBan: { lols: { banned: false, spamFactor: 0.85, offenses: 1 } },
+    telegram_id: 100000000 // pre-2018 ID, isNewAccount=false
+  }
+  const userSignals = buildUserSignals(lurker, { id: 100000000 })
+  const verdict = computeDeterministicVerdict({
+    userSignals,
+    quickAssessment: { risk: 'low', signals: [], trustSignals: [] },
+    userContext: { isNewAccount: false, messageCount: 1, isReply: false },
+    text: 'привіт всім'
+  })
+  if (verdict) {
+    assert.notStrictEqual(verdict.rule, 'lols_high_spam_factor',
+      'long-time lurker must not auto-ban on lols spamFactor alone')
+  }
+})
+
 test('verdict: identity churn + new account + promo → spam', () => {
   const churner = {
     globalStats: { totalMessages: 5, groupsActive: 1, spamDetections: 0, cleanMessages: 0, uniquenessRatio: 1, trackedMessages: 5 },

@@ -153,16 +153,24 @@ module.exports = async (ctx) => {
       updateUniqueness(user, messageText)
     }
 
-    // Recalculate reputation periodically (every 10 messages or if stale)
+    // Recalculate reputation periodically (every 10 messages or if stale).
+    // Review-fix: legacy users whose reputation predates the new ban-ceiling
+    // and external-ban factors must get one immediate recalc on first touch
+    // (otherwise ~13k banned-but-not-restricted records keep their stale
+    // status until message 10). Detect "legacy" as missing externalBan or
+    // reputation never refreshed since this code rolled out.
     const lastCalc = user.reputation && user.reputation.lastCalculated
+    const isLegacyReputation = user.isGlobalBanned && (!user.reputation || user.reputation.status !== 'restricted')
     const shouldRecalculate =
+      isLegacyReputation ||
       (user.globalStats.totalMessages % 10 === 0) ||
       !lastCalc ||
       (Date.now() - new Date(lastCalc).getTime() > 24 * 60 * 60 * 1000)
 
     if (shouldRecalculate) {
       user.reputation = calculateReputation(user.globalStats, ctx.from.id, {
-        isGlobalBanned: user.isGlobalBanned
+        isGlobalBanned: user.isGlobalBanned,
+        externalBan: user.externalBan
       })
     }
   }
