@@ -9,7 +9,10 @@ const MAX_CB_BYTES = 64
 const cb = (...parts) => {
   const raw = PREFIX + parts.filter(p => p !== undefined && p !== null).join(':')
   if (Buffer.byteLength(raw, 'utf8') <= MAX_CB_BYTES) return raw
-  // Truncate trailing bytes safely (won't split a multibyte char).
+  if (process.env.NODE_ENV !== 'production') {
+    throw new Error(`callback_data exceeds ${MAX_CB_BYTES} bytes (${Buffer.byteLength(raw, 'utf8')}): ${raw}`)
+  }
+  // Production safety net: truncate without splitting a multibyte char.
   const buf = Buffer.from(raw, 'utf8')
   let end = MAX_CB_BYTES
   while (end > 0 && (buf[end] & 0xC0) === 0x80) end--
@@ -20,8 +23,10 @@ const btn = (text, callbackData, opts = {}) => {
   const o = { text }
   if (opts.url) {
     o.url = opts.url
-  } else {
+  } else if (callbackData !== undefined && callbackData !== null) {
     o.callback_data = callbackData
+  } else {
+    throw new Error(`btn: missing both callback_data and opts.url for "${text}"`)
   }
   if (opts.iconEmojiId) o.icon_custom_emoji_id = opts.iconEmojiId
   if (opts.loginUrl) o.login_url = opts.loginUrl

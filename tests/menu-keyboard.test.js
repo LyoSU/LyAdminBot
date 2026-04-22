@@ -11,10 +11,25 @@ test('cb builds m:v1: prefixed callback_data', () => {
   assert.strictEqual(cb('ban', 'do', '123', '300'), 'm:v1:ban:do:123:300')
 })
 
-test('cb truncates payload at 64 bytes (Telegram limit)', () => {
+test('cb throws in non-production when payload exceeds 64 bytes', () => {
   const long = 'x'.repeat(80)
-  const result = cb('s', 'a', long)
-  assert.ok(Buffer.byteLength(result, 'utf8') <= 64)
+  assert.throws(() => cb('s', 'a', long), /exceeds 64 bytes/)
+})
+
+test('cb safely truncates in production when payload exceeds 64 bytes', () => {
+  const prev = process.env.NODE_ENV
+  process.env.NODE_ENV = 'production'
+  try {
+    const long = 'x'.repeat(80)
+    const result = cb('s', 'a', long)
+    assert.ok(Buffer.byteLength(result, 'utf8') <= 64)
+    // truncation must produce valid UTF-8 (no split multibyte chars)
+    const emoji = '🎉'.repeat(20) // 4 bytes each = 80 bytes total
+    const r2 = cb('s', 'a', emoji)
+    assert.doesNotThrow(() => Buffer.from(r2, 'utf8').toString('utf8'))
+  } finally {
+    process.env.NODE_ENV = prev
+  }
 })
 
 test('btn builds an inline button object', () => {
@@ -30,6 +45,11 @@ test('btn passes icon_custom_emoji_id when provided', () => {
 
 test('btn passes url instead of callback_data when given', () => {
   assert.deepStrictEqual(btn('Open', null, { url: 'https://t.me' }), { text: 'Open', url: 'https://t.me' })
+})
+
+test('btn throws when neither url nor callback_data provided', () => {
+  assert.throws(() => btn('Bad', null), /missing both callback_data and opts.url/)
+  assert.throws(() => btn('Bad', undefined), /missing both callback_data and opts.url/)
 })
 
 test('row wraps buttons into an array', () => {
