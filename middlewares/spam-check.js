@@ -645,18 +645,33 @@ module.exports = async (ctx) => {
         }
 
         // Handle delete action - always try to delete spam, even without restrict permission
-        // It's better to at least remove the spam message even if we can't ban the user
+        // It's better to at least remove the spam message even if we can't ban the user.
+        // For albums (media_group_id) we delete EVERY sibling — otherwise the
+        // caption message disappears but the 4 companion photos remain visible.
         if (action.action === 'mute_and_delete' || action.action === 'delete_only' || action.action === 'warn_and_restrict') {
-          try {
-            await ctx.deleteMessage()
-            deleteSuccess = true
-            spamAction.info({ userName: userDisplayName }, 'Deleted message')
-          } catch (error) {
-            // Only log as error if we expected to have permission
+          const albumIds = Array.isArray(ctx.mediaGroupIds) && ctx.mediaGroupIds.length > 0
+            ? ctx.mediaGroupIds
+            : [ctx.message.message_id]
+          const results = await Promise.all(albumIds.map(async (mid) => {
+            try {
+              await ctx.telegram.deleteMessage(ctx.chat.id, mid)
+              return { mid, ok: true }
+            } catch (error) {
+              return { mid, ok: false, err: error.message }
+            }
+          }))
+          const ok = results.filter(r => r.ok).length
+          deleteSuccess = ok > 0
+          if (ok === albumIds.length) {
+            spamAction.info({ userName: userDisplayName, deleted: ok, albumSize: albumIds.length }, 'Deleted message')
+          } else if (ok > 0) {
+            spamAction.warn({ userName: userDisplayName, deleted: ok, albumSize: albumIds.length, failures: results.filter(r => !r.ok) }, 'Partially deleted album')
+          } else {
+            const err = results[0] && results[0].err
             if (canDeleteMessages) {
-              spamAction.error({ err: error.message, userName: userDisplayName, userId }, 'Failed to delete message')
+              spamAction.error({ err, userName: userDisplayName, userId, albumSize: albumIds.length }, 'Failed to delete message')
             } else {
-              spamAction.warn({ err: error.message, chatTitle: ctx.chat.title }, 'Cannot delete - no permission')
+              spamAction.warn({ err, chatTitle: ctx.chat.title, albumSize: albumIds.length }, 'Cannot delete - no permission')
             }
           }
         }

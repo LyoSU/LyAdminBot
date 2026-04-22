@@ -8,6 +8,7 @@ const contextLoader = require('./context-loader')
 const globalBanCheck = require('./global-ban')
 const dataPersistence = require('./data-persistence')
 const emojiInject = require('./emoji-inject')
+const albumBuffer = require('./album-buffer')
 
 module.exports = {
   stats,
@@ -19,5 +20,6 @@ module.exports = {
   contextLoader,
   globalBanCheck,
   dataPersistence,
-  emojiInject
+  emojiInject,
+  albumBuffer
 }

@@ -17,7 +17,8 @@ const {
   banDatabase,
   spamCheck,
   dataPersistence,
-  emojiInject
+  emojiInject,
+  albumBuffer
 } = require('./middlewares')
 const { registerAllRoutes } = require('./routes')
 
@@ -161,6 +162,12 @@ const registerMiddlewares = (bot, i18n) => {
 
   // 8. Load context (user, group, member data)
   bot.use(contextLoader)
+
+  // 8.5. Aggregate album (media_group_id) siblings into one ctx so that
+  //      spam-check runs once per album and can delete ALL photos on
+  //      spam verdict (otherwise the caption message is removed but the
+  //      4 companion photos stay visible).
+  bot.use(albumBuffer)
 
   // 9. Global ban check
   bot.use(globalBanCheck)
