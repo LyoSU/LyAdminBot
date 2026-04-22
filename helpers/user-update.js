@@ -1,5 +1,6 @@
 const { calculateReputation } = require('./reputation')
 const { trackIdentity, updateUniqueness } = require('./spam-signals')
+const { recordMessageStats } = require('./user-stats')
 
 /**
  * Check if session reputation is stale compared to DB
@@ -152,6 +153,11 @@ module.exports = async (ctx) => {
     if (messageText) {
       updateUniqueness(user, messageText)
     }
+
+    // Full message-level stats: length (Welford), hour histogram, entity &
+    // media counters, reply/edit counters, language detection, premium flag,
+    // custom emoji ID harvest. Runs after totalMessages was incremented.
+    recordMessageStats(user, ctx)
 
     // Recalculate reputation periodically (every 10 messages or if stale).
     // Review-fix: legacy users whose reputation predates the new ban-ceiling

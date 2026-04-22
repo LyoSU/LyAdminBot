@@ -125,11 +125,22 @@ test('distinct hosts counter', () => {
 // Bio
 // --------------------------------------------------------------------------
 
-test('bio analysis', () => {
-  const bio = analyzeBio('Crypto signals @signal_bot https://t.me/+joinme')
+test('bio analysis: structural promo (URL + mention)', () => {
+  const bio = analyzeBio('Our signals @signal_bot https://t.me/+joinme')
   assert.ok(bio.urls.total >= 1)
   assert.ok(bio.mentions >= 1)
-  assert.ok(bio.promoTerms === true)
+  assert.strictEqual(bio.structuralPromo, true)
+})
+
+test('bio analysis: 2+ mentions triggers structural promo', () => {
+  const bio = analyzeBio('Follow @alpha @beta @gamma for updates')
+  assert.ok(bio.mentions >= 2)
+  assert.strictEqual(bio.structuralPromo, true)
+})
+
+test('bio analysis: plain-text self-description is NOT structural promo', () => {
+  const bio = analyzeBio('Hi, I am a student from Kyiv interested in photography and travel')
+  assert.strictEqual(bio.structuralPromo, false)
 })
 
 test('bio analysis: empty', () => {

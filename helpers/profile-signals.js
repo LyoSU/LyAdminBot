@@ -83,16 +83,31 @@ const analyzeUrls = (text) => {
   return result
 }
 
-const BIO_PROMO = /(заробі|заработ|earn|profit|invest|crypto|btc|eth|usdt|ton|signal|канал|channel|подпис|subscribe|prize|giveaway)/i
-
+/**
+ * Analyse a bio using structural signals ONLY — no keyword lists.
+ *
+ * A "promotional" bio is detected by structural evidence (URLs, multiple
+ * @mentions, invisible chars, high non-text-character ratio) rather than
+ * by a list of words. Keyword lists rot, lag the meta, and are biased.
+ */
 const analyzeBio = (bio) => {
   if (!bio || typeof bio !== 'string') return null
+  const urls = analyzeUrls(bio)
+  const mentions = (bio.match(/@[A-Za-z0-9_]{3,}/g) || []).length
+  // A "dense" bio is one where a large fraction of the text is occupied by
+  // links, mentions, hashtags, or emoji — classic promo profile layout.
+  // This metric has no language assumptions.
+  const nonLetter = (bio.match(/[^\p{L}\p{M}\s.,!?]/gu) || []).length
+  const density = bio.length > 0 ? nonLetter / bio.length : 0
   return {
     length: bio.length,
-    urls: analyzeUrls(bio),
-    mentions: (bio.match(/@[A-Za-z0-9_]{3,}/g) || []).length,
-    promoTerms: BIO_PROMO.test(bio),
-    invisible: hasInvisibleChars(bio)
+    urls,
+    mentions,
+    invisible: hasInvisibleChars(bio),
+    density,
+    // Structural "looks promotional": has link or 2+ mentions, not a plain-text
+    // self-description. No keyword matching.
+    structuralPromo: Boolean(urls.total >= 1 || mentions >= 2 || density >= 0.3)
   }
 }
 
@@ -192,9 +207,10 @@ const toSignalTags = (a) => {
   if (a.name.invisible) signals.push('name_invisible_char')
   if (a.bio?.invisible) signals.push('bio_invisible_char')
 
-  // Bio: link or promo term in bio is a strong promotional intent indicator
+  // Bio: structural signs of a promo profile. No keyword lookups.
   if (a.bio?.urls?.total > 0) signals.push('bio_has_url')
-  if (a.bio?.promoTerms) signals.push('bio_promo_terms')
+  if (a.bio?.structuralPromo) signals.push('bio_structural_promo')
+  if ((a.bio?.mentions || 0) >= 2) signals.push('bio_mention_chain')
 
   // Trust signals — paid features and privacy settings real users have
   if (a.hasEmojiStatus) trustSignals.push('paid_emoji_status')

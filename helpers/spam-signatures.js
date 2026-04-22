@@ -3,7 +3,7 @@ const { generateEmbedding, isPlaceholderMediaText } = require('./message-embeddi
 const { saveSpamVector } = require('./spam-vectors')
 const { qdrant: sigLog, nlp: nlpLog } = require('./logger')
 const nlpClient = require('./nlp-client')
-const { hasTextualContent, stripEmoji } = require('./text-utils')
+const { hasTextualContent } = require('./text-utils')
 
 /**
  * Spam Signature System

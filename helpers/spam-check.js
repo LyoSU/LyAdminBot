@@ -23,6 +23,8 @@ const { checkSignatures, addSignature } = require('./spam-signatures')
 const { spam: spamLog, moderation: modLog, cleanup: cleanupLog, qdrant: qdrantLog } = require('./logger')
 const { buildUserSignals, computeDeterministicVerdict, logSpamDecision } = require('./spam-signals')
 const { analyzeMessage: analyzeProfile, toSignalTags: profileTags } = require('./profile-signals')
+const { recordAndAssess: recordMediaFingerprint } = require('./media-fingerprint')
+const { analyzeContactMessage } = require('./contact-spam')
 
 // 30s timeout for all AI API calls (SDK default is 10 minutes)
 const API_TIMEOUT_MS = 30000
@@ -1036,6 +1038,84 @@ const checkForwardBlacklistPhase = async (ctx) => {
 }
 
 /**
+ * PHASE 0.7: Media fingerprint velocity check.
+ *
+ * For ANY media attachment (photo / video / voice / video_note / animation /
+ * sticker / document / audio) we record the file_unique_id and check whether
+ * the same file has been seen across suspiciously many chats/users.
+ *
+ * Even if the verdict doesn't exceed the velocity threshold here, the side
+ * effect (persisting the sighting) is what lets the NEXT occurrence tip over.
+ *
+ * Per-type thresholds live in the MediaFingerprint model:
+ *   - Voice / video_note: 2 chats + 2 users (humans almost never reshare)
+ *   - Photo / video:      3 chats + 2-3 users (moderate reuse)
+ *   - Sticker:            10 chats + 8 users  (stickers are commonly reused)
+ *
+ * When the threshold is crossed, the caller gets a deterministic SPAM
+ * verdict bypassing LLM. Deliberately chosen confidence 92 (high but not
+ * maximum) so community vote can still overturn in rare edge cases.
+ *
+ * @returns {Object} { result, signalTag } — signalTag to merge into quick
+ *                    assessment, result if velocity exceeded (terminal).
+ */
+const runMediaFingerprintPhase = async (ctx) => {
+  const message = ctx.message || ctx.editedMessage
+  if (!message || !ctx.db || !ctx.db.MediaFingerprint) {
+    return { result: null, signalTag: null, fingerprint: null }
+  }
+
+  try {
+    const assessment = await recordMediaFingerprint(ctx.db, message, {
+      userId: ctx.from?.id,
+      chatId: ctx.chat?.id
+    })
+    if (!assessment) return { result: null, signalTag: null, fingerprint: null }
+
+    // Emit a lightweight info log for every media sighting so patterns can be
+    // correlated from logs alone. Debug keeps it quiet by default.
+    spamLog.debug({
+      fileUniqueId: assessment.fileUniqueId,
+      mediaType: assessment.mediaType,
+      occurrences: assessment.occurrences,
+      uniqueUsers: assessment.uniqueUsers,
+      uniqueChats: assessment.uniqueChats,
+      velocityExceeded: assessment.velocityExceeded
+    }, 'Media fingerprint sighting')
+
+    if (assessment.velocityExceeded) {
+      return {
+        result: {
+          isSpam: true,
+          confidence: 92,
+          reason: assessment.velocityReason,
+          source: 'media_fingerprint_velocity',
+          mediaFingerprint: {
+            fileUniqueId: assessment.fileUniqueId,
+            mediaType: assessment.mediaType,
+            uniqueChats: assessment.uniqueChats,
+            uniqueUsers: assessment.uniqueUsers
+          }
+        },
+        signalTag: 'media_cross_chat_velocity',
+        fingerprint: assessment
+      }
+    }
+
+    // Soft signal: same file seen across 2+ chats but not yet over threshold.
+    // Feeds into deterministic verdict combinations downstream.
+    if (assessment.uniqueChats >= 2 && assessment.uniqueUsers >= 2) {
+      return { result: null, signalTag: 'media_multi_chat_reuse', fingerprint: assessment }
+    }
+
+    return { result: null, signalTag: null, fingerprint: assessment }
+  } catch (err) {
+    spamLog.warn({ err: err.message }, 'MediaFingerprint phase failed, continuing')
+    return { result: null, signalTag: null, fingerprint: null }
+  }
+}
+
+/**
  * PHASE 1: Quick Risk Assessment
  * @returns {Object} { result: Object|null, quickAssessment: Object }
  */
@@ -1541,18 +1621,76 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     const fwdResult = await checkForwardBlacklistPhase(ctx)
     if (fwdResult) return fwdResult
 
+    // PHASE 0.7: Media fingerprint velocity check.
+    // Records the sighting of any media file_unique_id and returns an
+    // immediate verdict if cross-chat/cross-user velocity is exceeded.
+    const mediaPhase = await runMediaFingerprintPhase(ctx)
+    if (mediaPhase.result) return mediaPhase.result
+
     // PHASE 1: Quick risk assessment
     const { result: qaResult, quickAssessment } = runQuickAssessmentPhase(ctx)
     if (qaResult) return qaResult
 
+    // Fold media-fingerprint soft signal into quick assessment so downstream
+    // deterministic rules can combine it with other signals. We add the tag
+    // after quick assessment ran so it isn't lost by the risk recomputation.
+    if (mediaPhase.signalTag && !quickAssessment.signals.includes(mediaPhase.signalTag)) {
+      quickAssessment.signals.push(mediaPhase.signalTag)
+    }
+    if (mediaPhase.fingerprint) {
+      quickAssessment.mediaFingerprint = mediaPhase.fingerprint
+    }
+
+    // Compute channel-post flag once and reuse across later phases.
+    // ctx.session.userInfo belongs to whoever triggered the update (often an
+    // unrelated user), so user-history rules would mix wrong data for channel
+    // posts — these phases are skipped below.
+    const isChannelPostEarly = !!(ctx.message?.sender_chat?.type === 'channel')
+
+    // PHASE 1.1: Contact-card spam detector.
+    // Catches Chinese / SEA promo contact-card attacks (e.g. first_name
+    // holds Chinese promo text + number is a +60 line) that bypass text
+    // content detectors entirely. Returns a verdict immediately for
+    // high-precision rule matches; on soft signals we fold tags into
+    // quickAssessment so the LLM/deterministic layer can combine them.
+    if (!isChannelPostEarly) {
+      const userCtxForContact = buildUserContext(ctx, null, quickAssessment)
+      const contactAnalysis = analyzeContactMessage(ctx, ctx.session?.userInfo, userCtxForContact)
+      if (contactAnalysis.isContact) {
+        for (const tag of contactAnalysis.signals) {
+          if (!quickAssessment.signals.includes(tag)) quickAssessment.signals.push(tag)
+        }
+        if (contactAnalysis.verdict) {
+          logSpamDecision({
+            phase: 'contact_spam',
+            decision: 'spam',
+            confidence: contactAnalysis.verdict.confidence,
+            reason: contactAnalysis.verdict.reason,
+            chatId: ctx.chat?.id,
+            userId: ctx.from?.id,
+            messageId: ctx.message?.message_id,
+            signals: contactAnalysis.signals,
+            trustSignals: quickAssessment.trustSignals,
+            userSignals: buildUserSignals(ctx.session?.userInfo, ctx.from),
+            extras: {
+              rule: contactAnalysis.verdict.rule,
+              contactFields: contactAnalysis.fields
+            }
+          })
+          return {
+            isSpam: true,
+            confidence: contactAnalysis.verdict.confidence,
+            reason: contactAnalysis.verdict.reason,
+            source: `contact_spam:${contactAnalysis.verdict.rule}`,
+            quickAssessment
+          }
+        }
+      }
+    }
+
     // PHASE 1.5: Deterministic verdict — short-circuit when signals are
     // overwhelming. Conservative by design: every rule must be high-precision
     // so we never short-circuit a genuine user. Falls through to LLM otherwise.
-    //
-    // Skipped for channel posts: ctx.session.userInfo belongs to whoever
-    // triggered the update (often an unrelated user), so user-history rules
-    // would mix wrong data. Channels still go through the rest of the pipeline.
-    const isChannelPostEarly = !!(ctx.message?.sender_chat?.type === 'channel')
     if (!isChannelPostEarly) {
       const userSignalsEarly = buildUserSignals(ctx.session?.userInfo, ctx.from)
       const userContextEarly = buildUserContext(ctx, null, quickAssessment)
