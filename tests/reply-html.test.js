@@ -52,6 +52,14 @@ test('replyHTML allows caller to override link_preview defaults', async () => {
   assert.strictEqual(c.payload.disable_web_page_preview, false)
 })
 
+test('replyHTML: link_preview_options with url (no is_disabled) defaults to enabled', async () => {
+  const ctx = mkCtx()
+  await replyHTML(ctx, 'x', { link_preview_options: { url: 'https://example.com' } })
+  const c = ctx._calls[0]
+  assert.deepStrictEqual(c.payload.link_preview_options, { url: 'https://example.com' })
+  assert.strictEqual(c.payload.disable_web_page_preview, false)
+})
+
 test('editHTML calls editMessageText with same defaults', async () => {
   const ctx = mkCtx()
   await editHTML(ctx, 100, '<i>x</i>')

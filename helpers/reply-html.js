@@ -17,14 +17,15 @@ const buildPayload = (chatId, text, opts = {}) => {
   }
 
   // Link preview defaults (modern + legacy). Caller can override either.
+  // "Disabled" means is_disabled === true explicitly — absence means enabled
+  // (so caller can pass link_preview_options:{url:'...'} without is_disabled
+  // and still get the preview through both old and new API forms).
   if (payload.link_preview_options === undefined) {
     payload.link_preview_options = { is_disabled: true }
   }
+  const isDisabled = payload.link_preview_options.is_disabled === true
   if (payload.disable_web_page_preview === undefined) {
-    payload.disable_web_page_preview = payload.link_preview_options.is_disabled !== false
-  }
-  if (payload.link_preview_options.is_disabled === false && opts.disable_web_page_preview === undefined) {
-    payload.disable_web_page_preview = false
+    payload.disable_web_page_preview = isDisabled
   }
 
   // reply_to_message_id → reply_parameters (keep both)
