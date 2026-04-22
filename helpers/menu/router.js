@@ -1,3 +1,39 @@
+/**
+ * Menu router — dispatches `m:v1:<screenId>:<action>:<args>` callbacks.
+ *
+ * Screen contract:
+ *   {
+ *     id: string,                             // e.g. 'settings.antispam'
+ *     access: 'public' | 'group_admin' | 'initiator' | 'group_admin_or_initiator',
+ *     accessOpts?: (ctx) => object | Promise<object>,  // OPTIONAL: produce
+ *       // access opts (e.g. { initiatorId }). Called before access check.
+ *       // Screens that use `initiator` or `group_admin_or_initiator` MUST
+ *       // implement this to return { initiatorId: <userId> }.
+ *     render: (ctx, state) => ({ text, keyboard }) | Promise<...>,
+ *     handle: (ctx, action, args) => result | Promise<result>
+ *   }
+ *
+ * handle() return contract (truth table):
+ *
+ *   result                            | renders? | toast       | cb answered?
+ *   ----------------------------------+----------+-------------+--------------
+ *   'render'                          | yes      | no          | empty
+ *   { render: true, state: {...} }    | yes      | no          | empty
+ *   { render: false, toast: 'key' }   | no       | 'key'       | 'key'
+ *   { toast: 'key' }                  | yes      | 'key'       | 'key'
+ *   { silent: true }                  | yes      | no          | NOT answered
+ *   { silent: true, render: false }   | no       | no          | NOT answered
+ *   null / undefined                  | no       | no          | empty
+ *
+ * Reserved screenIds: '_close' (deletes message), '_noop' (silent ack).
+ *
+ * Error paths:
+ *   parse failure   → cbQuery 'menu.unknown'
+ *   unknown screen  → cbQuery 'menu.unknown'
+ *   access denied   → cbQuery with access rule's toastKey (alert)
+ *   handler throws  → log + cbQuery 'menu.error'
+ */
+
 const { getMenu } = require('./registry')
 const { checkAccess } = require('./access')
 const { editHTML } = require('../reply-html')
@@ -60,7 +96,10 @@ const handleCallback = async (ctx) => {
     return ctx.answerCbQuery(ctx.i18n.t('menu.unknown')).catch(() => {})
   }
 
-  const access = await checkAccess(ctx, screen.access, parsed.accessOpts || {})
+  const accessOpts = typeof screen.accessOpts === 'function'
+    ? await screen.accessOpts(ctx)
+    : {}
+  const access = await checkAccess(ctx, screen.access, accessOpts || {})
   if (!access.ok) {
     return ctx.answerCbQuery(ctx.i18n.t(access.toastKey), { show_alert: true }).catch(() => {})
   }

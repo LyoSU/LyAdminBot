@@ -160,6 +160,57 @@ test('_noop action answers cbQuery silently', async () => {
   assert.strictEqual(ctx._calls.editHTML.length, 0)
 })
 
+test('handle returns {silent: true} → no cbQuery answer, still re-renders', async () => {
+  const { registry, router } = freshRouter()
+  registry.registerMenu({
+    id: 's',
+    access: 'public',
+    render: () => ({ text: 'r', keyboard: { inline_keyboard: [] } }),
+    handle: async () => ({ silent: true })
+  })
+  const ctx = mkCb({ data: 'm:v1:s:silent_action' })
+  await router.handleCallback(ctx)
+  assert.strictEqual(ctx._calls.cbAnswer.length, 0, 'should not answer cbQuery when silent')
+  assert.strictEqual(ctx._calls.editHTML.length, 1, 'still re-renders by default')
+})
+
+test('handle returns {render: true, state: {...}} → state is passed to render', async () => {
+  const { registry, router } = freshRouter()
+  let renderState = null
+  registry.registerMenu({
+    id: 's',
+    access: 'public',
+    render: (ctx, state) => {
+      renderState = state
+      return { text: 'r', keyboard: { inline_keyboard: [] } }
+    },
+    handle: async () => ({ render: true, state: { page: 3, foo: 'bar' } })
+  })
+  const ctx = mkCb({ data: 'm:v1:s:go' })
+  await router.handleCallback(ctx)
+  assert.deepStrictEqual(renderState, { page: 3, foo: 'bar' })
+})
+
+test('screen.accessOpts hook is called and its return value is passed to checkAccess', async () => {
+  const { registry, router } = freshRouter()
+  let accessOptsCalled = false
+  registry.registerMenu({
+    id: 's',
+    access: 'group_admin_or_initiator',
+    accessOpts: (ctx) => {
+      accessOptsCalled = true
+      return { initiatorId: ctx.from.id }  // clicker is treated as initiator
+    },
+    render: () => ({ text: 'r', keyboard: { inline_keyboard: [] } }),
+    handle: async () => 'render'
+  })
+  const ctx = mkCb({ data: 'm:v1:s:open', fromId: 99, getChatMember: async () => ({ status: 'member' }) })
+  await router.handleCallback(ctx)
+  assert.strictEqual(accessOptsCalled, true)
+  // non-admin but matches initiator → allowed → render happens
+  assert.strictEqual(ctx._calls.editHTML.length, 1)
+})
+
 test('handler errors are caught and answered with menu.error toast', async () => {
   const { registry, router } = freshRouter()
   registry.registerMenu({
