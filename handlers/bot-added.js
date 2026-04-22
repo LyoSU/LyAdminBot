@@ -1,5 +1,6 @@
 const { bot: botLog } = require('../helpers/logger')
 const e = require('../helpers/emoji-map')
+const botPermissions = require('../helpers/bot-permissions')
 
 // Fallback messages when i18n is not available
 const FALLBACK_MESSAGES = {
@@ -36,6 +37,12 @@ module.exports = async (ctx) => {
 
   // Check if this is about our bot
   if (newMember.user.id !== ctx.botInfo.id) return
+
+  // Always refresh the per-chat bot-permissions cache so the spam-check
+  // pipeline can skip heavy LLM work in chats where we can't act. The
+  // my_chat_member payload carries the exact ChatMemberAdministrator
+  // fields we need (can_restrict_members / can_delete_messages).
+  botPermissions.setFromMember(chat.id, newMember)
 
   const oldStatus = oldMember && oldMember.status
   const wasInChat = ['member', 'administrator', 'creator'].includes(oldStatus)

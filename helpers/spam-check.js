@@ -1789,6 +1789,36 @@ SECURITY CANARY
 // ========== MAIN FUNCTION ==========
 
 /**
+ * Predicate for the trusted-user LLM fast-path.
+ *
+ * Returns true iff the sender is an established, clean-history account
+ * AND the current message produced no quick-risk signals — safe to skip
+ * the Qdrant / LLM phases in that case. Kept as a named, pure function
+ * so the criteria are unit-testable in isolation without mocking the
+ * entire checkSpam flow.
+ *
+ * Thresholds are deliberately conservative; see the PHASE 1.8 comment
+ * inside checkSpam for the security reasoning.
+ */
+const TRUSTED_FAST_PATH_MIN_REPUTATION = 85
+const TRUSTED_FAST_PATH_MIN_MESSAGES = 30
+const isTrustedFastPathEligible = (userInfo, quickAssessment) => {
+  if (!userInfo || !userInfo.reputation || !userInfo.globalStats) return false
+  if (!quickAssessment) return false
+  const rep = Number(userInfo.reputation.score) || 0
+  const totalMsgs = Number(userInfo.globalStats.totalMessages) || 0
+  const spamDetections = Number(userInfo.globalStats.spamDetections) || 0
+  return (
+    rep >= TRUSTED_FAST_PATH_MIN_REPUTATION &&
+    totalMsgs >= TRUSTED_FAST_PATH_MIN_MESSAGES &&
+    spamDetections === 0 &&
+    quickAssessment.risk === 'low' &&
+    Array.isArray(quickAssessment.signals) &&
+    quickAssessment.signals.length === 0
+  )
+}
+
+/**
  * Main spam check function using hybrid approach
  */
 const checkSpam = async (messageText, ctx, groupSettings) => {
@@ -2003,6 +2033,58 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
       }
     }
 
+    // PHASE 1.8: Trusted-user fast-path.
+    //
+    // If the sender is a well-established account with a clean track
+    // record AND the quick-risk pass found literally zero signals, we
+    // can skip the expensive downstream phases (OpenAI moderation,
+    // Qdrant embedding lookup, LLM scoring). Criteria are deliberately
+    // conservative:
+    //
+    //   - reputation.score >= 85       (we've watched them long enough)
+    //   - totalMessages    >= 30       (not a fresh-bake)
+    //   - spamDetections    == 0       (never flagged)
+    //   - quickAssessment.risk === 'low' AND signals.length === 0
+    //                                  (no anomaly at all in THIS msg)
+    //   - not a channel crosspost      (different trust model)
+    //   - not an edited message        (edit-inject still possible)
+    //
+    // If a takeover slips through here, the account's first spam:
+    //   (a) likely trips quick-risk signals (dormancy / style-shift
+    //       / edit-inject / contact-spam), so the fast-path won't fire,
+    //   (b) even if it slips, the verdict gets recorded on the user
+    //       (spamDetections++, rep drops) so the very next post no
+    //       longer meets the trust bar.
+    //
+    // Net effect in prod: the Artem Bro / established-user class of
+    // message skips ~2s of Qdrant + ~5s of LLM work entirely.
+    if (!isChannelPostEarly && !ctx.editedMessage) {
+      if (isTrustedFastPathEligible(ctx.session && ctx.session.userInfo, quickAssessment)) {
+        const userInfo = ctx.session.userInfo
+        const rep = userInfo.reputation.score
+        const totalMsgs = userInfo.globalStats.totalMessages
+        logSpamDecision({
+          phase: 'trusted_fast_path',
+          decision: 'clean',
+          confidence: 0,
+          reason: `Established user rep=${rep} msgs=${totalMsgs} spamDetections=0 with no quick-risk signals`,
+          chatId: ctx.chat?.id,
+          userId: ctx.from?.id,
+          messageId: ctx.message?.message_id,
+          signals: [],
+          trustSignals: quickAssessment.trustSignals,
+          userSignals: buildUserSignals(userInfo, ctx.from)
+        })
+        return {
+          isSpam: false,
+          confidence: 0,
+          reason: 'Trusted established user — LLM skipped',
+          source: 'trusted_fast_path',
+          quickAssessment
+        }
+      }
+    }
+
     // Fetch photo URL once (largest size) for moderation + LLM
     const messagePhoto = ctx.message && ctx.message.photo && ctx.message.photo[ctx.message.photo.length - 1]
     const messagePhotoUrlPromise = messagePhoto && messagePhoto.file_id
@@ -2132,5 +2214,8 @@ module.exports = {
   getUserProfilePhotoUrl,
   getMessagePhotoUrl,
   getUserBio,
-  humanizeReason
+  humanizeReason,
+  isTrustedFastPathEligible,
+  TRUSTED_FAST_PATH_MIN_REPUTATION,
+  TRUSTED_FAST_PATH_MIN_MESSAGES
 }

@@ -28,6 +28,7 @@ const { logSpamDecision, buildUserSignals } = require('../helpers/spam-signals')
 const { snapshotMessage, analyzeEdit } = require('../helpers/edit-diff')
 const adminFeedback = require('../helpers/admin-feedback')
 const { isSystemSenderId } = require('../helpers/system-senders')
+const botPermissions = require('../helpers/bot-permissions')
 
 /**
  * Determine if user should receive full ban (vs temporary mute)
@@ -446,6 +447,24 @@ module.exports = async (ctx) => {
         try { snapshotMessage(ctx.chat.id, ctx.message.message_id, messageText) } catch (_err) { /* non-fatal */ }
       }
 
+      // No-permissions early exit:
+      //   If the bot has neither restrict nor delete rights in this chat,
+      //   any verdict below would be unactionable ("No restrict permission"
+      //   / "Cannot delete - no permission" in logs). Skip the heavy
+      //   Qdrant / LLM pipeline entirely — the orchestrator has already
+      //   run the ban-database lookup upstream, which is the only
+      //   enforcement path available to us here.
+      //
+      //   Resolver caches perms from my_chat_member events (zero calls
+      //   after the first one in each chat); lazy-fetches via
+      //   getChatMember on cold start. Returns null on API failure,
+      //   in which case we fall through to the full pipeline to be safe.
+      const botPerms = await botPermissions.resolve(ctx.telegram, ctx.chat.id, ctx.botInfo && ctx.botInfo.id)
+      if (botPerms && !botPerms.canAct) {
+        spamLog.debug({ chatId: ctx.chat.id, chatTitle: ctx.chat.title }, 'Skipping spam-check: bot has no restrict/delete rights')
+        return false
+      }
+
       let result
       try {
         result = await checkSpam(messageText, ctx, spamSettings)
@@ -577,15 +596,20 @@ module.exports = async (ctx) => {
         let muteSuccess = false
         let deleteSuccess = false
 
-        // Check bot permissions once (avoid duplicate API calls)
+        // Read bot permissions from the cache populated earlier in this
+        // same request by the resolve() call in the no-perms early exit
+        // above. Falls back to a fresh fetch only if the cache is somehow
+        // empty (stale-ttl eviction between the two reads is unlikely
+        // but not impossible).
         let canRestrictMembers = false
         let canDeleteMessages = false
-        try {
-          const botMember = await ctx.telegram.getChatMember(ctx.chat.id, ctx.botInfo.id)
-          canRestrictMembers = botMember.can_restrict_members
-          canDeleteMessages = botMember.can_delete_messages
-        } catch (error) {
-          spamAction.error({ err: error.message }, 'Failed to check bot permissions')
+        const cachedPerms = botPermissions.get(ctx.chat.id) ||
+          await botPermissions.resolve(ctx.telegram, ctx.chat.id, ctx.botInfo && ctx.botInfo.id)
+        if (cachedPerms) {
+          canRestrictMembers = cachedPerms.canRestrict
+          canDeleteMessages = cachedPerms.canDelete
+        } else {
+          spamAction.error({ chatId: ctx.chat.id }, 'Failed to resolve bot permissions')
         }
 
         // Handle mute/restrict action
