@@ -214,8 +214,56 @@ const getAccountAge = (ctx) => {
   return 'established'
 }
 
+/**
+ * Stolen / dormant account detection.
+ *
+ * Telegram user_ids are monotonically-ish increasing. We estimate the
+ * account's true creation date from the id (see predictCreationDate), and
+ * compare it against our locally-observed firstSeen timestamp. A large
+ * gap between "account exists since 2018" and "we first saw them writing
+ * yesterday" is a strong signal that the account is:
+ *   a) a long-dormant sleeper awakened for a campaign, or
+ *   b) a stolen/purchased account in a new owner's hands.
+ *
+ * The detector returns a structural verdict — no age-of-account keyword
+ * bias, no country data. Pure arithmetic on two timestamps.
+ */
+const getAccountAgeParadox = (userId, firstSeenDate, nowMs = Date.now()) => {
+  if (!userId || typeof userId !== 'number' || userId <= 0) return null
+  if (!firstSeenDate) return null
+  const [, predicted] = predictCreationDate(userId)
+  if (!(predicted instanceof Date)) return null
+
+  const firstSeen = firstSeenDate instanceof Date ? firstSeenDate : new Date(firstSeenDate)
+  if (Number.isNaN(firstSeen.getTime())) return null
+
+  const predictedAgeMs = nowMs - predicted.getTime()
+  const localAgeMs = nowMs - firstSeen.getTime()
+
+  const DAY = 24 * 60 * 60 * 1000
+  const predictedAgeDays = predictedAgeMs / DAY
+  const localAgeDays = localAgeMs / DAY
+
+  return {
+    predictedAgeDays: Math.max(0, predictedAgeDays),
+    localAgeDays: Math.max(0, localAgeDays),
+    predictedCreation: predicted,
+    firstSeen,
+    // Gap in days: how long the account existed before we observed it.
+    // High values = long sleeper / new-ownership candidate.
+    sleeperDays: Math.max(0, predictedAgeDays - localAgeDays),
+    // Veteran + fresh-in-our-data signal: the account has existed >1yr on
+    // Telegram but we've only known it for <7 days — classic sleeper awake.
+    isSleeperAwakened: predictedAgeDays > 365 && localAgeDays < 7,
+    // Newly-registered account actively posting within its first day —
+    // classic bot-farm fresh bake.
+    isFreshBake: predictedAgeDays < 7 && localAgeDays < 2
+  }
+}
+
 module.exports = {
   isNewAccount,
   getAccountAge,
-  predictCreationDate
+  predictCreationDate,
+  getAccountAgeParadox
 }

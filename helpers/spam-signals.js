@@ -1,6 +1,7 @@
 const { normalizeHeavy, sha256 } = require('./spam-signatures')
 const { hasTextualContent } = require('./text-utils')
 const { spam: spamLog } = require('./logger')
+const { getAccountAgeParadox } = require('./account-age')
 
 /**
  * Unified signal layer for the antispam pipeline.
@@ -190,6 +191,12 @@ const buildUserSignals = (userInfo, from) => {
   const lols = (userInfo && userInfo.externalBan && userInfo.externalBan.lols) || null
   const cas = (userInfo && userInfo.externalBan && userInfo.externalBan.cas) || null
 
+  // Account-age paradox — purely structural, no lists. Arithmetic on the
+  // account-id-predicted creation date vs. our locally observed firstSeen.
+  const paradox = (from?.id && stats.firstSeen)
+    ? getAccountAgeParadox(from.id, stats.firstSeen)
+    : null
+
   return {
     userId: from?.id || (userInfo && userInfo.telegram_id),
     isPremium: Boolean(from?.is_premium),
@@ -211,7 +218,14 @@ const buildUserSignals = (userInfo, from) => {
       spamFactor: lols.spamFactor || 0,
       scammer: Boolean(lols.scammer)
     } : null,
-    cas: cas ? { banned: Boolean(cas.banned) } : null
+    cas: cas ? { banned: Boolean(cas.banned) } : null,
+    accountAge: paradox ? {
+      predictedDays: Math.round(paradox.predictedAgeDays),
+      localDays: Math.round(paradox.localAgeDays),
+      sleeperDays: Math.round(paradox.sleeperDays),
+      isSleeperAwakened: paradox.isSleeperAwakened,
+      isFreshBake: paradox.isFreshBake
+    } : null
   }
 }
 
@@ -376,6 +390,24 @@ const computeDeterministicVerdict = ({ userSignals, quickAssessment, userContext
     (hasHighRiskSignal || strongPromo)
   ) {
     return { decision: 'spam', rule: 'compromised_account_rebrand', confidence: 80, reason: 'Established account with multiple recent identity changes and promotional content (likely compromised)' }
+  }
+
+  // Sleeper-awakened rule: predicted-creation date is >1 year older than
+  // our local firstSeen AND the account's local activity is very new AND
+  // a strong promo signal is present. This catches stolen / bought-and-
+  // weaponised accounts without relying on lols.bot or keyword lists.
+  const age = userSignals.accountAge
+  if (
+    age && age.isSleeperAwakened &&
+    userSignals.totalMessages <= 5 &&
+    (hasHighRiskSignal || strongPromo || hasPromoSignal)
+  ) {
+    return {
+      decision: 'spam',
+      rule: 'sleeper_awakened_promo',
+      confidence: 90,
+      reason: `Veteran account (~${age.predictedDays}d old) only active locally ${age.localDays}d, posting promotional content`
+    }
   }
 
   // ===== CLEAN rules =====
