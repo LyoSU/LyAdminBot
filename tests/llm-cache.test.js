@@ -61,6 +61,36 @@ test('cacheHits increment per lookup', () => {
   assert.strictEqual(r3.cacheHits, 3)
 })
 
+// Regression: distinct Cyrillic messages must not collide to the same key.
+// Before the velocity.js tokenizer fix, `\w` (ASCII-only) stripped all
+// Cyrillic → zero tokens → simHash '0000000000000000' → every Ukrainian /
+// Russian message hit ONE cache slot, causing a single "Uncle Sasha" verdict
+// to be replayed for unrelated messages across different chats.
+test('cyrillic: distinct messages produce distinct keys', () => {
+  const bucket = llmCache.makeBucket({ isNewAccount: false, isHighRisk: false })
+  const samples = [
+    'Вітаю,які саме серветки хочете за гойдалку',
+    'в таксі було так спекотно, що я розстебнулася і забула про це',
+    'Кто нибудь может одолжить суперклей?',
+    'Шкода,що раніше не замітила сюрприз',
+    'Гагарін і вас любіла дуже сильно'
+  ]
+  const keys = samples.map(s => llmCache.cacheKey(s, bucket))
+  assert.ok(keys.every(k => k !== null), 'all should produce a cache key')
+  assert.strictEqual(new Set(keys).size, samples.length, 'keys must be distinct')
+})
+
+test('cyrillic: all-zero simhash is rejected defensively', () => {
+  // Whitespace/punctuation-heavy short snippets can still collapse to
+  // zero-tokens. The cache must reject that key even if length > 16.
+  const bucket = llmCache.makeBucket({ isNewAccount: false, isHighRisk: false })
+  const k = llmCache.cacheKey('... ... ... ... ... ... ...', bucket)
+  // Either tokenize produces real tokens (unlikely for this input) or we
+  // reject the zero-hash; both outcomes are acceptable — the bad state
+  // would be caching under the zero-hash slot.
+  if (k !== null) assert.ok(!/0{16}$/.test(k), `zero-hash leaked into key: ${k}`)
+})
+
 let passed = 0; let failed = 0
 for (const t of tests) {
   try { t.fn(); passed++; console.log('  ✓ ' + t.name) } catch (e) { failed++; console.log('  ✗ ' + t.name); console.log('     ' + e.message) }

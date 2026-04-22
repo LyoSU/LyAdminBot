@@ -297,11 +297,15 @@ const getStructureHash = (text) => {
     .substring(0, 12)
 }
 
-// Simple tokenizer
+// Simple tokenizer. Unicode-aware: `\w` in JS is ASCII-only, so using it
+// here silently strips Cyrillic / CJK / Arabic / etc. and collapses
+// every non-Latin message to zero tokens → identical simHash '0'.repeat(16).
+// That bug caused cross-chat fuzzy-velocity pollution and LLM-cache key
+// collisions (all Cyrillic msgs hit one cached verdict).
 const tokenize = (text) => {
   return text
     .toLowerCase()
-    .replace(/[^\w\s]/g, ' ')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .split(/\s+/)
     .filter(t => t.length > 2)
 }
@@ -577,7 +581,10 @@ const recordOccurrence = async (text, userId, chatId, messageId) => {
   // Skip fuzzy/structure hashing for non-textual messages (emoji-only)
   // These collapse to identical hashes causing false cross-group velocity alerts
   const textual = hasTextualContent(text)
-  const simHash = textual ? getSimHash(text) : null
+  const rawSimHash = textual ? getSimHash(text) : null
+  // Also reject the degenerate all-zero hash: happens when tokenize produces
+  // no tokens (pure punctuation, very short words, or prior ASCII-only bug).
+  const simHash = rawSimHash && !/^0+$/.test(rawSimHash) ? rawSimHash : null
   const structHash = textual ? getStructureHash(text) : null
 
   // Record exact message (for all senders including channels)

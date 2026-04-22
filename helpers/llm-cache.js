@@ -45,7 +45,13 @@ const cacheKey = (text, bucket) => {
   if (!text || !hasTextualContent(text)) return null
   const norm = stripEmoji(text).trim().toLowerCase()
   if (norm.length < MIN_TEXT_LEN_FOR_CACHE) return null
-  return `${bucket}|${getSimHash(norm)}`
+  const sim = getSimHash(norm)
+  // Defensive: `0000000000000000` is the degenerate output when tokenize
+  // produced zero tokens (very short / punctuation-only / prior ASCII-only
+  // bug). Treat it as an un-cacheable fingerprint so a single stale verdict
+  // can't poison every future lookup.
+  if (!sim || /^0+$/.test(sim)) return null
+  return `${bucket}|${sim}`
 }
 
 const prune = (now) => {
