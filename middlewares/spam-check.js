@@ -463,6 +463,28 @@ module.exports = async (ctx) => {
       // without rerunning the bot. Text snippet (first 120 chars) is included
       // so debug analysis can correlate the verdict with what was actually said.
       const textSnippet = (messageText || '').substring(0, 120)
+      // Surface network-level detector state alongside the user signals so
+      // logs tell the whole story: "why did this trigger?" is answerable
+      // from a single spam.decision line without needing parallel grep.
+      const netExtras = {}
+      if (result.quickAssessment?.mediaFingerprint) {
+        netExtras.mediaFingerprint = {
+          mediaType: result.quickAssessment.mediaFingerprint.mediaType,
+          occurrences: result.quickAssessment.mediaFingerprint.occurrences,
+          uniqueChats: result.quickAssessment.mediaFingerprint.uniqueChats,
+          uniqueUsers: result.quickAssessment.mediaFingerprint.uniqueUsers,
+          velocityExceeded: result.quickAssessment.mediaFingerprint.velocityExceeded
+        }
+      }
+      if (result.quickAssessment?.chatBurst) {
+        netExtras.chatBurst = {
+          burstSize: result.quickAssessment.chatBurst.burstSize,
+          windowMs: result.quickAssessment.chatBurst.windowMs
+        }
+      }
+      if (result.quickAssessment?.customEmojiCluster) {
+        netExtras.customEmojiCluster = result.quickAssessment.customEmojiCluster
+      }
       logSpamDecision({
         phase: 'final',
         decision: result.isSpam ? 'spam' : 'clean',
@@ -478,7 +500,8 @@ module.exports = async (ctx) => {
           source: result.source,
           editedMessage: isEditedMessage,
           textSnippet,
-          textLen: (messageText || '').length
+          textLen: (messageText || '').length,
+          ...netExtras
         }
       })
 
