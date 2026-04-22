@@ -9,6 +9,7 @@ const globalBanCheck = require('./global-ban')
 const dataPersistence = require('./data-persistence')
 const emojiInject = require('./emoji-inject')
 const albumBuffer = require('./album-buffer')
+const { pendingInputMiddleware: pendingInput } = require('./pending-input')
 
 module.exports = {
   stats,
@@ -21,5 +22,6 @@ module.exports = {
   globalBanCheck,
   dataPersistence,
   emojiInject,
-  albumBuffer
+  albumBuffer,
+  pendingInput
 }

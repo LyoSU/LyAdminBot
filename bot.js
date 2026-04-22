@@ -18,7 +18,8 @@ const {
   spamCheck,
   dataPersistence,
   emojiInject,
-  albumBuffer
+  albumBuffer,
+  pendingInput
 } = require('./middlewares')
 const { registerAllRoutes } = require('./routes')
 
@@ -175,6 +176,13 @@ const registerMiddlewares = (bot, i18n) => {
 
   // 8. Load context (user, group, member data)
   bot.use(contextLoader)
+
+  // 8.25. Pending-input claim. If this message is a reply to a force_reply
+  //       prompt that the menu router is waiting on, the registered
+  //       handler runs and downstream middleware (album buffer, spam
+  //       check, message handler) is skipped — the user just submitted
+  //       form data, not a chat message.
+  bot.use(pendingInput)
 
   // 8.5. Aggregate album (media_group_id) siblings into one ctx so that
   //      spam-check runs once per album and can delete ALL photos on
