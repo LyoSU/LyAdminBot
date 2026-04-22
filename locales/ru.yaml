@@ -324,3 +324,15 @@ report:
   clean_thanks: "${e.check} ${target} — ок\n<i>спасибо за бдительность! ${e.eyes}</i>"
   clean_false_alarm: "${e.check} ${target} — ок\n<i>ложная тревога ${e.megaphone}</i>"
   clean_all_good: "${e.check} ${target} — ок\n<i>тут всё чисто ✨</i>"
+
+menu:
+  unknown: "Меню не найдено"
+  error: "Ошибка"
+  access:
+    only_admins: "🔒 Только для админов группы"
+    only_initiator: "🔒 Жми команду сам"
+    only_initiator_or_admin: "🔒 Только инициатор или админ группы"
+    denied: "Доступ запрещён"
+  saved: "✓ Сохранено"
+  cancelled: "↩️ Отменено"
+  session_expired: "⏱ Сессия истекла"

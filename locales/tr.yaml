@@ -148,3 +148,15 @@ del:
 
 global_ban:
   kicked: "${e.ban} ${name} atıldı — global ban.\n<code>${reason}</code>"
+
+menu:
+  unknown: "Menü bulunamadı"
+  error: "Hata"
+  access:
+    only_admins: "🔒 Sadece grup yöneticileri"
+    only_initiator: "🔒 Komuta kendin bas"
+    only_initiator_or_admin: "🔒 Sadece başlatan veya grup yöneticisi"
+    denied: "Erişim reddedildi"
+  saved: "✓ Kaydedildi"
+  cancelled: "↩️ İptal edildi"
+  session_expired: "⏱ Oturum süresi doldu"

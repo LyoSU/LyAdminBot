@@ -200,3 +200,15 @@ del:
 
 global_ban:
   kicked: "${e.ban} ${name} выключаны — глабальны бан.\n<code>${reason}</code>"
+
+menu:
+  unknown: "Меню не знойдзена"
+  error: "Памылка"
+  access:
+    only_admins: "🔒 Толькі для адмінаў групы"
+    only_initiator: "🔒 Націсні каманду сам"
+    only_initiator_or_admin: "🔒 Толькі ініцыятар або адмін групы"
+    denied: "Доступ забаронены"
+  saved: "✓ Захавана"
+  cancelled: "↩️ Скасавана"
+  session_expired: "⏱ Сесія састарэла"

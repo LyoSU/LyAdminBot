@@ -379,3 +379,15 @@ report:
   clean_thanks: "${e.check} ${target} — ок\n<i>дякую за пильність! ${e.eyes}</i>"
   clean_false_alarm: "${e.check} ${target} — ок\n<i>фальшива тривога ${e.megaphone}</i>"
   clean_all_good: "${e.check} ${target} — ок\n<i>все чисто тут ✨</i>"
+
+menu:
+  unknown: "Меню не знайдено"
+  error: "Помилка"
+  access:
+    only_admins: "🔒 Тільки для адмінів групи"
+    only_initiator: "🔒 Натисни команду сам"
+    only_initiator_or_admin: "🔒 Тільки ініціатор або адмін групи"
+    denied: "Доступ заборонено"
+  saved: "✓ Збережено"
+  cancelled: "↩️ Скасовано"
+  session_expired: "⏱ Сесія застаріла"

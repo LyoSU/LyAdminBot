@@ -388,3 +388,15 @@ report:
   clean_thanks: "${e.check} ${target} — ok\n<i>thanks for watching! ${e.eyes}</i>"
   clean_false_alarm: "${e.check} ${target} — ok\n<i>false alarm ${e.megaphone}</i>"
   clean_all_good: "${e.check} ${target} — ok\n<i>all clear here ✨</i>"
+
+menu:
+  unknown: "Menu not found"
+  error: "Error"
+  access:
+    only_admins: "🔒 Group admins only"
+    only_initiator: "🔒 Tap the command yourself"
+    only_initiator_or_admin: "🔒 Initiator or group admin only"
+    denied: "Access denied"
+  saved: "✓ Saved"
+  cancelled: "↩️ Cancelled"
+  session_expired: "⏱ Session expired"
