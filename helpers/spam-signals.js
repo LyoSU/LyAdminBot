@@ -2,6 +2,7 @@ const { normalizeHeavy, sha256 } = require('./spam-signatures')
 const { hasTextualContent } = require('./text-utils')
 const { spam: spamLog } = require('./logger')
 const { getAccountAgeParadox } = require('./account-age')
+const { getLengthStdDev, getReplyRatio, getHourZeroCount, getTopLanguage, detectLanguage } = require('./user-stats')
 
 /**
  * Unified signal layer for the antispam pipeline.
@@ -197,6 +198,14 @@ const buildUserSignals = (userInfo, from) => {
     ? getAccountAgeParadox(from.id, stats.firstSeen)
     : null
 
+  // Derived behavioural stats from the Welford running-mean / histogram /
+  // language / reply tracking layer. All O(1) reads, no allocations.
+  const replyRatio = getReplyRatio(userInfo)
+  const lengthStdDev = getLengthStdDev(userInfo)
+  const hourZeros = getHourZeroCount(userInfo)
+  const topLang = getTopLanguage(userInfo)
+  const avgLen = userInfo?.globalStats?.messageStats?.avgLength || 0
+
   return {
     userId: from?.id || (userInfo && userInfo.telegram_id),
     isPremium: Boolean(from?.is_premium),
@@ -225,7 +234,14 @@ const buildUserSignals = (userInfo, from) => {
       sleeperDays: Math.round(paradox.sleeperDays),
       isSleeperAwakened: paradox.isSleeperAwakened,
       isFreshBake: paradox.isFreshBake
-    } : null
+    } : null,
+    // Behavioural accumulators (nullable when user is too new to be meaningful)
+    replyRatio,
+    avgMessageLength: Math.round(avgLen),
+    lengthStdDev: Math.round(lengthStdDev),
+    hourZeroCount: hourZeros,
+    topLanguage: topLang,
+    uiLanguage: userInfo?.languageCode || from?.language_code || null
   }
 }
 
@@ -407,6 +423,128 @@ const computeDeterministicVerdict = ({ userSignals, quickAssessment, userContext
       rule: 'sleeper_awakened_promo',
       confidence: 90,
       reason: `Veteran account (~${age.predictedDays}d old) only active locally ${age.localDays}d, posting promotional content`
+    }
+  }
+
+  // Chat-burst coordinated attack rule. Fires when the current user is
+  // part of a cluster of 3+ new-user first-messages inside the chat with
+  // structurally-similar content in <= 15min, AND the current message
+  // carries any promo signal. This is the textbook coordinated-account
+  // attack — avoids FP on isolated new users.
+  if (
+    signals.includes('chat_new_user_burst') &&
+    (hasHighRiskSignal || strongPromo || hasPromoSignal)
+  ) {
+    return {
+      decision: 'spam',
+      rule: 'chat_burst_coordinated',
+      confidence: 92,
+      reason: 'Multiple new accounts first-posted in this chat within 15 minutes with similar content'
+    }
+  }
+
+  // Custom-emoji network rule. Firing alone is not enough (benign
+  // popular-pack sharing exists); combined with a strong promo signal
+  // and a new-to-us user, it's a near-certainty of a coordinated emoji-
+  // pack-branded spam ring.
+  if (
+    signals.includes('custom_emoji_cluster') &&
+    userSignals.totalMessages <= 5 &&
+    (hasHighRiskSignal || strongPromo)
+  ) {
+    return {
+      decision: 'spam',
+      rule: 'custom_emoji_network_promo',
+      confidence: 88,
+      reason: 'New user shares custom emoji IDs with a cluster of suspicious accounts'
+    }
+  }
+
+  // Media fingerprint soft rule: if a media file was already seen across
+  // multiple chats/users and the sender is new to us with no trust signals,
+  // treat it as spam. The strong rule (velocity exceeded) fires earlier
+  // in the phase chain; this is for the "almost there" case.
+  if (
+    signals.includes('media_multi_chat_reuse') &&
+    userSignals.totalMessages <= 3 &&
+    !trustSignals.includes('is_reply')
+  ) {
+    return {
+      decision: 'spam',
+      rule: 'media_multi_chat_reuse_new_user',
+      confidence: 85,
+      reason: 'New user sending media already posted by other accounts across chats'
+    }
+  }
+
+  // Style-shift rule — compromised-account tell.
+  // An established account with a long running-mean of short replies (avg
+  // length < 40) suddenly posts a long message (>= mean + 3*stddev, AND at
+  // least 200 chars absolute) carrying a promo signal. Real users drift
+  // their style gradually; stolen-account campaigns flip abruptly.
+  const currentLen = (text || '').length
+  if (
+    userSignals.totalMessages >= 50 &&
+    userSignals.avgMessageLength > 0 && userSignals.avgMessageLength < 40 &&
+    userSignals.lengthStdDev > 0 &&
+    currentLen >= Math.max(200, userSignals.avgMessageLength + 3 * userSignals.lengthStdDev) &&
+    (hasPromoSignal || hasHighRiskSignal)
+  ) {
+    return {
+      decision: 'spam',
+      rule: 'style_shift_promo_burst',
+      confidence: 82,
+      reason: `Established short-message user (avg ${userSignals.avgMessageLength} chars) suddenly posted ${currentLen}-char promo`
+    }
+  }
+
+  // Language-mismatch rule — coordinated-campaign signal.
+  // If the user has a stable detected top language with decent history
+  // (>= 15 tracked messages) and the CURRENT message is a different
+  // language (structurally determined via languagedetect), combined with
+  // promo signals, this is a strong fingerprint of a rented account posting
+  // campaign text in a language they don't normally write.
+  if (
+    userSignals.topLanguage &&
+    userSignals.totalMessages >= 15 &&
+    (hasPromoSignal || hasHighRiskSignal)
+  ) {
+    const currentLang = detectLanguage(text || '')
+    if (currentLang && currentLang !== userSignals.topLanguage) {
+      return {
+        decision: 'spam',
+        rule: 'language_mismatch_promo',
+        confidence: 80,
+        reason: `User typically writes in ${userSignals.topLanguage}, current message is ${currentLang} with promo content`
+      }
+    }
+  }
+
+  // Dormancy+burst rule — stolen/dormant account awoken for campaign.
+  // Account's hour-histogram shows many zero-hours (i.e. the user sleeps
+  // at predictable hours) but the CURRENT message is being sent during one
+  // of their usual sleep hours PLUS carrying a promo signal. Humans rarely
+  // post mid-sleep; bot controllers do.
+  //
+  // We read the histogram via userContext.hourHistogram (populated upstream
+  // by buildUserContext from the session user doc) to avoid taking the
+  // whole user object as input and keep this function a pure signal layer.
+  const hist = userContext?.hourHistogram
+  if (
+    Array.isArray(hist) && hist.length === 24 &&
+    userSignals.totalMessages >= 50 &&
+    (userSignals.hourZeroCount || 0) >= 6 &&
+    (hasPromoSignal || hasHighRiskSignal)
+  ) {
+    const msgDate = userContext?.messageDate
+    const nowHour = (typeof msgDate === 'number' ? new Date(msgDate * 1000) : new Date()).getUTCHours()
+    if (hist[nowHour] <= 1) {
+      return {
+        decision: 'spam',
+        rule: 'dormancy_burst_off_hour',
+        confidence: 80,
+        reason: `Message at UTC hour ${nowHour} is outside user's normal activity window`
+      }
     }
   }
 

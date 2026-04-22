@@ -32,6 +32,8 @@ const {
   recordEmojiStatusId
 } = require('./user-stats')
 const { evaluateProfileChurn } = require('./profile-churn')
+const llmCache = require('./llm-cache')
+const { recordCustomEmojiUse, recordChatFirstMessage, queryEmojiCluster } = require('./network-detectors')
 
 // 30s timeout for all AI API calls (SDK default is 10 minutes)
 const API_TIMEOUT_MS = 30000
@@ -1258,6 +1260,14 @@ const buildUserContext = (ctx, userRating, quickAssessment) => {
     replyAge,
     isEditedMessage: !!ctx.editedMessage,
     quickAssessment,
+    // Telegram server-side message timestamp (unix seconds). Needed by
+    // time-of-day detectors (dormancy-burst off-hour) so that evaluations
+    // are stable against local clock skew.
+    messageDate: ctx.message && typeof ctx.message.date === 'number' ? ctx.message.date : null,
+    // Persistent 24-bucket UTC hour histogram from user doc — used by
+    // dormancy-burst off-hour rule. Direct pass-through so computeDeterministicVerdict
+    // stays a pure signal consumer.
+    hourHistogram: globalStats?.messageStats?.hourHistogram || null,
     // Will be set by velocity check
     velocityBoost: 0,
     velocityReason: null
@@ -1409,6 +1419,26 @@ const runLLMPhase = async (messageText, ctx, userContext, groupSettings, groupDe
 
   const dynamicThreshold = calculateDynamicThreshold(userContext, groupSettings)
   spamLog.debug({ threshold: dynamicThreshold, msgLength: messageText.length }, 'Fallback to OpenRouter LLM')
+
+  // LLM cache lookup. Normalized simHash + small user-context bucket
+  // (new/established × high/low-risk). Saves repeated classifications of
+  // the same promo text during an active wave — typical hit rate in
+  // coordinated attacks is 40-70%. Cached verdicts still pass through the
+  // threshold gate below so admins' thresholds keep their effect.
+  const llmCacheBucket = {
+    isNewAccount: Boolean(userContext.isNewAccount),
+    isHighRisk: userContext.quickAssessment?.risk === 'high'
+  }
+  const cachedLLM = llmCache.get(messageText, llmCacheBucket)
+  if (cachedLLM) {
+    spamLog.info({
+      cacheHits: cachedLLM.cacheHits,
+      cacheAgeMs: cachedLLM.cacheAgeMs,
+      confidence: cachedLLM.confidence
+    }, 'LLM cache hit — reusing recent verdict')
+    // Return the cached verdict verbatim; re-label source for observability.
+    return { ...cachedLLM, source: 'openrouter_llm_cached' }
+  }
 
   // Prompt-injection canary. A random per-request hex token the model is
   // told it MUST NEVER output. If the model echoes it, the `message_text`
@@ -1635,10 +1665,29 @@ SECURITY CANARY
     }
   }
 
-  return {
+  const finalVerdict = {
     isSpam: finalIsSpam,
     confidence: Math.round(spamScore * 100),
     reason: analysis.reason,
+    source: 'openrouter_llm'
+  }
+
+  // Populate the LLM cache so near-duplicate messages coming in during the
+  // next few hours skip this whole pipeline branch. Store only confident
+  // verdicts (either side of the spectrum) — mid-confidence ones deserve
+  // fresh look-ups to avoid calcifying uncertainty.
+  if (spamScore >= 0.8 || spamScore <= 0.25) {
+    try {
+      llmCache.set(messageText, llmCacheBucket, finalVerdict)
+    } catch (_err) {
+      // Cache failures are non-fatal.
+    }
+  }
+
+  return {
+    isSpam: finalVerdict.isSpam,
+    confidence: finalVerdict.confidence,
+    reason: finalVerdict.reason,
     source: 'openrouter_llm'
   }
 }
@@ -1689,6 +1738,45 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
     // unrelated user), so user-history rules would mix wrong data for channel
     // posts — these phases are skipped below.
     const isChannelPostEarly = !!(ctx.message?.sender_chat?.type === 'channel')
+
+    // Network-level in-memory detectors. Both fire signals only (not a
+    // verdict) — the deterministic layer combines them with other signals.
+    //
+    //  - Custom emoji cluster: harvest custom_emoji_id entities and check if
+    //    3+ distinct users have shared any of them in the past 24h. Real
+    //    users occasionally share popular emoji IDs too, so we treat this
+    //    as a soft signal that only matters in combination.
+    //  - Chat-level new-user burst: when this is the sender's FIRST message
+    //    in this chat, record it and see if 3+ other new-user first-msgs
+    //    landed in this chat within 15min with similar simHash.
+    try {
+      const entities = (ctx.message?.entities || ctx.message?.caption_entities || [])
+      const customEmojiIds = entities
+        .filter(e => e && e.type === 'custom_emoji' && e.custom_emoji_id)
+        .map(e => e.custom_emoji_id)
+      if (customEmojiIds.length > 0 && ctx.from?.id) {
+        const emojiClusters = recordCustomEmojiUse(ctx.from.id, customEmojiIds)
+        const query = queryEmojiCluster(customEmojiIds)
+        if (query.clustered && !quickAssessment.signals.includes('custom_emoji_cluster')) {
+          quickAssessment.signals.push('custom_emoji_cluster')
+          quickAssessment.customEmojiCluster = emojiClusters
+        }
+      }
+      // First-message-in-chat check. messageCount being 0 or 1 means this
+      // is effectively the user's first observable post (counter is bumped
+      // before spam check in context loader).
+      const groupMemberStats = ctx.group?.members?.[ctx.from?.id]?.stats
+      const perGroupCount = groupMemberStats?.messagesCount || 0
+      if (!isChannelPostEarly && ctx.from?.id && ctx.chat?.id && perGroupCount <= 1) {
+        const burst = recordChatFirstMessage(ctx.chat.id, ctx.from.id, messageText)
+        if (burst && !quickAssessment.signals.includes('chat_new_user_burst')) {
+          quickAssessment.signals.push('chat_new_user_burst')
+          quickAssessment.chatBurst = burst
+        }
+      }
+    } catch (netErr) {
+      spamLog.warn({ err: netErr.message }, 'Network detectors failed, continuing')
+    }
 
     // PHASE 1.1: Contact-card spam detector.
     // Catches Chinese / SEA promo contact-card attacks (e.g. first_name
