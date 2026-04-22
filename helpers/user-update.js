@@ -1,6 +1,7 @@
 const { calculateReputation } = require('./reputation')
 const { trackIdentity, updateUniqueness } = require('./spam-signals')
 const { recordMessageStats } = require('./user-stats')
+const { isSystemSender } = require('./system-senders')
 
 /**
  * Check if session reputation is stale compared to DB
@@ -34,6 +35,12 @@ const isReputationStale = async (ctx, sessionUser) => {
 
 module.exports = async (ctx) => {
   if (!ctx.from) return
+  // System senders (777000 "Telegram", 1087968824 anonymous-admin bot,
+  // 136817688 channel bot) are not individuals — they're placeholders
+  // for messages whose real identity lives in `message.sender_chat`.
+  // Persisting them as users creates phantom records that accumulate
+  // years of cross-chat stats that correspond to no human at all.
+  if (isSystemSender(ctx)) return
 
   let user
   let needsDbRefresh = false

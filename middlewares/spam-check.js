@@ -27,6 +27,7 @@ const { scheduleDeletion } = require('../helpers/message-cleanup')
 const { logSpamDecision, buildUserSignals } = require('../helpers/spam-signals')
 const { snapshotMessage, analyzeEdit } = require('../helpers/edit-diff')
 const adminFeedback = require('../helpers/admin-feedback')
+const { isSystemSenderId } = require('../helpers/system-senders')
 
 /**
  * Determine if user should receive full ban (vs temporary mute)
@@ -233,9 +234,12 @@ module.exports = async (ctx) => {
     return
   }
 
-  // Skip Telegram service account (forwarded message info)
-  if (!isTestMode && senderId === 777000) {
-    spamLog.debug({ senderId }, 'Skipping Telegram service')
+  // Skip Telegram system senders (777000 "Telegram" service account,
+  // 1087968824 Group Anonymous Bot, 136817688 Channel Bot). These are
+  // Bot API placeholders — the authoritative identity is in sender_chat,
+  // already handled above.
+  if (!isTestMode && !hasSenderChat && isSystemSenderId(senderId)) {
+    spamLog.debug({ senderId }, 'Skipping Telegram system sender')
     return
   }
 

@@ -7,7 +7,7 @@
     "start": "node index.js",
     "lint": "node_modules/.bin/eslint --ext js .",
     "lint:fix": "node_modules/.bin/eslint --fix --ext js .",
-    "test": "node tests/profile-signals.test.js && node tests/spam-signals.test.js && node tests/golden-spam-samples.test.js && node tests/reputation.test.js && node tests/contact-spam.test.js && node tests/user-stats.test.js && node tests/media-fingerprint.test.js && node tests/profile-churn.test.js && node tests/llm-cache.test.js && node tests/network-detectors.test.js && node tests/edit-diff.test.js && node tests/reaction-feedback.test.js && node tests/graph-neighbourhood.test.js && node tests/admin-feedback.test.js && node tests/image-hash.test.js && node tests/scripts.test.js && node tests/album-buffer.test.js"
+    "test": "node tests/profile-signals.test.js && node tests/spam-signals.test.js && node tests/golden-spam-samples.test.js && node tests/reputation.test.js && node tests/contact-spam.test.js && node tests/user-stats.test.js && node tests/media-fingerprint.test.js && node tests/profile-churn.test.js && node tests/llm-cache.test.js && node tests/network-detectors.test.js && node tests/edit-diff.test.js && node tests/reaction-feedback.test.js && node tests/graph-neighbourhood.test.js && node tests/admin-feedback.test.js && node tests/image-hash.test.js && node tests/scripts.test.js && node tests/album-buffer.test.js && node tests/system-senders.test.js"
   },
   "dependencies": {
     "@qdrant/js-client-rest": "^1.15.1",

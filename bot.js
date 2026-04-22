@@ -148,8 +148,21 @@ const registerMiddlewares = (bot, i18n) => {
   // 4. Statistics
   bot.use(stats)
 
-  // 5. Rate limiting (5 requests per second)
-  bot.use(rateLimit({ window: 1000, limit: 5 }))
+  // 5. Rate limiting (5 requests per second per user).
+  //    Skip album (media_group_id) siblings: a 10-photo album arrives as
+  //    10 separate updates within ~100ms. Counting each one would drop
+  //    half the album before album-buffer aggregates them, leaving
+  //    undeleted photos if the album is spam. Returning a falsy key
+  //    from keyGenerator bypasses the store check in telegraf-ratelimit.
+  bot.use(rateLimit({
+    window: 1000,
+    limit: 5,
+    keyGenerator: (ctx) => {
+      const msg = ctx.message || ctx.editedMessage || ctx.channelPost || ctx.editedChannelPost
+      if (msg && msg.media_group_id) return null
+      return ctx.from && ctx.from.id
+    }
+  }))
 
   // 6. Sessions (user + group)
   configureSession(bot)
