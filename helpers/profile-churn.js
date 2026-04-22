@@ -77,7 +77,7 @@ const analyzeBusinessIntro = (userInfo) => {
   }
   const urls = analyzeUrls(intro.text)
   const mentions = (intro.text.match(/@[A-Za-z0-9_]{3,}/g) || []).length
-  const INVISIBLE = /[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/
+  const INVISIBLE = require('./scripts').INVISIBLE_REGEX
   const invisible = INVISIBLE.test(intro.text)
   const structuralPromo = Boolean(urls.total > 0 || mentions >= 2 || invisible)
   return {

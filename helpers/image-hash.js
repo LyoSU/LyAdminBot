@@ -109,61 +109,33 @@ const isNearDuplicate = (a, b, maxDistance = 10) => {
  * @param {string} fileId    Telegram file_id
  * @returns {Promise<string|null>}
  */
+const got = require('got')
+
+const DOWNLOAD_TIMEOUT_MS = 10000
+const DOWNLOAD_MAX_BYTES = 4 * 1024 * 1024
+
 const dhashFromFileId = async (telegram, fileId) => {
   if (!telegram || !fileId) return null
   try {
     const link = await telegram.getFileLink(fileId)
     const url = typeof link === 'string' ? link : (link && link.href)
     if (!url) return null
-    // node-fetch lives inside telegraf's deps; but to avoid pulling a new
-    // dep we use the built-in https/http.
-    const buf = await downloadBuffer(url)
-    if (!buf) return null
+    // `got` is already a project dep (used by telegram client shims).
+    // It gives us hard timeout + retry off the shelf; we cap the buffer
+    // size defensively to avoid OOM on a hostile server that streams
+    // forever.
+    const response = await got(url, {
+      encoding: null,
+      timeout: DOWNLOAD_TIMEOUT_MS,
+      retry: 0
+    })
+    if (!response || !response.body) return null
+    const buf = Buffer.isBuffer(response.body) ? response.body : Buffer.from(response.body)
+    if (buf.length > DOWNLOAD_MAX_BYTES) return null
     return await dhash(buf)
   } catch (_err) {
     return null
   }
-}
-
-// Minimal HTTPS downloader with hard timeouts. Kept internal to avoid
-// adding a new npm dep; `got` is already a project dep but is heavier
-// and locks onto specific versions.
-const https = require('https')
-const http = require('http')
-
-const downloadBuffer = (url, { timeoutMs = 10000, maxBytes = 4 * 1024 * 1024 } = {}) => {
-  return new Promise((resolve) => {
-    try {
-      const client = url.startsWith('https:') ? https : http
-      const req = client.get(url, (res) => {
-        if (res.statusCode !== 200) {
-          res.resume()
-          resolve(null)
-          return
-        }
-        const chunks = []
-        let size = 0
-        res.on('data', (c) => {
-          size += c.length
-          if (size > maxBytes) {
-            req.destroy()
-            resolve(null)
-            return
-          }
-          chunks.push(c)
-        })
-        res.on('end', () => resolve(Buffer.concat(chunks)))
-        res.on('error', () => resolve(null))
-      })
-      req.on('error', () => resolve(null))
-      req.setTimeout(timeoutMs, () => {
-        req.destroy()
-        resolve(null)
-      })
-    } catch (_err) {
-      resolve(null)
-    }
-  })
 }
 
 module.exports = {

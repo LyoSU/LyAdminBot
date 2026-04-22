@@ -11,10 +11,10 @@
  *   - Key: the normalized content simHash (same function velocity.js uses).
  *     Hash collisions are rare and the cost of a wrong hit is a single
  *     mis-verdict (bounded by downstream vote/reputation layers).
- *   - Value: { verdict, ts, hits } where verdict is the full LLM result.
+ *   - Value: { verdict, insertedAt, hits }
  *   - TTL: 6 hours — enough to cover an active wave, short enough that
  *     campaign-end FPs don't stick around.
- *   - Capacity: 5k entries, LRU eviction on insert overflow.
+ *   - Capacity: 5k entries, LRU eviction handled by `lru-cache`.
  *
  * We deliberately skip caching very-short messages (< 16 chars after
  * normalization) because their simHash is unstable and false hits hurt.
@@ -25,6 +25,8 @@
  * set of boolean-ish axes (isNewAccount, hasHighRisk) so it stays tiny.
  */
 
+const { LRUCache } = require('lru-cache')
+
 const { getSimHash } = require('./velocity')
 const { hasTextualContent, stripEmoji } = require('./text-utils')
 
@@ -32,8 +34,11 @@ const CACHE_TTL_MS = 6 * 60 * 60 * 1000 // 6h
 const CACHE_MAX_ENTRIES = 5000
 const MIN_TEXT_LEN_FOR_CACHE = 16
 
-// Map<cacheKey, { verdict, ts, hits }>
-const cache = new Map()
+const cache = new LRUCache({
+  max: CACHE_MAX_ENTRIES,
+  ttl: CACHE_TTL_MS,
+  ttlAutopurge: false
+})
 
 const makeBucket = ({ isNewAccount, isHighRisk }) => {
   // Bucket is just 2 bits today. Kept as a short string so it's
@@ -54,18 +59,6 @@ const cacheKey = (text, bucket) => {
   return `${bucket}|${sim}`
 }
 
-const prune = (now) => {
-  // Oldest-first eviction
-  for (const [key, entry] of cache) {
-    if (now - entry.ts > CACHE_TTL_MS) cache.delete(key)
-  }
-  while (cache.size > CACHE_MAX_ENTRIES) {
-    const first = cache.keys().next().value
-    if (!first) break
-    cache.delete(first)
-  }
-}
-
 /**
  * Look up a verdict. Returns null on miss, or the stored verdict with
  * hits counter incremented on hit.
@@ -75,13 +68,12 @@ const get = (text, bucketCtx) => {
   if (!key) return null
   const entry = cache.get(key)
   if (!entry) return null
-  const now = Date.now()
-  if (now - entry.ts > CACHE_TTL_MS) {
-    cache.delete(key)
-    return null
-  }
   entry.hits = (entry.hits || 0) + 1
-  return { ...entry.verdict, cacheHits: entry.hits, cacheAgeMs: now - entry.ts }
+  return {
+    ...entry.verdict,
+    cacheHits: entry.hits,
+    cacheAgeMs: Date.now() - entry.insertedAt
+  }
 }
 
 /**
@@ -92,9 +84,7 @@ const get = (text, bucketCtx) => {
 const set = (text, bucketCtx, verdict) => {
   const key = cacheKey(text, makeBucket(bucketCtx || {}))
   if (!key || !verdict) return false
-  const now = Date.now()
-  cache.set(key, { verdict, ts: now, hits: 0 })
-  prune(now)
+  cache.set(key, { verdict, insertedAt: Date.now(), hits: 0 })
   return true
 }
 

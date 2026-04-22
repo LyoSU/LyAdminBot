@@ -1,4 +1,8 @@
-const LanguageDetect = require('languagedetect')
+// tinyld: trigram-based language detector. Materially better than the
+// `languagedetect` package on short Cyrillic inputs (benchmark on our
+// prod log: "Шкода, що раніше не замітила" → tinyld uk 83%, vs.
+// languagedetect bg 29%). CommonJS-friendly, zero native deps.
+const { detectAll } = require('tinyld')
 
 const { hasTextualContent } = require('./text-utils')
 
@@ -28,8 +32,11 @@ const DETECTED_LANGUAGES_CAP = 5
 const CUSTOM_EMOJI_CAP = 20
 const BIO_HISTORY_CAP = 3
 
-// Instantiate once — the detector holds a large trigram database.
-const lngDetector = new LanguageDetect('iso2')
+// Detection thresholds tuned on prod samples: require the top candidate
+// to beat the runner-up by a margin so ambiguous short Slavic text
+// (uk/ru/be/sr/mk) resolves to null instead of a coin-flip.
+const LANG_MIN_ACCURACY = 0.40
+const LANG_MIN_MARGIN = 0.15
 
 // ---------------------------------------------------------------------------
 // Internal: lazy-init messageStats substructure on legacy docs
@@ -134,26 +141,32 @@ const welfordUpdate = (ms, n, newValue) => {
 
 /**
  * Detect the most likely language of a message, returning an ISO-639-1 code
- * or null when confidence is too low / the library can't map.
+ * or null when confidence is too low.
  *
- * We request top-3 candidates and return the first one that:
- *   (a) has a non-null ISO code (the library returns null for obscure
- *       entries like "pidgin", "hawaiian" that have no iso2 mapping), and
- *   (b) scores at least 0.15 (anything lower is noise).
+ * Two guards prevent the "noisy short Cyrillic" failure mode that poisoned
+ * per-user `topLanguage` in production:
+ *   (a) top candidate must score at least LANG_MIN_ACCURACY — below that
+ *       the detector is essentially guessing from character frequencies
+ *   (b) top must beat the runner-up by LANG_MIN_MARGIN — rejects
+ *       ambiguous near-ties (e.g. uk/ru on very short text)
  *
- * Returning the first CODED candidate instead of just the top one matters
- * for English vs. pidgin disambiguation — languagedetect frequently ranks
- * pidgin above english for short English messages.
+ * `hasTextualContent(text, 12)` enforces a minimum of 12 non-emoji chars;
+ * tinyld's accuracy drops sharply below ~10 characters on Slavic text.
  */
 const detectLanguage = (text) => {
-  if (!text || !hasTextualContent(text, 8)) return null
+  if (!text || !hasTextualContent(text, 12)) return null
   try {
-    const results = lngDetector.detect(text, 3)
+    const results = detectAll(text)
     if (!Array.isArray(results) || !results.length) return null
-    for (const [code, score] of results) {
-      if (code && score >= 0.15) return code
+    const top = results[0]
+    if (!top || !top.lang || typeof top.accuracy !== 'number') return null
+    if (top.accuracy < LANG_MIN_ACCURACY) return null
+    const runnerUp = results[1]
+    if (runnerUp && typeof runnerUp.accuracy === 'number' &&
+        (top.accuracy - runnerUp.accuracy) < LANG_MIN_MARGIN) {
+      return null
     }
-    return null
+    return top.lang
   } catch (err) {
     return null
   }

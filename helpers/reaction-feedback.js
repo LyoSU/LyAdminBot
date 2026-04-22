@@ -48,6 +48,8 @@
  *   - Memory bound: TTL + hard cap.
  */
 
+const { LRUCache } = require('lru-cache')
+
 const WINDOW_MS = 5 * 60 * 1000 // 5 min
 const TTL_MS = 30 * 60 * 1000 // keep bucket this long post-message
 const MAX_BUCKETS = 50000
@@ -96,26 +98,18 @@ const POSITIVE_EMOJIS = new Set([
   '👍', '❤️', '🔥', '🎉', '🥰', '😍', '🤩', '💯', '👌', '✨'
 ])
 
-// Map<chatId:messageId, {
-//   firstAt, lastAt, escalatedNeg, trustBoosted,
-//   negUsers: Map<userId, { reactionTs, weight, trusted }>,
-//   posUsers: Map<userId, { reactionTs, trusted, tenure }>,
-//   amplification?: { burstSize, windowMs }
-// }>
-const buckets = new Map()
+// key: `chatId:messageId` → per-message aggregate state.
+// lru-cache handles both the TTL (30min) and max-size eviction;
+// `updateAgeOnGet:true` slides the TTL forward while a message is still
+// attracting reactions, keeping hot buckets alive.
+const buckets = new LRUCache({
+  max: MAX_BUCKETS,
+  ttl: TTL_MS,
+  ttlAutopurge: false,
+  updateAgeOnGet: true
+})
 
 const keyFor = (chatId, messageId) => `${chatId}:${messageId}`
-
-const prune = (now = Date.now()) => {
-  for (const [k, v] of buckets) {
-    if (now - v.lastAt > TTL_MS) buckets.delete(k)
-  }
-  while (buckets.size > MAX_BUCKETS) {
-    const first = buckets.keys().next().value
-    if (!first) break
-    buckets.delete(first)
-  }
-}
 
 const emojiWeight = (reactions) => {
   if (!Array.isArray(reactions)) return { positive: 0, negativeWeight: 0, negativeEmojis: [], positiveEmojis: [] }
@@ -211,8 +205,6 @@ const recordReaction = (chatId, messageId, reactor, classification) => {
     })
   }
   bucket.lastAt = now
-
-  if ((buckets.size & 0x3FF) === 0) prune(now)
 
   // --- Controversy check ----------------------------------------------
   // If a message has STRONG positive AND strong negative consensus we

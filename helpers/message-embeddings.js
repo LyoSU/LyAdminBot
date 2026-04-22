@@ -1,6 +1,7 @@
 const { OpenAI } = require('openai')
 const { moderation: embedLog } = require('./logger')
 const { isEmojiOnly } = require('./text-utils')
+const { stripInvisible } = require('./scripts')
 
 // Lazy OpenAI client. Constructed on first use so requiring this module in
 // tests / scripts doesn't crash when OPENAI_API_KEY is unset. Pure helpers
@@ -34,8 +35,8 @@ const normalizeMessage = (text) => {
   // Remove excessive emoji spam
   normalized = normalized.replace(/(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff]){3,}/g, ' EMOJI_SPAM ')
 
-  // Remove invisible characters
-  normalized = normalized.replace(/[\u200B\u200C\u200D\uFEFF]/g, '')
+  // Remove invisible characters (shared helper — covers full \p{Cf} set)
+  normalized = stripInvisible(normalized)
 
   // Normalize whitespace
   normalized = normalized.replace(/\s+/g, ' ')

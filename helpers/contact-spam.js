@@ -50,29 +50,12 @@
  */
 
 // ---------------------------------------------------------------------------
-// Unicode script ranges (escape form — keeps source ASCII-only)
+// Unicode script detection delegated to shared helpers/scripts — uses
+// native \`\\p{Script=...}\` regex (Node ≥10) so ranges stay bound to the
+// runtime ICU data instead of hand-maintained hex blocks.
 // ---------------------------------------------------------------------------
 
-// CJK Unified Ideographs + extensions + Hiragana + Katakana + Hangul + fullwidth
-const CJK_RE = /[\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF\uFF00-\uFFEF]/
-
-// Thai + Lao + Khmer + Myanmar
-const SEA_RE = /[\u0E00-\u0E7F\u0E80-\u0EFF\u1780-\u17FF\u1000-\u109F]/
-
-// Arabic + Persian + Urdu
-const ARABIC_RE = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/
-
-// Devanagari + Bengali + Tamil + Telugu
-const INDIC_RE = /[\u0900-\u097F\u0980-\u09FF\u0B80-\u0BFF\u0C00-\u0C7F]/
-
-// Latin letters (used for script-mix detection)
-const LATIN_LETTER_RE = /[A-Za-z]/
-
-// Cyrillic letters
-const CYRILLIC_LETTER_RE = /[\u0400-\u04FF]/
-
-// Invisible / formatting chars — never appear in real names
-const INVISIBLE_RE = /[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/
+const scripts = require('./scripts')
 
 // URL / mention / telegram link inside a contact name
 // (plain-text URLs, t.me/telegram.me links, wa.me, @mentions ≥4 chars)
@@ -87,32 +70,19 @@ const DIGITS_IN_NAME_RE = /\d{4,}/
 
 const detectForeignScript = (text) => {
   if (!text || typeof text !== 'string') return null
-  if (CJK_RE.test(text)) return 'cjk'
-  if (SEA_RE.test(text)) return 'sea'
-  if (ARABIC_RE.test(text)) return 'arabic'
-  if (INDIC_RE.test(text)) return 'indic'
+  if (scripts.hasCJK(text)) return 'cjk'
+  if (scripts.hasSEA(text)) return 'sea'
+  if (scripts.hasArabic(text)) return 'arabic'
+  if (scripts.hasIndic(text)) return 'indic'
   return null
 }
 
 /**
- * True if the text mixes Latin with Cyrillic OR Latin with a non-Latin
- * non-Cyrillic script within the SAME token. A bilingual person writes
- * tokens in one script at a time; mid-token mixing is a homoglyph tell.
+ * True if the text mixes scripts within a single token. A bilingual person
+ * writes tokens in one script at a time; mid-token mixing is a homoglyph
+ * tell (e.g. "Vіagra" using a Cyrillic і).
  */
-const hasScriptMix = (text) => {
-  if (!text || typeof text !== 'string') return false
-  for (const token of text.split(/\s+/)) {
-    if (token.length < 2) continue
-    const hasLatin = LATIN_LETTER_RE.test(token)
-    const hasCyrillic = CYRILLIC_LETTER_RE.test(token)
-    const hasForeign = CJK_RE.test(token) || SEA_RE.test(token) ||
-      ARABIC_RE.test(token) || INDIC_RE.test(token)
-    if ((hasLatin && hasCyrillic) || (hasLatin && hasForeign) || (hasCyrillic && hasForeign)) {
-      return true
-    }
-  }
-  return false
-}
+const hasScriptMix = (text) => scripts.hasScriptMixWithinToken(text)
 
 // ---------------------------------------------------------------------------
 // Main detector
@@ -143,7 +113,7 @@ const analyzeContactMessage = (ctx, user, userCtx) => {
     phoneDigitsLen: phone.replace(/[^0-9]/g, '').length,
     foreignScript: detectForeignScript(name),
     scriptMix: hasScriptMix(name),
-    invisibleInName: INVISIBLE_RE.test(name),
+    invisibleInName: scripts.hasInvisible(name),
     urlInName: URL_IN_NAME_RE.test(name),
     digitsInName: DIGITS_IN_NAME_RE.test(name),
     foreignContact: Boolean(contactUserId && fromId && contactUserId !== fromId),

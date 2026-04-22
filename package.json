@@ -7,7 +7,7 @@
     "start": "node index.js",
     "lint": "node_modules/.bin/eslint --ext js .",
     "lint:fix": "node_modules/.bin/eslint --fix --ext js .",
-    "test": "node tests/profile-signals.test.js && node tests/spam-signals.test.js && node tests/golden-spam-samples.test.js && node tests/reputation.test.js && node tests/contact-spam.test.js && node tests/user-stats.test.js && node tests/media-fingerprint.test.js && node tests/profile-churn.test.js && node tests/llm-cache.test.js && node tests/network-detectors.test.js && node tests/edit-diff.test.js && node tests/reaction-feedback.test.js && node tests/graph-neighbourhood.test.js && node tests/admin-feedback.test.js && node tests/image-hash.test.js"
+    "test": "node tests/profile-signals.test.js && node tests/spam-signals.test.js && node tests/golden-spam-samples.test.js && node tests/reputation.test.js && node tests/contact-spam.test.js && node tests/user-stats.test.js && node tests/media-fingerprint.test.js && node tests/profile-churn.test.js && node tests/llm-cache.test.js && node tests/network-detectors.test.js && node tests/edit-diff.test.js && node tests/reaction-feedback.test.js && node tests/graph-neighbourhood.test.js && node tests/admin-feedback.test.js && node tests/image-hash.test.js && node tests/scripts.test.js"
   },
   "dependencies": {
     "@qdrant/js-client-rest": "^1.15.1",
@@ -15,7 +15,7 @@
     "dotenv": "^6.2.0",
     "got": "^9.6.0",
     "humanize-duration": "^3.18.0",
-    "languagedetect": "^1.3.0",
+    "lru-cache": "^11.3.5",
     "mongoose": "^8.21.0",
     "openai": "^4.100.0",
     "pino": "^10.1.0",
@@ -23,7 +23,8 @@
     "sharp": "^0.34.5",
     "telegraf": "^3.33.3",
     "telegraf-i18n": "^6.5.0",
-    "telegraf-ratelimit": "^2.0.0"
+    "telegraf-ratelimit": "^2.0.0",
+    "tinyld": "^1.3.4"
   },
   "devDependencies": {
     "eslint": "^6.0.0",

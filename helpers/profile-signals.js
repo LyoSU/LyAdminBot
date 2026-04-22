@@ -10,18 +10,15 @@
  * inform the LLM, but only combinations are used in deterministic verdicts.
  */
 
-const CYRILLIC = /[Ѐ-ӿԀ-ԯ]/
-const LATIN = /[A-Za-z]/
+const {
+  hasScriptMixWithinToken,
+  INVISIBLE_REGEX
+} = require('./scripts')
 
 // "Иoсифович" — Latin 'o' inside a Cyrillic token. Real bilingual users
-// switch tokens, not letters within a token.
-const hasHomoglyphMix = (text) => {
-  if (!text || typeof text !== 'string') return false
-  for (const token of text.split(/\s+/)) {
-    if (token.length >= 2 && CYRILLIC.test(token) && LATIN.test(token)) return true
-  }
-  return false
-}
+// switch tokens, not letters within a token. Shared helper covers Latin +
+// every non-Latin script, not just Cyrillic.
+const hasHomoglyphMix = (text) => hasScriptMixWithinToken(text)
 
 // Generated handles: low vowel ratio, digit suffix, long consonant runs.
 // Score 0..1, ≥0.7 = bot-like.
@@ -47,10 +44,10 @@ const usernameRandomnessScore = (username) => {
 const NAME_EMOJI = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}]/gu
 const countNameEmoji = (name) => name ? (name.match(NAME_EMOJI) || []).length : 0
 
-// Zero-width / RTL / LTR override / BOM characters used to hide payloads.
-// Written as escapes so the source file itself is plain ASCII.
-const INVISIBLE = /[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/
-const hasInvisibleChars = (text) => Boolean(text) && INVISIBLE.test(text)
+// Zero-width / RTL / LTR override / BOM / other \p{Cf} characters used
+// to hide payloads. Implementation is centralized in ./scripts so the
+// covered code-point set stays consistent across detectors.
+const hasInvisibleChars = (text) => Boolean(text) && INVISIBLE_REGEX.test(text)
 
 // URL shortener domains seen in real Telegram scam data. Keep focused.
 const SHORTENERS = new Set([

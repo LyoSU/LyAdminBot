@@ -632,7 +632,7 @@ const computeDeterministicVerdict = ({ userSignals, quickAssessment, userContext
   // Language-mismatch rule (user-baseline) — coordinated-campaign signal.
   // If the user has a stable detected top language with decent history
   // (>= 15 tracked messages) and the CURRENT message is a different
-  // language (structurally determined via languagedetect), combined with
+  // language (structurally determined via tinyld), combined with
   // promo signals, this is a strong fingerprint of a rented account posting
   // campaign text in a language they don't normally write.
   const currentLang = detectLanguage(text || '')

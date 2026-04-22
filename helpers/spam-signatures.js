@@ -241,7 +241,15 @@ const generateSignatures = (text) => {
  */
 const checkSignatures = async (text, db, options = {}) => {
   const {
-    maxHammingDistance = 8, // Max bits different for fuzzy match
+    // Tightened from 8 → 5 after a FP was observed in prod: a 200-char
+    // Ukrainian Djinni-platform rant fuzzy-matched a confirmed spam
+    // signature at 8 bits. At 64-bit simHash with Ukrainian stop-word-
+    // heavy tokens, two UNRELATED messages routinely land ≤8 bits apart.
+    // 5 bits (≈92% identical) keeps real spam variants while rejecting
+    // statistical neighbours. Pair with `minConfirmations` to require
+    // multi-incident evidence before acting on fuzzy.
+    maxHammingDistance = 5,
+    minConfirmations = 2,
     requireConfirmed = true
   } = options
 
@@ -293,16 +301,20 @@ const checkSignatures = async (text, db, options = {}) => {
 
     for (const candidate of fuzzyCandidates) {
       const distance = hammingDistance(signatures.fuzzyHash, candidate.fuzzyHash)
-      if (distance <= maxHammingDistance) {
-        // Confidence decreases with distance
-        const confidence = Math.max(75, 95 - distance * 2)
-        return {
-          match: 'fuzzy',
-          confidence,
-          distance,
-          signature: candidate,
-          reason: `Similar to known spam (${distance} bits different)`
-        }
+      if (distance > maxHammingDistance) continue
+      // Require multi-incident evidence: a signature that has only been
+      // reported once can itself be a FP-to-be. We don't want ONE bad
+      // confirmation to poison near-neighbours across the whole simHash
+      // space. `confirmations >= minConfirmations` is the trust gate.
+      const confirmations = Number(candidate.confirmations) || 0
+      if (confirmations < minConfirmations) continue
+      const confidence = Math.max(75, 95 - distance * 2)
+      return {
+        match: 'fuzzy',
+        confidence,
+        distance,
+        signature: candidate,
+        reason: `Similar to known spam (${distance} bits different, ${confirmations}× confirmed)`
       }
     }
   }

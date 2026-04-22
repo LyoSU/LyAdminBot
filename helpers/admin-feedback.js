@@ -24,34 +24,27 @@
  * the counters are observability, not policy.
  */
 
+const { LRUCache } = require('lru-cache')
+
 const { spam: spamLog } = require('./logger')
 
 const RECENT_TTL_MS = 30 * 60 * 1000 // 30 min
 const RECENT_MAX = 5000
-
-// Map<chatId:userId, { source, rule, confidence, ts, reason }>
-const recentActions = new Map()
-
-// Source → count of confirmed false positives (rolling 24h)
-const fpCounts = new Map()
 const FP_WINDOW_MS = 24 * 60 * 60 * 1000
 const FP_WARN_THRESHOLD = 10
 
-// Persistent per-source history so digest can show stable totals
+// Recent auto-actions — lru-cache handles TTL + LRU eviction.
+// value: { source, rule, confidence, reason }
+const recentActions = new LRUCache({ max: RECENT_MAX, ttl: RECENT_TTL_MS, ttlAutopurge: false })
+
+// Per-source history stream — kept as an append-only array trimmed to
+// FP_WINDOW_MS. A ring buffer style structure isn't worth the indirection
+// at our volumes (≤ few hundred overrides per day).
 const fpHistory = []
 
 const keyFor = (chatId, userId) => `${chatId}:${userId}`
 
-const prune = (now = Date.now()) => {
-  for (const [k, v] of recentActions) {
-    if (now - v.ts > RECENT_TTL_MS) recentActions.delete(k)
-  }
-  while (recentActions.size > RECENT_MAX) {
-    const first = recentActions.keys().next().value
-    if (!first) break
-    recentActions.delete(first)
-  }
-  // Prune old history
+const pruneFpHistory = (now = Date.now()) => {
   while (fpHistory.length && now - fpHistory[0].ts > FP_WINDOW_MS) fpHistory.shift()
 }
 
@@ -62,30 +55,19 @@ const prune = (now = Date.now()) => {
  */
 const recordAction = (chatId, userId, { source, rule, confidence, reason }) => {
   if (!chatId || !userId) return
-  const now = Date.now()
   recentActions.set(keyFor(chatId, userId), {
     source: source || 'unknown',
     rule: rule || null,
     confidence: Number(confidence) || null,
-    reason: reason || null,
-    ts: now
+    reason: reason || null
   })
-  if ((recentActions.size & 0x3FF) === 0) prune(now)
 }
 
 /**
  * Look up the last auto-action for a user in a chat. Used by the admin-
  * override handler to know "which source am I overriding?".
  */
-const queryLastAction = (chatId, userId) => {
-  const entry = recentActions.get(keyFor(chatId, userId))
-  if (!entry) return null
-  if (Date.now() - entry.ts > RECENT_TTL_MS) {
-    recentActions.delete(keyFor(chatId, userId))
-    return null
-  }
-  return entry
-}
+const queryLastAction = (chatId, userId) => recentActions.get(keyFor(chatId, userId)) || null
 
 /**
  * Register an admin override. Call this from handleAdminOverride on the
@@ -98,11 +80,11 @@ const registerOverride = (chatId, userId) => {
   if (!action) return null
 
   const sourceKey = action.rule ? `${action.source}::${action.rule}` : action.source
-  fpCounts.set(sourceKey, (fpCounts.get(sourceKey) || 0) + 1)
-  fpHistory.push({ sourceKey, ts: Date.now(), chatId, userId })
-  prune()
+  const now = Date.now()
+  fpHistory.push({ sourceKey, ts: now, chatId, userId })
+  pruneFpHistory(now)
 
-  const count = fpCounts.get(sourceKey) || 0
+  const count = fpHistory.reduce((n, h) => n + (h.sourceKey === sourceKey ? 1 : 0), 0)
   if (count >= FP_WARN_THRESHOLD) {
     spamLog.warn({ sourceKey, count, windowMs: FP_WINDOW_MS }, 'Admin-override rate high for this source')
   } else {
@@ -116,12 +98,13 @@ const registerOverride = (chatId, userId) => {
  * Caller can schedule this periodically and feed it into the log stream.
  */
 const digest = (topN = 5) => {
-  prune()
-  // Rebuild fresh counts from fpHistory — removes expired entries.
-  const fresh = new Map()
-  for (const h of fpHistory) fresh.set(h.sourceKey, (fresh.get(h.sourceKey) || 0) + 1)
-  const sorted = Array.from(fresh.entries()).sort((a, b) => b[1] - a[1]).slice(0, topN)
-  return sorted.map(([sourceKey, count]) => ({ sourceKey, count }))
+  pruneFpHistory()
+  const counts = new Map()
+  for (const h of fpHistory) counts.set(h.sourceKey, (counts.get(h.sourceKey) || 0) + 1)
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, topN)
+    .map(([sourceKey, count]) => ({ sourceKey, count }))
 }
 
 if (typeof setInterval === 'function') {
@@ -137,7 +120,6 @@ if (typeof setInterval === 'function') {
 
 const _resetForTests = () => {
   recentActions.clear()
-  fpCounts.clear()
   fpHistory.length = 0
 }
 
