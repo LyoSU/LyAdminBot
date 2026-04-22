@@ -83,3 +83,7 @@ assets/fonts/*
 assets/emojis/*
 
 !.gitkeep
+
+
+# Git worktrees (isolated dev workspaces)
+.worktrees/
