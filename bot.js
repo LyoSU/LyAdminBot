@@ -173,12 +173,22 @@ const registerMiddlewares = (bot, i18n) => {
 }
 
 // Explicitly list update types we need — ensures edited_message is always included
-// even if a previous setWebhook/getUpdates call restricted the list
+// even if a previous setWebhook/getUpdates call restricted the list.
+//
+//   chat_member            — join/leave events (used for first-message-latency
+//                            detection: joinedAt vs firstMessageAt delta).
+//   message_reaction       — emoji reactions on other users' messages. Feeds
+//                            the crowd-sourced spam-signal layer (3+ negative
+//                            reactions from trusted users → auto-escalate).
+//   message_reaction_count — aggregated reaction counts for popular posts.
 const ALLOWED_UPDATES = [
   'message',
   'edited_message',
   'callback_query',
   'my_chat_member',
+  'chat_member',
+  'message_reaction',
+  'message_reaction_count',
   'channel_post',
   'edited_channel_post'
 ]

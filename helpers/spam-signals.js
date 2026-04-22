@@ -477,6 +477,41 @@ const computeDeterministicVerdict = ({ userSignals, quickAssessment, userContext
     }
   }
 
+  // Fast-post-after-join + promo. We observed the chat_member join event,
+  // the user started posting within 30s, AND the message carries a promo
+  // signal. Human users almost never meet both conditions at once.
+  // FP guard: require NOT already-trusted (reputation > 60) to avoid
+  // accidentally catching eager long-time members.
+  if (
+    signals.includes('fast_post_after_join') &&
+    (hasPromoSignal || hasHighRiskSignal || strongPromo) &&
+    (userSignals.reputation?.score || 0) < 60
+  ) {
+    return {
+      decision: 'spam',
+      rule: 'fast_post_after_join_promo',
+      confidence: 88,
+      reason: 'First message posted within 30 seconds of joining the chat with promotional content'
+    }
+  }
+
+  // Edit-to-inject: an edited message added URL / mention / private-invite /
+  // invisible chars that weren't in the original. Structurally zero-FP —
+  // legitimate edits add/fix words, not promotional payloads.
+  // Exempt already-trusted users (score >= 70) so a trusted admin who edits
+  // their own post to add a helpful link doesn't get flagged.
+  if (
+    signals.includes('edit_injected_promo') &&
+    (userSignals.reputation?.score || 0) < 70
+  ) {
+    return {
+      decision: 'spam',
+      rule: 'edit_injected_promo',
+      confidence: 92,
+      reason: 'Message was edited to insert a URL / mention / private-invite / hidden character'
+    }
+  }
+
   // Style-shift rule — compromised-account tell.
   // An established account with a long running-mean of short replies (avg
   // length < 40) suddenly posts a long message (>= mean + 3*stddev, AND at
@@ -498,25 +533,44 @@ const computeDeterministicVerdict = ({ userSignals, quickAssessment, userContext
     }
   }
 
-  // Language-mismatch rule — coordinated-campaign signal.
+  // Language-mismatch rule (user-baseline) — coordinated-campaign signal.
   // If the user has a stable detected top language with decent history
   // (>= 15 tracked messages) and the CURRENT message is a different
   // language (structurally determined via languagedetect), combined with
   // promo signals, this is a strong fingerprint of a rented account posting
   // campaign text in a language they don't normally write.
+  const currentLang = detectLanguage(text || '')
   if (
     userSignals.topLanguage &&
     userSignals.totalMessages >= 15 &&
-    (hasPromoSignal || hasHighRiskSignal)
+    (hasPromoSignal || hasHighRiskSignal) &&
+    currentLang && currentLang !== userSignals.topLanguage
   ) {
-    const currentLang = detectLanguage(text || '')
-    if (currentLang && currentLang !== userSignals.topLanguage) {
-      return {
-        decision: 'spam',
-        rule: 'language_mismatch_promo',
-        confidence: 80,
-        reason: `User typically writes in ${userSignals.topLanguage}, current message is ${currentLang} with promo content`
-      }
+    return {
+      decision: 'spam',
+      rule: 'language_mismatch_promo',
+      confidence: 80,
+      reason: `User typically writes in ${userSignals.topLanguage}, current message is ${currentLang} with promo content`
+    }
+  }
+
+  // Language-mismatch rule (chat-baseline).
+  // Separate from the user-baseline rule: a brand-new user posting in a
+  // language different from the chat's dominant one + promo = classic drop
+  // of campaign content into a foreign-language chat (e.g. Uzbek spam in
+  // a Ukrainian chat). We require the chat to have >= 10 language samples
+  // before trusting this signal (enforced upstream in buildUserContext).
+  const chatTopLang = userContext?.chatTopLanguage
+  if (
+    chatTopLang && currentLang && currentLang !== chatTopLang &&
+    userSignals.totalMessages <= 5 &&
+    (hasPromoSignal || hasHighRiskSignal || strongPromo)
+  ) {
+    return {
+      decision: 'spam',
+      rule: 'language_mismatch_chat',
+      confidence: 82,
+      reason: `New user posting in ${currentLang} in a chat whose dominant language is ${chatTopLang}, with promo content`
     }
   }
 

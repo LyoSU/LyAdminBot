@@ -3,7 +3,8 @@ const {
   handleWelcome,
   handleAdminJsonReset,
   handleReport,
-  isBotMentionReport
+  isBotMentionReport,
+  handleChatMember
 } = require('../handlers')
 
 /**
@@ -13,7 +14,13 @@ const registerEvents = (bot) => {
   // Document upload (for JSON settings restore)
   bot.on('document', handleAdminJsonReset)
 
-  // New chat members welcome
+  // chat_member — user join/leave/status transitions.
+  // Used for first-message-latency tracking (see handlers/chat-member.js).
+  // Registered BEFORE 'new_chat_members' because telegraf fires both for
+  // legacy-group joins; chat_member is the richer payload.
+  bot.on('chat_member', handleChatMember)
+
+  // New chat members welcome (legacy `new_chat_members` message event)
   bot.on('new_chat_members', handleWelcome)
 
   // Handle @botusername mentions as report (in reply to a message)

@@ -624,9 +624,22 @@ const calculateDynamicThreshold = (context, groupSettings) => {
   // Premium users are unlikely to be spammers
   if (context.isPremium) baseThreshold += 20
 
-  // Profile indicators
-  if (context.hasProfile) baseThreshold += 10
-  if (context.hasUsername) baseThreshold += 8
+  // Profile indicators.
+  //
+  // Historic behaviour double-counted "has a username": hasProfile is the
+  // disjunction (hasUsername || isPremium), so any user with a username got
+  // +10 from hasProfile PLUS +8 from hasUsername = +18 on top of the 75
+  // baseline → 93 → capped at 90. That effectively made our threshold the
+  // maximum for every new-but-profile-having user, and produced the
+  // "Куплю ноутбук смартфон планшет" FN class (LLM at 0.82, action at 0.90,
+  // miss). Usernames are trivially settable by spammers and carry almost
+  // no prior signal — only Telegram Premium is a paid proxy for trust.
+  //
+  // New split:
+  //   - Premium (paid feature, hard to fake at scale): +10
+  //   - Username alone: +3 (a nudge, not a license)
+  if (context.isPremium) baseThreshold += 10
+  if (context.hasUsername) baseThreshold += 3
 
   // Message history in this group
   if (context.messageCount > 10) baseThreshold += 15
@@ -1145,6 +1158,32 @@ const runQuickAssessmentPhase = (ctx) => {
     for (const t of pTrust) if (!quickAssessment.trustSignals.includes(t)) quickAssessment.trustSignals.push(t)
     quickAssessment.profile = profile
 
+    // Fast-post-after-join signal. If we captured the chat_member join event
+    // and the user posted their first message within 30 seconds, push a
+    // quick-assessment tag. Bot farms are the main source — humans usually
+    // take at least a few minutes to orient themselves in a new chat.
+    const memberStatsQA = ctx.group && ctx.group.members && ctx.from &&
+      ctx.group.members[ctx.from.id] && ctx.group.members[ctx.from.id].stats
+    const latencyQA = memberStatsQA && Number.isFinite(memberStatsQA.firstMessageLatencyMs)
+      ? memberStatsQA.firstMessageLatencyMs
+      : null
+    if (latencyQA !== null && latencyQA < 30 * 1000) {
+      if (!quickAssessment.signals.includes('fast_post_after_join')) {
+        quickAssessment.signals.push('fast_post_after_join')
+      }
+    }
+
+    // Edit-to-inject detector signal. ctx._editInjectionDelta is set by the
+    // middleware layer when an edit introduces URLs / mentions / private-
+    // invite links / invisibles that weren't in the original. Pure
+    // structural comparison — no keyword matching.
+    if (ctx._editInjectionDelta && ctx._editInjectionDelta.injected) {
+      if (!quickAssessment.signals.includes('edit_injected_promo')) {
+        quickAssessment.signals.push('edit_injected_promo')
+      }
+      quickAssessment.editInjectionDelta = ctx._editInjectionDelta
+    }
+
     // Re-evaluate risk if profile signals pushed us over the line.
     // CRITICAL list validated against production: only signals where the
     // discrimination ratio (spam/clean firing) is high go here. Removed
@@ -1234,6 +1273,15 @@ const buildUserContext = (ctx, userRating, quickAssessment) => {
   const globalMessageCount = ctx.session && ctx.session.userInfo &&
     ctx.session.userInfo.globalStats && ctx.session.userInfo.globalStats.totalMessages
   const globalStats = (ctx.session && ctx.session.userInfo && ctx.session.userInfo.globalStats) || {}
+  // First-message-latency (ms) between chat_member join and first post.
+  // Populated by handlers/chat-member.js + helpers/group-member-update.js.
+  // Null when we didn't catch the join (bot wasn't in the chat yet, or
+  // the user was there before we subscribed to chat_member updates).
+  const memberStats = ctx.group && ctx.group.members && senderId &&
+    ctx.group.members[senderId] && ctx.group.members[senderId].stats
+  const firstMessageLatencyMs = memberStats && Number.isFinite(memberStats.firstMessageLatencyMs)
+    ? memberStats.firstMessageLatencyMs
+    : null
 
   const replyToMessage = ctx.message && ctx.message.reply_to_message
   const isReply = !!replyToMessage
@@ -1268,6 +1316,24 @@ const buildUserContext = (ctx, userRating, quickAssessment) => {
     // dormancy-burst off-hour rule. Direct pass-through so computeDeterministicVerdict
     // stays a pure signal consumer.
     hourHistogram: globalStats?.messageStats?.hourHistogram || null,
+    // Join→first-message delta in milliseconds. Fresh spam bots post within
+    // 30s of joining; humans usually lurk for minutes-to-hours. Surfaced to
+    // deterministic rules via the `fast_post_after_join` quick-signal tag.
+    firstMessageLatencyMs,
+    // Chat-level rolling language baseline (top-1 code). If the chat is
+    // clearly in one language and the user's current message is in a
+    // different language combined with a promo signal, that's a common
+    // coordinated-campaign fingerprint. Null if we haven't accumulated
+    // enough samples yet.
+    chatTopLanguage: (() => {
+      const chatLangs = ctx.group?.info?.stats?.detectedLanguages
+      if (!Array.isArray(chatLangs) || chatLangs.length === 0) return null
+      const top = chatLangs[0]
+      // Require at least 10 samples before trusting the top language so a
+      // brand-new chat doesn't immediately lock into its first message's lang.
+      if (!top || (top.count || 0) < 10) return null
+      return top.code
+    })(),
     // Will be set by velocity check
     velocityBoost: 0,
     velocityReason: null

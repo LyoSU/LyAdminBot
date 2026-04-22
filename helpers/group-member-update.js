@@ -36,6 +36,22 @@ module.exports = (ctx, targetId) => new Promise(async (resolve, reject) => {
       groupMember.stats.textTotal += ctx.message.text.length
     }
 
+    // First-message latency bookkeeping. If the user had a chat_member join
+    // event earlier (joinedAt set) this is the first time we see them
+    // actually post — compute the delta. If joinedAt is missing (we weren't
+    // subscribed yet or the event was before the bot joined), we just
+    // stamp firstMessageAt for reference and skip the latency.
+    if (!groupMember.stats.firstMessageAt) {
+      const now = new Date()
+      groupMember.stats.firstMessageAt = now
+      if (groupMember.stats.joinedAt instanceof Date) {
+        const latencyMs = now.getTime() - groupMember.stats.joinedAt.getTime()
+        if (latencyMs >= 0) {
+          groupMember.stats.firstMessageLatencyMs = latencyMs
+        }
+      }
+    }
+
     const updateInterval = 60 * 1000
 
     if ((groupMember.updatedAt.getTime() + updateInterval) < Date.now()) {

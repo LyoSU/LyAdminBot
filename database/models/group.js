@@ -83,6 +83,18 @@ const groupSchema = mongoose.Schema({
     textTotal: {
       type: Number,
       default: 0
+    },
+    // Top-N rolling language distribution for the chat. Populated from
+    // sampled user messages (see helpers/group-update.js). Used by the
+    // language-mismatch deterministic rule: a new user writing in a
+    // language that doesn't match the chat's dominant language, combined
+    // with a promo signal, is a coordinated-campaign fingerprint.
+    detectedLanguages: {
+      type: [{
+        code: { type: String },
+        count: { type: Number, default: 0 }
+      }],
+      default: []
     }
   },
   stickerSet: {

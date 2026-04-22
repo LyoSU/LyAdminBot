@@ -1,6 +1,28 @@
+const { detectLanguage } = require('./user-stats')
+
 // How often to refresh linked_chat_id (24 hours)
 const LINKED_CHAT_REFRESH_INTERVAL = 24 * 60 * 60 * 1000
 const LEGACY_BAN_DATABASE_SETTING = ['c', 'as'].join('')
+
+// Per-chat language aggregate: keep the top-N codes with counts.
+// We only update once every ~10 messages to avoid churning the doc,
+// but over time a clear dominant language emerges.
+const LANG_CAP = 5
+const LANG_SAMPLE_EVERY = 5
+const updateGroupLanguage = (group, text) => {
+  const code = detectLanguage(text)
+  if (!code) return
+  if (!Array.isArray(group.stats.detectedLanguages)) group.stats.detectedLanguages = []
+  const list = group.stats.detectedLanguages
+  const existing = list.find(e => e && e.code === code)
+  if (existing) existing.count = (existing.count || 0) + 1
+  else list.push({ code, count: 1 })
+  list.sort((a, b) => (b.count || 0) - (a.count || 0))
+  if (list.length > LANG_CAP) list.length = LANG_CAP
+  if (typeof group.markModified === 'function') {
+    group.markModified('stats.detectedLanguages')
+  }
+}
 
 module.exports = async (ctx) => {
   let group
@@ -31,6 +53,11 @@ module.exports = async (ctx) => {
 
   if (ctx.message && ctx.message.text && ctx.message.text.length > 0) {
     group.stats.textTotal += ctx.message.text.length
+    // Sample language detection every Nth message to keep it cheap while
+    // still converging quickly on the chat's dominant language.
+    if (group.stats.messagesCount % LANG_SAMPLE_EVERY === 0) {
+      updateGroupLanguage(group, ctx.message.text)
+    }
   }
 
   const updateInterval = 60 * 1000

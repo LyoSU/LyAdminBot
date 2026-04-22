@@ -25,6 +25,7 @@ const { getForwardHash } = require('../helpers/velocity')
 const { spam: spamLog, spamAction, reputation: repLog, notification: notifyLog } = require('../helpers/logger')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
 const { logSpamDecision, buildUserSignals } = require('../helpers/spam-signals')
+const { snapshotMessage, analyzeEdit } = require('../helpers/edit-diff')
 
 /**
  * Determine if user should receive full ban (vs temporary mute)
@@ -422,6 +423,22 @@ module.exports = async (ctx) => {
         isTopicMessage: !!isTopicMessage,
         // Edited messages - could be spam added after initial clean message
         isEditedMessage: isEditedMessage
+      }
+
+      // Edit-to-inject detector: compare the current text to the last
+      // snapshot we saw for this (chatId, messageId). On a fresh message,
+      // record the snapshot; on an edit, compute the delta.
+      // The resulting `edit_injected_promo` signal is folded into
+      // ctx for the LLM / deterministic layers via spam-check internals.
+      if (isEditedMessage && ctx.message?.message_id && ctx.chat?.id) {
+        try {
+          const delta = analyzeEdit(ctx.chat.id, ctx.message.message_id, messageText)
+          if (delta && delta.injected) {
+            ctx._editInjectionDelta = delta
+          }
+        } catch (_err) { /* non-fatal */ }
+      } else if (!isEditedMessage && ctx.message?.message_id && ctx.chat?.id) {
+        try { snapshotMessage(ctx.chat.id, ctx.message.message_id, messageText) } catch (_err) { /* non-fatal */ }
       }
 
       let result

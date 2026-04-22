@@ -39,7 +39,6 @@ const groupMemberSchema = mongoose.Schema({
       type: Number,
       default: 0
     },
-    messageType: Object,
     textTotal: {
       type: Number,
       default: 0
