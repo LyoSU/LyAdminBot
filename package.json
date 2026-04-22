@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node index.js",
     "lint": "node_modules/.bin/eslint --ext js .",
-    "lint:fix": "node_modules/.bin/eslint --fix --ext js ."
+    "lint:fix": "node_modules/.bin/eslint --fix --ext js .",
+    "test": "OPENAI_API_KEY=test node tests/profile-signals.test.js && OPENAI_API_KEY=test node tests/spam-signals.test.js && OPENAI_API_KEY=test node tests/golden-spam-samples.test.js"
   },
   "dependencies": {
     "@qdrant/js-client-rest": "^1.15.1",

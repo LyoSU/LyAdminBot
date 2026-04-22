@@ -72,9 +72,9 @@ const forwardBlacklistSchema = mongoose.Schema({
   expiresAt: {
     type: Date,
     default: function () {
-      const days = this.status === 'blacklisted' ? 180 : // 6 months
-        this.status === 'suspicious' ? 90 : // 3 months
-          30 // 1 month for clean
+      const days = this.status === 'blacklisted' ? 180 // 6 months
+        : this.status === 'suspicious' ? 90 // 3 months
+          : 30 // 1 month for clean
       return new Date(Date.now() + days * 24 * 60 * 60 * 1000)
     },
     index: { expires: 0 }

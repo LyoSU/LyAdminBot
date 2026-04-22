@@ -27,8 +27,12 @@ const getAccountAgeMonths = (userId) => {
  * - 100 = Highly trusted (long history, many groups, no spam)
  * - 50 = Neutral (new user, no data)
  * - 0 = Known spammer
+ *
+ * @param {Object} globalStats
+ * @param {Object|number} accountAge { months, isExtrapolated } or legacy number
+ * @param {Object} extras { isGlobalBanned, uniquenessRatio, externalBan }
  */
-const calculateReputationScore = (globalStats, accountAge) => {
+const calculateReputationScore = (globalStats, accountAge, extras = {}) => {
   // Handle both old format (number) and new format ({ months, isExtrapolated })
   const ageMonths = typeof accountAge === 'number' ? accountAge : (accountAge?.months || 0)
   const isExtrapolated = typeof accountAge === 'object' ? accountAge.isExtrapolated : false
@@ -59,6 +63,14 @@ const calculateReputationScore = (globalStats, accountAge) => {
     score += Math.floor(cleanRatio * 5)
   }
 
+  // High text uniqueness over a meaningful sample = natural conversation.
+  // Conservative: only adds bonus, never penalises (low uniqueness alone is
+  // not enough to call someone a spammer — that lives in deterministic rules).
+  const uniquenessRatio = Number.isFinite(extras.uniquenessRatio) ? extras.uniquenessRatio : null
+  if (uniquenessRatio !== null && totalMessages >= 30 && uniquenessRatio >= 0.7) {
+    score += 5
+  }
+
   // === NEGATIVE FACTORS (can go deeply negative) ===
 
   // Spam detections: -15 per detection, with decay for rehabilitated users
@@ -74,11 +86,31 @@ const calculateReputationScore = (globalStats, accountAge) => {
   const deletedMessages = Math.max(0, globalStats.deletedMessages || 0)
   score -= deletedMessages * 5
 
+  // External provider signals — informative but NOT authoritative.
+  // lols/CAS have wider coverage but also false positives; we treat them as
+  // a soft penalty, not as a verdict. A combination with local spam history
+  // is what really matters (handled in deterministic rules).
+  const lols = extras.externalBan && extras.externalBan.lols
+  if (lols && lols.banned) score -= 15
+  if (lols && Number.isFinite(lols.spamFactor) && lols.spamFactor >= 0.6) {
+    score -= Math.floor(lols.spamFactor * 10)
+  }
+  const cas = extras.externalBan && extras.externalBan.cas
+  if (cas && cas.banned) score -= 12
+
   // === RECOVERY FACTORS ===
 
   // Manual unbans (admin corrected false positive): +10 each
   const manualUnbans = Math.max(0, globalStats.manualUnbans || 0)
   score += manualUnbans * 10
+
+  // === HARD CEILING for currently banned accounts ===
+  // If an admin/global ban is in effect, reputation must reflect that.
+  // Otherwise we end up with the 13k+ globally-banned-but-score-above-20
+  // mismatch we measured in production.
+  if (extras.isGlobalBanned) {
+    score = Math.min(score, 10)
+  }
 
   // Bound to 0-100
   return Math.max(0, Math.min(100, score))
@@ -89,10 +121,10 @@ const calculateReputationScore = (globalStats, accountAge) => {
  * Prevents gaming the system by just joining groups without activity
  */
 const TRUSTED_REQUIREMENTS = {
-  minMessages: 50,      // Must have sent at least 50 messages
-  minCleanChecks: 5,    // Must have passed at least 5 spam checks
-  minGroups: 2,         // Must be active in at least 2 groups
-  minScore: 75          // Must have score >= 75
+  minMessages: 50, // Must have sent at least 50 messages
+  minCleanChecks: 5, // Must have passed at least 5 spam checks
+  minGroups: 2, // Must be active in at least 2 groups
+  minScore: 75 // Must have score >= 75
 }
 
 /**
@@ -134,11 +166,19 @@ const getReputationStatus = (score, globalStats = null) => {
 
 /**
  * Calculate full reputation object for a user
+ *
+ * @param {Object} globalStats
+ * @param {number} userId
+ * @param {Object} extras { isGlobalBanned, externalBan, uniquenessRatio }
  */
-const calculateReputation = (globalStats, userId) => {
+const calculateReputation = (globalStats, userId, extras = {}) => {
   const stats = globalStats || {}
   const accountAgeMonths = getAccountAgeMonths(userId)
-  const score = calculateReputationScore(stats, accountAgeMonths)
+  const enrichedExtras = {
+    ...extras,
+    uniquenessRatio: Number.isFinite(extras.uniquenessRatio) ? extras.uniquenessRatio : stats.uniquenessRatio
+  }
+  const score = calculateReputationScore(stats, accountAgeMonths, enrichedExtras)
   return {
     score,
     status: getReputationStatus(score, stats),
@@ -187,16 +227,43 @@ const processSpamAction = (userInfo, options) => {
     userInfo.reputation.lastCalculated = null
   }
 
-  // Recalculate reputation
-  userInfo.reputation = calculateReputation(stats, userId)
+  // Recalculate reputation (now includes external ban + ban state)
+  userInfo.reputation = calculateReputation(stats, userId, {
+    isGlobalBanned: userInfo.isGlobalBanned,
+    externalBan: userInfo.externalBan
+  })
 
-  // Apply global ban for high-confidence spam
+  // Apply global ban — three triggers:
+  //   1. High-confidence single detection (existing behavior)
+  //   2. Repeat-offender escalation: 5+ detections in total, regardless of
+  //      per-event confidence (fixes the 24+ users in prod with 100+ detections
+  //      that never got globally banned because each event was 70-84%).
+  //   3. External provider already says banned (lols.bot / CAS).
+  // Trigger 1 still requires muteSuccess (avoids banning when we couldn't
+  // even act locally), but triggers 2/3 fire even without mute permission so
+  // that downstream groups get the propagated signal.
   let globalBanApplied = false
-  if (muteSuccess && confidence >= 85 && globalBanEnabled) {
-    userInfo.isGlobalBanned = true
-    userInfo.globalBanReason = reason
-    userInfo.globalBanDate = new Date()
-    globalBanApplied = true
+  if (globalBanEnabled && !userInfo.isGlobalBanned) {
+    const detections = stats.spamDetections || 0
+    const lols = userInfo.externalBan && userInfo.externalBan.lols
+    const cas = userInfo.externalBan && userInfo.externalBan.cas
+    const externalBanned = (lols && lols.banned) || (cas && cas.banned)
+
+    let banReason = null
+    if (muteSuccess && confidence >= 85) {
+      banReason = reason
+    } else if (detections >= 5) {
+      banReason = `Repeat offender (${detections} detections)`
+    } else if (externalBanned) {
+      banReason = lols && lols.banned ? 'lols.bot ban' : 'CAS ban'
+    }
+
+    if (banReason) {
+      userInfo.isGlobalBanned = true
+      userInfo.globalBanReason = banReason
+      userInfo.globalBanDate = new Date()
+      globalBanApplied = true
+    }
   }
 
   return {

@@ -124,26 +124,26 @@ const generateEmbedding = async (text, userContext = {}) => {
 const isPlaceholderMediaText = (text) => {
   if (!text) return false
   const normalized = text.toLowerCase().trim()
-  
+
   // Catch-all placeholder for unknown media types
   if (normalized === '[media message]') return true
-  
+
   // All media placeholders follow pattern: [Type: file_unique_id]
   const mediaTypes = [
-    'sticker', 'animation', 'video', 'videonote', 'voice', 
+    'sticker', 'animation', 'video', 'videonote', 'voice',
     'audio', 'photo', 'document'
   ]
-  
+
   for (const type of mediaTypes) {
     if (normalized.startsWith(`[${type}:`)) return true
   }
-  
+
   // Legacy patterns (for backwards compatibility)
   const legacyPlaceholders = [
     '[photo]', '[voice message]', '[video]', '[audio]'
   ]
   if (legacyPlaceholders.includes(normalized)) return true
-  
+
   return false
 }
 

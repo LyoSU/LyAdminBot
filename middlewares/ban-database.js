@@ -71,6 +71,35 @@ const checkBanDatabase = async (userId) => {
   return response.body
 }
 
+/**
+ * Persist the lols.bot result on the user document so downstream phases
+ * (LLM, deterministic verdict, dashboards) can use it without another
+ * round-trip. Only writes when something actually changed.
+ *
+ * Stored under user.externalBan.lols (see database/models/user.js).
+ *
+ * The shape is intentionally compact — we keep the few fields lols.bot
+ * returns plus a checkedAt timestamp so we can age the cache later.
+ */
+const cacheLolsResult = (ctx, body) => {
+  if (!ctx || !ctx.session || !ctx.session.userInfo || !body || body.ok !== true) return
+  const userInfo = ctx.session.userInfo
+  if (!userInfo.externalBan) userInfo.externalBan = {}
+
+  const previous = userInfo.externalBan.lols || {}
+  const next = {
+    banned: Boolean(body.banned),
+    offenses: Number.isFinite(body.offenses) ? body.offenses : (previous.offenses || 0),
+    spamFactor: Number.isFinite(body.spam_factor) ? body.spam_factor : (previous.spamFactor || 0),
+    scammer: Boolean(body.scammer),
+    when: body.when ? new Date(body.when * 1000) : previous.when,
+    reasons: Array.isArray(body.reasons) ? body.reasons : (previous.reasons || []),
+    checkedAt: new Date()
+  }
+
+  userInfo.externalBan.lols = next
+}
+
 const banSender = async (ctx, userId, isSenderChat) => {
   if (isSenderChat) {
     return ctx.telegram.callApi('banChatSenderChat', {
@@ -101,6 +130,9 @@ module.exports = async (ctx) => {
 
     try {
       const body = await checkBanDatabase(userId)
+      // Cache regardless of banned=true/false — non-banned profiles still
+      // expose offenses/spamFactor that downstream phases can leverage.
+      if (!isSenderChat) cacheLolsResult(ctx, body)
       if (body && body.ok === true && body.banned === true) {
         const banData = formatBanDatabaseData(body)
         banDatabaseLog.warn({ userId, ...banData }, 'User listed in global ban database')

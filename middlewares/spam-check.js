@@ -24,6 +24,7 @@ const { addSignature } = require('../helpers/spam-signatures')
 const { getForwardHash } = require('../helpers/velocity')
 const { spam: spamLog, spamAction, reputation: repLog, notification: notifyLog } = require('../helpers/logger')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
+const { logSpamDecision, buildUserSignals } = require('../helpers/spam-signals')
 
 /**
  * Determine if user should receive full ban (vs temporary mute)
@@ -52,8 +53,8 @@ const shouldFullBan = async (ctx, result, userId) => {
 
   const banExemptReason = isLocalTrusted ? 'local_trusted'
     : isGlobalTrusted ? 'global_trusted'
-    : messageCount >= 10 ? 'tenure'
-    : null
+      : messageCount >= 10 ? 'tenure'
+        : null
 
   if (banExemptReason) {
     spamAction.info({
@@ -457,6 +458,23 @@ module.exports = async (ctx) => {
 
       spamLog.info(logData, result.isSpam ? 'SPAM detected' : 'CLEAN')
 
+      // Unified decision log — single line per message, machine-parseable.
+      // Pasting these from production lets us reconstruct any false positive
+      // without rerunning the bot.
+      logSpamDecision({
+        phase: 'final',
+        decision: result.isSpam ? 'spam' : 'clean',
+        confidence: result.confidence,
+        reason: result.reason,
+        chatId: ctx.chat?.id,
+        userId: senderId,
+        messageId: ctx.message?.message_id,
+        signals: result.quickAssessment?.signals,
+        trustSignals: result.quickAssessment?.trustSignals,
+        userSignals: !isChannelPost ? buildUserSignals(ctx.session?.userInfo, ctx.from) : null,
+        extras: { source: result.source, editedMessage: isEditedMessage }
+      })
+
       if (isTestMode) {
         spamLog.info({
           text: messageText.substring(0, 100),
@@ -702,14 +720,17 @@ module.exports = async (ctx) => {
 
         return true // Stop further processing
       } else if (!result.isSpam) {
-        // Message confirmed clean by AI - count for reputation
-        // Only count if AI explicitly said NOT spam (don't count borderline cases)
+        // Message confirmed clean — count for reputation. Counting was too
+        // strict before: only LLM "not spam" verdicts incremented this, so
+        // users whose messages reached deterministic-clean / vector-clean /
+        // moderation-clean exits never built trusted status, blocking them
+        // from the trusted-bypass path. Now we count ANY non-spam result.
         if (ctx.session && ctx.session.userInfo && !isChannelPost) {
           const stats = ctx.session.userInfo.globalStats || (ctx.session.userInfo.globalStats = {})
           stats.cleanMessages = (stats.cleanMessages || 0) + 1
 
-          // Force reputation recalculation if cleanMessages milestone reached
-          // This helps users build trusted status faster with legitimate activity
+          // Force reputation recalc on every 10th clean msg so trusted status
+          // becomes attainable for active users via legitimate activity.
           if (stats.cleanMessages % 10 === 0 && ctx.session.userInfo.reputation) {
             ctx.session.userInfo.reputation.lastCalculated = null
           }

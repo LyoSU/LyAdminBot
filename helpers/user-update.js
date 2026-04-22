@@ -1,4 +1,5 @@
 const { calculateReputation } = require('./reputation')
+const { trackIdentity, updateUniqueness } = require('./spam-signals')
 
 /**
  * Check if session reputation is stale compared to DB
@@ -86,14 +87,19 @@ module.exports = async (ctx) => {
     user.last_name = ctx.from.last_name
     user.username = ctx.from.username
 
-    if (!user.updatedAt) user.updatedAt = 0
-
+    // updatedAt is normally populated by mongoose timestamps. If somehow absent
+    // (legacy doc, manual insert) treat the user as needing a refresh and skip
+    // the .getTime() call that would crash on a non-Date value.
     const updateInterval = 60 * 1000
-
-    if ((user.updatedAt.getTime() + updateInterval) < Date.now()) {
+    const updatedAtMs = user.updatedAt instanceof Date ? user.updatedAt.getTime() : 0
+    if ((updatedAtMs + updateInterval) < Date.now()) {
       user.updatedAt = new Date()
     }
   }
+
+  // Track identity changes (name/username) — runs for every interaction, not
+  // only group messages. Catches spammers that rotate identities in DM as well.
+  trackIdentity(user, ctx.from)
 
   // Update global stats for group messages
   if (ctx.chat && ['group', 'supergroup'].includes(ctx.chat.type)) {
@@ -131,6 +137,15 @@ module.exports = async (ctx) => {
       user.globalStats.groupsActive = user.globalStats.groupsList.length
     }
 
+    // Update text uniqueness (rolling window of normalized hashes).
+    // Strong signal for mass-blast spam: a user with 100 messages and 1%
+    // uniqueness is almost certainly running a campaign.
+    const message = ctx.message || ctx.editedMessage
+    const messageText = (message && (message.text || message.caption)) || ''
+    if (messageText) {
+      updateUniqueness(user, messageText)
+    }
+
     // Recalculate reputation periodically (every 10 messages or if stale)
     const lastCalc = user.reputation && user.reputation.lastCalculated
     const shouldRecalculate =
@@ -139,7 +154,9 @@ module.exports = async (ctx) => {
       (Date.now() - new Date(lastCalc).getTime() > 24 * 60 * 60 * 1000)
 
     if (shouldRecalculate) {
-      user.reputation = calculateReputation(user.globalStats, ctx.from.id)
+      user.reputation = calculateReputation(user.globalStats, ctx.from.id, {
+        isGlobalBanned: user.isGlobalBanned
+      })
     }
   }
 

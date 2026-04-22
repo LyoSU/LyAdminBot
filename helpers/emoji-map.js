@@ -44,14 +44,14 @@ module.exports = {
 // Raw custom emoji IDs for inline keyboard button icons (icon_custom_emoji_id)
 // These are used in InlineKeyboardButton objects, not in HTML text
 module.exports.btnIcons = {
-  spam: '5922712343011135025',       // 🚫
-  clean: '5805532930662996322',      // ✅
-  enable: '5773626993010546707',     // ▶️
-  disable: '5774077015388852135',    // ❌
-  globalBan: '5926783847453692661',  // 🛡
-  rules: '6008090211181923982',      // 📝
-  trusted: '6032994772321309200',    // 👤
-  help: '6030848053177486888',       // ❓
-  notSpam: '5805532930662996322',    // ✅
-  addToGroup: '6032609071373226027'  // 👥
+  spam: '5922712343011135025', // 🚫
+  clean: '5805532930662996322', // ✅
+  enable: '5773626993010546707', // ▶️
+  disable: '5774077015388852135', // ❌
+  globalBan: '5926783847453692661', // 🛡
+  rules: '6008090211181923982', // 📝
+  trusted: '6032994772321309200', // 👤
+  help: '6030848053177486888', // ❓
+  notSpam: '5805532930662996322', // ✅
+  addToGroup: '6032609071373226027' // 👥
 }
