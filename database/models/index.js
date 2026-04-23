@@ -8,6 +8,7 @@ const ForwardBlacklist = require('./forwardBlacklist')
 const BanDatabaseSyncState = require('./banDatabaseSyncState')
 const MediaFingerprint = require('./mediaFingerprint')
 const ModEvent = require('./modEvent')
+const ModLog = require('./modLog')
 
 module.exports = {
   User,
@@ -19,5 +20,6 @@ module.exports = {
   ForwardBlacklist,
   BanDatabaseSyncState,
   MediaFingerprint,
-  ModEvent
+  ModEvent,
+  ModLog
 }
