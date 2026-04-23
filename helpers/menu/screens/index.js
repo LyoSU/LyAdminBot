@@ -7,12 +7,27 @@ const help = require('./help')
 const onboarding = require('./onboarding')
 const settings = require('./settings')
 const modEvent = require('./mod-event')
+const modBanPicker = require('./mod-ban-picker')
+const modDelUndo = require('./mod-del-undo')
+const modRights = require('./mod-rights')
 
 const registerAll = () => {
   help.register()
   onboarding.register()
   settings.register()
   modEvent.register()
+  modBanPicker.register()
+  modDelUndo.register()
+  modRights.register()
 }
 
-module.exports = { registerAll, help, onboarding, settings, modEvent }
+module.exports = {
+  registerAll,
+  help,
+  onboarding,
+  settings,
+  modEvent,
+  modBanPicker,
+  modDelUndo,
+  modRights
+}

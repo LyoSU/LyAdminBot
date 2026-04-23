@@ -3,6 +3,11 @@ const { userName, getRandomInt } = require('../utils')
 const { mapTelegramError } = require('../helpers/error-mapper')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
 const { isSenderAdmin } = require('../helpers/is-sender-admin')
+const { replyHTML } = require('../helpers/reply-html')
+const modEvent = require('../helpers/mod-event')
+const policy = require('../helpers/cleanup-policy')
+const { renderPicker } = require('../helpers/menu/screens/mod-ban-picker')
+const { sendRightsCard } = require('../helpers/menu/screens/mod-rights')
 
 const BAN_UNITS = { m: 60, h: 3600, d: 86400 }
 const MAX_BAN = 364 * 24 * 60 * 60
@@ -103,7 +108,10 @@ function scheduleSelBanCleanup (ctx, responseMessageId) {
 
 /**
  * Parse ban time from admin command arguments.
- * Returns { banTime, banUser, autoBan } or null for show-stats.
+ *   { banTime, banUser, autoBan, explicit }
+ *     explicit — true when the admin typed a duration literally (e.g. `/banan 5m`).
+ *     autoBan  — default fallback (no arg, not already restricted) with stack-ramping.
+ *     banTime  — -1 signals the unban path (target is already restricted).
  */
 async function parseAdminBan (ctx, arg) {
   const banUser = ctx.message.reply_to_message.from
@@ -114,7 +122,8 @@ async function parseAdminBan (ctx, arg) {
     return {
       banTime: parseInt(arg[1], 10) * BAN_UNITS[banType],
       banUser,
-      autoBan: false
+      autoBan: false,
+      explicit: true
     }
   }
 
@@ -124,13 +133,231 @@ async function parseAdminBan (ctx, arg) {
   )
 
   if (replyMember.status === 'restricted') {
-    return { banTime: -1, banUser, autoBan: false }
+    return { banTime: -1, banUser, autoBan: false, explicit: false }
   }
 
   return {
     banTime: ctx.group.info.settings.banan.default,
     banUser,
-    autoBan: true
+    autoBan: true,
+    explicit: false
+  }
+}
+
+/**
+ * Post the /banan quick-picker message with inline duration buttons and
+ * schedule its auto-delete. Returns the sent message or null on failure.
+ */
+async function sendBanPicker (ctx, targetUser) {
+  const targetName = userName(targetUser, true)
+  const { text, keyboard } = renderPicker(ctx, {
+    targetName,
+    targetId: targetUser.id
+  })
+
+  let sent
+  try {
+    sent = await replyHTML(ctx, text, {
+      reply_markup: keyboard,
+      reply_to_message_id: ctx.message.message_id
+    })
+  } catch (_err) {
+    return null
+  }
+
+  if (sent && sent.message_id && ctx.db) {
+    scheduleDeletion(ctx.db, {
+      chatId: ctx.chat.id,
+      messageId: sent.message_id,
+      delayMs: policy.quick_picker,
+      source: 'mod_ban_picker'
+    }, ctx.telegram).catch(() => {})
+  }
+  return sent
+}
+
+/**
+ * Send the unified moderation-result message (compact one-liner + [↩️ Скасувати]).
+ * Creates a ModEvent row so the existing mod.event screen handles the undo.
+ */
+async function sendBanResult (ctx, {
+  targetUser,
+  banTime,
+  banDuration,
+  easterKey,
+  count,
+  adminUser
+}) {
+  let event = null
+  if (ctx.db && ctx.db.ModEvent) {
+    try {
+      event = await modEvent.createModEvent(ctx.db, {
+        chatId: ctx.chat.id,
+        actorId: adminUser && adminUser.id,
+        actorName: adminUser && (adminUser.first_name || adminUser.username),
+        targetId: targetUser.id,
+        targetName: targetUser.first_name,
+        targetUsername: targetUser.username,
+        targetTitle: targetUser.title,
+        actionType: 'manual_ban'
+      })
+    } catch (_err) { /* best-effort */ }
+  }
+
+  // The result message mostly reuses the legacy `banan.*` locale key so
+  // existing easter eggs still fire. We append the undo button on top.
+  const bodyKey = easterKey || 'banan.suc'
+  const body = ctx.i18n.t(bodyKey, {
+    name: userName(targetUser, true),
+    duration: banDuration,
+    count
+  })
+
+  const keyboard = event
+    ? modEvent.buildCompactKeyboard(ctx.i18n, event)
+    : { inline_keyboard: [] }
+
+  let sent
+  try {
+    sent = await replyHTML(ctx, body, { reply_markup: keyboard })
+  } catch (_err) {
+    return null
+  }
+
+  if (sent && sent.message_id && event && ctx.db) {
+    try {
+      await modEvent.updateModEvent(ctx.db, event.eventId, {
+        notificationChatId: ctx.chat.id,
+        notificationMessageId: sent.message_id
+      })
+    } catch (_err) { /* best-effort */ }
+    // Schedule undo-button lifetime. Per spec the button lives 60s, then
+    // the message itself is pruned via the standard deletion path (we do
+    // not edit the button out — deleting the card is cleaner).
+    if (banTime > 0) {
+      scheduleDeletion(ctx.db, {
+        chatId: ctx.chat.id,
+        messageId: sent.message_id,
+        delayMs: policy.banan_undo,
+        source: 'banan_undo'
+      }, ctx.telegram).catch(() => {})
+    }
+  }
+  return sent
+}
+
+/**
+ * Execute the actual ban: restrictChatMember, record stats, post the
+ * result card. Exposed as `module.exports.performBan` so the quick-picker
+ * screen can re-enter the flow from a callback.
+ *
+ * @param {Object} ctx — Telegraf context. For the picker path, this is
+ *   the CALLBACK context (no ctx.message). For the legacy path, it's the
+ *   message context.
+ * @param {Object} opts
+ * @param {number} opts.targetId
+ * @param {number} opts.seconds  — 0 = permanent, otherwise > 0
+ * @param {Object} [opts.targetUser] — pre-loaded user object; if absent,
+ *   we resolve via getChatMember.
+ * @param {Object} opts.adminUser — the admin who triggered the action.
+ * @param {number} [opts.deletePickerMessageId] — message_id of the picker
+ *   to delete once the ban succeeds.
+ * @returns {Promise<{ok: boolean, toastKey?: string}>}
+ */
+async function performBan (ctx, opts = {}) {
+  const { targetId, seconds, adminUser, deletePickerMessageId } = opts
+  let targetUser = opts.targetUser
+
+  if (!targetUser) {
+    try {
+      const m = await ctx.telegram.getChatMember(ctx.chat.id, targetId)
+      targetUser = m && m.user
+    } catch (_err) {
+      return { ok: false, toastKey: 'menu.mod.ban.picker.failed' }
+    }
+  }
+  if (!targetUser) return { ok: false, toastKey: 'menu.mod.ban.picker.failed' }
+
+  const isPermanent = seconds === 0
+  const banTime = isPermanent ? 0 : clampBanTime(seconds)
+  const now = Math.floor(Date.now() / 1000)
+  const unixBanTime = isPermanent ? 0 : now + banTime
+  const banDuration = isPermanent
+    ? ctx.i18n.t('menu.mod.ban.picker.dur_forever_human')
+    : formatDuration(banTime, ctx)
+
+  // Execute the ban via the appropriate API.
+  try {
+    if (isPermanent) {
+      await ctx.telegram.callApi('banChatMember', {
+        chat_id: ctx.chat.id,
+        user_id: targetId
+      })
+    } else {
+      await ctx.telegram.restrictChatMember(ctx.chat.id, targetId, {
+        until_date: unixBanTime
+      })
+    }
+  } catch (error) {
+    await maybeShowRightsCard(ctx, error, 'banan', targetUser)
+    return { ok: false, toastKey: mapTelegramError(error, 'banan') }
+  }
+
+  // Update GroupMember stats (best-effort).
+  let banMember = null
+  try {
+    banMember = await ensureBanMember(ctx, targetId)
+  } catch (_err) { /* non-fatal */ }
+
+  const count = banMember ? (banMember.banan.num || 0) + 1 : 1
+  const easterKey = banMember
+    ? getEasterEggKey(banTime || 9999 * 24 * 60 * 60, false, banMember)
+    : null
+
+  // Delete the picker message (best-effort; may have already been deleted
+  // by the cleanup-policy timer if the admin waited too long).
+  if (deletePickerMessageId) {
+    ctx.telegram.deleteMessage(ctx.chat.id, deletePickerMessageId).catch(() => {})
+  }
+
+  await sendBanResult(ctx, {
+    targetUser,
+    banTime: banTime || Infinity,
+    banDuration,
+    easterKey,
+    count,
+    adminUser
+  })
+
+  // Persist stats.
+  if (banMember) {
+    banMember.banan.num += 1
+    banMember.banan.sum += (banTime || 0)
+    banMember.banan.last = {
+      who: adminUser && adminUser.id,
+      how: banTime || 0,
+      time: Math.floor(Date.now() / 1000)
+    }
+    banMember.banan.time = Date.now()
+    try { await banMember.save() } catch (_err) { /* non-fatal */ }
+  }
+
+  return { ok: true }
+}
+
+/**
+ * Detect the "missing permissions" error path and, when applicable,
+ * replace the default 1-liner with the rich rights card (§8). Falls
+ * through to the default error reply in all other cases.
+ */
+async function maybeShowRightsCard (ctx, error, action, targetUser) {
+  const errorKey = mapTelegramError(error, action)
+  if (!errorKey.endsWith('error_no_rights')) return false
+  try {
+    await sendRightsCard(ctx, { action, targetUser })
+    return true
+  } catch (_err) {
+    return false
   }
 }
 
@@ -141,6 +368,7 @@ module.exports = async (ctx) => {
   let banTime = getRandomInt(60, 600)
   let banUser = ctx.from
   let autoBan = false
+  let explicit = false
 
   if (isAdmin) {
     if (ctx.message.reply_to_message) {
@@ -148,6 +376,20 @@ module.exports = async (ctx) => {
       banTime = parsed.banTime
       banUser = parsed.banUser
       autoBan = parsed.autoBan
+      explicit = parsed.explicit
+
+      // Quick-picker (§6): admin replied without a duration and target is
+      // NOT already restricted. Show the picker instead of the default
+      // auto-ban. Restricted targets fall through to the unban path below.
+      if (!explicit && banTime > 0 && !autoBan) {
+        // This branch shouldn't hit — parseAdminBan only returns > 0 when
+        // explicit is true, or < 0 for unban. Guard anyway.
+      }
+      if (!explicit && autoBan && ctx.db && ctx.db.ModEvent) {
+        // Show picker; bail out before the auto-ban runs.
+        await sendBanPicker(ctx, banUser)
+        return
+      }
     } else {
       // Admin without reply — show stats
       return ctx.replyWithHTML(ctx.i18n.t('banan.show', {
@@ -180,6 +422,9 @@ module.exports = async (ctx) => {
         banMember.banan.last.how - (ctx.message.date - banMember.banan.last.time)
       )
     } catch (error) {
+      if (await maybeShowRightsCard(ctx, error, 'banan', banUser)) {
+        return
+      }
       const errorKey = mapTelegramError(error, 'banan')
       return ctx.replyWithHTML(ctx.i18n.t(errorKey))
     }
@@ -187,7 +432,7 @@ module.exports = async (ctx) => {
     return banMember.save()
   }
 
-  // Ban flow
+  // Ban flow (explicit duration or non-admin joke-path)
   banTime = clampBanTime(banTime)
   const now = Math.floor(Date.now() / 1000)
   const unixBanTime = now + banTime
@@ -205,6 +450,9 @@ module.exports = async (ctx) => {
       until_date: unixBanTime
     })
   } catch (error) {
+    if (await maybeShowRightsCard(ctx, error, 'banan', banUser)) {
+      return
+    }
     const errorKey = mapTelegramError(error, 'banan')
     return ctx.replyWithHTML(ctx.i18n.t(errorKey))
   }
@@ -217,11 +465,27 @@ module.exports = async (ctx) => {
   }
 
   const easterKey = getEasterEggKey(banTime, isSelfBan, banMember)
-  const message = await ctx.replyWithHTML(ctx.i18n.t(easterKey || 'banan.suc', {
-    name: userName(banUser, true),
-    duration: banDuration,
-    count: (banMember.banan.num || 0) + 1
-  }))
+
+  // Admin-triggered explicit ban → unified mod-event card w/ undo.
+  // Non-admin joke-path (self-random-ban) → legacy reply, no undo.
+  let message
+  if (isAdmin && explicit) {
+    message = await sendBanResult(ctx, {
+      targetUser: banUser,
+      banTime,
+      banDuration,
+      easterKey,
+      count: (banMember.banan.num || 0) + 1,
+      adminUser: ctx.from
+    })
+  }
+  if (!message) {
+    message = await ctx.replyWithHTML(ctx.i18n.t(easterKey || 'banan.suc', {
+      name: userName(banUser, true),
+      duration: banDuration,
+      count: (banMember.banan.num || 0) + 1
+    }))
+  }
 
   banMember.banan.num += 1
   banMember.banan.sum += banTime
@@ -238,3 +502,7 @@ module.exports = async (ctx) => {
     scheduleSelBanCleanup(ctx, message.message_id)
   }
 }
+
+module.exports.performBan = performBan
+module.exports.sendBanPicker = sendBanPicker
+module.exports.sendBanResult = sendBanResult
