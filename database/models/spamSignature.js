@@ -16,7 +16,6 @@ const spamSignatureSchema = mongoose.Schema({
   exactHash: { type: String }, // Exact text match
   normalizedHash: { type: String }, // Template match
   fuzzyHash: { type: String }, // SimHash for similarity
-  structureHash: { type: String }, // Message structure pattern
 
   // Confirmation status
   status: {
@@ -80,7 +79,6 @@ spamSignatureSchema.index({ exactHash: 1 }, { unique: true, sparse: true })
 spamSignatureSchema.index({ exactHash: 1, status: 1 })
 spamSignatureSchema.index({ normalizedHash: 1, status: 1 })
 spamSignatureSchema.index({ fuzzyHash: 1, status: 1 })
-spamSignatureSchema.index({ structureHash: 1, status: 1, confirmations: 1 })
 spamSignatureSchema.index({ source: 1, status: 1 })
 
 module.exports = spamSignatureSchema

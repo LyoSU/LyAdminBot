@@ -135,7 +135,6 @@ async function addBanDatabaseMessage (text, db) {
         $set: {
           lastSeenAt: new Date(),
           fuzzyHash: signatures.fuzzyHash,
-          structureHash: signatures.structureHash,
           status: 'confirmed'
         },
         $setOnInsert: {

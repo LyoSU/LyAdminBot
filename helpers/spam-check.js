@@ -609,7 +609,9 @@ const calculateDynamicThreshold = (context, groupSettings) => {
     if (rep.status === 'trusted') {
       baseThreshold += 25 // Should be skipped earlier, but safety net
     } else if (rep.status === 'neutral' && rep.score > 60) {
-      baseThreshold += Math.floor((rep.score - 50) / 5) * 2 // +2 to +10
+      // score 61 → +4, score 80 → +12, score 100 → +20.
+      // Cap at +10 so neutral users don't out-reward premium (+10).
+      baseThreshold += Math.min(10, Math.floor((rep.score - 50) / 5) * 2)
     }
   }
 

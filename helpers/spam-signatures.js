@@ -54,39 +54,6 @@ const normalizeHeavy = (text) => {
     .trim()
 }
 
-/**
- * Extract structural tokens - what the message "looks like"
- * Good for detecting template-based spam
- */
-const extractStructure = (text) => {
-  if (!text) return ''
-  const patterns = []
-
-  // Detect presence of various elements
-  if (/@[\w]+/.test(text)) patterns.push('MENTION')
-  if (/https?:\/\/|t\.me\//i.test(text)) patterns.push('LINK')
-  if (/\d{5,}/.test(text)) patterns.push('LONG_NUM')
-  if (/[$€£₴₽¥]\s*\d|^\d+\s*[$€£₴₽¥]/m.test(text)) patterns.push('PRICE')
-  if (/[+]?\d[\d\s\-()]{8,}/.test(text)) patterns.push('PHONE')
-  if (/[\u{1F300}-\u{1F9FF}]/u.test(text)) patterns.push('EMOJI')
-  if (/[!?]{2,}/.test(text)) patterns.push('EXCLAIM')
-  if (/[A-Z]{5,}/.test(text)) patterns.push('CAPS')
-  // Structural markers only (no keyword lists). "Bot-style tags" covers
-  // cashtags ($BTC, $USDT) which Telegram ties to its cashtag entity but
-  // we detect structurally here because this function works on raw text.
-  if (/\$[A-Za-z]{2,10}\b/.test(text)) patterns.push('CASHTAG')
-  // Digit-run inside price-like bracket: "+$500", "5000₴", "10k USDT"
-  if (/\b\d+\s*k\b/i.test(text) || /\b\d{3,}\b.*[$€£₴₽¥]/m.test(text)) patterns.push('BIGPRICE')
-
-  // Add word count bucket
-  const words = text.split(/\s+/).length
-  if (words < 10) patterns.push('SHORT')
-  else if (words < 30) patterns.push('MEDIUM')
-  else patterns.push('LONG')
-
-  return patterns.sort().join(':')
-}
-
 // ============================================================================
 // HASH FUNCTIONS
 // ============================================================================
@@ -200,7 +167,6 @@ const generateSignatures = (text) => {
 
   const lightNorm = normalizeLight(text)
   const heavyNorm = normalizeHeavy(text)
-  const structure = extractStructure(text)
 
   // Safety net: short normalized templates are too generic for reliable matching.
   // "шо за дс? _URL_" (3 real words) matches any message with the same short phrase + any link.
@@ -221,11 +187,7 @@ const generateSignatures = (text) => {
     // Fuzzy match (simhash of normalized text) - only if text survived normalization
     fuzzyHash: hasEnoughNormalized ? simHash(heavyNorm) : null,
 
-    // Structure match (what the message "looks like")
-    structureHash: md5(structure),
-
     // Metadata
-    structure,
     textLength: text.length,
     wordCount: text.split(/\s+/).length
   }
@@ -506,8 +468,7 @@ const addSignature = async (text, db, chatId, options = {}) => {
         $addToSet: { uniqueGroups: chatId },
         $set: {
           lastSeenAt: new Date(),
-          fuzzyHash: signatures.fuzzyHash,
-          structureHash: signatures.structureHash
+          fuzzyHash: signatures.fuzzyHash
         }
       },
       { new: true }
@@ -548,7 +509,7 @@ const addSignature = async (text, db, chatId, options = {}) => {
 
   // Step 2: No template match - upsert by exactHash (unique index ensures no duplicates)
   // Only store normalizedHash/fuzzyHash if they're not null (collapsed text)
-  const hashFields = { structureHash: signatures.structureHash }
+  const hashFields = {}
   if (signatures.normalizedHash) hashFields.normalizedHash = signatures.normalizedHash
   if (signatures.fuzzyHash) hashFields.fuzzyHash = signatures.fuzzyHash
 
@@ -640,7 +601,6 @@ module.exports = {
   // Normalization
   normalizeLight,
   normalizeHeavy,
-  extractStructure,
 
   // Hashing
   md5,
