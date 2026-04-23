@@ -1,5 +1,6 @@
 const handleStart = require('./start')
 const handleHelp = require('./help')
+const handleSettings = require('./settings')
 const handleKick = require('./kick')
 const handlePing = require('./ping')
 const handleSetLanguage = require('./language-set')
@@ -39,6 +40,7 @@ const handleMessageReaction = require('./message-reaction')
 module.exports = {
   handleStart,
   handleHelp,
+  handleSettings,
   handleKick,
   handlePing,
   handleSetLanguage,

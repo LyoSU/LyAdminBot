@@ -102,13 +102,36 @@ module.exports = async (ctx) => {
     if (!settingsRoot) {
       return sendPlaceholder(ctx)
     }
-    // Plan 4 will define settings.root. Until then, this branch never hits
-    // the render path; we keep the structure ready so the deep-link format
-    // is honored as soon as the screen lands.
+    // Resolve the target group, check admin status in that group, then render
+    // the root panel into the private chat. The render function builds from
+    // ctx.group.info.settings — we swap in the target group's data before
+    // calling it.
     try {
-      const view = await settingsRoot.render(ctx, { targetChatId: parsed.chatId })
-      if (view && view.text) {
-        await replyHTML(ctx, view.text, view.keyboard ? { reply_markup: view.keyboard } : {})
+      if (!ctx.db) return sendPlaceholder(ctx)
+      const groupDoc = await ctx.db.Group.findOne({ group_id: parsed.chatId })
+      if (!groupDoc) return sendPlaceholder(ctx)
+
+      // Admin check against the target group.
+      let member
+      try {
+        member = await ctx.telegram.getChatMember(parsed.chatId, ctx.from.id)
+      } catch (e) {
+        return sendPlaceholder(ctx)
+      }
+      if (!member || !['creator', 'administrator'].includes(member.status)) {
+        return sendPlaceholder(ctx)
+      }
+
+      // Swap group context so renderRoot reads from the target group's settings.
+      const prevGroup = ctx.group
+      ctx.group = { info: groupDoc }
+      try {
+        const view = await settingsRoot.render(ctx, { targetChatId: parsed.chatId })
+        if (view && view.text) {
+          await replyHTML(ctx, view.text, view.keyboard ? { reply_markup: view.keyboard } : {})
+        }
+      } finally {
+        ctx.group = prevGroup
       }
     } catch (err) {
       log.warn({ err: err && err.message }, '/start settings deep-link failed')

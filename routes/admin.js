@@ -1,6 +1,7 @@
 const rateLimit = require('telegraf-ratelimit')
 const { onlyAdmin } = require('../middlewares')
 const {
+  handleSettings,
   handleAdminWelcome,
   handleAdminWelcomeGif,
   handleAdminWelcomeGifReset,
@@ -55,6 +56,9 @@ const registerAdminRoutes = (bot) => {
   bot.hears(/^!spam(?:\s(.*))?/, onlyAdmin, handleAdminSpamSettings)
   bot.hears(/^!trust(?:\s(.*))?/, onlyAdmin, handleTrust)
   bot.hears(/^!untrust(?:\s(.*))?/, onlyAdmin, handleUntrust)
+
+  // Settings panel (!settings alias for the /settings command)
+  bot.hears('!settings', onlyAdmin, handleSettings)
 
   // Utilities
   bot.hears('!reset', onlyAdmin, handleAdminReset)

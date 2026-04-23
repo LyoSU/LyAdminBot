@@ -3,6 +3,7 @@ const { onlyGroup } = require('../middlewares')
 const {
   handleStart,
   handleHelp,
+  handleSettings,
   handlePing,
   handleSetLanguage,
   handleWebAuth,
@@ -42,6 +43,7 @@ const registerCommands = (bot) => {
   bot.command('del', handleDelete)
 
   // Group-only commands
+  bot.command('settings', onlyGroup, handleSettings)
   bot.command('kick', onlyGroup, handleKick)
   bot.command('top', onlyGroup, handleTop)
   bot.command('top_banan', onlyGroup, handleTopBanan)
