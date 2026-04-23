@@ -1,4 +1,5 @@
 const { bot: log } = require('../helpers/logger')
+const { liftPmContext } = require('../helpers/menu/pm-context')
 
 const handlers = new Map()
 
@@ -11,6 +12,9 @@ const isExpired = (pi) => pi.expiresAt && pi.expiresAt.getTime() < Date.now()
 
 const pendingInputMiddleware = async (ctx, next) => {
   if (!ctx.message || !ctx.message.text) return next()
+  // In PM the group session never binds ctx.group; lift the deep-link target
+  // group so admins can complete force-reply flows started from /settings.
+  await liftPmContext(ctx)
   const pi = ctx.group && ctx.group.info && ctx.group.info.settings && ctx.group.info.settings.pendingInput
   if (!pi || !pi.userId) return next()
 
@@ -38,9 +42,7 @@ const pendingInputMiddleware = async (ctx, next) => {
   // Mirrors the save semantics of middlewares/data-persistence.js saveGroupInfo().
   if (ctx.group && ctx.group.info && typeof ctx.group.info.save === 'function' && !ctx.group.info.isSaving) {
     ctx.group.info.isSaving = true
-    try { await ctx.group.info.save() }
-    catch (err) { log.debug({ err: err.message, type: pi.type }, 'pending-input: group save failed') }
-    finally { ctx.group.info.isSaving = false }
+    try { await ctx.group.info.save() } catch (err) { log.debug({ err: err.message, type: pi.type }, 'pending-input: group save failed') } finally { ctx.group.info.isSaving = false }
   }
   // Intentionally do NOT call next — the message was consumed
 }

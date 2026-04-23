@@ -2,7 +2,7 @@
 
 const assert = require('assert')
 const pm = require('../helpers/menu/pm-context')
-const { liftPmTarget } = require('../routes/menu')
+const { liftPmContext } = require('../helpers/menu/pm-context')
 
 const tests = []
 const test = (name, fn) => tests.push({ name, fn })
@@ -20,22 +20,22 @@ test('returns null for unknown user', () => {
   assert.strictEqual(pm.getPmTarget(999), null)
 })
 
-test('liftPmTarget no-op in group chat', async () => {
+test('liftPmContext no-op in group chat', async () => {
   pm.clearAll()
   pm.setPmTarget(7, -100)
   const ctx = { chat: { id: -100, type: 'supergroup' }, from: { id: 7 } }
-  await liftPmTarget(ctx)
+  await liftPmContext(ctx)
   assert.strictEqual(ctx.targetChatId, undefined, 'must not lift in group')
 })
 
-test('liftPmTarget no-op when no PM target stored', async () => {
+test('liftPmContext no-op when no PM target stored', async () => {
   pm.clearAll()
   const ctx = { chat: { id: 555, type: 'private' }, from: { id: 7 } }
-  await liftPmTarget(ctx)
+  await liftPmContext(ctx)
   assert.strictEqual(ctx.targetChatId, undefined)
 })
 
-test('liftPmTarget injects targetChatId in PM', async () => {
+test('liftPmContext injects targetChatId in PM', async () => {
   pm.clearAll()
   pm.setPmTarget(7, -100500)
   const ctx = {
@@ -43,11 +43,11 @@ test('liftPmTarget injects targetChatId in PM', async () => {
     from: { id: 7 },
     db: null
   }
-  await liftPmTarget(ctx)
+  await liftPmContext(ctx)
   assert.strictEqual(ctx.targetChatId, -100500)
 })
 
-test('liftPmTarget loads Group when db is available', async () => {
+test('liftPmContext loads Group when db is available', async () => {
   pm.clearAll()
   pm.setPmTarget(7, -100500)
   const groupDoc = { group_id: -100500, settings: { foo: 'bar' } }
@@ -56,12 +56,12 @@ test('liftPmTarget loads Group when db is available', async () => {
     from: { id: 7 },
     db: { Group: { findOne: async () => groupDoc } }
   }
-  await liftPmTarget(ctx)
+  await liftPmContext(ctx)
   assert.strictEqual(ctx.targetChatId, -100500)
   assert.strictEqual(ctx.group.info.settings.foo, 'bar')
 })
 
-test('liftPmTarget swallows db errors silently', async () => {
+test('liftPmContext swallows db errors silently', async () => {
   pm.clearAll()
   pm.setPmTarget(7, -100500)
   const ctx = {
@@ -69,7 +69,7 @@ test('liftPmTarget swallows db errors silently', async () => {
     from: { id: 7 },
     db: { Group: { findOne: async () => { throw new Error('db down') } } }
   }
-  await liftPmTarget(ctx)
+  await liftPmContext(ctx)
   assert.strictEqual(ctx.targetChatId, -100500, 'targetChatId still set')
   assert.strictEqual(ctx.group, undefined, 'group not injected on error')
 })

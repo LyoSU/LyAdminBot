@@ -15,7 +15,8 @@ const {
   handleMyStats,
   handleExtraList,
   handleReport,
-  handleBanan
+  handleBanan,
+  handleCancel
 } = require('../handlers')
 
 /**
@@ -41,6 +42,7 @@ const registerCommands = (bot) => {
   bot.command('web', handleWebAuth)
   bot.command('q', handleQuote)
   bot.command('del', handleDelete)
+  bot.command('cancel', handleCancel)
 
   // Group-only commands
   bot.command('settings', onlyGroup, handleSettings)

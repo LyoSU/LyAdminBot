@@ -22,29 +22,12 @@ const scheduledDeletionSchema = mongoose.Schema({
   // When to delete
   deleteAt: { type: Date, required: true }, // indexed below (TTL)
 
-  // Source for logging/debugging
+  // Source for logging/debugging. Free-form string — no enum constraint
+  // because dynamic source tags (e.g. `mod_event:auto_ban:expanded`) are
+  // common and policing them via enum just whacks-a-mole every new
+  // notification path. Validation stays at the call-site.
   source: {
     type: String,
-    enum: [
-      // Spam-related
-      'vote_result',
-      'ban_database',
-      'ban_database_no_permissions',
-      'spam_high_confidence',
-      'spam_no_permissions',
-      'vote_timeout',
-      'report_spam',
-      'report_clean',
-      'global_ban',
-      // Command responses
-      'cmd_ping',
-      'cmd_help',
-      'cmd_stats',
-      'cmd_banan',
-      'cmd_welcome',
-      // Generic
-      'other'
-    ],
     default: 'other'
   },
 

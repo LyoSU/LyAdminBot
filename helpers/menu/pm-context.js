@@ -10,7 +10,7 @@
 
 const { LRUCache } = require('lru-cache')
 
-const TTL_MS = 30 * 60 * 1000  // 30 min — long enough for an admin to step away
+const TTL_MS = 30 * 60 * 1000 // 30 min — long enough for an admin to step away
 
 const cache = new LRUCache({ max: 2000, ttl: TTL_MS })
 
@@ -28,4 +28,30 @@ const clearPmTarget = (userId) => cache.delete(userId)
 
 const clearAll = () => cache.clear()
 
-module.exports = { setPmTarget, getPmTarget, clearPmTarget, clearAll, _cache: cache }
+// Inject the PM-target group into ctx for any code that needs group context
+// in a private chat. No-op outside PM, when no target is stored, or when
+// ctx.group is already loaded. Mirrors loadGroupContext for in-group msgs:
+// sets ctx.group.info + ctx.targetChatId and aligns ctx.i18n.locale to the
+// group's saved locale.
+const liftPmContext = async (ctx) => {
+  if (!ctx || !ctx.chat || ctx.chat.type !== 'private' || !ctx.from) return false
+  if (ctx.group && ctx.group.info) return true
+  const targetChatId = getPmTarget(ctx.from.id)
+  if (!targetChatId) return false
+  ctx.targetChatId = targetChatId
+  if (!ctx.db || !ctx.db.Group) return true
+  try {
+    const groupDoc = await ctx.db.Group.findOne({ group_id: targetChatId })
+    if (!groupDoc) return true
+    ctx.group = { info: groupDoc }
+    const groupLocale = groupDoc.settings && groupDoc.settings.locale
+    if (groupLocale && ctx.i18n && typeof ctx.i18n.locale === 'function') {
+      try { ctx.i18n.locale(groupLocale) } catch { /* ignore */ }
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
+module.exports = { setPmTarget, getPmTarget, clearPmTarget, clearAll, liftPmContext, _cache: cache }

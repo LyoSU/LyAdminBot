@@ -7,6 +7,7 @@ const handleSetLanguage = require('./language-set')
 const handleBanan = require('./banan')
 const handleQuote = require('./quote')
 const handleDelete = require('./delete')
+const handleCancel = require('./cancel')
 const handleTop = require('./top')
 const handleTopBanan = require('./top-banan')
 const handleMyStats = require('./my-stats')
@@ -47,6 +48,7 @@ module.exports = {
   handleBanan,
   handleQuote,
   handleDelete,
+  handleCancel,
   handleTop,
   handleTopBanan,
   handleMyStats,
