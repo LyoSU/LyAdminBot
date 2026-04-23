@@ -211,8 +211,7 @@ test('callback_data stays under 64 bytes for normal eventIds', () => {
 const run = async () => {
   let passed = 0; let failed = 0
   for (const t of tests) {
-    try { await t.fn(); passed++; console.log('  ✓ ' + t.name) }
-    catch (e) { failed++; console.log('  ✗ ' + t.name); console.log('     ' + e.message) }
+    try { await t.fn(); passed++; console.log('  ✓ ' + t.name) } catch (e) { failed++; console.log('  ✗ ' + t.name); console.log('     ' + e.message) }
   }
   console.log(`\n${passed} passed, ${failed} failed`)
   process.exit(failed === 0 ? 0 : 1)

@@ -1,9 +1,8 @@
 const { globalBan: log } = require('../helpers/logger')
-const { humanizeReason, checkTrustedUser } = require('../helpers/spam-check')
-const { scheduleDeletion } = require('../helpers/message-cleanup')
+const { checkTrustedUser } = require('../helpers/spam-check')
+const { sendModEventNotification } = require('../helpers/mod-event-send')
 
 const GLOBAL_BAN_DURATION_HOURS = 24
-const NOTIFICATION_DELETE_DELAY_MS = 30 * 1000
 
 /**
  * Check if global ban has expired
@@ -63,22 +62,20 @@ const executeBanActions = async (ctx, reason) => {
     log.error({ err: err.message, userId, chatId }, 'Failed to kick user')
   }
 
-  // 3. Notify group and schedule auto-delete (only if kick succeeded)
+  // 3. Notify group via unified mod-event sender (§9). Scheduling of the
+  //    notification's own auto-delete happens inside the helper using
+  //    cleanup_policy.mod_event_compact (90s, not the old 30s).
   if (kicked) {
     try {
-      const msg = await ctx.replyWithHTML(ctx.i18n.t('global_ban.kicked', {
-        name: ctx.from.first_name,
-        reason: humanizeReason(reason, ctx.i18n)
-      }))
-
-      if (msg && ctx.db) {
-        scheduleDeletion(ctx.db, {
-          chatId,
-          messageId: msg.message_id,
-          delayMs: NOTIFICATION_DELETE_DELAY_MS,
-          source: 'global_ban'
-        }, ctx.telegram).catch(err => log.warn({ err: err.message }, 'Failed to schedule notification deletion'))
-      }
+      await sendModEventNotification(ctx, {
+        actionType: 'global_ban',
+        targetUser: {
+          id: userId,
+          first_name: ctx.from.first_name,
+          username: ctx.from.username
+        },
+        reason
+      })
     } catch (err) {
       log.warn({ err: err.message, userId }, 'Failed to send notification')
     }

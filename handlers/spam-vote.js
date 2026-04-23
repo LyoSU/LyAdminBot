@@ -707,20 +707,14 @@ const handleAdminOverride = async (ctx) => {
 
   // 6. Edit notification to show override result + remove button
   const adminName = ctx.from.first_name || ctx.from.username || `${adminId}`
-  let bannedUserName = `${bannedUserId}`
-  if (bannedUserId > 0 && ctx.db) {
-    try {
-      const user = await ctx.db.User.findOne({ telegram_id: bannedUserId })
-      if (user && user.first_name) {
-        bannedUserName = user.first_name
-      }
-    } catch { /* use ID as fallback */ }
-  }
 
   try {
+    // Unified compact override line (§9 of UX design). Target user name
+    // was shown in the original notification; the override line only
+    // needs the admin who took the action.
     await ctx.editMessageText(
-      ctx.i18n.t('spam.admin_override', { admin: adminName, name: bannedUserName }),
-      { parse_mode: 'HTML' }
+      ctx.i18n.t('mod_event.compact.override', { admin: adminName }),
+      { parse_mode: 'HTML', reply_markup: { inline_keyboard: [] } }
     )
   } catch (error) {
     log.warn({ err: error.message }, 'Admin override: failed to edit notification')

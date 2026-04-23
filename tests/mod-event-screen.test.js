@@ -156,7 +156,11 @@ test('undo: non-admin rejected', async () => {
 
 test('undo: admin → restrictChatMember + override rerender', async () => {
   const event = {
-    eventId: 'ev7', actionType: 'auto_ban', targetId: 42, targetName: 'V', chatId: -100500,
+    eventId: 'ev7',
+    actionType: 'auto_ban',
+    targetId: 42,
+    targetName: 'V',
+    chatId: -100500,
     toObject () { return { ...this } }
   }
   const { ctx, edits, calls } = mkCtx({ isAdmin: true, event })
@@ -184,8 +188,7 @@ test('missing eventId arg → not_found toast', async () => {
 const run = async () => {
   let passed = 0; let failed = 0
   for (const t of tests) {
-    try { await t.fn(); passed++; console.log('  ✓ ' + t.name) }
-    catch (e) { failed++; console.log('  ✗ ' + t.name); console.log('     ' + (e.stack || e.message)) }
+    try { await t.fn(); passed++; console.log('  ✓ ' + t.name) } catch (e) { failed++; console.log('  ✗ ' + t.name); console.log('     ' + (e.stack || e.message)) }
   }
   console.log(`\n${passed} passed, ${failed} failed`)
   process.exit(failed === 0 ? 0 : 1)

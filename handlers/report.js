@@ -1,11 +1,11 @@
 const { userName } = require('../utils')
-const { checkSpam, getSpamSettings, humanizeReason } = require('../helpers/spam-check')
+const { checkSpam, getSpamSettings } = require('../helpers/spam-check')
 const { processSpamAction } = require('../helpers/reputation')
 const { createVoteEvent, getAccountAgeDays } = require('../helpers/vote-ui')
 const { addSignature } = require('../helpers/spam-signatures')
-const e = require('../helpers/emoji-map')
 const { report: reportLog } = require('../helpers/logger')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
+const { sendModEventNotification } = require('../helpers/mod-event-send')
 
 // Rate limiting: max 3 reports per user per 5 minutes
 const reportCooldowns = new Map()
@@ -388,31 +388,27 @@ const handleReport = async (ctx) => {
           }
         }
 
-        // Send notification for high confidence spam
-        const actionText = isChannelPost
-          ? (actionTaken ? (deleted ? `${e.ban} + ${e.trash}` : `${e.ban}`) : (deleted ? `${e.trash}` : `${e.warn}`))
-          : (actionTaken ? (deleted ? `${e.mute} + ${e.trash}` : `${e.mute}`) : (deleted ? `${e.trash}` : `${e.warn}`))
-
-        const notificationMsg = await ctx.replyWithHTML(
-          ctx.i18n.t('report.spam_found', {
-            reporter: reporterName,
-            target: targetName,
-            confidence: result.confidence,
-            reason: humanizeReason(result.reason, ctx.i18n) || ctx.i18n.t('spam_vote.reasons.default'),
-            action: actionText
-          }),
-          { disable_web_page_preview: true }
-        )
-
-        // Schedule auto-delete after 30 seconds (persistent)
-        if (ctx.db) {
-          scheduleDeletion(ctx.db, {
-            chatId: ctx.chat.id,
-            messageId: notificationMsg.message_id,
-            delayMs: 30000,
-            source: 'report_spam'
-          }, ctx.telegram)
-        }
+        // Unified compact notification (§9). `actionTaken` + `deleted`
+        // decide which one-liner fires: full mute = auto_mute; only
+        // deleted = auto_delete; channel-ban = auto_ban. This mirrors the
+        // mapping used in middlewares/spam-check.js.
+        const actionType = isChannelPost
+          ? (actionTaken ? 'auto_ban' : 'auto_delete')
+          : (actionTaken ? 'auto_mute' : 'auto_delete')
+        await sendModEventNotification(ctx, {
+          actionType,
+          targetUser: {
+            id: targetId,
+            first_name: targetUser.first_name,
+            username: targetUser.username,
+            title: isChannelPost ? targetUser.title : undefined,
+            isChannel: isChannelPost
+          },
+          reason: result.reason,
+          confidence: result.confidence,
+          messagePreview: messageText,
+          warning: (!deleted && actionTaken) ? 'could not delete message' : undefined
+        })
       }
 
       reportLog.info({ target: targetName, reporter: reporterName, confidence: result.confidence }, 'Spam action taken')

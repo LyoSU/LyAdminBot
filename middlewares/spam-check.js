@@ -1,4 +1,4 @@
-const { btnIcons } = require('../helpers/emoji-map')
+const { sendModEventNotification } = require('../helpers/mod-event-send')
 
 // Admin cache: Map<chatId, { adminIds: Set<number>, cachedAt: number }>
 const adminCache = new Map()
@@ -17,13 +17,12 @@ const getCachedAdminIds = async (telegram, chatId) => {
 }
 
 const { userName } = require('../utils')
-const { checkSpam, checkTrustedUser, getSpamSettings, humanizeReason } = require('../helpers/spam-check')
+const { checkSpam, checkTrustedUser, getSpamSettings } = require('../helpers/spam-check')
 const { processSpamAction } = require('../helpers/reputation')
 const { createVoteEvent, getAccountAgeDays } = require('../helpers/vote-ui')
 const { addSignature } = require('../helpers/spam-signatures')
 const { getForwardHash } = require('../helpers/velocity')
 const { spam: spamLog, spamAction, reputation: repLog, notification: notifyLog } = require('../helpers/logger')
-const { scheduleDeletion } = require('../helpers/message-cleanup')
 const { logSpamDecision, buildUserSignals } = require('../helpers/spam-signals')
 const { snapshotMessage, analyzeEdit } = require('../helpers/edit-diff')
 const adminFeedback = require('../helpers/admin-feedback')
@@ -772,28 +771,28 @@ module.exports = async (ctx) => {
             notifyLog.error({ err: voteError.message }, 'Failed to create vote event')
           }
         } else if ((muteSuccess || deleteSuccess) && !needsVoting) {
-          // High confidence - show notification with admin override button
-          const notificationMsg = await ctx.replyWithHTML(
-            ctx.i18n.t('spam.notification.full', { name: userName(senderInfo, true), reason: humanizeReason(result.reason, ctx.i18n) }),
-            {
-              disable_web_page_preview: true,
-              reply_markup: {
-                inline_keyboard: [[
-                  { text: ctx.i18n.t('spam.btn_not_spam'), callback_data: `ns:${senderId}`, icon_custom_emoji_id: btnIcons.notSpam }
-                ]]
-              }
-            }
-          ).catch(e => notifyLog.error({ err: e.message }, 'Failed to send high-confidence notification'))
-
-          // Schedule auto-delete after 5 minutes (give admins time to see & act)
-          if (notificationMsg && ctx.db) {
-            scheduleDeletion(ctx.db, {
-              chatId: ctx.chat.id,
-              messageId: notificationMsg.message_id,
-              delayMs: 5 * 60 * 1000,
-              source: 'spam_high_confidence'
-            }, ctx.telegram)
-          }
+          // High confidence — unified compact notification (§9).
+          // The actionType differentiates: full ban → auto_ban, mute-only
+          // → auto_mute, delete-only → auto_delete. Spec § table maps these
+          // to distinct one-liners.
+          const actionType = fullBanApplied ? 'auto_ban'
+            : muteSuccess ? 'auto_mute'
+              : 'auto_delete'
+          await sendModEventNotification(ctx, {
+            actionType,
+            targetUser: {
+              id: senderId,
+              first_name: senderInfo.first_name,
+              username: senderInfo.username,
+              title: isChannelPost ? senderInfo.title : undefined,
+              isChannel: isChannelPost
+            },
+            reason: result.reason,
+            confidence: result.confidence,
+            messagePreview: messageText,
+            warning: (!deleteSuccess && (muteSuccess || fullBanApplied))
+              ? 'could not delete message' : undefined
+          })
 
           // Add to signature database for high-confidence cases
           if (ctx.db) {
@@ -804,23 +803,24 @@ module.exports = async (ctx) => {
 
           notifyLog.info({ confidence: result.confidence, source: result.source }, 'High confidence spam - no voting')
         } else if (!muteSuccess && !deleteSuccess) {
-          // Bot detected spam but has no permissions to act - show simple notification
-          const notificationParams = { name: userName(senderInfo, true), reason: humanizeReason(result.reason, ctx.i18n) }
-          const statusMessage = ctx.i18n.t('spam.notification.no_permissions', notificationParams)
+          // Bot detected spam but has no permissions to act — emit a
+          // `no_permissions` compact notification. Expanded view surfaces
+          // confidence + reason; the [📖 Дай права] button points admins
+          // at the permission instructions.
           notifyLog.warn('Spam detected but no permissions to act')
-
-          const notificationMsg = await ctx.replyWithHTML(statusMessage, { disable_web_page_preview: true })
-            .catch(error => notifyLog.error({ err: error.message }, 'Failed to send notification'))
-
-          // Schedule auto-delete after 60 seconds (persistent)
-          if (notificationMsg && ctx.db) {
-            scheduleDeletion(ctx.db, {
-              chatId: ctx.chat.id,
-              messageId: notificationMsg.message_id,
-              delayMs: 60 * 1000,
-              source: 'spam_no_permissions'
-            }, ctx.telegram)
-          }
+          await sendModEventNotification(ctx, {
+            actionType: 'no_permissions',
+            targetUser: {
+              id: senderId,
+              first_name: senderInfo.first_name,
+              username: senderInfo.username,
+              title: isChannelPost ? senderInfo.title : undefined,
+              isChannel: isChannelPost
+            },
+            reason: result.reason,
+            confidence: result.confidence,
+            messagePreview: messageText
+          })
         }
 
         return true // Stop further processing

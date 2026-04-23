@@ -98,7 +98,7 @@ test('creates event row + sends message + schedules deletion + patches row', asy
   assert.strictEqual(calls.ScheduledDeletionSchedule.length, 1)
   const sched = calls.ScheduledDeletionSchedule[0]
   assert.strictEqual(sched.messageId, 9001)
-  assert.strictEqual(sched.delayMs, 90_000, '90s for compact default')
+  assert.strictEqual(sched.delayMs, 90000, '90s for compact default')
   assert.strictEqual(sched.source, 'mod_event:auto_ban')
 })
 
@@ -109,7 +109,7 @@ test('override uses 30s TTL', async () => {
     targetUser: { id: 42, first_name: 'Alice' },
     actor: { id: 7, first_name: 'AdminBob' }
   })
-  assert.strictEqual(calls.ScheduledDeletionSchedule[0].delayMs, 30_000)
+  assert.strictEqual(calls.ScheduledDeletionSchedule[0].delayMs, 30000)
 })
 
 test('messagePreview truncated to 200 chars at DB-row level', async () => {
@@ -136,8 +136,7 @@ test('returns null + swallows when db.ModEvent missing', async () => {
 const run = async () => {
   let passed = 0; let failed = 0
   for (const t of tests) {
-    try { await t.fn(); passed++; console.log('  ✓ ' + t.name) }
-    catch (e) { failed++; console.log('  ✗ ' + t.name); console.log('     ' + (e.stack || e.message)) }
+    try { await t.fn(); passed++; console.log('  ✓ ' + t.name) } catch (e) { failed++; console.log('  ✗ ' + t.name); console.log('     ' + (e.stack || e.message)) }
   }
   console.log(`\n${passed} passed, ${failed} failed`)
   process.exit(failed === 0 ? 0 : 1)
