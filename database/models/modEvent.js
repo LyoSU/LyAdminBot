@@ -24,7 +24,15 @@ const ACTION_TYPES = [
   'no_permissions',
   'global_ban',
   'voting',
-  'override'
+  'override',
+  // Admin-triggered moderation. Same rendering as the auto_* counterparts
+  // (compact one-liner + undo) but the actor is a human admin, not the
+  // bot. Added for Plan 6 — /banan, /kick produce these events so the
+  // result message can host the `[↩️ Скасувати]` button via the existing
+  // mod.event screen's `undo` action.
+  'manual_ban',
+  'manual_mute',
+  'manual_kick'
 ]
 
 const modEventSchema = mongoose.Schema({

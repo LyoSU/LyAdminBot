@@ -53,7 +53,14 @@ const COMPACT_KEY_BY_ACTION = {
   no_permissions: 'mod_event.compact.suspicious',
   global_ban: 'mod_event.compact.global_ban',
   voting: 'mod_event.compact.voting',
-  override: 'mod_event.compact.override'
+  override: 'mod_event.compact.override',
+  // Admin-triggered moderation (Plan 6). The compact line uses its own
+  // locale keys so translators can tweak the wording ("отримує банан"
+  // vs. "спам"). Rendering chrome (undo / hide buttons) is shared with
+  // auto_ban / auto_mute below.
+  manual_ban: 'mod_event.compact.manual_ban',
+  manual_mute: 'mod_event.compact.manual_mute',
+  manual_kick: 'mod_event.compact.manual_kick'
 }
 
 // Derive the name we plug into the compact line. For override events the
@@ -162,6 +169,17 @@ const buildCompactKeyboard = (i18n, event, opts = {}) => {
   // Override / voting don't carry the why/hide row — they're terminal
   // (override) or routed through legacy sv:* buttons (voting).
   if (actionType === 'override') return { inline_keyboard: [] }
+
+  // Admin-triggered mod actions (Plan 6 §7): single `[↩️ Скасувати]`.
+  // No why/hide — the admin knows why they banned. Undo routes through
+  // the same handler as auto_* (restrictChatMember + unban).
+  if (actionType === 'manual_ban' || actionType === 'manual_mute' || actionType === 'manual_kick') {
+    return {
+      inline_keyboard: [
+        row(btn(i18n.t('mod_event.btn.undo_short'), cb(SCREEN_ID, 'undo', eventId)))
+      ]
+    }
+  }
 
   // Default: bans / mutes / deletes / suspicious.
   return {
