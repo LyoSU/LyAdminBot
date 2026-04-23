@@ -11,6 +11,7 @@ const settingsExtras = require('./settings-extras')
 const settingsModlog = require('./settings-modlog')
 const settingsDiagnostics = require('./settings-diagnostics')
 const modEvent = require('./mod-event')
+const modVoteDetails = require('./mod-vote-details')
 const modBanPicker = require('./mod-ban-picker')
 const modDelUndo = require('./mod-del-undo')
 const modRights = require('./mod-rights')
@@ -27,6 +28,7 @@ const registerAll = () => {
   settingsModlog.register()
   settingsDiagnostics.register()
   modEvent.register()
+  modVoteDetails.register()
   modBanPicker.register()
   modDelUndo.register()
   modRights.register()
@@ -45,6 +47,7 @@ module.exports = {
   settingsModlog,
   settingsDiagnostics,
   modEvent,
+  modVoteDetails,
   modBanPicker,
   modDelUndo,
   modRights,
