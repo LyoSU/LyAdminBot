@@ -1,32 +1,134 @@
+// /start handler — private card + deep-link routing, or a short group hint.
+//
+// Deep-links (from `?start=<payload>`):
+//   help              → immediately render the /help tab-menu
+//   settings_<chatId> → render the /settings root for that chat (in private).
+//                       Falls back to a "coming soon" placeholder if Plan 4
+//                       hasn't registered settings.root yet.
+//   mystats_<chatId>  → forward to the regular /mystats handler, with chat
+//                       context overridden to the target chat. Same fallback
+//                       policy if the data isn't loadable.
+//
+// Unknown payload → behave like a regular /start (log debug, ignore).
+//
+// The payload parser is exported (`parseStartPayload`) so tests can exercise
+// it without wiring up a Telegraf context.
+
 const { userName } = require('../utils')
-const { btnIcons } = require('../helpers/emoji-map')
+const { replyHTML } = require('../helpers/reply-html')
+const { cb, btn, row } = require('../helpers/menu/keyboard')
+const help = require('../helpers/menu/screens/help')
+const { getMenu } = require('../helpers/menu/registry')
+const { bot: log } = require('../helpers/logger')
 
-/**
- * Handle /start command in both private and group chats
- */
-module.exports = async (ctx) => {
-  const isPrivate = ctx.chat.type === 'private'
+const parseStartPayload = (payload) => {
+  if (!payload || typeof payload !== 'string') return { kind: 'none' }
+  const trimmed = payload.trim()
+  if (!trimmed) return { kind: 'none' }
+  if (trimmed === 'help') return { kind: 'help' }
+  const m = trimmed.match(/^(settings|mystats)_(-?\d+)$/)
+  if (m) {
+    return { kind: m[1], chatId: parseInt(m[2], 10) }
+  }
+  return { kind: 'unknown', raw: trimmed }
+}
 
-  if (isPrivate) {
-    // Private chat - show full welcome with "Add to group" button
-    await ctx.replyWithHTML(
-      ctx.i18n.t('private.start', {
-        name: userName(ctx.from)
-      }),
-      {
-        reply_markup: {
-          inline_keyboard: [[
-            {
-              text: ctx.i18n.t('private.btn_add'),
-              url: `https://t.me/${ctx.botInfo.username}?startgroup=add`,
-              icon_custom_emoji_id: btnIcons.addToGroup
-            }
-          ]]
-        }
-      }
-    )
-  } else {
-    // Group chat - short info about the bot
-    await ctx.replyWithHTML(ctx.i18n.t('group.start'))
+// Extract start payload from the command text. ctx.startPayload is only set
+// by Telegraf's `bot.start()` convenience handler; we use `bot.command(…)`
+// so we parse it ourselves. Format: `/start foo@BotName` or `/start foo`.
+const readPayload = (ctx) => {
+  if (ctx.startPayload) return ctx.startPayload
+  const text = (ctx.message && ctx.message.text) || ''
+  const parts = text.split(/\s+/)
+  // parts[0] = "/start" or "/start@BotName"
+  return parts.slice(1).join(' ')
+}
+
+const buildPrivateKeyboard = (ctx) => {
+  const botUsername = (ctx.botInfo && ctx.botInfo.username) || 'LyAdminBot'
+  return {
+    inline_keyboard: [
+      row(btn(ctx.i18n.t('menu.start.btn.add'), null, {
+        url: `https://t.me/${botUsername}?startgroup=add`
+      })),
+      row(
+        btn(ctx.i18n.t('menu.start.btn.help'), cb(help.SCREEN_ID, 'tab', 'start', String(ctx.from.id))),
+        btn(ctx.i18n.t('menu.start.btn.lang'), 'set_language:uk')
+      )
+    ]
   }
 }
+
+// Group chats get a 1-line hint and a single inline help button. Deep-links
+// never fire in group context (Telegram only passes them from the user's
+// private-chat `?start=…` flow), so we skip that logic here entirely.
+const buildGroupKeyboard = (ctx) => ({
+  inline_keyboard: [
+    row(btn(ctx.i18n.t('menu.start.btn.help'), cb(help.SCREEN_ID, 'tab', 'start', String(ctx.from.id))))
+  ]
+})
+
+const sendPrivateCard = async (ctx) => {
+  const text = ctx.i18n.t('menu.start.private', { name: userName(ctx.from) })
+  await replyHTML(ctx, text, { reply_markup: buildPrivateKeyboard(ctx) })
+}
+
+const sendGroupHint = async (ctx) => {
+  await replyHTML(ctx, ctx.i18n.t('menu.start.group'), {
+    reply_markup: buildGroupKeyboard(ctx),
+    reply_to_message_id: ctx.message && ctx.message.message_id
+  })
+}
+
+const sendPlaceholder = async (ctx) => {
+  await replyHTML(ctx, ctx.i18n.t('menu.start.placeholder'))
+}
+
+module.exports = async (ctx) => {
+  const isPrivate = ctx.chat && ctx.chat.type === 'private'
+
+  if (!isPrivate) {
+    return sendGroupHint(ctx)
+  }
+
+  const parsed = parseStartPayload(readPayload(ctx))
+
+  if (parsed.kind === 'help') {
+    return help.sendHelp(ctx, ctx.from.id)
+  }
+
+  if (parsed.kind === 'settings') {
+    const settingsRoot = getMenu('settings.root')
+    if (!settingsRoot) {
+      return sendPlaceholder(ctx)
+    }
+    // Plan 4 will define settings.root. Until then, this branch never hits
+    // the render path; we keep the structure ready so the deep-link format
+    // is honored as soon as the screen lands.
+    try {
+      const view = await settingsRoot.render(ctx, { targetChatId: parsed.chatId })
+      if (view && view.text) {
+        await replyHTML(ctx, view.text, view.keyboard ? { reply_markup: view.keyboard } : {})
+      }
+    } catch (err) {
+      log.warn({ err: err && err.message }, '/start settings deep-link failed')
+      await sendPlaceholder(ctx)
+    }
+    return
+  }
+
+  if (parsed.kind === 'mystats') {
+    // Forward to the existing /mystats handler. /mystats requires a group
+    // context (ctx.group, member data). In the private-chat deep-link case
+    // we don't have that yet — punt to the placeholder. Wiring the full
+    // "resolve group by id, load member stats, send stats" path is Plan 8
+    // territory; this branch is scaffolding.
+    return sendPlaceholder(ctx)
+  }
+
+  // Unknown payload or none: plain welcome.
+  return sendPrivateCard(ctx)
+}
+
+module.exports.parseStartPayload = parseStartPayload
+module.exports.readPayload = readPayload
