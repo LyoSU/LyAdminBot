@@ -278,6 +278,9 @@ menu:
   saved: "✓ Захавана"
   cancelled: "↩️ Скасавана"
   session_expired: "⏱ Сесія састарэла"
+  lang_picker:
+    text: "🌐 <b>Мова інтэрфейсу</b>\n\nБягучая: ${current}"
+    saved: "✓ Мова абноўлена"
   start:
     private: |
       ${e.shield} Прывітанне, <b>${name}</b>! ${e.wave}

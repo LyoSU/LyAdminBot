@@ -5,6 +5,7 @@
 
 const help = require('./help')
 const onboarding = require('./onboarding')
+const langPicker = require('./lang-picker')
 const settings = require('./settings')
 const settingsWelcome = require('./settings-welcome')
 const settingsExtras = require('./settings-extras')
@@ -21,6 +22,7 @@ const statsExtras = require('./stats-extras')
 const registerAll = () => {
   help.register()
   onboarding.register()
+  langPicker.register()
   settings.register()
   settingsWelcome.register()
   settingsExtras.register()
@@ -39,6 +41,7 @@ module.exports = {
   registerAll,
   help,
   onboarding,
+  langPicker,
   settings,
   settingsWelcome,
   settingsExtras,

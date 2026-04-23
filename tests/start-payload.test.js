@@ -24,6 +24,14 @@ test('mystats_<chatId> → { kind: mystats, chatId }', () => {
   assert.deepStrictEqual(parseStartPayload('mystats_-100500'), { kind: 'mystats', chatId: -100500 })
 })
 
+test('mod_event_<eventId> → { kind: mod_event, eventId }', () => {
+  assert.deepStrictEqual(parseStartPayload('mod_event_a1b2c3d4e5f6'), { kind: 'mod_event', eventId: 'a1b2c3d4e5f6' })
+  // Case-insensitive hex
+  assert.deepStrictEqual(parseStartPayload('mod_event_DEADBEEF'), { kind: 'mod_event', eventId: 'DEADBEEF' })
+  // Non-hex chars → unknown
+  assert.deepStrictEqual(parseStartPayload('mod_event_xyz'), { kind: 'unknown', raw: 'mod_event_xyz' })
+})
+
 test('unknown payload → { kind: unknown, raw }', () => {
   assert.deepStrictEqual(parseStartPayload('foobar'), { kind: 'unknown', raw: 'foobar' })
   // Malformed settings (no chatId) → unknown

@@ -18,9 +18,12 @@ const { userName } = require('../utils')
 const { replyHTML } = require('../helpers/reply-html')
 const { cb, btn, row } = require('../helpers/menu/keyboard')
 const help = require('../helpers/menu/screens/help')
+const langPicker = require('../helpers/menu/screens/lang-picker')
 const { getMenu } = require('../helpers/menu/registry')
 const { setPmTarget } = require('../helpers/menu/pm-context')
-const { setKnownAdmin } = require('../helpers/admin-cache')
+const { setKnownAdmin, isUserAdmin } = require('../helpers/admin-cache')
+const modEvent = require('../helpers/mod-event')
+const myStats = require('./my-stats')
 const { bot: log } = require('../helpers/logger')
 
 const parseStartPayload = (payload) => {
@@ -31,6 +34,12 @@ const parseStartPayload = (payload) => {
   const m = trimmed.match(/^(settings|mystats)_(-?\d+)$/)
   if (m) {
     return { kind: m[1], chatId: parseInt(m[2], 10) }
+  }
+  // mod_event_<eventId> — opens compact mod-event details in PM. Triggered
+  // by the [🤨 За що?] URL button on group-side mod-event notifications.
+  const me = trimmed.match(/^mod_event_([a-f0-9]+)$/i)
+  if (me) {
+    return { kind: 'mod_event', eventId: me[1] }
   }
   return { kind: 'unknown', raw: trimmed }
 }
@@ -55,7 +64,7 @@ const buildPrivateKeyboard = (ctx) => {
       })),
       row(
         btn(ctx.i18n.t('menu.start.btn.help'), cb(help.SCREEN_ID, 'tab', 'start', String(ctx.from.id))),
-        btn(ctx.i18n.t('menu.start.btn.lang'), 'set_language:uk')
+        btn(ctx.i18n.t('menu.start.btn.lang'), cb(langPicker.SCREEN_ID, 'open'))
       )
     ]
   }
@@ -84,6 +93,30 @@ const sendGroupHint = async (ctx) => {
 
 const sendPlaceholder = async (ctx) => {
   await replyHTML(ctx, ctx.i18n.t('menu.start.placeholder'))
+}
+
+// /start mod_event_<eventId> — open expanded mod-event details in PM.
+// Triggered when a chat member taps [🤨 За що?] on a group mod-event
+// notification. Expanded text + admin-only [↩️ Розблокувати] (when the
+// clicker is admin in the original chat).
+const renderModEventInPm = async (ctx, eventId) => {
+  if (!ctx.db || !ctx.db.ModEvent) return false
+  const event = await modEvent.getModEvent(ctx.db, eventId)
+  if (!event) return false
+
+  const targetUser = {
+    id: event.targetId,
+    first_name: event.targetName || '',
+    username: null
+  }
+  const expanded = modEvent.buildExpandedText(ctx.i18n, event, targetUser)
+  const isAdmin = await isUserAdmin(ctx.telegram, event.chatId, ctx.from.id)
+  const inline = []
+  if (isAdmin && (event.actionType === 'auto_ban' || event.actionType === 'auto_mute' || event.actionType === 'global_ban')) {
+    inline.push([{ text: ctx.i18n.t('mod_event.btn.undo'), callback_data: `m:v1:mod.event:undo:${eventId}` }])
+  }
+  await replyHTML(ctx, expanded, inline.length ? { reply_markup: { inline_keyboard: inline } } : {})
+  return true
 }
 
 module.exports = async (ctx) => {
@@ -149,12 +182,21 @@ module.exports = async (ctx) => {
     return
   }
 
+  if (parsed.kind === 'mod_event') {
+    try {
+      const ok = await renderModEventInPm(ctx, parsed.eventId)
+      if (ok) return
+    } catch (err) {
+      log.warn({ err: err && err.message }, '/start mod_event deep-link failed')
+    }
+    return sendPlaceholder(ctx)
+  }
+
   if (parsed.kind === 'mystats') {
     // /mystats deep-link — resolve the target Group + GroupMember and render
     // the panel directly in the DM. Falls back to placeholder if the bot
     // doesn't know the chat or the user never posted in it.
     try {
-      const myStats = require('./my-stats')
       if (typeof myStats.handleDeepLink === 'function') {
         const ok = await myStats.handleDeepLink(ctx, parsed.chatId)
         if (ok) return

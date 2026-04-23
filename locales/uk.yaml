@@ -447,6 +447,9 @@ menu:
   saved: "✓ Збережено"
   cancelled: "↩️ Скасовано"
   session_expired: "⏱ Сесія застаріла"
+  lang_picker:
+    text: "🌐 <b>Мова інтерфейсу</b>\n\nПоточна: ${current}"
+    saved: "✓ Мова оновлена"
   start:
     private: |
       ${e.shield} Привіт, <b>${name}</b>! ${e.wave}

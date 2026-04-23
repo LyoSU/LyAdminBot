@@ -455,6 +455,9 @@ menu:
   saved: "✓ Saved"
   cancelled: "↩️ Cancelled"
   session_expired: "⏱ Session expired"
+  lang_picker:
+    text: "🌐 <b>Interface language</b>\n\nCurrent: ${current}"
+    saved: "✓ Language updated"
   start:
     private: |
       ${e.shield} Hey, <b>${name}</b>! ${e.wave}

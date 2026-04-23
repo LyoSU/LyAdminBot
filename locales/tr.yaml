@@ -226,6 +226,9 @@ menu:
   saved: "✓ Kaydedildi"
   cancelled: "↩️ İptal edildi"
   session_expired: "⏱ Oturum süresi doldu"
+  lang_picker:
+    text: "🌐 <b>Arayüz dili</b>\n\nGeçerli: ${current}"
+    saved: "✓ Dil güncellendi"
   start:
     private: |
       ${e.shield} Selam, <b>${name}</b>! ${e.wave}

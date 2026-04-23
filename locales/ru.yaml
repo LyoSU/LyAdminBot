@@ -392,6 +392,9 @@ menu:
   saved: "✓ Сохранено"
   cancelled: "↩️ Отменено"
   session_expired: "⏱ Сессия истекла"
+  lang_picker:
+    text: "🌐 <b>Язык интерфейса</b>\n\nТекущий: ${current}"
+    saved: "✓ Язык обновлён"
   start:
     private: |
       ${e.shield} Йо, <b>${name}</b>! ${e.wave}

@@ -28,6 +28,23 @@ const MOD_LOG_TYPE_BY_ACTION = {
   auto_delete: 'auto_del'
 }
 
+// Mutate the inline keyboard to swap any [🤨 За що?] callback button for
+// a t.me deep-link URL button. Group viewers tap → bot DM opens with
+// /start mod_event_<eventId>; expanded view + admin actions render in PM.
+// Falls back silently if botUsername is unknown (keeps callback button).
+const rewireWhyToPm = (keyboard, eventId, botUsername) => {
+  if (!botUsername || !keyboard || !Array.isArray(keyboard.inline_keyboard)) return
+  const url = `https://t.me/${botUsername}?start=mod_event_${eventId}`
+  for (const row of keyboard.inline_keyboard) {
+    for (let i = 0; i < row.length; i++) {
+      const cb = row[i] && row[i].callback_data
+      if (typeof cb === 'string' && cb.startsWith('m:v1:mod.event:why:')) {
+        row[i] = { text: row[i].text, url }
+      }
+    }
+  }
+}
+
 /**
  * @param {Object} ctx — Telegraf context (must have ctx.telegram, ctx.chat,
  *                       ctx.db, ctx.i18n).
@@ -98,6 +115,11 @@ const sendModEventNotification = async (ctx, opts = {}) => {
 
   const { text } = modEvent.buildCompactText(ctx.i18n, event, targetUser)
   const keyboard = modEvent.buildCompactKeyboard(ctx.i18n, event)
+  // Swap the in-group [🤨 За що?] callback for a deep-link URL button.
+  // Expanding details inline would clutter the group; the URL opens a PM
+  // with the bot, /start mod_event_<eventId> renders the expanded view
+  // privately and offers admin actions there.
+  rewireWhyToPm(keyboard, event.eventId, ctx.botInfo && ctx.botInfo.username)
 
   let sent
   try {
