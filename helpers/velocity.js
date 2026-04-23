@@ -841,7 +841,7 @@ const getDecayedCount = async (key, window) => {
 const calculateVelocityScore = async (text, userId, chatId, messageId, forwardOrigin = null) => {
   // Skip very short messages
   if (!text || text.length < 5) {
-    return { score: 0, confidence: 0, dominated: 'skip', signals: {} }
+    return { score: 0, confidence: 0, dominant: 'skip', signals: {} }
   }
 
   // Record this occurrence

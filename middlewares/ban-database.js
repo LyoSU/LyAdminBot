@@ -155,8 +155,16 @@ module.exports = async (ctx) => {
         const sender = ctx.message.sender_chat || ctx.from
         const displayName = userName(sender, !isSenderChat)
         // Check bot permissions before taking action
+        const botId = ctx.botInfo && ctx.botInfo.id
+        if (!botId) {
+          // Cold-start or test harness without telegraf init — skip the
+          // permissions probe. Better to miss one enforcement window than
+          // crash the middleware on a TypeError.
+          banDatabaseLog.warn('Skipping ban-database enforcement: botInfo not yet populated')
+          return
+        }
         try {
-          const botMember = await ctx.telegram.getChatMember(ctx.chat.id, ctx.botInfo.id)
+          const botMember = await ctx.telegram.getChatMember(ctx.chat.id, botId)
           const canRestrict = botMember.can_restrict_members
 
           if (canRestrict) {

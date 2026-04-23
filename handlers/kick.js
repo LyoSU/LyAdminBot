@@ -74,7 +74,21 @@ module.exports = async (ctx) => {
   const isSelfKick = ctx.from.id === kickUser.id
 
   try {
-    await ctx.telegram.unbanChatMember(ctx.chat.id, kickUser.id)
+    // Ban then immediately unban — the canonical "kick" that works in both
+    // supergroups and basic groups. A bare unbanChatMember removes a member
+    // only in supergroups (as a documented side-effect); in basic groups
+    // it would just clear a non-existent ban and leave the user in the chat.
+    // `only_if_banned: true` on the unban makes sure we don't accidentally
+    // lift a pre-existing ban if admin re-runs /kick on a banned user.
+    await ctx.telegram.callApi('banChatMember', {
+      chat_id: ctx.chat.id,
+      user_id: kickUser.id
+    })
+    await ctx.telegram.callApi('unbanChatMember', {
+      chat_id: ctx.chat.id,
+      user_id: kickUser.id,
+      only_if_banned: true
+    })
   } catch (error) {
     const errorKey = mapTelegramError(error, 'kick')
     if (errorKey.endsWith('error_no_rights')) {

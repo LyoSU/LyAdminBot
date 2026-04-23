@@ -1195,7 +1195,14 @@ const runQuickAssessmentPhase = (ctx) => {
       }, 'Quick assessment')
     }
   } catch (quickAssessErr) {
-    spamLog.warn({ err: quickAssessErr.message }, 'Quick assessment error, continuing with standard flow')
+    // Keep the stack — this catch wraps ~60 lines of logic. A bare message
+    // (`user is not defined`) is what shipped for 2.5 months before anyone
+    // pulled the source reference. Stack + error type make drift traceable.
+    spamLog.warn({
+      err: quickAssessErr.message,
+      stack: quickAssessErr.stack,
+      errType: quickAssessErr.name
+    }, 'Quick assessment error, continuing with standard flow')
   }
 
   return { result: null, quickAssessment }
@@ -1861,7 +1868,13 @@ SECURITY CANARY
   // next few hours skip this whole pipeline branch. Store only confident
   // verdicts (either side of the spectrum) — mid-confidence ones deserve
   // fresh look-ups to avoid calcifying uncertainty.
-  if (spamScore >= 0.8 || spamScore <= 0.25) {
+  //
+  // Thresholds match llm-cache.isConfidentEnoughToCache (spam >= 0.85,
+  // clean <= 0.20) so every .set() we fire actually lands — previously
+  // the caller used looser bounds (>= 0.8, <= 0.25) and verdicts in the
+  // 0.80-0.84 / 0.21-0.25 windows were silently rejected inside the
+  // cache, wasting a function call per borderline LLM verdict.
+  if (spamScore >= 0.85 || spamScore <= 0.2) {
     try {
       llmCache.set(messageText, llmCacheBucket, finalVerdict)
     } catch (_err) {

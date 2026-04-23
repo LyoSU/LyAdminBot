@@ -46,7 +46,7 @@ module.exports = async (ctx) => {
   let needsDbRefresh = false
 
   if (!ctx.session.userInfo) {
-    const now = Math.floor(new Date().getTime() / 1000)
+    const now = Math.floor(Date.now() / 1000)
 
     // Use findOneAndUpdate with upsert to avoid duplicate key errors
     user = await ctx.db.User.findOneAndUpdate(
