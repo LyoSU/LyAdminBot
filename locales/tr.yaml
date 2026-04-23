@@ -158,6 +158,9 @@ mod_event:
     global_ban: "🌍 ${name} — global ban"
     voting: "⚖️ ${name} — oylamada"
     override: "↩️ Admin ${admin} tarafından geri alındı"
+    manual_ban: "🍌 ${name} muz aldı"
+    manual_mute: "🔇 ${name} — susturuldu"
+    manual_kick: "👢 ${name} — atıldı"
   expanded:
     confidence_line: "📊 ${confidence}% · 🤖 ${reason}"
     preview_line: "📝 «${preview}»"
@@ -173,6 +176,7 @@ mod_event:
     give_rights: "📖 Yetki ver"
     trust_anyway: "↩️ Yine de güven"
     cant_undo: "🚫 Engel kaldırılamadı"
+    undo_short: "↩️ Geri al"
   toast:
     hidden: "✓"
     undone: "↩️ Engel kaldırıldı"
@@ -443,6 +447,60 @@ menu:
     trusted:
       title: "👤 <b>Henüz güvenilir kullanıcı yok</b>"
       hint: "<i>Anti-spam onu atlatsın diye güvenilir ekle.</i>"
+  common:
+    back: "← Geri"
+    close: "✕ Kapat"
+    cancel: "✕ İptal"
+    dismiss: "✓ Anladım"
+    confirm: "✓ Onayla"
+  mod:
+    ban:
+      picker:
+        text: "🍌 ${name} susturulsun mu?"
+        dur_5m: "5 dk"
+        dur_30m: "30 dk"
+        dur_1h: "1 saat"
+        dur_6h: "6 saat"
+        dur_1d: "1 gün"
+        dur_7d: "7 gün"
+        dur_forever: "⛔ Kalıcı"
+        dur_forever_human: "kalıcı olarak"
+        cancel: "✕ İptal"
+        invalid: "Buton anlaşılmadı"
+        failed: "🚫 Ban başarısız"
+    del:
+      undo:
+        notification: "🗑 Silindi. <i>Fikrin değişti mi? 30 sn içinde geri al.</i>"
+        restored_by: "<i>admin ${admin} tarafından geri yüklendi</i>"
+        btn:
+          restore: "↩️ Geri yükle"
+          cant_restore: "🚫 Geri yüklenemez"
+        toast:
+          restored: "↩️ Geri yüklendi"
+          expired: "⏱ Geç kaldın — tampon boşaldı"
+          cant_restore: "🚫 Bu mesaj tipi desteklenmiyor"
+          failed: "🚫 Geri yükleme başarısız"
+    rights:
+      card:
+        title_banan: "🔒 ${name} susturulamaz"
+        title_kick: "🔒 ${name} atılamaz"
+        title_del: "🔒 Mesaj silinemez"
+        title_generic: "🔒 İşlem yapılamaz"
+        missing_header: "<b>Eksik admin yetkileri:</b>"
+        bullet: "• ${perm}"
+      perms:
+        restrict: "Kullanıcıları banlamak"
+        delete: "Mesajları silmek"
+      steps:
+        header: "<b>📖 Yetki nasıl verilir:</b>"
+        step_1: "1. Sohbet ayarlarını aç (başlığa dokun)"
+        step_2: "2. «Yöneticiler» bölümüne gir"
+        step_3: "3. Beni bul ve yetkilerimi aç"
+        step_4: "4. «Mesajları silmek» ve «Kullanıcıları banlamak» yetkilerini ver"
+      btn:
+        how: "📖 Nasıl verilir"
+        ack: "✓ Anladım"
+        dismiss: "✕ Kapat"
 
 bot_commands:
   start: "Botu kullanmaya başla"

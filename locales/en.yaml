@@ -317,6 +317,9 @@ mod_event:
     global_ban: "🌍 ${name} — global ban"
     voting: "⚖️ ${name} — under vote"
     override: "↩️ Reverted by admin ${admin}"
+    manual_ban: "🍌 ${name} gets a banana"
+    manual_mute: "🔇 ${name} — muted"
+    manual_kick: "👢 ${name} — kicked"
   expanded:
     confidence_line: "📊 ${confidence}% · 🤖 ${reason}"
     preview_line: "📝 «${preview}»"
@@ -332,6 +335,7 @@ mod_event:
     give_rights: "📖 Grant admin"
     trust_anyway: "↩️ Trust anyway"
     cant_undo: "🚫 Can't unblock"
+    undo_short: "↩️ Undo"
   toast:
     hidden: "✓"
     undone: "↩️ Unblocked"
@@ -678,6 +682,60 @@ menu:
     trusted:
       title: "👤 <b>No trusted users yet</b>"
       hint: "<i>Add a trusted user to skip anti-spam checks for them.</i>"
+  common:
+    back: "← Back"
+    close: "✕ Close"
+    cancel: "✕ Cancel"
+    dismiss: "✓ Got it"
+    confirm: "✓ Confirm"
+  mod:
+    ban:
+      picker:
+        text: "🍌 Mute ${name}?"
+        dur_5m: "5 min"
+        dur_30m: "30 min"
+        dur_1h: "1 hour"
+        dur_6h: "6 hours"
+        dur_1d: "1 day"
+        dur_7d: "7 days"
+        dur_forever: "⛔ Forever"
+        dur_forever_human: "permanent"
+        cancel: "✕ Cancel"
+        invalid: "Unknown button"
+        failed: "🚫 Ban failed"
+    del:
+      undo:
+        notification: "🗑 Deleted. <i>Changed your mind? Restore within 30 s.</i>"
+        restored_by: "<i>restored by admin ${admin}</i>"
+        btn:
+          restore: "↩️ Restore"
+          cant_restore: "🚫 Can't restore"
+        toast:
+          restored: "↩️ Restored"
+          expired: "⏱ Too late — buffer expired"
+          cant_restore: "🚫 Message type not supported"
+          failed: "🚫 Restore failed"
+    rights:
+      card:
+        title_banan: "🔒 Can't mute ${name}"
+        title_kick: "🔒 Can't kick ${name}"
+        title_del: "🔒 Can't delete the message"
+        title_generic: "🔒 Action unavailable"
+        missing_header: "<b>Missing admin rights:</b>"
+        bullet: "• ${perm}"
+      perms:
+        restrict: "Ban users"
+        delete: "Delete messages"
+      steps:
+        header: "<b>📖 How to grant rights:</b>"
+        step_1: "1. Open chat settings (tap the title)"
+        step_2: "2. Go to «Administrators»"
+        step_3: "3. Find me and open my rights"
+        step_4: "4. Enable «Delete messages» and «Ban users»"
+      btn:
+        how: "📖 How to grant"
+        ack: "✓ Got it"
+        dismiss: "✕ Close"
 
 bot_commands:
   start: "Start using the bot"

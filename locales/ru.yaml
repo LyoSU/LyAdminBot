@@ -294,6 +294,9 @@ mod_event:
     global_ban: "🌍 ${name} — глобальный бан"
     voting: "⚖️ ${name} — на голосовании"
     override: "↩️ Отменено админом ${admin}"
+    manual_ban: "🍌 ${name} получает банан"
+    manual_mute: "🔇 ${name} — мут"
+    manual_kick: "👢 ${name} — кик"
   expanded:
     confidence_line: "📊 ${confidence}% · 🤖 ${reason}"
     preview_line: "📝 «${preview}»"
@@ -309,6 +312,7 @@ mod_event:
     give_rights: "📖 Дай права"
     trust_anyway: "↩️ Всё равно доверить"
     cant_undo: "🚫 Не могу разблокировать"
+    undo_short: "↩️ Отменить"
   toast:
     hidden: "✓"
     undone: "↩️ Разблокирован"
@@ -613,6 +617,60 @@ menu:
     trusted:
       title: "👤 <b>Доверенных пока нет</b>"
       hint: "<i>Добавь доверенного, чтобы антиспам не проверял его сообщения.</i>"
+  common:
+    back: "← Назад"
+    close: "✕ Закрыть"
+    cancel: "✕ Отменить"
+    dismiss: "✓ Понятно"
+    confirm: "✓ Подтвердить"
+  mod:
+    ban:
+      picker:
+        text: "🍌 Замьютить ${name}?"
+        dur_5m: "5 мин"
+        dur_30m: "30 мин"
+        dur_1h: "1 час"
+        dur_6h: "6 ч"
+        dur_1d: "1 день"
+        dur_7d: "7 дней"
+        dur_forever: "⛔ Навсегда"
+        dur_forever_human: "навсегда"
+        cancel: "✕ Отменить"
+        invalid: "Не понял кнопку"
+        failed: "🚫 Не вышло забанить"
+    del:
+      undo:
+        notification: "🗑 Удалено. <i>Передумал? Восстанови за 30 с.</i>"
+        restored_by: "<i>восстановлено админом ${admin}</i>"
+        btn:
+          restore: "↩️ Восстановить"
+          cant_restore: "🚫 Не могу восстановить"
+        toast:
+          restored: "↩️ Восстановлено"
+          expired: "⏱ Поздно — буфер очистился"
+          cant_restore: "🚫 Тип сообщения не поддерживается"
+          failed: "🚫 Не вышло восстановить"
+    rights:
+      card:
+        title_banan: "🔒 Не могу замьютить ${name}"
+        title_kick: "🔒 Не могу кикнуть ${name}"
+        title_del: "🔒 Не могу удалить сообщение"
+        title_generic: "🔒 Не могу выполнить действие"
+        missing_header: "<b>Не хватает прав админа:</b>"
+        bullet: "• ${perm}"
+      perms:
+        restrict: "Банить пользователей"
+        delete: "Удалять сообщения"
+      steps:
+        header: "<b>📖 Как дать права:</b>"
+        step_1: "1. Открой настройки чата (тап по названию)"
+        step_2: "2. Перейди в «Администраторы»"
+        step_3: "3. Найди меня и открой права"
+        step_4: "4. Включи «Удалять сообщения» и «Банить пользователей»"
+      btn:
+        how: "📖 Как дать права"
+        ack: "✓ Понятно"
+        dismiss: "✕ Закрыть"
 
 bot_commands:
   start: "Начать работу с ботом"

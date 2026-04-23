@@ -210,6 +210,9 @@ mod_event:
     global_ban: "🌍 ${name} — глабальны бан"
     voting: "⚖️ ${name} — на галасаванні"
     override: "↩️ Скасавана адмінам ${admin}"
+    manual_ban: "🍌 ${name} атрымлівае банан"
+    manual_mute: "🔇 ${name} — мут"
+    manual_kick: "👢 ${name} — кік"
   expanded:
     confidence_line: "📊 ${confidence}% · 🤖 ${reason}"
     preview_line: "📝 «${preview}»"
@@ -225,6 +228,7 @@ mod_event:
     give_rights: "📖 Дай правы"
     trust_anyway: "↩️ Усё адно давяраць"
     cant_undo: "🚫 Не атрымалася разблакіраваць"
+    undo_short: "↩️ Скасаваць"
   toast:
     hidden: "✓"
     undone: "↩️ Разблакіравана"
@@ -495,6 +499,60 @@ menu:
     trusted:
       title: "👤 <b>Давераных пакуль няма</b>"
       hint: "<i>Дадайце давераных, каб антыспам не правяраў іх паведамленні.</i>"
+  common:
+    back: "← Назад"
+    close: "✕ Закрыць"
+    cancel: "✕ Скасаваць"
+    dismiss: "✓ Зразумела"
+    confirm: "✓ Пацвердзіць"
+  mod:
+    ban:
+      picker:
+        text: "🍌 Замʼюціць ${name}?"
+        dur_5m: "5 хв"
+        dur_30m: "30 хв"
+        dur_1h: "1 гадз"
+        dur_6h: "6 гадз"
+        dur_1d: "1 дзень"
+        dur_7d: "7 дзён"
+        dur_forever: "⛔ Назаўсёды"
+        dur_forever_human: "назаўсёды"
+        cancel: "✕ Скасаваць"
+        invalid: "Не зразумеў кнопку"
+        failed: "🚫 Не атрымалася забаніць"
+    del:
+      undo:
+        notification: "🗑 Выдалена. <i>Перадумаў? Адновіш за 30 с.</i>"
+        restored_by: "<i>адноўлена адмінам ${admin}</i>"
+        btn:
+          restore: "↩️ Аднавіць"
+          cant_restore: "🚫 Не магу аднавіць"
+        toast:
+          restored: "↩️ Адноўлена"
+          expired: "⏱ Позна — буфер ачысціўся"
+          cant_restore: "🚫 Тып паведамлення не падтрымліваецца"
+          failed: "🚫 Не атрымалася аднавіць"
+    rights:
+      card:
+        title_banan: "🔒 Не магу замʼюціць ${name}"
+        title_kick: "🔒 Не магу выкінуць ${name}"
+        title_del: "🔒 Не магу выдаліць паведамленне"
+        title_generic: "🔒 Не магу выканаць дзеянне"
+        missing_header: "<b>Не хапае правоў адміна:</b>"
+        bullet: "• ${perm}"
+      perms:
+        restrict: "Баніць карыстальнікаў"
+        delete: "Выдаляць паведамленні"
+      steps:
+        header: "<b>📖 Як даць правы:</b>"
+        step_1: "1. Адкрый налады чата (тап на назву)"
+        step_2: "2. Перайдзі ў «Адміністратары»"
+        step_3: "3. Знайдзі мяне і адкрый правы"
+        step_4: "4. Уключы «Выдаляць паведамленні» і «Баніць карыстальнікаў»"
+      btn:
+        how: "📖 Як даць правы"
+        ack: "✓ Зразумела"
+        dismiss: "✕ Закрыць"
 
 bot_commands:
   start: "Пачаць працу з ботам"

@@ -301,6 +301,9 @@ mod_event:
     global_ban: "🌍 ${name} — глобальний бан"
     voting: "⚖️ ${name} — на голосуванні"
     override: "↩️ Скасовано адміном ${admin}"
+    manual_ban: "🍌 ${name} отримує банан"
+    manual_mute: "🔇 ${name} — мут"
+    manual_kick: "👢 ${name} — кік"
   expanded:
     confidence_line: "📊 ${confidence}% · 🤖 ${reason}"
     preview_line: "📝 «${preview}»"
@@ -316,6 +319,7 @@ mod_event:
     give_rights: "📖 Дай права"
     trust_anyway: "↩️ Все одно довірити"
     cant_undo: "🚫 Не можу розблокувати"
+    undo_short: "↩️ Скасувати"
   toast:
     hidden: "✓"
     undone: "↩️ Розблоковано"
@@ -670,6 +674,60 @@ menu:
     trusted:
       title: "👤 <b>Довірених поки немає</b>"
       hint: "<i>Додай довіреного, щоб антиспам не перевіряв його повідомлення.</i>"
+  common:
+    back: "← Назад"
+    close: "✕ Закрити"
+    cancel: "✕ Скасувати"
+    dismiss: "✓ Зрозумів"
+    confirm: "✓ Підтвердити"
+  mod:
+    ban:
+      picker:
+        text: "🍌 Замʼютити ${name}?"
+        dur_5m: "5 хв"
+        dur_30m: "30 хв"
+        dur_1h: "1 год"
+        dur_6h: "6 год"
+        dur_1d: "1 день"
+        dur_7d: "7 днів"
+        dur_forever: "⛔ Назавжди"
+        dur_forever_human: "назавжди"
+        cancel: "✕ Скасувати"
+        invalid: "Не зрозумів кнопку"
+        failed: "🚫 Не вдалось забанити"
+    del:
+      undo:
+        notification: "🗑 Видалено. <i>Передумав? Відновити протягом 30 с.</i>"
+        restored_by: "<i>відновлено адміном ${admin}</i>"
+        btn:
+          restore: "↩️ Відновити"
+          cant_restore: "🚫 Не можу відновити"
+        toast:
+          restored: "↩️ Відновлено"
+          expired: "⏱ Пізно — буфер очистився"
+          cant_restore: "🚫 Тип повідомлення не підтримується"
+          failed: "🚫 Не вдалось відновити"
+    rights:
+      card:
+        title_banan: "🔒 Не можу замʼютити ${name}"
+        title_kick: "🔒 Не можу кікнути ${name}"
+        title_del: "🔒 Не можу видалити повідомлення"
+        title_generic: "🔒 Не можу виконати дію"
+        missing_header: "<b>Бракує прав адміна:</b>"
+        bullet: "• ${perm}"
+      perms:
+        restrict: "Банити користувачів"
+        delete: "Видаляти повідомлення"
+      steps:
+        header: "<b>📖 Як дати права:</b>"
+        step_1: "1. Відкрий налаштування чату (тап на назву)"
+        step_2: "2. Перейди в «Адміністратори»"
+        step_3: "3. Знайди мене і відкрий права"
+        step_4: "4. Увімкни «Видаляти повідомлення» і «Банити користувачів»"
+      btn:
+        how: "📖 Як дати права"
+        ack: "✓ Зрозумів"
+        dismiss: "✕ Закрити"
 
 bot_commands:
   start: "Почати роботу з ботом"
