@@ -400,3 +400,116 @@ menu:
   saved: "✓ Saved"
   cancelled: "↩️ Cancelled"
   session_expired: "⏱ Session expired"
+  start:
+    private: |
+      ${e.shield} Hey, <b>${name}</b>! ${e.wave}
+
+      <b>LyAdminBot</b> — anti-spam for groups.
+      Catching spam · banning scammers · cleaning ads.
+
+      <b>Quick start:</b>
+      1. Add me to a group
+      2. Make me admin
+      3. Done — I'll handle it.
+    group: |
+      ${e.shield} Anti-spam active. <code>/help</code> — what I can do.
+    placeholder: "This feature will be available soon. Try <code>/settings</code> in a minute."
+    btn:
+      add: "➕ Add to group"
+      help: "📖 Help"
+      lang: "🌐 Language"
+  help:
+    title: "${e.shield} <b>LyAdminBot · Help</b>"
+    only_initiator: "🔒 Tap /help yourself to open the menu"
+    tab_label:
+      start: "🛡 Start"
+      mod: "⚔️ Moderation"
+      stats: "📊 Stats"
+      admin: "🔧 Admin"
+      about: "💬 About"
+    body:
+      start: |
+        I catch spam in groups automatically — just add me and make me admin.
+
+        <b>Quick start:</b>
+        1. Add to group
+        2. Give admin rights (delete messages + ban users)
+        3. Type <code>/ping</code> in the group to verify
+
+        Core commands:
+        • <code>/help</code> — this menu
+        • <code>/lang</code> — change language
+        • <code>/ping</code> — is the bot alive
+      mod: |
+        For admins, reply (${e.reply}) to a message:
+        • <code>/banan</code> — mute. Again — unmute
+        • <code>/banan 5m</code> — timed mute (m/h/d)
+        • <code>/kick</code> — kick from the group
+        • <code>/del</code> — delete the message
+        • <code>/report</code> — report spam (anyone can)
+
+        <i>${e.reply} — reply to a message</i>
+      stats: |
+        Your activity in the chat:
+        • <code>/mystats</code> — bananas, messages, activity (via DM)
+        • <code>/top</code> — most active members
+        • <code>/top_banan</code> — top banana collectors
+
+        <i>Group chats only.</i>
+      admin: |
+        For admins:
+        • <code>/settings</code> — chat settings panel
+        • <code>!spam</code> — anti-spam (alias, being migrated)
+        • <code>!welcome</code>, <code>!gif</code>, <code>!text</code> — welcome messages
+        • <code>!extra name</code> — save a quick command
+
+        <b>How to give me admin rights:</b>
+        Open chat settings → Administrators → Add admin → LyAdminBot, enable "Delete messages" and "Ban users".
+      about: |
+        <b>LyAdminBot</b> — anti-spam bot for Telegram groups.
+
+        What I do:
+        ${e.shield} catch spam (rules, signatures, AI, voting)
+        ${e.banana} moderation: ban, kick, delete
+        ${e.wave} welcome new members
+        ${e.chart} activity stats
+        ${e.notes} extra commands (<code>#rules</code>, <code>#faq</code>)
+
+        Languages: українська, english, русский, türkçe, беларуская.
+        <i>No flags — language, not politics.</i>
+  onboarding:
+    card: |
+      ${e.shield} Hey! I'm here, anti-spam is on.
+
+      <b>Quick setup (60 seconds):</b>
+
+      🌐 Language: <b>${language}</b> (auto)
+      🎚 Sensitivity: <b>${threshold}%</b> (${sensitivityLabel})
+      👋 Welcome: <b>${welcomeState}</b>
+    ack: "👌 Got it — on guard"
+    config_soon: "Settings will be ready shortly, try /settings in a minute"
+    sensitivity:
+      low: "loose"
+      mid: "medium"
+      high: "strict"
+    welcome:
+      on: "enabled"
+      off: "disabled"
+    btn:
+      ack: "✓ Works for me"
+      config: "🔧 Configure"
+
+bot_commands:
+  start: "Start using the bot"
+  help: "Help and commands"
+  ping: "Check bot status"
+  lang: "Choose interface language"
+  banan: "Mute user via reply (/banan 5m)"
+  kick: "Kick user via reply"
+  del: "Delete message via reply"
+  report: "Report spam via reply"
+  mystats: "My chat stats"
+  top: "Top active members"
+  top_banan: "Top bananas (moderation)"
+  extras: "Saved quick commands"
+  settings: "Chat settings (admins)"

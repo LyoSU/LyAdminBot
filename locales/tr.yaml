@@ -160,3 +160,116 @@ menu:
   saved: "✓ Kaydedildi"
   cancelled: "↩️ İptal edildi"
   session_expired: "⏱ Oturum süresi doldu"
+  start:
+    private: |
+      ${e.shield} Selam, <b>${name}</b>! ${e.wave}
+
+      <b>LyAdminBot</b> — gruplar için anti-spam.
+      Spam yakalarım · dolandırıcıları banlarım · reklamları temizlerim.
+
+      <b>Hızlı başlangıç:</b>
+      1. Gruba ekle
+      2. Admin yap
+      3. Tamam — gerisini hallederim.
+    group: |
+      ${e.shield} Anti-spam aktif. <code>/help</code> — neler yapabilirim.
+    placeholder: "Bu özellik yakında açılacak. Bir dakika sonra <code>/settings</code> dene."
+    btn:
+      add: "➕ Gruba ekle"
+      help: "📖 Yardım"
+      lang: "🌐 Dil"
+  help:
+    title: "${e.shield} <b>LyAdminBot · Yardım</b>"
+    only_initiator: "🔒 Menüyü açmak için /help komutuna kendin bas"
+    tab_label:
+      start: "🛡 Başlangıç"
+      mod: "⚔️ Moderasyon"
+      stats: "📊 İstatistik"
+      admin: "🔧 Admin"
+      about: "💬 Hakkında"
+    body:
+      start: |
+        Gruplarda spamı otomatik yakalarım — beni ekle ve admin yap.
+
+        <b>Hızlı başlangıç:</b>
+        1. Gruba ekle
+        2. Admin yetkilerini ver (mesaj silme + banlama)
+        3. Grupta <code>/ping</code> yazarak kontrol et
+
+        Temel komutlar:
+        • <code>/help</code> — bu menü
+        • <code>/lang</code> — dil seç
+        • <code>/ping</code> — bot çalışıyor mu
+      mod: |
+        Adminler için, bir mesaja yanıt olarak (${e.reply}):
+        • <code>/banan</code> — sustur. Tekrar — susturmayı kaldır
+        • <code>/banan 5m</code> — süreli mut (m/h/d)
+        • <code>/kick</code> — gruptan at
+        • <code>/del</code> — mesajı sil
+        • <code>/report</code> — spam şikayeti (herkes yapabilir)
+
+        <i>${e.reply} — bir mesaja yanıt vermelisin</i>
+      stats: |
+        Sohbetteki aktivite istatistiğin:
+        • <code>/mystats</code> — muzlar, mesajlar, aktivite (özelden)
+        • <code>/top</code> — en aktif üyeler
+        • <code>/top_banan</code> — muz koleksiyoncuları
+
+        <i>Sadece gruplar için.</i>
+      admin: |
+        Adminler için:
+        • <code>/settings</code> — grup ayar paneli
+        • <code>!spam</code> — anti-spam (alias, taşınıyor)
+        • <code>!welcome</code>, <code>!gif</code>, <code>!text</code> — karşılama
+        • <code>!extra isim</code> — hızlı komut kaydet
+
+        <b>Nasıl admin yetkisi verilir:</b>
+        Grup ayarları → Yöneticiler → Ekle → LyAdminBot, «Mesaj silme» ve «Kullanıcı banlama» yetkilerini aç.
+      about: |
+        <b>LyAdminBot</b> — Telegram grupları için anti-spam botu.
+
+        Neler yapıyorum:
+        ${e.shield} spam yakalıyorum (kurallar, imza, AI, oylama)
+        ${e.banana} moderasyon: ban, at, sil
+        ${e.wave} yeni üyeleri karşılıyorum
+        ${e.chart} aktivite istatistikleri
+        ${e.notes} extra komutlar (<code>#rules</code>, <code>#faq</code>)
+
+        Diller: українська, english, русский, türkçe, беларуская.
+        <i>Bayrak yok — dil, siyaset değil.</i>
+  onboarding:
+    card: |
+      ${e.shield} Selam! Buradayım, anti-spam aktif.
+
+      <b>Hızlı ayar (60 saniye):</b>
+
+      🌐 Dil: <b>${language}</b> (auto)
+      🎚 Hassasiyet: <b>${threshold}%</b> (${sensitivityLabel})
+      👋 Karşılama: <b>${welcomeState}</b>
+    ack: "👌 Tamam — nöbetteyim"
+    config_soon: "Ayarlar yakında hazır, bir dakika sonra /settings dene"
+    sensitivity:
+      low: "yumuşak"
+      mid: "orta"
+      high: "sıkı"
+    welcome:
+      on: "açık"
+      off: "kapalı"
+    btn:
+      ack: "✓ Böyle iyi"
+      config: "🔧 Ayarla"
+
+bot_commands:
+  start: "Botu kullanmaya başla"
+  help: "Yardım ve komutlar"
+  ping: "Bot durumunu kontrol et"
+  lang: "Arayüz dilini seç"
+  banan: "Yanıtla mute (/banan 5m)"
+  kick: "Yanıtla gruptan at"
+  del: "Yanıtla mesajı sil"
+  report: "Yanıtla spam ihbarı"
+  mystats: "Sohbetteki istatistiğim"
+  top: "En aktif üyeler"
+  top_banan: "Muz sıralaması (moderasyon)"
+  extras: "Kaydedilmiş hızlı komutlar"
+  settings: "Grup ayarları (adminler)"

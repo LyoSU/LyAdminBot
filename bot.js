@@ -9,6 +9,7 @@ const { db } = require('./database')
 const { processExpiredVotes } = require('./handlers')
 const { processStartupCleanup, startCleanupInterval } = require('./helpers/message-cleanup')
 const { startPeriodicSync: startBanDatabaseSync } = require('./helpers/ban-database-sync')
+const { setupCommands } = require('./bot/setup-commands')
 const {
   stats,
   errorHandler,
@@ -273,6 +274,10 @@ const init = () => {
   const bot = createBot()
   const i18n = createI18n()
 
+  // Expose i18n to modules that need the raw repository (e.g. setup-commands
+  // reads localized descriptions without a per-request ctx).
+  bot.context.i18n = i18n
+
   registerMiddlewares(bot, i18n)
   registerAllRoutes(bot)
 
@@ -280,6 +285,16 @@ const init = () => {
   db.connection.once('open', async () => {
     dbLog.info('Connected to MongoDB')
     await launchBot(bot)
+
+    // Register bot commands with Telegram (scoped per-locale) + menu button.
+    // Failures are logged inside setupCommands and never throw — this call
+    // is purely cosmetic Telegram metadata and must not block boot.
+    try {
+      await setupCommands(bot)
+      botLog.debug('Bot commands registered')
+    } catch (err) {
+      botLog.warn({ err: err && err.message }, 'setupCommands outer failure')
+    }
 
     // Process any pending message deletions from before restart
     await processStartupCleanup(db, bot.telegram)
