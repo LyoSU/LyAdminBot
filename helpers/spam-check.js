@@ -311,26 +311,20 @@ const quickRiskAssessment = (ctx) => {
 
   // ===== HIGH RISK SIGNALS =====
 
-  // 1. Forward from hidden user (common spam pattern)
-  if (message.forward_origin) {
-    if (message.forward_origin.type === 'hidden_user') {
-      signals.push('forward_hidden_user')
-    } else if (message.forward_origin.type === 'channel') {
-      // Forward from channel - moderate risk
-      signals.push('forward_channel')
-    }
+  // 1. Forward from hidden user (common spam pattern). Channel forwards
+  // removed — news forwarding is routine and was the loudest FP source.
+  if (message.forward_origin && message.forward_origin.type === 'hidden_user') {
+    signals.push('forward_hidden_user')
   }
 
-  // 2. Inline keyboard with URLs (promo buttons)
+  // 2. Inline keyboard with URLs (promo buttons).
+  // 3+ URL buttons is the strong signal; a single URL button fires on
+  // legitimate bot-posted memes/widgets and is too noisy to emit on its own.
   if (message.reply_markup && message.reply_markup.inline_keyboard) {
     const buttons = message.reply_markup.inline_keyboard.flat()
     const urlButtons = buttons.filter(btn => btn.url)
-    if (urlButtons.length > 0) {
-      signals.push('inline_url_buttons')
-      // Multiple URL buttons = higher risk
-      if (urlButtons.length >= 3) {
-        signals.push('many_url_buttons')
-      }
+    if (urlButtons.length >= 3) {
+      signals.push('many_url_buttons')
     }
   }
 
@@ -369,10 +363,8 @@ const quickRiskAssessment = (ctx) => {
     signals.push('long_text')
   }
 
-  // 4. Via bot (might be automated)
-  if (message.via_bot) {
-    signals.push('via_bot')
-  }
+  // `via_bot` removed — inline-bot posts are overwhelmingly legit
+  // (memes, translations). No signal here.
 
   // 5. Web preview without link in text (bot-added preview)
   // Bots can add link_preview_options with URL not present in message text
@@ -385,81 +377,27 @@ const quickRiskAssessment = (ctx) => {
     }
   }
 
-  // 6. Contact sharing (phone number as contact, not text)
-  if (message.contact) {
-    signals.push('shared_contact')
-    // Contact with different user_id than sender = suspicious
-    if (message.contact.user_id && ctx.from && message.contact.user_id !== ctx.from.id) {
-      signals.push('foreign_contact')
-    }
+  // 6. Contact sharing. "foreign_contact" (sharing someone ELSE's contact)
+  // is the real signal — a bot forwarding a victim's card. A user sharing
+  // their own vCard is normal. We keep only the foreign case.
+  if (message.contact && ctx.from &&
+      message.contact.user_id && message.contact.user_id !== ctx.from.id) {
+    signals.push('foreign_contact')
   }
 
-  // 7. Location sharing (often used in scams)
-  if (message.location && !message.venue) {
-    // Raw location without venue context
-    signals.push('raw_location')
-  }
-
-  // 8. Dice/Game messages - suspicious only if NOT a reply
-  // Dice as reply to conversation = having fun, not spam
-  if ((message.dice || message.game) && !message.reply_to_message) {
-    signals.push('game_message')
-  }
-
-  // 9. Voice/Video message - suspicious only if NOT a reply
-  // Voice reply = real conversation
-  if ((message.voice || message.video_note) && !message.reply_to_message) {
-    signals.push('voice_video_note')
-  }
-
-  // 10. Poll/Quiz (can be used for engagement farming)
-  if (message.poll) {
-    signals.push('poll_message')
-  }
-
-  // 11. Premium emoji in name (common spam pattern)
-  const user = ctx.from
-  if (user) {
-    const name = `${user.first_name || ''} ${user.last_name || ''}`
-    // Check for excessive emojis in name (more than 2)
-    // Extended emoji ranges
-    const emojiRegex = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}]/gu
-    const emojiCount = (name.match(emojiRegex) || []).length
-    if (emojiCount > 2) {
-      signals.push('emoji_name')
-    }
-  }
-
-  // 12. Story mention/forward (new TG feature, can be abused)
-  if (message.story) {
-    signals.push('story_forward')
-  }
-
-  // 13. Paid media (premium content promotion)
-  if (message.paid_media) {
-    signals.push('paid_media')
-  }
-
-  // 14. Effect ID (message effects - sometimes used to grab attention)
-  if (message.effect_id) {
-    signals.push('message_effect')
-  }
-
-  // 15. Business connection (business account messages)
-  if (message.business_connection_id) {
-    signals.push('business_message')
-  }
-
-  // 16. Giveaway messages (can be fake/scam giveaways in groups/channels)
-  if (message.giveaway || message.giveaway_winners || message.giveaway_created || message.giveaway_completed) {
-    signals.push('giveaway_message')
-  }
-
-  // 17. Edited message — spammers send clean text then edit to spam
-  // Prevents edited messages from hitting skip/low early exits
+  // 7. Edited message — spammers send clean text then edit to spam.
+  // Kept because the edit-injection detector (below) also watches this
+  // but a bare "edited" flag alone helps LLM weighting.
   if (ctx.editedMessage) {
     signals.push('edited_message')
   }
+
+  // Removed as low-precision noise (individually FP-prone; real attacks
+  // already tripped by structural signals or LLM content interpretation):
+  //   shared_contact, raw_location, game_message, voice_video_note,
+  //   poll_message, emoji_name, story_forward, paid_media, message_effect,
+  //   business_message, giveaway_message, inline_url_buttons (1 button),
+  //   forward_channel (most forwards are benign news), via_bot.
 
   // Note: invoice, web_app_data, users_shared, chat_shared are NOT relevant
   // for supergroups - they only occur in private chats with bots
@@ -517,7 +455,8 @@ const quickRiskAssessment = (ctx) => {
 
   // ===== RISK CALCULATION =====
 
-  // Critical signals = instant high risk
+  // Critical signals = instant high risk. Each of these has high precision
+  // on its own in prod data; no accumulation needed.
   const criticalSignals = [
     'forward_hidden_user', // Hidden forward source
     'hidden_url', // Deceptive text links
@@ -527,18 +466,19 @@ const quickRiskAssessment = (ctx) => {
   ]
   const hasCritical = signals.some(s => criticalSignals.includes(s))
 
-  // Medium-weight signals (suspicious but not critical alone)
+  // Medium-weight signals. Two of these together → high. Alone → medium,
+  // which routes to LLM for content interpretation.
   const mediumSignals = [
-    'cashtag', // Crypto mentions
-    'inline_url_buttons', // Any URL buttons
+    'cashtag',      // Crypto mentions
     'phone_number', // Phone in text
-    'shared_contact', // Contact card
-    'paid_media', // Premium content promo
-    'giveaway_message' // Fake/scam giveaways
+    'text_url'      // Plain URL in text
   ]
   const mediumCount = signals.filter(s => mediumSignals.includes(s)).length
 
-  if (hasCritical || signals.length >= 3 || mediumCount >= 2) {
+  // Note the absence of `signals.length >= 3` — accumulating weak signals
+  // into a high verdict was the main source of false elevations. The
+  // surviving weak signals contribute to LLM context only.
+  if (hasCritical || mediumCount >= 2) {
     return { risk: 'high', signals, trustSignals }
   }
 
@@ -1628,6 +1568,65 @@ SECURITY CANARY
     username: senderChat?.username || userContext.channelUsername || null
   } : null
 
+  // Structural message attachments — LLM often needs to see inline URL
+  // buttons, forward origin, link previews to understand whether a short
+  // text is actually a promo wrapper. Surface them as compact objects
+  // rather than hoping the LLM infers them from message_text alone.
+  const inlineButtons = []
+  if (message.reply_markup && Array.isArray(message.reply_markup.inline_keyboard)) {
+    for (const row of message.reply_markup.inline_keyboard) {
+      for (const b of row) {
+        if (!b) continue
+        const label = (b.text || '').slice(0, 80)
+        if (b.url) inlineButtons.push({ text: label, url: b.url })
+        else if (b.web_app && b.web_app.url) inlineButtons.push({ text: label, url: b.web_app.url, kind: 'web_app' })
+      }
+    }
+  }
+
+  const forwardInfo = message.forward_origin ? {
+    type: message.forward_origin.type || null,
+    chat_title: message.forward_origin.chat?.title || null,
+    chat_username: message.forward_origin.chat?.username || null,
+    sender_name: message.forward_origin.sender_user_name || message.forward_origin.sender_user?.first_name || null
+  } : null
+
+  // link_preview_options.url is bot-added when the URL isn't in the
+  // visible message text. Worth seeing both the URL and whether its host
+  // appears in the text — classic hidden-preview promo.
+  const preview = message.link_preview_options && message.link_preview_options.url
+    ? { url: message.link_preview_options.url }
+    : null
+
+  // Entity summary — which Telegram-recognized tokens are present.
+  // Lets the LLM weight "mentions-only reply" vs "mention + text_link" etc.
+  const entities = message.entities || message.caption_entities || []
+  const entityTypes = entities.length > 0
+    ? Object.fromEntries(
+        Object.entries(
+          entities.reduce((acc, e) => { acc[e.type] = (acc[e.type] || 0) + 1; return acc }, {})
+        )
+      )
+    : null
+
+  // Caller-useful attachment hints (the text slice is in message_text, but
+  // the LLM benefits from knowing that the message also carries a photo /
+  // document / sticker — those change the spam prior).
+  const attachments = []
+  if (message.photo) attachments.push('photo')
+  if (message.animation) attachments.push('animation')
+  if (message.video) attachments.push('video')
+  if (message.video_note) attachments.push('video_note')
+  if (message.voice) attachments.push('voice')
+  if (message.document) attachments.push('document')
+  if (message.sticker) attachments.push('sticker')
+  if (message.audio) attachments.push('audio')
+  if (message.story) attachments.push('story')
+  if (message.poll) attachments.push('poll')
+  if (message.contact) attachments.push('contact')
+  if (message.location) attachments.push('location')
+  if (message.venue) attachments.push('venue')
+
   const llmContextObj = {
     group: {
       title: ctx.chat?.title || null,
@@ -1658,7 +1657,13 @@ SECURITY CANARY
     reply: replyContext,
     external_reply: externalReplyContext,
     quote: message.quote?.text ? message.quote.text.substring(0, 300) : null,
-    is_edited: Boolean(userContext.isEditedMessage)
+    is_edited: Boolean(userContext.isEditedMessage),
+    inline_buttons: inlineButtons.length > 0 ? inlineButtons : null,
+    forward: forwardInfo,
+    link_preview: preview,
+    entity_types: entityTypes,
+    attachments: attachments.length > 0 ? attachments : null,
+    via_bot: message.via_bot?.username ? `@${message.via_bot.username}` : null
   }
 
   const userPayload = {

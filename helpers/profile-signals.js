@@ -59,6 +59,36 @@ const SHORTENERS = new Set([
 const PRIVATE_INVITE = /(?:t|telegram)\.me\/(?:\+[\w-]+|joinchat\/[\w-]+)/i
 const BOT_DEEPLINK = /t\.me\/[\w_]+bot\?start=/i
 
+// Well-known utility bots that newcomers legitimately reference. Keep tight:
+// any bot OUTSIDE this set becomes suspect when a first-message user name-drops
+// it. Extend carefully — each addition loosens the detector.
+const UTILITY_BOTS = new Set([
+  'gif', 'vid', 'pic', 'sticker', 'stickersbot',
+  'youtube', 'spotify', 'wikibot', 'translator', 'translate',
+  'pollbot', 'quizbot', 'gamee', 'combot', 'grouphelpbot'
+])
+
+// Match a plausible bot @handle (3+ alnum chars ending in "bot", case-insens).
+// Excludes: current bot username (passed in), utility bots above, and anchor
+// patterns like "@cmd" where there's no "bot" suffix.
+const EXTERNAL_BOT_MENTION = /@([a-z][\w]{2,31}bot)\b/gi
+
+const findExternalBotMentions = (text, selfUsername) => {
+  if (!text) return []
+  const self = (selfUsername || '').toLowerCase()
+  const matches = []
+  const seen = new Set()
+  for (const m of text.matchAll(EXTERNAL_BOT_MENTION)) {
+    const handle = m[1].toLowerCase()
+    if (handle === self) continue
+    if (UTILITY_BOTS.has(handle)) continue
+    if (seen.has(handle)) continue
+    seen.add(handle)
+    matches.push(handle)
+  }
+  return matches
+}
+
 const analyzeUrls = (text) => {
   const result = { total: 0, distinctHosts: 0, shorteners: 0, privateInvites: 0, botDeeplinks: 0, punycode: 0 }
   if (!text || typeof text !== 'string') return result
@@ -142,6 +172,9 @@ const analyzeMessage = (ctx, userInfo, chatInfo) => {
     if (ageMs < 24 * 60 * 60 * 1000) sleeper = true
   }
 
+  const selfUsername = ctx?.botInfo?.username
+  const externalBots = findExternalBotMentions(text, selfUsername)
+
   return {
     name: {
       homoglyph: hasHomoglyphMix(displayName),
@@ -161,10 +194,12 @@ const analyzeMessage = (ctx, userInfo, chatInfo) => {
     languageCode: from.language_code || null,
     urls: analyzeUrls(text),
     mentionCount: countMentions(text),
+    externalBotMentions: externalBots,
     hashtagCount: countHashtags(text, entities),
     messageInvisible: hasInvisibleChars(text),
     sleeper,
-    isFirstMessageEver: (userInfo?.globalStats?.totalMessages || 0) <= 1
+    isFirstMessageEver: (userInfo?.globalStats?.totalMessages || 0) <= 1,
+    totalMessages: (userInfo?.globalStats?.totalMessages || 0)
   }
 }
 
@@ -214,6 +249,19 @@ const toSignalTags = (a) => {
   if (a.hasBirthdate) trustSignals.push('declared_birthdate')
   if (a.hasPrivateForwards) trustSignals.push('private_forwards_enabled')
 
+  // Compound content+behaviour signals — only fire in combo with newness.
+  // Individually each phrase/@mention can be legit; on a first-few-message
+  // account they're the canonical shill/lure openers.
+  // Structural compound signals — gated by newness so innocent references
+  // don't fire. Each of these is meta/structure-only: no keyword or phrase
+  // lists. Content interpretation is deferred to the LLM layer — these
+  // signals only boost risk to 'high' so the LLM gets richer context and
+  // a tighter threshold, not an auto-verdict.
+  const firstFew = (a.totalMessages || 0) <= 3
+  if (firstFew && a.externalBotMentions && a.externalBotMentions.length > 0) {
+    signals.push('external_bot_mention_first_msg')
+  }
+
   return { signals, trustSignals }
 }
 
@@ -226,6 +274,7 @@ module.exports = {
   analyzeBio,
   countMentions,
   countHashtags,
+  findExternalBotMentions,
   analyzeMessage,
   toSignalTags
 }

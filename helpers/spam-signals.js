@@ -323,7 +323,12 @@ const computeDeterministicVerdict = ({ userSignals, quickAssessment, userContext
     s === 'cashtag' ||
     s === 'text_url' ||
     s === 'inline_url_buttons' ||
-    s === 'phone_number'
+    s === 'phone_number' ||
+    // Structural compound signal from profile-signals.js — newness-gated
+    // mention of an external bot. No content keyword matching; just the
+    // @xxxbot pattern from a first-few-messages account, which is
+    // canonical shill setup.
+    s === 'external_bot_mention_first_msg'
   ))
 
   // ===== SPAM rules =====
@@ -430,6 +435,7 @@ const computeDeterministicVerdict = ({ userSignals, quickAssessment, userContext
       reason: `Veteran account (~${age.predictedDays}d old) only active locally ${age.localDays}d, posting promotional content`
     }
   }
+
 
   // Chat-burst coordinated attack rule. Fires when the current user is
   // part of a cluster of 3+ new-user first-messages inside the chat with
