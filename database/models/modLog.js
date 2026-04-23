@@ -35,7 +35,12 @@ const EVENT_TYPES = [
   'trust',
   'untrust',
   // Any toggle / sensitivity / locale mutation through the /settings panel.
-  'settings_change'
+  'settings_change',
+  // Captcha outcomes (mid-confidence soft-mute + global-ban appeal).
+  'captcha_passed',
+  'captcha_failed',
+  'appeal_passed',
+  'appeal_failed'
 ]
 
 const modLogSchema = mongoose.Schema({

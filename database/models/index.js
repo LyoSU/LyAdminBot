@@ -9,6 +9,7 @@ const BanDatabaseSyncState = require('./banDatabaseSyncState')
 const MediaFingerprint = require('./mediaFingerprint')
 const ModEvent = require('./modEvent')
 const ModLog = require('./modLog')
+const Captcha = require('./captcha')
 
 module.exports = {
   User,
@@ -21,5 +22,6 @@ module.exports = {
   BanDatabaseSyncState,
   MediaFingerprint,
   ModEvent,
-  ModLog
+  ModLog,
+  Captcha
 }

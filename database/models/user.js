@@ -111,6 +111,18 @@ const userSchema = mongoose.Schema({
   globalBanReason: String,
   globalBanDate: Date,
 
+  // Captcha state.
+  //   captchaPassedAt           — last successful pass. Spam-check uses this
+  //                               as a 24h soft whitelist so we don't ask the
+  //                               same person twice in a row.
+  //   captchaAppealsUsed        — cumulative global-ban appeals (pass + fail).
+  //                               After 3 the appeal flow refuses for 30d via
+  //                               captchaAppealsLockedUntil.
+  //   captchaAppealsLockedUntil — cooldown timestamp; set on the 3rd attempt.
+  captchaPassedAt: Date,
+  captchaAppealsUsed: { type: Number, default: 0 },
+  captchaAppealsLockedUntil: Date,
+
   // History of name/username changes — strong signal for fresh-identity spam
   // Entries sorted newest-first, capped at 10 each
   nameHistory: {

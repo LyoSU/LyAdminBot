@@ -32,7 +32,13 @@ const ACTION_TYPES = [
   // mod.event screen's `undo` action.
   'manual_ban',
   'manual_mute',
-  'manual_kick'
+  'manual_kick',
+  // Captcha gate (soft-mute path). The bot delete-and-restricts a
+  // mid-confidence sender for 5 min; the user clears the gate via the
+  // emoji captcha, escalating to a normal mute on timeout/fail.
+  'pending_captcha',
+  'captcha_passed',
+  'captcha_failed'
 ]
 
 const modEventSchema = mongoose.Schema({
