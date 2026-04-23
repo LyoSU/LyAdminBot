@@ -199,7 +199,45 @@ del:
   error_old: "${e.cross} Занадта старое паведамленне"
 
 global_ban:
-  kicked: "${e.ban} ${name} выключаны — глабальны бан.\n<code>${reason}</code>"
+  # Legacy `kicked` key removed — notification via mod_event.compact.global_ban.
+
+mod_event:
+  compact:
+    banned: "⛔ ${name} — спам"
+    muted: "🔇 ${name} — падазрона · мут 24 г"
+    deleted: "🗑 ${name} — выдалена"
+    suspicious: "👀 ${name} — падазронае паведамленне"
+    global_ban: "🌍 ${name} — глабальны бан"
+    voting: "⚖️ ${name} — на галасаванні"
+    override: "↩️ Скасавана адмінам ${admin}"
+  expanded:
+    confidence_line: "📊 ${confidence}% · 🤖 ${reason}"
+    preview_line: "📝 «${preview}»"
+    warning_line: "⚠️ ${warning}"
+  btn:
+    why: "🤨 За што?"
+    why_alt: "🤨 Што здарылася?"
+    less: "🛡 Схаваць дэталі"
+    hide: "✓ Схаваць"
+    undo: "↩️ Разблакіраваць"
+    vote_spam: "🚫 ${n}"
+    vote_clean: "✅ ${n}"
+    give_rights: "📖 Дай правы"
+    trust_anyway: "↩️ Усё адно давяраць"
+    cant_undo: "🚫 Не атрымалася разблакіраваць"
+  toast:
+    hidden: "✓"
+    undone: "↩️ Разблакіравана"
+    undo_failed: "🚫 Не атрымалася разблакіраваць"
+    not_found: "Падзея не знойдзена"
+  reason:
+    default: "падазроная актыўнасць"
+    phishing: "фішынг"
+    forward_blacklist: "вядомы спам-форвард"
+    confirmed_signature: "пацверджаны спам-патэрн"
+    community_confirmed_spammer: "паўторны спамер (паводле галасоў)"
+    restricted_reputation: "абмежаваная рэпутацыя"
+    no_rights_grant: "дайце мне правы — сам разбяруся"
 
 menu:
   unknown: "Меню не знойдзена"

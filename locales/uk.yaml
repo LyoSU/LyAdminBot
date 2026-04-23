@@ -286,22 +286,56 @@ sticker:
   empty_forward: "${e.reply} Відповідай на стікер, фото або файл"
   only_admin: "${e.lock} Тільки адміни. Свій пак — @fStikBot"
 spam:
-  banned: "${e.ban} ${name} забанено назавжди\n<code>${reason}</code>"
-  muted: "${e.mute} ${name} замучено на 24 години\n<code>${reason}</code>"
-  notification:
-    full: "${e.ban} ${name} — спам\n<code>${reason}</code>"
-    muted_only: "${e.mute} ${name} замучено\n<code>${reason}</code>\n\n${e.warn} Повідомлення не вдалось видалити"
-    deleted_only: "${e.trash} Спам видалено\n<code>${reason}</code>\n\n${e.warn} ${name} не замучено"
-    no_permissions: "${e.eyes} Схоже на спам від ${name}\n<code>${reason}</code>\n\n${e.bulb} Дайте мені права адміна — сам розберусь"
-  btn_not_spam: "Не спам"
-  admin_override: "${e.check} <b>Скасовано ${admin}</b>\n\n${e.user} ${name} розблоковано"
+  # Legacy ban / notification keys removed in favour of the unified
+  # mod_event:* namespace (see §9 of the UX design). Kept for any stray
+  # caller: only the override messages are still wired through `handlers/
+  # spam-vote.js` admin-override path.
   admin_override_not_admin: "Тільки для адмінів групи"
+
+mod_event:
+  compact:
+    banned: "⛔ ${name} — спам"
+    muted: "🔇 ${name} — підозріло · муть 24 год"
+    deleted: "🗑 ${name} — видалено"
+    suspicious: "👀 ${name} — підозрілий допис"
+    global_ban: "🌍 ${name} — глобальний бан"
+    voting: "⚖️ ${name} — на голосуванні"
+    override: "↩️ Скасовано адміном ${admin}"
+  expanded:
+    confidence_line: "📊 ${confidence}% · 🤖 ${reason}"
+    preview_line: "📝 «${preview}»"
+    warning_line: "⚠️ ${warning}"
+  btn:
+    why: "🤨 За що?"
+    why_alt: "🤨 Що сталось?"
+    less: "🛡 Зменшити деталі"
+    hide: "✓ Сховати"
+    undo: "↩️ Розблокувати"
+    vote_spam: "🚫 ${n}"
+    vote_clean: "✅ ${n}"
+    give_rights: "📖 Дай права"
+    trust_anyway: "↩️ Все одно довірити"
+    cant_undo: "🚫 Не можу розблокувати"
+  toast:
+    hidden: "✓"
+    undone: "↩️ Розблоковано"
+    undo_failed: "🚫 Не вдалось розблокувати"
+    not_found: "Подія не знайдена"
+  reason:
+    default: "підозріла активність"
+    phishing: "фішинг"
+    forward_blacklist: "відомий спам-форвард"
+    confirmed_signature: "підтверджений спам-патерн"
+    community_confirmed_spammer: "повторний спамер (за голосами)"
+    restricted_reputation: "обмежена репутація"
+    no_rights_grant: "дайте мені права — сам розберусь"
 
 only_group: "${e.group} Працює тільки в групах"
 only_admin: "${e.lock} Тільки для адмінів групи"
 
 global_ban:
-  kicked: "${e.ban} ${name} вилучено — глобальний бан.\n<code>${reason}</code>"
+  # Legacy `kicked` key removed — notification now unified via
+  # mod_event.compact.global_ban (§9 of the UX design).
 
 spam_vote:
   title_blocked: "${e.cross} <b>Заблоковано</b>"

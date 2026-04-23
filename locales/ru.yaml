@@ -282,20 +282,52 @@ sticker:
   empty_forward: "↩️ Ответь на стикер, фото или файл"
   only_admin: "${e.lock} Только админы. Свой пак — @fStikBot"
 spam:
-  notification:
-    full: "${e.ban} ${name} — спам\n<code>${reason}</code>"
-    muted_only: "${e.mute} ${name} замьючен\n<code>${reason}</code>\n\n${e.warn} Сообщение не удалось удалить"
-    deleted_only: "${e.trash} Спам удалён\n<code>${reason}</code>\n\n${e.warn} ${name} не замьючен"
-    no_permissions: "${e.eyes} Похоже на спам от ${name}\n<code>${reason}</code>\n\n${e.bulb} Дайте мне права админа — сам разберусь"
-  btn_not_spam: "Не спам"
-  admin_override: "${e.check} <b>Отменено ${admin}</b>\n\n${e.user} ${name} разблокирован"
+  # Legacy notification keys removed — заменены unified mod_event:* (§9).
   admin_override_not_admin: "Только для админов группы"
+
+mod_event:
+  compact:
+    banned: "⛔ ${name} — спам"
+    muted: "🔇 ${name} — подозрительно · мьют 24 ч"
+    deleted: "🗑 ${name} — удалено"
+    suspicious: "👀 ${name} — подозрительное сообщение"
+    global_ban: "🌍 ${name} — глобальный бан"
+    voting: "⚖️ ${name} — на голосовании"
+    override: "↩️ Отменено админом ${admin}"
+  expanded:
+    confidence_line: "📊 ${confidence}% · 🤖 ${reason}"
+    preview_line: "📝 «${preview}»"
+    warning_line: "⚠️ ${warning}"
+  btn:
+    why: "🤨 За что?"
+    why_alt: "🤨 Что случилось?"
+    less: "🛡 Скрыть детали"
+    hide: "✓ Скрыть"
+    undo: "↩️ Разблокировать"
+    vote_spam: "🚫 ${n}"
+    vote_clean: "✅ ${n}"
+    give_rights: "📖 Дай права"
+    trust_anyway: "↩️ Всё равно доверить"
+    cant_undo: "🚫 Не могу разблокировать"
+  toast:
+    hidden: "✓"
+    undone: "↩️ Разблокирован"
+    undo_failed: "🚫 Не вышло разблокировать"
+    not_found: "Событие не найдено"
+  reason:
+    default: "подозрительная активность"
+    phishing: "фишинг"
+    forward_blacklist: "известный спам-форвард"
+    confirmed_signature: "подтверждённый спам-паттерн"
+    community_confirmed_spammer: "повторный спамер (по голосам)"
+    restricted_reputation: "ограниченная репутация"
+    no_rights_grant: "дайте мне права — сам разберусь"
 
 only_group: "${e.group} Работает только в группах"
 only_admin: "${e.lock} Только для админов группы"
 
 global_ban:
-  kicked: "${e.ban} ${name} исключён — глобальный бан.\n<code>${reason}</code>"
+  # Legacy `kicked` key removed — notification now via mod_event.compact.global_ban.
 
 spam_vote:
   # Easter eggs for vote results

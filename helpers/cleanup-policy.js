@@ -6,7 +6,14 @@ module.exports = {
   cmd_help: 60 * 1000,
   cmd_settings_idle: 10 * 60 * 1000,
   vote_result: 2 * 60 * 1000,
+  // Unified mod-event notifications (§9 of UX spec).
+  // `mod_event` retained as legacy alias equal to the expanded TTL until
+  // call-sites are migrated (currently: none — sender uses the *_compact /
+  // *_expanded / *_override variants directly).
   mod_event: 2 * 60 * 1000,
+  mod_event_compact: 90 * 1000,
+  mod_event_expanded: 2 * 60 * 1000,
+  mod_event_override: 30 * 1000,
   banan_undo: 60 * 1000,
   onboarding_ack: 30 * 1000,
   confirm_screen: 30 * 1000,

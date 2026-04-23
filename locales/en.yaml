@@ -281,15 +281,9 @@ sticker:
   empty_forward: "↩️ Reply to a sticker, photo, or file"
   only_admin: "${e.lock} Admins only. Personal pack — @fStikBot"
 spam:
-  banned: "${e.ban} ${name} permabanned\n<code>${reason}</code>"
-  muted: "${e.mute} ${name} muted for 24h\n<code>${reason}</code>"
-  notification:
-    full: "${e.ban} ${name} — spam\n<code>${reason}</code>"
-    muted_only: "${e.mute} ${name} muted\n<code>${reason}</code>\n\n${e.warn} Couldn't delete message"
-    deleted_only: "${e.trash} Spam deleted\n<code>${reason}</code>\n\n${e.warn} ${name} not muted"
-    no_permissions: "${e.eyes} Looks like spam from ${name}\n<code>${reason}</code>\n\n${e.bulb} Make me admin and I'll handle it"
-  btn_not_spam: "Not spam"
-  admin_override: "${e.check} <b>Overridden by ${admin}</b>\n\n${e.user} ${name} unblocked"
+  # Legacy notification keys removed in favour of the unified mod_event:*
+  # namespace (see §9 of the UX design). Only the override toast is still
+  # used from `handlers/spam-vote.js`.
   admin_override_not_admin: "Only group admins can do this"
   error:
     mute_failed: |
@@ -311,7 +305,46 @@ only_group: "${e.group} Works in groups only"
 only_admin: "${e.lock} Group admins only"
 
 global_ban:
-  kicked: "${e.ban} ${name} kicked — global ban.\n<code>${reason}</code>"
+  # Legacy `kicked` key removed — notification now unified via
+  # mod_event.compact.global_ban (§9 of the UX design).
+
+mod_event:
+  compact:
+    banned: "⛔ ${name} — spam"
+    muted: "🔇 ${name} — suspicious · muted 24h"
+    deleted: "🗑 ${name} — deleted"
+    suspicious: "👀 ${name} — suspicious post"
+    global_ban: "🌍 ${name} — global ban"
+    voting: "⚖️ ${name} — under vote"
+    override: "↩️ Reverted by admin ${admin}"
+  expanded:
+    confidence_line: "📊 ${confidence}% · 🤖 ${reason}"
+    preview_line: "📝 «${preview}»"
+    warning_line: "⚠️ ${warning}"
+  btn:
+    why: "🤨 Why?"
+    why_alt: "🤨 What happened?"
+    less: "🛡 Less detail"
+    hide: "✓ Hide"
+    undo: "↩️ Unblock"
+    vote_spam: "🚫 ${n}"
+    vote_clean: "✅ ${n}"
+    give_rights: "📖 Grant admin"
+    trust_anyway: "↩️ Trust anyway"
+    cant_undo: "🚫 Can't unblock"
+  toast:
+    hidden: "✓"
+    undone: "↩️ Unblocked"
+    undo_failed: "🚫 Couldn't unblock"
+    not_found: "Event not found"
+  reason:
+    default: "suspicious activity"
+    phishing: "phishing"
+    forward_blacklist: "known spam forward"
+    confirmed_signature: "confirmed spam pattern"
+    community_confirmed_spammer: "repeat spammer (voted)"
+    restricted_reputation: "restricted reputation"
+    no_rights_grant: "grant me admin rights and I'll handle it"
 
 spam_vote:
   title_blocked: "${e.cross} <b>Blocked</b>"

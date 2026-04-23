@@ -147,7 +147,45 @@ del:
   error_old: "${e.cross} Mesaj çok eski"
 
 global_ban:
-  kicked: "${e.ban} ${name} atıldı — global ban.\n<code>${reason}</code>"
+  # Legacy `kicked` key removed — notification via mod_event.compact.global_ban.
+
+mod_event:
+  compact:
+    banned: "⛔ ${name} — spam"
+    muted: "🔇 ${name} — şüpheli · 24 saat susturuldu"
+    deleted: "🗑 ${name} — silindi"
+    suspicious: "👀 ${name} — şüpheli mesaj"
+    global_ban: "🌍 ${name} — global ban"
+    voting: "⚖️ ${name} — oylamada"
+    override: "↩️ Admin ${admin} tarafından geri alındı"
+  expanded:
+    confidence_line: "📊 ${confidence}% · 🤖 ${reason}"
+    preview_line: "📝 «${preview}»"
+    warning_line: "⚠️ ${warning}"
+  btn:
+    why: "🤨 Neden?"
+    why_alt: "🤨 Ne oldu?"
+    less: "🛡 Detayı azalt"
+    hide: "✓ Gizle"
+    undo: "↩️ Engeli kaldır"
+    vote_spam: "🚫 ${n}"
+    vote_clean: "✅ ${n}"
+    give_rights: "📖 Yetki ver"
+    trust_anyway: "↩️ Yine de güven"
+    cant_undo: "🚫 Engel kaldırılamadı"
+  toast:
+    hidden: "✓"
+    undone: "↩️ Engel kaldırıldı"
+    undo_failed: "🚫 Engel kaldırılamadı"
+    not_found: "Olay bulunamadı"
+  reason:
+    default: "şüpheli aktivite"
+    phishing: "phishing"
+    forward_blacklist: "bilinen spam yönlendirmesi"
+    confirmed_signature: "doğrulanmış spam kalıbı"
+    community_confirmed_spammer: "tekrar eden spam'ci (oylamayla)"
+    restricted_reputation: "kısıtlı itibar"
+    no_rights_grant: "bana yetki verirseniz halledim"
 
 menu:
   unknown: "Menü bulunamadı"
