@@ -12,6 +12,8 @@ const { registerMenu } = require('../registry')
 const { cb, btn, row, backBtn, NOOP } = require('../keyboard')
 const { renderEmptyState } = require('../empty-state')
 const { countRecent, rangeSince } = require('../../mod-log')
+const { resolveTargetChatId } = require('../pm-context')
+const { escapeHtml } = require('../../text-utils')
 const { bot: log } = require('../../logger')
 
 const SCREEN_ID = 'settings.modlog'
@@ -60,13 +62,6 @@ const formatTime = (date) => {
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`
 }
 
-// HTML-safe name shown in rows. Strips angle brackets that would break
-// parse_mode=HTML.
-const escapeHtml = (s) => String(s || '')
-  .replace(/&/g, '&amp;')
-  .replace(/</g, '&lt;')
-  .replace(/>/g, '&gt;')
-
 const displayName = (name) => escapeHtml(name || '—')
 
 const renderRow = (ctx, entry) => {
@@ -100,10 +95,13 @@ const buildRangeRow = (ctx, activeRange) => {
   ]
 }
 
-const buildPaginationRow = (page, totalPages) => {
+// Pagination buttons carry the current range in their callback args so the
+// rerender can preserve the filter. Without this the page-click would fall
+// through to DEFAULT_RANGE on rerender.
+const buildPaginationRow = (page, totalPages, range) => {
   if (totalPages <= 1) return null
-  const prevCb = page > 0 ? cb(SCREEN_ID, 'page', String(page - 1)) : NOOP
-  const nextCb = page < totalPages - 1 ? cb(SCREEN_ID, 'page', String(page + 1)) : NOOP
+  const prevCb = page > 0 ? cb(SCREEN_ID, 'page', String(page - 1), range) : NOOP
+  const nextCb = page < totalPages - 1 ? cb(SCREEN_ID, 'page', String(page + 1), range) : NOOP
   return [
     btn('‹', prevCb),
     btn(`${page + 1} / ${totalPages}`, NOOP),
@@ -114,7 +112,8 @@ const buildPaginationRow = (page, totalPages) => {
 const render = async (ctx, state = {}) => {
   const range = VALID_RANGES.includes(state.range) ? state.range : DEFAULT_RANGE
   const page = Math.max(0, parseInt(state.page, 10) || 0)
-  const chatId = ctx.chat && ctx.chat.id
+  // In PM, ctx.chat.id is the DM; resolveTargetChatId picks the real group.
+  const chatId = resolveTargetChatId(ctx)
 
   const since = rangeSince(range)
 
@@ -167,7 +166,7 @@ const render = async (ctx, state = {}) => {
 
   const kb = []
   kb.push(buildRangeRow(ctx, range))
-  const pag = buildPaginationRow(page, totalPages)
+  const pag = buildPaginationRow(page, totalPages, range)
   if (pag) kb.push(pag)
   kb.push(backRow)
   return { text, keyboard: { inline_keyboard: kb } }
@@ -183,10 +182,8 @@ const handle = async (ctx, action, args) => {
   if (action === 'page') {
     const p = parseInt(args && args[0], 10)
     if (!Number.isFinite(p) || p < 0) return { render: false }
-    // Preserve current range. We don't persist state server-side here, so
-    // the handler receives the args without range context — fall back to
-    // the default. Future: stash in menuState.
-    return { render: true, state: { page: p } }
+    const r = (args && args[1] && VALID_RANGES.includes(args[1])) ? args[1] : DEFAULT_RANGE
+    return { render: true, state: { page: p, range: r } }
   }
   return { render: false }
 }

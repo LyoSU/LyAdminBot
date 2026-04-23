@@ -311,15 +311,15 @@ global_ban:
 mod_event:
   compact:
     banned: "⛔ ${name} — spam"
-    muted: "🔇 ${name} — suspicious · muted 24h"
+    muted: "🔇 ${name} — muted 24h"
     deleted: "🗑 ${name} — deleted"
     suspicious: "👀 ${name} — suspicious post"
     global_ban: "🌍 ${name} — global ban"
     voting: "⚖️ ${name} — under vote"
     override: "↩️ Reverted by admin ${admin}"
-    manual_ban: "🍌 ${name} gets a banana"
-    manual_mute: "🔇 ${name} — muted"
-    manual_kick: "👢 ${name} — kicked"
+    manual_ban: "🍌 ${name} gets a banana from ${admin}"
+    manual_mute: "🔇 ${name} — muted by ${admin}"
+    manual_kick: "👢 ${name} — kicked by ${admin}"
   expanded:
     confidence_line: "📊 ${confidence}% · 🤖 ${reason}"
     preview_line: "📝 «${preview}»"
@@ -330,11 +330,8 @@ mod_event:
     less: "🛡 Less detail"
     hide: "✓ Hide"
     undo: "↩️ Unblock"
-    vote_spam: "🚫 ${n}"
-    vote_clean: "✅ ${n}"
     give_rights: "📖 Grant admin"
     trust_anyway: "↩️ Trust anyway"
-    cant_undo: "🚫 Can't unblock"
     undo_short: "↩️ Undo"
   toast:
     hidden: "✓"
@@ -348,7 +345,7 @@ mod_event:
     confirmed_signature: "confirmed spam pattern"
     community_confirmed_spammer: "repeat spammer (voted)"
     restricted_reputation: "restricted reputation"
-    no_rights_grant: "grant me admin rights and I'll handle it"
+    no_rights_grant: "waiting for admin rights"
 
 spam_vote:
   title_blocked: "${e.cross} <b>Blocked</b>"
@@ -369,7 +366,7 @@ spam_vote:
   btn_details: "🔍 Details"
   progress:
     title: "⚖️ Voting: ${remaining}"
-    until_resolution: "${bar}  ${votesIn} / ${votesNeeded} votes until resolution"
+    until_resolution: "${bar}  ${votesIn} votes"
   details:
     hash: "🧮 Hash: <code>${hash}</code>"
     tally: "⚖️ Votes: 🚫 ${spam} · ✅ ${clean}"
@@ -534,7 +531,6 @@ menu:
         ${e.notes} extra commands (<code>#rules</code>, <code>#faq</code>)
 
         Languages: українська, english, русский, türkçe, беларуская.
-        <i>No flags — language, not politics.</i>
   onboarding:
     card: |
       ${e.shield} Hey! I'm here, anti-spam is on.
@@ -561,6 +557,7 @@ menu:
       title: "⚙️ <b>Chat settings</b>"
       text: |
         ⚙️ <b>Chat settings</b>
+        💬 <b>${chatTitle}</b>
 
         🛡 Anti-spam: <b>${antispamState}</b> · threshold <b>${threshold}%</b>
         👋 Welcome: <b>${welcomeState}</b> (${welcomeCount})
@@ -679,8 +676,6 @@ menu:
         🌐 <b>Interface language</b>
 
         Current: <b>${current}</b>
-
-        <i>No flags — language, not politics.</i>
       active_marker: "● "
       saved: "✓ Language saved"
     reset:
@@ -725,6 +720,7 @@ menu:
         added: "✓ Text added"
         removed: "✓ Text removed"
         too_long: "Text is too long (max 1000 chars)"
+        links_not_allowed: "Links not allowed in welcome — the bot shouldn't hand out third-party URLs. HTML formatting (<code>&lt;b&gt;</code>, <code>&lt;i&gt;</code>, <code>&lt;code&gt;</code>) still works."
         limit: "Reached limit of 20 texts"
         cancelled: "↩️ Cancelled"
       gifs:
@@ -738,10 +734,11 @@ menu:
         btn:
           add: "➕ Add gif"
           add_first: "➕ Add the first one"
-        prompt: "Send a gif/sticker <code>file_id</code>. Uploading via attachment is not yet supported."
+        prompt: "Send a gif, sticker, or video (or just a <code>file_id</code>). Or <code>/cancel</code> to bail out."
         added: "✓ Gif added"
         removed: "✓ Gif removed"
-        invalid: "That doesn't look like a file_id. Send letters/digits or <code>/cancel</code>."
+        invalid: "Send a gif/sticker/video or <code>file_id</code>. Or <code>/cancel</code>."
+        duplicate: "That gif is already on the list"
         limit: "Reached limit of 20 gifs"
         cancelled: "↩️ Cancelled"
     extras:
@@ -813,23 +810,6 @@ menu:
         untrust: "<b>${actor}</b> → untrusted ${target}"
         settings_change: "<b>${actor}</b> → ${action}"
         default: "${action}"
-    diagnostics:
-      text: |
-        ⚙️ <b>Diagnostics</b>
-
-        ${list}
-      row_fmt: "${status} <b>${label}:</b> ${value}"
-      row:
-        telegram: "Telegram API"
-        mongo: "MongoDB"
-        openai: "OpenAI"
-        openrouter: "OpenRouter"
-        qdrant: "Qdrant"
-        queue: "Antispam queue"
-        uptime: "Uptime"
-        unknown: "?"
-      btn:
-        refresh: "🔄 Refresh"
   empty_state:
     rules:
       title: "📜 <b>No rules yet</b>"

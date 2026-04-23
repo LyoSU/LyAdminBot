@@ -66,7 +66,7 @@ test('buildCompactText: auto_mute uk', () => {
   const i18n = mkI18n('uk')
   const { text } = mod.buildCompactText(i18n, { actionType: 'auto_mute' }, { first_name: 'Dan' })
   assert.ok(text.startsWith('🔇 Dan'))
-  assert.ok(text.includes('муть'))
+  assert.ok(text.includes('мут'))
 })
 
 test('buildCompactText: no_permissions → suspicious-style line', () => {

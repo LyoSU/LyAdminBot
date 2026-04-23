@@ -86,8 +86,6 @@ const modEventSchema = mongoose.Schema({
   // Only shown in the expanded view; never in the compact line.
   warning: String,
 
-  actionTaken: { type: Number, default: () => Date.now() },
-
   // Where the notification was posted. Needed so override / undo flows
   // can edit or delete the right message.
   notificationChatId: Number,

@@ -25,6 +25,7 @@ const { replyHTML } = require('../../reply-html')
 const { truncate } = require('../../text-utils')
 const { renderEmptyState } = require('../empty-state')
 const { logModEvent } = require('../../mod-log')
+const { resolveTargetChatId } = require('../pm-context')
 const { bot: log } = require('../../logger')
 
 const ROOT_ID = 'settings.welcome'
@@ -88,7 +89,7 @@ const registerRoot = () => registerMenu({
       w.enable = next
       // Audit: record the toggle in ModLog for the journal.
       logModEvent(ctx.db, {
-        chatId: ctx.chat.id,
+        chatId: resolveTargetChatId(ctx),
         eventType: 'settings_change',
         actor: ctx.from,
         action: `welcome.enable → ${next}`
@@ -178,6 +179,12 @@ const registerTexts = () => registerMenu({
   }
 })
 
+// Block <a href=...> tags: welcome messages are sent by the bot and we don't
+// want the bot lending its credibility to phishing URLs. Admins who want to
+// link something can post it manually or use %name% for mentions. Other
+// Telegram-safe HTML (b/i/code/etc.) passes through.
+const LINK_TAG_RE = /<\s*a\b[^>]*>/i
+
 const handleTextInput = async (ctx, text) => {
   const trimmed = (text || '').trim()
   if (!trimmed || trimmed === '/cancel') {
@@ -186,6 +193,10 @@ const handleTextInput = async (ctx, text) => {
   }
   if (trimmed.length > MAX_TEXT_LEN) {
     await replyHTML(ctx, ctx.i18n.t('menu.settings.welcome.texts.too_long'))
+    return
+  }
+  if (LINK_TAG_RE.test(trimmed)) {
+    await replyHTML(ctx, ctx.i18n.t('menu.settings.welcome.texts.links_not_allowed'))
     return
   }
   const w = ensureWelcome(ctx)
@@ -274,31 +285,40 @@ const registerGifs = () => registerMenu({
   }
 })
 
-// The gif input handler is special: the user replies with a *media* message,
-// not a text message. pendingInput middleware currently only fires on text
-// replies, so the force-reply captures nothing useful — we surface the
-// friendly error so admins know to paste a file_id. Full media support
-// requires extending pendingInput to inspect non-text updates; deferred.
-const handleGifInput = async (ctx, text) => {
+// The gif input handler accepts a replied media message (animation, sticker,
+// video, or document — we save its file_id) OR a pasted file_id fallback.
+// pendingInput now surfaces media via the 4th arg `input` (kind/fileId).
+const GIF_MEDIA_KINDS = new Set(['animation', 'sticker', 'video', 'document'])
+
+const handleGifInput = async (ctx, text, _pi, input) => {
   const trimmed = (text || '').trim()
-  if (!trimmed || trimmed === '/cancel') {
+  if (trimmed === '/cancel') {
     await replyHTML(ctx, ctx.i18n.t('menu.settings.welcome.gifs.cancelled'))
     return
   }
-  // Accept a pasted file_id as a fallback. Telegram file_ids are long
-  // alnum/underscore/hyphen strings — heuristically validate to avoid
-  // storing arbitrary user text as a file_id.
-  if (!/^[\w-]{20,}$/.test(trimmed)) {
+
+  let fileId = null
+  if (input && input.fileId && GIF_MEDIA_KINDS.has(input.kind)) {
+    fileId = input.fileId
+  } else if (trimmed && /^[\w-]{20,}$/.test(trimmed)) {
+    // Fallback: pasted file_id string. Telegram file_ids are long alnum/-/_
+    fileId = trimmed
+  } else {
     await replyHTML(ctx, ctx.i18n.t('menu.settings.welcome.gifs.invalid'))
     return
   }
+
   const w = ensureWelcome(ctx)
   if (!w) return
   if (w.gifs.length >= MAX_GIFS) {
     await replyHTML(ctx, ctx.i18n.t('menu.settings.welcome.gifs.limit'))
     return
   }
-  w.gifs.push(trimmed)
+  if (w.gifs.includes(fileId)) {
+    await replyHTML(ctx, ctx.i18n.t('menu.settings.welcome.gifs.duplicate'))
+    return
+  }
+  w.gifs.push(fileId)
   await replyHTML(ctx, ctx.i18n.t('menu.settings.welcome.gifs.added'))
 }
 

@@ -13,6 +13,9 @@ const isExpired = (entry) => entry.expiresAt && entry.expiresAt.getTime() < Date
 
 const setState = (group, userId, screen, data) => {
   const arr = ensureArray(group)
+  // Opportunistically evict expired entries so the array doesn't grow
+  // unbounded — no periodic job exists to do it otherwise.
+  cleanupExpired(group)
   const idx = findIndex(arr, userId, screen)
   const entry = {
     userId,

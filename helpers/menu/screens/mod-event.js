@@ -28,6 +28,7 @@ const modEvent = require('../../mod-event')
 const { logModEvent } = require('../../mod-log')
 const policy = require('../../cleanup-policy')
 const { scheduleDeletion } = require('../../message-cleanup')
+const adminCache = require('../../admin-cache')
 const { bot: log } = require('../../logger')
 
 const SCREEN_ID = 'mod.event'
@@ -296,7 +297,10 @@ const handle = async (ctx, action, args) => {
   }
 
   if (action === 'undo') {
-    const viewerIsAdmin = await isAdmin(ctx)
+    // Admin check must target the group where the mod-event happened, not
+    // ctx.chat — which is the DM when the button was tapped from the PM
+    // deep-link expanded card (/start mod_event_<id>).
+    const viewerIsAdmin = await adminCache.isUserAdmin(ctx.telegram, event.chatId, ctx.from && ctx.from.id)
     if (!viewerIsAdmin) {
       return { render: false, toast: 'menu.access.only_admins' }
     }
@@ -305,7 +309,6 @@ const handle = async (ctx, action, args) => {
       log.warn({ err: result.err, eventId }, 'mod.event undo: failed')
       return { render: false, toast: 'mod_event.toast.undo_failed' }
     }
-    // Flip the event into override state + rerender.
     const adminName = ctx.from && (ctx.from.first_name || ctx.from.username)
       ? (ctx.from.first_name || ctx.from.username)
       : String(ctx.from && ctx.from.id)
@@ -315,8 +318,6 @@ const handle = async (ctx, action, args) => {
       actorName: adminName
     })
     const overrideEvent = updated || { ...event.toObject(), actionType: 'override', actorId: ctx.from && ctx.from.id, actorName: adminName }
-    // Audit the override in ModLog; reason carries the original eventId so
-    // the journal can cross-reference the undone action.
     logModEvent(ctx.db, {
       chatId: event.chatId,
       eventType: 'override',
@@ -328,17 +329,50 @@ const handle = async (ctx, action, args) => {
       action: `undo ${event.actionType}`,
       reason: `eventId=${eventId}`
     }).catch(() => {})
-    const { text } = modEvent.buildCompactText(ctx.i18n, overrideEvent, buildTarget(overrideEvent))
-    try {
-      await editHTML(ctx, ctx.callbackQuery.message.message_id, text, {
-        reply_markup: { inline_keyboard: [] }
-      })
-    } catch (err) {
-      if (!/message is not modified/.test(err.message || '')) {
-        log.warn({ err: err.message, eventId }, 'mod.event undo: render failed')
+
+    const { text: overrideText } = modEvent.buildCompactText(ctx.i18n, overrideEvent, buildTarget(overrideEvent))
+    const fromPm = ctx.chat && ctx.chat.type === 'private'
+
+    // Always update the group notification (if the bot still knows where it
+    // lives) — this is the message other members can see. Tolerate missing
+    // refs: the notification may have aged out or been deleted.
+    if (event.notificationChatId && event.notificationMessageId) {
+      try {
+        await ctx.telegram.callApi('editMessageText', {
+          chat_id: event.notificationChatId,
+          message_id: event.notificationMessageId,
+          text: overrideText,
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: [] }
+        })
+        await scheduleDeletion(ctx.db, {
+          chatId: event.notificationChatId,
+          messageId: event.notificationMessageId,
+          delayMs: policy.mod_event_override,
+          source: `mod_event:override:${event.actionType}`
+        }, ctx.telegram).catch(() => {})
+      } catch (err) {
+        if (!/message is not modified|message to edit not found/.test(err.message || '')) {
+          log.warn({ err: err.message, eventId }, 'mod.event undo: group edit failed')
+        }
       }
     }
-    await refreshDeletion(ctx, ctx.callbackQuery.message.message_id, 'override', 'override')
+
+    // Update the message we're replying to. In group that IS the notification
+    // (already edited above — ignore "not modified"); in PM that's the
+    // expanded card the admin is staring at, swap it to a compact override.
+    if (fromPm || !event.notificationChatId) {
+      try {
+        await editHTML(ctx, ctx.callbackQuery.message.message_id, overrideText, {
+          reply_markup: { inline_keyboard: [] }
+        })
+      } catch (err) {
+        if (!/message is not modified/.test(err.message || '')) {
+          log.warn({ err: err.message, eventId, fromPm }, 'mod.event undo: local edit failed')
+        }
+      }
+    }
+
     return { render: false, toast: 'mod_event.toast.undone' }
   }
 

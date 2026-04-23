@@ -27,7 +27,7 @@ test('progress lines: pure renderer returns title + bar', () => {
   })
   assert.strictEqual(lines.length, 2)
   assert.ok(lines[0].includes('⚖️'), 'title row has scale emoji')
-  assert.ok(lines[1].includes('1 / 3'), 'bar row carries votes/needed (' + lines[1] + ')')
+  assert.ok(/1 голосів/.test(lines[1]), 'bar row carries vote count (' + lines[1] + ')')
 })
 
 test('progress bar shape: 10 cells', () => {
@@ -62,7 +62,7 @@ test('percent capped at 100% (extra votes do not overflow)', () => {
   })
   const m = lines[1].match(/[█░]+/)
   assert.strictEqual(m[0], '██████████', 'overflow clamps to all-full')
-  assert.ok(lines[1].includes('3 / 3'), 'votesIn capped at votesNeeded (' + lines[1] + ')')
+  assert.ok(/3 votes/.test(lines[1]), 'votesIn capped at votesNeeded (' + lines[1] + ')')
 })
 
 test('expired voting renders zero remaining without throwing', () => {

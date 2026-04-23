@@ -26,6 +26,7 @@ const { editHTML } = require('../../reply-html')
 const { humanizeReason } = require('../../spam-check')
 const { escapeHtml } = require('../../mod-event')
 const { truncate } = require('../../text-utils')
+const { isAdmin } = require('../access')
 const voteUI = require('../../vote-ui')
 const { bot: log } = require('../../logger')
 
@@ -49,7 +50,9 @@ const formatVoterList = (voters, max = 3) => {
 }
 
 // Pure renderer — easy to unit-test without a Telegram context.
-const renderDetailsText = (i18n, spamVote) => {
+// `opts.viewerIsAdmin` gates the fingerprint hash line: exposing it to
+// everyone hands spammers a "change this to dodge signature" hint.
+const renderDetailsText = (i18n, spamVote, opts = {}) => {
   const lines = []
 
   // Reuse the progress block so the details view feels like an enrichment
@@ -91,8 +94,10 @@ const renderDetailsText = (i18n, spamVote) => {
     lines.push(i18n.t('mod_event.expanded.preview_line', { preview }))
   }
 
-  // Fingerprint hash (first 12 chars, if present)
-  if (spamVote.messageHash) {
+  // Fingerprint hash (first 12 chars, if present) — admin-only. A spammer
+  // who sees the hash can trivially perturb their message to invalidate
+  // the signature match; gating preserves that signal for reuse.
+  if (spamVote.messageHash && opts.viewerIsAdmin) {
     const short = String(spamVote.messageHash).slice(0, 12)
     lines.push(i18n.t('spam_vote.details.hash', { hash: short }))
   }
@@ -149,7 +154,8 @@ const findVote = async (ctx, eventId) => {
 }
 
 const renderDetails = async (ctx, spamVote) => {
-  const text = renderDetailsText(ctx.i18n, spamVote)
+  const viewerIsAdmin = await isAdmin(ctx)
+  const text = renderDetailsText(ctx.i18n, spamVote, { viewerIsAdmin })
   const keyboard = buildKeyboard(ctx.i18n, spamVote)
   await editHTML(ctx, ctx.callbackQuery.message.message_id, text, {
     reply_markup: keyboard

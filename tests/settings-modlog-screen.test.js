@@ -181,8 +181,13 @@ test('handle range action ignores unknown ranges', async () => {
 })
 
 test('handle page action returns state with that page', async () => {
-  const result = await modlog.handle({}, 'page', ['3'])
-  assert.deepStrictEqual(result, { render: true, state: { page: 3 } })
+  const result = await modlog.handle({}, 'page', ['3', '7d'])
+  assert.deepStrictEqual(result, { render: true, state: { page: 3, range: '7d' } })
+})
+
+test('handle page action without range falls back to default', async () => {
+  const result = await modlog.handle({}, 'page', ['2'])
+  assert.deepStrictEqual(result, { render: true, state: { page: 2, range: '24h' } })
 })
 
 test('handle page action ignores negative or NaN', async () => {

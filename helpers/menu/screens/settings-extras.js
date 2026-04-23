@@ -21,6 +21,7 @@ const { replyHTML, editHTML } = require('../../reply-html')
 const { truncate } = require('../../text-utils')
 const { renderEmptyState } = require('../empty-state')
 const { logModEvent } = require('../../mod-log')
+const { resolveTargetChatId } = require('../pm-context')
 const { bot: log } = require('../../logger')
 
 const ROOT_ID = 'settings.extras'
@@ -225,7 +226,7 @@ const registerView = () => registerMenu({
       // but the array is a plain Mongoose subdoc array (DocumentArray) so splice
       // is tracked natively.
       logModEvent(ctx.db, {
-        chatId: ctx.chat.id,
+        chatId: resolveTargetChatId(ctx),
         eventType: 'settings_change',
         actor: ctx.from,
         action: `extras.delete ${removed.name}`
@@ -300,7 +301,7 @@ const handleRenameInput = async (ctx, text, pi) => {
   const oldName = extras[idx].name
   extras[idx].name = trimmed
   logModEvent(ctx.db, {
-    chatId: ctx.chat.id,
+    chatId: resolveTargetChatId(ctx),
     eventType: 'settings_change',
     actor: ctx.from,
     action: `extras.rename ${oldName} → ${trimmed}`

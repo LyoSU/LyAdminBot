@@ -155,7 +155,7 @@ spam_vote:
   btn_details: "🔍 Detaylar"
   progress:
     title: "⚖️ Oylama: ${remaining}"
-    until_resolution: "${bar}  ${votesIn} / ${votesNeeded} oy karara kadar"
+    until_resolution: "${bar}  ${votesIn} oy"
   details:
     hash: "🧮 Hash: <code>${hash}</code>"
     tally: "⚖️ Oylar: 🚫 ${spam} · ✅ ${clean}"
@@ -176,15 +176,15 @@ spam_vote:
 mod_event:
   compact:
     banned: "⛔ ${name} — spam"
-    muted: "🔇 ${name} — şüpheli · 24 saat susturuldu"
+    muted: "🔇 ${name} — 24 saat susturuldu"
     deleted: "🗑 ${name} — silindi"
     suspicious: "👀 ${name} — şüpheli mesaj"
     global_ban: "🌍 ${name} — global ban"
     voting: "⚖️ ${name} — oylamada"
     override: "↩️ Admin ${admin} tarafından geri alındı"
-    manual_ban: "🍌 ${name} muz aldı"
-    manual_mute: "🔇 ${name} — susturuldu"
-    manual_kick: "👢 ${name} — atıldı"
+    manual_ban: "🍌 ${name} — ${admin} tarafından muzlandı"
+    manual_mute: "🔇 ${name} — ${admin} tarafından susturuldu"
+    manual_kick: "👢 ${name} — ${admin} tarafından atıldı"
   expanded:
     confidence_line: "📊 ${confidence}% · 🤖 ${reason}"
     preview_line: "📝 «${preview}»"
@@ -195,11 +195,8 @@ mod_event:
     less: "🛡 Detayı azalt"
     hide: "✓ Gizle"
     undo: "↩️ Engeli kaldır"
-    vote_spam: "🚫 ${n}"
-    vote_clean: "✅ ${n}"
     give_rights: "📖 Yetki ver"
     trust_anyway: "↩️ Yine de güven"
-    cant_undo: "🚫 Engel kaldırılamadı"
     undo_short: "↩️ Geri al"
   toast:
     hidden: "✓"
@@ -213,7 +210,7 @@ mod_event:
     confirmed_signature: "doğrulanmış spam kalıbı"
     community_confirmed_spammer: "tekrar eden spam'ci (oylamayla)"
     restricted_reputation: "kısıtlı itibar"
-    no_rights_grant: "bana yetki verirseniz halledim"
+    no_rights_grant: "admin yetkisi bekleniyor"
 
 menu:
   unknown: "Menü bulunamadı"
@@ -332,6 +329,7 @@ menu:
       title: "⚙️ <b>Sohbet ayarları</b>"
       text: |
         ⚙️ <b>Sohbet ayarları</b>
+        💬 <b>${chatTitle}</b>
 
         🛡 Anti-spam: <b>${antispamState}</b> · eşik <b>${threshold}%</b>
         👋 Karşılama: <b>${welcomeState}</b> (${welcomeCount})
@@ -496,6 +494,7 @@ menu:
         added: "✓ Metin eklendi"
         removed: "✓ Metin silindi"
         too_long: "Metin çok uzun (maks 1000 karakter)"
+        links_not_allowed: "Karşılamada bağlantıya izin yok — bot, başkalarının URL'lerini dağıtmaz. HTML biçimlendirme (<code>&lt;b&gt;</code>, <code>&lt;i&gt;</code>, <code>&lt;code&gt;</code>) çalışır."
         limit: "20 metin sınırına ulaşıldı"
         cancelled: "↩️ İptal"
       gifs:
@@ -509,10 +508,11 @@ menu:
         btn:
           add: "➕ Gif ekle"
           add_first: "➕ İlkini ekle"
-        prompt: "Bir gif/sticker <code>file_id</code> gönder."
+        prompt: "Bir gif, sticker veya video gönder (ya da <code>file_id</code>). Çıkmak için <code>/cancel</code>."
         added: "✓ Gif eklendi"
         removed: "✓ Gif silindi"
-        invalid: "file_id'ye benzemiyor. Harf/rakam dizisi gönder veya <code>/cancel</code>."
+        invalid: "Gif/sticker/video veya <code>file_id</code> gönder. Ya da <code>/cancel</code>."
+        duplicate: "Bu gif zaten listede"
         limit: "20 gif sınırına ulaşıldı"
         cancelled: "↩️ İptal"
     extras:
@@ -584,23 +584,6 @@ menu:
         untrust: "<b>${actor}</b> → güvenilirden çıkardı ${target}"
         settings_change: "<b>${actor}</b> → ${action}"
         default: "${action}"
-    diagnostics:
-      text: |
-        ⚙️ <b>Tanılama</b>
-
-        ${list}
-      row_fmt: "${status} <b>${label}:</b> ${value}"
-      row:
-        telegram: "Telegram API"
-        mongo: "MongoDB"
-        openai: "OpenAI"
-        openrouter: "OpenRouter"
-        qdrant: "Qdrant"
-        queue: "Antispam kuyruğu"
-        uptime: "Çalışma süresi"
-        unknown: "?"
-      btn:
-        refresh: "🔄 Yenile"
   empty_state:
     rules:
       title: "📜 <b>Henüz kural yok</b>"

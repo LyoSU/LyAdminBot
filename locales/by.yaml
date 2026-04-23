@@ -207,7 +207,7 @@ spam_vote:
   btn_details: "🔍 Дэталі"
   progress:
     title: "⚖️ Галасаванне: ${remaining}"
-    until_resolution: "${bar}  ${votesIn} / ${votesNeeded} галасоў да рэзалюцыі"
+    until_resolution: "${bar}  ${votesIn} галасоў"
   details:
     hash: "🧮 Hash: <code>${hash}</code>"
     tally: "⚖️ Галасы: 🚫 ${spam} · ✅ ${clean}"
@@ -228,15 +228,15 @@ spam_vote:
 mod_event:
   compact:
     banned: "⛔ ${name} — спам"
-    muted: "🔇 ${name} — падазрона · мут 24 г"
+    muted: "🔇 ${name} — мут 24 г"
     deleted: "🗑 ${name} — выдалена"
     suspicious: "👀 ${name} — падазронае паведамленне"
     global_ban: "🌍 ${name} — глабальны бан"
     voting: "⚖️ ${name} — на галасаванні"
     override: "↩️ Скасавана адмінам ${admin}"
-    manual_ban: "🍌 ${name} атрымлівае банан"
-    manual_mute: "🔇 ${name} — мут"
-    manual_kick: "👢 ${name} — кік"
+    manual_ban: "🍌 ${name} атрымлівае банан ад ${admin}"
+    manual_mute: "🔇 ${name} — мут ад ${admin}"
+    manual_kick: "👢 ${name} — кік ад ${admin}"
   expanded:
     confidence_line: "📊 ${confidence}% · 🤖 ${reason}"
     preview_line: "📝 «${preview}»"
@@ -247,11 +247,8 @@ mod_event:
     less: "🛡 Схаваць дэталі"
     hide: "✓ Схаваць"
     undo: "↩️ Разблакіраваць"
-    vote_spam: "🚫 ${n}"
-    vote_clean: "✅ ${n}"
     give_rights: "📖 Дай правы"
     trust_anyway: "↩️ Усё адно давяраць"
-    cant_undo: "🚫 Не атрымалася разблакіраваць"
     undo_short: "↩️ Скасаваць"
   toast:
     hidden: "✓"
@@ -265,7 +262,7 @@ mod_event:
     confirmed_signature: "пацверджаны спам-патэрн"
     community_confirmed_spammer: "паўторны спамер (паводле галасоў)"
     restricted_reputation: "абмежаваная рэпутацыя"
-    no_rights_grant: "дайце мне правы — сам разбяруся"
+    no_rights_grant: "чакаю правы адміна"
 
 menu:
   unknown: "Меню не знойдзена"
@@ -384,6 +381,7 @@ menu:
       title: "⚙️ <b>Налады чата</b>"
       text: |
         ⚙️ <b>Налады чата</b>
+        💬 <b>${chatTitle}</b>
 
         🛡 Антыспам: <b>${antispamState}</b> · парог <b>${threshold}%</b>
         👋 Прывітанне: <b>${welcomeState}</b> (${welcomeCount})
@@ -548,6 +546,7 @@ menu:
         added: "✓ Тэкст дададзены"
         removed: "✓ Тэкст выдалены"
         too_long: "Тэкст занадта доўгі (макс 1000 сімвалаў)"
+        links_not_allowed: "Спасылкі ў прывітанні не дазволены — бот не раздае чужыя URL. HTML-фарматаванне (<code>&lt;b&gt;</code>, <code>&lt;i&gt;</code>, <code>&lt;code&gt;</code>) працуе."
         limit: "Дасягнуты ліміт 20 тэкстаў"
         cancelled: "↩️ Скасавана"
       gifs:
@@ -561,10 +560,11 @@ menu:
         btn:
           add: "➕ Дадаць gif"
           add_first: "➕ Дадаць першы"
-        prompt: "Дашліце <code>file_id</code> gif/стыкера."
+        prompt: "Дашліце gif, стыкер ці відэа (ці проста <code>file_id</code>). Каб выйсці — <code>/cancel</code>."
         added: "✓ Gif дададзены"
         removed: "✓ Gif выдалены"
-        invalid: "Не падобна на file_id. Дашліце радок з літарамі/лічбамі або <code>/cancel</code>."
+        invalid: "Дашліце gif/стыкер/відэа ці <code>file_id</code>. Ці <code>/cancel</code>."
+        duplicate: "Гэты gif ужо ў спісе"
         limit: "Дасягнуты ліміт 20 gif"
         cancelled: "↩️ Скасавана"
     extras:
@@ -636,23 +636,6 @@ menu:
         untrust: "<b>${actor}</b> → выдалены з давераных ${target}"
         settings_change: "<b>${actor}</b> → ${action}"
         default: "${action}"
-    diagnostics:
-      text: |
-        ⚙️ <b>Дыягностыка</b>
-
-        ${list}
-      row_fmt: "${status} <b>${label}:</b> ${value}"
-      row:
-        telegram: "Telegram API"
-        mongo: "MongoDB"
-        openai: "OpenAI"
-        openrouter: "OpenRouter"
-        qdrant: "Qdrant"
-        queue: "Чарга антыспаму"
-        uptime: "Аптайм"
-        unknown: "?"
-      btn:
-        refresh: "🔄 Абнавіць"
   empty_state:
     rules:
       title: "📜 <b>Правіл пакуль няма</b>"

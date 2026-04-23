@@ -27,14 +27,16 @@ const policy = require('../../cleanup-policy')
 const { bar, truncate } = require('../../text-utils')
 const { renderEmptyState } = require('../empty-state')
 const { logModEvent } = require('../../mod-log')
+const { resolveTargetChatId } = require('../pm-context')
 const { bot: log } = require('../../logger')
 
 // Best-effort audit helper — never await this in a way that surfaces errors
 // to the caller. The ModLog write is orthogonal to the action's success.
 const auditSettingsChange = (ctx, action) => {
-  if (!ctx || !ctx.chat || !ctx.chat.id) return
+  const chatId = resolveTargetChatId(ctx)
+  if (!chatId) return
   logModEvent(ctx.db, {
-    chatId: ctx.chat.id,
+    chatId,
     eventType: 'settings_change',
     actor: ctx.from,
     action
@@ -61,18 +63,7 @@ const WELCOME_ID = 'settings.welcome'
 const EXTRAS_ID = 'settings.extras'
 const MODLOG_ID = 'settings.modlog'
 
-const LANGUAGES = [
-  { code: 'uk', name: 'Українська' },
-  { code: 'en', name: 'English' },
-  { code: 'ru', name: 'Русский' },
-  { code: 'tr', name: 'Türkçe' },
-  { code: 'by', name: 'Беларуская' }
-]
-
-const languageName = (code) => {
-  const match = LANGUAGES.find(l => l.code === code)
-  return match ? match.name : (code || 'English')
-}
+const { LANGUAGES, languageName } = require('../../languages')
 
 const MIN_THRESHOLD = 50
 const MAX_THRESHOLD = 95
@@ -135,11 +126,16 @@ const onOff = (ctx, value) => ctx.i18n.t(value
 // ----------------------------------------------------------------------------
 
 const renderRoot = (ctx) => {
-  const s = ctx.group && ctx.group.info && ctx.group.info.settings
+  const info = ctx.group && ctx.group.info
+  const s = info && info.settings
   const spam = (s && s.openaiSpamCheck) || {}
   const welcome = (s && s.welcome) || {}
+  // In PM we show which group is being configured — the admin may juggle
+  // several. Falls back to a dash when title isn't stored (legacy docs).
+  const chatTitle = (info && info.title) || '—'
 
   const text = ctx.i18n.t('menu.settings.root.text', {
+    chatTitle,
     antispamState: onOff(ctx, spam.enabled !== false),
     threshold: spam.confidenceThreshold || 70,
     welcomeState: onOff(ctx, welcome.enable === true),

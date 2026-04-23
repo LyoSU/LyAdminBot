@@ -84,20 +84,26 @@ test('screen registers at id mod.vote.details with public access', () => {
   assert.strictEqual(s.access, 'public')
 })
 
-test('renderDetailsText: includes confidence, preview, hash, tally', () => {
+test('renderDetailsText: includes confidence, preview, tally (admin view has hash)', () => {
   const sv = mkSpamVote()
-  const text = screen.renderDetailsText(mkI18n('uk'), sv)
+  const text = screen.renderDetailsText(mkI18n('uk'), sv, { viewerIsAdmin: true })
   assert.ok(text.includes('⚖️'), 'has progress title')
   assert.ok(text.includes('87%'), 'confidence rendered')
   assert.ok(text.includes('«Buy crypto'), 'preview rendered')
-  assert.ok(text.includes('deadbeefcafe'), 'fingerprint hash rendered (first 12)')
+  assert.ok(text.includes('deadbeefcafe'), 'fingerprint hash rendered for admin')
   assert.ok(/🚫\s*4/.test(text), 'spam weighted in tally')
   assert.ok(/✅\s*1/.test(text), 'clean weighted in tally')
 })
 
-test('renderDetailsText: hash truncated to 12 chars', () => {
+test('renderDetailsText: non-admin does NOT see fingerprint hash', () => {
+  const sv = mkSpamVote()
+  const text = screen.renderDetailsText(mkI18n('uk'), sv, { viewerIsAdmin: false })
+  assert.ok(!text.includes('deadbeefcafe'), 'hash hidden from non-admin')
+})
+
+test('renderDetailsText: admin hash truncated to 12 chars', () => {
   const sv = mkSpamVote({ messageHash: 'a'.repeat(64) })
-  const text = screen.renderDetailsText(mkI18n('uk'), sv)
+  const text = screen.renderDetailsText(mkI18n('uk'), sv, { viewerIsAdmin: true })
   assert.ok(text.includes('a'.repeat(12)))
   assert.ok(!text.includes('a'.repeat(13)))
 })

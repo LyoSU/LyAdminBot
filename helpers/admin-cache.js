@@ -2,13 +2,15 @@
 //
 // Why: every menu callback in PM (settings flow) re-asks Telegram
 // "is this user admin in <group>?". Without a cache that's an HTTP round-trip
-// per click. 5-minute TTL is short enough to honor demotions reasonably fast
-// while shielding the bot from per-click latency.
+// per click. 90-second TTL balances latency relief against the window in
+// which a demoted admin can still write — long enough to absorb a click-burst
+// through a single settings flow, short enough that a demotion lands within
+// a couple of navigation steps.
 
 const { LRUCache } = require('lru-cache')
 
 const ADMIN_STATUSES = new Set(['creator', 'administrator'])
-const TTL_MS = 5 * 60 * 1000
+const TTL_MS = 90 * 1000
 
 const cache = new LRUCache({ max: 5000, ttl: TTL_MS })
 

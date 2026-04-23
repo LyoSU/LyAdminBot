@@ -9,21 +9,9 @@
 
 const { registerMenu } = require('../registry')
 const { cb, btn, row, closeBtn } = require('../keyboard')
+const { LANGUAGES, languageName: nameOf } = require('../../languages')
 
 const SCREEN_ID = 'lang.picker'
-
-const LANGUAGES = [
-  { code: 'uk', name: 'Українська' },
-  { code: 'en', name: 'English' },
-  { code: 'ru', name: 'Русский' },
-  { code: 'tr', name: 'Türkçe' },
-  { code: 'by', name: 'Беларуская' }
-]
-
-const nameOf = (code) => {
-  const found = LANGUAGES.find(l => l.code === code)
-  return found ? found.name : 'English'
-}
 
 const renderView = (ctx) => {
   const current = (ctx.i18n && typeof ctx.i18n.locale === 'function' && ctx.i18n.locale()) || 'en'

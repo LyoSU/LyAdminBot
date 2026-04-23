@@ -108,10 +108,31 @@ const sendPlaceholder = async (ctx) => {
 // Triggered when a chat member taps [🤨 За що?] on a group mod-event
 // notification. Expanded text + admin-only [↩️ Розблокувати] (when the
 // clicker is admin in the original chat).
+//
+// Access: the caller must be a current member of event.chatId. The eventId
+// hex is short enough to be enumerable in principle, and the expanded view
+// exposes the original message preview — we gate explicitly by membership
+// rather than relying on the token alone.
+const MEMBER_STATUSES = new Set(['creator', 'administrator', 'member', 'restricted'])
+
+const isChatMember = async (telegram, chatId, userId) => {
+  try {
+    const m = await telegram.getChatMember(chatId, userId)
+    return Boolean(m && MEMBER_STATUSES.has(m.status))
+  } catch {
+    return false
+  }
+}
+
 const renderModEventInPm = async (ctx, eventId) => {
   if (!ctx.db || !ctx.db.ModEvent) return false
   const event = await modEvent.getModEvent(ctx.db, eventId)
   if (!event) return false
+
+  if (!await isChatMember(ctx.telegram, event.chatId, ctx.from.id)) {
+    await replyHTML(ctx, ctx.i18n.t('mod_event.toast.not_found'))
+    return true
+  }
 
   const targetUser = {
     id: event.targetId,

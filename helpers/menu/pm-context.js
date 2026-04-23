@@ -54,4 +54,15 @@ const liftPmContext = async (ctx) => {
   }
 }
 
-module.exports = { setPmTarget, getPmTarget, clearPmTarget, clearAll, liftPmContext, _cache: cache }
+// Resolve the group chatId this handler is operating on. In PM, ctx.chat.id
+// is the DM — not the group — so prefer the lifted/deep-link target. Falls
+// through to the loaded group doc, then ctx.chat.id as a last resort.
+const resolveTargetChatId = (ctx) => {
+  if (!ctx) return null
+  if (ctx.targetChatId) return ctx.targetChatId
+  if (ctx.group && ctx.group.info && ctx.group.info.group_id) return ctx.group.info.group_id
+  if (ctx.chat && ctx.chat.id) return ctx.chat.id
+  return null
+}
+
+module.exports = { setPmTarget, getPmTarget, clearPmTarget, clearAll, liftPmContext, resolveTargetChatId, _cache: cache }

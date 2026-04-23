@@ -16,13 +16,9 @@
 //   embedding in the parse_mode:HTML messages.
 
 const { cb, btn, row } = require('./menu/keyboard')
+const { escapeHtml } = require('./text-utils')
 
 const SCREEN_ID = 'mod.event'
-
-const escapeHtml = (s) => String(s || '')
-  .replace(/&/g, '&amp;')
-  .replace(/</g, '&lt;')
-  .replace(/>/g, '&gt;')
 
 const usernameLabel = (target) => {
   if (!target) return 'Unknown'
@@ -86,9 +82,19 @@ const buildCompactText = (i18n, event, target) => {
     username: event.targetUsername,
     title: event.targetTitle
   })
-  const params = event.actionType === 'override'
-    ? { admin: usernameLabel({ first_name: event.actorName, id: event.actorId }) }
-    : { name }
+  const adminLabel = event.actorName || event.actorId
+    ? usernameLabel({ first_name: event.actorName, id: event.actorId })
+    : ''
+  let params
+  if (event.actionType === 'override') {
+    params = { admin: adminLabel }
+  } else if (event.actionType === 'manual_ban' || event.actionType === 'manual_mute' || event.actionType === 'manual_kick') {
+    // Manual actions name the admin who pressed the button — an unsigned
+    // "X отримує банан" reads like it happened on its own.
+    params = { name, admin: adminLabel }
+  } else {
+    params = { name }
+  }
   const line = i18n.t(key, params)
   return { text: line, compactLine: line }
 }

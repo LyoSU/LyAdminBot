@@ -288,15 +288,15 @@ spam:
 mod_event:
   compact:
     banned: "⛔ ${name} — спам"
-    muted: "🔇 ${name} — подозрительно · мьют 24 ч"
+    muted: "🔇 ${name} — мут 24 ч"
     deleted: "🗑 ${name} — удалено"
     suspicious: "👀 ${name} — подозрительное сообщение"
     global_ban: "🌍 ${name} — глобальный бан"
     voting: "⚖️ ${name} — на голосовании"
     override: "↩️ Отменено админом ${admin}"
-    manual_ban: "🍌 ${name} получает банан"
-    manual_mute: "🔇 ${name} — мут"
-    manual_kick: "👢 ${name} — кик"
+    manual_ban: "🍌 ${name} получает банан от ${admin}"
+    manual_mute: "🔇 ${name} — мут от ${admin}"
+    manual_kick: "👢 ${name} — кик от ${admin}"
   expanded:
     confidence_line: "📊 ${confidence}% · 🤖 ${reason}"
     preview_line: "📝 «${preview}»"
@@ -307,11 +307,8 @@ mod_event:
     less: "🛡 Скрыть детали"
     hide: "✓ Скрыть"
     undo: "↩️ Разблокировать"
-    vote_spam: "🚫 ${n}"
-    vote_clean: "✅ ${n}"
     give_rights: "📖 Дай права"
     trust_anyway: "↩️ Всё равно доверить"
-    cant_undo: "🚫 Не могу разблокировать"
     undo_short: "↩️ Отменить"
   toast:
     hidden: "✓"
@@ -325,7 +322,7 @@ mod_event:
     confirmed_signature: "подтверждённый спам-паттерн"
     community_confirmed_spammer: "повторный спамер (по голосам)"
     restricted_reputation: "ограниченная репутация"
-    no_rights_grant: "дайте мне права — сам разберусь"
+    no_rights_grant: "жду права админа"
 
 only_group: "${e.group} Работает только в группах"
 only_admin: "${e.lock} Только для админов группы"
@@ -344,7 +341,7 @@ spam_vote:
   btn_details: "🔍 Детали"
   progress:
     title: "⚖️ Голосование: ${remaining}"
-    until_resolution: "${bar}  ${votesIn} / ${votesNeeded} голосов до резолюции"
+    until_resolution: "${bar}  ${votesIn} голосов"
   details:
     hash: "🧮 Hash: <code>${hash}</code>"
     tally: "⚖️ Голоса: 🚫 ${spam} · ✅ ${clean}"
@@ -481,7 +478,7 @@ menu:
       🌐 Язык: <b>${language}</b> (auto)
       🎚 Чувствительность: <b>${threshold}%</b> (${sensitivityLabel})
       👋 Приветствие: <b>${welcomeState}</b>
-    ack: "👌 Принято — работаю"
+    ack: "👌 Принято — на страже"
     config_soon: "Настройки скоро будут активны, попробуй /settings через минуту"
     sensitivity:
       low: "мягкая"
@@ -498,6 +495,7 @@ menu:
       title: "⚙️ <b>Настройки чата</b>"
       text: |
         ⚙️ <b>Настройки чата</b>
+        💬 <b>${chatTitle}</b>
 
         🛡 Антиспам: <b>${antispamState}</b> · порог <b>${threshold}%</b>
         👋 Приветствие: <b>${welcomeState}</b> (${welcomeCount})
@@ -662,6 +660,7 @@ menu:
         added: "✓ Текст добавлен"
         removed: "✓ Текст удалён"
         too_long: "Текст слишком длинный (макс 1000 символов)"
+        links_not_allowed: "Ссылки в приветствии не разрешены — бот не раздаёт чужие URL. HTML-форматирование (<code>&lt;b&gt;</code>, <code>&lt;i&gt;</code>, <code>&lt;code&gt;</code>) работает."
         limit: "Достигнут лимит 20 текстов"
         cancelled: "↩️ Отменено"
       gifs:
@@ -675,10 +674,11 @@ menu:
         btn:
           add: "➕ Добавить gif"
           add_first: "➕ Добавить первый"
-        prompt: "Отправь <code>file_id</code> gif/стикера."
+        prompt: "Отправь gif, стикер или видео (можно и просто <code>file_id</code>). Или <code>/cancel</code> для выхода."
         added: "✓ Gif добавлен"
         removed: "✓ Gif удалён"
-        invalid: "Не похоже на file_id. Отправь строку с буквами/цифрами или <code>/cancel</code>."
+        invalid: "Отправь gif/стикер/видео или <code>file_id</code>. Или <code>/cancel</code>."
+        duplicate: "Этот gif уже в списке"
         limit: "Достигнут лимит 20 gif"
         cancelled: "↩️ Отменено"
     extras:
@@ -750,23 +750,6 @@ menu:
         untrust: "<b>${actor}</b> → убран из доверенных ${target}"
         settings_change: "<b>${actor}</b> → ${action}"
         default: "${action}"
-    diagnostics:
-      text: |
-        ⚙️ <b>Диагностика</b>
-
-        ${list}
-      row_fmt: "${status} <b>${label}:</b> ${value}"
-      row:
-        telegram: "Telegram API"
-        mongo: "MongoDB"
-        openai: "OpenAI"
-        openrouter: "OpenRouter"
-        qdrant: "Qdrant"
-        queue: "Очередь антиспама"
-        uptime: "Аптайм"
-        unknown: "?"
-      btn:
-        refresh: "🔄 Обновить"
   empty_state:
     rules:
       title: "📜 <b>Правил пока нет</b>"

@@ -7,19 +7,11 @@
 
 const { replyHTML } = require('../helpers/reply-html')
 const { getMenu } = require('../helpers/menu/registry')
-
-const LOCALE_CODES = ['uk', 'en', 'ru', 'tr', 'by']
-const LOCALE_NAMES = {
-  uk: 'Українська',
-  en: 'English',
-  ru: 'Русский',
-  tr: 'Türkçe',
-  by: 'Беларуская'
-}
+const { LANGUAGE_CODES, languageName, isKnownLanguage } = require('../helpers/languages')
 
 const buildPrivateKeyboard = () => ({
-  inline_keyboard: LOCALE_CODES.map(code => [{
-    text: LOCALE_NAMES[code],
+  inline_keyboard: LANGUAGE_CODES.map(code => [{
+    text: languageName(code),
     callback_data: `set_language:${code}`
   }])
 })
@@ -27,7 +19,7 @@ const buildPrivateKeyboard = () => ({
 module.exports = async (ctx) => {
   if (ctx.updateType === 'callback_query') {
     const code = ctx.match && ctx.match[1]
-    if (!code || !LOCALE_CODES.includes(code)) {
+    if (!code || !isKnownLanguage(code)) {
       return ctx.answerCbQuery().catch(() => {})
     }
 
@@ -38,7 +30,7 @@ module.exports = async (ctx) => {
       )
       if (chatMember && ['creator', 'administrator'].includes(chatMember.status)) {
         ctx.group.info.settings.locale = code
-        return ctx.answerCbQuery(LOCALE_NAMES[code]).catch(() => {})
+        return ctx.answerCbQuery(languageName(code)).catch(() => {})
       }
       return ctx.answerCbQuery().catch(() => {})
     }
@@ -47,7 +39,7 @@ module.exports = async (ctx) => {
     if (ctx.session && ctx.session.userInfo) {
       ctx.session.userInfo.locale = code
     }
-    return ctx.answerCbQuery(LOCALE_NAMES[code]).catch(() => {})
+    return ctx.answerCbQuery(languageName(code)).catch(() => {})
   }
 
   // /lang command. In groups, render the settings.lang screen inline.
@@ -70,5 +62,4 @@ module.exports = async (ctx) => {
   })
 }
 
-module.exports.LOCALE_CODES = LOCALE_CODES
-module.exports.LOCALE_NAMES = LOCALE_NAMES
+module.exports.LOCALE_CODES = LANGUAGE_CODES

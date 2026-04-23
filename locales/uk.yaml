@@ -295,15 +295,15 @@ spam:
 mod_event:
   compact:
     banned: "⛔ ${name} — спам"
-    muted: "🔇 ${name} — підозріло · муть 24 год"
+    muted: "🔇 ${name} — мут на 24 год"
     deleted: "🗑 ${name} — видалено"
     suspicious: "👀 ${name} — підозрілий допис"
     global_ban: "🌍 ${name} — глобальний бан"
     voting: "⚖️ ${name} — на голосуванні"
     override: "↩️ Скасовано адміном ${admin}"
-    manual_ban: "🍌 ${name} отримує банан"
-    manual_mute: "🔇 ${name} — мут"
-    manual_kick: "👢 ${name} — кік"
+    manual_ban: "🍌 ${name} отримує банан від ${admin}"
+    manual_mute: "🔇 ${name} — мут від ${admin}"
+    manual_kick: "👢 ${name} — кік від ${admin}"
   expanded:
     confidence_line: "📊 ${confidence}% · 🤖 ${reason}"
     preview_line: "📝 «${preview}»"
@@ -314,11 +314,8 @@ mod_event:
     less: "🛡 Зменшити деталі"
     hide: "✓ Сховати"
     undo: "↩️ Розблокувати"
-    vote_spam: "🚫 ${n}"
-    vote_clean: "✅ ${n}"
     give_rights: "📖 Дай права"
     trust_anyway: "↩️ Все одно довірити"
-    cant_undo: "🚫 Не можу розблокувати"
     undo_short: "↩️ Скасувати"
   toast:
     hidden: "✓"
@@ -332,7 +329,7 @@ mod_event:
     confirmed_signature: "підтверджений спам-патерн"
     community_confirmed_spammer: "повторний спамер (за голосами)"
     restricted_reputation: "обмежена репутація"
-    no_rights_grant: "дайте мені права — сам розберусь"
+    no_rights_grant: "чекаю прав адміна"
 
 only_group: "${e.group} Працює тільки в групах"
 only_admin: "${e.lock} Тільки для адмінів групи"
@@ -360,7 +357,7 @@ spam_vote:
   btn_details: "🔍 Деталі"
   progress:
     title: "⚖️ Голосування: ${remaining}"
-    until_resolution: "${bar}  ${votesIn} / ${votesNeeded} голосів до резолюції"
+    until_resolution: "${bar}  ${votesIn} голосів"
   details:
     hash: "🧮 Hash: <code>${hash}</code>"
     tally: "⚖️ Голоси: 🚫 ${spam} · ✅ ${clean}"
@@ -526,7 +523,6 @@ menu:
         ${e.notes} extra-команди (<code>#rules</code>, <code>#faq</code>)
 
         Мова: українська, english, русский, türkçe, беларуская.
-        <i>Без прапорів — мовою, а не політикою.</i>
   onboarding:
     card: |
       ${e.shield} Привіт! Я тут, антиспам активний.
@@ -553,6 +549,7 @@ menu:
       title: "⚙️ <b>Налаштування чату</b>"
       text: |
         ⚙️ <b>Налаштування чату</b>
+        💬 <b>${chatTitle}</b>
 
         🛡 Антиспам: <b>${antispamState}</b> · поріг <b>${threshold}%</b>
         👋 Привітання: <b>${welcomeState}</b> (${welcomeCount})
@@ -671,8 +668,6 @@ menu:
         🌐 <b>Мова інтерфейсу</b>
 
         Поточна: <b>${current}</b>
-
-        <i>Без прапорів — мовою, а не політикою.</i>
       active_marker: "● "
       saved: "✓ Мову збережено"
     reset:
@@ -717,6 +712,7 @@ menu:
         added: "✓ Текст додано"
         removed: "✓ Текст видалено"
         too_long: "Текст надто довгий (макс 1000 символів)"
+        links_not_allowed: "Посилання в привітанні не дозволяємо — бот не роздає чужі URL. HTML-форматування (<code>&lt;b&gt;</code>, <code>&lt;i&gt;</code>, <code>&lt;code&gt;</code>) працює."
         limit: "Досягнуто ліміт 20 текстів"
         cancelled: "↩️ Скасовано"
       gifs:
@@ -730,10 +726,11 @@ menu:
         btn:
           add: "➕ Додати gif"
           add_first: "➕ Додати перший"
-        prompt: "Надішли <code>file_id</code> gif/стікера. Поки що завантаження вкладеним файлом не підтримано — використай <code>/del</code> на існуючій gif щоб дістати id з експорту."
+        prompt: "Надішли gif, стікер чи відео (можна також просто <code>file_id</code>). Або <code>/cancel</code> щоб вийти."
         added: "✓ Gif додано"
         removed: "✓ Gif видалено"
-        invalid: "Не схоже на file_id. Надішли рядок з літерами/цифрами або <code>/cancel</code>."
+        invalid: "Надішли gif/стікер/відео або <code>file_id</code>. Або <code>/cancel</code>."
+        duplicate: "Цей gif вже в списку"
         limit: "Досягнуто ліміт 20 gif"
         cancelled: "↩️ Скасовано"
     extras:
@@ -805,23 +802,6 @@ menu:
         untrust: "<b>${actor}</b> → вилучив з довірених ${target}"
         settings_change: "<b>${actor}</b> → ${action}"
         default: "${action}"
-    diagnostics:
-      text: |
-        ⚙️ <b>Діагностика</b>
-
-        ${list}
-      row_fmt: "${status} <b>${label}:</b> ${value}"
-      row:
-        telegram: "Telegram API"
-        mongo: "MongoDB"
-        openai: "OpenAI"
-        openrouter: "OpenRouter"
-        qdrant: "Qdrant"
-        queue: "Черга антиспаму"
-        uptime: "Аптайм"
-        unknown: "?"
-      btn:
-        refresh: "🔄 Оновити"
   empty_state:
     rules:
       title: "📜 <b>Правил поки немає</b>"
@@ -952,7 +932,7 @@ captcha:
   compact:
     pending: "🤔 ${name} — підтверди що ти не бот"
     passed: "✓ ${name} — людина (пройшов перевірку)"
-    failed: "🔇 ${name} — не пройшов перевірку · муть 24 год"
+    failed: "🔇 ${name} — не пройшов перевірку · мут на 24 год"
   btn:
     start: "🤖 Я не бот"
     appeal: "🤖 Пройти перевірку"

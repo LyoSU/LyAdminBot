@@ -94,11 +94,22 @@ const truncate = (str, max, ellipsis = '…') => {
   return s.slice(0, keep) + ellipsis
 }
 
+/**
+ * Escape the four characters that would otherwise break a parse_mode=HTML
+ * Telegram message: <, >, &, ". Works on null/undefined (returns empty).
+ */
+const escapeHtml = (s) => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+
 module.exports = {
   EMOJI_REGEX,
   stripEmoji,
   hasTextualContent,
   isEmojiOnly,
   bar,
-  truncate
+  truncate,
+  escapeHtml
 }
