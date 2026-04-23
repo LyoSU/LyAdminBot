@@ -13,13 +13,26 @@ const FALLBACK_MESSAGES = {
 }
 
 /**
- * Get i18n message with fallback
+ * Get i18n message with fallback.
+ *
+ * Resilient to two failure modes both seen on prod:
+ *   - ctx.i18n missing entirely (middleware ordering)
+ *   - ctx.i18n.t('key') returning '' or the key itself (raw i18n instance
+ *     queried before per-request language context is bound — causes
+ *     "Bad Request: message text is empty" when the result lands in
+ *     sendMessage)
+ * In either case we fall back to the English bundle rather than sending
+ * a blank notification to the group.
  */
 const getMessage = (ctx, key) => {
+  const fallback = FALLBACK_MESSAGES[key] || `[${key}]`
   if (ctx.i18n && typeof ctx.i18n.t === 'function') {
-    return ctx.i18n.t(`bot_added.${key}`)
+    const localized = ctx.i18n.t(`bot_added.${key}`)
+    if (typeof localized === 'string' && localized.trim() && localized.trim() !== `bot_added.${key}`) {
+      return localized
+    }
   }
-  return FALLBACK_MESSAGES[key] || `[${key}]`
+  return fallback
 }
 
 /**

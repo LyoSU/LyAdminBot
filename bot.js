@@ -141,10 +141,7 @@ const registerMiddlewares = (bot, i18n) => {
   // 1. Skip channel posts
   bot.on(['channel_post', 'edited_channel_post'], skipChannelPosts)
 
-  // 2. Handle bot added/removed from groups
-  bot.use(handleMyChatMemberUpdates)
-
-  // 3. Global error handler
+  // 2. Global error handler
   bot.use(errorHandler)
 
   // 4. Statistics
@@ -174,6 +171,13 @@ const registerMiddlewares = (bot, i18n) => {
 
   // 7.5. Inject custom emoji map into i18n
   bot.use(emojiInject)
+
+  // 7.7. Handle bot added/removed/promoted/demoted updates. Placed AFTER
+  //      i18n+emojiInject so onboarding/demotion notifications resolve per
+  //      the group's language and render <tg-emoji> placeholders. Placed
+  //      BEFORE contextLoader because my_chat_member is not a message and
+  //      has no ctx.message for loaders to key off.
+  bot.use(handleMyChatMemberUpdates)
 
   // 8. Load context (user, group, member data)
   bot.use(contextLoader)
