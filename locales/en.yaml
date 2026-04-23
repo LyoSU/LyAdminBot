@@ -678,6 +678,138 @@ menu:
     open_in_pm:
       text: "🔧 Settings open in a <b>private chat</b> with the bot — keeps the group clean."
       btn: "⚙️ Open settings"
+    welcome:
+      text: |
+        👋 <b>Welcome new members</b>
+
+        Status: <b>${state}</b>
+        📝 Texts: <b>${textsCount}</b>
+        🎬 Gifs: <b>${gifsCount}</b>
+      btn:
+        enable: "🟢 Enable"
+        disable: "🔴 Disable"
+        texts: "✏️ Texts"
+        gifs: "🎬 Gifs"
+      texts:
+        text: |
+          ✏️ <b>Welcome texts</b> (${total}/${max})
+
+          ${list}
+        empty_title: "✏️ <b>No welcome texts yet</b>"
+        empty_hint: "<i>Add a text — new members will see it with a random gif. Use <code>%name%</code> to inject the member's name.</i>"
+        item: "${index}. ${preview}"
+        btn:
+          add: "➕ Add text"
+          add_first: "➕ Add the first one"
+        prompt: "Send the welcome text. You can use <code>%name%</code> for a name placeholder."
+        added: "✓ Text added"
+        removed: "✓ Text removed"
+        too_long: "Text is too long (max 1000 chars)"
+        limit: "Reached limit of 20 texts"
+        cancelled: "↩️ Cancelled"
+      gifs:
+        text: |
+          🎬 <b>Welcome gifs</b> (${total}/${max})
+
+          ${list}
+        empty_title: "🎬 <b>No gifs yet</b>"
+        empty_hint: "<i>Add a gif/sticker — bot will show a random one when someone joins.</i>"
+        item: "#${index}"
+        btn:
+          add: "➕ Add gif"
+          add_first: "➕ Add the first one"
+        prompt: "Send a gif/sticker <code>file_id</code>. Uploading via attachment is not yet supported."
+        added: "✓ Gif added"
+        removed: "✓ Gif removed"
+        invalid: "That doesn't look like a file_id. Send letters/digits or <code>/cancel</code>."
+        limit: "Reached limit of 20 gifs"
+        cancelled: "↩️ Cancelled"
+    extras:
+      text: "📝 <b>Extras</b> · <b>${count}</b>/<b>${max}</b>"
+      empty_title: "📝 <b>No extras yet</b>"
+      empty_hint: "<i>Save a quick command: reply to a message with <code>!extra name</code>. Then call it via <code>#name</code>.</i>"
+      not_found: "Extra not found"
+      btn:
+        create: "➕ Create"
+      type:
+        text: "text"
+        photo: "photo"
+        video: "video"
+        animation: "gif"
+        document: "document"
+        sticker: "sticker"
+        voice: "voice"
+        audio: "audio"
+        video_note: "video note"
+      view:
+        text: |
+          📝 <b>#${name}</b>
+
+          Type: <b>${type}</b>
+          <code>${preview}</code>
+        no_preview: "(no text)"
+        confirm_delete: "🗑 Delete <b>#${name}</b>?"
+        rename_prompt: "Send a new name for <code>#${name}</code> (latin/cyrillic/digits/underscore, ≤30)."
+        rename_too_long: "Name is too long (max 30 chars)"
+        rename_invalid: "Allowed: latin, cyrillic, digits, <code>_</code>"
+        rename_exists: "That name already exists"
+        renamed: "✓ <code>#${from}</code> → <code>#${to}</code>"
+        deleted: "✓ Deleted"
+        cancelled: "↩️ Cancelled"
+        btn:
+          rename: "✏️ Rename"
+          delete: "🗑 Delete"
+          confirm: "⚠️ Yes, delete"
+    modlog:
+      text: |
+        📋 <b>Recent actions</b> · ${range} · <b>${total}</b>
+
+        ${list}
+      empty_text: "📋 <b>Log</b> · ${range}"
+      empty_title: "📋 <b>Nothing here yet</b>"
+      empty_hint: "<i>Manual and automatic moderation actions + settings changes will appear here for the selected period.</i>"
+      active_marker: "● "
+      range:
+        24h: "24h"
+        7d: "7d"
+        all: "all time"
+      btn:
+        24h: "24h"
+        7d: "7 days"
+        all: "All time"
+      actor:
+        bot: "bot"
+      row:
+        manual_ban: "<b>${actor}</b> → ban ${target} (${action})"
+        manual_mute: "<b>${actor}</b> → mute ${target} (${action})"
+        manual_kick: "<b>${actor}</b> → kick ${target}"
+        manual_del: "<b>${actor}</b> → deleted message from ${target}"
+        auto_ban: "auto-ban ${target} (${action})"
+        auto_mute: "auto-mute ${target} (${action})"
+        auto_del: "auto-delete ${target}"
+        override: "<b>${actor}</b> → override (${action})"
+        vote_resolved: "vote: ${action}"
+        trust: "<b>${actor}</b> → trusted ${target}"
+        untrust: "<b>${actor}</b> → untrusted ${target}"
+        settings_change: "<b>${actor}</b> → ${action}"
+        default: "${action}"
+    diagnostics:
+      text: |
+        ⚙️ <b>Diagnostics</b>
+
+        ${list}
+      row_fmt: "${status} <b>${label}:</b> ${value}"
+      row:
+        telegram: "Telegram API"
+        mongo: "MongoDB"
+        openai: "OpenAI"
+        openrouter: "OpenRouter"
+        qdrant: "Qdrant"
+        queue: "Antispam queue"
+        uptime: "Uptime"
+        unknown: "?"
+      btn:
+        refresh: "🔄 Refresh"
   empty_state:
     rules:
       title: "📜 <b>No rules yet</b>"

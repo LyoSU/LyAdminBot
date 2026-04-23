@@ -495,6 +495,138 @@ menu:
     open_in_pm:
       text: "🔧 Налады адкрываюцца ў <b>прыватцы</b> з ботам — каб не засмечваць групавы чат."
       btn: "⚙️ Адкрыць налады"
+    welcome:
+      text: |
+        👋 <b>Прывітанне новенькіх</b>
+
+        Стан: <b>${state}</b>
+        📝 Тэкстаў: <b>${textsCount}</b>
+        🎬 Gif: <b>${gifsCount}</b>
+      btn:
+        enable: "🟢 Уключыць"
+        disable: "🔴 Выключыць"
+        texts: "✏️ Тэксты"
+        gifs: "🎬 Gif"
+      texts:
+        text: |
+          ✏️ <b>Тэксты прывітання</b> (${total}/${max})
+
+          ${list}
+        empty_title: "✏️ <b>Тэкстаў прывітання пакуль няма</b>"
+        empty_hint: "<i>Дадайце тэкст — новенькія ўбачаць яго з выпадковым gif. Можна выкарыстаць <code>%name%</code> для падстаноўкі імя.</i>"
+        item: "${index}. ${preview}"
+        btn:
+          add: "➕ Дадаць тэкст"
+          add_first: "➕ Дадаць першы"
+        prompt: "Дашліце тэкст прывітання. Можна выкарыстаць <code>%name%</code>."
+        added: "✓ Тэкст дададзены"
+        removed: "✓ Тэкст выдалены"
+        too_long: "Тэкст занадта доўгі (макс 1000 сімвалаў)"
+        limit: "Дасягнуты ліміт 20 тэкстаў"
+        cancelled: "↩️ Скасавана"
+      gifs:
+        text: |
+          🎬 <b>Gif прывітання</b> (${total}/${max})
+
+          ${list}
+        empty_title: "🎬 <b>Gif пакуль няма</b>"
+        empty_hint: "<i>Дадайце gif/стыкер — бот будзе паказваць выпадковы пры ўваходзе.</i>"
+        item: "#${index}"
+        btn:
+          add: "➕ Дадаць gif"
+          add_first: "➕ Дадаць першы"
+        prompt: "Дашліце <code>file_id</code> gif/стыкера."
+        added: "✓ Gif дададзены"
+        removed: "✓ Gif выдалены"
+        invalid: "Не падобна на file_id. Дашліце радок з літарамі/лічбамі або <code>/cancel</code>."
+        limit: "Дасягнуты ліміт 20 gif"
+        cancelled: "↩️ Скасавана"
+    extras:
+      text: "📝 <b>Extras</b> · <b>${count}</b>/<b>${max}</b>"
+      empty_title: "📝 <b>Extras пакуль няма</b>"
+      empty_hint: "<i>Захавайце хуткую каманду: у адказ на паведамленне напішыце <code>!extra імя</code>. Затым выклікайце праз <code>#імя</code>.</i>"
+      not_found: "Extra не знойдзена"
+      btn:
+        create: "➕ Стварыць"
+      type:
+        text: "тэкст"
+        photo: "фота"
+        video: "відэа"
+        animation: "gif"
+        document: "дакумент"
+        sticker: "стыкер"
+        voice: "голас"
+        audio: "аўдыа"
+        video_note: "кружок"
+      view:
+        text: |
+          📝 <b>#${name}</b>
+
+          Тып: <b>${type}</b>
+          <code>${preview}</code>
+        no_preview: "(без тэксту)"
+        confirm_delete: "🗑 Выдаліць <b>#${name}</b>?"
+        rename_prompt: "Дашліце новае імя для <code>#${name}</code> (лацінка/кірыліца/лічбы/падкрэсліванне, ≤30)."
+        rename_too_long: "Імя занадта доўгае (макс 30)"
+        rename_invalid: "Дазволена: лацінка, кірыліца, лічбы, <code>_</code>"
+        rename_exists: "Такое імя ўжо ёсць"
+        renamed: "✓ <code>#${from}</code> → <code>#${to}</code>"
+        deleted: "✓ Выдалена"
+        cancelled: "↩️ Скасавана"
+        btn:
+          rename: "✏️ Перайменаваць"
+          delete: "🗑 Выдаліць"
+          confirm: "⚠️ Так, выдаліць"
+    modlog:
+      text: |
+        📋 <b>Апошнія дзеянні</b> · ${range} · <b>${total}</b>
+
+        ${list}
+      empty_text: "📋 <b>Журнал</b> · ${range}"
+      empty_title: "📋 <b>Пакуль нічога не адбылося</b>"
+      empty_hint: "<i>Тут зʼявяцца ручныя і аўтаматычныя дзеянні мадэрацыі + змены налад за абраны перыяд.</i>"
+      active_marker: "● "
+      range:
+        24h: "24 г"
+        7d: "7 дзён"
+        all: "увесь час"
+      btn:
+        24h: "24 г"
+        7d: "7 дзён"
+        all: "Увесь час"
+      actor:
+        bot: "бот"
+      row:
+        manual_ban: "<b>${actor}</b> → бан ${target} (${action})"
+        manual_mute: "<b>${actor}</b> → мут ${target} (${action})"
+        manual_kick: "<b>${actor}</b> → кік ${target}"
+        manual_del: "<b>${actor}</b> → выдаліў паведамленне ${target}"
+        auto_ban: "аўта-бан ${target} (${action})"
+        auto_mute: "аўта-мут ${target} (${action})"
+        auto_del: "аўта-выдаленне ${target}"
+        override: "<b>${actor}</b> → скасаванне (${action})"
+        vote_resolved: "галасаванне: ${action}"
+        trust: "<b>${actor}</b> → давераны ${target}"
+        untrust: "<b>${actor}</b> → выдалены з давераных ${target}"
+        settings_change: "<b>${actor}</b> → ${action}"
+        default: "${action}"
+    diagnostics:
+      text: |
+        ⚙️ <b>Дыягностыка</b>
+
+        ${list}
+      row_fmt: "${status} <b>${label}:</b> ${value}"
+      row:
+        telegram: "Telegram API"
+        mongo: "MongoDB"
+        openai: "OpenAI"
+        openrouter: "OpenRouter"
+        qdrant: "Qdrant"
+        queue: "Чарга антыспаму"
+        uptime: "Аптайм"
+        unknown: "?"
+      btn:
+        refresh: "🔄 Абнавіць"
   empty_state:
     rules:
       title: "📜 <b>Правіл пакуль няма</b>"

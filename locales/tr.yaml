@@ -443,6 +443,138 @@ menu:
     open_in_pm:
       text: "🔧 Ayarlar bot ile <b>özel sohbette</b> açılır — grubu temiz tutar."
       btn: "⚙️ Ayarları aç"
+    welcome:
+      text: |
+        👋 <b>Yeni üyeler için karşılama</b>
+
+        Durum: <b>${state}</b>
+        📝 Metinler: <b>${textsCount}</b>
+        🎬 Gif: <b>${gifsCount}</b>
+      btn:
+        enable: "🟢 Aç"
+        disable: "🔴 Kapat"
+        texts: "✏️ Metinler"
+        gifs: "🎬 Gif"
+      texts:
+        text: |
+          ✏️ <b>Karşılama metinleri</b> (${total}/${max})
+
+          ${list}
+        empty_title: "✏️ <b>Henüz karşılama metni yok</b>"
+        empty_hint: "<i>Bir metin ekle — yeni üyeler rastgele bir gif ile birlikte görür. <code>%name%</code> kullanarak ismi yerleştirebilirsin.</i>"
+        item: "${index}. ${preview}"
+        btn:
+          add: "➕ Metin ekle"
+          add_first: "➕ İlkini ekle"
+        prompt: "Karşılama metnini gönder. <code>%name%</code> ile isim ekleyebilirsin."
+        added: "✓ Metin eklendi"
+        removed: "✓ Metin silindi"
+        too_long: "Metin çok uzun (maks 1000 karakter)"
+        limit: "20 metin sınırına ulaşıldı"
+        cancelled: "↩️ İptal"
+      gifs:
+        text: |
+          🎬 <b>Karşılama gif'leri</b> (${total}/${max})
+
+          ${list}
+        empty_title: "🎬 <b>Henüz gif yok</b>"
+        empty_hint: "<i>Bir gif/sticker ekle — yeni üye girince bot rastgele birini gösterir.</i>"
+        item: "#${index}"
+        btn:
+          add: "➕ Gif ekle"
+          add_first: "➕ İlkini ekle"
+        prompt: "Bir gif/sticker <code>file_id</code> gönder."
+        added: "✓ Gif eklendi"
+        removed: "✓ Gif silindi"
+        invalid: "file_id'ye benzemiyor. Harf/rakam dizisi gönder veya <code>/cancel</code>."
+        limit: "20 gif sınırına ulaşıldı"
+        cancelled: "↩️ İptal"
+    extras:
+      text: "📝 <b>Extras</b> · <b>${count}</b>/<b>${max}</b>"
+      empty_title: "📝 <b>Henüz extra yok</b>"
+      empty_hint: "<i>Hızlı komut kaydet: bir mesaja yanıt olarak <code>!extra ad</code> yaz. Sonra <code>#ad</code> ile çağır.</i>"
+      not_found: "Extra bulunamadı"
+      btn:
+        create: "➕ Oluştur"
+      type:
+        text: "metin"
+        photo: "fotoğraf"
+        video: "video"
+        animation: "gif"
+        document: "belge"
+        sticker: "sticker"
+        voice: "ses"
+        audio: "ses"
+        video_note: "video notu"
+      view:
+        text: |
+          📝 <b>#${name}</b>
+
+          Tür: <b>${type}</b>
+          <code>${preview}</code>
+        no_preview: "(metin yok)"
+        confirm_delete: "🗑 <b>#${name}</b> silinsin mi?"
+        rename_prompt: "<code>#${name}</code> için yeni ad gönder (latin/kiril/rakam/alt çizgi, ≤30)."
+        rename_too_long: "Ad çok uzun (maks 30)"
+        rename_invalid: "İzin verilen: latin, kiril, rakam, <code>_</code>"
+        rename_exists: "Bu ad zaten var"
+        renamed: "✓ <code>#${from}</code> → <code>#${to}</code>"
+        deleted: "✓ Silindi"
+        cancelled: "↩️ İptal"
+        btn:
+          rename: "✏️ Yeniden adlandır"
+          delete: "🗑 Sil"
+          confirm: "⚠️ Evet, sil"
+    modlog:
+      text: |
+        📋 <b>Son işlemler</b> · ${range} · <b>${total}</b>
+
+        ${list}
+      empty_text: "📋 <b>Günlük</b> · ${range}"
+      empty_title: "📋 <b>Henüz bir şey yok</b>"
+      empty_hint: "<i>Seçili dönemdeki manuel ve otomatik moderasyon eylemleri + ayar değişiklikleri burada görünecek.</i>"
+      active_marker: "● "
+      range:
+        24h: "24 sa"
+        7d: "7 gün"
+        all: "tüm zaman"
+      btn:
+        24h: "24 sa"
+        7d: "7 gün"
+        all: "Tüm zaman"
+      actor:
+        bot: "bot"
+      row:
+        manual_ban: "<b>${actor}</b> → ban ${target} (${action})"
+        manual_mute: "<b>${actor}</b> → susturma ${target} (${action})"
+        manual_kick: "<b>${actor}</b> → atma ${target}"
+        manual_del: "<b>${actor}</b> → ${target} mesajını sildi"
+        auto_ban: "oto-ban ${target} (${action})"
+        auto_mute: "oto-susturma ${target} (${action})"
+        auto_del: "oto-silme ${target}"
+        override: "<b>${actor}</b> → geri al (${action})"
+        vote_resolved: "oylama: ${action}"
+        trust: "<b>${actor}</b> → güvenilir ${target}"
+        untrust: "<b>${actor}</b> → güvenilirden çıkardı ${target}"
+        settings_change: "<b>${actor}</b> → ${action}"
+        default: "${action}"
+    diagnostics:
+      text: |
+        ⚙️ <b>Tanılama</b>
+
+        ${list}
+      row_fmt: "${status} <b>${label}:</b> ${value}"
+      row:
+        telegram: "Telegram API"
+        mongo: "MongoDB"
+        openai: "OpenAI"
+        openrouter: "OpenRouter"
+        qdrant: "Qdrant"
+        queue: "Antispam kuyruğu"
+        uptime: "Çalışma süresi"
+        unknown: "?"
+      btn:
+        refresh: "🔄 Yenile"
   empty_state:
     rules:
       title: "📜 <b>Henüz kural yok</b>"
