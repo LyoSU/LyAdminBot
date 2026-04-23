@@ -239,6 +239,32 @@ const generateSignatures = (text) => {
  * Check if a message matches any confirmed spam signatures
  * Returns match info or null
  */
+// Token Jaccard — token-level similarity as a second gate on top of simhash.
+// simhash can alias two messages that share *no* meaningful tokens if stopword
+// vectors collide. Jaccard on the raw token set catches that: "similar bit
+// vector but zero token overlap" means the simhash is coincidentally close,
+// not that the messages are actually similar. Rejected when overlap is low.
+const jaccardTokens = (textA, textB) => {
+  if (!textA || !textB) return 0
+  const aTokens = new Set(tokenize(textA))
+  const bTokens = new Set(tokenize(textB))
+  if (aTokens.size === 0 || bTokens.size === 0) return 0
+  let intersect = 0
+  for (const t of aTokens) if (bTokens.has(t)) intersect++
+  const union = aTokens.size + bTokens.size - intersect
+  return union > 0 ? intersect / union : 0
+}
+
+// Scale Hamming threshold with text length. Short texts have noisy simhash
+// (few tokens → vector dominated by stopwords), so we require a tighter
+// match. The default 5 bits only applies to meaningfully long content.
+const hammingThresholdFor = (text, defaultMax) => {
+  const words = (text || '').split(/\s+/).filter(Boolean).length
+  if (words < 12) return Math.min(3, defaultMax)
+  if (words < 20) return Math.min(4, defaultMax)
+  return defaultMax
+}
+
 const checkSignatures = async (text, db, options = {}) => {
   const {
     // Tightened from 8 → 5 after a FP was observed in prod: a 200-char
@@ -247,9 +273,15 @@ const checkSignatures = async (text, db, options = {}) => {
     // heavy tokens, two UNRELATED messages routinely land ≤8 bits apart.
     // 5 bits (≈92% identical) keeps real spam variants while rejecting
     // statistical neighbours. Pair with `minConfirmations` to require
-    // multi-incident evidence before acting on fuzzy.
+    // multi-incident evidence before acting on fuzzy. Short messages
+    // further tighten to 3 bits via `hammingThresholdFor`.
     maxHammingDistance = 5,
     minConfirmations = 2,
+    // Second gate on fuzzy matches: require non-trivial token overlap
+    // with the stored sample. 0.2 = ~20% shared tokens. Rejects the
+    // "same simhash vector, different topic" class of false-positives
+    // we saw when dev-chat coincidentally aliased a promo template.
+    minTokenJaccard = 0.2,
     requireConfirmed = true
   } = options
 
@@ -294,6 +326,10 @@ const checkSignatures = async (text, db, options = {}) => {
   // 3. Check fuzzy hash with Hamming distance
   // Skip if fuzzyHash is null (text collapsed during normalization)
   if (signatures.fuzzyHash) {
+    // Length-adaptive threshold — stopword-heavy short messages alias
+    // too easily at the default 5 bits.
+    const effectiveMaxDistance = hammingThresholdFor(text, maxHammingDistance)
+
     const fuzzyCandidates = await db.SpamSignature.find({
       fuzzyHash: { $exists: true, $ne: null },
       ...statusQuery
@@ -301,13 +337,20 @@ const checkSignatures = async (text, db, options = {}) => {
 
     for (const candidate of fuzzyCandidates) {
       const distance = hammingDistance(signatures.fuzzyHash, candidate.fuzzyHash)
-      if (distance > maxHammingDistance) continue
+      if (distance > effectiveMaxDistance) continue
       // Require multi-incident evidence: a signature that has only been
       // reported once can itself be a FP-to-be. We don't want ONE bad
       // confirmation to poison near-neighbours across the whole simHash
       // space. `confirmations >= minConfirmations` is the trust gate.
       const confirmations = Number(candidate.confirmations) || 0
       if (confirmations < minConfirmations) continue
+      // Secondary gate: reject matches that share too few actual tokens
+      // with the stored sample. simhash closeness without lexical overlap
+      // is the signature of an alias collision, not a real variant.
+      if (candidate.sampleText) {
+        const overlap = jaccardTokens(text, candidate.sampleText)
+        if (overlap < minTokenJaccard) continue
+      }
       const confidence = Math.max(75, 95 - distance * 2)
       return {
         match: 'fuzzy',
@@ -587,6 +630,8 @@ module.exports = {
   sha256,
   simHash,
   hammingDistance,
+  jaccardTokens,
+  hammingThresholdFor,
 
   // High-level API
   generateSignatures,
