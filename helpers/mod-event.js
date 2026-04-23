@@ -60,7 +60,16 @@ const COMPACT_KEY_BY_ACTION = {
   // auto_ban / auto_mute below.
   manual_ban: 'mod_event.compact.manual_ban',
   manual_mute: 'mod_event.compact.manual_mute',
-  manual_kick: 'mod_event.compact.manual_kick'
+  manual_kick: 'mod_event.compact.manual_kick',
+  // Captcha-gate states. The pending line is the only one rendered by
+  // `mod-event-send`; passed/failed are written by `captcha-flow.applyPass`
+  // / `applyFail` directly via editHTML so the keys live alongside the
+  // captcha namespace, not under mod_event.compact.*. We still keep the
+  // pending_captcha → captcha.compact.pending mapping here so a stray
+  // re-render (e.g. `mod.event:less`) finds the right key.
+  pending_captcha: 'captcha.compact.pending',
+  captcha_passed: 'captcha.compact.passed',
+  captcha_failed: 'captcha.compact.failed'
 }
 
 // Derive the name we plug into the compact line. For override events the

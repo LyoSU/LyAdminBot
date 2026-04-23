@@ -23,5 +23,16 @@ module.exports = {
   onboarding_ack: 30 * 1000,
   confirm_screen: 30 * 1000,
   quick_picker: 30 * 1000,
-  menu_state: 10 * 60 * 1000
+  menu_state: 10 * 60 * 1000,
+  // Captcha gates (mid-confidence soft-mute + global-ban appeal).
+  // captcha_window      — soft-mute restriction window for the suspect user.
+  //                       Matches the captcha row TTL; on expiry the
+  //                       in-process escalation timer flips to a 24h mute.
+  // captcha_appeal_window — global-ban appeal slot in PM.
+  // captcha_pass_notice — auto-delete the "✓ {name} — людина" group line
+  //                       after a pass; the action is journalled in ModLog
+  //                       so the in-chat record is intentionally short-lived.
+  captcha_window: 5 * 60 * 1000,
+  captcha_appeal_window: 10 * 60 * 1000,
+  captcha_pass_notice: 30 * 1000
 }
