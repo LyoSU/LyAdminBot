@@ -6,6 +6,8 @@ const { addSignature } = require('../helpers/spam-signatures')
 const { report: reportLog } = require('../helpers/logger')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
 const { sendModEventNotification } = require('../helpers/mod-event-send')
+const { ackOnTarget, REACTIONS } = require('../helpers/reactions')
+const { withTyping } = require('../helpers/typing')
 
 // Rate limiting: max 3 reports per user per 5 minutes
 const reportCooldowns = new Map()
@@ -137,6 +139,10 @@ const handleReport = async (ctx) => {
     return ctx.replyWithHTML(ctx.i18n.t('report.no_content'))
   }
 
+  // 👀 reaction on the reported message (§15) — tells the reporter
+  // AND the target that the bot saw the report without a text ack.
+  ackOnTarget(ctx, replyMsg.message_id, REACTIONS.report).catch(() => {})
+
   // Send "analyzing" message
   const statusMsg = await ctx.replyWithHTML(ctx.i18n.t('report.analyzing'))
 
@@ -251,8 +257,9 @@ const handleReport = async (ctx) => {
       status: rep.status || 'neutral'
     }, 'Checking user')
 
-    // Force spam check
-    const result = await checkSpam(messageText || '[Media]', mockCtx, spamSettings)
+    // Force spam check (wrapped in typing indicator — this is the slow path,
+    // LLM analysis can take 2–8 s).
+    const result = await withTyping(ctx, () => checkSpam(messageText || '[Media]', mockCtx, spamSettings))
 
     // Handle null result
     if (!result) {

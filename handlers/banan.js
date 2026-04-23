@@ -8,6 +8,7 @@ const modEvent = require('../helpers/mod-event')
 const policy = require('../helpers/cleanup-policy')
 const { renderPicker } = require('../helpers/menu/screens/mod-ban-picker')
 const { sendRightsCard } = require('../helpers/menu/screens/mod-rights')
+const { ackOnTarget, REACTIONS } = require('../helpers/reactions')
 
 const BAN_UNITS = { m: 60, h: 3600, d: 86400 }
 const MAX_BAN = 364 * 24 * 60 * 60
@@ -462,6 +463,13 @@ module.exports = async (ctx) => {
       { source: 'assets/arkasha_banan.webp' },
       { reply_to_message_id: ctx.message.message_id }
     ).catch(() => {})
+  }
+
+  // 🍌 reaction on the muted user's message (§15). Cosmetic — silently
+  // swallows failures inside reactions.js if reactions are disabled in
+  // the chat or the API call races the delete.
+  if (ctx.message.reply_to_message && ctx.message.reply_to_message.message_id) {
+    ackOnTarget(ctx, ctx.message.reply_to_message.message_id, REACTIONS.banan).catch(() => {})
   }
 
   const easterKey = getEasterEggKey(banTime, isSelfBan, banMember)

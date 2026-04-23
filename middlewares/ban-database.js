@@ -169,7 +169,8 @@ module.exports = async (ctx) => {
               notificationMsg = await ctx.replyWithHTML(getGenericMessage(ctx, 'banned', displayName), {
                 reply_to_message_id: ctx.message.message_id,
                 allow_sending_without_reply: true,
-                disable_web_page_preview: true
+                disable_web_page_preview: true,
+                link_preview_options: { is_disabled: true }
               })
             } catch (error) {
               banDatabaseLog.error({ err: error.message }, 'Failed to send notification')

@@ -1,5 +1,6 @@
 const replicators = require('telegraf/core/replicators')
 const { escapeRegex } = require('../../utils')
+const { ackOnTarget, REACTIONS } = require('../../helpers/reactions')
 
 module.exports = async (ctx) => {
   const extraName = ctx.match[2]
@@ -24,6 +25,9 @@ module.exports = async (ctx) => {
         type: extraType,
         message: extraMessage
       })
+
+      // ✍️ reaction on the sample message — cosmetic ack (§15).
+      ackOnTarget(ctx, replyMessage.message_id, REACTIONS.extraSaved).catch(() => {})
 
       await ctx.replyWithHTML(ctx.i18n.t('cmd.extra.push', { extraName }))
     } else if (groupExtra) ctx.replyWithHTML(ctx.i18n.t('cmd.extra.pull', { extraName }))

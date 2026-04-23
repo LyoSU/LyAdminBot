@@ -1,4 +1,5 @@
 const { btnIcons } = require('../../helpers/emoji-map')
+const { ackOnTarget, REACTIONS } = require('../../helpers/reactions')
 
 /**
  * Build inline keyboard for spam settings
@@ -256,6 +257,14 @@ const handleTrustCommand = async (ctx, args, settings) => {
   }
 
   settings.trustedUsers.push(targetId)
+
+  // 👌 reaction on the replied-to message when trust was added via reply
+  // (§15 — cosmetic ack, silently fails if reactions are disabled).
+  const replyForReaction = ctx.message && ctx.message.reply_to_message
+  if (replyForReaction && replyForReaction.message_id) {
+    ackOnTarget(ctx, replyForReaction.message_id, REACTIONS.trustOk).catch(() => {})
+  }
+
   return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.added', { name: targetName }))
 }
 

@@ -477,7 +477,8 @@ const createVoteEvent = async (ctx, options) => {
     const notificationMsg = await ctx.telegram.sendMessage(ctx.chat.id, notification.text, {
       parse_mode: 'HTML',
       reply_markup: notification.keyboard,
-      disable_web_page_preview: true
+      disable_web_page_preview: true,
+      link_preview_options: { is_disabled: true }
     })
 
     // Save notification message ID for later updates
@@ -518,7 +519,8 @@ const updateVoteUI = async (ctx, spamVote) => {
       {
         parse_mode: 'HTML',
         reply_markup: notification.keyboard,
-        disable_web_page_preview: true
+        disable_web_page_preview: true,
+        link_preview_options: { is_disabled: true }
       }
     )
   } catch (error) {
@@ -569,7 +571,8 @@ const showResultUI = async (ctx, spamVote, reputationChange = null) => {
       text,
       {
         parse_mode: 'HTML',
-        disable_web_page_preview: true
+        disable_web_page_preview: true,
+        link_preview_options: { is_disabled: true }
       }
     )
 

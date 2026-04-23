@@ -1,4 +1,5 @@
 const { sendModEventNotification } = require('../helpers/mod-event-send')
+const { withTyping } = require('../helpers/typing')
 
 // Admin cache: Map<chatId, { adminIds: Set<number>, cachedAt: number }>
 const adminCache = new Map()
@@ -464,9 +465,13 @@ module.exports = async (ctx) => {
         return false
       }
 
+      // Wrap the full-pipeline check in a typing indicator. Only the LLM
+      // leg is actually slow (2–8 s) but the indicator is effectively
+      // free — callApi failures silently drop inside withTyping/
+      // reactions helpers.
       let result
       try {
-        result = await checkSpam(messageText, ctx, spamSettings)
+        result = await withTyping(ctx, () => checkSpam(messageText, ctx, spamSettings))
       } catch (error) {
         spamLog.error({ userId: senderId, userName: userName(senderInfo), err: error.message }, 'Check failed')
         return false

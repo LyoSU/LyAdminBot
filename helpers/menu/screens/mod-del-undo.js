@@ -19,6 +19,7 @@ const { replyHTML } = require('../../reply-html')
 const { scheduleDeletion } = require('../../message-cleanup')
 const policy = require('../../cleanup-policy')
 const buffer = require('../../delete-buffer')
+const { ackOnTarget, REACTIONS } = require('../../reactions')
 const { bot: log } = require('../../logger')
 
 const SCREEN_ID = 'mod.del.undo'
@@ -65,6 +66,11 @@ const sendUndoNotification = async (ctx, { chatId, messageId }) => {
       delayMs: policy.banan_undo,
       source: 'mod_del_undo'
     }, ctx.telegram).catch(() => {})
+  }
+  // 🗑 reaction on the bot's own notification — visual cue that the
+  // deletion succeeded (§15). Cosmetic only; failures absorbed.
+  if (sent && sent.message_id) {
+    ackOnTarget(ctx, sent.message_id, REACTIONS.del).catch(() => {})
   }
   return sent
 }
