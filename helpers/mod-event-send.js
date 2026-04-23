@@ -13,10 +13,20 @@
 // admin-only semantics by rejecting non-admin clicks with a localized toast.
 
 const modEvent = require('./mod-event')
+const { logModEvent } = require('./mod-log')
 const { replyHTML } = require('./reply-html')
 const { scheduleDeletion } = require('./message-cleanup')
 const policy = require('./cleanup-policy')
 const { notification: log } = require('./logger')
+
+// Map ModEvent.actionType → ModLog.eventType. ModLog is the audit trail; not
+// every actionType is auditable (override is written explicitly from the
+// undo handler; voting resolves into a separate vote_resolved row).
+const MOD_LOG_TYPE_BY_ACTION = {
+  auto_ban: 'auto_ban',
+  auto_mute: 'auto_mute',
+  auto_delete: 'auto_del'
+}
 
 /**
  * @param {Object} ctx — Telegraf context (must have ctx.telegram, ctx.chat,
@@ -70,6 +80,20 @@ const sendModEventNotification = async (ctx, opts = {}) => {
   } catch (err) {
     log.error({ err: err.message, actionType }, 'mod-event-send: failed to create event row')
     return null
+  }
+
+  // Audit automatic actions into ModLog (parallel to the ephemeral ModEvent).
+  // Decoupled TTLs: ModEvent = 7d UI state, ModLog = 30d queryable history.
+  const logType = MOD_LOG_TYPE_BY_ACTION[actionType]
+  if (logType) {
+    logModEvent(ctx.db, {
+      chatId: ctx.chat.id,
+      eventType: logType,
+      actor: (actor && actor !== 'bot') ? actor : null,
+      target: targetUser,
+      action: reason || '',
+      reason: confidence !== undefined ? `confidence=${confidence}` : null
+    }).catch(() => {})
   }
 
   const { text } = modEvent.buildCompactText(ctx.i18n, event, targetUser)

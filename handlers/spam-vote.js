@@ -3,6 +3,7 @@ const { addSignature } = require('../helpers/spam-signatures')
 const { getReputationStatus } = require('../helpers/reputation')
 const { spamVote: log, nlp: nlpLog } = require('../helpers/logger')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
+const { logModEvent } = require('../helpers/mod-log')
 const nlpClient = require('../helpers/nlp-client')
 const adminFeedback = require('../helpers/admin-feedback')
 
@@ -283,6 +284,15 @@ const processVoteResult = async (ctx, spamVote, skipSave = false) => {
 
   // Update UI to show result
   await showResultUI(ctx, spamVote, reputationChange)
+
+  // Audit the resolution so it shows up in /settings → 📋 Журнал.
+  logModEvent(ctx.db, {
+    chatId: spamVote.chatId,
+    eventType: 'vote_resolved',
+    target: spamVote.bannedUserId ? { id: spamVote.bannedUserId } : null,
+    action: `winner=${winner}`,
+    reason: `resolvedBy=${spamVote.resolvedBy || 'votes'}`
+  }).catch(() => {})
 
   log.info({
     eventId: spamVote.eventId,

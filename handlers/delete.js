@@ -1,6 +1,7 @@
 const { mapTelegramError } = require('../helpers/error-mapper')
 const { isSenderAdmin } = require('../helpers/is-sender-admin')
 const buffer = require('../helpers/delete-buffer')
+const { logModEvent } = require('../helpers/mod-log')
 const { sendUndoNotification } = require('../helpers/menu/screens/mod-del-undo')
 const { sendRightsCard } = require('../helpers/menu/screens/mod-rights')
 
@@ -38,6 +39,15 @@ module.exports = async (ctx) => {
     })
 
     if (deleted) {
+      // Audit the manual-delete before surfacing the undo notification —
+      // ordering doesn't matter for correctness, but readable trace order helps.
+      logModEvent(ctx.db, {
+        chatId: ctx.chat.id,
+        eventType: 'manual_del',
+        actor: ctx.from,
+        target: target.from
+      }).catch(() => {})
+
       // Best-effort undo notification. Failure is purely cosmetic — the
       // delete already succeeded. Notification self-expires via the
       // standard cleanup queue.

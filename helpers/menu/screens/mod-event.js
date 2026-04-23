@@ -25,6 +25,7 @@ const { registerMenu } = require('../registry')
 const { isAdmin } = require('../access')
 const { editHTML } = require('../../reply-html')
 const modEvent = require('../../mod-event')
+const { logModEvent } = require('../../mod-log')
 const policy = require('../../cleanup-policy')
 const { scheduleDeletion } = require('../../message-cleanup')
 const { bot: log } = require('../../logger')
@@ -186,6 +187,19 @@ const handle = async (ctx, action, args) => {
       actorName: adminName
     })
     const overrideEvent = updated || { ...event.toObject(), actionType: 'override', actorId: ctx.from && ctx.from.id, actorName: adminName }
+    // Audit the override in ModLog; reason carries the original eventId so
+    // the journal can cross-reference the undone action.
+    logModEvent(ctx.db, {
+      chatId: event.chatId,
+      eventType: 'override',
+      actor: ctx.from,
+      target: {
+        id: event.targetId,
+        name: event.targetName || event.targetUsername || null
+      },
+      action: `undo ${event.actionType}`,
+      reason: `eventId=${eventId}`
+    }).catch(() => {})
     const { text } = modEvent.buildCompactText(ctx.i18n, overrideEvent, buildTarget(overrideEvent))
     try {
       await editHTML(ctx, ctx.callbackQuery.message.message_id, text, {

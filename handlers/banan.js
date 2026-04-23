@@ -5,6 +5,7 @@ const { scheduleDeletion } = require('../helpers/message-cleanup')
 const { isSenderAdmin } = require('../helpers/is-sender-admin')
 const { replyHTML } = require('../helpers/reply-html')
 const modEvent = require('../helpers/mod-event')
+const { logModEvent } = require('../helpers/mod-log')
 const policy = require('../helpers/cleanup-policy')
 const { renderPicker } = require('../helpers/menu/screens/mod-ban-picker')
 const { sendRightsCard } = require('../helpers/menu/screens/mod-rights')
@@ -330,6 +331,16 @@ async function performBan (ctx, opts = {}) {
     adminUser
   })
 
+  // Audit: admin ban via quick-picker. `isPermanent` picks the manual_ban
+  // vs manual_mute split — mirrors mod-event's actionType distinction.
+  logModEvent(ctx.db, {
+    chatId: ctx.chat.id,
+    eventType: isPermanent ? 'manual_ban' : 'manual_mute',
+    actor: adminUser,
+    target: targetUser,
+    action: banDuration
+  }).catch(() => {})
+
   // Persist stats.
   if (banMember) {
     banMember.banan.num += 1
@@ -505,6 +516,17 @@ module.exports = async (ctx) => {
   banMember.banan.time = Date.now()
   if (autoBan) banMember.banan.stack += 1
   await banMember.save()
+
+  // Audit admin-triggered bans; skip random self-bans (joke path).
+  if (isAdmin && explicit && !isSelfBan) {
+    logModEvent(ctx.db, {
+      chatId: ctx.chat.id,
+      eventType: 'manual_mute',
+      actor: ctx.from,
+      target: banUser,
+      action: banDuration
+    }).catch(() => {})
+  }
 
   if (isSelfBan) {
     scheduleSelBanCleanup(ctx, message.message_id)

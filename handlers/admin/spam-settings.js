@@ -1,5 +1,6 @@
 const { btnIcons } = require('../../helpers/emoji-map')
 const { ackOnTarget, REACTIONS } = require('../../helpers/reactions')
+const { logModEvent } = require('../../helpers/mod-log')
 
 /**
  * Build inline keyboard for spam settings
@@ -265,6 +266,13 @@ const handleTrustCommand = async (ctx, args, settings) => {
     ackOnTarget(ctx, replyForReaction.message_id, REACTIONS.trustOk).catch(() => {})
   }
 
+  logModEvent(ctx.db, {
+    chatId: ctx.chat.id,
+    eventType: 'trust',
+    actor: ctx.from,
+    target: { id: targetId, name: targetName }
+  }).catch(() => {})
+
   return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.trust.added', { name: targetName }))
 }
 
@@ -313,6 +321,14 @@ const handleUntrustCommand = async (ctx, args, settings) => {
   }
 
   settings.trustedUsers.splice(index, 1)
+
+  logModEvent(ctx.db, {
+    chatId: ctx.chat.id,
+    eventType: 'untrust',
+    actor: ctx.from,
+    target: { id: targetId, name: targetName }
+  }).catch(() => {})
+
   return ctx.replyWithHTML(ctx.i18n.t('cmd.spam_settings.untrust.removed', { name: targetName }))
 }
 

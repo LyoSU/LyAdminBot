@@ -3,6 +3,7 @@ const { mapTelegramError } = require('../helpers/error-mapper')
 const { isSenderAdmin } = require('../helpers/is-sender-admin')
 const { replyHTML } = require('../helpers/reply-html')
 const modEvent = require('../helpers/mod-event')
+const { logModEvent } = require('../helpers/mod-log')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
 const policy = require('../helpers/cleanup-policy')
 const { sendRightsCard } = require('../helpers/menu/screens/mod-rights')
@@ -92,6 +93,13 @@ module.exports = async (ctx) => {
   }
 
   if (isAdmin) {
+    // Audit regardless of whether the unified card lands — the kick succeeded.
+    logModEvent(ctx.db, {
+      chatId: ctx.chat.id,
+      eventType: 'manual_kick',
+      actor: ctx.from,
+      target: kickUser
+    }).catch(() => {})
     const sent = await sendKickResult(ctx, { kickUser, adminUser: ctx.from })
     if (sent) return
     // Fall through on send failure.
