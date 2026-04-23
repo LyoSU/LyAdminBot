@@ -408,7 +408,7 @@ const quickRiskAssessment = (ctx) => {
   // But NOT if replying to own message (spammers reply to themselves)
   if (message.reply_to_message) {
     const replyToFrom = message.reply_to_message.from
-    const isReplyToSelf = user && replyToFrom && replyToFrom.id === user.id
+    const isReplyToSelf = ctx.from && replyToFrom && replyToFrom.id === ctx.from.id
 
     if (!isReplyToSelf) {
       trustSignals.push('is_reply')
