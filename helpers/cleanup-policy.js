@@ -14,6 +14,11 @@ module.exports = {
   mod_event_compact: 90 * 1000,
   mod_event_expanded: 2 * 60 * 1000,
   mod_event_override: 30 * 1000,
+  // Post-result spam-vote action buttons (§10) — `[⛔ Забанити назавжди]`,
+  // `[↩️ Розблокувати]`, `[⛔ Все ж забанити]`. After the window expires the
+  // result text remains as the journal record and only the keyboard is
+  // stripped — the message itself is not deleted by this TTL.
+  vote_post_result_btn: 60 * 1000,
   banan_undo: 60 * 1000,
   onboarding_ack: 30 * 1000,
   confirm_screen: 30 * 1000,

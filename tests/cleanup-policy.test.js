@@ -13,6 +13,7 @@ test('exports all expected keys', () => {
     'mod_event_compact',
     'mod_event_expanded',
     'mod_event_override',
+    'vote_post_result_btn',
     'banan_undo',
     'onboarding_ack',
     'confirm_screen',
