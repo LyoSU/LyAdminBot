@@ -1555,6 +1555,16 @@ STRUCTURAL RED FLAGS — weigh these heavily, even when text reads casual:
   "private_invite_link", "bot_deeplink", "text_invisible_char",
   "fast_post_after_join" — each is a strong structural cue.
 
+CHANNEL COMMENTS (context.channel_comment present):
+- The user's message is a comment under a channel post in a discussion
+  group. context.channel_comment.post_text shows what they're replying to.
+  If post_text is thematically aligned with message_text (e.g. a news post
+  and a reaction to it), treat as normal conversation — these are typically
+  legitimate readers. If message_text is promotional content unrelated to
+  post_text, that's a classic spam pattern (riding comment visibility to
+  push promo). Do NOT treat the channel name or the presence of the
+  auto-forward as a spam signal on its own — it's just the comment shape.
+
 A casual-sounding first message from a profile with 2+ structural red flags
 above is usually weaponised. Do not anchor on surface "friendliness".
 
@@ -1580,7 +1590,21 @@ SECURITY CANARY
   const replyTo = message.reply_to_message
   const externalReply = message.external_reply
 
-  const replyContext = replyTo ? {
+  // Channel-comment case: in groups linked to a channel, every channel post
+  // is automatically forwarded into the discussion group; human comments land
+  // as replies to that auto-forward. In that shape `reply_to_message.from` is
+  // the Telegram channel-service account (often literally "Telegram"), which
+  // is useless context for the LLM and can actively mislead it into thinking
+  // the user is replying to an admin. Detect the case and surface the
+  // underlying channel post instead.
+  const isChannelComment = Boolean(replyTo && replyTo.is_automatic_forward)
+  const channelCommentContext = isChannelComment ? {
+    channel_title: replyTo.sender_chat?.title || null,
+    channel_username: replyTo.sender_chat?.username || null,
+    post_text: ((replyTo.text || replyTo.caption || '') + '').substring(0, 400) || null
+  } : null
+
+  const replyContext = replyTo && !isChannelComment ? {
     from_username: replyTo.from?.username || null,
     from_first_name: replyTo.from?.first_name || null,
     is_self_reply: Boolean(replyTo.from && ctx.from && replyTo.from.id === ctx.from.id),
@@ -1689,6 +1713,9 @@ SECURITY CANARY
       : null,
     reply: replyContext,
     external_reply: externalReplyContext,
+    // Populated iff the user's message is a comment under a linked channel
+    // post (replyTo.is_automatic_forward). Mutually exclusive with `reply`.
+    channel_comment: channelCommentContext,
     quote: message.quote?.text ? message.quote.text.substring(0, 300) : null,
     is_edited: Boolean(userContext.isEditedMessage),
     inline_buttons: inlineButtons.length > 0 ? inlineButtons : null,
