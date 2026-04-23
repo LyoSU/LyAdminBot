@@ -26,7 +26,20 @@ const { scheduleDeletion } = require('../../message-cleanup')
 const policy = require('../../cleanup-policy')
 const { bar, truncate } = require('../../text-utils')
 const { renderEmptyState } = require('../empty-state')
+const { logModEvent } = require('../../mod-log')
 const { bot: log } = require('../../logger')
+
+// Best-effort audit helper — never await this in a way that surfaces errors
+// to the caller. The ModLog write is orthogonal to the action's success.
+const auditSettingsChange = (ctx, action) => {
+  if (!ctx || !ctx.chat || !ctx.chat.id) return
+  logModEvent(ctx.db, {
+    chatId: ctx.chat.id,
+    eventType: 'settings_change',
+    actor: ctx.from,
+    action
+  }).catch(() => {})
+}
 
 // ----------------------------------------------------------------------------
 // Shared constants / helpers
@@ -43,6 +56,11 @@ const BAN_DB_ID = 'settings.banDatabase'
 const BAN_CH_ID = 'settings.banChannel'
 const LANG_ID = 'settings.lang'
 const RESET_ID = 'settings.reset'
+// Forward references — Plan-5 subscreens. Stringly to avoid circular requires.
+const WELCOME_ID = 'settings.welcome'
+const EXTRAS_ID = 'settings.extras'
+const MODLOG_ID = 'settings.modlog'
+const DIAG_ID = 'settings.diagnostics'
 
 const LANGUAGES = [
   { code: 'uk', name: 'Українська' },
@@ -139,19 +157,19 @@ const renderRoot = (ctx) => {
     inline_keyboard: [
       row(
         btn(ctx.i18n.t('menu.settings.root.btn.antispam'), cb(ANTISPAM_ID, 'open')),
-        btn(ctx.i18n.t('menu.settings.root.btn.welcome'), cb(ROOT_ID, 'soon', 'welcome'))
+        btn(ctx.i18n.t('menu.settings.root.btn.welcome'), cb(WELCOME_ID, 'open'))
       ),
       row(
         btn(ctx.i18n.t('menu.settings.root.btn.banDatabase'), cb(BAN_DB_ID, 'open')),
         btn(ctx.i18n.t('menu.settings.root.btn.banChannel'), cb(BAN_CH_ID, 'open'))
       ),
       row(
-        btn(ctx.i18n.t('menu.settings.root.btn.extras'), cb(ROOT_ID, 'soon', 'extras')),
+        btn(ctx.i18n.t('menu.settings.root.btn.extras'), cb(EXTRAS_ID, 'open')),
         btn(ctx.i18n.t('menu.settings.root.btn.lang'), cb(LANG_ID, 'open'))
       ),
       row(
-        btn(ctx.i18n.t('menu.settings.root.btn.modlog'), cb(ROOT_ID, 'soon', 'modlog')),
-        btn(ctx.i18n.t('menu.settings.root.btn.diag'), cb(ROOT_ID, 'soon', 'diag'))
+        btn(ctx.i18n.t('menu.settings.root.btn.modlog'), cb(MODLOG_ID, 'open')),
+        btn(ctx.i18n.t('menu.settings.root.btn.diag'), cb(DIAG_ID, 'open'))
       ),
       row(
         btn(ctx.i18n.t('menu.settings.root.btn.export'), cb(ROOT_ID, 'export')),
@@ -259,10 +277,12 @@ const registerAntispam = () => registerMenu({
     const s = ensureSpamSettings(ctx)
     if (action === 'toggle') {
       s.enabled = s.enabled === false
+      auditSettingsChange(ctx, `antispam.enabled → ${s.enabled}`)
       return 'render'
     }
     if (action === 'globalban') {
       s.globalBan = s.globalBan === false
+      auditSettingsChange(ctx, `antispam.globalBan → ${s.globalBan}`)
       return 'render'
     }
     return { render: false }
@@ -315,6 +335,7 @@ const registerSensitivity = () => registerMenu({
       const delta = parseInt(args[0], 10)
       if (!Number.isFinite(delta)) return { render: false }
       s.confidenceThreshold = clampThreshold((s.confidenceThreshold || 70) + delta)
+      auditSettingsChange(ctx, `antispam.confidenceThreshold → ${s.confidenceThreshold}`)
       return 'render'
     }
     return { render: false }
@@ -602,6 +623,7 @@ const registerBanDatabase = () => registerMenu({
   handle: async (ctx, action) => {
     if (action === 'toggle') {
       ctx.group.info.settings.banDatabase = ctx.group.info.settings.banDatabase === false
+      auditSettingsChange(ctx, `banDatabase → ${ctx.group.info.settings.banDatabase}`)
       return 'render'
     }
     return { render: false }
@@ -626,6 +648,7 @@ const registerBanChannel = () => registerMenu({
   handle: async (ctx, action) => {
     if (action === 'toggle') {
       ctx.group.info.settings.banChannel = ctx.group.info.settings.banChannel !== true
+      auditSettingsChange(ctx, `banChannel → ${ctx.group.info.settings.banChannel}`)
       return 'render'
     }
     return { render: false }
@@ -669,6 +692,7 @@ const registerLang = () => registerMenu({
         if (ctx.i18n && typeof ctx.i18n.locale === 'function') {
           try { ctx.i18n.locale(code) } catch { /* ignore */ }
         }
+        auditSettingsChange(ctx, `locale → ${code}`)
         return { render: true, toast: 'menu.settings.lang.saved' }
       }
     }

@@ -6,6 +6,10 @@
 const help = require('./help')
 const onboarding = require('./onboarding')
 const settings = require('./settings')
+const settingsWelcome = require('./settings-welcome')
+const settingsExtras = require('./settings-extras')
+const settingsModlog = require('./settings-modlog')
+const settingsDiagnostics = require('./settings-diagnostics')
 const modEvent = require('./mod-event')
 const modBanPicker = require('./mod-ban-picker')
 const modDelUndo = require('./mod-del-undo')
@@ -18,6 +22,10 @@ const registerAll = () => {
   help.register()
   onboarding.register()
   settings.register()
+  settingsWelcome.register()
+  settingsExtras.register()
+  settingsModlog.register()
+  settingsDiagnostics.register()
   modEvent.register()
   modBanPicker.register()
   modDelUndo.register()
@@ -32,6 +40,10 @@ module.exports = {
   help,
   onboarding,
   settings,
+  settingsWelcome,
+  settingsExtras,
+  settingsModlog,
+  settingsDiagnostics,
   modEvent,
   modBanPicker,
   modDelUndo,
