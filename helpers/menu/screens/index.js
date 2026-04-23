@@ -6,11 +6,13 @@
 const help = require('./help')
 const onboarding = require('./onboarding')
 const settings = require('./settings')
+const modEvent = require('./mod-event')
 
 const registerAll = () => {
   help.register()
   onboarding.register()
   settings.register()
+  modEvent.register()
 }
 
-module.exports = { registerAll, help, onboarding, settings }
+module.exports = { registerAll, help, onboarding, settings, modEvent }
