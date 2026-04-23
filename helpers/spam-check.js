@@ -1,4 +1,5 @@
 const { OpenAI } = require('openai')
+const { LRUCache } = require('lru-cache')
 const {
   extractFeatures,
   generateEmbedding,
@@ -248,18 +249,34 @@ const callLLMWithRetry = async (systemPrompt, userPrompt, { imageUrl, maxRetries
   return null
 }
 
-// LLM rate limiter: max 20 calls/hour per group
-const llmRateLimits = new Map() // Map<chatId, number[]> (timestamps)
+// LLM rate limiter: max 20 calls/hour per group.
+//
+// Backed by lru-cache with TTL so inactive chats naturally evict and the
+// process doesn't accumulate timestamp-array entries forever (previously a
+// plain Map — one entry per chat-id ever seen, no upper bound). Cap at 10k
+// active chats; beyond that we start evicting least-recently-used, which is
+// exactly the desired behaviour (inactive chats lose their quota state and
+// start fresh on next activity).
 const LLM_RATE_LIMIT = 20
 const LLM_RATE_WINDOW = 60 * 60 * 1000 // 1 hour
+const llmRateLimits = new LRUCache({
+  max: 10000,
+  ttl: LLM_RATE_WINDOW,
+  updateAgeOnGet: false
+})
 
 const checkLLMRateLimit = (chatId) => {
   const now = Date.now()
   const timestamps = llmRateLimits.get(chatId) || []
   const recent = timestamps.filter(t => now - t < LLM_RATE_WINDOW)
-  llmRateLimits.set(chatId, recent)
-  if (recent.length >= LLM_RATE_LIMIT) return false
+  if (recent.length >= LLM_RATE_LIMIT) {
+    // Persist the pruned list so subsequent checks don't re-filter the same
+    // stale entries, and so the entry keeps its TTL refresh for eviction.
+    llmRateLimits.set(chatId, recent)
+    return false
+  }
   recent.push(now)
+  llmRateLimits.set(chatId, recent)
   return true
 }
 

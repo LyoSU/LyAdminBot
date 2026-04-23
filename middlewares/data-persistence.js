@@ -36,7 +36,18 @@ const saveGroupInfo = (ctx) => {
 
   return ctx.group.info.save()
     .then(() => { ctx.group.info.isSaving = false })
-    .catch(() => { ctx.group.info.isSaving = false })
+    .catch((err) => {
+      ctx.group.info.isSaving = false
+      // VersionError is the expected parallel-save race; next tick wins.
+      // Everything else (validation, connection, schema) is a real signal —
+      // we must log it, because silently-dropped persistence is exactly the
+      // pattern that hid the `user is not defined` trust-block bug for months.
+      if (err.name === 'VersionError') {
+        dbLog.debug({ groupId: ctx.group.info.group_id }, 'Group save conflict (will sync later)')
+      } else {
+        dbLog.error({ err, groupId: ctx.group.info.group_id }, 'Group save error')
+      }
+    })
 }
 
 /**
@@ -72,7 +83,14 @@ const saveGroupMember = (ctx) => {
   member.isSaving = true
   return member.save()
     .then(() => { member.isSaving = false })
-    .catch(() => { member.isSaving = false })
+    .catch((err) => {
+      member.isSaving = false
+      if (err.name === 'VersionError') {
+        dbLog.debug({ memberId, groupId: ctx.chat?.id }, 'Member save conflict (will sync later)')
+      } else {
+        dbLog.error({ err, memberId, groupId: ctx.chat?.id }, 'Member save error')
+      }
+    })
 }
 
 /**
