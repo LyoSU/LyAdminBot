@@ -25,6 +25,7 @@ const { replyHTML } = require('../../reply-html')
 const { scheduleDeletion } = require('../../message-cleanup')
 const policy = require('../../cleanup-policy')
 const { bar, truncate } = require('../../text-utils')
+const { renderEmptyState } = require('../empty-state')
 const { bot: log } = require('../../logger')
 
 // ----------------------------------------------------------------------------
@@ -334,18 +335,16 @@ const renderRules = (ctx, state = {}) => {
   const page = Math.max(0, parseInt(state.page, 10) || 0)
 
   if (rules.length === 0) {
-    const text = [
-      ctx.i18n.t('menu.empty_state.rules.title'),
-      '',
-      ctx.i18n.t('menu.empty_state.rules.hint')
-    ].join('\n')
-    const keyboard = {
-      inline_keyboard: [
-        row(btn(ctx.i18n.t('menu.settings.rules.btn.add_first'), cb(RULES_ID, 'add', 'allow'))),
-        row(backBtn(ANTISPAM_ID, { label: ctx.i18n.t('menu.settings.common.back') }))
-      ]
-    }
-    return { text, keyboard }
+    // Use the shared renderEmptyState helper (§17) + append CTA/back rows.
+    const empty = renderEmptyState(ctx.i18n, {
+      titleKey: 'menu.empty_state.rules.title',
+      descKey: 'menu.empty_state.rules.hint'
+    })
+    empty.keyboard.inline_keyboard.push(
+      row(btn(ctx.i18n.t('menu.settings.rules.btn.add_first'), cb(RULES_ID, 'add', 'allow'))),
+      row(backBtn(ANTISPAM_ID, { label: ctx.i18n.t('menu.settings.common.back') }))
+    )
+    return empty
   }
 
   // Build list of { rule, absoluteIndex } so delete buttons stay correct across pages.
@@ -457,18 +456,15 @@ const renderTrusted = (ctx, state = {}) => {
   const page = Math.max(0, parseInt(state.page, 10) || 0)
 
   if (trusted.length === 0) {
-    const text = [
-      ctx.i18n.t('menu.empty_state.trusted.title'),
-      '',
-      ctx.i18n.t('menu.empty_state.trusted.hint')
-    ].join('\n')
-    const keyboard = {
-      inline_keyboard: [
-        row(btn(ctx.i18n.t('menu.settings.trusted.btn.add_first'), cb(TRUSTED_ID, 'add'))),
-        row(backBtn(ANTISPAM_ID, { label: ctx.i18n.t('menu.settings.common.back') }))
-      ]
-    }
-    return { text, keyboard }
+    const empty = renderEmptyState(ctx.i18n, {
+      titleKey: 'menu.empty_state.trusted.title',
+      descKey: 'menu.empty_state.trusted.hint'
+    })
+    empty.keyboard.inline_keyboard.push(
+      row(btn(ctx.i18n.t('menu.settings.trusted.btn.add_first'), cb(TRUSTED_ID, 'add'))),
+      row(backBtn(ANTISPAM_ID, { label: ctx.i18n.t('menu.settings.common.back') }))
+    )
+    return empty
   }
 
   const items = trusted.map((id, idx) => ({ id, idx }))
