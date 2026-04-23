@@ -498,6 +498,153 @@ menu:
     btn:
       ack: "✓ Works for me"
       config: "🔧 Configure"
+  settings:
+    root:
+      title: "⚙️ <b>Chat settings</b>"
+      text: |
+        ⚙️ <b>Chat settings</b>
+
+        🛡 Anti-spam: <b>${antispamState}</b> · threshold <b>${threshold}%</b>
+        👋 Welcome: <b>${welcomeState}</b> (${welcomeCount})
+        🌍 Ban database: <b>${banDatabaseState}</b>
+        📺 Channel ban: <b>${banChannelState}</b>
+        📝 Extras: <b>${extrasCount}</b>/<b>${extrasMax}</b>
+        🌐 Language: <b>${language}</b>
+      btn:
+        antispam: "🛡 Anti-spam"
+        welcome: "👋 Welcome"
+        banDatabase: "🌍 Ban DB"
+        banChannel: "📺 Channel ban"
+        extras: "📝 Extras"
+        lang: "🌐 Language"
+        modlog: "📋 Mod log"
+        diag: "⚙️ Diagnostics"
+        export: "📤 Export JSON"
+        reset: "♻️ Reset"
+    common:
+      back: "← Back"
+      close: "✕ Close"
+      saved: "✓ Saved"
+      on: "enabled"
+      off: "disabled"
+      enabled: "✅"
+      disabled: "❌"
+      not_implemented: "This section will be enabled in the next update"
+      invalid_input: "Invalid value"
+    antispam:
+      text: |
+        🛡 <b>Anti-spam</b>
+
+        Status: <b>${state}</b>
+        Global ban: <b>${globalBan}</b>
+
+        Sensitivity: <b>${threshold}%</b>
+        <code>${bar}</code>
+
+        📜 Rules: <b>${rulesCount}</b>
+        👤 Trusted: <b>${trustedCount}</b>
+      btn:
+        enable: "🟢 Enable"
+        disable: "🔴 Disable"
+        globalban_on: "🌍 Global ban: on"
+        globalban_off: "🌍 Global ban: off"
+        sensitivity: "🎚 Sensitivity"
+        rules: "📜 Rules"
+        trusted: "👤 Trusted"
+    sensitivity:
+      text: |
+        🎚 <b>Anti-spam sensitivity</b>
+
+        <code>${bar}</code>
+        Current: <b>${value}%</b>
+
+        <i>Higher = fewer misses, lower = fewer false positives. Range 50–95.</i>
+    rules:
+      text: |
+        📜 <b>Anti-spam rules</b> (${total})
+
+        ${list}
+      empty_title: "📜 <b>Anti-spam rules</b>"
+      item: "${index}. ${type} ${preview}"
+      type_allow: "✅"
+      type_deny: "⛔"
+      btn:
+        add_allow: "➕ Allow"
+        add_deny: "➕ Deny"
+        add_first: "➕ Add first rule"
+        remove: "🗑"
+      prompt_allow: "Type the <b>ALLOW</b> rule text (or /cancel)"
+      prompt_deny: "Type the <b>DENY</b> rule text (or /cancel)"
+      added: "✓ Rule added"
+      removed: "✓ Rule removed"
+      too_long: "Rule too long (max 200 chars)"
+      limit_reached: "Rule limit reached (50)"
+      cancelled: "↩️ Cancelled"
+    trusted:
+      text: |
+        👤 <b>Trusted users</b> (${total})
+
+        ${list}
+      empty_title: "👤 <b>Trusted users</b>"
+      item: "${index}. ${name}"
+      btn:
+        add: "➕ Add"
+        add_first: "➕ Add first"
+        remove: "🗑"
+      prompt: "Send @username or numeric ID (or /cancel)"
+      added: "✓ Added to trusted"
+      removed: "✓ Removed from trusted"
+      not_found: "User not found"
+      invalid: "Send @username or numeric ID"
+      already: "User is already trusted"
+    banDatabase:
+      text: |
+        🌍 <b>Global ban database</b>
+
+        Status: <b>${state}</b>
+
+        <i>When enabled, users banned here for spam will also be banned in other groups that opted into the database.</i>
+      btn:
+        enable: "🟢 Enable"
+        disable: "🔴 Disable"
+    banChannel:
+      text: |
+        📺 <b>Channel ban</b>
+
+        Status: <b>${state}</b>
+
+        <i>When enabled, messages posted as channels are deleted and the channel is blocked.</i>
+      btn:
+        enable: "🟢 Enable"
+        disable: "🔴 Disable"
+    lang:
+      text: |
+        🌐 <b>Interface language</b>
+
+        Current: <b>${current}</b>
+
+        <i>No flags — language, not politics.</i>
+      active_marker: "● "
+      saved: "✓ Language saved"
+    reset:
+      text: |
+        ♻️ <b>Reset all group settings?</b>
+
+        This cannot be undone.
+      btn:
+        confirm: "⚠️ Yes, reset"
+      done: "✓ Reset"
+    export:
+      sent: "✓ JSON sent"
+      error: "Failed to send JSON"
+    soon: "This section will be enabled in the next update"
+  empty_state:
+    rules:
+      title: "📜 <b>No rules yet</b>"
+      hint: "<i>Create the first rule — the bot will allow or block matching messages.</i>"
+    trusted:
+      title: "👤 <b>No trusted users yet</b>"
+      hint: "<i>Add a trusted user to skip anti-spam checks for them.</i>"
 
 bot_commands:
   start: "Start using the bot"

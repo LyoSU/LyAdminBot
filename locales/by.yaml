@@ -310,6 +310,153 @@ menu:
     btn:
       ack: "✓ Так падыходзіць"
       config: "🔧 Наладзіць"
+  settings:
+    root:
+      title: "⚙️ <b>Налады чата</b>"
+      text: |
+        ⚙️ <b>Налады чата</b>
+
+        🛡 Антыспам: <b>${antispamState}</b> · парог <b>${threshold}%</b>
+        👋 Прывітанне: <b>${welcomeState}</b> (${welcomeCount})
+        🌍 Бан-база: <b>${banDatabaseState}</b>
+        📺 Бан каналаў: <b>${banChannelState}</b>
+        📝 Extras: <b>${extrasCount}</b>/<b>${extrasMax}</b>
+        🌐 Мова: <b>${language}</b>
+      btn:
+        antispam: "🛡 Антыспам"
+        welcome: "👋 Прывітанне"
+        banDatabase: "🌍 Бан-база"
+        banChannel: "📺 Бан каналаў"
+        extras: "📝 Extras"
+        lang: "🌐 Мова"
+        modlog: "📋 Журнал"
+        diag: "⚙️ Дыягностыка"
+        export: "📤 Экспарт JSON"
+        reset: "♻️ Скінуць"
+    common:
+      back: "← Назад"
+      close: "✕ Закрыць"
+      saved: "✓ Захавана"
+      on: "уключана"
+      off: "выключана"
+      enabled: "✅"
+      disabled: "❌"
+      not_implemented: "Раздзел будзе актываваны ў наступным абнаўленні"
+      invalid_input: "Некарэктнае значэнне"
+    antispam:
+      text: |
+        🛡 <b>Антыспам</b>
+
+        Стан: <b>${state}</b>
+        Глабальны бан: <b>${globalBan}</b>
+
+        Чуласць: <b>${threshold}%</b>
+        <code>${bar}</code>
+
+        📜 Правілаў: <b>${rulesCount}</b>
+        👤 Давераных: <b>${trustedCount}</b>
+      btn:
+        enable: "🟢 Уключыць"
+        disable: "🔴 Выключыць"
+        globalban_on: "🌍 Глаб. бан: укл"
+        globalban_off: "🌍 Глаб. бан: выкл"
+        sensitivity: "🎚 Чуласць"
+        rules: "📜 Правілы"
+        trusted: "👤 Давераныя"
+    sensitivity:
+      text: |
+        🎚 <b>Чуласць антыспаму</b>
+
+        <code>${bar}</code>
+        Цяперашняе значэнне: <b>${value}%</b>
+
+        <i>Вышэй = менш пропускаў, ніжэй = менш памылковых спрацоўванняў. Дыяпазон 50–95.</i>
+    rules:
+      text: |
+        📜 <b>Правілы антыспаму</b> (${total})
+
+        ${list}
+      empty_title: "📜 <b>Правілы антыспаму</b>"
+      item: "${index}. ${type} ${preview}"
+      type_allow: "✅"
+      type_deny: "⛔"
+      btn:
+        add_allow: "➕ Дазволіць"
+        add_deny: "➕ Забараніць"
+        add_first: "➕ Дадаць першае правіла"
+        remove: "🗑"
+      prompt_allow: "Увядзі тэкст правіла <b>ДАЗВОЛІЦЬ</b> (або /cancel)"
+      prompt_deny: "Увядзі тэкст правіла <b>ЗАБАРАНІЦЬ</b> (або /cancel)"
+      added: "✓ Правіла дададзена"
+      removed: "✓ Правіла выдалена"
+      too_long: "Правіла занадта доўгае (макс 200 сімвалаў)"
+      limit_reached: "Ліміт 50 правіл дасягнуты"
+      cancelled: "↩️ Скасавана"
+    trusted:
+      text: |
+        👤 <b>Давераныя карыстальнікі</b> (${total})
+
+        ${list}
+      empty_title: "👤 <b>Давераныя карыстальнікі</b>"
+      item: "${index}. ${name}"
+      btn:
+        add: "➕ Дадаць"
+        add_first: "➕ Дадаць першага"
+        remove: "🗑"
+      prompt: "Дашлі @username або лікавы ID (або /cancel)"
+      added: "✓ Дададзены ў давераных"
+      removed: "✓ Выдалены з давераных"
+      not_found: "Карыстальніка не знойдзена"
+      invalid: "Дашлі @username або лікавы ID"
+      already: "Ужо ў давераных"
+    banDatabase:
+      text: |
+        🌍 <b>Глабальная бан-база</b>
+
+        Стан: <b>${state}</b>
+
+        <i>Калі ўключана — карыстальнікаў, забаненых тут за спам, банам і ў іншых групах, падключаных да базы.</i>
+      btn:
+        enable: "🟢 Уключыць"
+        disable: "🔴 Выключыць"
+    banChannel:
+      text: |
+        📺 <b>Бан каналаў</b>
+
+        Стан: <b>${state}</b>
+
+        <i>Калі ўключана — паведамленні ад імя каналаў выдаляюцца, а канал блакуецца.</i>
+      btn:
+        enable: "🟢 Уключыць"
+        disable: "🔴 Выключыць"
+    lang:
+      text: |
+        🌐 <b>Мова інтэрфейсу</b>
+
+        Цяперашняя: <b>${current}</b>
+
+        <i>Без сцягоў — мовай, а не палітыкай.</i>
+      active_marker: "● "
+      saved: "✓ Мову захавана"
+    reset:
+      text: |
+        ♻️ <b>Скінуць усе налады групы?</b>
+
+        Дзеянне нельга адмяніць.
+      btn:
+        confirm: "⚠️ Так, скінуць"
+      done: "✓ Скінута"
+    export:
+      sent: "✓ JSON адпраўлена"
+      error: "Не ўдалося адправіць JSON"
+    soon: "Раздзел будзе актываваны ў наступным абнаўленні"
+  empty_state:
+    rules:
+      title: "📜 <b>Правіл пакуль няма</b>"
+      hint: "<i>Стварыце першае правіла — бот будзе дазваляць або блакаваць паведамленні па супадзенні.</i>"
+    trusted:
+      title: "👤 <b>Давераных пакуль няма</b>"
+      hint: "<i>Дадайце давераных, каб антыспам не правяраў іх паведамленні.</i>"
 
 bot_commands:
   start: "Пачаць працу з ботам"

@@ -258,6 +258,153 @@ menu:
     btn:
       ack: "✓ Böyle iyi"
       config: "🔧 Ayarla"
+  settings:
+    root:
+      title: "⚙️ <b>Sohbet ayarları</b>"
+      text: |
+        ⚙️ <b>Sohbet ayarları</b>
+
+        🛡 Anti-spam: <b>${antispamState}</b> · eşik <b>${threshold}%</b>
+        👋 Karşılama: <b>${welcomeState}</b> (${welcomeCount})
+        🌍 Ban veritabanı: <b>${banDatabaseState}</b>
+        📺 Kanal banı: <b>${banChannelState}</b>
+        📝 Extras: <b>${extrasCount}</b>/<b>${extrasMax}</b>
+        🌐 Dil: <b>${language}</b>
+      btn:
+        antispam: "🛡 Anti-spam"
+        welcome: "👋 Karşılama"
+        banDatabase: "🌍 Ban DB"
+        banChannel: "📺 Kanal banı"
+        extras: "📝 Extras"
+        lang: "🌐 Dil"
+        modlog: "📋 Mod log"
+        diag: "⚙️ Tanılama"
+        export: "📤 JSON dışa aktar"
+        reset: "♻️ Sıfırla"
+    common:
+      back: "← Geri"
+      close: "✕ Kapat"
+      saved: "✓ Kaydedildi"
+      on: "açık"
+      off: "kapalı"
+      enabled: "✅"
+      disabled: "❌"
+      not_implemented: "Bu bölüm bir sonraki güncellemede etkinleşecek"
+      invalid_input: "Geçersiz değer"
+    antispam:
+      text: |
+        🛡 <b>Anti-spam</b>
+
+        Durum: <b>${state}</b>
+        Global ban: <b>${globalBan}</b>
+
+        Hassasiyet: <b>${threshold}%</b>
+        <code>${bar}</code>
+
+        📜 Kural: <b>${rulesCount}</b>
+        👤 Güvenilir: <b>${trustedCount}</b>
+      btn:
+        enable: "🟢 Aç"
+        disable: "🔴 Kapat"
+        globalban_on: "🌍 Global ban: açık"
+        globalban_off: "🌍 Global ban: kapalı"
+        sensitivity: "🎚 Hassasiyet"
+        rules: "📜 Kurallar"
+        trusted: "👤 Güvenilir"
+    sensitivity:
+      text: |
+        🎚 <b>Anti-spam hassasiyeti</b>
+
+        <code>${bar}</code>
+        Geçerli: <b>${value}%</b>
+
+        <i>Yüksek = daha az kaçak, düşük = daha az yanlış alarm. Aralık 50–95.</i>
+    rules:
+      text: |
+        📜 <b>Anti-spam kuralları</b> (${total})
+
+        ${list}
+      empty_title: "📜 <b>Anti-spam kuralları</b>"
+      item: "${index}. ${type} ${preview}"
+      type_allow: "✅"
+      type_deny: "⛔"
+      btn:
+        add_allow: "➕ İzin ver"
+        add_deny: "➕ Engelle"
+        add_first: "➕ İlk kuralı ekle"
+        remove: "🗑"
+      prompt_allow: "<b>İZİN VER</b> kuralının metnini gir (veya /cancel)"
+      prompt_deny: "<b>ENGELLE</b> kuralının metnini gir (veya /cancel)"
+      added: "✓ Kural eklendi"
+      removed: "✓ Kural kaldırıldı"
+      too_long: "Kural çok uzun (maks 200 karakter)"
+      limit_reached: "Kural limiti dolu (50)"
+      cancelled: "↩️ İptal edildi"
+    trusted:
+      text: |
+        👤 <b>Güvenilir kullanıcılar</b> (${total})
+
+        ${list}
+      empty_title: "👤 <b>Güvenilir kullanıcılar</b>"
+      item: "${index}. ${name}"
+      btn:
+        add: "➕ Ekle"
+        add_first: "➕ İlkini ekle"
+        remove: "🗑"
+      prompt: "@kullaniciadi veya sayısal ID gönder (veya /cancel)"
+      added: "✓ Güvenilire eklendi"
+      removed: "✓ Güvenilirlerden kaldırıldı"
+      not_found: "Kullanıcı bulunamadı"
+      invalid: "@kullaniciadi veya sayısal ID gir"
+      already: "Zaten güvenilir"
+    banDatabase:
+      text: |
+        🌍 <b>Genel ban veritabanı</b>
+
+        Durum: <b>${state}</b>
+
+        <i>Açıkken burada spam için banlanan kullanıcılar, veritabanına katılan diğer gruplarda da banlanır.</i>
+      btn:
+        enable: "🟢 Aç"
+        disable: "🔴 Kapat"
+    banChannel:
+      text: |
+        📺 <b>Kanal banı</b>
+
+        Durum: <b>${state}</b>
+
+        <i>Açıkken kanal adına gönderilen mesajlar silinir ve kanal engellenir.</i>
+      btn:
+        enable: "🟢 Aç"
+        disable: "🔴 Kapat"
+    lang:
+      text: |
+        🌐 <b>Arayüz dili</b>
+
+        Geçerli: <b>${current}</b>
+
+        <i>Bayraksız — dil, politika değil.</i>
+      active_marker: "● "
+      saved: "✓ Dil kaydedildi"
+    reset:
+      text: |
+        ♻️ <b>Tüm grup ayarları sıfırlansın mı?</b>
+
+        Bu geri alınamaz.
+      btn:
+        confirm: "⚠️ Evet, sıfırla"
+      done: "✓ Sıfırlandı"
+    export:
+      sent: "✓ JSON gönderildi"
+      error: "JSON gönderilemedi"
+    soon: "Bu bölüm bir sonraki güncellemede etkinleşecek"
+  empty_state:
+    rules:
+      title: "📜 <b>Henüz kural yok</b>"
+      hint: "<i>İlk kuralı oluştur — bot eşleşen mesajlara izin verir veya engeller.</i>"
+    trusted:
+      title: "👤 <b>Henüz güvenilir kullanıcı yok</b>"
+      hint: "<i>Anti-spam onu atlatsın diye güvenilir ekle.</i>"
 
 bot_commands:
   start: "Botu kullanmaya başla"

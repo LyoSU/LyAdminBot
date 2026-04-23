@@ -434,6 +434,153 @@ menu:
     btn:
       ack: "✓ Так подходит"
       config: "🔧 Настроить"
+  settings:
+    root:
+      title: "⚙️ <b>Настройки чата</b>"
+      text: |
+        ⚙️ <b>Настройки чата</b>
+
+        🛡 Антиспам: <b>${antispamState}</b> · порог <b>${threshold}%</b>
+        👋 Приветствие: <b>${welcomeState}</b> (${welcomeCount})
+        🌍 Бан-база: <b>${banDatabaseState}</b>
+        📺 Бан каналов: <b>${banChannelState}</b>
+        📝 Extras: <b>${extrasCount}</b>/<b>${extrasMax}</b>
+        🌐 Язык: <b>${language}</b>
+      btn:
+        antispam: "🛡 Антиспам"
+        welcome: "👋 Приветствие"
+        banDatabase: "🌍 Бан-база"
+        banChannel: "📺 Бан каналов"
+        extras: "📝 Extras"
+        lang: "🌐 Язык"
+        modlog: "📋 Журнал"
+        diag: "⚙️ Диагностика"
+        export: "📤 Экспорт JSON"
+        reset: "♻️ Сбросить"
+    common:
+      back: "← Назад"
+      close: "✕ Закрыть"
+      saved: "✓ Сохранено"
+      on: "включено"
+      off: "выключено"
+      enabled: "✅"
+      disabled: "❌"
+      not_implemented: "Раздел будет активирован в следующем обновлении"
+      invalid_input: "Некорректное значение"
+    antispam:
+      text: |
+        🛡 <b>Антиспам</b>
+
+        Статус: <b>${state}</b>
+        Глобальный бан: <b>${globalBan}</b>
+
+        Чувствительность: <b>${threshold}%</b>
+        <code>${bar}</code>
+
+        📜 Правил: <b>${rulesCount}</b>
+        👤 Доверенных: <b>${trustedCount}</b>
+      btn:
+        enable: "🟢 Включить"
+        disable: "🔴 Выключить"
+        globalban_on: "🌍 Глоб. бан: вкл"
+        globalban_off: "🌍 Глоб. бан: выкл"
+        sensitivity: "🎚 Чувствительность"
+        rules: "📜 Правила"
+        trusted: "👤 Доверенные"
+    sensitivity:
+      text: |
+        🎚 <b>Чувствительность антиспама</b>
+
+        <code>${bar}</code>
+        Текущее значение: <b>${value}%</b>
+
+        <i>Выше = меньше пропусков, ниже = меньше ложных срабатываний. Диапазон 50–95.</i>
+    rules:
+      text: |
+        📜 <b>Правила антиспама</b> (${total})
+
+        ${list}
+      empty_title: "📜 <b>Правила антиспама</b>"
+      item: "${index}. ${type} ${preview}"
+      type_allow: "✅"
+      type_deny: "⛔"
+      btn:
+        add_allow: "➕ Разрешить"
+        add_deny: "➕ Запретить"
+        add_first: "➕ Добавить первое правило"
+        remove: "🗑"
+      prompt_allow: "Введи текст правила <b>РАЗРЕШИТЬ</b> (или /cancel)"
+      prompt_deny: "Введи текст правила <b>ЗАПРЕТИТЬ</b> (или /cancel)"
+      added: "✓ Правило добавлено"
+      removed: "✓ Правило удалено"
+      too_long: "Правило слишком длинное (макс 200 символов)"
+      limit_reached: "Достигнут лимит 50 правил"
+      cancelled: "↩️ Отменено"
+    trusted:
+      text: |
+        👤 <b>Доверенные пользователи</b> (${total})
+
+        ${list}
+      empty_title: "👤 <b>Доверенные пользователи</b>"
+      item: "${index}. ${name}"
+      btn:
+        add: "➕ Добавить"
+        add_first: "➕ Добавить первого"
+        remove: "🗑"
+      prompt: "Отправь @username или числовой ID (или /cancel)"
+      added: "✓ Добавлен в доверенные"
+      removed: "✓ Удалён из доверенных"
+      not_found: "Пользователь не найден"
+      invalid: "Отправь @username или числовой ID"
+      already: "Уже в доверенных"
+    banDatabase:
+      text: |
+        🌍 <b>Глобальная бан-база</b>
+
+        Статус: <b>${state}</b>
+
+        <i>Когда включено — пользователей, забаненных здесь за спам, также банит в других группах, подключённых к базе.</i>
+      btn:
+        enable: "🟢 Включить"
+        disable: "🔴 Выключить"
+    banChannel:
+      text: |
+        📺 <b>Бан каналов</b>
+
+        Статус: <b>${state}</b>
+
+        <i>Когда включено — посты от имени каналов удаляются, а канал блокируется.</i>
+      btn:
+        enable: "🟢 Включить"
+        disable: "🔴 Выключить"
+    lang:
+      text: |
+        🌐 <b>Язык интерфейса</b>
+
+        Текущий: <b>${current}</b>
+
+        <i>Без флагов — язык, а не политика.</i>
+      active_marker: "● "
+      saved: "✓ Язык сохранён"
+    reset:
+      text: |
+        ♻️ <b>Сбросить все настройки группы?</b>
+
+        Действие нельзя отменить.
+      btn:
+        confirm: "⚠️ Да, сбросить"
+      done: "✓ Сброшено"
+    export:
+      sent: "✓ JSON отправлен"
+      error: "Не удалось отправить JSON"
+    soon: "Раздел будет активирован в следующем обновлении"
+  empty_state:
+    rules:
+      title: "📜 <b>Правил пока нет</b>"
+      hint: "<i>Создай первое правило — бот будет разрешать или блокировать сообщения по совпадению.</i>"
+    trusted:
+      title: "👤 <b>Доверенных пока нет</b>"
+      hint: "<i>Добавь доверенного, чтобы антиспам не проверял его сообщения.</i>"
 
 bot_commands:
   start: "Начать работу с ботом"
