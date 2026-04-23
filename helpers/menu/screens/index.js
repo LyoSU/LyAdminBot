@@ -18,6 +18,7 @@ const modRights = require('./mod-rights')
 const statsTop = require('./stats-top')
 const statsTopBanan = require('./stats-top-banan')
 const statsExtras = require('./stats-extras')
+const captcha = require('./captcha')
 
 const registerAll = () => {
   help.register()
@@ -35,6 +36,7 @@ const registerAll = () => {
   statsTop.register()
   statsTopBanan.register()
   statsExtras.register()
+  captcha.register()
 }
 
 module.exports = {
@@ -53,5 +55,6 @@ module.exports = {
   modRights,
   statsTop,
   statsTopBanan,
-  statsExtras
+  statsExtras,
+  captcha
 }
