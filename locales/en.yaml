@@ -682,12 +682,61 @@ menu:
     trusted:
       title: "👤 <b>No trusted users yet</b>"
       hint: "<i>Add a trusted user to skip anti-spam checks for them.</i>"
+    extras:
+      title: "📝 <b>No extras yet</b>"
+      hint: "<i>Save a quick command: reply to any message with <code>!extra name</code>. Then summon it via <code>#name</code> in chat.</i>"
+      btn_create: "➕ Create"
+      cue_toast: "↪️ Reply to a message with <code>!extra name</code>"
+    top:
+      title: "🏆 <b>Leaderboard empty</b>"
+      hint: "<i>Stats appear once the chat has a few messages.</i>"
+    top_banan:
+      title: "🍌 <b>Nobody banned yet</b>"
+      hint: "<i>The banana leaderboard fills up once moderation starts in this group.</i>"
+  stats:
+    mystats:
+      text: |
+        ${e.chart} Stats for <b>${name}</b> in <b>${chatName}</b>
+
+        ${e.banana} <b>Bananas:</b>        <code>${banCount}</code>
+        ${e.clock} <b>Total muted:</b>    ${banTime}
+        ${e.zap} <b>Auto-ban:</b>         ${banAutoTime}
+
+        ${e.chat} <b>Messages:</b>   <code>${messages}</code>
+        ${e.chart_up} <b>Activity:</b>  <code>${activityBar}</code>  <b>${activityPercent}%</b>
+        🌊 <b>Flood:</b>     <code>${floodBar}</code>  <b>${floodPercent}%</b>
+
+        ${e.calendar} <b>Joined:</b> ${joinedAt}${badge}
+      send_pm: "${e.chart} Stats sent to DM"
+      blocked: |
+        Can't DM you 😅
+        Message me first and then try again.
+    top:
+      title: "${e.trophy} Top active · <b>${chatName}</b> · page <b>${page}/${total}</b>"
+      item: "${rank} ${medal}${name}   <code>${value}</code>"
+      btn:
+        all_time: "📅 All time"
+        period_7d: "🕒 Last 7 days"
+    top_banan:
+      title: "${e.banana} Top bananas · <b>${chatName}</b> · page <b>${page}/${total}</b>"
+      item: "${rank} ${medal}${name}   <code>${value}</code>"
+      value_duration: "${human}"
+      value_count: "${count} ${e.banana}"
+    extras:
+      title: "${e.notes} <b>Extras</b> · ${count}/${max}"
+      btn_page: "page ${page}/${total}"
   common:
     back: "← Back"
     close: "✕ Close"
     cancel: "✕ Cancel"
     dismiss: "✓ Got it"
     confirm: "✓ Confirm"
+    toast:
+      saved: "✓ Saved"
+      cancelled: "↩️ Cancelled"
+      only_admins: "🔒 Group admins only"
+      session_expired: "⏱ Session expired"
+      loading: "… One moment"
   mod:
     ban:
       picker:

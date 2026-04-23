@@ -4,6 +4,8 @@ const access = require('./access')
 const state = require('./state')
 const router = require('./router')
 const flows = require('./flows')
+const emptyState = require('./empty-state')
+const toastHelper = require('./toast')
 
 module.exports = {
   // Registry
@@ -42,5 +44,13 @@ module.exports = {
 
   // Flows
   startInputFlow: flows.startInputFlow,
-  consumeInput: flows.consumeInput
+  consumeInput: flows.consumeInput,
+
+  // Empty state renderer (§17)
+  renderEmptyState: emptyState.renderEmptyState,
+
+  // Toast helper (§18)
+  toast: toastHelper.toast,
+  toastKeyFor: toastHelper.keyFor,
+  TOAST_KEYS: toastHelper.CANONICAL_KEYS
 }

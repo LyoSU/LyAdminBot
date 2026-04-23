@@ -617,12 +617,61 @@ menu:
     trusted:
       title: "👤 <b>Доверенных пока нет</b>"
       hint: "<i>Добавь доверенного, чтобы антиспам не проверял его сообщения.</i>"
+    extras:
+      title: "📝 <b>Extras пока нет</b>"
+      hint: "<i>Сохрани быструю команду: в ответ на сообщение напиши <code>!extra имя</code>. Потом вызывай через <code>#имя</code> в чате.</i>"
+      btn_create: "➕ Создать"
+      cue_toast: "↪️ В ответ на сообщение напиши <code>!extra имя</code>"
+    top:
+      title: "🏆 <b>Топ пока пуст</b>"
+      hint: "<i>Статистика появится, когда в чате накопится немного сообщений.</i>"
+    top_banan:
+      title: "🍌 <b>Никого ещё не банили</b>"
+      hint: "<i>Здесь появится топ коллекционеров бананов, когда в группе начнётся модерация.</i>"
+  stats:
+    mystats:
+      text: |
+        ${e.chart} Стата <b>${name}</b> в <b>${chatName}</b>
+
+        ${e.banana} <b>Бананов:</b>       <code>${banCount}</code>
+        ${e.clock} <b>Всего в бане:</b>  ${banTime}
+        ${e.zap} <b>Автобан:</b>        ${banAutoTime}
+
+        ${e.chat} <b>Сообщений:</b>    <code>${messages}</code>
+        ${e.chart_up} <b>Актив:</b>   <code>${activityBar}</code>  <b>${activityPercent}%</b>
+        🌊 <b>Флуд:</b>    <code>${floodBar}</code>  <b>${floodPercent}%</b>
+
+        ${e.calendar} <b>Тут с:</b> ${joinedAt}${badge}
+      send_pm: "${e.chart} Стата в личке"
+      blocked: |
+        Не могу написать тебе в личку 😅
+        Напиши мне первым, и потом попробуй снова.
+    top:
+      title: "${e.trophy} Топ активных · <b>${chatName}</b> · стр <b>${page}/${total}</b>"
+      item: "${rank} ${medal}${name}   <code>${value}</code>"
+      btn:
+        all_time: "📅 Всё время"
+        period_7d: "🕒 За 7 дней"
+    top_banan:
+      title: "${e.banana} Топ бананов · <b>${chatName}</b> · стр <b>${page}/${total}</b>"
+      item: "${rank} ${medal}${name}   <code>${value}</code>"
+      value_duration: "${human}"
+      value_count: "${count} ${e.banana}"
+    extras:
+      title: "${e.notes} <b>Extras</b> · ${count}/${max}"
+      btn_page: "стр ${page}/${total}"
   common:
     back: "← Назад"
     close: "✕ Закрыть"
     cancel: "✕ Отменить"
     dismiss: "✓ Понятно"
     confirm: "✓ Подтвердить"
+    toast:
+      saved: "✓ Сохранено"
+      cancelled: "↩️ Отменено"
+      only_admins: "🔒 Только для админов группы"
+      session_expired: "⏱ Сессия истекла"
+      loading: "… Секунду"
   mod:
     ban:
       picker:

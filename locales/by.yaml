@@ -499,12 +499,61 @@ menu:
     trusted:
       title: "👤 <b>Давераных пакуль няма</b>"
       hint: "<i>Дадайце давераных, каб антыспам не правяраў іх паведамленні.</i>"
+    extras:
+      title: "📝 <b>Extras пакуль няма</b>"
+      hint: "<i>Захавайце хуткую каманду: у адказ на паведамленне напішыце <code>!extra імя</code>. Потым выклікайце праз <code>#імя</code> у чаце.</i>"
+      btn_create: "➕ Стварыць"
+      cue_toast: "↪️ У адказ на паведамленне напішыце <code>!extra імя</code>"
+    top:
+      title: "🏆 <b>Топ пакуль пусты</b>"
+      hint: "<i>Статыстыка зʼявіцца, калі ў чаце назьбіраецца крыху паведамленняў.</i>"
+    top_banan:
+      title: "🍌 <b>Нікога яшчэ не банілі</b>"
+      hint: "<i>Тут зʼявіцца топ калекцыянераў бананаў, калі пачнецца мадэрацыя.</i>"
+  stats:
+    mystats:
+      text: |
+        ${e.chart} Стата <b>${name}</b> у <b>${chatName}</b>
+
+        ${e.banana} <b>Бананаў:</b>        <code>${banCount}</code>
+        ${e.clock} <b>Усяго ў бане:</b>  ${banTime}
+        ${e.zap} <b>Аўтабан:</b>         ${banAutoTime}
+
+        ${e.chat} <b>Паведамленняў:</b>   <code>${messages}</code>
+        ${e.chart_up} <b>Актыўнасць:</b>   <code>${activityBar}</code>  <b>${activityPercent}%</b>
+        🌊 <b>Флуд:</b>    <code>${floodBar}</code>  <b>${floodPercent}%</b>
+
+        ${e.calendar} <b>Тут з:</b> ${joinedAt}${badge}
+      send_pm: "${e.chart} Стату скінуў у асабістыя"
+      blocked: |
+        Не магу напісаць табе ў асабістыя 😅
+        Напішы мне першы, і тады паспрабуй зноў.
+    top:
+      title: "${e.trophy} Топ актыўных · <b>${chatName}</b> · стар <b>${page}/${total}</b>"
+      item: "${rank} ${medal}${name}   <code>${value}</code>"
+      btn:
+        all_time: "📅 Увесь час"
+        period_7d: "🕒 За 7 дзён"
+    top_banan:
+      title: "${e.banana} Топ бананаў · <b>${chatName}</b> · стар <b>${page}/${total}</b>"
+      item: "${rank} ${medal}${name}   <code>${value}</code>"
+      value_duration: "${human}"
+      value_count: "${count} ${e.banana}"
+    extras:
+      title: "${e.notes} <b>Extras</b> · ${count}/${max}"
+      btn_page: "стар ${page}/${total}"
   common:
     back: "← Назад"
     close: "✕ Закрыць"
     cancel: "✕ Скасаваць"
     dismiss: "✓ Зразумела"
     confirm: "✓ Пацвердзіць"
+    toast:
+      saved: "✓ Захавана"
+      cancelled: "↩️ Скасавана"
+      only_admins: "🔒 Толькі для адмінаў групы"
+      session_expired: "⏱ Сесія састарэла"
+      loading: "… Хвілінку"
   mod:
     ban:
       picker:

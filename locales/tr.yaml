@@ -447,12 +447,61 @@ menu:
     trusted:
       title: "👤 <b>Henüz güvenilir kullanıcı yok</b>"
       hint: "<i>Anti-spam onu atlatsın diye güvenilir ekle.</i>"
+    extras:
+      title: "📝 <b>Henüz extra yok</b>"
+      hint: "<i>Hızlı komut kaydet: bir mesaja yanıt olarak <code>!extra ad</code> yaz. Sonra sohbette <code>#ad</code> ile çağır.</i>"
+      btn_create: "➕ Oluştur"
+      cue_toast: "↪️ Bir mesaja yanıt olarak <code>!extra ad</code> yaz"
+    top:
+      title: "🏆 <b>Liderlik tablosu boş</b>"
+      hint: "<i>Sohbette birkaç mesaj biriktikten sonra istatistikler görünür.</i>"
+    top_banan:
+      title: "🍌 <b>Henüz kimse banlanmadı</b>"
+      hint: "<i>Moderasyon başlayınca muz koleksiyonerleri listesi buraya gelir.</i>"
+  stats:
+    mystats:
+      text: |
+        ${e.chart} <b>${name}</b> istatistikleri · <b>${chatName}</b>
+
+        ${e.banana} <b>Muz:</b>        <code>${banCount}</code>
+        ${e.clock} <b>Toplam susturma:</b>  ${banTime}
+        ${e.zap} <b>Oto-ban:</b>       ${banAutoTime}
+
+        ${e.chat} <b>Mesaj:</b>    <code>${messages}</code>
+        ${e.chart_up} <b>Aktiflik:</b>   <code>${activityBar}</code>  <b>${activityPercent}%</b>
+        🌊 <b>Flood:</b>    <code>${floodBar}</code>  <b>${floodPercent}%</b>
+
+        ${e.calendar} <b>Katılım:</b> ${joinedAt}${badge}
+      send_pm: "${e.chart} İstatistik DM'e gönderildi"
+      blocked: |
+        Sana DM yazamıyorum 😅
+        Önce bana mesaj yaz, sonra tekrar dene.
+    top:
+      title: "${e.trophy} En aktif · <b>${chatName}</b> · sayfa <b>${page}/${total}</b>"
+      item: "${rank} ${medal}${name}   <code>${value}</code>"
+      btn:
+        all_time: "📅 Tüm zamanlar"
+        period_7d: "🕒 Son 7 gün"
+    top_banan:
+      title: "${e.banana} Muz liderleri · <b>${chatName}</b> · sayfa <b>${page}/${total}</b>"
+      item: "${rank} ${medal}${name}   <code>${value}</code>"
+      value_duration: "${human}"
+      value_count: "${count} ${e.banana}"
+    extras:
+      title: "${e.notes} <b>Extras</b> · ${count}/${max}"
+      btn_page: "sayfa ${page}/${total}"
   common:
     back: "← Geri"
     close: "✕ Kapat"
     cancel: "✕ İptal"
     dismiss: "✓ Anladım"
     confirm: "✓ Onayla"
+    toast:
+      saved: "✓ Kaydedildi"
+      cancelled: "↩️ İptal edildi"
+      only_admins: "🔒 Sadece grup yöneticileri"
+      session_expired: "⏱ Oturum süresi doldu"
+      loading: "… Bir saniye"
   mod:
     ban:
       picker:
