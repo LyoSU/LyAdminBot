@@ -11,7 +11,7 @@
 //  [🔧 Налаштувати] → renderScreen(ctx, 'settings.root') if registered;
 //                      otherwise toast a "coming soon" placeholder.
 
-const { registerMenu, getMenu } = require('../registry')
+const { registerMenu } = require('../registry')
 const { cb, btn, row } = require('../keyboard')
 const { setReaction } = require('../../reactions')
 const { scheduleDeletion } = require('../../message-cleanup')
@@ -103,16 +103,13 @@ const register = () => {
       }
 
       if (action === 'config') {
-        // Forward to /settings root if Plan 4 has registered it already;
-        // otherwise toast a placeholder so the button is never dead.
-        const settingsScreen = getMenu('settings.root')
-        if (settingsScreen) {
-          // Lazy require to avoid a circular dep between router and screens.
-          const { renderScreen } = require('../router')
-          await renderScreen(ctx, settingsScreen, {})
-          return { render: false }
-        }
-        return { render: false, toast: 'menu.onboarding.config_soon' }
+        // Admin panels don't render in-group. Edit the onboarding card to
+        // show a PM-redirect: short text + URL button → bot's DM deep-link
+        // (/start settings_<chatId>). Lazy-require the settings handler to
+        // reuse its pm-redirect builder.
+        const { buildPmRedirect } = require('../../../handlers/settings')
+        const { text, keyboard } = buildPmRedirect(ctx)
+        return { text, keyboard }
       }
 
       return { render: false }

@@ -1,25 +1,35 @@
-// /settings (and !settings alias) — entry point into the settings panel.
+// /settings (and !settings alias) — entry point.
 //
-// Group-only: in private chats we silently redirect to the deep-link suggestion
-// (the deep-link is handled by /start, not here). Non-admin group members get
-// a short rejection reply.
+// UX contract (Apr-2026): admin panels NEVER render in-group. Settings in a
+// group chat would be visible to all members and socially awkward to poke at,
+// so we bounce with a minimal 1-line hint + a URL button that deep-links to
+// the bot's PM where the panel renders privately (see handlers/start.js).
 //
-// Admin → send a fresh message with settings.root rendered inline. We do NOT
-// use the usual renderScreen() here because it expects a callback context
-// (editMessageText); instead we render the view manually and send as a new
-// message. Subsequent button clicks flow through the regular router.
+// Non-admin in group: short rejection reply.
+// Private chat: the /start deep-link flow is the intended entry; raw /settings
+// in DM has no chat context, so we bounce with a hint.
 
 const { replyHTML } = require('../helpers/reply-html')
-const { getMenu } = require('../helpers/menu/registry')
 const { isAdmin } = require('../helpers/menu/access')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
 const policy = require('../helpers/cleanup-policy')
 const { bot: log } = require('../helpers/logger')
 
+const buildPmRedirect = (ctx) => {
+  const botUsername = (ctx.botInfo && ctx.botInfo.username) || 'LyAdminBot'
+  const chatId = ctx.chat && ctx.chat.id
+  const url = `https://t.me/${botUsername}?start=settings_${chatId}`
+  const text = ctx.i18n.t('menu.settings.open_in_pm.text')
+  const keyboard = {
+    inline_keyboard: [[
+      { text: ctx.i18n.t('menu.settings.open_in_pm.btn'), url }
+    ]]
+  }
+  return { text, keyboard }
+}
+
 const handleSettings = async (ctx) => {
   if (!ctx.chat || !['supergroup', 'group'].includes(ctx.chat.type)) {
-    // Private chat: /start with a settings_<chatId> deep-link handles this
-    // path. Raw /settings in DM has no chat context, so we bounce with a hint.
     try {
       await replyHTML(ctx, ctx.i18n.t('only_group'))
     } catch { /* ignore */ }
@@ -35,47 +45,36 @@ const handleSettings = async (ctx) => {
     return
   }
 
-  const root = getMenu('settings.root')
-  if (!root) {
-    log.warn('handleSettings: settings.root not registered')
-    return
-  }
-
-  let view
-  try {
-    view = await root.render(ctx, {})
-  } catch (err) {
-    log.warn({ err: err.message }, 'handleSettings: render failed')
-    return
-  }
-  if (!view || !view.text) return
+  const { text, keyboard } = buildPmRedirect(ctx)
 
   let sent = null
   try {
-    sent = await replyHTML(ctx, view.text, view.keyboard ? { reply_markup: view.keyboard } : {})
+    sent = await replyHTML(ctx, text, {
+      reply_markup: keyboard,
+      reply_to_message_id: ctx.message && ctx.message.message_id
+    })
   } catch (err) {
     log.warn({ err: err.message }, 'handleSettings: reply failed')
     return
   }
 
-  // Auto-delete idle settings menu after cmd_settings_idle TTL.
   if (sent && sent.message_id && ctx.db) {
     scheduleDeletion(ctx.db, {
       chatId: ctx.chat.id,
       messageId: sent.message_id,
-      delayMs: policy.cmd_settings_idle,
-      source: 'cmd_settings_idle'
+      delayMs: policy.cmd_help,
+      source: 'cmd_settings_pm_redirect'
     }, ctx.telegram).catch(() => {})
   }
-  // Also clean up the invoking command so the chat stays tidy.
   if (ctx.message && ctx.message.message_id && ctx.db) {
     scheduleDeletion(ctx.db, {
       chatId: ctx.chat.id,
       messageId: ctx.message.message_id,
-      delayMs: policy.cmd_settings_idle,
-      source: 'cmd_settings_idle'
+      delayMs: policy.cmd_help,
+      source: 'cmd_settings_pm_redirect'
     }, ctx.telegram).catch(() => {})
   }
 }
 
 module.exports = handleSettings
+module.exports.buildPmRedirect = buildPmRedirect

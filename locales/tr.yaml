@@ -440,6 +440,9 @@ menu:
       sent: "✓ JSON gönderildi"
       error: "JSON gönderilemedi"
     soon: "Bu bölüm bir sonraki güncellemede etkinleşecek"
+    open_in_pm:
+      text: "🔧 Ayarlar bot ile <b>özel sohbette</b> açılır — grubu temiz tutar."
+      btn: "⚙️ Ayarları aç"
   empty_state:
     rules:
       title: "📜 <b>Henüz kural yok</b>"

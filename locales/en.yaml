@@ -675,6 +675,9 @@ menu:
       sent: "✓ JSON sent"
       error: "Failed to send JSON"
     soon: "This section will be enabled in the next update"
+    open_in_pm:
+      text: "🔧 Settings open in a <b>private chat</b> with the bot — keeps the group clean."
+      btn: "⚙️ Open settings"
   empty_state:
     rules:
       title: "📜 <b>No rules yet</b>"
