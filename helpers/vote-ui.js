@@ -1,3 +1,4 @@
+const humanizeDuration = require('humanize-duration')
 const { userName } = require('../utils')
 const e = require('./emoji-map')
 const { btnIcons } = require('./emoji-map')
@@ -6,6 +7,16 @@ const { sha256, normalizeLight } = require('./spam-signatures')
 const { spamVote: log } = require('./logger')
 const { scheduleDeletion } = require('./message-cleanup')
 const { humanizeReason } = require('./spam-check')
+const { bar } = require('./text-utils')
+const { cb, btn } = require('./menu/keyboard')
+const policy = require('./cleanup-policy')
+
+const MOD_EVENT_SCREEN = 'mod.event'
+const VOTE_DETAILS_SCREEN = 'mod.vote.details'
+
+// Resolution threshold (matches SpamVote.canResolve()): total weighted votes
+// >= 3. Exposed for the progress-bar renderer + tests.
+const VOTES_NEEDED = 3
 
 /**
  * Generate hash of message text (for SpamVote reference)
@@ -52,17 +63,107 @@ const formatSignals = (signals) => {
 }
 
 /**
- * Build inline keyboard for voting
+ * Build inline keyboard for voting.
+ *
+ * Two rows: vote buttons (legacy `sv:*` callbacks — preserved by Plan 3) and
+ * the [🔍 Деталі] menu-router button that routes to the `mod.vote.details`
+ * screen via the standard `m:v1:` namespace.
  */
 const buildVoteKeyboard = (eventId, voteTally, i18n) => {
   const spamLabel = `${i18n.t('spam_vote.btn_spam')} · ${voteTally.spamCount}`
   const cleanLabel = `${i18n.t('spam_vote.btn_clean')} · ${voteTally.cleanCount}`
 
   return {
-    inline_keyboard: [[
-      { text: spamLabel, callback_data: `sv:${eventId}:spam`, icon_custom_emoji_id: btnIcons.spam },
-      { text: cleanLabel, callback_data: `sv:${eventId}:clean`, icon_custom_emoji_id: btnIcons.clean }
-    ]]
+    inline_keyboard: [
+      [
+        { text: spamLabel, callback_data: `sv:${eventId}:spam`, icon_custom_emoji_id: btnIcons.spam },
+        { text: cleanLabel, callback_data: `sv:${eventId}:clean`, icon_custom_emoji_id: btnIcons.clean }
+      ],
+      [
+        btn(i18n.t('spam_vote.btn_details'), cb(VOTE_DETAILS_SCREEN, 'open', eventId))
+      ]
+    ]
+  }
+}
+
+/**
+ * Pure helper: render the two-line progress block shown above the compact
+ * voting line.
+ *
+ *   ⚖️ Голосування: 4 хв 12 с
+ *   ██████░░░░  3 / 5 голосів до резолюції
+ *
+ * @param {Object} args
+ * @param {Date|string|number} args.expiresAt - Voting deadline.
+ * @param {Object} args.voteTally - { spamWeighted, cleanWeighted }.
+ * @param {Object} args.i18n - i18n context (t() + locale()).
+ * @param {number} [args.now=Date.now()] - Reference time (test seam).
+ * @param {number} [args.votesNeeded=VOTES_NEEDED]
+ * @returns {string[]} Two lines (first = title, second = bar). Caller joins.
+ */
+const buildProgressLines = ({ expiresAt, voteTally, i18n, now, votesNeeded } = {}) => {
+  const reference = typeof now === 'number' ? now : Date.now()
+  const target = expiresAt instanceof Date ? expiresAt : new Date(expiresAt)
+  const remainingMs = Math.max(0, target.getTime() - reference)
+  const need = Math.max(1, Number(votesNeeded || VOTES_NEEDED))
+
+  // humanize-duration: largest:2 round, scoped to hours/minutes/seconds.
+  // 0ms -> "0 seconds" — fine for the rare edge case where the renderer
+  // races the timeout job; the next editMessageText shortly drops the bar.
+  const locale = (i18n && typeof i18n.locale === 'function' ? i18n.locale() : null) || 'en'
+  const humanRemaining = humanizeDuration(remainingMs, {
+    language: locale,
+    fallbacks: ['en'],
+    units: ['h', 'm', 's'],
+    largest: 2,
+    round: true
+  })
+
+  const tally = voteTally || {}
+  const votesIn = Math.max(0, Number(tally.spamWeighted || 0) + Number(tally.cleanWeighted || 0))
+  const cappedVotes = Math.min(votesIn, need)
+  const percent = Math.min(100, (cappedVotes / need) * 100)
+  const progressBar = bar(percent, 10, { full: '█', empty: '░' })
+
+  const titleLine = i18n.t('spam_vote.progress.title', { remaining: humanRemaining })
+  const barLine = i18n.t('spam_vote.progress.until_resolution', {
+    bar: progressBar,
+    votesIn: cappedVotes,
+    votesNeeded: need
+  })
+
+  return [titleLine, barLine]
+}
+
+/**
+ * Post-result keyboards (§10): admin-only action buttons that live ~60s
+ * after the vote resolves. They route through the unified `mod.event`
+ * screen so we reuse its admin gate + override flow.
+ *
+ * @param {string} eventId - SpamVote.eventId (also used as mod.event id when
+ *   a parallel ModEvent exists; otherwise the screen handler will treat it
+ *   as a vote-scoped operation).
+ * @param {'spam'|'clean'} winner
+ * @param {Object} i18n
+ */
+const buildPostResultKeyboard = (eventId, winner, i18n) => {
+  if (winner === 'spam') {
+    return {
+      inline_keyboard: [
+        [
+          btn(i18n.t('spam_vote.post_result.perma'), cb(MOD_EVENT_SCREEN, 'perma', eventId)),
+          btn(i18n.t('spam_vote.post_result.unblock'), cb(MOD_EVENT_SCREEN, 'undo', eventId))
+        ]
+      ]
+    }
+  }
+  // clean
+  return {
+    inline_keyboard: [
+      [
+        btn(i18n.t('spam_vote.post_result.still_ban'), cb(MOD_EVENT_SCREEN, 'still_ban', eventId))
+      ]
+    ]
   }
 }
 
@@ -155,6 +256,15 @@ const buildVoteNotification = (spamVote, i18n) => {
   } = spamVote
 
   const lines = []
+
+  // Progress block (§10) — top of the notification so admins glance it first.
+  // Refreshed on every editMessageText via updateVoteUI().
+  lines.push(...buildProgressLines({
+    expiresAt,
+    voteTally,
+    i18n
+  }))
+  lines.push('')
 
   // Title - different for ban vs mute
   const titleKey = actionTaken?.banned ? 'spam_vote.title_banned' : 'spam_vote.title_blocked'
@@ -559,9 +669,14 @@ const showResultUI = async (ctx, spamVote, reputationChange = null) => {
     }
   }
 
-  const text = spamVote.result === 'clean'
+  const winner = spamVote.result === 'clean' ? 'clean' : 'spam'
+  const text = winner === 'clean'
     ? buildCleanResultNotification(spamVote, i18n, reputationChange)
     : buildSpamResultNotification(spamVote, i18n, reputationChange)
+
+  // Post-result admin-only buttons (§10). Live ~60s — after the window
+  // expires we strip the keyboard but leave the result text as a record.
+  const keyboard = buildPostResultKeyboard(spamVote.eventId, winner, i18n)
 
   try {
     await ctx.telegram.editMessageText(
@@ -571,17 +686,26 @@ const showResultUI = async (ctx, spamVote, reputationChange = null) => {
       text,
       {
         parse_mode: 'HTML',
+        reply_markup: keyboard,
         disable_web_page_preview: true,
         link_preview_options: { is_disabled: true }
       }
     )
 
-    // Schedule auto-delete after 2 minutes (persistent)
+    // Strip the post-result keyboard after the configured window so admins
+    // can't undo the vote forever; the result line itself remains as the
+    // group-visible journal entry until it ages out via the existing
+    // vote_result deletion below.
+    scheduleKeyboardStrip(ctx, spamVote)
+
+    // Existing 2-minute message deletion (vote_result TTL) still applies —
+    // it removes the entire notification later. The keyboard-strip just
+    // beats it to the punch on the keyboard so post-window clicks no-op.
     if (ctx.db) {
       await scheduleDeletion(ctx.db, {
         chatId: spamVote.notificationChatId,
         messageId: spamVote.notificationMessageId,
-        delayMs: 2 * 60 * 1000,
+        delayMs: policy.vote_result,
         source: 'vote_result',
         reference: { type: 'spam_vote', id: spamVote.eventId }
       }, ctx.telegram)
@@ -592,6 +716,28 @@ const showResultUI = async (ctx, spamVote, reputationChange = null) => {
   }
 }
 
+/**
+ * Best-effort: after `vote_post_result_btn` ms, edit the message to remove
+ * the inline keyboard. We use a setTimeout (in-process) because:
+ *   - The message-cleanup queue only handles deletions, not keyboard edits.
+ *   - 60s is short enough that a process restart losing the timer is
+ *     acceptable — the next interaction will fail loudly on stale callback.
+ * Errors are swallowed; the keyboard might already be gone (manual click
+ * deleted the message, or admin used `[hide]`).
+ */
+const scheduleKeyboardStrip = (ctx, spamVote) => {
+  const chatId = spamVote.notificationChatId
+  const messageId = spamVote.notificationMessageId
+  if (!chatId || !messageId || !ctx.telegram) return
+  setTimeout(() => {
+    ctx.telegram.callApi('editMessageReplyMarkup', {
+      chat_id: chatId,
+      message_id: messageId,
+      reply_markup: { inline_keyboard: [] }
+    }).catch(() => { /* message gone or unchanged — ignore */ })
+  }, policy.vote_post_result_btn)
+}
+
 module.exports = {
   getExactHash,
   getAccountAgeDays,
@@ -599,6 +745,12 @@ module.exports = {
   updateVoteUI,
   showResultUI,
   buildVoteNotification,
+  buildVoteKeyboard,
   buildSpamResultNotification,
-  buildCleanResultNotification
+  buildCleanResultNotification,
+  buildProgressLines,
+  buildPostResultKeyboard,
+  VOTES_NEEDED,
+  VOTE_DETAILS_SCREEN,
+  MOD_EVENT_SCREEN
 }
