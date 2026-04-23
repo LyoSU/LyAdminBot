@@ -1,81 +1,56 @@
-const humanizeDuration = require('humanize-duration')
-const { userName } = require('../utils')
-const e = require('../helpers/emoji-map')
+// /top_banan — top banana-collectors leaderboard.
+//
+// Thin shim over helpers/menu/screens/stats-top-banan.js.
+
+const { replyHTML } = require('../helpers/reply-html')
+const { getMenu } = require('../helpers/menu/registry')
+const { scheduleDeletion } = require('../helpers/message-cleanup')
+const policy = require('../helpers/cleanup-policy')
+const { bot: log } = require('../helpers/logger')
+
+const SCREEN_ID = 'stats.top_banan'
 
 module.exports = async (ctx) => {
-  let result = ''
-  let topMembers = []
-
-  const groupMembers = await ctx.db.GroupMember.find({ group: ctx.group.info })
-
-  groupMembers.forEach((member) => {
-    if (member.banan.num > 0 || member.banan.sum > 0) {
-      topMembers.push({
-        telegram_id: member.telegram_id,
-        banan: {
-          num: member.banan.num,
-          sum: member.banan.sum
-        }
-      })
-    }
-  })
-
-  if (topMembers.length > 0) {
-    topMembers.sort((a, b) => b.banan.sum - a.banan.sum)
-
-    let top = ''
-
-    const topMembersSum = topMembers.slice(0, 10)
-
-    for (let index = 0; index < topMembersSum.length; index++) {
-      const user = await ctx.db.User.findOne({ telegram_id: topMembersSum[index].telegram_id })
-      const banan = humanizeDuration(
-        topMembersSum[index].banan.sum * 1000,
-        {
-          round: true,
-          largest: 2,
-          language: ctx.i18n.locale(),
-          fallbacks: ['en']
-        }
-      )
-
-      // Add title/medal for top 3
-      const position = index + 1
-      const titleKey = `cmd.top_banan.titles.${position}`
-      const title = ctx.i18n.t(titleKey)
-      const medal = title !== titleKey ? `${title} ` : ''
-
-      top += `\n${medal}${position}. ${userName(user)} — ${banan}`
-    }
-
-    topMembers.sort((a, b) => b.banan.num - a.banan.num)
-
-    top += '\n'
-
-    const topMembersNum = topMembers.slice(0, 10)
-
-    for (let index = 0; index < topMembersNum.length; index++) {
-      const user = await ctx.db.User.findOne({ telegram_id: topMembersNum[index].telegram_id })
-      const banan = topMembersNum[index].banan.num
-
-      // Add title/medal for top 3
-      const position = index + 1
-      const titleKey = `cmd.top_banan.titles.${position}`
-      const title = ctx.i18n.t(titleKey)
-      const medal = title !== titleKey ? `${title} ` : ''
-
-      top += `\n${medal}${position}. ${userName(user)} — ${banan} ${e.banana}`
-    }
-
-    result = ctx.i18n.t('cmd.top_banan.info', {
-      chatName: ctx.chat.title,
-      top
-    })
-  } else {
-    result = ctx.i18n.t('cmd.top_banan.error.empty')
+  const screen = getMenu(SCREEN_ID)
+  if (!screen) {
+    log.warn('handleTopBanan: stats.top_banan not registered')
+    return
   }
 
-  await ctx.replyWithHTML(result, {
-    reply_to_message_id: ctx.message.message_id
-  })
+  let view
+  try {
+    view = await screen.render(ctx, { page: 0 })
+  } catch (err) {
+    log.warn({ err: err.message }, 'handleTopBanan: render failed')
+    return
+  }
+  if (!view || !view.text) return
+
+  let sent
+  try {
+    sent = await replyHTML(ctx, view.text, {
+      reply_markup: view.keyboard || { inline_keyboard: [] },
+      reply_to_message_id: ctx.message && ctx.message.message_id
+    })
+  } catch (err) {
+    log.warn({ err: err.message }, 'handleTopBanan: send failed')
+    return
+  }
+
+  if (sent && sent.message_id && ctx.db) {
+    scheduleDeletion(ctx.db, {
+      chatId: ctx.chat.id,
+      messageId: sent.message_id,
+      delayMs: policy.cmd_settings_idle,
+      source: 'cmd_top_banan'
+    }, ctx.telegram).catch(() => {})
+  }
+  if (ctx.message && ctx.message.message_id && ctx.db) {
+    scheduleDeletion(ctx.db, {
+      chatId: ctx.chat.id,
+      messageId: ctx.message.message_id,
+      delayMs: policy.cmd_settings_idle,
+      source: 'cmd_top_banan'
+    }, ctx.telegram).catch(() => {})
+  }
 }

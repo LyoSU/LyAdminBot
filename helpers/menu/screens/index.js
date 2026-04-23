@@ -10,6 +10,9 @@ const modEvent = require('./mod-event')
 const modBanPicker = require('./mod-ban-picker')
 const modDelUndo = require('./mod-del-undo')
 const modRights = require('./mod-rights')
+const statsTop = require('./stats-top')
+const statsTopBanan = require('./stats-top-banan')
+const statsExtras = require('./stats-extras')
 
 const registerAll = () => {
   help.register()
@@ -19,6 +22,9 @@ const registerAll = () => {
   modBanPicker.register()
   modDelUndo.register()
   modRights.register()
+  statsTop.register()
+  statsTopBanan.register()
+  statsExtras.register()
 }
 
 module.exports = {
@@ -29,5 +35,8 @@ module.exports = {
   modEvent,
   modBanPicker,
   modDelUndo,
-  modRights
+  modRights,
+  statsTop,
+  statsTopBanan,
+  statsExtras
 }
