@@ -366,6 +366,24 @@ spam_vote:
   vote_time: "${e.clock} ${time}"
   btn_spam: "Spam"
   btn_clean: "Clean"
+  btn_details: "🔍 Details"
+  progress:
+    title: "⚖️ Voting: ${remaining}"
+    until_resolution: "${bar}  ${votesIn} / ${votesNeeded} votes until resolution"
+  details:
+    hash: "🧮 Hash: <code>${hash}</code>"
+    tally: "⚖️ Votes: 🚫 ${spam} · ✅ ${clean}"
+    top_voters: "👥 Active:"
+    collapse: "🛡 Less detail"
+  post_result:
+    perma: "⛔ Ban permanently"
+    unblock: "↩️ Unblock"
+    still_ban: "⛔ Ban anyway"
+    perma_marker: "permanent (${admin})"
+    still_ban_done: "🍌 ${name} — banned by admin ${admin} (despite vote)"
+  toast:
+    perma_done: "⛔ Permanently banned"
+    still_ban_done: "⛔ Banned"
   voters_spam: "${e.ban} Spam (${count}):"
   voters_clean: "✓ Clean (${count}):"
   voters_empty: " —"

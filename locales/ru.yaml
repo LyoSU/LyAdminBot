@@ -341,6 +341,26 @@ spam_vote:
   result_landslide: "${e.trophy} Уверенная победа"
   result_fast: "${e.zap} Молниеносный вердикт"
   result_solo_hero: "🦸 Один голос решил всё"
+  btn_details: "🔍 Детали"
+  progress:
+    title: "⚖️ Голосование: ${remaining}"
+    until_resolution: "${bar}  ${votesIn} / ${votesNeeded} голосов до резолюции"
+  details:
+    hash: "🧮 Hash: <code>${hash}</code>"
+    tally: "⚖️ Голоса: 🚫 ${spam} · ✅ ${clean}"
+    top_voters: "👥 Активные:"
+    collapse: "🛡 Меньше деталей"
+  post_result:
+    perma: "⛔ Забанить навсегда"
+    unblock: "↩️ Разблокировать"
+    still_ban: "⛔ Всё равно забанить"
+    perma_marker: "навсегда (${admin})"
+    still_ban_done: "🍌 ${name} — забанен админом ${admin} (вопреки vote)"
+  toast:
+    perma_done: "⛔ Забанен навсегда"
+    still_ban_done: "⛔ Забанен"
+  cb:
+    not_found: "Голосование не найдено"
 
 report:
   only_group: "Только в группах"

@@ -201,6 +201,30 @@ del:
 global_ban:
   # Legacy `kicked` key removed — notification via mod_event.compact.global_ban.
 
+spam_vote:
+  btn_spam: "Спам"
+  btn_clean: "Норм"
+  btn_details: "🔍 Дэталі"
+  progress:
+    title: "⚖️ Галасаванне: ${remaining}"
+    until_resolution: "${bar}  ${votesIn} / ${votesNeeded} галасоў да рэзалюцыі"
+  details:
+    hash: "🧮 Hash: <code>${hash}</code>"
+    tally: "⚖️ Галасы: 🚫 ${spam} · ✅ ${clean}"
+    top_voters: "👥 Актыўныя:"
+    collapse: "🛡 Менш дэталяў"
+  post_result:
+    perma: "⛔ Забаніць назаўжды"
+    unblock: "↩️ Разблакіраваць"
+    still_ban: "⛔ Усё ж забаніць"
+    perma_marker: "назаўжды (${admin})"
+    still_ban_done: "🍌 ${name} — забанены адмінам ${admin} (нягледзячы на vote)"
+  toast:
+    perma_done: "⛔ Забанены назаўжды"
+    still_ban_done: "⛔ Забанены"
+  cb:
+    not_found: "Галасаванне не знойдзена"
+
 mod_event:
   compact:
     banned: "⛔ ${name} — спам"

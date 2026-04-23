@@ -149,6 +149,30 @@ del:
 global_ban:
   # Legacy `kicked` key removed — notification via mod_event.compact.global_ban.
 
+spam_vote:
+  btn_spam: "Spam"
+  btn_clean: "Temiz"
+  btn_details: "🔍 Detaylar"
+  progress:
+    title: "⚖️ Oylama: ${remaining}"
+    until_resolution: "${bar}  ${votesIn} / ${votesNeeded} oy karara kadar"
+  details:
+    hash: "🧮 Hash: <code>${hash}</code>"
+    tally: "⚖️ Oylar: 🚫 ${spam} · ✅ ${clean}"
+    top_voters: "👥 Aktifler:"
+    collapse: "🛡 Detayı azalt"
+  post_result:
+    perma: "⛔ Kalıcı banla"
+    unblock: "↩️ Engeli kaldır"
+    still_ban: "⛔ Yine de banla"
+    perma_marker: "kalıcı (${admin})"
+    still_ban_done: "🍌 ${name} — admin ${admin} tarafından banlandı (oylamaya rağmen)"
+  toast:
+    perma_done: "⛔ Kalıcı banlandı"
+    still_ban_done: "⛔ Banlandı"
+  cb:
+    not_found: "Oylama bulunamadı"
+
 mod_event:
   compact:
     banned: "⛔ ${name} — spam"

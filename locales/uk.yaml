@@ -357,6 +357,24 @@ spam_vote:
   vote_time: "${e.clock} ${time}"
   btn_spam: "Спам"
   btn_clean: "Норм"
+  btn_details: "🔍 Деталі"
+  progress:
+    title: "⚖️ Голосування: ${remaining}"
+    until_resolution: "${bar}  ${votesIn} / ${votesNeeded} голосів до резолюції"
+  details:
+    hash: "🧮 Hash: <code>${hash}</code>"
+    tally: "⚖️ Голоси: 🚫 ${spam} · ✅ ${clean}"
+    top_voters: "👥 Активні:"
+    collapse: "🛡 Зменшити деталі"
+  post_result:
+    perma: "⛔ Забанити назавжди"
+    unblock: "↩️ Розблокувати"
+    still_ban: "⛔ Все ж забанити"
+    perma_marker: "назавжди (${admin})"
+    still_ban_done: "🍌 ${name} — забанено адміном ${admin} (попри vote)"
+  toast:
+    perma_done: "⛔ Забанено назавжди"
+    still_ban_done: "⛔ Забанено"
   voters_spam: "${e.ban} Спам (${count}):"
   voters_clean: "✓ Норм (${count}):"
   voters_empty: " —"
