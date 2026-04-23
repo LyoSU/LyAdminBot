@@ -41,9 +41,40 @@ preload('../helpers/vote-ui', {
 })
 preload('../helpers/spam-signatures', { addSignature: async () => null })
 preload('../helpers/velocity', { getForwardHash: () => null })
+// Realistic buildUserSignals mock — returns the same shape helpers/spam-signals
+// actually produces. A previous empty-object stub would have silently passed
+// even if middleware started reading fields that were never mocked (the same
+// silent-drift class that hid the `userContext.user.*` bug for months).
+const makeUserSignals = (overrides = {}) => ({
+  userId: 42,
+  isPremium: false,
+  hasUsername: false,
+  totalMessages: 1,
+  groupsActive: 1,
+  spamDetections: 0,
+  cleanMessages: 0,
+  uniquenessRatio: 1,
+  trackedMessages: 1,
+  nameHistoryLen: 1,
+  usernameHistoryLen: 0,
+  nameChurn24h: 0,
+  usernameChurn24h: 0,
+  reputation: { score: 50, status: 'neutral' },
+  lols: null,
+  cas: null,
+  accountAge: null,
+  replyRatio: null,
+  avgMessageLength: 0,
+  lengthStdDev: 0,
+  hourZeroCount: 0,
+  topLanguage: null,
+  uiLanguage: null,
+  hiddenUrlRatio: null,
+  ...overrides
+})
 preload('../helpers/spam-signals', {
   logSpamDecision: () => {},
-  buildUserSignals: () => ({})
+  buildUserSignals: () => makeUserSignals()
 })
 preload('../helpers/edit-diff', {
   snapshotMessage: () => {},
@@ -137,6 +168,31 @@ test('recently-passed user skips captcha branch', async () => {
   ctx.session.userInfo = { captchaPassedAt: new Date() }
   await spamCheck(ctx)
   assert.ok(!lastCaptchaCall, 'whitelisted user bypasses captcha branch')
+})
+
+test('non-spam verdict never triggers captcha', async () => {
+  // Guard against a confidence-only check: even at a number that would route
+  // to captcha under the mid-confidence band, if isSpam is false we must
+  // never fire the flow.
+  spamResult = { isSpam: false, confidence: 65, reason: 'clean', source: 'llm' }
+  lastCaptchaCall = null
+  const ctx = mkCtx()
+  const ret = await spamCheck(ctx)
+  assert.ok(!lastCaptchaCall, 'captcha must not fire for clean verdicts')
+  assert.notStrictEqual(ret, true, 'clean messages should pass through')
+})
+
+test('admin caller is exempt from captcha routing', async () => {
+  // Admins can write anything — verdict path shouldn't even evaluate.
+  spamResult = { isSpam: true, confidence: 65, reason: 'weak_llm', source: 'llm' }
+  lastCaptchaCall = null
+  const ctx = mkCtx()
+  ctx.telegram.getChatAdministrators = async () => [{ user: { id: 42 } }]
+  // Use a fresh chat id so the cached empty admin list from earlier tests
+  // doesn't bleed in — the middleware keeps a process-local admin cache.
+  ctx.chat.id = -100777
+  await spamCheck(ctx)
+  assert.ok(!lastCaptchaCall, 'admin caller must bypass captcha (and all action branches)')
 })
 
 const run = async () => {
