@@ -1514,14 +1514,23 @@ const runLLMPhase = async (messageText, ctx, userContext, groupSettings, groupDe
   const dynamicThreshold = calculateDynamicThreshold(userContext, groupSettings)
   spamLog.debug({ threshold: dynamicThreshold, msgLength: messageText.length }, 'Fallback to OpenRouter LLM')
 
-  // LLM cache lookup. Normalized simHash + small user-context bucket
-  // (new/established × high/low-risk). Saves repeated classifications of
-  // the same promo text during an active wave — typical hit rate in
-  // coordinated attacks is 40-70%. Cached verdicts still pass through the
-  // threshold gate below so admins' thresholds keep their effect.
+  // LLM cache lookup. Normalized simHash + user-context bucket. Buckets
+  // prevent cross-pollination of verdicts between very different profiles
+  // (sleeper-awakened impersonator vs established regular), so a soft
+  // "clean" on one doesn't become a free pass for the other. Cache
+  // populates only for confident verdicts (see llm-cache.isConfident…).
+  const accountAge = userContext.user && userContext.user.accountAge
+  const isSleeperAwakened = Boolean(
+    accountAge && accountAge.isSleeperAwakened && (accountAge.sleeperDays || 0) >= 180
+  )
+  const nameChurn = (userContext.user && userContext.user.nameChurn24h) || 0
+  const usernameChurn = (userContext.user && userContext.user.usernameChurn24h) || 0
+  const hasChurn = nameChurn > 0 || usernameChurn > 0
   const llmCacheBucket = {
     isNewAccount: Boolean(userContext.isNewAccount),
-    isHighRisk: userContext.quickAssessment?.risk === 'high'
+    isHighRisk: userContext.quickAssessment?.risk === 'high',
+    isSleeper: isSleeperAwakened,
+    hasChurn
   }
   const cachedLLM = llmCache.get(messageText, llmCacheBucket)
   if (cachedLLM) {
