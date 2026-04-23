@@ -322,7 +322,6 @@ const computeDeterministicVerdict = ({ userSignals, quickAssessment, userContext
   const hasPromoSignal = signals.some(s => (
     s === 'cashtag' ||
     s === 'text_url' ||
-    s === 'inline_url_buttons' ||
     s === 'phone_number' ||
     // Structural compound signal from profile-signals.js — newness-gated
     // mention of an external bot. No content keyword matching; just the
@@ -375,26 +374,13 @@ const computeDeterministicVerdict = ({ userSignals, quickAssessment, userContext
   ) {
     return { decision: 'spam', rule: 'new_user_private_invite', confidence: 92, reason: 'Private invite link from a new/low-history account' }
   }
-  // I3 (review): "sleeper" name was misleading — the detector fires on first
-  // observation, not on a true wake-up from idle. Added an extra requirement:
-  // the user must have given us at least one earlier observation (>= 1 prior
-  // message tracked) before a "wake-up + promo" verdict. Otherwise this is
-  // simply a lurker's first message and we shouldn't auto-ban.
-  if (
-    signals.includes('sleeper_account') &&
-    userSignals.totalMessages >= 2 &&
-    (hasPromoSignal || signals.includes('private_invite_link') || signals.includes('url_shortener'))
-  ) {
-    return { decision: 'spam', rule: 'sleeper_with_promo', confidence: 90, reason: 'Old account with low history, suddenly posting promotional content' }
-  }
-  // homoglyph name + new account + promo signal — fake-identity scammer profile.
-  if (
-    signals.includes('name_homoglyph') &&
-    userContext?.isNewAccount &&
-    hasPromoSignal
-  ) {
-    return { decision: 'spam', rule: 'fake_identity_promo', confidence: 90, reason: 'Homoglyph identity with promotional content' }
-  }
+  // Note: two earlier rules here keyed off tags 'sleeper_account' and
+  // 'name_homoglyph' that are not emitted by any production detector. The
+  // sleeper case is now covered structurally below via userSignals.accountAge
+  // .isSleeperAwakened (rule sleeper_awakened_promo). The homoglyph case
+  // would need a dedicated detector in profile-signals.js before its rule
+  // can return; until then LLM handles identity-lookalike scammers from
+  // bucketSignals.nameHistoryLen / usernameChurn24h.
 
   // C3 (review): compromised-account rule was firing on benign single
   // username changes plus any link. Real takeovers almost always involve
