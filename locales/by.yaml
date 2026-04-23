@@ -396,7 +396,6 @@ menu:
         extras: "📝 Extras"
         lang: "🌐 Мова"
         modlog: "📋 Журнал"
-        diag: "⚙️ Дыягностыка"
         export: "📤 Экспарт JSON"
         reset: "♻️ Скінуць"
     common:

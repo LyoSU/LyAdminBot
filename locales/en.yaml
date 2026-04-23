@@ -573,7 +573,6 @@ menu:
         extras: "📝 Extras"
         lang: "🌐 Language"
         modlog: "📋 Mod log"
-        diag: "⚙️ Diagnostics"
         export: "📤 Export JSON"
         reset: "♻️ Reset"
     common:

@@ -15,7 +15,17 @@ const liftPmTarget = async (ctx) => {
   if (!ctx.db || !ctx.db.Group) return
   try {
     const groupDoc = await ctx.db.Group.findOne({ group_id: targetChatId })
-    if (groupDoc) ctx.group = { info: groupDoc }
+    if (groupDoc) {
+      ctx.group = { info: groupDoc }
+      // Mirror loadGroupContext behavior: group's settings.locale wins over
+      // the user's TG language_code. Without this, every menu callback in PM
+      // re-renders in the user's TG language even after they picked a
+      // different language for the group.
+      const groupLocale = groupDoc.settings && groupDoc.settings.locale
+      if (groupLocale && ctx.i18n && typeof ctx.i18n.locale === 'function') {
+        try { ctx.i18n.locale(groupLocale) } catch { /* ignore */ }
+      }
+    }
   } catch { /* ignore */ }
 }
 

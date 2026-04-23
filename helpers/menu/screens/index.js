@@ -9,7 +9,6 @@ const settings = require('./settings')
 const settingsWelcome = require('./settings-welcome')
 const settingsExtras = require('./settings-extras')
 const settingsModlog = require('./settings-modlog')
-const settingsDiagnostics = require('./settings-diagnostics')
 const modEvent = require('./mod-event')
 const modVoteDetails = require('./mod-vote-details')
 const modBanPicker = require('./mod-ban-picker')
@@ -26,7 +25,6 @@ const registerAll = () => {
   settingsWelcome.register()
   settingsExtras.register()
   settingsModlog.register()
-  settingsDiagnostics.register()
   modEvent.register()
   modVoteDetails.register()
   modBanPicker.register()
@@ -45,7 +43,6 @@ module.exports = {
   settingsWelcome,
   settingsExtras,
   settingsModlog,
-  settingsDiagnostics,
   modEvent,
   modVoteDetails,
   modBanPicker,

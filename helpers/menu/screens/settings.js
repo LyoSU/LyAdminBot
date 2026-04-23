@@ -60,7 +60,6 @@ const RESET_ID = 'settings.reset'
 const WELCOME_ID = 'settings.welcome'
 const EXTRAS_ID = 'settings.extras'
 const MODLOG_ID = 'settings.modlog'
-const DIAG_ID = 'settings.diagnostics'
 
 const LANGUAGES = [
   { code: 'uk', name: 'Українська' },
@@ -168,8 +167,7 @@ const renderRoot = (ctx) => {
         btn(ctx.i18n.t('menu.settings.root.btn.lang'), cb(LANG_ID, 'open'))
       ),
       row(
-        btn(ctx.i18n.t('menu.settings.root.btn.modlog'), cb(MODLOG_ID, 'open')),
-        btn(ctx.i18n.t('menu.settings.root.btn.diag'), cb(DIAG_ID, 'open'))
+        btn(ctx.i18n.t('menu.settings.root.btn.modlog'), cb(MODLOG_ID, 'open'))
       ),
       row(
         btn(ctx.i18n.t('menu.settings.root.btn.export'), cb(ROOT_ID, 'export')),

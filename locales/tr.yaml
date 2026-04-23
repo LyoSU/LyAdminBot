@@ -344,7 +344,6 @@ menu:
         extras: "📝 Extras"
         lang: "🌐 Dil"
         modlog: "📋 Mod log"
-        diag: "⚙️ Tanılama"
         export: "📤 JSON dışa aktar"
         reset: "♻️ Sıfırla"
     common:

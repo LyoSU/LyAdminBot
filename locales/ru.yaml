@@ -510,7 +510,6 @@ menu:
         extras: "📝 Extras"
         lang: "🌐 Язык"
         modlog: "📋 Журнал"
-        diag: "⚙️ Диагностика"
         export: "📤 Экспорт JSON"
         reset: "♻️ Сбросить"
     common:

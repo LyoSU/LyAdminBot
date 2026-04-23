@@ -565,7 +565,6 @@ menu:
         extras: "📝 Extras"
         lang: "🌐 Мова"
         modlog: "📋 Журнал"
-        diag: "⚙️ Діагностика"
         export: "📤 Експорт JSON"
         reset: "♻️ Скинути"
     common:
