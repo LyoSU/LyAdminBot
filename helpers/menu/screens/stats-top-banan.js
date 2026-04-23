@@ -8,7 +8,7 @@
 
 const humanizeDuration = require('humanize-duration')
 const { registerMenu } = require('../registry')
-const { cb, btn, row, paginated, closeBtn } = require('../keyboard')
+const { closeBtn } = require('../keyboard')
 const { userName } = require('../../../utils')
 const { renderEmptyState } = require('../empty-state')
 const { bot: log } = require('../../logger')

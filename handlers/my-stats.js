@@ -88,13 +88,17 @@ function computeMyStats ({ member, group, from, chatName, i18n }) {
   }
 
   // Flood%: ratio of this member's avg message length versus the group avg.
-  // Positive deltas only (sub-average chatters aren't flooders). Falls back
-  // to a crude ban-density metric when the group has no corpus yet.
+  // Positive deltas only (sub-average chatters aren't flooders). When the
+  // group has no corpus yet we fall back to a crude ban-density proxy so
+  // the value isn't misleadingly 0 for restricted members.
   let floodPercent = 0
   const memberAvg = messages > 0 ? memberStats.textTotal / messages : 0
   const groupAvg = groupStats.messagesCount > 0 ? groupStats.textTotal / groupStats.messagesCount : 0
-  if (groupAvg > 0 && memberAvg > groupAvg) {
-    floodPercent = Math.min(100, Math.round(((memberAvg / groupAvg) - 1) * 100))
+  if (groupAvg > 0) {
+    if (memberAvg > groupAvg) {
+      floodPercent = Math.min(100, Math.round(((memberAvg / groupAvg) - 1) * 100))
+    }
+    // else: sub-average chatters stay at 0 — not flooders by definition.
   } else if (messages > 0) {
     floodPercent = Math.min(100, Math.round((banCount / messages) * 100))
   }

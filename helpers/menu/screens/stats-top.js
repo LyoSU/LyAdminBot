@@ -14,7 +14,7 @@
 // re-fetches and re-slices on each call.
 
 const { registerMenu } = require('../registry')
-const { cb, btn, row, paginated, closeBtn } = require('../keyboard')
+const { row, paginated, closeBtn } = require('../keyboard')
 const { userName } = require('../../../utils')
 const { renderEmptyState } = require('../empty-state')
 const { bot: log } = require('../../logger')
