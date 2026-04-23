@@ -1,8 +1,17 @@
 const { sendModEventNotification } = require('../helpers/mod-event-send')
 
 // Admin cache: Map<chatId, { adminIds: Set<number>, cachedAt: number }>
+//
+// Separate from helpers/admin-cache.js because we bulk-fetch the whole admin
+// list (getChatAdministrators) once per group, rather than doing per-user
+// getChatMember calls. Bulk is cheaper in busy chats where many different
+// users speak between cache reads.
+//
+// TTL aligned with helpers/admin-cache.js (90 s) so that a demotion lands
+// in both caches within the same window — previously this map held stale
+// admin status for up to an hour after PM/menu access had already updated.
 const adminCache = new Map()
-const ADMIN_CACHE_TTL = 60 * 60 * 1000 // 1 hour
+const ADMIN_CACHE_TTL = 90 * 1000
 
 const getCachedAdminIds = async (telegram, chatId) => {
   const cached = adminCache.get(chatId)
