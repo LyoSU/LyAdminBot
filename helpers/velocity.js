@@ -197,7 +197,7 @@ class VelocityStore {
             if (!userStats || !lastActivity || (Date.now() - lastActivity > CONFIG.MAX_AGE)) {
               this.data.delete(key)
               cleanedKeys++
-              return // continue forEach
+              continue // advance to next entry — `return` exits the whole setInterval callback
             }
           }
 
@@ -250,9 +250,19 @@ const getSimHash = (text, hashBits = 64) => {
   const vector = new Array(hashBits).fill(0)
 
   for (const token of tokens) {
-    const hash = fnv1a(token)
+    // fnv1a returns a 32-bit unsigned integer, and JS bitwise shifts mask
+    // their RHS to the low 5 bits — so `hash >> 32` wraps back to `hash >> 0`.
+    // A naive `for i in 0..64` loop against a single 32-bit hash produces
+    // a "64-bit" simHash where bits 32..63 silently alias bits 0..31,
+    // halving the effective entropy and doubling fuzzy-match collisions.
+    // We synthesise the high 32 bits with a second FNV-1a keyed off a
+    // distinct seed (Knuth's golden-ratio constant) so the two halves are
+    // statistically independent.
+    const hLow = fnv1a(token)
+    const hHigh = fnv1a(token, 0x9e3779b9)
     for (let i = 0; i < hashBits; i++) {
-      if ((hash >> i) & 1) {
+      const source = i < 32 ? hLow : hHigh
+      if ((source >> (i & 31)) & 1) {
         vector[i]++
       } else {
         vector[i]--
@@ -311,8 +321,8 @@ const tokenize = (text) => {
 }
 
 // FNV-1a hash (fast, good distribution)
-const fnv1a = (str) => {
-  let hash = 2166136261
+const fnv1a = (str, seed = 2166136261) => {
+  let hash = seed >>> 0
   for (let i = 0; i < str.length; i++) {
     hash ^= str.charCodeAt(i)
     hash = (hash * 16777619) >>> 0
