@@ -726,3 +726,40 @@ bot_commands:
   top_banan: "Muz sıralaması (moderasyon)"
   extras: "Kaydedilmiş hızlı komutlar"
   settings: "Grup ayarları (adminler)"
+
+captcha:
+  compact:
+    pending: "🤔 ${name} — bot olmadığını doğrula"
+    passed: "✓ ${name} — insan (doğrulandı)"
+    failed: "🔇 ${name} — doğrulama başarısız · 24 sa mute"
+  btn:
+    start: "🤖 Ben bot değilim"
+    appeal: "🤖 Doğrulamayı geç"
+  challenge:
+    prompt: "<b>${name}</b> öğesine bas"
+    tries_left: "Kalan hak: ${n}"
+  toast:
+    wrong: "❌ Yanlış emoji"
+    expired: "⏱ Süre doldu"
+    no_challenge: "Aktif doğrulama yok"
+  appeal:
+    intro: "🛡 Global yasaklısın. İtiraz etmek ister misin? Kısa bir doğrulamadan geç."
+    passed: "✓ Global yasak kaldırıldı. Düzgün davran."
+    failed: "❌ Geçemedin. Daha sonra dene."
+    locked: "🔒 Deneme limiti aşıldı. 30 gün sonra dene."
+  emoji:
+    banana: "muz"
+    apple: "elma"
+    car: "araba"
+    star: "yıldız"
+    dog: "köpek"
+    cat: "kedi"
+    sun: "güneş"
+    moon: "ay"
+    heart: "kalp"
+    fire: "ateş"
+    book: "kitap"
+    key: "anahtar"
+    tree: "ağaç"
+    house: "ev"
+    clock: "saat"

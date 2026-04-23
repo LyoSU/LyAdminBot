@@ -955,3 +955,40 @@ bot_commands:
   top_banan: "Top bananas (moderation)"
   extras: "Saved quick commands"
   settings: "Chat settings (admins)"
+
+captcha:
+  compact:
+    pending: "🤔 ${name} — prove you're not a bot"
+    passed: "✓ ${name} — human (verified)"
+    failed: "🔇 ${name} — failed check · muted 24h"
+  btn:
+    start: "🤖 I'm not a bot"
+    appeal: "🤖 Pass the check"
+  challenge:
+    prompt: "Tap <b>${name}</b>"
+    tries_left: "Tries left: ${n}"
+  toast:
+    wrong: "❌ Wrong emoji"
+    expired: "⏱ Time's up"
+    no_challenge: "No active challenge"
+  appeal:
+    intro: "🛡 You're under a global ban. Want to appeal? Take a short check."
+    passed: "✓ Global ban lifted. Behave."
+    failed: "❌ Didn't pass. Try later."
+    locked: "🔒 Too many attempts. Try in 30 days."
+  emoji:
+    banana: "banana"
+    apple: "apple"
+    car: "car"
+    star: "star"
+    dog: "dog"
+    cat: "cat"
+    sun: "sun"
+    moon: "moon"
+    heart: "heart"
+    fire: "fire"
+    book: "book"
+    key: "key"
+    tree: "tree"
+    house: "house"
+    clock: "clock"
