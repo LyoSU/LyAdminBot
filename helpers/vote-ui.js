@@ -7,7 +7,12 @@ const { sha256, normalizeLight } = require('./spam-signatures')
 const { spamVote: log } = require('./logger')
 const { scheduleDeletion } = require('./message-cleanup')
 const { humanizeReason } = require('./spam-check')
-const { bar } = require('./text-utils')
+const { bar, escapeHtml: escapeHtmlBase } = require('./text-utils')
+
+// Vote-UI wrapper over the shared HTML escaper — additionally neutralizes `@`
+// so that user-supplied display names and spam message previews don't
+// accidentally trigger Telegram's @mention resolution when we render them.
+const escapeHtml = (text) => escapeHtmlBase(text).replace(/@/g, '&#64;')
 const { cb, btn } = require('./menu/keyboard')
 const policy = require('./cleanup-policy')
 
@@ -176,14 +181,6 @@ const getRemainingTime = (expiresAt) => {
   const minutes = Math.floor(remaining / 60000)
   const seconds = Math.floor((remaining % 60000) / 1000)
   return `${minutes}:${seconds.toString().padStart(2, '0')}`
-}
-
-/**
- * Escape HTML special characters
- */
-const escapeHtml = (text) => {
-  if (!text) return ''
-  return String(text).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/@/g, '&#64;')
 }
 
 /**
