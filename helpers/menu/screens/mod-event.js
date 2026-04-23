@@ -122,10 +122,138 @@ const tryUndo = async (ctx, event) => {
   }
 }
 
+// Post-result spam-vote actions (§10). Both branches:
+//   1. Verify presser is admin (toast-reject otherwise).
+//   2. Apply the action (perma-ban / 30d-ban).
+//   3. Edit the existing notification: keep the result text, append a
+//      "·{suffix}" marker, drop the keyboard.
+//   4. Audit via ModLog.
+// The setTimeout-based keyboard strip from vote-ui will fire harmlessly
+// later — Telegram returns "message is not modified", which we ignore.
+const handlePostVoteAction = async (ctx, action, eventId) => {
+  const viewerIsAdmin = await isAdmin(ctx)
+  if (!viewerIsAdmin) {
+    return { render: false, toast: 'menu.access.only_admins' }
+  }
+  const spamVote = await findVoteByEventId(ctx, eventId)
+  if (!spamVote || !spamVote.bannedUserId || !spamVote.chatId) {
+    return { render: false, toast: 'spam_vote.cb.not_found' }
+  }
+
+  const adminName = (ctx.from && (ctx.from.first_name || ctx.from.username)) || String(ctx.from && ctx.from.id)
+  const adminLabel = adminName
+
+  if (action === 'perma') {
+    // Permanent ban — banChatMember without `until_date`. Ignore failures
+    // (user may already be banned). The keyboard is dropped either way.
+    try {
+      await ctx.telegram.callApi('banChatMember', {
+        chat_id: spamVote.chatId,
+        user_id: spamVote.bannedUserId
+      })
+    } catch (err) {
+      log.warn({ err: err.message, eventId }, 'mod.event perma: ban failed')
+      return { render: false, toast: 'mod_event.toast.undo_failed' }
+    }
+
+    // Append a perma-marker to the existing message text and strip kbd.
+    const currentText = (ctx.callbackQuery.message && ctx.callbackQuery.message.text) || ''
+    const suffix = ' · ' + ctx.i18n.t('spam_vote.post_result.perma_marker', { admin: adminLabel })
+    const nextText = currentText.endsWith(suffix.trim()) ? currentText : currentText + suffix
+    try {
+      await editHTML(ctx, ctx.callbackQuery.message.message_id, nextText, {
+        reply_markup: { inline_keyboard: [] }
+      })
+    } catch (err) {
+      if (!/message is not modified/.test(err.message || '')) {
+        log.warn({ err: err.message, eventId }, 'mod.event perma: edit failed')
+      }
+    }
+
+    logModEvent(ctx.db, {
+      chatId: spamVote.chatId,
+      eventType: 'manual_ban',
+      actor: ctx.from,
+      target: { id: spamVote.bannedUserId, name: spamVote.bannedUserName || spamVote.bannedUserUsername || null },
+      action: 'ban perma',
+      reason: `eventId=${eventId} post_vote_perma`
+    }).catch(() => {})
+
+    return { render: false, toast: 'spam_vote.toast.perma_done' }
+  }
+
+  if (action === 'still_ban') {
+    // 30-day ban over a clean-confirmed result. We use until_date 30d so
+    // the user can still be unbanned later if they appeal.
+    const untilDate = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60
+    try {
+      await ctx.telegram.callApi('banChatMember', {
+        chat_id: spamVote.chatId,
+        user_id: spamVote.bannedUserId,
+        until_date: untilDate
+      })
+    } catch (err) {
+      log.warn({ err: err.message, eventId }, 'mod.event still_ban: ban failed')
+      return { render: false, toast: 'mod_event.toast.undo_failed' }
+    }
+
+    // Replace text with a compact override line so it reads as a single
+    // record. Spec wording: "🍌 {name} — забанено адміном @{x} (попри vote)".
+    const nameLabel = spamVote.bannedUserUsername
+      ? `@${spamVote.bannedUserUsername}`
+      : (spamVote.bannedUserName || `id${spamVote.bannedUserId}`)
+    const text = ctx.i18n.t('spam_vote.post_result.still_ban_done', {
+      name: nameLabel,
+      admin: adminLabel
+    })
+    try {
+      await editHTML(ctx, ctx.callbackQuery.message.message_id, text, {
+        reply_markup: { inline_keyboard: [] }
+      })
+    } catch (err) {
+      if (!/message is not modified/.test(err.message || '')) {
+        log.warn({ err: err.message, eventId }, 'mod.event still_ban: edit failed')
+      }
+    }
+
+    logModEvent(ctx.db, {
+      chatId: spamVote.chatId,
+      eventType: 'override',
+      actor: ctx.from,
+      target: { id: spamVote.bannedUserId, name: spamVote.bannedUserName || spamVote.bannedUserUsername || null },
+      action: 'ban 30d',
+      reason: 'post_vote_clean_override'
+    }).catch(() => {})
+
+    return { render: false, toast: 'spam_vote.toast.still_ban_done' }
+  }
+
+  return { render: false, silent: true }
+}
+
+// Try to load a SpamVote by eventId. Used by post-result actions wired from
+// vote-ui.js where the callback carries a SpamVote.eventId instead of a
+// ModEvent.eventId. Returns null if the model is unavailable or no doc.
+const findVoteByEventId = async (ctx, eventId) => {
+  if (!ctx.db || !ctx.db.SpamVote || !eventId) return null
+  try {
+    return await ctx.db.SpamVote.findOne({ eventId })
+  } catch {
+    return null
+  }
+}
+
 const handle = async (ctx, action, args) => {
   const eventId = args && args[0]
   if (!eventId) {
     return { render: false, toast: 'mod_event.toast.not_found' }
+  }
+
+  // `perma` / `still_ban` are spam-vote post-result actions (§10) — the
+  // eventId is a SpamVote.eventId, not a ModEvent. Handle them inline so
+  // we don't have to fabricate a ModEvent stub.
+  if (action === 'perma' || action === 'still_ban') {
+    return handlePostVoteAction(ctx, action, eventId)
   }
 
   const event = await modEvent.getModEvent(ctx.db, eventId)
@@ -243,5 +371,6 @@ module.exports = {
   renderCompact,
   renderExpanded,
   handle,
-  tryUndo
+  tryUndo,
+  handlePostVoteAction
 }
