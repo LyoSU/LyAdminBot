@@ -7,6 +7,8 @@ const test = (name, fn) => tests.push({ name, fn })
 const fresh = () => {
   delete require.cache[require.resolve('../helpers/menu/registry')]
   delete require.cache[require.resolve('../helpers/menu/router')]
+  delete require.cache[require.resolve('../helpers/menu/access')]
+  delete require.cache[require.resolve('../helpers/admin-cache')]
   delete require.cache[require.resolve('../helpers/menu')]
   return require('../helpers/menu')
 }

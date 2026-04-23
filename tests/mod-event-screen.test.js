@@ -185,9 +185,12 @@ test('missing eventId arg → not_found toast', async () => {
   assert.strictEqual(res.toast, 'mod_event.toast.not_found')
 })
 
+const adminCache = require('../helpers/admin-cache')
+
 const run = async () => {
   let passed = 0; let failed = 0
   for (const t of tests) {
+    adminCache.clearAll()
     try { await t.fn(); passed++; console.log('  ✓ ' + t.name) } catch (e) { failed++; console.log('  ✗ ' + t.name); console.log('     ' + (e.stack || e.message)) }
   }
   console.log(`\n${passed} passed, ${failed} failed`)

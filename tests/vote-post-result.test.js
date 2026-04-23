@@ -121,9 +121,12 @@ test('perma: missing SpamVote → not_found toast', async () => {
   assert.strictEqual(calls.banChatMember.length, 0)
 })
 
+const adminCache = require('../helpers/admin-cache')
+
 const run = async () => {
   let passed = 0; let failed = 0
   for (const t of tests) {
+    adminCache.clearAll()
     try { await t.fn(); passed++; console.log('  ✓ ' + t.name) } catch (e) { failed++; console.log('  ✗ ' + t.name); console.log('     ' + (e.stack || e.message)) }
   }
   console.log(`\n${passed} passed, ${failed} failed`)

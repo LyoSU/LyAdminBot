@@ -19,6 +19,8 @@ const { replyHTML } = require('../helpers/reply-html')
 const { cb, btn, row } = require('../helpers/menu/keyboard')
 const help = require('../helpers/menu/screens/help')
 const { getMenu } = require('../helpers/menu/registry')
+const { setPmTarget } = require('../helpers/menu/pm-context')
+const { setKnownAdmin } = require('../helpers/admin-cache')
 const { bot: log } = require('../helpers/logger')
 
 const parseStartPayload = (payload) => {
@@ -122,9 +124,16 @@ module.exports = async (ctx) => {
         return sendPlaceholder(ctx)
       }
 
+      // Remember target group for subsequent menu callbacks in this DM.
+      // Without this, every settings.* button click would fail group_admin
+      // checks because ctx.chat in PM doesn't reflect the user's group role.
+      setPmTarget(ctx.from.id, parsed.chatId)
+      setKnownAdmin(parsed.chatId, ctx.from.id, true)
+
       // Swap group context so renderRoot reads from the target group's settings.
       const prevGroup = ctx.group
       ctx.group = { info: groupDoc }
+      ctx.targetChatId = parsed.chatId
       try {
         const view = await settingsRoot.render(ctx, { targetChatId: parsed.chatId })
         if (view && view.text) {

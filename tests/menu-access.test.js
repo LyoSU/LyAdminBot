@@ -1,5 +1,6 @@
 const assert = require('assert')
 const { checkAccess } = require('../helpers/menu/access')
+const adminCache = require('../helpers/admin-cache')
 
 const tests = []
 const test = (name, fn) => tests.push({ name, fn })
@@ -107,6 +108,9 @@ test('group_admin denies if getChatMember throws', async () => {
 const run = async () => {
   let passed = 0; let failed = 0
   for (const t of tests) {
+    // Clear admin cache between tests so cached results from earlier tests
+    // (which use the same fromId+chatId pairs) don't leak.
+    adminCache.clearAll()
     try { await t.fn(); passed++; console.log('  ✓ ' + t.name) }
     catch (e) { failed++; console.log('  ✗ ' + t.name); console.log('     ' + e.message) }
   }

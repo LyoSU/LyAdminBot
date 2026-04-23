@@ -12,17 +12,17 @@
 // Do not "consolidate" by reusing isSenderAdmin here.
 
 const { bot: log } = require('../logger')
-
-const ADMIN_STATUSES = new Set(['creator', 'administrator'])
+const adminCache = require('../admin-cache')
 
 const isAdmin = async (ctx) => {
-  if (!ctx || !ctx.chat || !ctx.from) return false
-  try {
-    const member = await ctx.telegram.getChatMember(ctx.chat.id, ctx.from.id)
-    return Boolean(member && ADMIN_STATUSES.has(member.status))
-  } catch {
-    return false
-  }
+  if (!ctx || !ctx.from) return false
+  // PM with a deep-link target group → check admin in THAT group, not in
+  // the private chat with the bot (where every user is "creator" of their
+  // own DM, which is meaningless). The pm-context middleware in
+  // routes/menu.js sets ctx.targetChatId before this runs.
+  const chatId = ctx.targetChatId || (ctx.chat && ctx.chat.id)
+  if (!chatId) return false
+  return adminCache.isUserAdmin(ctx.telegram, chatId, ctx.from.id)
 }
 
 const isInitiator = (ctx, initiatorId) => {
