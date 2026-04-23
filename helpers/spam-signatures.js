@@ -282,6 +282,10 @@ const checkSignatures = async (text, db, options = {}) => {
     // "same simhash vector, different topic" class of false-positives
     // we saw when dev-chat coincidentally aliased a promo template.
     minTokenJaccard = 0.2,
+    // Only distances ≤ this are returned as deterministic spam. Looser
+    // matches (3-5 bits) are soft — the caller should use them as an LLM
+    // signal, not an auto-ban. Rationale: thin evidence → LLM decides.
+    autoBanMaxDistance = 2,
     requireConfirmed = true
   } = options
 
@@ -335,29 +339,42 @@ const checkSignatures = async (text, db, options = {}) => {
       ...statusQuery
     }).limit(1000).select('fuzzyHash sampleText confirmations')
 
+    // First pass: look for a TIGHT match (≤ autoBanMaxDistance) that
+    // warrants a deterministic verdict. Fall through to a soft match if
+    // we can't find one — but still return the tightest candidate so the
+    // caller can surface it as an LLM signal.
+    let softMatch = null
     for (const candidate of fuzzyCandidates) {
       const distance = hammingDistance(signatures.fuzzyHash, candidate.fuzzyHash)
       if (distance > effectiveMaxDistance) continue
-      // Require multi-incident evidence: a signature that has only been
-      // reported once can itself be a FP-to-be. We don't want ONE bad
-      // confirmation to poison near-neighbours across the whole simHash
-      // space. `confirmations >= minConfirmations` is the trust gate.
       const confirmations = Number(candidate.confirmations) || 0
       if (confirmations < minConfirmations) continue
-      // Secondary gate: reject matches that share too few actual tokens
-      // with the stored sample. simhash closeness without lexical overlap
-      // is the signature of an alias collision, not a real variant.
       if (candidate.sampleText) {
         const overlap = jaccardTokens(text, candidate.sampleText)
         if (overlap < minTokenJaccard) continue
       }
-      const confidence = Math.max(75, 95 - distance * 2)
+      if (distance <= autoBanMaxDistance) {
+        const confidence = Math.max(85, 98 - distance * 3)
+        return {
+          match: 'fuzzy',
+          confidence,
+          distance,
+          signature: candidate,
+          reason: `Similar to known spam (${distance} bits different, ${confirmations}× confirmed)`
+        }
+      }
+      // Track the tightest soft match (smaller distance wins).
+      if (!softMatch || distance < softMatch.distance) {
+        softMatch = { distance, confirmations, candidate }
+      }
+    }
+    if (softMatch) {
       return {
-        match: 'fuzzy',
-        confidence,
-        distance,
-        signature: candidate,
-        reason: `Similar to known spam (${distance} bits different, ${confirmations}× confirmed)`
+        match: 'fuzzy_soft',
+        confidence: 60,
+        distance: softMatch.distance,
+        signature: softMatch.candidate,
+        reason: `Loosely similar to known spam (${softMatch.distance} bits different, ${softMatch.confirmations}× confirmed) — needs LLM review`
       }
     }
   }

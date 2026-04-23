@@ -569,12 +569,9 @@ const calculateDynamicThreshold = (context, groupSettings) => {
 
   // ===== TRUST INDICATORS (raise threshold = more lenient) =====
 
-  // Premium users are unlikely to be spammers
-  if (context.isPremium) baseThreshold += 20
-
   // Profile indicators.
   //
-  // Historic behaviour double-counted "has a username": hasProfile is the
+  // Historic behaviour double-counted "has a username": hasProfile was a
   // disjunction (hasUsername || isPremium), so any user with a username got
   // +10 from hasProfile PLUS +8 from hasUsername = +18 on top of the 75
   // baseline → 93 → capped at 90. That effectively made our threshold the
@@ -583,9 +580,8 @@ const calculateDynamicThreshold = (context, groupSettings) => {
   // miss). Usernames are trivially settable by spammers and carry almost
   // no prior signal — only Telegram Premium is a paid proxy for trust.
   //
-  // New split:
-  //   - Premium (paid feature, hard to fake at scale): +10
-  //   - Username alone: +3 (a nudge, not a license)
+  // Also fixed: previously Premium was counted twice (+20 then +10 = +30).
+  // Net +10 is plenty for a paid-feature signal.
   if (context.isPremium) baseThreshold += 10
   if (context.hasUsername) baseThreshold += 3
 
@@ -922,6 +918,13 @@ const checkSpamSignaturesPhase = async (messageText, ctx) => {
         confidence: signatureMatch.confidence,
         distance: signatureMatch.distance
       }, 'Matched spam signature')
+
+      // `fuzzy_soft` is a loose fuzzy hit (distance 3-5 on simhash) — too
+      // thin to auto-ban but worth boosting confidence and ensuring the
+      // message reaches the LLM for content review.
+      if (signatureMatch.match === 'fuzzy_soft') {
+        return { result: null, candidateBoost: 12 }
+      }
 
       return {
         result: {
@@ -1527,6 +1530,27 @@ GUIDANCE
   promotional signals — bias toward SPAM.
 - If an image is attached, also analyse it for promotional text, QR codes,
   crypto logos, contact info overlays, adult content ads.
+
+STRUCTURAL RED FLAGS — weigh these heavily, even when text reads casual:
+- context.inline_buttons: URL buttons on a message (especially with
+  promotional labels like "підписатися", "канал", "купити") — classic
+  promo posting pattern; raise score notably.
+- context.forward.type: forwards from unknown channels/hidden users with
+  promo content — typical scam relay.
+- context.link_preview.url when the preview host doesn't appear in
+  message_text — bot-added hidden promo.
+- context.user_signals.accountAge.isSleeperAwakened + sleeperDays > 180 +
+  low totalMessages — weaponised dormant account pattern.
+- context.user_signals.nameChurn24h + usernameChurn24h > 0 on a first-few-
+  messages account — identity rotation during onboarding almost never
+  happens in legit use.
+- context.quick_assessment.signals containing "external_bot_mention_first_msg",
+  "private_invite_link", "bot_deeplink", "text_invisible_char",
+  "fast_post_after_join" — each is a strong structural cue.
+
+A casual-sounding first message from a profile with 2+ structural red flags
+above is usually weaponised. Do not anchor on surface "friendliness".
+
 - reason = short explanation for group admins (1-2 sentences).
 
 SECURITY CANARY
