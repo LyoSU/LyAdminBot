@@ -50,9 +50,55 @@ const isEmojiOnly = (text) => {
   return !hasTextualContent(text)
 }
 
+/**
+ * Render a unicode progress-bar of `len` cells representing `percent` (0..100).
+ *
+ * Pure, stateless, side-effect-free — safe for unit tests and locale strings.
+ * Used by /settings antispam sensitivity screen and (later, Plan 8) stats.
+ *
+ * @param {number} percent - 0..100. Clamped. NaN/null → 0.
+ * @param {number} [len=10] - Number of cells in the bar.
+ * @param {object} [chars] - Override bar glyphs.
+ * @param {string} [chars.full='▮']
+ * @param {string} [chars.empty='▱']
+ * @returns {string}
+ */
+const bar = (percent, len = 10, chars) => {
+  const glyphs = chars || {}
+  const full = glyphs.full || '▮'
+  const empty = glyphs.empty || '▱'
+  const cellCount = Math.max(1, Math.floor(len))
+  let p = Number(percent)
+  if (!Number.isFinite(p)) p = 0
+  if (p < 0) p = 0
+  if (p > 100) p = 100
+  const filled = Math.round((p / 100) * cellCount)
+  return full.repeat(filled) + empty.repeat(cellCount - filled)
+}
+
+/**
+ * Char-level truncation with ellipsis. Not grapheme-perfect (emoji ZWJ
+ * sequences can split) — acceptable for button previews where the caller
+ * already caps input length at 200 chars.
+ *
+ * @param {string} str
+ * @param {number} max - Max visible length (including the ellipsis character).
+ * @param {string} [ellipsis='…']
+ */
+const truncate = (str, max, ellipsis = '…') => {
+  if (!str) return ''
+  const s = String(str)
+  const limit = Math.max(1, Math.floor(max))
+  if (s.length <= limit) return s
+  const keep = Math.max(0, limit - ellipsis.length)
+  return s.slice(0, keep) + ellipsis
+}
+
 module.exports = {
   EMOJI_REGEX,
   stripEmoji,
   hasTextualContent,
-  isEmojiOnly
+  isEmojiOnly,
+  bar,
+  truncate
 }
