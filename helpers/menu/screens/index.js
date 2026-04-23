@@ -5,10 +5,12 @@
 
 const help = require('./help')
 const onboarding = require('./onboarding')
+const settings = require('./settings')
 
 const registerAll = () => {
   help.register()
   onboarding.register()
+  settings.register()
 }
 
-module.exports = { registerAll, help, onboarding }
+module.exports = { registerAll, help, onboarding, settings }
