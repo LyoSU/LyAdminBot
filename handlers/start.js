@@ -141,11 +141,18 @@ module.exports = async (ctx) => {
   }
 
   if (parsed.kind === 'mystats') {
-    // Forward to the existing /mystats handler. /mystats requires a group
-    // context (ctx.group, member data). In the private-chat deep-link case
-    // we don't have that yet — punt to the placeholder. Wiring the full
-    // "resolve group by id, load member stats, send stats" path is Plan 8
-    // territory; this branch is scaffolding.
+    // /mystats deep-link — resolve the target Group + GroupMember and render
+    // the panel directly in the DM. Falls back to placeholder if the bot
+    // doesn't know the chat or the user never posted in it.
+    try {
+      const myStats = require('./my-stats')
+      if (typeof myStats.handleDeepLink === 'function') {
+        const ok = await myStats.handleDeepLink(ctx, parsed.chatId)
+        if (ok) return
+      }
+    } catch (err) {
+      log.warn({ err: err && err.message }, '/start mystats deep-link failed')
+    }
     return sendPlaceholder(ctx)
   }
 

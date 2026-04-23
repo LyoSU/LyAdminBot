@@ -1,117 +1,255 @@
+// /mystats — per-user stats panel.
+//
+// Render surface per §11 of the UX spec:
+//
+//   📊 Стата {name} в {chatName}
+//
+//   🍌 Бананів:       12
+//   ⏲ Всього в бані: 4 год 22 хв
+//   ⚡ Автобан:        1 год
+//
+//   💬 Повідомлень:   1 247
+//   📈 Актив:   ▮▮▮▮▮▮▮▱▱▱  72%
+//   🌊 Флуд:    ▮▮▱▱▱▱▱▱▱▱  18%
+//
+//   📅 Тут з: 2024-03-15
+//   🎖 Ветеран чату
+//
+// Entry paths:
+//   1. /mystats in a group — sends the panel to the user's DM and posts a
+//      short "stats sent" reply in the group. Both messages auto-delete.
+//   2. Deep-link ?start=mystats_<chatId> — private-chat invocation, resolves
+//      the target Group + GroupMember by chatId for the user and renders the
+//      panel directly in the DM.
+//
+// Metrics:
+//   activity% = (member.textTotal / group.textTotal) * 100, capped 100
+//   flood%    = min(100, (member.avgMsgLen / group.avgMsgLen - 1) * 100) when
+//               the member's avg is above the group's avg; otherwise 0. If
+//               there's no group data yet we fall back to (banCount /
+//               messages) * 100 capped 100 — a best-effort "spam-signal
+//               density" proxy until the schema grows a proper per-period
+//               break-out. Documented in PLAN 8 final report.
+
 const humanizeDuration = require('humanize-duration')
 const dateFormat = require('dateformat')
 const { userName } = require('../utils')
+const { replyHTML } = require('../helpers/reply-html')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
+const { bar } = require('../helpers/text-utils')
+const policy = require('../helpers/cleanup-policy')
+const { bot: log } = require('../helpers/logger')
+
+const AUTO_DELETE_MS = 3 * 1000
 
 /**
- * Get a fun badge based on user stats
+ * Pick a fun badge based on stats (pure — tests can exercise this directly).
  */
-function getStatsBadge (ctx, member, active, flood, messages, banCount) {
-  // Veteran: here for > 6 months
-  const memberAge = Date.now() - new Date(member.createdAt).getTime()
+function getStatsBadge (i18n, member, activePct, floodPct, messages, banCount) {
+  const memberAge = member && member.createdAt
+    ? Date.now() - new Date(member.createdAt).getTime()
+    : 0
   const sixMonths = 6 * 30 * 24 * 60 * 60 * 1000
 
-  // Exemplary citizen: many messages, no bans
-  if (messages > 100 && banCount === 0) {
-    return ctx.i18n.t('cmd.my_stats.badge.exemplary')
-  }
-
-  // Banana collector: 10+ bans
-  if (banCount >= 10) {
-    return ctx.i18n.t('cmd.my_stats.badge.collector')
-  }
-
-  // Soul of the party: > 15% activity
-  if (parseFloat(active) > 15) {
-    return ctx.i18n.t('cmd.my_stats.badge.soul')
-  }
-
-  // Flood master: > 150% flood
-  if (parseFloat(flood) > 150) {
-    return ctx.i18n.t('cmd.my_stats.badge.flood_master')
-  }
-
-  // Veteran: > 6 months
-  if (memberAge > sixMonths && messages > 50) {
-    return ctx.i18n.t('cmd.my_stats.badge.veteran')
-  }
-
-  // Silent observer: < 1% activity but old member
-  if (parseFloat(active) < 1 && memberAge > 30 * 24 * 60 * 60 * 1000) {
-    return ctx.i18n.t('cmd.my_stats.badge.silent')
-  }
-
-  // Newbie: < 7 days
-  if (memberAge < 7 * 24 * 60 * 60 * 1000) {
-    return ctx.i18n.t('cmd.my_stats.badge.newbie')
-  }
-
+  if (messages > 100 && banCount === 0) return i18n.t('cmd.my_stats.badge.exemplary')
+  if (banCount >= 10) return i18n.t('cmd.my_stats.badge.collector')
+  if (activePct > 15) return i18n.t('cmd.my_stats.badge.soul')
+  if (floodPct > 80) return i18n.t('cmd.my_stats.badge.flood_master')
+  if (memberAge > sixMonths && messages > 50) return i18n.t('cmd.my_stats.badge.veteran')
+  if (activePct < 1 && memberAge > 30 * 24 * 60 * 60 * 1000) return i18n.t('cmd.my_stats.badge.silent')
+  if (memberAge > 0 && memberAge < 7 * 24 * 60 * 60 * 1000) return i18n.t('cmd.my_stats.badge.newbie')
   return ''
 }
 
-module.exports = async (ctx) => {
-  if (['supergroup', 'group'].includes(ctx.chat.type)) {
-    const member = ctx.group.members[ctx.from.id]
-    const groupAvrg = ctx.group.info.stats.textTotal / ctx.group.info.stats.messagesCount
-    const memberAvrg = member.stats.textTotal / member.stats.messagesCount
+/**
+ * Compute the render-ready stats payload. Pure — no I/O. Unit-testable.
+ *
+ * @param {object} input
+ * @param {object} input.member - GroupMember doc (banan, stats, createdAt)
+ * @param {object} input.group  - Group doc (stats, settings.banan.default)
+ * @param {object} input.from   - Telegram user (first_name, username)
+ * @param {string} input.chatName
+ * @param {object} input.i18n   - Telegraf-i18n instance (t(), locale())
+ * @returns {{ text: string, activityPercent: number, floodPercent: number }}
+ */
+function computeMyStats ({ member, group, from, chatName, i18n }) {
+  const memberStats = (member && member.stats) || { messagesCount: 0, textTotal: 0 }
+  const groupStats = (group && group.stats) || { messagesCount: 0, textTotal: 0 }
+  const banan = (member && member.banan) || { num: 0, sum: 0, stack: 0 }
+  const banDefault = (group && group.settings && group.settings.banan && group.settings.banan.default) || 300
 
-    const active = ((member.stats.textTotal * 100) / ctx.group.info.stats.textTotal).toFixed(2)
-    const flood = Math.abs(((memberAvrg - groupAvrg) / groupAvrg) * 100).toFixed(2)
-    const messages = member.stats.messagesCount
-    const banCount = member.banan.num
+  const messages = memberStats.messagesCount || 0
+  const banCount = banan.num || 0
 
-    // Get fun badge
-    const badge = getStatsBadge(ctx, member, active, flood, messages, banCount)
+  // Activity%: share of the group's total text produced by this member.
+  let activityPercent = 0
+  if (groupStats.textTotal > 0) {
+    activityPercent = Math.min(100, (memberStats.textTotal * 100) / groupStats.textTotal)
+  }
 
-    const pMessage = await ctx.telegram.sendMessage(ctx.from.id, ctx.i18n.t('cmd.my_stats.chat', {
-      name: userName(ctx.from, true),
-      chatName: ctx.chat.title,
-      banTime: humanizeDuration(
-        member.banan.sum * 1000,
-        { language: ctx.i18n.locale(), fallbacks: ['en'] }
-      ),
-      banAutoTime: humanizeDuration(
-        member.banan.stack * ctx.group.info.settings.banan.default * 1000,
-        { language: ctx.i18n.locale(), fallbacks: ['en'] }
-      ),
-      banCount,
-      messages,
-      active,
-      flood,
-      createdAt: dateFormat(member.createdAt, 'dd.mm.yyyy H:MM:ss'),
-      badge
-    }), {
-      parse_mode: 'HTML'
-    }).catch(() => {})
+  // Flood%: ratio of this member's avg message length versus the group avg.
+  // Positive deltas only (sub-average chatters aren't flooders). Falls back
+  // to a crude ban-density metric when the group has no corpus yet.
+  let floodPercent = 0
+  const memberAvg = messages > 0 ? memberStats.textTotal / messages : 0
+  const groupAvg = groupStats.messagesCount > 0 ? groupStats.textTotal / groupStats.messagesCount : 0
+  if (groupAvg > 0 && memberAvg > groupAvg) {
+    floodPercent = Math.min(100, Math.round(((memberAvg / groupAvg) - 1) * 100))
+  } else if (messages > 0) {
+    floodPercent = Math.min(100, Math.round((banCount / messages) * 100))
+  }
 
-    let gMessage
+  const activityBar = bar(activityPercent, 10)
+  const floodBar = bar(floodPercent, 10)
 
-    if (pMessage) {
-      gMessage = await ctx.replyWithHTML(ctx.i18n.t('cmd.my_stats.send_pm'), {
-        reply_to_message_id: ctx.message.message_id
-      })
-    } else {
-      gMessage = await ctx.replyWithHTML(ctx.i18n.t('cmd.my_stats.error.blocked'), {
-        reply_to_message_id: ctx.message.message_id
-      })
-    }
+  const banTime = humanizeDuration(
+    (banan.sum || 0) * 1000,
+    { language: i18n.locale(), fallbacks: ['en'], largest: 2, round: true }
+  )
+  const banAutoTime = humanizeDuration(
+    (banan.stack || 0) * banDefault * 1000,
+    { language: i18n.locale(), fallbacks: ['en'], largest: 2, round: true }
+  )
 
-    if (gMessage && ctx.db) {
-      const delayMs = 3 * 1000
-      // Delete bot's response
-      scheduleDeletion(ctx.db, {
-        chatId: ctx.chat.id,
-        messageId: gMessage.message_id,
-        delayMs,
-        source: 'cmd_stats'
-      }, ctx.telegram)
-      // Delete user's command
-      scheduleDeletion(ctx.db, {
-        chatId: ctx.chat.id,
-        messageId: ctx.message.message_id,
-        delayMs,
-        source: 'cmd_stats'
-      }, ctx.telegram)
-    }
+  const joinedAt = member && member.createdAt
+    ? dateFormat(member.createdAt, 'dd.mm.yyyy')
+    : '—'
+
+  const badge = getStatsBadge(i18n, member, activityPercent, floodPercent, messages, banCount)
+  const badgeLine = badge ? `\n${badge}` : ''
+
+  const text = i18n.t('menu.stats.mystats.text', {
+    name: userName(from, true),
+    chatName,
+    banCount,
+    banTime,
+    banAutoTime,
+    messages,
+    activityBar,
+    activityPercent: Math.round(activityPercent),
+    floodBar,
+    floodPercent: Math.round(floodPercent),
+    joinedAt,
+    badge: badgeLine
+  })
+
+  return { text, activityPercent, floodPercent }
+}
+
+/**
+ * Resolve Group + GroupMember for deep-link path. Returns null on any miss.
+ */
+async function resolveChatMember (ctx, chatId) {
+  if (!ctx.db) return null
+  try {
+    const group = await ctx.db.Group.findOne({ group_id: chatId })
+    if (!group) return null
+    const member = await ctx.db.GroupMember.findOne({
+      group: group._id,
+      telegram_id: ctx.from.id
+    })
+    return { group, member }
+  } catch (err) {
+    log.debug({ err: err.message }, 'mystats: resolve failed')
+    return null
   }
 }
+
+/**
+ * Send the stats panel as a private message to ctx.from. Used by both the
+ * /mystats group path and the deep-link DM path.
+ * Returns the sent Message or null (e.g. user blocked the bot).
+ */
+async function sendStatsToPM (ctx, { member, group, chatName }) {
+  const { text } = computeMyStats({
+    member,
+    group,
+    from: ctx.from,
+    chatName,
+    i18n: ctx.i18n
+  })
+
+  try {
+    return await ctx.telegram.callApi('sendMessage', {
+      chat_id: ctx.from.id,
+      text,
+      parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true },
+      disable_web_page_preview: true
+    })
+  } catch (_err) {
+    return null
+  }
+}
+
+// Main command entry. Private chat = deep-link path (rendered in `start.js`).
+module.exports = async (ctx) => {
+  if (!['supergroup', 'group'].includes(ctx.chat.type)) return
+
+  const member = ctx.group && ctx.group.members && ctx.group.members[ctx.from.id]
+  const group = ctx.group && ctx.group.info
+  if (!member || !group) {
+    return ctx.replyWithHTML(ctx.i18n.t('menu.stats.mystats.blocked')).catch(() => {})
+  }
+
+  const chatName = ctx.chat.title || ''
+  const pmMessage = await sendStatsToPM(ctx, { member, group, chatName })
+
+  let groupAck
+  if (pmMessage) {
+    groupAck = await replyHTML(ctx, ctx.i18n.t('menu.stats.mystats.send_pm'), {
+      reply_to_message_id: ctx.message.message_id
+    }).catch(() => null)
+  } else {
+    groupAck = await replyHTML(ctx, ctx.i18n.t('menu.stats.mystats.blocked'), {
+      reply_to_message_id: ctx.message.message_id
+    }).catch(() => null)
+  }
+
+  if (groupAck && ctx.db) {
+    scheduleDeletion(ctx.db, {
+      chatId: ctx.chat.id,
+      messageId: groupAck.message_id,
+      delayMs: AUTO_DELETE_MS,
+      source: 'cmd_stats'
+    }, ctx.telegram).catch(() => {})
+    scheduleDeletion(ctx.db, {
+      chatId: ctx.chat.id,
+      messageId: ctx.message.message_id,
+      delayMs: AUTO_DELETE_MS,
+      source: 'cmd_stats'
+    }, ctx.telegram).catch(() => {})
+  }
+}
+
+/**
+ * Deep-link entry point for `?start=mystats_<chatId>`. Called from start.js.
+ * Renders the panel in the private chat if the bot knows the chat + member.
+ */
+module.exports.handleDeepLink = async (ctx, chatId) => {
+  const resolved = await resolveChatMember(ctx, chatId)
+  if (!resolved || !resolved.group || !resolved.member) {
+    return false
+  }
+  const chatName = resolved.group.title || ''
+  const { text } = computeMyStats({
+    member: resolved.member,
+    group: resolved.group,
+    from: ctx.from,
+    chatName,
+    i18n: ctx.i18n
+  })
+  try {
+    await replyHTML(ctx, text)
+    // Auto-clean the placeholder isn't needed in DM — users own their chats.
+    // We still let policy decide.
+    void policy
+    return true
+  } catch (err) {
+    log.debug({ err: err.message }, 'mystats deep-link send failed')
+    return false
+  }
+}
+
+module.exports.computeMyStats = computeMyStats
+module.exports.getStatsBadge = getStatsBadge
