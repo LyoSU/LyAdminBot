@@ -23,6 +23,8 @@ const { getMenu } = require('../helpers/menu/registry')
 const { setPmTarget } = require('../helpers/menu/pm-context')
 const { setKnownAdmin, isUserAdmin } = require('../helpers/admin-cache')
 const modEvent = require('../helpers/mod-event')
+const captchaScreen = require('../helpers/menu/screens/captcha')
+const captchaFlow = require('../helpers/captcha-flow')
 const myStats = require('./my-stats')
 const { bot: log } = require('../helpers/logger')
 
@@ -40,6 +42,13 @@ const parseStartPayload = (payload) => {
   const me = trimmed.match(/^mod_event_([a-f0-9]+)$/i)
   if (me) {
     return { kind: 'mod_event', eventId: me[1] }
+  }
+  // captcha_<challengeId> — opens the captcha screen for the given row.
+  // Triggered by the [🤖 Я не бот] URL button on the group-side
+  // pending_captcha notification.
+  const cap = trimmed.match(/^captcha_([a-f0-9]+)$/i)
+  if (cap) {
+    return { kind: 'captcha', challengeId: cap[1] }
   }
   return { kind: 'unknown', raw: trimmed }
 }
@@ -119,6 +128,60 @@ const renderModEventInPm = async (ctx, eventId) => {
   return true
 }
 
+// /start captcha_<challengeId> — open the captcha picker for the given
+// active row. The row is keyed by the user (so a foreign /start with the
+// same payload is rejected by the picker handler), but we also
+// short-circuit here when the row is missing / expired so the user gets
+// a clear locale toast instead of an empty render.
+const renderCaptchaInPm = async (ctx, challengeId) => {
+  if (!ctx.db || !ctx.db.Captcha) return false
+  const row = await ctx.db.Captcha.findOne({ challengeId })
+  if (!row) {
+    await replyHTML(ctx, ctx.i18n.t('captcha.toast.expired'))
+    return true
+  }
+  if (row.userId !== ctx.from.id) {
+    // Foreign tap — silently ignore (the row owner gets their own button).
+    await replyHTML(ctx, ctx.i18n.t('captcha.toast.no_challenge'))
+    return true
+  }
+  if (row.expiresAt && row.expiresAt.getTime() < Date.now()) {
+    await replyHTML(ctx, ctx.i18n.t('captcha.toast.expired'))
+    return true
+  }
+  await captchaScreen.renderForChallenge(ctx, row)
+  return true
+}
+
+// /start (PM) by a globally-banned user → offer to appeal via captcha.
+// Returns true if we rendered the appeal card, false to fall through to
+// the normal welcome.
+const sendGlobalBanAppealCard = async (ctx) => {
+  const userInfo = ctx.session && ctx.session.userInfo
+  if (!userInfo || !userInfo.isGlobalBanned) return false
+
+  // Cooldown after 3 cumulative attempts.
+  if (userInfo.captchaAppealsLockedUntil &&
+      userInfo.captchaAppealsLockedUntil.getTime &&
+      userInfo.captchaAppealsLockedUntil.getTime() > Date.now()) {
+    await replyHTML(ctx, ctx.i18n.t('captcha.appeal.locked'))
+    return true
+  }
+
+  const result = await captchaFlow.startGlobalBanAppeal(ctx)
+  if (!result.ok) {
+    if (result.locked) {
+      await replyHTML(ctx, ctx.i18n.t('captcha.appeal.locked'))
+      return true
+    }
+    return false
+  }
+  // Render intro + start the picker as a single message.
+  await replyHTML(ctx, ctx.i18n.t('captcha.appeal.intro'))
+  await captchaScreen.renderForChallenge(ctx, result.captcha)
+  return true
+}
+
 module.exports = async (ctx) => {
   const isPrivate = ctx.chat && ctx.chat.type === 'private'
 
@@ -127,6 +190,16 @@ module.exports = async (ctx) => {
   }
 
   const parsed = parseStartPayload(readPayload(ctx))
+
+  if (parsed.kind === 'captcha') {
+    try {
+      const ok = await renderCaptchaInPm(ctx, parsed.challengeId)
+      if (ok) return
+    } catch (err) {
+      log.warn({ err: err && err.message }, '/start captcha deep-link failed')
+    }
+    return sendPlaceholder(ctx)
+  }
 
   if (parsed.kind === 'help') {
     return help.sendHelp(ctx, ctx.from.id)
@@ -207,7 +280,16 @@ module.exports = async (ctx) => {
     return sendPlaceholder(ctx)
   }
 
-  // Unknown payload or none: plain welcome.
+  // Unknown payload or none. Global-ban appeal trumps the regular welcome
+  // — a banned user landing in PM gets an explanation and a captcha shot
+  // at clearing the global ban.
+  try {
+    const appealed = await sendGlobalBanAppealCard(ctx)
+    if (appealed) return
+  } catch (err) {
+    log.warn({ err: err && err.message }, '/start global-ban appeal failed')
+  }
+
   return sendPrivateCard(ctx)
 }
 

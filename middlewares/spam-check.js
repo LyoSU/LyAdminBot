@@ -29,6 +29,10 @@ const { snapshotMessage, analyzeEdit } = require('../helpers/edit-diff')
 const adminFeedback = require('../helpers/admin-feedback')
 const { isSystemSenderId } = require('../helpers/system-senders')
 const botPermissions = require('../helpers/bot-permissions')
+const captchaFlow = require('../helpers/captcha-flow')
+
+const CAPTCHA_TRIGGER_MIN_CONFIDENCE = 60
+const CAPTCHA_WHITELIST_WINDOW_MS = 24 * 60 * 60 * 1000
 
 /**
  * Determine if user should receive full ban (vs temporary mute)
@@ -563,6 +567,40 @@ module.exports = async (ctx) => {
       // Use dynamic confidence threshold and determine action
       const baseThreshold = spamSettings.confidenceThreshold || 70
       const action = determineAction(result, context, baseThreshold)
+
+      // Mid-confidence captcha gate. When the verdict is sub-threshold but
+      // still suspicious enough (>=60), normally we'd let the message
+      // through. Instead, soft-mute the sender and ask for an emoji
+      // captcha — a real person clears it in 5 sec, a fly-by-night spam
+      // account never bothers.
+      //
+      // Skipped for: channel posts (no DM target), 24h post-pass whitelist
+      // on the User doc, and any case where the standard pipeline already
+      // wants to act (action !== 'none').
+      const captchaWhitelisted = ctx.session && ctx.session.userInfo &&
+        ctx.session.userInfo.captchaPassedAt instanceof Date &&
+        Date.now() - ctx.session.userInfo.captchaPassedAt.getTime() < CAPTCHA_WHITELIST_WINDOW_MS
+      if (
+        action.action === 'none' &&
+        result.isSpam &&
+        result.confidence >= CAPTCHA_TRIGGER_MIN_CONFIDENCE &&
+        result.confidence < baseThreshold &&
+        !isChannelPost &&
+        !captchaWhitelisted
+      ) {
+        const dispatched = await captchaFlow.startMidConfidenceCaptcha(ctx, {
+          senderInfo,
+          message,
+          confidence: result.confidence,
+          reason: result.reason
+        }).catch((err) => {
+          spamAction.warn({ err: err.message, userId: senderId }, 'captcha dispatch failed')
+          return { ok: false }
+        })
+        if (dispatched && dispatched.ok) {
+          return true // captcha gate took over; stop the pipeline.
+        }
+      }
 
       if (action.action !== 'none') {
         const userDisplayName = context.userName
