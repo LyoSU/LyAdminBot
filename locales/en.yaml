@@ -935,6 +935,46 @@ bot_commands:
   top_banan: "Top bananas (moderation)"
   extras: "Saved quick commands"
   settings: "Chat settings (admins)"
+  digest: "Weekly bot digest (admins)"
+
+digest:
+  title: "${chart} <b>Weekly digest</b> · <b>${chatTitle}</b>"
+  period: "<i>${from} – ${to}</i>"
+  empty: "${shield} Quiet week. Nothing suspicious happened."
+  footer: "<i>${shield} Working while you sleep. <code>/digest</code> to refresh.</i>"
+  row:
+    auto_del: "${trash} Spam deleted: <b>${n}</b>"
+    auto_ban: "${ban} Auto-banned: <b>${n}</b>"
+    auto_mute: "${lock} Auto-muted: <b>${n}</b>"
+    admin_actions: "${crown} Manual admin actions: <b>${n}</b>"
+    captcha: "${check} Captcha: <b>${passed}</b> passed · <b>${failed}</b> failed"
+    votes: "${target} Community votes: <b>${n}</b>"
+    external: "${eyes} Banned in your other chats: <b>${n}</b> by <b>${admins}</b> ${adminsWord}"
+  feature:
+    external_ban: "${eyes} Observed <b>${bans}</b> bans in ${chatsWord} by <b>${admins}</b> ${adminsWord} — will be extra cautious here."
+    hot_week: "${fire} Hot week — ${n} automatic actions kept this chat clean."
+    captcha_pass_rate: "${check} Captcha pass rate: <b>${passRate}%</b> of those I asked to verify."
+    votes_confirmed: "${target} Your community upheld <b>${n}</b> ${decisionsWord} — zero overturned."
+    overrides: "${warn} Admins overrode <b>${n}</b> of my decisions — being honest about mistakes."
+  plural:
+    chats_one: "another of your chats"
+    chats_few: "other of your chats"
+    chats_many: "other of your chats"
+    admins_one: "admin"
+    admins_few: "admins"
+    admins_many: "admins"
+    decisions_one: "decision"
+    decisions_few: "decisions"
+    decisions_many: "decisions"
+  cmd:
+    delivered: "${chart} Digest sent to your DM."
+    pm_blocked: "${warn} I can't DM you. Message me first, then try again."
+  combined:
+    title: "${chart} <b>Weekly digest</b> · <b>${n}</b> ${chatsWord} where you're an admin"
+    totals_header: "<b>Totals this week:</b>"
+    per_chat_header: "<b>By chat:</b>"
+    per_chat_row: "· <b>${title}</b> — ${summary}"
+    per_chat_quiet: "<i>quiet</i>"
 
 captcha:
   compact:

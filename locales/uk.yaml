@@ -927,6 +927,48 @@ bot_commands:
   top_banan: "Топ бананів (модерації)"
   extras: "Збережені швидкі команди"
   settings: "Налаштування чату (адміни)"
+  digest: "Тижневий звіт роботи бота (адміни)"
+
+digest:
+  # Pure-text strings — no emoji here. Render() prepends icons from emojiMap
+  # so the renderer controls visual consistency (e.g. premium vs unicode).
+  title: "${chart} <b>Тижневий звіт</b> · <b>${chatTitle}</b>"
+  period: "<i>${from} – ${to}</i>"
+  empty: "${shield} Тиждень спокійний. Нічого підозрілого не сталось."
+  footer: "<i>${shield} Працюю поки ви спите. <code>/digest</code> — щоб згенерувати знову.</i>"
+  row:
+    auto_del: "${trash} Видалено спаму: <b>${n}</b>"
+    auto_ban: "${ban} Забанено авто: <b>${n}</b>"
+    auto_mute: "${lock} Заглушено авто: <b>${n}</b>"
+    admin_actions: "${crown} Ручних дій адмінів: <b>${n}</b>"
+    captcha: "${check} Captcha: <b>${passed}</b> пройшли · <b>${failed}</b> провалили"
+    votes: "${target} Голосувань спільноти: <b>${n}</b>"
+    external: "${eyes} Забанили в інших ваших чатах: <b>${n}</b> від <b>${admins}</b> ${adminsWord}"
+  feature:
+    external_ban: "${eyes} Зафіксував <b>${bans}</b> банів у ${chatsWord} від <b>${admins}</b> ${adminsWord} — підсилю обережність тут."
+    hot_week: "${fire} Гарячий тиждень — ${n} авто-дій захистили чат."
+    captcha_pass_rate: "${check} Captcha пройшли <b>${passRate}%</b> з тих, кого я просив підтвердити."
+    votes_confirmed: "${target} Ваша спільнота підтвердила <b>${n}</b> ${decisionsWord} — нуль скасувань."
+    overrides: "${warn} Адміни скасували <b>${n}</b> з моїх рішень — чесно визнаю помилки."
+  plural:
+    chats_one: "іншому вашому чаті"
+    chats_few: "інших ваших чатах"
+    chats_many: "інших ваших чатах"
+    admins_one: "адміна"
+    admins_few: "адмінів"
+    admins_many: "адмінів"
+    decisions_one: "моє рішення"
+    decisions_few: "мої рішення"
+    decisions_many: "моїх рішень"
+  cmd:
+    delivered: "${chart} Звіт — в особисті."
+    pm_blocked: "${warn} Не можу написати в особисті. Напиши мені першим, потім спробуй ще раз."
+  combined:
+    title: "${chart} <b>Тижневий звіт</b> · <b>${n}</b> ${chatsWord}, де ти адмін"
+    totals_header: "<b>Сумарно за тиждень:</b>"
+    per_chat_header: "<b>По чатах:</b>"
+    per_chat_row: "· <b>${title}</b> — ${summary}"
+    per_chat_quiet: "<i>спокійно</i>"
 
 captcha:
   compact:

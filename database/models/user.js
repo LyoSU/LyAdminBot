@@ -206,6 +206,51 @@ const userSchema = mongoose.Schema({
       default: 'neutral'
     },
     lastCalculated: { type: Date, default: Date.now }
+  },
+
+  // Own-network reputation — mirrors moderation actions taken by HUMAN admins
+  // in other chats where our bot is also an admin. Populated by
+  // handlers/chat-member.js when it observes a `chat_member` update whose
+  // `from` field is a non-bot admin toggling the user's status.
+  //
+  //   bannedInChats        — CURRENT set of chatIds where the user is banned
+  //                          ($pull on unban, $addToSet on ban).
+  //   restrictedInChats    — CURRENT set of chatIds where the user is
+  //                          restricted ($pull on unrestrict, $addToSet on
+  //                          restrict).
+  //   distinctAdminsBanned — MONOTONIC set of admin userIds that have ever
+  //                          banned this user. Never pulled — the historical
+  //                          fact "3 different admins banned this user"
+  //                          survives later unbans and is the load-bearing
+  //                          signal for own-network detection rules.
+  //   networkBanCount      — cumulative count of ban EVENTS (monotonic).
+  //                          `bannedInChats.length` ≠ this count once any
+  //                          ban/unban cycle happens.
+  //   networkRestrictCount — same, for restrict events.
+  //
+  // Deliberately not populated by our own /ban, auto_ban, vote_resolved, etc
+  // — those paths write to ModLog directly with actorId=our bot/null.
+  // This field is ONLY for second-hand observations of decisions we did not
+  // make ourselves, so a rule like "banned by ≥2 DIFFERENT admins" is a
+  // meaningful independent-verification signal.
+  crossChat: {
+    bannedInChats: { type: [Number], default: [] },
+    restrictedInChats: { type: [Number], default: [] },
+    distinctAdminsBanned: { type: [Number], default: [] },
+    networkBanCount: { type: Number, default: 0 },
+    networkRestrictCount: { type: Number, default: 0 },
+    lastNetworkBanAt: { type: Date },
+    lastNetworkRestrictAt: { type: Date }
+  },
+
+  // Preferences for the weekly digest that the bot PMs to admins.
+  //   optedOut  — admin clicked "не турбуй". Never sent again.
+  //   lastSentAt — last digest we successfully delivered (for dedup in
+  //                multi-chat-admin scenarios where they'd otherwise get
+  //                one PM per chat within the same week).
+  digestPreferences: {
+    optedOut: { type: Boolean, default: false },
+    lastSentAt: { type: Date }
   }
 }, {
   timestamps: true
@@ -214,5 +259,8 @@ const userSchema = mongoose.Schema({
 userSchema.index({ isGlobalBanned: 1 }, { sparse: true })
 userSchema.index({ 'reputation.status': 1 }, { sparse: true })
 userSchema.index({ 'externalBan.lols.banned': 1 }, { sparse: true })
+// Supports future detector queries like "users with ≥2 current network bans"
+// without a full collection scan.
+userSchema.index({ 'crossChat.networkBanCount': 1 }, { sparse: true })
 
 module.exports = userSchema

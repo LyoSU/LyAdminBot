@@ -8,6 +8,7 @@ const { bot: botLog, db: dbLog } = require('./helpers/logger')
 const { db } = require('./database')
 const { processExpiredVotes } = require('./handlers')
 const { processStartupCleanup, startCleanupInterval } = require('./helpers/message-cleanup')
+const { startDigestScheduler } = require('./helpers/digest-scheduler')
 const { startPeriodicSync: startBanDatabaseSync } = require('./helpers/ban-database-sync')
 const { setupCommands } = require('./bot/setup-commands')
 const {
@@ -315,6 +316,12 @@ const init = () => {
 
     // Start global ban database signature sync if enabled
     startBanDatabaseSync(db)
+
+    // Weekly digest scheduler — PMs a summary of bot activity to each admin
+    // once per week per chat. See helpers/digest-scheduler.js for the
+    // delivery window, opt-out, and rate-limit details.
+    startDigestScheduler({ db, telegram: bot.telegram, i18n })
+    botLog.debug('Started digest scheduler')
   })
 }
 

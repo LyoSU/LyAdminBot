@@ -40,7 +40,15 @@ const EVENT_TYPES = [
   'captcha_passed',
   'captcha_failed',
   'appeal_passed',
-  'appeal_failed'
+  'appeal_failed',
+  // External admin actions — observed via `chat_member` updates where the
+  // actor is a human admin (from.is_bot=false, from.id!=our bot). Mirrors
+  // the decision so own-network reputation rules can reason over it, but
+  // does NOT imply any action on our part. See handlers/chat-member.js.
+  'external_ban',
+  'external_restrict',
+  'external_unban',
+  'external_unrestrict'
 ]
 
 const modLogSchema = mongoose.Schema({

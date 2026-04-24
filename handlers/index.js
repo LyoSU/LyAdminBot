@@ -37,6 +37,7 @@ const { handleTrust, handleUntrust } = require('./admin/trust')
 const { handleSpamVoteCallback, handleAdminOverride, processExpiredVotes } = require('./spam-vote')
 const handleChatMember = require('./chat-member')
 const handleMessageReaction = require('./message-reaction')
+const handleDigest = require('./admin/digest')
 
 module.exports = {
   handleStart,
@@ -81,5 +82,6 @@ module.exports = {
   handleAdminOverride,
   processExpiredVotes,
   handleChatMember,
-  handleMessageReaction
+  handleMessageReaction,
+  handleDigest
 }

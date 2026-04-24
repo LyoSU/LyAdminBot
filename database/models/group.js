@@ -123,9 +123,19 @@ const groupSchema = mongoose.Schema({
   linked_chat_id: {
     type: Number,
     default: null
+  },
+  // Last time the weekly digest was processed for this chat (sent OR skipped
+  // because nothing happened). Scheduler uses this to decide due-ness.
+  lastDigestSentAt: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true
 })
+
+// Supports the hourly scheduler's "chats whose weekly digest is due" query
+// without a collection scan at 10k+ groups.
+groupSchema.index({ lastDigestSentAt: 1 })
 
 module.exports = groupSchema

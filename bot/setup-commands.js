@@ -34,7 +34,7 @@ const SCOPES = {
   ],
   all_chat_administrators: [
     'banan', 'kick', 'del', 'report', 'mystats',
-    'top', 'top_banan', 'extras', 'settings', 'help', 'lang', 'ping'
+    'top', 'top_banan', 'extras', 'settings', 'digest', 'help', 'lang', 'ping'
   ]
 }
 

@@ -16,7 +16,8 @@ const {
   handleExtraList,
   handleReport,
   handleBanan,
-  handleCancel
+  handleCancel,
+  handleDigest
 } = require('../handlers')
 
 /**
@@ -50,6 +51,7 @@ const registerCommands = (bot) => {
   bot.command('top', onlyGroup, handleTop)
   bot.command('top_banan', onlyGroup, handleTopBanan)
   bot.command('mystats', onlyGroup, handleMyStats)
+  bot.command('digest', onlyGroup, handleDigest)
   bot.command('extras', onlyGroup, handleExtraList)
   bot.command('report', onlyGroup, handleReport)
 
