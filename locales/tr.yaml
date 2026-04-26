@@ -661,18 +661,6 @@ menu:
         cancel: "✕ İptal"
         invalid: "Buton anlaşılmadı"
         failed: "🚫 Ban başarısız"
-    del:
-      undo:
-        notification: "🗑 Silindi. <i>Fikrin değişti mi? 30 sn içinde geri al.</i>"
-        restored_by: "<i>admin ${admin} tarafından geri yüklendi</i>"
-        btn:
-          restore: "↩️ Geri yükle"
-          cant_restore: "🚫 Geri yüklenemez"
-        toast:
-          restored: "↩️ Geri yüklendi"
-          expired: "⏱ Geç kaldın — tampon boşaldı"
-          cant_restore: "🚫 Bu mesaj tipi desteklenmiyor"
-          failed: "🚫 Geri yükleme başarısız"
     rights:
       card:
         title_banan: "🔒 ${name} susturulamaz"

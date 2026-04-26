@@ -887,18 +887,6 @@ menu:
         cancel: "✕ Cancel"
         invalid: "Unknown button"
         failed: "🚫 Ban failed"
-    del:
-      undo:
-        notification: "🗑 Deleted. <i>Changed your mind? Restore within 30 s.</i>"
-        restored_by: "<i>restored by admin ${admin}</i>"
-        btn:
-          restore: "↩️ Restore"
-          cant_restore: "🚫 Can't restore"
-        toast:
-          restored: "↩️ Restored"
-          expired: "⏱ Too late — buffer expired"
-          cant_restore: "🚫 Message type not supported"
-          failed: "🚫 Restore failed"
     rights:
       card:
         title_banan: "🔒 Can't mute ${name}"

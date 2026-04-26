@@ -827,18 +827,6 @@ menu:
         cancel: "✕ Отменить"
         invalid: "Не понял кнопку"
         failed: "🚫 Не вышло забанить"
-    del:
-      undo:
-        notification: "🗑 Удалено. <i>Передумал? Восстанови за 30 с.</i>"
-        restored_by: "<i>восстановлено админом ${admin}</i>"
-        btn:
-          restore: "↩️ Восстановить"
-          cant_restore: "🚫 Не могу восстановить"
-        toast:
-          restored: "↩️ Восстановлено"
-          expired: "⏱ Поздно — буфер очистился"
-          cant_restore: "🚫 Тип сообщения не поддерживается"
-          failed: "🚫 Не вышло восстановить"
     rights:
       card:
         title_banan: "🔒 Не могу замьютить ${name}"

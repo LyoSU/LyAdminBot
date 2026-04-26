@@ -1,8 +1,6 @@
 const { mapTelegramError } = require('../helpers/error-mapper')
 const { isSenderAdmin } = require('../helpers/is-sender-admin')
-const buffer = require('../helpers/delete-buffer')
 const { logModEvent } = require('../helpers/mod-log')
-const { sendUndoNotification } = require('../helpers/menu/screens/mod-del-undo')
 const { sendRightsCard } = require('../helpers/menu/screens/mod-rights')
 
 module.exports = async (ctx) => {
@@ -22,9 +20,6 @@ module.exports = async (ctx) => {
 
   if (isAdmin && ctx.message.reply_to_message) {
     const target = ctx.message.reply_to_message
-    // Snapshot BEFORE deletion — once the message is gone we can't
-    // getChatMember-read it, only what Telegram already delivered to us.
-    buffer.put(ctx.chat.id, target.message_id, target)
 
     let deleted = false
     await ctx.deleteMessage(target.message_id).then(() => {
@@ -39,26 +34,12 @@ module.exports = async (ctx) => {
     })
 
     if (deleted) {
-      // Audit the manual-delete before surfacing the undo notification —
-      // ordering doesn't matter for correctness, but readable trace order helps.
       logModEvent(ctx.db, {
         chatId: ctx.chat.id,
         eventType: 'manual_del',
         actor: ctx.from,
         target: target.from
       }).catch(() => {})
-
-      // Best-effort undo notification. Failure is purely cosmetic — the
-      // delete already succeeded. Notification self-expires via the
-      // standard cleanup queue.
-      await sendUndoNotification(ctx, {
-        chatId: ctx.chat.id,
-        messageId: target.message_id
-      }).catch(() => {})
-    } else {
-      // Delete failed — drop the buffer entry so an orphaned undo
-      // notification can never resurface the message from cache.
-      buffer.del(ctx.chat.id, target.message_id)
     }
   }
 }

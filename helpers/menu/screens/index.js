@@ -13,7 +13,6 @@ const settingsModlog = require('./settings-modlog')
 const modEvent = require('./mod-event')
 const modVoteDetails = require('./mod-vote-details')
 const modBanPicker = require('./mod-ban-picker')
-const modDelUndo = require('./mod-del-undo')
 const modRights = require('./mod-rights')
 const statsTop = require('./stats-top')
 const statsTopBanan = require('./stats-top-banan')
@@ -31,7 +30,6 @@ const registerAll = () => {
   modEvent.register()
   modVoteDetails.register()
   modBanPicker.register()
-  modDelUndo.register()
   modRights.register()
   statsTop.register()
   statsTopBanan.register()
@@ -51,7 +49,6 @@ module.exports = {
   modEvent,
   modVoteDetails,
   modBanPicker,
-  modDelUndo,
   modRights,
   statsTop,
   statsTopBanan,

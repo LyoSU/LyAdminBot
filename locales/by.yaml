@@ -713,18 +713,6 @@ menu:
         cancel: "✕ Скасаваць"
         invalid: "Не зразумеў кнопку"
         failed: "🚫 Не атрымалася забаніць"
-    del:
-      undo:
-        notification: "🗑 Выдалена. <i>Перадумаў? Адновіш за 30 с.</i>"
-        restored_by: "<i>адноўлена адмінам ${admin}</i>"
-        btn:
-          restore: "↩️ Аднавіць"
-          cant_restore: "🚫 Не магу аднавіць"
-        toast:
-          restored: "↩️ Адноўлена"
-          expired: "⏱ Позна — буфер ачысціўся"
-          cant_restore: "🚫 Тып паведамлення не падтрымліваецца"
-          failed: "🚫 Не атрымалася аднавіць"
     rights:
       card:
         title_banan: "🔒 Не магу замʼюціць ${name}"
