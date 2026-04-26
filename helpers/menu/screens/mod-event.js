@@ -29,6 +29,7 @@ const { logModEvent } = require('../../mod-log')
 const policy = require('../../cleanup-policy')
 const { scheduleDeletion } = require('../../message-cleanup')
 const adminCache = require('../../admin-cache')
+const { applyAdminOverride } = require('../../admin-override')
 const { bot: log } = require('../../logger')
 
 const SCREEN_ID = 'mod.event'
@@ -308,6 +309,21 @@ const handle = async (ctx, action, args) => {
     if (!result.ok) {
       log.warn({ err: result.err, eventId }, 'mod.event undo: failed')
       return { render: false, toast: 'mod_event.toast.undo_failed' }
+    }
+    // Roll back the data-layer side-effects of the original auto-action:
+    // reputation boost, drop global ban, ++manualUnbans, --spamDetections
+    // (floored at 0), per-chat whitelist. Without this the user stays
+    // `restricted` and the very next message is auto-banned again — which
+    // is exactly the cascade we observed in production (e.g. one admin
+    // overriding the same user 6× in 8 minutes). Channel targets are
+    // no-op'd inside applyAdminOverride. Failure is non-fatal: the
+    // Telegram-side unban already succeeded above and is the user-visible
+    // win; reputation rollback is best-effort.
+    if (ctx.db) {
+      await applyAdminOverride(ctx.db, {
+        userId: event.targetId,
+        chatId: event.chatId
+      }).catch(err => log.warn({ err: err.message, eventId }, 'mod.event undo: applyAdminOverride failed'))
     }
     const adminName = ctx.from && (ctx.from.first_name || ctx.from.username)
       ? (ctx.from.first_name || ctx.from.username)

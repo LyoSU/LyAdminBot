@@ -1,6 +1,7 @@
 const { updateVoteUI, showResultUI } = require('../helpers/vote-ui')
 const { addSignature } = require('../helpers/spam-signatures')
 const { getReputationStatus } = require('../helpers/reputation')
+const { applyAdminOverride } = require('../helpers/admin-override')
 const { spamVote: log, nlp: nlpLog } = require('../helpers/logger')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
 const { logModEvent } = require('../helpers/mod-log')
@@ -654,64 +655,16 @@ const handleAdminOverride = async (ctx) => {
     log.error({ err: error.message, adminId, bannedUserId, chatId }, 'Admin override: unban/unmute failed')
   }
 
-  // 3. Remove global ban (only for real users)
-  if (bannedUserId > 0 && ctx.db) {
+  // 3. Apply data-layer side-effects: reputation boost, drop global ban,
+  //    increment manualUnbans, decrement spamDetections (floor 0), add to
+  //    per-chat whitelist. Centralised in helpers/admin-override so the
+  //    compact `[↩️ Розблокувати]` path stays in lockstep with this one.
+  //    Channels are no-op'd inside the helper (no per-user reputation).
+  if (ctx.db) {
     try {
-      await ctx.db.User.findOneAndUpdate(
-        { telegram_id: bannedUserId },
-        {
-          $unset: { isGlobalBanned: 1, globalBanReason: 1, globalBanDate: 1 }
-        }
-      )
+      await applyAdminOverride(ctx.db, { userId: bannedUserId, chatId })
     } catch (error) {
-      log.warn({ err: error.message, bannedUserId }, 'Admin override: failed to remove global ban')
-    }
-
-    // 4. Reputation boost (+20, capped at 74) + stats adjustment
-    try {
-      const user = await ctx.db.User.findOne({ telegram_id: bannedUserId })
-      const oldScore = user?.reputation?.score || 50
-      const globalStats = user?.globalStats || {}
-      const newScore = Math.min(74, oldScore + 20)
-      const newStatus = getReputationStatus(newScore, globalStats)
-
-      await ctx.db.User.findOneAndUpdate(
-        { telegram_id: bannedUserId },
-        {
-          $set: {
-            'reputation.status': newStatus,
-            'reputation.score': newScore,
-            'reputation.lastCalculated': new Date()
-          },
-          $inc: {
-            'globalStats.manualUnbans': 1,
-            'globalStats.spamDetections': -1
-          }
-        },
-        { upsert: true }
-      )
-
-      log.info({ adminId, bannedUserId, oldScore, newScore, newStatus }, 'Admin override: reputation boosted')
-    } catch (error) {
-      log.error({ err: error.message, bannedUserId }, 'Admin override: failed to update reputation')
-    }
-
-    // 5. Add to group's trustedUsers (per-group only, not global)
-    try {
-      const group = await ctx.db.Group.findOne({ group_id: chatId })
-      if (group && group.settings && group.settings.spamProtection) {
-        if (!group.settings.spamProtection.trustedUsers) {
-          group.settings.spamProtection.trustedUsers = []
-        }
-        if (!group.settings.spamProtection.trustedUsers.includes(bannedUserId)) {
-          group.settings.spamProtection.trustedUsers.push(bannedUserId)
-          group.markModified('settings.spamProtection.trustedUsers')
-          await group.save()
-          log.info({ bannedUserId, chatId }, 'Admin override: added to group trusted list')
-        }
-      }
-    } catch (error) {
-      log.warn({ err: error.message, bannedUserId, chatId }, 'Admin override: failed to add to trusted list')
+      log.error({ err: error.message, bannedUserId }, 'Admin override: applyAdminOverride failed')
     }
   }
 
