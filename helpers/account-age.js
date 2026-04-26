@@ -123,7 +123,40 @@ const entries = [
   [6527226055, 1690289160],
   [6813121418, 1698489600],
   [6865576492, 1699052400],
-  [6925870357, 1701192327] // 2024
+  [6925870357, 1701192327], // 2023-11-29 (existing; legacy comment said
+  //                           "2024" but the unix value is in fact Nov 2023)
+
+  // ─── Cross-bot calibration anchors (2026-04-26 audit) ──────────────────
+  // Source: min(createdAt) across LyAdminBot + fStikBot + QuoteBot + lybot
+  // user collections per 100M-id bucket. Multi-bot earliest is the tightest
+  // available *upper bound* on Telegram registration date — true creation
+  // is at-or-before this. Safe direction for our anti-spam detectors:
+  // accountAge predictions can only become *older* than reality, never
+  // newer, so the "fresh-bake" rule doesn't fire on legitimate veterans.
+  //
+  // The 7.6B–8.1B plateau (all 2024-09-18) is real: ≈0.5B IDs allocated
+  // in a single day. Likely a Telegram-side ID allocation event or a mass
+  // bot-farm registration spike. We anchor the plateau explicitly so
+  // interpolation matches observed reality rather than smearing the dates
+  // linearly across what was actually a one-day jump.
+  [7000000000, 1708351706], // 2024-02-19
+  [7100000000, 1708352108], // 2024-02-19
+  [7200000000, 1716731573], // 2024-05-26
+  [7300000000, 1716733039], // 2024-05-26
+  [7400000000, 1716729388], // 2024-05-26
+  [7500000000, 1723641696], // 2024-08-14
+  [7600000000, 1726680317], // 2024-09-18 ─┐
+  [7700000000, 1726678480], //              │ 2024-09-18 plateau
+  [7800000000, 1726680015], //              │ (~0.5B IDs in one day,
+  [7900000000, 1726679350], //              │  Telegram alloc event /
+  [8000000000, 1726680694], //              │  bot-farm spike)
+  [8100000000, 1726685883], // 2024-09-18 ─┘
+  [8200000000, 1753301180], // 2025-07-23
+  [8300000000, 1753300167], // 2025-07-23
+  [8400000000, 1753303865], // 2025-07-23
+  [8500000000, 1761942128], // 2025-10-31
+  [8600000000, 1771801757], // 2026-02-22
+  [8700000000, 1771806478]  // 2026-02-23
 ]
 
 entries.sort((a, b) => a[0] - b[0])
