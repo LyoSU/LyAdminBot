@@ -64,10 +64,13 @@ const sendModEventNotification = async (ctx, opts = {}) => {
     targetUser = {},
     actor = 'bot',
     reason,
-    confidence,
+    confidence: rawConfidence,
     messagePreview,
     warning
   } = opts
+  // Normalize to integer once at the entry point so both ModEvent.confidence
+  // and the `confidence=NN` string on ModLog.reason stay clean for analytics.
+  const confidence = modEvent.roundConfidence(rawConfidence)
 
   if (!ctx || !ctx.telegram || !ctx.chat || !ctx.db || !ctx.db.ModEvent) {
     log.warn({ actionType }, 'mod-event-send: missing ctx plumbing — skipping notification')

@@ -32,10 +32,21 @@ const usernameLabel = (target) => {
   return 'Unknown'
 }
 
+// Normalize a confidence value to an integer percentage (or pass through
+// null/undefined). Used both for display (formatConfidence) and as a write-
+// time invariant in createModEvent + the ModLog reason serializer, so that
+// raw floats from the LLM/vector pipeline never reach persistence and break
+// `group-by reason` analytics.
+const roundConfidence = (n) => {
+  if (n === null || n === undefined) return n
+  const num = Number(n)
+  if (!Number.isFinite(num)) return n
+  return Math.round(num)
+}
+
 const formatConfidence = (n) => {
-  if (n === null || n === undefined || Number.isNaN(Number(n))) return null
-  const pct = Math.round(Number(n))
-  return `📊 ${pct}%`
+  const rounded = roundConfidence(n)
+  return rounded == null ? null : `📊 ${rounded}%`
 }
 
 // Map action type → compact locale key. Auto-delete / auto-ban route to
@@ -247,7 +258,10 @@ const buildExpandedKeyboard = (i18n, event, opts = {}) => {
 
 const createModEvent = async (db, fields) => {
   if (!db || !db.ModEvent) throw new Error('mod-event: db.ModEvent unavailable')
-  return db.ModEvent.create(fields)
+  const safe = fields && fields.confidence !== undefined
+    ? { ...fields, confidence: roundConfidence(fields.confidence) }
+    : fields
+  return db.ModEvent.create(safe)
 }
 
 const getModEvent = async (db, eventId) => {
@@ -264,6 +278,7 @@ module.exports = {
   SCREEN_ID,
   escapeHtml,
   usernameLabel,
+  roundConfidence,
   formatConfidence,
   resolveReason,
   buildCompactText,
