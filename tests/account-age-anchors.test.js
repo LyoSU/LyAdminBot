@@ -70,7 +70,7 @@ expectMonth(8700000000, '2026-02', '8.7B → Feb 2026')
 //      predictedAgeDays read >365 even for accounts created last week.
 {
   const today = Date.now()
-  const firstSeen = new Date(today - 2 * 86400_000)   // 2 days ago
+  const firstSeen = new Date(today - 2 * 86400000) // 2 days ago
   const paradox = getAccountAgeParadox(8700000000, firstSeen, today)
   assert.ok(paradox, 'paradox returned for valid input')
   assert.strictEqual(
@@ -83,7 +83,7 @@ expectMonth(8700000000, '2026-02', '8.7B → Feb 2026')
 //      (firstSeen yesterday) → real sleeper.
 {
   const today = Date.now()
-  const firstSeen = new Date(today - 1 * 86400_000)
+  const firstSeen = new Date(today - 1 * 86400000)
   const paradox = getAccountAgeParadox(2000000000, firstSeen, today)
   assert.strictEqual(
     paradox.isSleeperAwakened, true,
@@ -100,11 +100,12 @@ expectMonth(8700000000, '2026-02', '8.7B → Feb 2026')
 //      timestamp, so age-based detectors see a 0-day-old "unknown"
 //      account, not a 4-year-old veteran.
 {
-  for (const id of [2_500_000_000, 3_000_000_000, 3_500_000_000, 4_000_000_000, 4_900_000_000]) {
+  const deadZoneIds = [2500000000, 3000000000, 3500000000, 4000000000, 4900000000]
+  for (const id of deadZoneIds) {
     const [prefix, date] = predictCreationDate(id)
     assert.strictEqual(prefix, '?', `id=${id} (transition gap) must return '?' prefix`)
     assert.ok(
-      Math.abs(Date.now() - date.getTime()) < 60_000,
+      Math.abs(Date.now() - date.getTime()) < 60000,
       `id=${id} (transition gap) date should be ~now; got ${date.toISOString()}`
     )
   }
@@ -114,10 +115,10 @@ expectMonth(8700000000, '2026-02', '8.7B → Feb 2026')
 //      2.147B-1 (last legit int32 id) and 5.0B+1 (first id past the gap)
 //      must NOT be treated as gap.
 {
-  const [pSub] = predictCreationDate(2_147_483_647)
+  const [pSub] = predictCreationDate(2147483647)
   assert.notStrictEqual(pSub, '?', 'last legit int32 id must not be in dead zone')
 
-  const [pUp] = predictCreationDate(5_000_000_001)
+  const [pUp] = predictCreationDate(5000000001)
   assert.notStrictEqual(pUp, '?', 'first id past the gap must not be in dead zone')
 }
 
@@ -126,8 +127,8 @@ expectMonth(8700000000, '2026-02', '8.7B → Feb 2026')
 //      not produce a "1500-day-old account" verdict.
 {
   const today = Date.now()
-  const firstSeen = new Date(today - 1 * 86400_000)
-  for (const id of [3_500_000_000, 4_000_000_000]) {
+  const firstSeen = new Date(today - 1 * 86400000)
+  for (const id of [3500000000, 4000000000]) {
     const paradox = getAccountAgeParadox(id, firstSeen, today)
     assert.strictEqual(
       paradox.isSleeperAwakened, false,

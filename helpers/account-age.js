@@ -165,7 +165,7 @@ const entries = [
   [8400000000, 1753303865], // 2025-07-23
   [8500000000, 1761942128], // 2025-10-31
   [8600000000, 1771801757], // 2026-02-22
-  [8700000000, 1771806478]  // 2026-02-23
+  [8700000000, 1771806478] // 2026-02-23
 ]
 
 entries.sort((a, b) => a[0] - b[0])
@@ -185,8 +185,8 @@ entries.sort((a, b) => a[0] - b[0])
 // "creation date" — it would feed false age signals into the spam
 // detectors (sleeper_awakened triggers at predictedAgeDays>365, and a wild
 // interpolation in this range can land anywhere from 2018 to 2024).
-const TRANSITION_GAP_START = 2_147_483_648  // 2^31, last 32-bit boundary
-const TRANSITION_GAP_END   = 5_000_000_000  // first observed real users in cross-bot data
+const TRANSITION_GAP_START = 2147483648 // 2^31, last 32-bit boundary
+const TRANSITION_GAP_END = 5000000000 // first observed real users in cross-bot data
 
 const parseRegistrationTime = (prefix, regTime) => {
   return [prefix, new Date(regTime * 1000)]
