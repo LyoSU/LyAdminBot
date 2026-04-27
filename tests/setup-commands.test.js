@@ -2,8 +2,7 @@
 // (scope, language_code, command list) and confirms failures are swallowed.
 
 const assert = require('assert')
-const path = require('path')
-const I18n = require('telegraf-i18n')
+const { createI18n } = require('../bot/i18n')
 
 const { setupCommands, SCOPES, LOCALES } = require('../bot/setup-commands')
 
@@ -12,11 +11,7 @@ const test = (name, fn) => tests.push({ name, fn })
 
 const mkFakeBot = (failOn = null) => {
   const calls = []
-  const i18n = new I18n({
-    directory: path.resolve(__dirname, '..', 'locales'),
-    defaultLanguage: 'en',
-    defaultLanguageOnMissing: true
-  })
+  const i18n = createI18n()
   return {
     context: { i18n },
     telegram: {

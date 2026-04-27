@@ -1,7 +1,6 @@
 const assert = require('assert')
-const path = require('path')
-const I18n = require('telegraf-i18n')
 const emojiMap = require('../helpers/emoji-map')
+const { createI18n } = require('../bot/i18n')
 
 // Fresh registry for this file so screen collisions from other tests don't
 // leak in.
@@ -15,11 +14,7 @@ const registry = require('../helpers/menu/registry')
 const tests = []
 const test = (name, fn) => tests.push({ name, fn })
 
-const i18n = new I18n({
-  directory: path.resolve(__dirname, '..', 'locales'),
-  defaultLanguage: 'en',
-  defaultLanguageOnMissing: true
-})
+const i18n = createI18n()
 
 const mkCtx = (lang = 'uk') => ({
   i18n: {

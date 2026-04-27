@@ -1,7 +1,6 @@
 const assert = require('assert')
-const path = require('path')
-const I18n = require('telegraf-i18n')
 const emojiMap = require('../helpers/emoji-map')
+const { createI18n } = require('../bot/i18n')
 
 delete require.cache[require.resolve('../helpers/menu/registry')]
 delete require.cache[require.resolve('../helpers/menu/screens/settings-modlog')]
@@ -9,11 +8,7 @@ delete require.cache[require.resolve('../helpers/menu/screens/settings-modlog')]
 const modlog = require('../helpers/menu/screens/settings-modlog')
 const registry = require('../helpers/menu/registry')
 
-const i18nLoader = new I18n({
-  directory: path.resolve(__dirname, '..', 'locales'),
-  defaultLanguage: 'en',
-  defaultLanguageOnMissing: true
-})
+const i18nLoader = createI18n()
 
 const tests = []
 const test = (name, fn) => tests.push({ name, fn })

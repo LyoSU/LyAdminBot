@@ -3,9 +3,7 @@
 // step expansion callback.
 
 const assert = require('assert')
-const path = require('path')
-const I18n = require('telegraf-i18n')
-const emojiMap = require('../helpers/emoji-map')
+const { createI18n } = require('../bot/i18n')
 
 delete require.cache[require.resolve('../helpers/menu/registry')]
 delete require.cache[require.resolve('../helpers/menu/screens/mod-rights')]
@@ -15,16 +13,9 @@ const rights = require('../helpers/menu/screens/mod-rights')
 const registry = require('../helpers/menu/registry')
 const botPermissions = require('../helpers/bot-permissions')
 
-const i18nLoader = new I18n({
-  directory: path.resolve(__dirname, '..', 'locales'),
-  defaultLanguage: 'en',
-  defaultLanguageOnMissing: true
-})
+const i18nLoader = createI18n()
 
-const mkI18n = (lang = 'uk') => ({
-  t: (k, vars = {}) => i18nLoader.t(lang, k, { e: emojiMap, ...vars }),
-  locale: () => lang
-})
+const mkI18n = (lang = 'uk') => i18nLoader.createContext(lang)
 
 const tests = []
 const test = (name, fn) => tests.push({ name, fn })

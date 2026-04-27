@@ -53,9 +53,12 @@ assert.ok(
 // someone removes `templateData: { e: emojiMap }` from createI18n, every
 // background render that hits ${e.*} will throw "Failed to compile
 // template" — the same regression we fixed in 2026-04-27 for the
-// expired-vote handler. This test pins the contract.
+// expired-vote handler. The factory now lives in bot/i18n.js, so we
+// pin the contract there. (See tests/i18n-background-context.test.js
+// for the complementary runtime check.)
+const i18nSrc = fs.readFileSync(path.resolve(__dirname, '..', 'bot', 'i18n.js'), 'utf8')
 assert.ok(
-  /templateData:\s*\{\s*e:\s*emojiMap/.test(botSrc),
+  /templateData:\s*\{\s*e:\s*emojiMap/.test(i18nSrc),
   // eslint-disable-next-line no-template-curly-in-string
   'createI18n() must pass `templateData: { e: emojiMap }` so background-job I18nContexts can resolve ${e.*}'
 )

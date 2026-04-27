@@ -1,16 +1,14 @@
-const path = require('path')
 const Telegraf = require('telegraf')
 const session = require('telegraf/session')
 const rateLimit = require('telegraf-ratelimit')
-const I18n = require('telegraf-i18n')
 
-const emojiMap = require('./helpers/emoji-map')
 const { bot: botLog, db: dbLog } = require('./helpers/logger')
 const { db } = require('./database')
 const { processStartupCleanup } = require('./helpers/message-cleanup')
 const { setupCommands } = require('./bot/setup-commands')
 const { startBackgroundJobs } = require('./bot/background-jobs')
 const { installShutdownHandlers } = require('./bot/shutdown')
+const { createI18n } = require('./bot/i18n')
 const {
   stats,
   errorHandler,
@@ -39,24 +37,6 @@ const createBot = () => {
   bot.context.db = db
 
   return bot
-}
-
-/**
- * Configure i18n (internationalization)
- */
-const createI18n = () => {
-  // `e: emojiMap` lives in the global templateData so EVERY I18nContext —
-  // including ones created by background jobs via i18n.createContext() —
-  // can resolve `${e.*}` placeholders. Per-update wrapper middleware was
-  // not enough: the spam-vote expiration job (handlers/spam-vote.js) and
-  // the digest scheduler bypass middleware entirely, and used to throw
-  // "Failed to compile template" on every render that referenced ${e.*}.
-  return new I18n({
-    directory: path.resolve(__dirname, 'locales'),
-    defaultLanguage: 'en',
-    defaultLanguageOnMissing: true,
-    templateData: { e: emojiMap }
-  })
 }
 
 /**

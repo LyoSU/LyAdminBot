@@ -53,15 +53,9 @@ const setupCommands = async (bot) => {
   // module decoupled from bot.js wiring specifics.
   let resolvedI18n = i18n
   if (!resolvedI18n) {
-    const path = require('path')
-    const I18n = require('telegraf-i18n')
-    const emojiMap = require('../helpers/emoji-map')
-    resolvedI18n = new I18n({
-      directory: path.resolve(__dirname, '..', 'locales'),
-      defaultLanguage: 'en',
-      defaultLanguageOnMissing: true,
-      templateData: { e: emojiMap }
-    })
+    // Fall back to the same factory the bot uses on boot so this module
+    // never drifts from production wiring.
+    resolvedI18n = require('./i18n').createI18n()
   }
 
   const scopeType = {

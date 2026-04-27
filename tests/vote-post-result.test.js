@@ -5,9 +5,7 @@
 // banChatMember calls, message edit, and ModLog entry.
 
 const assert = require('assert')
-const path = require('path')
-const I18n = require('telegraf-i18n')
-const emojiMap = require('../helpers/emoji-map')
+const { createI18n } = require('../bot/i18n')
 
 // Reset registry so re-registering doesn't throw
 delete require.cache[require.resolve('../helpers/menu/registry')]
@@ -15,15 +13,8 @@ delete require.cache[require.resolve('../helpers/menu/screens/mod-event')]
 
 const screen = require('../helpers/menu/screens/mod-event')
 
-const i18nLoader = new I18n({
-  directory: path.resolve(__dirname, '..', 'locales'),
-  defaultLanguage: 'en',
-  defaultLanguageOnMissing: true
-})
-const mkI18n = (lang = 'uk') => ({
-  t: (k, vars = {}) => i18nLoader.t(lang, k, { e: emojiMap, ...vars }),
-  locale: () => lang
-})
+const i18nLoader = createI18n()
+const mkI18n = (lang = 'uk') => i18nLoader.createContext(lang)
 
 const mkCtx = ({ isAdmin = false, spamVote = null, fromId = 7 } = {}) => {
   const calls = { banChatMember: [], editMessageText: [], modLog: [] }

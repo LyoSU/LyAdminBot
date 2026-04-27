@@ -1,20 +1,11 @@
 const assert = require('assert')
-const path = require('path')
-const I18n = require('telegraf-i18n')
-const emojiMap = require('../helpers/emoji-map')
+const { createI18n } = require('../bot/i18n')
 
 const voteUI = require('../helpers/vote-ui')
 
-const i18nLoader = new I18n({
-  directory: path.resolve(__dirname, '..', 'locales'),
-  defaultLanguage: 'en',
-  defaultLanguageOnMissing: true
-})
+const i18nLoader = createI18n()
 
-const mkI18n = (lang = 'uk') => ({
-  t: (k, vars = {}) => i18nLoader.t(lang, k, { e: emojiMap, ...vars }),
-  locale: () => lang
-})
+const mkI18n = (lang = 'uk') => i18nLoader.createContext(lang)
 
 const tests = []
 const test = (name, fn) => tests.push({ name, fn })
