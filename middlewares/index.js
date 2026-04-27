@@ -7,7 +7,6 @@ const errorHandler = require('./error-handler')
 const contextLoader = require('./context-loader')
 const globalBanCheck = require('./global-ban')
 const dataPersistence = require('./data-persistence')
-const emojiInject = require('./emoji-inject')
 const albumBuffer = require('./album-buffer')
 const { pendingInputMiddleware: pendingInput } = require('./pending-input')
 
@@ -21,7 +20,6 @@ module.exports = {
   contextLoader,
   globalBanCheck,
   dataPersistence,
-  emojiInject,
   albumBuffer,
   pendingInput
 }

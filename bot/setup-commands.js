@@ -55,10 +55,12 @@ const setupCommands = async (bot) => {
   if (!resolvedI18n) {
     const path = require('path')
     const I18n = require('telegraf-i18n')
+    const emojiMap = require('../helpers/emoji-map')
     resolvedI18n = new I18n({
       directory: path.resolve(__dirname, '..', 'locales'),
       defaultLanguage: 'en',
-      defaultLanguageOnMissing: true
+      defaultLanguageOnMissing: true,
+      templateData: { e: emojiMap }
     })
   }
 

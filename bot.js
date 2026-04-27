@@ -4,6 +4,7 @@ const session = require('telegraf/session')
 const rateLimit = require('telegraf-ratelimit')
 const I18n = require('telegraf-i18n')
 
+const emojiMap = require('./helpers/emoji-map')
 const { bot: botLog, db: dbLog } = require('./helpers/logger')
 const { db } = require('./database')
 const { processExpiredVotes } = require('./handlers')
@@ -19,7 +20,6 @@ const {
   banDatabase,
   spamCheck,
   dataPersistence,
-  emojiInject,
   albumBuffer,
   pendingInput
 } = require('./middlewares')
@@ -46,10 +46,17 @@ const createBot = () => {
  * Configure i18n (internationalization)
  */
 const createI18n = () => {
+  // `e: emojiMap` lives in the global templateData so EVERY I18nContext —
+  // including ones created by background jobs via i18n.createContext() —
+  // can resolve `${e.*}` placeholders. Per-update wrapper middleware was
+  // not enough: the spam-vote expiration job (handlers/spam-vote.js) and
+  // the digest scheduler bypass middleware entirely, and used to throw
+  // "Failed to compile template" on every render that referenced ${e.*}.
   return new I18n({
     directory: path.resolve(__dirname, 'locales'),
     defaultLanguage: 'en',
-    defaultLanguageOnMissing: true
+    defaultLanguageOnMissing: true,
+    templateData: { e: emojiMap }
   })
 }
 
@@ -167,17 +174,14 @@ const registerMiddlewares = (bot, i18n) => {
   // 6. Sessions (user + group)
   configureSession(bot)
 
-  // 7. Internationalization
+  // 7. Internationalization (custom emoji map injected via global
+  //    templateData in createI18n — see comment there)
   bot.use(i18n.middleware())
 
-  // 7.5. Inject custom emoji map into i18n
-  bot.use(emojiInject)
-
   // 7.7. Handle bot added/removed/promoted/demoted updates. Placed AFTER
-  //      i18n+emojiInject so onboarding/demotion notifications resolve per
-  //      the group's language and render <tg-emoji> placeholders. Placed
-  //      BEFORE contextLoader because my_chat_member is not a message and
-  //      has no ctx.message for loaders to key off.
+  //      i18n so onboarding/demotion notifications resolve per the group's
+  //      language. Placed BEFORE contextLoader because my_chat_member is
+  //      not a message and has no ctx.message for loaders to key off.
   bot.use(handleMyChatMemberUpdates)
 
   // 8. Load context (user, group, member data)

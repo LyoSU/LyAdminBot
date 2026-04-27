@@ -35,25 +35,32 @@ assert.ok(
   'getMessage must guard against empty string / echoed-key from t() — do not remove this check'
 )
 
-// Module ordering guard: bot.js must register i18n and emojiInject BEFORE
+// Module ordering guard: bot.js must register i18n BEFORE
 // handleMyChatMemberUpdates. If someone hoists the my_chat_member handler
 // back to the top of the middleware stack, this test fires.
 const botSrc = fs.readFileSync(path.resolve(__dirname, '..', 'bot.js'), 'utf8')
 const i18nIdx = botSrc.indexOf('bot.use(i18n.middleware())')
-const emojiInjectIdx = botSrc.indexOf('bot.use(emojiInject)')
 const myChatMemberIdx = botSrc.indexOf('bot.use(handleMyChatMemberUpdates)')
 assert.ok(i18nIdx > 0, 'bot.use(i18n.middleware()) must exist')
-assert.ok(emojiInjectIdx > 0, 'bot.use(emojiInject) must exist')
 assert.ok(myChatMemberIdx > 0, 'bot.use(handleMyChatMemberUpdates) must exist')
 assert.ok(
   i18nIdx < myChatMemberIdx,
   'handleMyChatMemberUpdates must be registered AFTER i18n.middleware() — reordering causes blank sendMessage (400 message text is empty)'
 )
+
+// Emoji-data guard: ${e.*} placeholders are resolved through I18n
+// templateData (global, available even in background-job contexts). If
+// someone removes `templateData: { e: emojiMap }` from createI18n, every
+// background render that hits ${e.*} will throw "Failed to compile
+// template" — the same regression we fixed in 2026-04-27 for the
+// expired-vote handler. This test pins the contract.
 assert.ok(
-  emojiInjectIdx < myChatMemberIdx,
-  'handleMyChatMemberUpdates must be registered AFTER emojiInject — otherwise <tg-emoji> placeholders leak into the text'
+  /templateData:\s*\{\s*e:\s*emojiMap/.test(botSrc),
+  // eslint-disable-next-line no-template-curly-in-string
+  'createI18n() must pass `templateData: { e: emojiMap }` so background-job I18nContexts can resolve ${e.*}'
 )
 
 console.log('  ✓ getMessage defensive guard present in handlers/bot-added.js')
-console.log('  ✓ handleMyChatMemberUpdates registered after i18n + emojiInject in bot.js')
-console.log('\n2 passed, 0 failed')
+console.log('  ✓ handleMyChatMemberUpdates registered after i18n.middleware() in bot.js')
+console.log('  ✓ createI18n() injects emoji map via global templateData')
+console.log('\n3 passed, 0 failed')
