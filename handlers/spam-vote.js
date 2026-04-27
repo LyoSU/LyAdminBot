@@ -430,11 +430,20 @@ const handleSpamVoteCallback = async (ctx) => {
  * Called periodically to handle votes that timed out
  */
 const processExpiredVotes = async (db, telegram, i18n) => {
+  let expiredVotes
   try {
-    const expiredVotes = await db.SpamVote.findExpired(50)
+    expiredVotes = await db.SpamVote.findExpired(50)
+  } catch (error) {
+    log.error({ err: error }, 'Error fetching expired votes')
+    return
+  }
 
-    for (const vote of expiredVotes) {
-      // Get group locale for i18n
+  // Per-vote try/catch — one bad vote MUST NOT skip the rest of the
+  // batch. Mirrors processCleanupQueue / runDigestPass. Without this,
+  // a single transient failure (template compile error, Mongo blip,
+  // Telegram 429) strands all subsequent votes until the next minute.
+  for (const vote of expiredVotes) {
+    try {
       const group = await db.Group.findOne({ group_id: vote.chatId })
       const locale = group?.locale || 'en'
       const i18nCtx = i18n.createContext(locale, {})
@@ -503,13 +512,16 @@ const processExpiredVotes = async (db, telegram, i18n) => {
           cleanWeighted: vote.voteTally.cleanWeighted
         }, 'Vote expired, processed with current votes')
       }
+    } catch (error) {
+      // Pass the full Error object so pino logs the stack trace too —
+      // the prior `err: error.message` shape stripped the cause and made
+      // the original "Failed to compile template" outage hard to diagnose.
+      log.error({ err: error, eventId: vote.eventId }, 'Failed to process expired vote')
     }
+  }
 
-    if (expiredVotes.length > 0) {
-      log.debug({ count: expiredVotes.length }, 'Processed expired votes')
-    }
-  } catch (error) {
-    log.error({ err: error.message }, 'Error processing expired votes')
+  if (expiredVotes.length > 0) {
+    log.debug({ count: expiredVotes.length }, 'Processed expired votes')
   }
 }
 
