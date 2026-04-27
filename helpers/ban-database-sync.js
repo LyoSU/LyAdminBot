@@ -365,7 +365,7 @@ async function runSync (db, options = {}) {
   } catch (error) {
     log.error({ err: error, stack: error.stack }, 'Ban database sync failed')
     await db.BanDatabaseSyncState.setStatus('failed', error.message)
-    return { status: 'failed', error.message }
+    return { status: 'failed', error: error.message }
   }
 }
 
