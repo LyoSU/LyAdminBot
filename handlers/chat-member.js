@@ -77,7 +77,7 @@ const recordJoin = async (ctx, update, user, oldStatus, newStatus) => {
     }, 'chat_member join recorded')
   } catch (err) {
     spamLog.warn({
-      err: err.message,
+      err,
       chatId: ctx.chat && ctx.chat.id,
       userId: user && user.id
     }, 'Failed to record chat_member join')
@@ -143,7 +143,7 @@ const recordExternalModeration = async (ctx, update, user, oldStatus, newStatus)
     await ctx.db.User.updateOne({ telegram_id: user.id }, update$, { upsert: false })
   } catch (err) {
     spamLog.warn({
-      err: err.message,
+      err,
       chatId,
       userId: user.id
     }, 'Failed to mirror external moderation into User.crossChat')

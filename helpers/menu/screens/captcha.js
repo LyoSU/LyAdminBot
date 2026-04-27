@@ -64,7 +64,7 @@ const reRender = async (ctx, captchaRow) => {
     })
   } catch (err) {
     if (!/message is not modified/.test(err.message || '')) {
-      log.warn({ err: err.message }, 'captcha screen: rerender failed')
+      log.warn({ err }, 'captcha screen: rerender failed')
     }
   }
 }
@@ -115,7 +115,7 @@ const handlePick = async (ctx, args) => {
       })
     } catch (err) {
       if (!/message is not modified/.test(err.message || '')) {
-        log.warn({ err: err.message }, 'captcha screen: pass edit failed')
+        log.warn({ err }, 'captcha screen: pass edit failed')
       }
     }
     return { render: false, silent: true }
@@ -138,7 +138,7 @@ const handlePick = async (ctx, args) => {
     })
   } catch (err) {
     if (!/message is not modified/.test(err.message || '')) {
-      log.warn({ err: err.message }, 'captcha screen: fail edit failed')
+      log.warn({ err }, 'captcha screen: fail edit failed')
     }
   }
   return { render: false, toast: 'captcha.toast.wrong' }

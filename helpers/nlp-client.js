@@ -45,7 +45,7 @@ async function checkHealth () {
 
     return { ok: false, models: [], reason: `status ${response.statusCode}` }
   } catch (error) {
-    log.debug({ err: error.message }, 'NLP service health check failed')
+    log.debug({ err: error }, 'NLP service health check failed')
     return { ok: false, models: [], reason: error.message }
   }
 }
@@ -96,7 +96,7 @@ async function extract (text, lang = 'auto') {
 
     return null
   } catch (error) {
-    log.debug({ err: error.message }, 'NLP extract error')
+    log.debug({ err: error }, 'NLP extract error')
     return null
   }
 }
@@ -142,7 +142,7 @@ async function extractBatch (texts, lang = 'auto') {
 
     return []
   } catch (error) {
-    log.debug({ err: error.message }, 'NLP batch extract error')
+    log.debug({ err: error }, 'NLP batch extract error')
     return []
   }
 }

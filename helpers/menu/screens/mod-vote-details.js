@@ -148,7 +148,7 @@ const findVote = async (ctx, eventId) => {
   try {
     return await ctx.db.SpamVote.findOne({ eventId })
   } catch (err) {
-    log.warn({ err: err.message, eventId }, 'mod.vote.details: findOne failed')
+    log.warn({ err, eventId }, 'mod.vote.details: findOne failed')
     return null
   }
 }
@@ -182,7 +182,7 @@ const handle = async (ctx, action, args) => {
       await renderDetails(ctx, spamVote)
     } catch (err) {
       if (!/message is not modified/.test(err.message || '')) {
-        log.warn({ err: err.message, eventId }, 'mod.vote.details open: render failed')
+        log.warn({ err, eventId }, 'mod.vote.details open: render failed')
       }
     }
     return { render: false, silent: true }
@@ -193,7 +193,7 @@ const handle = async (ctx, action, args) => {
       await renderActiveVote(ctx, spamVote)
     } catch (err) {
       if (!/message is not modified/.test(err.message || '')) {
-        log.warn({ err: err.message, eventId }, 'mod.vote.details less: render failed')
+        log.warn({ err, eventId }, 'mod.vote.details less: render failed')
       }
     }
     return { render: false, silent: true }

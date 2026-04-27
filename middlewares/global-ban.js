@@ -23,7 +23,7 @@ const clearExpiredBan = async (ctx) => {
   userInfo.globalBanReason = undefined
   userInfo.globalBanDate = undefined
 
-  await userInfo.save().catch(err => log.error({ err: err.message }, 'Failed to clear expired ban'))
+  await userInfo.save().catch(err => log.error({ err }, 'Failed to clear expired ban'))
 
   log.info({ userId: ctx.from.id }, 'Cleared expired global ban')
 }
@@ -51,7 +51,7 @@ const executeBanActions = async (ctx, reason) => {
     await ctx.telegram.deleteMessage(chatId, ctx.message.message_id)
     deleted = true
   } catch (err) {
-    log.warn({ err: err.message, userId }, 'Failed to delete message')
+    log.warn({ err, userId }, 'Failed to delete message')
   }
 
   // 2. Kick the user (critical action)
@@ -59,7 +59,7 @@ const executeBanActions = async (ctx, reason) => {
     await ctx.telegram.kickChatMember(chatId, userId)
     kicked = true
   } catch (err) {
-    log.error({ err: err.message, userId, chatId }, 'Failed to kick user')
+    log.error({ err, userId, chatId }, 'Failed to kick user')
   }
 
   // 3. Notify group via unified mod-event sender (§9). Scheduling of the
@@ -77,7 +77,7 @@ const executeBanActions = async (ctx, reason) => {
         reason
       })
     } catch (err) {
-      log.warn({ err: err.message, userId }, 'Failed to send notification')
+      log.warn({ err, userId }, 'Failed to send notification')
     }
   }
 

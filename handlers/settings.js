@@ -54,7 +54,7 @@ const handleSettings = async (ctx) => {
       reply_to_message_id: ctx.message && ctx.message.message_id
     })
   } catch (err) {
-    log.warn({ err: err.message }, 'handleSettings: reply failed')
+    log.warn({ err }, 'handleSettings: reply failed')
     return
   }
 

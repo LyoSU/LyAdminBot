@@ -111,7 +111,7 @@ const shouldFullBan = async (ctx, result, userId) => {
         }
       }
     } catch (err) {
-      spamAction.warn({ err: err.message }, 'Failed to check spam verdicts')
+      spamAction.warn({ err }, 'Failed to check spam verdicts')
     }
   }
 
@@ -372,7 +372,7 @@ module.exports = async (ctx) => {
       } catch (error) {
         // When admin check fails, always skip spam check to avoid false positives.
         // Transient API failures should not cause legitimate users to be flagged.
-        spamLog.warn({ userId: senderId, err: error.message }, 'Admin check failed — skipping spam check')
+        spamLog.warn({ userId: senderId, err: error }, 'Admin check failed — skipping spam check')
         return
       }
     } else if (isTestMode) {
@@ -484,7 +484,7 @@ module.exports = async (ctx) => {
       try {
         result = await checkSpam(messageText, ctx, spamSettings)
       } catch (error) {
-        spamLog.error({ userId: senderId, userName: userName(senderInfo), err: error.message }, 'Check failed')
+        spamLog.error({ userId: senderId, userName: userName(senderInfo), err: error }, 'Check failed')
         return false
       }
 
@@ -601,7 +601,7 @@ module.exports = async (ctx) => {
           confidence: result.confidence,
           reason: result.reason
         }).catch((err) => {
-          spamAction.warn({ err: err.message, userId: senderId }, 'captcha dispatch failed')
+          spamAction.warn({ err, userId: senderId }, 'captcha dispatch failed')
           return { ok: false }
         })
         if (dispatched && dispatched.ok) {
@@ -714,7 +714,7 @@ module.exports = async (ctx) => {
                 }
               }
             } catch (error) {
-              spamAction.error({ err: error.message, userName: userDisplayName, action: isChannelPost ? 'ban' : 'mute' }, 'Action failed')
+              spamAction.error({ err: error, userName: userDisplayName, action: isChannelPost ? 'ban' : 'mute' }, 'Action failed')
             }
           } else {
             spamAction.warn({ chatTitle: ctx.chat.title }, 'No restrict permission')
@@ -734,7 +734,7 @@ module.exports = async (ctx) => {
               await ctx.telegram.deleteMessage(ctx.chat.id, mid)
               return { mid, ok: true }
             } catch (error) {
-              return { mid, ok: false, err: error.message }
+              return { mid, ok: false, err: error }
             }
           }))
           const ok = results.filter(r => r.ok).length
@@ -818,7 +818,7 @@ module.exports = async (ctx) => {
               notifyLog.warn('Vote event creation returned null - missing sender info')
             }
           } catch (voteError) {
-            notifyLog.error({ err: voteError.message }, 'Failed to create vote event')
+            notifyLog.error({ err: voteError }, 'Failed to create vote event')
           }
         } else if ((muteSuccess || deleteSuccess) && !needsVoting) {
           // High confidence — unified compact notification (§9).
@@ -847,7 +847,7 @@ module.exports = async (ctx) => {
           // Add to signature database for high-confidence cases
           if (ctx.db) {
             addSignature(messageText, ctx.db, ctx.chat.id).catch(e =>
-              notifyLog.error({ err: e.message }, 'Failed to add signature for high-confidence spam')
+              notifyLog.error({ err: e }, 'Failed to add signature for high-confidence spam')
             )
           }
 

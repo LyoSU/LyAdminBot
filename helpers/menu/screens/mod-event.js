@@ -120,7 +120,7 @@ const tryUndo = async (ctx, event) => {
     }
     return { ok: true }
   } catch (err) {
-    return { ok: false, err: err.message }
+    return { ok: false, err }
   }
 }
 
@@ -154,7 +154,7 @@ const handlePostVoteAction = async (ctx, action, eventId) => {
         user_id: spamVote.bannedUserId
       })
     } catch (err) {
-      log.warn({ err: err.message, eventId }, 'mod.event perma: ban failed')
+      log.warn({ err, eventId }, 'mod.event perma: ban failed')
       return { render: false, toast: 'mod_event.toast.undo_failed' }
     }
 
@@ -168,7 +168,7 @@ const handlePostVoteAction = async (ctx, action, eventId) => {
       })
     } catch (err) {
       if (!/message is not modified/.test(err.message || '')) {
-        log.warn({ err: err.message, eventId }, 'mod.event perma: edit failed')
+        log.warn({ err, eventId }, 'mod.event perma: edit failed')
       }
     }
 
@@ -195,7 +195,7 @@ const handlePostVoteAction = async (ctx, action, eventId) => {
         until_date: untilDate
       })
     } catch (err) {
-      log.warn({ err: err.message, eventId }, 'mod.event still_ban: ban failed')
+      log.warn({ err, eventId }, 'mod.event still_ban: ban failed')
       return { render: false, toast: 'mod_event.toast.undo_failed' }
     }
 
@@ -214,7 +214,7 @@ const handlePostVoteAction = async (ctx, action, eventId) => {
       })
     } catch (err) {
       if (!/message is not modified/.test(err.message || '')) {
-        log.warn({ err: err.message, eventId }, 'mod.event still_ban: edit failed')
+        log.warn({ err, eventId }, 'mod.event still_ban: edit failed')
       }
     }
 
@@ -269,7 +269,7 @@ const handle = async (ctx, action, args) => {
       await renderExpanded(ctx, event, viewerIsAdmin)
     } catch (err) {
       if (!/message is not modified/.test(err.message || '')) {
-        log.warn({ err: err.message, eventId }, 'mod.event why: render failed')
+        log.warn({ err, eventId }, 'mod.event why: render failed')
       }
     }
     return { render: false, silent: true }
@@ -280,7 +280,7 @@ const handle = async (ctx, action, args) => {
       await renderCompact(ctx, event)
     } catch (err) {
       if (!/message is not modified/.test(err.message || '')) {
-        log.warn({ err: err.message, eventId }, 'mod.event less: render failed')
+        log.warn({ err, eventId }, 'mod.event less: render failed')
       }
     }
     return { render: false, silent: true }
@@ -323,7 +323,7 @@ const handle = async (ctx, action, args) => {
       await applyAdminOverride(ctx.db, {
         userId: event.targetId,
         chatId: event.chatId
-      }).catch(err => log.warn({ err: err.message, eventId }, 'mod.event undo: applyAdminOverride failed'))
+      }).catch(err => log.warn({ err, eventId }, 'mod.event undo: applyAdminOverride failed'))
     }
     const adminName = ctx.from && (ctx.from.first_name || ctx.from.username)
       ? (ctx.from.first_name || ctx.from.username)
@@ -369,7 +369,7 @@ const handle = async (ctx, action, args) => {
         }, ctx.telegram).catch(() => {})
       } catch (err) {
         if (!/message is not modified|message to edit not found/.test(err.message || '')) {
-          log.warn({ err: err.message, eventId }, 'mod.event undo: group edit failed')
+          log.warn({ err, eventId }, 'mod.event undo: group edit failed')
         }
       }
     }
@@ -384,7 +384,7 @@ const handle = async (ctx, action, args) => {
         })
       } catch (err) {
         if (!/message is not modified/.test(err.message || '')) {
-          log.warn({ err: err.message, eventId, fromPm }, 'mod.event undo: local edit failed')
+          log.warn({ err, eventId, fromPm }, 'mod.event undo: local edit failed')
         }
       }
     }

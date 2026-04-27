@@ -29,7 +29,7 @@ const checkVoteEligibility = async (ctx, chatId, userId) => {
       return { canVote: true, weight: 3, isAdmin: true }
     }
   } catch (error) {
-    log.warn({ err: error.message, userId, chatId }, 'Could not check admin status')
+    log.warn({ err: error, userId, chatId }, 'Could not check admin status')
   }
 
   // 2. Check if user has trusted reputation
@@ -39,7 +39,7 @@ const checkVoteEligibility = async (ctx, chatId, userId) => {
       return { canVote: true, weight: 2, isAdmin: false }
     }
   } catch (error) {
-    log.warn({ err: error.message, userId }, 'Could not check user reputation')
+    log.warn({ err: error, userId }, 'Could not check user reputation')
   }
 
   // 3. Check if user has enough messages in this chat
@@ -53,7 +53,7 @@ const checkVoteEligibility = async (ctx, chatId, userId) => {
       }
     }
   } catch (error) {
-    log.warn({ err: error.message, userId, chatId }, 'Could not check message count')
+    log.warn({ err: error, userId, chatId }, 'Could not check message count')
   }
 
   // 4. Regular users cannot vote
@@ -140,7 +140,7 @@ const processVoteResult = async (ctx, spamVote, skipSave = false) => {
         }, 'Unbanned channel by community vote')
       }
     } catch (error) {
-      log.error({ err: error.message, eventId: spamVote.eventId }, 'Failed to unban/unmute')
+      log.error({ err: error, eventId: spamVote.eventId }, 'Failed to unban/unmute')
     }
 
     // 2. Boost reputation (only for real users, not channels)
@@ -182,7 +182,7 @@ const processVoteResult = async (ctx, spamVote, skipSave = false) => {
           newStatus
         }, 'Boosted reputation after clean vote')
       } catch (error) {
-        log.error({ err: error.message, eventId: spamVote.eventId }, 'Failed to update reputation')
+        log.error({ err: error, eventId: spamVote.eventId }, 'Failed to update reputation')
       }
     }
 
@@ -192,7 +192,7 @@ const processVoteResult = async (ctx, spamVote, skipSave = false) => {
         await ctx.db.ForwardBlacklist.addCleanReport(spamVote.forwardOrigin.hash)
         log.debug({ eventId: spamVote.eventId }, 'Reported clean to ForwardBlacklist')
       } catch (error) {
-        log.warn({ err: error.message, eventId: spamVote.eventId }, 'Failed to report clean to ForwardBlacklist')
+        log.warn({ err: error, eventId: spamVote.eventId }, 'Failed to report clean to ForwardBlacklist')
       }
     }
   } else {
@@ -215,7 +215,7 @@ const processVoteResult = async (ctx, spamVote, skipSave = false) => {
           }
         }
       } catch (error) {
-        log.error({ err: error.message, eventId: spamVote.eventId }, 'Failed to add SpamSignature')
+        log.error({ err: error, eventId: spamVote.eventId }, 'Failed to add SpamSignature')
       }
     }
 
@@ -236,7 +236,7 @@ const processVoteResult = async (ctx, spamVote, skipSave = false) => {
           }, 'Updated ForwardBlacklist')
         }
       } catch (error) {
-        log.error({ err: error.message, eventId: spamVote.eventId }, 'Failed to update ForwardBlacklist')
+        log.error({ err: error, eventId: spamVote.eventId }, 'Failed to update ForwardBlacklist')
       }
     }
 
@@ -273,7 +273,7 @@ const processVoteResult = async (ctx, spamVote, skipSave = false) => {
           newStatus
         }, 'Decreased user reputation')
       } catch (error) {
-        log.error({ err: error.message, eventId: spamVote.eventId }, 'Failed to decrease reputation')
+        log.error({ err: error, eventId: spamVote.eventId }, 'Failed to decrease reputation')
       }
     }
   }
@@ -579,7 +579,7 @@ const extractNlpMetadata = (text, signature, db) => {
         posCount: nlpResult.pos.length
       }, 'NLP metadata extracted for spam signature')
     } catch (err) {
-      nlpLog.warn({ err: err.message, signatureId }, 'NLP metadata extraction failed')
+      nlpLog.warn({ err, signatureId }, 'NLP metadata extraction failed')
     }
   })
 }
@@ -619,7 +619,7 @@ const handleAdminOverride = async (ctx) => {
       return ctx.answerCbQuery(ctx.i18n.t('spam.admin_override_not_admin'), { show_alert: true })
     }
   } catch (error) {
-    log.warn({ err: error.message, adminId, chatId }, 'Could not verify admin status for override')
+    log.warn({ err: error, adminId, chatId }, 'Could not verify admin status for override')
     return ctx.answerCbQuery(ctx.i18n.t('spam.admin_override_not_admin'), { show_alert: true })
   }
 
@@ -631,7 +631,7 @@ const handleAdminOverride = async (ctx) => {
         chat_id: chatId,
         user_id: bannedUserId,
         only_if_banned: true
-      }).catch(e => log.debug({ err: e.message, bannedUserId }, 'Unban no-op'))
+      }).catch(e => log.debug({ err: e, bannedUserId }, 'Unban no-op'))
 
       // Try unmute (no-op if not muted)
       await ctx.telegram.restrictChatMember(chatId, bannedUserId, {
@@ -651,7 +651,7 @@ const handleAdminOverride = async (ctx) => {
           can_pin_messages: false,
           can_manage_topics: false
         }
-      }).catch(e => log.debug({ err: e.message, bannedUserId }, 'Unmute no-op'))
+      }).catch(e => log.debug({ err: e, bannedUserId }, 'Unmute no-op'))
 
       log.info({ adminId, bannedUserId, chatId }, 'Admin override: unbanned/unmuted user')
     } else {
@@ -659,12 +659,12 @@ const handleAdminOverride = async (ctx) => {
       await ctx.telegram.callApi('unbanChatSenderChat', {
         chat_id: chatId,
         sender_chat_id: bannedUserId
-      }).catch(e => log.debug({ err: e.message, channelId: bannedUserId }, 'Channel unban no-op'))
+      }).catch(e => log.debug({ err: e, channelId: bannedUserId }, 'Channel unban no-op'))
 
       log.info({ adminId, channelId: bannedUserId, chatId }, 'Admin override: unbanned channel')
     }
   } catch (error) {
-    log.error({ err: error.message, adminId, bannedUserId, chatId }, 'Admin override: unban/unmute failed')
+    log.error({ err: error, adminId, bannedUserId, chatId }, 'Admin override: unban/unmute failed')
   }
 
   // 3. Apply data-layer side-effects: reputation boost, drop global ban,
@@ -676,7 +676,7 @@ const handleAdminOverride = async (ctx) => {
     try {
       await applyAdminOverride(ctx.db, { userId: bannedUserId, chatId })
     } catch (error) {
-      log.error({ err: error.message, bannedUserId }, 'Admin override: applyAdminOverride failed')
+      log.error({ err: error, bannedUserId }, 'Admin override: applyAdminOverride failed')
     }
   }
 
@@ -692,7 +692,7 @@ const handleAdminOverride = async (ctx) => {
       { parse_mode: 'HTML', reply_markup: { inline_keyboard: [] } }
     )
   } catch (error) {
-    log.warn({ err: error.message }, 'Admin override: failed to edit notification')
+    log.warn({ err: error }, 'Admin override: failed to edit notification')
   }
 
   // 7. Schedule deletion of updated notification (30s)

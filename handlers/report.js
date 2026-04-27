@@ -180,7 +180,7 @@ const handleReport = async (ctx) => {
           { upsert: true, new: true }
         )
       } catch (dbErr) {
-        reportLog.error({ err: dbErr.message }, 'DB error')
+        reportLog.error({ err: dbErr }, 'DB error')
       }
     }
 
@@ -217,7 +217,7 @@ const handleReport = async (ctx) => {
           telegram_id: targetId
         })
       } catch (dbErr) {
-        reportLog.error({ err: dbErr.message }, 'GroupMember DB error')
+        reportLog.error({ err: dbErr }, 'GroupMember DB error')
       }
     }
 
@@ -308,7 +308,7 @@ const handleReport = async (ctx) => {
           }
         }
       } catch (e) {
-        reportLog.error({ err: e.message }, 'Failed to restrict')
+        reportLog.error({ err: e }, 'Failed to restrict')
       }
 
       // Try to delete message
@@ -317,7 +317,7 @@ const handleReport = async (ctx) => {
         await ctx.telegram.deleteMessage(ctx.chat.id, replyMsg.message_id)
         deleted = true
       } catch (e) {
-        reportLog.error({ err: e.message }, 'Failed to delete')
+        reportLog.error({ err: e }, 'Failed to delete')
       }
 
       // Delete the "analyzing" status message
@@ -361,7 +361,7 @@ const handleReport = async (ctx) => {
             confidence: result.confidence
           }, 'Created vote event for uncertain spam (via report)')
         } catch (voteErr) {
-          reportLog.error({ err: voteErr.message }, 'Failed to create vote event')
+          reportLog.error({ err: voteErr }, 'Failed to create vote event')
         }
       } else if (result.confidence >= 85) {
         // High confidence - no voting needed, just update reputation
@@ -392,7 +392,7 @@ const handleReport = async (ctx) => {
           try {
             await addSignature(messageText, ctx.db, ctx.chat.id)
           } catch (sigError) {
-            reportLog.error({ err: sigError.message }, 'Failed to add SpamSignature')
+            reportLog.error({ err: sigError }, 'Failed to add SpamSignature')
           }
         }
 

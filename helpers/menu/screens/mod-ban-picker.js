@@ -110,7 +110,7 @@ const handle = async (ctx, action, args) => {
       return { render: false, toast: result && result.toastKey ? result.toastKey : 'menu.mod.ban.picker.failed' }
     }
   } catch (err) {
-    log.warn({ err: err.message }, 'mod.ban.picker: performBan threw')
+    log.warn({ err }, 'mod.ban.picker: performBan threw')
     return { render: false, toast: 'menu.mod.ban.picker.failed' }
   }
 

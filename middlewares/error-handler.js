@@ -33,7 +33,7 @@ const handleLeaveChat = async (ctx) => {
     await ctx.telegram.leaveChat(chatId)
     botLog.info({ chatId, chatTitle }, 'Left chat')
   } catch (leaveError) {
-    botLog.error({ chatId, err: leaveError.message }, 'Failed to leave chat')
+    botLog.error({ chatId, err: leaveError }, 'Failed to leave chat')
   }
 }
 

@@ -602,7 +602,7 @@ const createVoteEvent = async (ctx, options) => {
 
     return spamVoteDoc
   } catch (error) {
-    log.error({ err: error.message, eventId: spamVoteDoc.eventId }, 'Failed to send vote notification')
+    log.error({ err: error, eventId: spamVoteDoc.eventId }, 'Failed to send vote notification')
     return spamVoteDoc
   }
 }
@@ -632,7 +632,7 @@ const updateVoteUI = async (ctx, spamVote) => {
     )
   } catch (error) {
     if (!error.message.includes('message is not modified')) {
-      log.error({ err: error.message, eventId: spamVote.eventId }, 'Failed to update vote UI')
+      log.error({ err: error, eventId: spamVote.eventId }, 'Failed to update vote UI')
     }
   }
 }
@@ -709,7 +709,7 @@ const showResultUI = async (ctx, spamVote, reputationChange = null) => {
       log.debug({ eventId: spamVote.eventId }, 'Scheduled result notification deletion')
     }
   } catch (error) {
-    log.error({ err: error.message, eventId: spamVote.eventId }, 'Failed to show result UI')
+    log.error({ err: error, eventId: spamVote.eventId }, 'Failed to show result UI')
   }
 }
 

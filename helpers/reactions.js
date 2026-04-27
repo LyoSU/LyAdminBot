@@ -22,7 +22,7 @@ const setReaction = async (ctx, chatId, messageId, emoji) => {
     })
     return true
   } catch (err) {
-    log.debug({ err: err.message, chatId, messageId, emoji }, 'setMessageReaction failed (silently dropped)')
+    log.debug({ err, chatId, messageId, emoji }, 'setMessageReaction failed (silently dropped)')
     return false
   }
 }

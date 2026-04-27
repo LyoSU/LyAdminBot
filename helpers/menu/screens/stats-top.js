@@ -132,7 +132,7 @@ async function render (ctx, state) {
   try {
     rows = await fetchTopActive(ctx)
   } catch (err) {
-    log.debug({ err: err.message }, 'stats.top: fetch failed')
+    log.debug({ err }, 'stats.top: fetch failed')
   }
 
   if (rows.length === 0) {

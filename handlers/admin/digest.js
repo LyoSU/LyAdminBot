@@ -42,7 +42,7 @@ module.exports = async (ctx) => {
   try {
     stats = await computeDigestStats(ctx.db, ctx.chat.id, { since, now })
   } catch (err) {
-    log.warn({ err: err.message, chatId: ctx.chat.id }, 'digest: compute failed')
+    log.warn({ err, chatId: ctx.chat.id }, 'digest: compute failed')
     return
   }
 

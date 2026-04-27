@@ -121,7 +121,7 @@ const generateEmbedding = async (text, userContext = {}) => {
 
     return response.data[0].embedding
   } catch (error) {
-    embedLog.error({ err: error.message }, 'Error generating embedding')
+    embedLog.error({ err: error }, 'Error generating embedding')
     return null
   }
 }
@@ -178,7 +178,7 @@ const generateBatchEmbeddings = async (texts) => {
 
     return response.data.map(item => item.embedding)
   } catch (error) {
-    embedLog.error({ err: error.message }, 'Error generating batch embeddings')
+    embedLog.error({ err: error }, 'Error generating batch embeddings')
     return []
   }
 }

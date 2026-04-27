@@ -217,7 +217,7 @@ module.exports = async (ctx) => {
       const ok = await renderCaptchaInPm(ctx, parsed.challengeId)
       if (ok) return
     } catch (err) {
-      log.warn({ err: err && err.message }, '/start captcha deep-link failed')
+      log.warn({ err }, '/start captcha deep-link failed')
     }
     return sendPlaceholder(ctx)
   }
@@ -270,7 +270,7 @@ module.exports = async (ctx) => {
         ctx.group = prevGroup
       }
     } catch (err) {
-      log.warn({ err: err && err.message }, '/start settings deep-link failed')
+      log.warn({ err }, '/start settings deep-link failed')
       await sendPlaceholder(ctx)
     }
     return
@@ -281,7 +281,7 @@ module.exports = async (ctx) => {
       const ok = await renderModEventInPm(ctx, parsed.eventId)
       if (ok) return
     } catch (err) {
-      log.warn({ err: err && err.message }, '/start mod_event deep-link failed')
+      log.warn({ err }, '/start mod_event deep-link failed')
     }
     return sendPlaceholder(ctx)
   }
@@ -296,7 +296,7 @@ module.exports = async (ctx) => {
         if (ok) return
       }
     } catch (err) {
-      log.warn({ err: err && err.message }, '/start mystats deep-link failed')
+      log.warn({ err }, '/start mystats deep-link failed')
     }
     return sendPlaceholder(ctx)
   }
@@ -308,7 +308,7 @@ module.exports = async (ctx) => {
     const appealed = await sendGlobalBanAppealCard(ctx)
     if (appealed) return
   } catch (err) {
-    log.warn({ err: err && err.message }, '/start global-ban appeal failed')
+    log.warn({ err }, '/start global-ban appeal failed')
   }
 
   return sendPrivateCard(ctx)

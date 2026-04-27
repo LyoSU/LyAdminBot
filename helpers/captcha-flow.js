@@ -134,7 +134,7 @@ const startMidConfidenceCaptcha = async (ctx, opts = {}) => {
   try {
     await restrictForCaptcha(ctx.telegram, chatId, userId, untilSeconds)
   } catch (err) {
-    log.warn({ err: err.message, chatId, userId }, 'captcha-flow: restrict failed')
+    log.warn({ err, chatId, userId }, 'captcha-flow: restrict failed')
     return { ok: false, reason: 'restrict_failed' }
   }
 
@@ -159,7 +159,7 @@ const startMidConfidenceCaptcha = async (ctx, opts = {}) => {
         messagePreview: messageTextPreview(message)
       })
     } catch (err) {
-      log.warn({ err: err.message }, 'captcha-flow: failed to create ModEvent')
+      log.warn({ err }, 'captcha-flow: failed to create ModEvent')
     }
 
     try {
@@ -174,7 +174,7 @@ const startMidConfidenceCaptcha = async (ctx, opts = {}) => {
         expiresAt
       })
     } catch (err) {
-      log.error({ err: err.message }, 'captcha-flow: failed to create Captcha row')
+      log.error({ err }, 'captcha-flow: failed to create Captcha row')
       return { ok: false, reason: 'db_failed' }
     }
   } else if (captchaRow.eventId) {
@@ -193,7 +193,7 @@ const startMidConfidenceCaptcha = async (ctx, opts = {}) => {
   try {
     sent = await replyHTML(ctx, text, { reply_markup: keyboard })
   } catch (err) {
-    log.error({ err: err.message }, 'captcha-flow: failed to post pending notification')
+    log.error({ err }, 'captcha-flow: failed to post pending notification')
   }
 
   if (sent && sent.message_id && event) {
@@ -281,7 +281,7 @@ const scheduleEscalation = (ctx, captchaRow, senderInfo) => {
         botInfo: ctx.botInfo
       }, stillActive, { senderInfo, reason: 'timeout' })
     } catch (err) {
-      log.warn({ err: err.message, challengeId }, 'captcha-flow: escalation timer crashed')
+      log.warn({ err, challengeId }, 'captcha-flow: escalation timer crashed')
     }
   }, delay)
   // Don't keep the event loop alive just for a captcha timeout.
@@ -321,7 +321,7 @@ const startGlobalBanAppeal = async (ctx) => {
       expiresAt: new Date(Date.now() + APPEAL_TTL_MS)
     })
   } catch (err) {
-    log.error({ err: err.message }, 'captcha-flow: failed to create appeal row')
+    log.error({ err }, 'captcha-flow: failed to create appeal row')
     return { ok: false, reason: 'db_failed' }
   }
   return { ok: true, captcha: captchaRow, reused: false }
@@ -353,7 +353,7 @@ const applyMidPass = async ({ telegram, db, i18n }, captchaRow, opts) => {
   try {
     await liftRestrictions(telegram, chatId, userId)
   } catch (err) {
-    log.warn({ err: err.message, chatId, userId }, 'captcha-flow: lift restrictions failed')
+    log.warn({ err, chatId, userId }, 'captcha-flow: lift restrictions failed')
   }
 
   // 24h soft whitelist on the User document. Persist via the standard
@@ -384,7 +384,7 @@ const applyMidPass = async ({ telegram, db, i18n }, captchaRow, opts) => {
       )
     } catch (err) {
       if (!/message is not modified/.test(err.message || '')) {
-        log.warn({ err: err.message }, 'captcha-flow: pass edit failed')
+        log.warn({ err }, 'captcha-flow: pass edit failed')
       }
     }
     // Quick auto-delete of the success notice — it's a transient OK.
@@ -462,7 +462,7 @@ const applyMidFail = async ({ telegram, db, i18n }, captchaRow, opts) => {
   try {
     await restrictForCaptcha(telegram, chatId, userId, muteUntil)
   } catch (err) {
-    log.warn({ err: err.message, chatId, userId }, 'captcha-flow: fail mute failed')
+    log.warn({ err, chatId, userId }, 'captcha-flow: fail mute failed')
   }
 
   const event = captchaRow.eventId
@@ -482,7 +482,7 @@ const applyMidFail = async ({ telegram, db, i18n }, captchaRow, opts) => {
       )
     } catch (err) {
       if (!/message is not modified/.test(err.message || '')) {
-        log.warn({ err: err.message }, 'captcha-flow: fail edit failed')
+        log.warn({ err }, 'captcha-flow: fail edit failed')
       }
     }
     try {

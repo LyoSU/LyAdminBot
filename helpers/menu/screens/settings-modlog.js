@@ -134,7 +134,7 @@ const render = async (ctx, state = {}) => {
         .lean()
     }
   } catch (err) {
-    log.debug({ err: err.message, chatId }, 'settings.modlog: query failed')
+    log.debug({ err, chatId }, 'settings.modlog: query failed')
     // Fall through to empty-state. Users don't need to see a query-error toast.
   }
 

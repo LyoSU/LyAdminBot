@@ -235,7 +235,7 @@ const callLLMWithRetry = async (systemPrompt, userPrompt, { imageUrl, maxRetries
       spamLog.warn({
         attempt: attempt + 1,
         model,
-        err: err.message
+        err
       }, 'LLM call failed, retrying')
 
       // Switch to fallback model on error
@@ -246,7 +246,7 @@ const callLLMWithRetry = async (systemPrompt, userPrompt, { imageUrl, maxRetries
     }
   }
 
-  spamLog.error({ err: lastError && lastError.message, attempts: maxRetries }, 'All LLM retry attempts failed')
+  spamLog.error({ err: lastError, attempts: maxRetries }, 'All LLM retry attempts failed')
   return null
 }
 
@@ -694,7 +694,7 @@ const getMessagePhotoUrl = async (ctx, messagePhoto) => {
     const fileLink = await ctx.telegram.getFileLink(messagePhoto.file_id)
     return fileLink
   } catch (error) {
-    modLog.error({ err: error.message }, 'Error getting message photo')
+    modLog.error({ err: error }, 'Error getting message photo')
     return null
   }
 }
@@ -719,7 +719,7 @@ const getUserProfilePhotoUrl = async (ctx) => {
     const fileLink = await ctx.telegram.getFileLink(photo.file_id)
     return fileLink
   } catch (error) {
-    modLog.error({ err: error.message }, 'Error getting user profile photo')
+    modLog.error({ err: error }, 'Error getting user profile photo')
     return null
   }
 }
@@ -773,7 +773,7 @@ const getUserChatInfo = async (ctx) => {
       hasPhoto: Boolean(chatInfo.photo)
     }
   } catch (error) {
-    modLog.error({ err: error.message }, 'Error getting user chat info')
+    modLog.error({ err: error }, 'Error getting user chat info')
     return empty
   }
 }
@@ -794,7 +794,7 @@ const getGroupDescription = async (ctx) => {
     const chatInfo = await ctx.telegram.getChat(ctx.chat.id)
     return chatInfo.description || null
   } catch (error) {
-    modLog.error({ err: error.message }, 'Error getting group description')
+    modLog.error({ err: error }, 'Error getting group description')
     return null
   }
 }
@@ -876,7 +876,7 @@ const checkOpenAIModeration = async (messageText, imageUrl = null, imageType = '
     modLog.debug({ textLength: messageText ? messageText.length : 0, hasImage: !!imageUrl }, 'Content passed moderation')
     return { flagged: false }
   } catch (error) {
-    modLog.error({ err: error.message }, 'Error during moderation check')
+    modLog.error({ err: error }, 'Error during moderation check')
     return null
   }
 }
@@ -953,7 +953,7 @@ const checkSpamSignaturesPhase = async (messageText, ctx) => {
       }
     }
   } catch (sigErr) {
-    spamLog.warn({ err: sigErr.message }, 'SpamSignature check failed, continuing')
+    spamLog.warn({ err: sigErr }, 'SpamSignature check failed, continuing')
   }
 
   // Check candidate signatures for confidence boosting
@@ -1027,7 +1027,7 @@ const checkForwardBlacklistPhase = async (ctx) => {
       }, 'Forward from suspicious source')
     }
   } catch (fwdErr) {
-    spamLog.warn({ err: fwdErr.message }, 'ForwardBlacklist check failed, continuing')
+    spamLog.warn({ err: fwdErr }, 'ForwardBlacklist check failed, continuing')
   }
 
   return null
@@ -1116,7 +1116,7 @@ const runMediaFingerprintPhase = async (ctx) => {
 
     return { result: null, signalTag: null, fingerprint: assessment }
   } catch (err) {
-    spamLog.warn({ err: err.message }, 'MediaFingerprint phase failed, continuing')
+    spamLog.warn({ err }, 'MediaFingerprint phase failed, continuing')
     return { result: null, signalTag: null, fingerprint: null }
   }
 }
@@ -1196,7 +1196,7 @@ const runQuickAssessmentPhase = (ctx) => {
     // (`user is not defined`) is what shipped for 2.5 months before anyone
     // pulled the source reference. Stack + error type make drift traceable.
     spamLog.warn({
-      err: quickAssessErr.message,
+      err: quickAssessErr,
       stack: quickAssessErr.stack,
       errType: quickAssessErr.name
     }, 'Quick assessment error, continuing with standard flow')
@@ -1377,7 +1377,7 @@ const runVelocityPhase = async (messageText, ctx, userContext) => {
       userContext.velocityReason = velocityResult.dominant
     }
   } catch (velocityError) {
-    spamLog.error({ err: velocityError.message }, 'Velocity check error')
+    spamLog.error({ err: velocityError }, 'Velocity check error')
   }
 
   return null
@@ -1447,7 +1447,7 @@ const runQdrantPhase = async (messageText, ctx, userContext) => {
           }, 'Promoted vector to SpamSignature')
         }
       } catch (err) {
-        qdrantLog.warn({ err: err.message }, 'Vector promotion failed')
+        qdrantLog.warn({ err }, 'Vector promotion failed')
       }
     })
   }
@@ -1849,7 +1849,7 @@ SECURITY CANARY
         })
         qdrantLog.debug({ spamScore: spamScore.toFixed(2) }, 'Saved vector to Qdrant')
       } catch (saveError) {
-        qdrantLog.error({ err: saveError.message }, 'Failed to save vector')
+        qdrantLog.error({ err: saveError }, 'Failed to save vector')
       }
     }
   }
@@ -2053,7 +2053,7 @@ const checkSpam = async (messageText, ctx, groupSettings) => {
         } catch (_err) { /* non-fatal */ }
       }
     } catch (netErr) {
-      spamLog.warn({ err: netErr.message }, 'Network detectors failed, continuing')
+      spamLog.warn({ err: netErr }, 'Network detectors failed, continuing')
     }
 
     // PHASE 1.1: Contact-card spam detector.

@@ -170,7 +170,7 @@ module.exports = async (ctx) => {
           if (canRestrict) {
             // Has permissions - kick user, send ban notification, delete message
             banSender(ctx, userId, isSenderChat)
-              .catch(error => banDatabaseLog.error({ err: error.message, userId, isSenderChat }, 'Failed to ban globally listed sender'))
+              .catch(error => banDatabaseLog.error({ err: error, userId, isSenderChat }, 'Failed to ban globally listed sender'))
 
             let notificationMsg = null
             try {
@@ -181,7 +181,7 @@ module.exports = async (ctx) => {
                 link_preview_options: { is_disabled: true }
               })
             } catch (error) {
-              banDatabaseLog.error({ err: error.message }, 'Failed to send notification')
+              banDatabaseLog.error({ err: error }, 'Failed to send notification')
             }
 
             // Schedule auto-delete after 25 seconds
@@ -197,7 +197,7 @@ module.exports = async (ctx) => {
 
             // Delete the original message - always try, even without explicit permission
             ctx.deleteMessage().catch(error => {
-              banDatabaseLog.warn({ err: error.message }, 'Failed to delete original message')
+              banDatabaseLog.warn({ err: error }, 'Failed to delete original message')
             })
           } else {
             // No restrict permissions - but still try to delete the message
@@ -208,7 +208,7 @@ module.exports = async (ctx) => {
               await ctx.deleteMessage()
               banDatabaseLog.info('Deleted globally banned user message (no restrict permission)')
             } catch (error) {
-              banDatabaseLog.warn({ err: error.message }, 'Cannot delete globally banned user message - no permission')
+              banDatabaseLog.warn({ err: error }, 'Cannot delete globally banned user message - no permission')
 
               // Only show notification if we couldn't delete
               let notificationMsg = null
@@ -218,7 +218,7 @@ module.exports = async (ctx) => {
                   allow_sending_without_reply: true
                 })
               } catch (notifyError) {
-                banDatabaseLog.error({ err: notifyError.message }, 'Failed to send no-permission notification')
+                banDatabaseLog.error({ err: notifyError }, 'Failed to send no-permission notification')
               }
 
               // Schedule auto-delete after 60 seconds
@@ -234,21 +234,21 @@ module.exports = async (ctx) => {
             }
           }
         } catch (error) {
-          banDatabaseLog.error({ err: error.message }, 'Failed to check bot permissions')
+          banDatabaseLog.error({ err: error }, 'Failed to check bot permissions')
         }
 
         // Also add the current message to signatures
         const messageText = ctx.message.text || ctx.message.caption
         if (ctx.db && messageText && messageText.length > 20) {
           addSignature(messageText, ctx.db, ctx.chat.id).catch(err =>
-            banDatabaseLog.debug({ err: err.message }, 'Failed to add current message to signatures')
+            banDatabaseLog.debug({ err }, 'Failed to add current message to signatures')
           )
         }
 
         return true
       }
     } catch (error) {
-      banDatabaseLog.warn({ err: error.message, userId }, 'Global ban database check failed')
+      banDatabaseLog.warn({ err: error, userId }, 'Global ban database check failed')
     }
   }
 }

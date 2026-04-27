@@ -400,7 +400,7 @@ const saveSignatureToQdrant = (signature, db) => {
         uniqueGroups: signature.uniqueGroups.length
       }, 'Saved confirmed signature to Qdrant')
     } catch (err) {
-      sigLog.warn({ err: err.message, signatureId: signature._id }, 'Failed to save signature to Qdrant')
+      sigLog.warn({ err, signatureId: signature._id }, 'Failed to save signature to Qdrant')
     }
   })
 }
@@ -442,7 +442,7 @@ const extractNlpForSignature = (signature, db) => {
         bigrams: nlpResult.bigrams.length
       }, 'NLP metadata extracted for signature')
     } catch (err) {
-      nlpLog.warn({ err: err.message, signatureId: signature._id }, 'NLP extraction failed')
+      nlpLog.warn({ err, signatureId: signature._id }, 'NLP extraction failed')
     }
   })
 }

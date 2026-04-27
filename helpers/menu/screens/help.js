@@ -112,7 +112,7 @@ const sendHelp = async (ctx, initiatorId) => {
     }
     return message
   } catch (err) {
-    log.warn({ err: err && err.message }, '/help send failed')
+    log.warn({ err }, '/help send failed')
     return null
   }
 }

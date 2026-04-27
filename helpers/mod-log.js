@@ -67,7 +67,7 @@ const logModEvent = async (db, {
       reason: reason ? String(reason).slice(0, 200) : null
     })
   } catch (err) {
-    log.debug({ err: err.message, eventType, chatId }, 'mod-log: write failed')
+    log.debug({ err, eventType, chatId }, 'mod-log: write failed')
     return null
   }
 }
@@ -97,7 +97,7 @@ const queryRecent = async (db, chatId, {
       .limit(Math.max(1, Math.min(100, limit)))
       .lean()
   } catch (err) {
-    log.debug({ err: err.message, chatId }, 'mod-log: query failed')
+    log.debug({ err, chatId }, 'mod-log: query failed')
     return []
   }
 }
@@ -113,7 +113,7 @@ const countRecent = async (db, chatId, { since = null } = {}) => {
   try {
     return await db.ModLog.countDocuments(query)
   } catch (err) {
-    log.debug({ err: err.message, chatId }, 'mod-log: count failed')
+    log.debug({ err, chatId }, 'mod-log: count failed')
     return 0
   }
 }

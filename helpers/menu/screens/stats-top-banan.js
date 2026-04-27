@@ -66,7 +66,7 @@ async function render (ctx, state) {
   try {
     rows = await fetchTopBanan(ctx)
   } catch (err) {
-    log.debug({ err: err.message }, 'stats.top_banan: fetch failed')
+    log.debug({ err }, 'stats.top_banan: fetch failed')
   }
 
   if (rows.length === 0) {

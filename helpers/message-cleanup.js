@@ -54,7 +54,7 @@ const scheduleDeletion = async (db, options, telegram = null) => {
         await db.ScheduledDeletion.deleteOne({ chatId, messageId }).catch(() => {})
       } catch (error) {
         if (!error.message.includes('message to delete not found')) {
-          log.debug({ chatId, messageId, err: error.message }, 'Delete failed (in-memory)')
+          log.debug({ chatId, messageId, err: error }, 'Delete failed (in-memory)')
         }
       }
     }, delayMs)
@@ -81,7 +81,7 @@ const scheduleDeletion = async (db, options, telegram = null) => {
 
     return deletion
   } catch (error) {
-    log.error({ err: error.message, chatId, messageId }, 'Failed to schedule deletion')
+    log.error({ err: error, chatId, messageId }, 'Failed to schedule deletion')
     return null
   }
 }
@@ -109,7 +109,7 @@ const cancelDeletion = async (db, chatId, messageId) => {
     }
     return result.deletedCount > 0
   } catch (error) {
-    log.error({ err: error.message, chatId, messageId }, 'Failed to cancel deletion')
+    log.error({ err: error, chatId, messageId }, 'Failed to cancel deletion')
     return false
   }
 }
@@ -158,7 +158,7 @@ const processCleanupQueue = async (db, telegram) => {
           log.warn({
             chatId: deletion.chatId,
             messageId: deletion.messageId,
-            err: error.message
+            err: error
           }, 'Delete failed')
         }
       }
@@ -168,7 +168,7 @@ const processCleanupQueue = async (db, telegram) => {
       try {
         await db.ScheduledDeletion.deleteOne({ _id: deletion._id })
       } catch (dbError) {
-        log.error({ err: dbError.message, id: deletion._id }, 'Failed to remove from queue')
+        log.error({ err: dbError, id: deletion._id }, 'Failed to remove from queue')
       }
 
       // Rate limit: ~10 deletions/sec to avoid Telegram 429 errors
@@ -183,7 +183,7 @@ const processCleanupQueue = async (db, telegram) => {
       }, 'Cleanup queue processed')
     }
   } catch (error) {
-    log.error({ err: error.message }, 'Error processing cleanup queue')
+    log.error({ err: error }, 'Error processing cleanup queue')
   }
 
   return stats
@@ -262,7 +262,7 @@ const getQueueStats = async (db) => {
 
     return { total, pending, upcoming, inMemoryTimers: pendingTimers.size }
   } catch (error) {
-    log.error({ err: error.message }, 'Failed to get queue stats')
+    log.error({ err: error }, 'Failed to get queue stats')
     return null
   }
 }

@@ -72,7 +72,7 @@ const runDigestPass = async ({ db, telegram, i18n, now = new Date(), skipWindowC
       ]
     }).select({ group_id: 1, title: 1, lastDigestSentAt: 1, 'settings.locale': 1 }).lean()
   } catch (err) {
-    log.warn({ err: err.message }, 'digest-scheduler: fetching due chats failed')
+    log.warn({ err }, 'digest-scheduler: fetching due chats failed')
     return { dueChats: 0, adminsConsidered: 0, sent: 0, skipped: 0 }
   }
 
@@ -105,7 +105,7 @@ const runDigestPass = async ({ db, telegram, i18n, now = new Date(), skipWindowC
       if (delivered) stat.sent += 1
       else stat.skipped += 1
     } catch (err) {
-      log.warn({ err: err.message, adminId }, 'digest-scheduler: admin processing failed')
+      log.warn({ err, adminId }, 'digest-scheduler: admin processing failed')
       stat.skipped += 1
     }
     await sleep(ADMIN_PM_DELAY_MS)
@@ -122,7 +122,7 @@ const runDigestPass = async ({ db, telegram, i18n, now = new Date(), skipWindowC
         { $set: { lastDigestSentAt: now } }
       )
     } catch (err) {
-      log.warn({ err: err.message }, 'digest-scheduler: bumping lastDigestSentAt failed')
+      log.warn({ err }, 'digest-scheduler: bumping lastDigestSentAt failed')
     }
   }
 
@@ -149,7 +149,7 @@ const buildAdminToChatsMap = async (telegram, dueChats) => {
       admins = await telegram.getChatAdministrators(chat.group_id)
       chatsFetchedOk.add(chat.group_id)
     } catch (err) {
-      log.debug({ err: err.message, chatId: chat.group_id }, 'digest-scheduler: getChatAdministrators failed')
+      log.debug({ err, chatId: chat.group_id }, 'digest-scheduler: getChatAdministrators failed')
       chatsFetchedFailed.add(chat.group_id)
       continue
     }
@@ -217,7 +217,7 @@ const shouldSendToUser = async (db, userId, now) => {
     }
     return true
   } catch (err) {
-    log.debug({ err: err.message, userId }, 'digest-scheduler: shouldSendToUser failed')
+    log.debug({ err, userId }, 'digest-scheduler: shouldSendToUser failed')
     return true
   }
 }
@@ -234,7 +234,7 @@ const recordDelivery = async (db, userId, now) => {
       { upsert: true }
     )
   } catch (err) {
-    log.debug({ err: err.message, userId }, 'digest-scheduler: recordDelivery failed')
+    log.debug({ err, userId }, 'digest-scheduler: recordDelivery failed')
   }
 }
 

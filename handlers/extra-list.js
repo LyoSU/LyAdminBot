@@ -19,7 +19,7 @@ module.exports = async (ctx) => {
   try {
     view = await screen.render(ctx, { page: 0 })
   } catch (err) {
-    log.warn({ err: err.message }, 'handleExtraList: render failed')
+    log.warn({ err }, 'handleExtraList: render failed')
     return
   }
   if (!view || !view.text) return
@@ -31,7 +31,7 @@ module.exports = async (ctx) => {
       reply_to_message_id: ctx.message && ctx.message.message_id
     })
   } catch (err) {
-    log.warn({ err: err.message }, 'handleExtraList: send failed')
+    log.warn({ err }, 'handleExtraList: send failed')
     return
   }
 

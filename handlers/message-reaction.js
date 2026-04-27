@@ -116,7 +116,7 @@ module.exports = async (ctx) => {
         weightSum: verdict.negativeEscalation.weightSum
       }, 'Deleted message via reaction feedback')
     } catch (err) {
-      spamLog.debug({ chatId, messageId, err: err.message }, 'Reaction-delete failed (likely no admin rights)')
+      spamLog.debug({ chatId, messageId, err }, 'Reaction-delete failed (likely no admin rights)')
     }
   }
 

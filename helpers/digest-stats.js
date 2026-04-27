@@ -55,7 +55,7 @@ const computeDigestStats = async (db, chatId, { since, now = new Date() } = {}) 
       { eventType: 1, actorId: 1, _id: 0 }
     ).lean()
   } catch (err) {
-    log.debug({ err: err.message, chatId }, 'digest: modlog query failed')
+    log.debug({ err, chatId }, 'digest: modlog query failed')
     return empty
   }
 
@@ -295,7 +295,7 @@ const computeDigestStatsForChats = async (db, chatIds, { since, now = new Date()
       { chatId: 1, eventType: 1, actorId: 1, _id: 0 }
     ).lean()
   } catch (err) {
-    log.debug({ err: err.message, chatIds }, 'digest: batched modlog query failed')
+    log.debug({ err, chatIds }, 'digest: batched modlog query failed')
     return { aggregate, perChat }
   }
 

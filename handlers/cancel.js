@@ -20,7 +20,7 @@ const consumeAndSave = async (ctx) => {
   if (typeof ctx.group.info.save === 'function' && !ctx.group.info.isSaving) {
     ctx.group.info.isSaving = true
     try { await ctx.group.info.save() } catch (err) {
-      log.debug({ err: err.message }, 'cancel: group save failed')
+      log.debug({ err }, 'cancel: group save failed')
     } finally { ctx.group.info.isSaving = false }
   }
   return { promptMsgId }

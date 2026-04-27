@@ -101,7 +101,7 @@ const saveGroup = async (ctx) => {
   if (ctx.group.info.isSaving) return
   ctx.group.info.isSaving = true
   try { await ctx.group.info.save() } catch (err) {
-    log.debug({ err: err.message }, 'settings: group save failed')
+    log.debug({ err }, 'settings: group save failed')
   } finally { ctx.group.info.isSaving = false }
 }
 
@@ -188,7 +188,7 @@ const sendSettingsJson = async (ctx) => {
     })
     return true
   } catch (err) {
-    log.warn({ err: err.message, chatId: ctx.chat && ctx.chat.id }, 'settings: export json failed')
+    log.warn({ err, chatId: ctx.chat && ctx.chat.id }, 'settings: export json failed')
     return false
   }
 }
@@ -736,7 +736,7 @@ const registerReset = () => registerMenu({
         ctx.group.info.settings = new ctx.db.Group().settings
         await saveGroup(ctx)
       } catch (err) {
-        log.warn({ err: err.message }, 'settings: reset failed')
+        log.warn({ err }, 'settings: reset failed')
         return { render: false, toast: 'menu.error' }
       }
       // Navigate back to root (which will re-render with defaults).

@@ -21,7 +21,7 @@ module.exports = async (ctx) => {
   try {
     view = await screen.render(ctx, { page: 0 })
   } catch (err) {
-    log.warn({ err: err.message }, 'handleTopBanan: render failed')
+    log.warn({ err }, 'handleTopBanan: render failed')
     return
   }
   if (!view || !view.text) return
@@ -33,7 +33,7 @@ module.exports = async (ctx) => {
       reply_to_message_id: ctx.message && ctx.message.message_id
     })
   } catch (err) {
-    log.warn({ err: err.message }, 'handleTopBanan: send failed')
+    log.warn({ err }, 'handleTopBanan: send failed')
     return
   }
 

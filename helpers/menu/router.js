@@ -70,7 +70,7 @@ const renderScreen = async (ctx, screen, state) => {
     await editHTML(ctx, ctx.callbackQuery.message.message_id, view.text, opts)
   } catch (err) {
     if (!err.message || !err.message.includes('message is not modified')) {
-      log.warn({ err: err.message, screenId: screen.id }, 'menu render: editHTML failed')
+      log.warn({ err, screenId: screen.id }, 'menu render: editHTML failed')
     }
   }
 }
@@ -121,7 +121,7 @@ const handleCallback = async (ctx) => {
       await ctx.answerCbQuery().catch(() => {})
     }
   } catch (err) {
-    log.error({ err: err.message, screenId: parsed.screenId, action: parsed.action }, 'menu handler error')
+    log.error({ err, screenId: parsed.screenId, action: parsed.action }, 'menu handler error')
     await ctx.answerCbQuery(ctx.i18n.t('menu.error'), { show_alert: false }).catch(() => {})
   }
 }

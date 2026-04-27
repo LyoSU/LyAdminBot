@@ -98,7 +98,7 @@ const sendModEventNotification = async (ctx, opts = {}) => {
       warning
     })
   } catch (err) {
-    log.error({ err: err.message, actionType }, 'mod-event-send: failed to create event row')
+    log.error({ err, actionType }, 'mod-event-send: failed to create event row')
     return null
   }
 
@@ -127,7 +127,7 @@ const sendModEventNotification = async (ctx, opts = {}) => {
   try {
     sent = await replyHTML(ctx, text, { reply_markup: keyboard })
   } catch (err) {
-    log.error({ err: err.message, actionType }, 'mod-event-send: failed to send notification')
+    log.error({ err, actionType }, 'mod-event-send: failed to send notification')
     // Best-effort: leave the DB row behind; TTL will collect it.
     return { event, sentMessageId: null }
   }
@@ -142,7 +142,7 @@ const sendModEventNotification = async (ctx, opts = {}) => {
         notificationMessageId: sent.message_id
       })
     } catch (err) {
-      log.warn({ err: err.message, eventId: event.eventId }, 'mod-event-send: failed to patch event with message_id')
+      log.warn({ err, eventId: event.eventId }, 'mod-event-send: failed to patch event with message_id')
     }
 
     // Schedule compact-default auto-delete. The callback handler reschedules
@@ -158,7 +158,7 @@ const sendModEventNotification = async (ctx, opts = {}) => {
         source: `mod_event:${actionType}`
       }, ctx.telegram)
     } catch (err) {
-      log.warn({ err: err.message, eventId: event.eventId }, 'mod-event-send: scheduleDeletion failed')
+      log.warn({ err, eventId: event.eventId }, 'mod-event-send: scheduleDeletion failed')
     }
   }
 

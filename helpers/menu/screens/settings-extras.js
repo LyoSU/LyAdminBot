@@ -241,7 +241,7 @@ const registerView = () => registerMenu({
           })
         } catch (err) {
           if (!/message is not modified/.test(err.message || '')) {
-            log.debug({ err: err.message }, 'settings.extras: grid re-render failed')
+            log.debug({ err }, 'settings.extras: grid re-render failed')
           }
         }
       }
@@ -321,7 +321,7 @@ const registerInputHandlers = () => {
   try {
     registerInputHandler('settings.extras.rename', handleRenameInput)
   } catch (err) {
-    log.debug({ err: err.message }, 'settings-extras: registerInputHandler skipped')
+    log.debug({ err }, 'settings-extras: registerInputHandler skipped')
   }
 }
 

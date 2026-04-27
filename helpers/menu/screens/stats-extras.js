@@ -110,7 +110,7 @@ async function sendExtra (ctx, slug) {
     await ctx.telegram.callApi(method, opts)
     return true
   } catch (err) {
-    log.debug({ err: err.message, slug }, 'stats.extras: send failed')
+    log.debug({ err, slug }, 'stats.extras: send failed')
     return false
   }
 }

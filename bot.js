@@ -301,7 +301,7 @@ const init = () => {
       await setupCommands(bot)
       botLog.debug('Bot commands registered')
     } catch (err) {
-      botLog.warn({ err: err && err.message }, 'setupCommands outer failure')
+      botLog.warn({ err }, 'setupCommands outer failure')
     }
 
     // Process any pending message deletions from before restart

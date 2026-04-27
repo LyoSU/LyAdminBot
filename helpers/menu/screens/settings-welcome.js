@@ -332,7 +332,7 @@ const registerInputHandlers = () => {
     registerInputHandler('settings.welcome.text.add', handleTextInput)
     registerInputHandler('settings.welcome.gif.add', handleGifInput)
   } catch (err) {
-    log.debug({ err: err.message }, 'settings-welcome: registerInputHandler skipped (likely duplicate)')
+    log.debug({ err }, 'settings-welcome: registerInputHandler skipped (likely duplicate)')
   }
 }
 

@@ -154,7 +154,7 @@ async function resolveChatMember (ctx, chatId) {
     })
     return { group, member }
   } catch (err) {
-    log.debug({ err: err.message }, 'mystats: resolve failed')
+    log.debug({ err }, 'mystats: resolve failed')
     return null
   }
 }
@@ -250,7 +250,7 @@ module.exports.handleDeepLink = async (ctx, chatId) => {
     void policy
     return true
   } catch (err) {
-    log.debug({ err: err.message }, 'mystats deep-link send failed')
+    log.debug({ err }, 'mystats deep-link send failed')
     return false
   }
 }

@@ -68,7 +68,7 @@ async function fetchBanDatabaseExport () {
     log.info({ totalUsers: userIds.length }, 'Parsed ban database export')
     return userIds
   } catch (error) {
-    log.error({ err: error.message }, 'Failed to fetch ban database export')
+    log.error({ err: error }, 'Failed to fetch ban database export')
     throw error
   }
 }
@@ -103,9 +103,9 @@ async function fetchUserMessages (userId) {
     // Log network errors at warn level, others at debug
     const isNetworkError = ['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED'].includes(error.code)
     if (isNetworkError) {
-      log.warn({ userId, err: error.message, code: error.code }, 'Network error fetching user')
+      log.warn({ userId, err: error, code: error.code }, 'Network error fetching user')
     } else {
-      log.debug({ userId, err: error.message }, 'Failed to fetch user')
+      log.debug({ userId, err: error }, 'Failed to fetch user')
     }
     return { ok: false, messages: [] }
   }
@@ -201,7 +201,7 @@ async function processUser (userId, db) {
           }
         }
       } catch (err) {
-        log.debug({ err: err.message }, 'Failed to add message')
+        log.debug({ err }, 'Failed to add message')
       }
     }
   }
@@ -363,9 +363,9 @@ async function runSync (db, options = {}) {
 
     return { status: 'completed', stats }
   } catch (error) {
-    log.error({ err: error.message, stack: error.stack }, 'Ban database sync failed')
+    log.error({ err: error, stack: error.stack }, 'Ban database sync failed')
     await db.BanDatabaseSyncState.setStatus('failed', error.message)
-    return { status: 'failed', error: error.message }
+    return { status: 'failed', error.message }
   }
 }
 
@@ -412,7 +412,7 @@ async function startPeriodicSync (db) {
       log.info('Reset stale ban database sync state from previous crash')
     }
   } catch (err) {
-    log.warn({ err: err.message }, 'Failed to reset ban database sync state')
+    log.warn({ err }, 'Failed to reset ban database sync state')
   }
 
   const intervalMs = CONFIG.intervalHours * 60 * 60 * 1000

@@ -174,7 +174,7 @@ const recordAndAssess = async (db, message, { userId, chatId, telegram }) => {
         (entry.firstSeenAt && Math.abs(new Date(entry.firstSeenAt).getTime() - before) < 200)
     }
   } catch (err) {
-    spamLog.warn({ err: err.message, fileUniqueId: fp.fileUniqueId }, 'MediaFingerprint record failed')
+    spamLog.warn({ err, fileUniqueId: fp.fileUniqueId }, 'MediaFingerprint record failed')
     return null
   }
 }

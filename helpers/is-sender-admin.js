@@ -43,7 +43,7 @@ const isSenderAdmin = async (ctx) => {
     const member = await ctx.telegram.getChatMember(ctx.chat.id, fromId)
     return Boolean(member && ADMIN_STATUSES.has(member.status))
   } catch (err) {
-    botLog.warn({ err: err.message, chatId: ctx.chat.id, userId: fromId }, 'isSenderAdmin failed')
+    botLog.warn({ err, chatId: ctx.chat.id, userId: fromId }, 'isSenderAdmin failed')
     return false
   }
 }

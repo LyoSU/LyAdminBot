@@ -82,7 +82,7 @@ const setupCommands = async (bot) => {
         })
       } catch (err) {
         log.warn(
-          { err: err && err.message, scope: scopeKey, languageCode },
+          { err, scope: scopeKey, languageCode },
           'setMyCommands failed'
         )
       }
@@ -96,7 +96,7 @@ const setupCommands = async (bot) => {
       menu_button: { type: 'commands' }
     })
   } catch (err) {
-    log.warn({ err: err && err.message }, 'setChatMenuButton failed')
+    log.warn({ err }, 'setChatMenuButton failed')
   }
 }
 
