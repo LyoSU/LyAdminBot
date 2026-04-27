@@ -7,11 +7,10 @@ const I18n = require('telegraf-i18n')
 const emojiMap = require('./helpers/emoji-map')
 const { bot: botLog, db: dbLog } = require('./helpers/logger')
 const { db } = require('./database')
-const { processExpiredVotes } = require('./handlers')
-const { processStartupCleanup, startCleanupInterval } = require('./helpers/message-cleanup')
-const { startDigestScheduler } = require('./helpers/digest-scheduler')
-const { startPeriodicSync: startBanDatabaseSync } = require('./helpers/ban-database-sync')
+const { processStartupCleanup } = require('./helpers/message-cleanup')
 const { setupCommands } = require('./bot/setup-commands')
+const { startBackgroundJobs } = require('./bot/background-jobs')
+const { installShutdownHandlers } = require('./bot/shutdown')
 const {
   stats,
   errorHandler,
@@ -308,24 +307,17 @@ const init = () => {
     // Process any pending message deletions from before restart
     await processStartupCleanup(db, bot.telegram)
 
-    // Start periodic message cleanup (every 30 seconds)
-    startCleanupInterval(db, bot.telegram, 30 * 1000)
-    botLog.debug('Started message cleanup service')
+    // Boot every recurring task (cleanup queue, expired-vote resolver,
+    // ban-database sync, weekly digest).
+    const backgroundJobs = startBackgroundJobs({
+      db,
+      telegram: bot.telegram,
+      i18n
+    })
 
-    // Start spam vote expiration handler (check every minute)
-    setInterval(() => {
-      processExpiredVotes(db, bot.telegram, i18n)
-    }, 60 * 1000)
-    botLog.debug('Started spam vote expiration handler')
-
-    // Start global ban database signature sync if enabled
-    startBanDatabaseSync(db)
-
-    // Weekly digest scheduler — PMs a summary of bot activity to each admin
-    // once per week per chat. See helpers/digest-scheduler.js for the
-    // delivery window, opt-out, and rate-limit details.
-    startDigestScheduler({ db, telegram: bot.telegram, i18n })
-    botLog.debug('Started digest scheduler')
+    // Wire SIGTERM/SIGINT + unhandled-rejection nets. Done LAST so the
+    // handler closes over the live bot, db, and jobs handles.
+    installShutdownHandlers({ bot, db, backgroundJobs })
   })
 }
 
