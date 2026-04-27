@@ -70,8 +70,17 @@ const entries = [
   [2120496865, 1636714020],
   [2123596685, 1636503180],
   [2138472342, 1637590800],
-  [3318845111, 1618028800],
-  [4317845111, 1620028800],
+  // Removed two synthetic entries:
+  //   [3318845111, 1618028800] (2021-04-10) and
+  //   [4317845111, 1620028800] (2021-05-03)
+  // They were time-going-backwards relative to neighbours (≈Nov 2021),
+  // breaking monotonicity and producing absurd interpolation results
+  // anywhere in 2.1B–5.16B. Cross-bot probe (fStikBot 20.4M users +
+  // QuoteBot 22.9M users) shows ZERO real users in the entire 2.20B–5.00B
+  // range — Telegram skipped this id band during the 32→64-bit migration
+  // (post-int32-max 2.147B straight to ~5B). The TRANSITION_GAP guard at
+  // the top of predictCreationDate now returns '?' for any id in this
+  // dead zone instead of letting linear interpolation produce noise.
   [5162494923, 1652449800], // 2022
   [5186883095, 1648764360],
   [5304951856, 1656718440],
@@ -161,6 +170,24 @@ const entries = [
 
 entries.sort((a, b) => a[0] - b[0])
 
+// 32→64-bit migration dead zone. int32_max = 2,147,483,647. From mid-2021
+// Telegram extended user_id to int64 in MTProto layer 133, but rather than
+// continuing allocations sequentially past 2^31 it skipped a wide band and
+// resumed at ~5B. Empirical verification: a min(createdAt)/count probe
+// across fStikBot (20.4M users) + QuoteBot (22.9M users) found ZERO real
+// users in 2.20B–5.00B (28 contiguous 100M-wide buckets, all empty).
+//
+// A user_id that lands in this gap is therefore one of:
+//   - a spoofed / forged value (someone pretending to be an older account)
+//   - a bot or other special account allocated outside the normal pool
+//   - a future migration extension — re-probe before changing this guard
+// In none of these cases should our interpolation try to invent a
+// "creation date" — it would feed false age signals into the spam
+// detectors (sleeper_awakened triggers at predictedAgeDays>365, and a wild
+// interpolation in this range can land anywhere from 2018 to 2024).
+const TRANSITION_GAP_START = 2_147_483_648  // 2^31, last 32-bit boundary
+const TRANSITION_GAP_END   = 5_000_000_000  // first observed real users in cross-bot data
+
 const parseRegistrationTime = (prefix, regTime) => {
   return [prefix, new Date(regTime * 1000)]
 }
@@ -177,6 +204,13 @@ const predictCreationDate = (id) => {
   // Channel IDs are negative - no creation date available
   // Return current time with '?' prefix to indicate unknown
   if (id < 0) {
+    return parseRegistrationTime('?', nowUnix)
+  }
+
+  // 32→64-bit transition gap (see comment near TRANSITION_GAP_*).
+  // Empirically empty across 42M cross-bot users — anything here is a
+  // spoof or a special-allocation account, not a real registration.
+  if (id >= TRANSITION_GAP_START && id < TRANSITION_GAP_END) {
     return parseRegistrationTime('?', nowUnix)
   }
 

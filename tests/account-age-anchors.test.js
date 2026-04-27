@@ -91,4 +91,49 @@ expectMonth(8700000000, '2026-02', '8.7B → Feb 2026')
   )
 }
 
+// ── 10. 32→64-bit transition dead zone (2.147B – 5.0B) ─────────────────
+//      Empirical probe across fStikBot+QuoteBot (42M users combined) found
+//      ZERO real users in this range. Linear interpolation over the old
+//      synthetic entries [3318845111, 2021-04] / [4317845111, 2021-05]
+//      previously produced a 2018-2024 random walk for any id in this
+//      band. The dead-zone guard now returns prefix '?' with `now` as the
+//      timestamp, so age-based detectors see a 0-day-old "unknown"
+//      account, not a 4-year-old veteran.
+{
+  for (const id of [2_500_000_000, 3_000_000_000, 3_500_000_000, 4_000_000_000, 4_900_000_000]) {
+    const [prefix, date] = predictCreationDate(id)
+    assert.strictEqual(prefix, '?', `id=${id} (transition gap) must return '?' prefix`)
+    assert.ok(
+      Math.abs(Date.now() - date.getTime()) < 60_000,
+      `id=${id} (transition gap) date should be ~now; got ${date.toISOString()}`
+    )
+  }
+}
+
+// ── 11. Boundaries stay sharp ──────────────────────────────────────────
+//      2.147B-1 (last legit int32 id) and 5.0B+1 (first id past the gap)
+//      must NOT be treated as gap.
+{
+  const [pSub] = predictCreationDate(2_147_483_647)
+  assert.notStrictEqual(pSub, '?', 'last legit int32 id must not be in dead zone')
+
+  const [pUp] = predictCreationDate(5_000_000_001)
+  assert.notStrictEqual(pUp, '?', 'first id past the gap must not be in dead zone')
+}
+
+// ── 12. Dead-zone ids do NOT trigger sleeper-awakened ──────────────────
+//      The whole point of this fix: a spoofed or weird id in the gap must
+//      not produce a "1500-day-old account" verdict.
+{
+  const today = Date.now()
+  const firstSeen = new Date(today - 1 * 86400_000)
+  for (const id of [3_500_000_000, 4_000_000_000]) {
+    const paradox = getAccountAgeParadox(id, firstSeen, today)
+    assert.strictEqual(
+      paradox.isSleeperAwakened, false,
+      `dead-zone id=${id} must NOT trigger sleeper-awakened`
+    )
+  }
+}
+
 console.log('account-age-anchors: OK')
