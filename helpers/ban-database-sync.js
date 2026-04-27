@@ -1,6 +1,7 @@
 const got = require('got')
 const { banDatabaseSync: log } = require('./logger')
 const { generateSignatures } = require('./spam-signatures')
+const { safeInterval, safeTimeout } = require('./timers')
 
 /**
  * Global ban database synchronization system.
@@ -417,18 +418,14 @@ async function startPeriodicSync (db) {
   const intervalMs = CONFIG.intervalHours * 60 * 60 * 1000
 
   // Run first sync after 1 minute (let bot fully start)
-  setTimeout(() => {
-    runSync(db).catch(err => {
-      log.error({ err: err.message }, 'Periodic sync failed')
-    })
-  }, 60 * 1000)
+  safeTimeout(() => runSync(db), 60 * 1000, { log, label: 'ban-db-first-sync' })
 
-  // Then run at intervals
-  const intervalId = setInterval(() => {
-    runSync(db).catch(err => {
-      log.error({ err: err.message }, 'Periodic sync failed')
-    })
-  }, intervalMs)
+  // Then run at intervals.
+  const intervalId = safeInterval(
+    () => runSync(db),
+    intervalMs,
+    { log, label: 'ban-db-periodic-sync' }
+  )
 
   log.info({ intervalHours: CONFIG.intervalHours }, 'Started periodic ban database sync')
 

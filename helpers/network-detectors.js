@@ -28,6 +28,7 @@
  */
 
 const { velocity: velocityLog } = require('./logger')
+const { safeInterval } = require('./timers')
 const { getSimHash } = require('./velocity')
 const { hasTextualContent } = require('./text-utils')
 const { dhashFromFileId, hammingDistance: dhashHamming } = require('./image-hash')
@@ -88,12 +89,12 @@ const queryEmojiCluster = (emojiIds) => {
 
 // Periodic sweep — runs every 6h, drops entries idle for > window * 2
 if (typeof setInterval === 'function') {
-  setInterval(() => {
+  safeInterval(() => {
     const now = Date.now()
     for (const [id, entry] of emojiClusters) {
       if (now - entry.lastSeenAt > 2 * EMOJI_WINDOW_MS) emojiClusters.delete(id)
     }
-  }, 6 * 60 * 60 * 1000).unref()
+  }, 6 * 60 * 60 * 1000, { log: velocityLog, label: 'emoji-cluster-sweep' })
 }
 
 // ---------------------------------------------------------------------------
@@ -209,13 +210,13 @@ const recordChatFirstMessage = (chatId, userId, text) => {
 
 // Periodic sweep — drop entries older than window * 4 and empty chats
 if (typeof setInterval === 'function') {
-  setInterval(() => {
+  safeInterval(() => {
     const now = Date.now()
     for (const [chatId, entries] of chatBurstQueue) {
       pruneBurstQueue(entries, now)
       if (entries.length === 0) chatBurstQueue.delete(chatId)
     }
-  }, 30 * 60 * 1000).unref()
+  }, 30 * 60 * 1000, { log: velocityLog, label: 'chat-burst-queue-sweep' })
 }
 
 // ---------------------------------------------------------------------------
@@ -274,12 +275,12 @@ const queryStickerPack = (setName) => {
 }
 
 if (typeof setInterval === 'function') {
-  setInterval(() => {
+  safeInterval(() => {
     const now = Date.now()
     for (const [name, entry] of stickerPackClusters) {
       if (now - entry.lastSeenAt > 2 * STICKER_PACK_WINDOW_MS) stickerPackClusters.delete(name)
     }
-  }, 6 * 60 * 60 * 1000).unref()
+  }, 6 * 60 * 60 * 1000, { log: velocityLog, label: 'sticker-pack-cluster-sweep' })
 }
 
 // ---------------------------------------------------------------------------
@@ -360,7 +361,7 @@ const fetchAndClusterProfilePhoto = async (telegram, userId) => {
 }
 
 if (typeof setInterval === 'function') {
-  setInterval(() => {
+  safeInterval(() => {
     const now = Date.now()
     for (const [uid, entry] of profilePhotoByUser) {
       if (now - entry.seenAt > 2 * PROFILE_PHOTO_TTL_MS) profilePhotoByUser.delete(uid)
@@ -372,7 +373,7 @@ if (typeof setInterval === 'function') {
     }
     profilePhotoClusters.length = 0
     profilePhotoClusters.push(...alive)
-  }, 12 * 60 * 60 * 1000).unref()
+  }, 12 * 60 * 60 * 1000, { log: velocityLog, label: 'profile-photo-sweep' })
 }
 
 const _resetForTests = () => {

@@ -32,6 +32,7 @@
 const { computeDigestStatsForChats, renderCombinedDigest, isWorthSending } = require('./digest-stats')
 const emojiMap = require('./emoji-map')
 const { bot: log } = require('./logger')
+const { safeInterval, safeTimeout } = require('./timers')
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 const DEFAULT_TICK_MS = 60 * 60 * 1000 // 1 hour
@@ -274,18 +275,16 @@ const startDigestScheduler = ({ db, telegram, i18n, tickMs = DEFAULT_TICK_MS } =
   // deploy at the same time would storm Telegram at boot + 1h on the dot.
   const jitter = Math.floor(Math.random() * tickMs * 0.5)
   let interval = null
-  const firstTimeout = setTimeout(() => {
+  const firstTimeout = safeTimeout(() => {
     runDigestPass({ db, telegram, i18n }).catch((err) => {
-      log.warn({ err: err.message }, 'digest-scheduler: tick threw')
+      log.warn({ err }, 'digest-scheduler: first-tick rejected')
     })
-    interval = setInterval(() => {
-      runDigestPass({ db, telegram, i18n }).catch((err) => {
-        log.warn({ err: err.message }, 'digest-scheduler: tick threw')
-      })
-    }, tickMs)
-    if (interval && typeof interval.unref === 'function') interval.unref()
-  }, tickMs + jitter)
-  if (firstTimeout && typeof firstTimeout.unref === 'function') firstTimeout.unref()
+    interval = safeInterval(
+      () => runDigestPass({ db, telegram, i18n }),
+      tickMs,
+      { log, label: 'digest-scheduler' }
+    )
+  }, tickMs + jitter, { log, label: 'digest-scheduler-first-tick' })
   return {
     stop: () => {
       if (firstTimeout) clearTimeout(firstTimeout)

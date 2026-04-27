@@ -12,6 +12,7 @@
  */
 
 const { cleanup: log } = require('./logger')
+const { safeInterval } = require('./timers')
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -224,9 +225,11 @@ const startCleanupInterval = (db, telegram, intervalMs = 30000) => {
     clearInterval(cleanupIntervalId)
   }
 
-  cleanupIntervalId = setInterval(() => {
-    processCleanupQueue(db, telegram)
-  }, intervalMs)
+  cleanupIntervalId = safeInterval(
+    () => processCleanupQueue(db, telegram),
+    intervalMs,
+    { log, label: 'message-cleanup' }
+  )
 
   log.debug({ intervalMs }, 'Started cleanup interval')
 

@@ -5,6 +5,7 @@ const { createVoteEvent, getAccountAgeDays } = require('../helpers/vote-ui')
 const { addSignature } = require('../helpers/spam-signatures')
 const { report: reportLog } = require('../helpers/logger')
 const { scheduleDeletion } = require('../helpers/message-cleanup')
+const { safeInterval } = require('../helpers/timers')
 const { sendModEventNotification } = require('../helpers/mod-event-send')
 const { ackOnTarget, REACTIONS } = require('../helpers/reactions')
 const { withTyping } = require('../helpers/typing')
@@ -14,8 +15,8 @@ const reportCooldowns = new Map()
 const COOLDOWN_MS = 5 * 60 * 1000
 const MAX_REPORTS = 3
 
-// Periodic cleanup of stale cooldown entries (every 10 minutes)
-setInterval(() => {
+// Periodic cleanup of stale cooldown entries (every 10 minutes).
+safeInterval(() => {
   const now = Date.now()
   for (const [userId, reports] of reportCooldowns) {
     const recent = reports.filter(time => now - time < COOLDOWN_MS)
@@ -25,7 +26,7 @@ setInterval(() => {
       reportCooldowns.set(userId, recent)
     }
   }
-}, 10 * 60 * 1000)
+}, 10 * 60 * 1000, { label: 'report-cooldown-sweep' })
 
 const isRateLimited = (userId) => {
   const now = Date.now()

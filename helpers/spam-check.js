@@ -23,6 +23,7 @@ const {
 } = require('./velocity')
 const { checkSignatures, addSignature } = require('./spam-signatures')
 const { spam: spamLog, moderation: modLog, cleanup: cleanupLog, qdrant: qdrantLog } = require('./logger')
+const { safeInterval } = require('./timers')
 const { buildUserSignals, computeDeterministicVerdict, logSpamDecision } = require('./spam-signals')
 const { analyzeMessage: analyzeProfile, toSignalTags: profileTags } = require('./profile-signals')
 const { recordAndAssess: recordMediaFingerprint } = require('./media-fingerprint')
@@ -284,17 +285,13 @@ const checkLLMRateLimit = (chatId) => {
 let cleanupInitialized = false
 const initializeCleanup = () => {
   if (!cleanupInitialized) {
-    setInterval(async () => {
-      try {
-        const cleanedCount = await cleanupOldVectors()
-        const mergedCount = await mergeSimilarVectors()
-        if (cleanedCount > 0 || mergedCount > 0) {
-          cleanupLog.info({ cleaned: cleanedCount, merged: mergedCount }, 'Vector cleanup completed')
-        }
-      } catch (err) {
-        cleanupLog.error({ err }, 'Error during cleanup')
+    safeInterval(async () => {
+      const cleanedCount = await cleanupOldVectors()
+      const mergedCount = await mergeSimilarVectors()
+      if (cleanedCount > 0 || mergedCount > 0) {
+        cleanupLog.info({ cleaned: cleanedCount, merged: mergedCount }, 'Vector cleanup completed')
       }
-    }, 24 * 60 * 60 * 1000) // Daily cleanup
+    }, 24 * 60 * 60 * 1000, { log: cleanupLog, label: 'vector-cleanup' })
     cleanupInitialized = true
   }
 }
@@ -486,9 +483,9 @@ const quickRiskAssessment = (ctx) => {
   // Medium-weight signals. Two of these together → high. Alone → medium,
   // which routes to LLM for content interpretation.
   const mediumSignals = [
-    'cashtag',      // Crypto mentions
+    'cashtag', // Crypto mentions
     'phone_number', // Phone in text
-    'text_url'      // Plain URL in text
+    'text_url' // Plain URL in text
   ]
   const mediumCount = signals.filter(s => mediumSignals.includes(s)).length
 
@@ -1684,10 +1681,10 @@ SECURITY CANARY
   const entities = message.entities || message.caption_entities || []
   const entityTypes = entities.length > 0
     ? Object.fromEntries(
-        Object.entries(
-          entities.reduce((acc, e) => { acc[e.type] = (acc[e.type] || 0) + 1; return acc }, {})
-        )
+      Object.entries(
+        entities.reduce((acc, e) => { acc[e.type] = (acc[e.type] || 0) + 1; return acc }, {})
       )
+    )
     : null
 
   // Caller-useful attachment hints (the text slice is in message_text, but

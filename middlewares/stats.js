@@ -1,4 +1,5 @@
 const { stats: statsLog } = require('../helpers/logger')
+const { safeInterval } = require('../helpers/timers')
 
 const stats = {
   rpsAvrg: 0,
@@ -6,7 +7,7 @@ const stats = {
   times: {}
 }
 
-setInterval(() => {
+safeInterval(() => {
   if (Object.keys(stats.times).length > 0) {
     Object.keys(stats.times).forEach(time => {
       const rps = stats.times[time].length
@@ -28,7 +29,7 @@ setInterval(() => {
       delete stats.times[time]
     })
   }
-}, 1000)
+}, 1000, { log: statsLog, label: 'request-stats-aggregator' })
 
 module.exports = (ctx, next) => {
   ctx.state.startMs = new Date()

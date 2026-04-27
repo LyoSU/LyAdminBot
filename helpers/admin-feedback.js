@@ -27,6 +27,7 @@
 const { LRUCache } = require('lru-cache')
 
 const { spam: spamLog } = require('./logger')
+const { safeInterval } = require('./timers')
 
 const RECENT_TTL_MS = 30 * 60 * 1000 // 30 min
 const RECENT_MAX = 5000
@@ -110,12 +111,12 @@ const digest = (topN = 5) => {
 if (typeof setInterval === 'function') {
   // Hourly digest to stdout (via our logger). Top-5 most-overridden
   // sources in the last 24h. Zero-result window produces no output.
-  setInterval(() => {
+  safeInterval(() => {
     const top = digest(5)
     if (top.length > 0) {
       spamLog.info({ top }, 'spam.admin_feedback.digest')
     }
-  }, 60 * 60 * 1000).unref()
+  }, 60 * 60 * 1000, { log: spamLog, label: 'admin-feedback-digest' })
 }
 
 const _resetForTests = () => {

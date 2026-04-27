@@ -1,5 +1,6 @@
 const crypto = require('crypto')
 const { velocity: velocityLog } = require('./logger')
+const { safeInterval } = require('./timers')
 const { hasTextualContent } = require('./text-utils')
 
 /**
@@ -162,7 +163,7 @@ class VelocityStore {
 
   // Cleanup old entries
   startCleanup () {
-    setInterval(() => {
+    safeInterval(() => {
       const cutoff = Date.now() - CONFIG.MAX_AGE
       let cleanedKeys = 0
 
@@ -214,7 +215,7 @@ class VelocityStore {
         this.keyAccessOrder = this.keyAccessOrder.filter(k => this.data.has(k))
         velocityLog.debug({ totalKeys: this.data.size, removedKeys: cleanedKeys }, 'Cleanup completed')
       }
-    }, CONFIG.CLEANUP_INTERVAL)
+    }, CONFIG.CLEANUP_INTERVAL, { log: velocityLog, label: 'velocity-cleanup' })
   }
 }
 
