@@ -22,7 +22,6 @@
 // inline here.
 
 const { registerMenu } = require('../registry')
-const { isAdmin } = require('../access')
 const { editHTML } = require('../../reply-html')
 const modEvent = require('../../mod-event')
 const { logModEvent } = require('../../mod-log')
@@ -133,13 +132,18 @@ const tryUndo = async (ctx, event) => {
 // The setTimeout-based keyboard strip from vote-ui will fire harmlessly
 // later — Telegram returns "message is not modified", which we ignore.
 const handlePostVoteAction = async (ctx, action, eventId) => {
-  const viewerIsAdmin = await isAdmin(ctx)
-  if (!viewerIsAdmin) {
-    return { render: false, toast: 'menu.access.only_admins', show_alert: true }
-  }
+  // Look up the vote FIRST so we have spamVote.chatId to pin the admin
+  // check against. Using isAdmin(ctx) here would defer to ctx.targetChatId
+  // || ctx.chat.id, which in PM (lifted from an unrelated settings deep-
+  // link) can point at a different group than the vote actually belongs
+  // to — a non-admin in the vote's group would see false admin gating.
   const spamVote = await findVoteByEventId(ctx, eventId)
   if (!spamVote || !spamVote.bannedUserId || !spamVote.chatId) {
     return { render: false, toast: 'spam_vote.cb.not_found' }
+  }
+  const viewerIsAdmin = await adminCache.isUserAdmin(ctx.telegram, spamVote.chatId, ctx.from && ctx.from.id)
+  if (!viewerIsAdmin) {
+    return { render: false, toast: 'menu.access.only_admins', show_alert: true }
   }
 
   const adminName = (ctx.from && (ctx.from.first_name || ctx.from.username)) || String(ctx.from && ctx.from.id)
@@ -264,7 +268,12 @@ const handle = async (ctx, action, args) => {
   }
 
   if (action === 'why') {
-    const viewerIsAdmin = await isAdmin(ctx)
+    // Pin admin check to event.chatId so the keyboard rendered in PM does
+    // not falsely include admin buttons because ctx.targetChatId (set by
+    // an earlier settings deep-link) points at a different group where
+    // the viewer happens to be admin. The undo handler below already
+    // re-checks event.chatId, so this just keeps the UI honest.
+    const viewerIsAdmin = await adminCache.isUserAdmin(ctx.telegram, event.chatId, ctx.from && ctx.from.id)
     try {
       await renderExpanded(ctx, event, viewerIsAdmin)
     } catch (err) {
@@ -287,7 +296,8 @@ const handle = async (ctx, action, args) => {
   }
 
   if (action === 'hide') {
-    const viewerIsAdmin = await isAdmin(ctx)
+    // Same rationale as 'why': pin to event.chatId, not ctx context.
+    const viewerIsAdmin = await adminCache.isUserAdmin(ctx.telegram, event.chatId, ctx.from && ctx.from.id)
     if (!viewerIsAdmin) {
       return { render: false, toast: 'menu.access.only_admins', show_alert: true }
     }

@@ -172,6 +172,74 @@ test('undo: admin → restrictChatMember + override rerender', async () => {
   assert.ok(edits[0].text.includes('AdminAlice'))
 })
 
+// Cross-chat privilege leak regression. Scenario: Alex is admin in group A
+// (chatA), opened /start settings_<A> earlier so pmTarget cache says A.
+// Auto-ban happens in group B (chatB) where he is NOT admin. He taps the
+// "За що?" deep-link → PM opens with expanded card. Re-clicking the why
+// callback in PM lifts ctx.targetChatId=A. Without explicit event.chatId
+// pinning, isAdmin(ctx) would check A → return true → render keyboard with
+// fake [↩️ Розблокувати] for an event from B he can't actually act on.
+test('cross-chat: admin in A, event in B, PM context lifted to A → no admin buttons', async () => {
+  const chatA = -1000  // Alex is admin here
+  const chatB = -2000  // event.chatId — Alex is NOT admin here
+  const event = {
+    eventId: 'evX',
+    actionType: 'auto_ban',
+    targetId: 99,
+    targetName: 'Target',
+    chatId: chatB
+  }
+  const calls = { restrictChatMember: 0, deleteMessage: 0, edits: [] }
+  const ModEvent = {
+    findOne: async ({ eventId }) => eventId === event.eventId ? event : null,
+    findOneAndUpdate: async () => event
+  }
+  const telegram = {
+    // Per-chat admin status — Alex (id=7) is admin in A only.
+    getChatMember: async (chatId, userId) => ({
+      status: (chatId === chatA && userId === 7) ? 'administrator' : 'member'
+    }),
+    callApi: async (method, payload) => {
+      if (method === 'editMessageText') { calls.edits.push(payload); return {} }
+      if (method === 'getChatMember') {
+        return { status: (payload.chat_id === chatA && payload.user_id === 7) ? 'administrator' : 'member' }
+      }
+      return null
+    },
+    restrictChatMember: async () => { calls.restrictChatMember++ },
+    deleteMessage: async () => { calls.deleteMessage++ }
+  }
+  const ctx = {
+    telegram,
+    chat: { id: 7, type: 'private' },   // DM
+    targetChatId: chatA,                 // lifted from earlier settings deep-link
+    from: { id: 7, first_name: 'Alex' },
+    db: { ModEvent },
+    i18n: mkI18n('uk'),
+    deleteMessage: async () => { calls.deleteMessage++ },
+    callbackQuery: { data: 'm:v1:mod.event:why:evX', message: { message_id: 500 } }
+  }
+
+  // 1. 'why' must render WITHOUT admin buttons — keyboard pinned to event.chatId.
+  await screen.handle(ctx, 'why', ['evX'])
+  assert.strictEqual(calls.edits.length, 1, 'why edited the message')
+  const flat = calls.edits[0].reply_markup.inline_keyboard.flat()
+  assert.ok(flat.every(b => !b.text.includes('Розблокувати')), 'NO undo button leaked from chatA admin status')
+  assert.ok(flat.every(b => !b.text.includes('Сховати')), 'NO hide button leaked')
+
+  // 2. 'hide' must reject with modal alert.
+  const hideRes = await screen.handle(ctx, 'hide', ['evX'])
+  assert.strictEqual(hideRes.toast, 'menu.access.only_admins')
+  assert.strictEqual(hideRes.show_alert, true)
+  assert.strictEqual(calls.deleteMessage, 0, 'hide did not run')
+
+  // 3. 'undo' must reject — defense-in-depth (was already correct pre-fix).
+  const undoRes = await screen.handle(ctx, 'undo', ['evX'])
+  assert.strictEqual(undoRes.toast, 'menu.access.only_admins')
+  assert.strictEqual(undoRes.show_alert, true)
+  assert.strictEqual(calls.restrictChatMember, 0, 'undo did not run')
+})
+
 test('unknown eventId → not_found toast', async () => {
   const { ctx } = mkCtx({ isAdmin: true, event: null })
   const res = await screen.handle(ctx, 'why', ['nonexistent'])
