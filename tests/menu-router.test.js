@@ -143,6 +143,27 @@ test('handle returns {toast, render: false} → answerCbQuery only', async () =>
   await router.handleCallback(ctx)
   assert.strictEqual(ctx._calls.editHTML.length, 0)
   assert.strictEqual(ctx._calls.cbAnswer[0][0], 'menu.saved')
+  // Default toast: NO show_alert opts — passive 5s toast
+  assert.strictEqual(ctx._calls.cbAnswer[0][1], undefined)
+})
+
+test('handle returns {toast, show_alert: true} → MODAL answerCbQuery', async () => {
+  // Regression for the "AI ban → unban button works for everyone" report:
+  // non-admin clicks on admin-gated actions historically got a tiny 5s
+  // toast that distracted users missed, then saw an OTHER admin's success
+  // edit in chat and concluded "the button worked for me too". Router
+  // must honour show_alert so handlers can force a modal popup.
+  const { registry, router } = freshRouter()
+  registry.registerMenu({
+    id: 's',
+    access: 'public',
+    render: () => ({ text: 'r', keyboard: { inline_keyboard: [] } }),
+    handle: async () => ({ toast: 'menu.access.only_admins', render: false, show_alert: true })
+  })
+  const ctx = mkCb({ data: 'm:v1:s:save' })
+  await router.handleCallback(ctx)
+  assert.strictEqual(ctx._calls.cbAnswer[0][0], 'menu.access.only_admins')
+  assert.deepStrictEqual(ctx._calls.cbAnswer[0][1], { show_alert: true })
 })
 
 test('_close action deletes the message', async () => {

@@ -126,6 +126,9 @@ test('hide action: non-admin → toast + no deletion', async () => {
   const { ctx, calls } = mkCtx({ isAdmin: false, event })
   const res = await screen.handle(ctx, 'hide', ['ev4'])
   assert.strictEqual(res.toast, 'menu.access.only_admins')
+  // Modal alert, not the tiny passive toast — distracted non-admins miss
+  // the 5s notification and read "nothing happened" as "the action worked".
+  assert.strictEqual(res.show_alert, true)
   assert.strictEqual(calls.deleteMessage, 0)
 })
 
@@ -137,11 +140,16 @@ test('hide action: admin → deletes message', async () => {
   assert.strictEqual(calls.deleteMessage, 1)
 })
 
-test('undo: non-admin rejected', async () => {
+test('undo: non-admin rejected with MODAL alert (not tiny toast)', async () => {
   const event = { eventId: 'ev6', actionType: 'auto_ban', targetId: 42, targetName: 'U', chatId: -100500 }
   const { ctx, calls } = mkCtx({ isAdmin: false, event })
   const res = await screen.handle(ctx, 'undo', ['ev6'])
   assert.strictEqual(res.toast, 'menu.access.only_admins')
+  // Regression: a missed rejection here historically read as "the unban
+  // worked" to bystanders, because the 5s passive toast is easy to miss
+  // while the success message edit of OTHER admins' overrides stays
+  // visible in the chat. Forcing show_alert disambiguates.
+  assert.strictEqual(res.show_alert, true)
   assert.strictEqual(calls.restrictChatMember, 0)
 })
 

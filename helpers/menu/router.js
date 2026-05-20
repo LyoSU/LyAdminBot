@@ -15,15 +15,22 @@
  *
  * handle() return contract (truth table):
  *
- *   result                            | renders? | toast       | cb answered?
- *   ----------------------------------+----------+-------------+--------------
- *   'render'                          | yes      | no          | empty
- *   { render: true, state: {...} }    | yes      | no          | empty
- *   { render: false, toast: 'key' }   | no       | 'key'       | 'key'
- *   { toast: 'key' }                  | yes      | 'key'       | 'key'
- *   { silent: true }                  | yes      | no          | NOT answered
- *   { silent: true, render: false }   | no       | no          | NOT answered
- *   null / undefined                  | no       | no          | empty
+ *   result                                | renders? | toast       | cb answered?
+ *   --------------------------------------+----------+-------------+--------------
+ *   'render'                              | yes      | no          | empty
+ *   { render: true, state: {...} }        | yes      | no          | empty
+ *   { render: false, toast: 'key' }       | no       | 'key'       | 'key' (tiny)
+ *   { toast: 'key' }                      | yes      | 'key'       | 'key' (tiny)
+ *   { toast: 'key', show_alert: true }    | (same)   | (same)      | 'key' as MODAL
+ *   { silent: true }                      | yes      | no          | NOT answered
+ *   { silent: true, render: false }       | no       | no          | NOT answered
+ *   null / undefined                      | no       | no          | empty
+ *
+ * `show_alert: true` is for rejections users MUST notice (admin-only gates,
+ * destructive denials). The default tiny toast is a 5s passive notification
+ * that distracted users routinely miss — and a missed access-fail toast
+ * reads to the user as "the button worked", which has real safety
+ * consequences for admin-only actions like undo / hide.
  *
  * Reserved screenIds: '_close' (deletes message), '_noop' (silent ack).
  *
@@ -116,7 +123,8 @@ const handleCallback = async (ctx) => {
       await renderScreen(ctx, screen, result && result.state)
     }
     if (result && result.toast) {
-      await ctx.answerCbQuery(ctx.i18n.t(result.toast)).catch(() => {})
+      const opts = result.show_alert ? { show_alert: true } : undefined
+      await ctx.answerCbQuery(ctx.i18n.t(result.toast), opts).catch(() => {})
     } else if (!result || !result.silent) {
       await ctx.answerCbQuery().catch(() => {})
     }

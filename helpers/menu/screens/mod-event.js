@@ -135,7 +135,7 @@ const tryUndo = async (ctx, event) => {
 const handlePostVoteAction = async (ctx, action, eventId) => {
   const viewerIsAdmin = await isAdmin(ctx)
   if (!viewerIsAdmin) {
-    return { render: false, toast: 'menu.access.only_admins' }
+    return { render: false, toast: 'menu.access.only_admins', show_alert: true }
   }
   const spamVote = await findVoteByEventId(ctx, eventId)
   if (!spamVote || !spamVote.bannedUserId || !spamVote.chatId) {
@@ -289,7 +289,7 @@ const handle = async (ctx, action, args) => {
   if (action === 'hide') {
     const viewerIsAdmin = await isAdmin(ctx)
     if (!viewerIsAdmin) {
-      return { render: false, toast: 'menu.access.only_admins' }
+      return { render: false, toast: 'menu.access.only_admins', show_alert: true }
     }
     try {
       await ctx.deleteMessage()
@@ -303,7 +303,10 @@ const handle = async (ctx, action, args) => {
     // deep-link expanded card (/start mod_event_<id>).
     const viewerIsAdmin = await adminCache.isUserAdmin(ctx.telegram, event.chatId, ctx.from && ctx.from.id)
     if (!viewerIsAdmin) {
-      return { render: false, toast: 'menu.access.only_admins' }
+      // Modal alert (not the tiny 5s toast): a missed rejection here reads
+      // to non-admins as "the unban worked", which has triggered repeat
+      // confusion in production. show_alert forces the user to ack.
+      return { render: false, toast: 'menu.access.only_admins', show_alert: true }
     }
     const result = await tryUndo(ctx, event)
     if (!result.ok) {
