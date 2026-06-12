@@ -39,6 +39,8 @@ export class TelegramGateway {
   private readonly chatQueues = new Map<number, Promise<void>>()
   private readonly albumBuffers = new Map<string, { messages: Message[]; timer: NodeJS.Timeout }>()
   private handler: MessageHandler | null = null
+  /** App-supplied error sink; defaults to console.error so adapters stay pure. */
+  private errorSink: (err: unknown) => void = (err) => console.error('[gateway] handler error:', err)
 
   constructor(private readonly config: GatewayConfig) {
     this.tg = new TelegramClient({
@@ -60,6 +62,11 @@ export class TelegramGateway {
     this.handler = handler
   }
 
+  /** Route handler errors somewhere structured (the app logger). */
+  onError(sink: (err: unknown) => void): void {
+    this.errorSink = sink
+  }
+
   /** Expose callback-query routing without leaking the dispatcher. */
   onCallbackQuery(handler: (query: CallbackQueryContext) => Promise<void>): void {
     this.dispatcher.onCallbackQuery(handler)
@@ -70,7 +77,7 @@ export class TelegramGateway {
     const previous = this.chatQueues.get(chatId) ?? Promise.resolve()
     const next = previous.then(task).catch((err) => {
       // A failed message must never wedge the whole chat queue.
-      console.error('[gateway] handler error:', err)
+      this.errorSink(err)
     })
     this.chatQueues.set(chatId, next)
     // Prevent unbounded map growth in long-running processes.

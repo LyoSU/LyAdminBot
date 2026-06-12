@@ -28,6 +28,7 @@ import {
 } from '@lyadmin/ui'
 import { loadConfig } from './config.js'
 import { formatDuration, parseBananDuration } from './duration.js'
+import { log } from './logger.js'
 
 const config = loadConfig()
 
@@ -347,6 +348,7 @@ const handleBanan = async (message: Message, chat: Chat, caller: User, arg: stri
     const ok = await gateway.moderationActions.mute(chat.id, caller.id, seconds)
       .then(() => true).catch(() => false)
     if (ok) {
+      log.info('banan', { chatId: chat.id, userId: caller.id, by: caller.id, kind: 'self', seconds })
       await gateway.tg.sendText(chat.id, viewHtml(locale.banan.self(escapeName(caller.displayName), human)))
         .catch(() => { /* non-fatal */ })
     }
@@ -365,6 +367,7 @@ const handleBanan = async (message: Message, chat: Chat, caller: User, arg: stri
       await gateway.tg.restrictChatMember({ chatId: chat.id, userId: target.id, restrictions: {} })
         .catch(() => { /* ok */ })
       await dropCommand()
+      log.info('banan_lifted', { chatId: chat.id, userId: target.id, by: caller.id })
       await gateway.tg.sendText(chat.id, viewHtml(locale.banan.lifted(escapeName(target.displayName))))
         .catch(() => { /* non-fatal */ })
       return
@@ -375,6 +378,7 @@ const handleBanan = async (message: Message, chat: Chat, caller: User, arg: stri
     .then(() => true).catch(() => false)
   await dropCommand()
   if (!ok) return
+  log.info('banan', { chatId: chat.id, userId: target.id, by: caller.id, kind: 'admin', seconds })
   rememberBananLabel(chat.id, target.id, target.displayName)
   const sent = await gateway.tg.sendText(chat.id, viewHtml(locale.banan.success(escapeName(target.displayName), human)), {
     replyMarkup: toKeyboard([[{ text: locale.banan.undoButton, data: `un:${chat.id}:${target.id}` }]])
@@ -424,6 +428,7 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
   }).catch(() => false) // duplicate vote → just add the ballot below
 
   const reporterIsAdmin = await isChatAdmin(chat.id, reporter.id)
+  log.info('report', { chatId: chat.id, userId: target.id, by: reporter.id, byAdmin: reporterIsAdmin, messageId: replied.id })
   await store.castBallot({
     chatId: chat.id, messageId: replied.id,
     userId: reporter.id, isAdmin: reporterIsAdmin, choice: 'spam'
@@ -437,6 +442,7 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
   if (tally.outcome === 'spam') {
     // Admin ballot resolved instantly.
     if (!(await store.closeVote(chat.id, replied.id, 'spam'))) return
+    log.info('vote_resolved', { chatId: chat.id, userId: target.id, messageId: replied.id, outcome: 'spam', by: 'admin_report' })
     await enforceVoteSpam({
       chatId: chat.id, messageId: replied.id, targetUserId: target.id, textPreview
     }, 'admin_report')
@@ -590,6 +596,25 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     gateway.moderationActions
   )
 
+  // Operational log: one line per actioned message (and per skipped action),
+  // so prod moderation is fully auditable from the container logs.
+  if (verdict.action !== 'none' && verdict.action !== 'observe') {
+    log.info('moderation', {
+      chatId: chat.id, userId: sender.id, messageId: message.id,
+      action: verdict.action, applied: result.applied, skipped: result.skippedReason ?? undefined,
+      pSpam: Math.round(verdict.pSpam * 100) / 100, decidedBy: verdict.decidedBy,
+      ruleId: verdict.ruleId ?? undefined, reason: verdict.reasonCode,
+      needsVote: verdict.needsVote || undefined,
+      errors: result.errors.length > 0 ? result.errors : undefined,
+      latencyMs: Date.now() - started
+    })
+  } else if (verdict.action === 'observe') {
+    log.debug('observe', {
+      chatId: chat.id, userId: sender.id, messageId: message.id,
+      pSpam: Math.round(verdict.pSpam * 100) / 100, reason: verdict.reasonCode
+    })
+  }
+
   // The message joins the chat context only if it stayed in the chat —
   // deleted spam must not poison the window for the next evaluation.
   const removed = result.applied && (verdict.action === 'delete' || verdict.action === 'mute' || verdict.action === 'ban')
@@ -612,6 +637,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
 
   if (result.captchaRequired && result.applied) {
     issueCaptcha(chat.id, sender.id)
+    log.info('captcha_issued', { chatId: chat.id, userId: sender.id })
     const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
     const view = captchaPrompt(locale, {
       chatId: chat.id, userId: sender.id, userLabel: sender.displayName
@@ -643,6 +669,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
         targetLabel: sender.displayName, textPreview: normalized.text, openedBy: selfId
       }).catch(() => false)
       if (opened) {
+        log.info('vote_opened', { chatId: chat.id, userId: sender.id, messageId: message.id, pSpam: Math.round(verdict.pSpam * 100) / 100, reason: verdict.reasonCode })
         const view = votePrompt(locale, {
           chatId: chat.id, messageId: message.id,
           userLabel: sender.displayName, textPreview: normalized.text
@@ -712,6 +739,7 @@ const wireCallbacks = (): void => {
         await query.answer({})
         return
       }
+      log.info('settings_changed', { chatId, by: query.user.id, action, value: value || undefined })
       const view = await renderSettingsPanel(locale, chatId)
       await gateway.tg.editMessage({
         chatId: query.user.id, message: query.messageId,
@@ -731,6 +759,7 @@ const wireCallbacks = (): void => {
       }
       await gateway.tg.restrictChatMember({ chatId, userId, restrictions: {} })
         .catch(() => { /* already expired */ })
+      log.info('banan_lifted', { chatId, userId, by: query.user.id, via: 'undo' })
       const label = bananLabels.get(`${chatId}:${userId}`)
       if (label) {
         await gateway.tg.editMessage({
@@ -783,6 +812,10 @@ const wireCallbacks = (): void => {
         await query.answer({ text: locale.vote.alreadyEnded })
         return
       }
+      log.info('vote_resolved', {
+        chatId, userId: Number(vote['targetUserId'] ?? 0), messageId,
+        outcome: tally.outcome, spam: tally.spam, ham: tally.ham, by: 'community'
+      })
       if (tally.outcome === 'spam') {
         await enforceVoteSpam({
           chatId, messageId,
@@ -828,6 +861,7 @@ const wireCallbacks = (): void => {
       // One tap proves liveness: lift the gate restriction, drop the prompt.
       await gateway.tg.restrictChatMember({ chatId, userId, restrictions: {} })
         .catch(() => { /* window may have expired already */ })
+      log.info('captcha_passed', { chatId, userId })
       await query.answer({ text: locale.captcha.passed })
       await gateway.tg.deleteMessagesById(chatId, [query.messageId]).catch(() => { /* ok */ })
       return
@@ -874,6 +908,10 @@ const wireCallbacks = (): void => {
         recentForwards.delete(`${chatIdRaw}:${messageIdRaw}`)
       }
       recentVerdicts.delete(`${chatIdRaw}:${messageIdRaw}`)
+      log.info('override', {
+        chatId, userId: Number(userIdRaw), messageId: Number(messageIdRaw), by: query.user.id,
+        wasDecidedBy: verdict?.decidedBy, wasReason: verdict?.reasonCode
+      })
       await query.answer({ text: locale.notification.overrideDone })
       // Remove the notification message itself — keep chats clean.
       await gateway.tg.deleteMessagesById(chatId, [query.messageId]).catch(() => { /* ok */ })
@@ -884,11 +922,12 @@ const wireCallbacks = (): void => {
 const main = async (): Promise<void> => {
   await store.connect(config.mongoUri)
   gateway.onMessage(handleMessage)
+  gateway.onError((err) => log.error('handler_error', { err: err instanceof Error ? err : String(err) }))
   wireCallbacks()
   const self = await gateway.start()
   selfId = self.id
   selfUsername = self.username
-  console.log(`[bot] started as @${self.username} (${self.id})`)
+  log.info('started', { username: self.username, id: self.id })
 
   // Clear deletions that came due while we were down, then sweep periodically
   // as the backstop for the in-memory timers.
@@ -897,7 +936,7 @@ const main = async (): Promise<void> => {
   sweepTimer.unref?.()
 
   const shutdown = async (): Promise<void> => {
-    console.log('[bot] shutting down…')
+    log.info('shutdown')
     await gateway.stop().catch(() => { /* ignore */ })
     await store.close().catch(() => { /* ignore */ })
     process.exit(0)
@@ -908,13 +947,13 @@ const main = async (): Promise<void> => {
 
 // A single failed promise must never take the moderation bot down.
 process.on('unhandledRejection', (reason) => {
-  console.error('[bot] unhandled rejection:', reason)
+  log.error('unhandled_rejection', { err: reason instanceof Error ? reason : String(reason) })
 })
 process.on('uncaughtException', (err) => {
-  console.error('[bot] uncaught exception:', err)
+  log.error('uncaught_exception', { err })
 })
 
 main().catch((err) => {
-  console.error('[bot] fatal:', err)
+  log.error('fatal', { err })
   process.exit(1)
 })
