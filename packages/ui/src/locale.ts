@@ -40,6 +40,8 @@ export interface Locale {
     overrideDone: string
     overrideAlreadyDone: string
     adminOnly: string
+    /** Posted when the bot caught spam but lacks the rights to act. */
+    missingRights: string
   }
 
   reasons: Record<string, string>
@@ -93,6 +95,16 @@ export interface Locale {
     empty: string
     messagesUnit: (count: number) => string
     bananUnit: (count: number) => string
+  }
+
+  /** Custom hashtag triggers (extras). */
+  extra: {
+    saved: (name: string) => string
+    deleted: (name: string) => string
+    notFound: (name: string) => string
+    usage: string
+    listTitle: string
+    listEmpty: string
   }
 
   /** Manual /banan moderation (admin mute with personality). */

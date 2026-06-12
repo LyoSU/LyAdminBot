@@ -46,7 +46,8 @@ export const en: Locale = {
     notSpamButton: '✅ Not spam',
     overrideDone: 'Done, reverted. User is back and trusted in this chat now.',
     overrideAlreadyDone: 'Already reverted.',
-    adminOnly: 'Chat admins only.'
+    adminOnly: 'Chat admins only.',
+    missingRights: '⚠️ Caught spam but I lack the rights to remove it. Please grant me delete-messages and ban-users rights.'
   },
 
   reasons: {
@@ -137,6 +138,15 @@ export const en: Locale = {
     empty: 'No stats yet.',
     messagesUnit: (count) => (count === 1 ? 'message' : 'messages'),
     bananUnit: () => '🍌'
+  },
+
+  extra: {
+    saved: (name) => `✅ Saved #${name}`,
+    deleted: (name) => `🗑 Deleted #${name}`,
+    notFound: (name) => `No such trigger: #${name}`,
+    usage: 'Reply to a message with /extra name to save it under #name. /extra name with no reply deletes it.',
+    listTitle: '📂 Saved triggers:',
+    listEmpty: 'No triggers here yet.'
   },
 
   banan: {

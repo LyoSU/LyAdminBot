@@ -18,7 +18,9 @@ import {
   MongoStore, MongoSignaturePort, MongoForwardPort, QdrantVectorPort,
   OpenAiModerationPort, OpenRouterLlmPort, MemoryVelocityPort,
   MemorySessionPort, MemoryConversationWindow,
-  groupDocToChatPolicy, presetToThreshold, userDocToHistory
+  matchExtras,
+  groupDocToChatPolicy, presetToThreshold, userDocToHistory,
+  type NormalizedExtra
 } from '@lyadmin/data'
 import {
   captchaPrompt, compactNotification, escapeHtml as escapeName, helpView,
@@ -209,6 +211,28 @@ const reportAllowed = (userId: number): boolean => {
 }
 
 const MUTE_AFTER_VOTE_SECONDS = 24 * 60 * 60
+
+/**
+ * When the bot catches spam but can't act (not an admin / missing rights), it
+ * posts one warning per chat per hour so admins know to grant rights — without
+ * spamming the chat on every blocked message.
+ */
+const MISSING_RIGHTS_WARN_MS = 60 * 60 * 1000
+const missingRightsWarned = new Map<number, number>()
+const RIGHTS_ERROR_REGEX = /ADMIN_REQUIRED|FORBIDDEN|not enough rights|RIGHT/i
+const shouldWarnMissingRights = (chatId: number, errors: string[]): boolean => {
+  if (!errors.some((e) => RIGHTS_ERROR_REGEX.test(e))) return false
+  const now = Date.now()
+  const until = missingRightsWarned.get(chatId)
+  if (until && until > now) return false
+  missingRightsWarned.set(chatId, now + MISSING_RIGHTS_WARN_MS)
+  if (missingRightsWarned.size > 2000) {
+    for (const [key, expires] of missingRightsWarned) {
+      if (expires <= now) missingRightsWarned.delete(key)
+    }
+  }
+  return true
+}
 
 /**
  * A vote resolved to spam (instant admin ballot or community threshold):
@@ -484,6 +508,72 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
   }
 }
 
+/** A re-sendable file id from any media-bearing message, if present. */
+const mediaFileId = (msg: Message): string | null => {
+  const media = msg.media as { fileId?: string } | null
+  return media && typeof media.fileId === 'string' ? media.fileId : null
+}
+
+/**
+ * /extra <name> (admin): reply to a message → save it under #name; no reply →
+ * delete that extra. /extras → list names. Triggers fire on #name hashtags.
+ */
+const handleExtraCommand = async (message: Message, chat: Chat, caller: User, name: string | undefined): Promise<void> => {
+  const locale = await localeFor(caller.id, caller.language)
+  if (!(await isChatAdmin(chat.id, caller.id))) return
+  const dropCommand = (): Promise<void> =>
+    gateway.tg.deleteMessagesById(chat.id, [message.id]).catch(() => { /* no rights */ })
+  if (!name) {
+    await sendView(message, { text: locale.extra.usage, buttons: [] })
+    return
+  }
+  const cleanName = name.replace(/^#/, '')
+  const replied = await gateway.fetchRepliedMessage(message)
+  if (replied) {
+    const extra: NormalizedExtra = { name: cleanName, text: replied.text ?? '', fileId: mediaFileId(replied) }
+    await store.saveExtra(chat.id, extra).catch(() => { /* best-effort */ })
+    log.info('extra_saved', { chatId: chat.id, by: caller.id, name: cleanName, hasMedia: extra.fileId !== null })
+    await dropCommand()
+    const sent = await gateway.tg.sendText(chat.id, viewHtml(locale.extra.saved(cleanName))).catch(() => null)
+    if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'extra_ack')
+    return
+  }
+  const removed = await store.deleteExtra(chat.id, cleanName).catch(() => false)
+  await dropCommand()
+  if (removed) log.info('extra_deleted', { chatId: chat.id, by: caller.id, name: cleanName })
+  const sent = await gateway.tg.sendText(chat.id, viewHtml(removed ? locale.extra.deleted(cleanName) : locale.extra.notFound(cleanName))).catch(() => null)
+  if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'extra_ack')
+}
+
+const handleExtraList = async (message: Message, chat: Chat, caller: User): Promise<void> => {
+  const locale = await localeFor(caller.id, caller.language)
+  const extras = await store.getExtras(chat.id).catch(() => [])
+  const text = extras.length === 0
+    ? locale.extra.listEmpty
+    : [locale.extra.listTitle, '', ...extras.map((e) => `#${e.name}`)].join('\n')
+  const sent = await gateway.tg.replyText(message, viewHtml(text)).catch(() => null)
+  if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'extra_list')
+}
+
+/** Replay the extras a message's hashtags trigger (legit, non-spam messages). */
+const fireExtras = async (message: Message, chat: Chat, text: string): Promise<void> => {
+  const [extras, maxExtra] = await Promise.all([
+    store.getExtras(chat.id).catch(() => []),
+    store.getMaxExtra(chat.id).catch(() => 1)
+  ])
+  if (extras.length === 0) return
+  for (const extra of matchExtras(text, extras, maxExtra)) {
+    if (extra.fileId) {
+      await gateway.tg.sendMedia(chat.id, extra.fileId, {
+        replyTo: message.id,
+        ...(extra.text ? { caption: viewHtml(extra.text) } : {})
+      }).catch(() => { /* file id may have expired — skip */ })
+    } else if (extra.text) {
+      await gateway.tg.replyText(message, viewHtml(extra.text)).catch(() => { /* non-fatal */ })
+    }
+  }
+}
+
 /**
  * /top (by messages) and /top-banan (by banana count). One ephemeral
  * leaderboard message; names resolved live via MTProto so they never go stale.
@@ -569,6 +659,14 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'cmd_ping')
       scheduleDelete(chat.id, message.id, NOTIFY_TTL_BANAN_MS, 'cmd_ping')
     }
+    return
+  }
+  if (/^\/extras(@\w+)?$/.test(commandText)) {
+    await handleExtraList(message, chat, sender)
+    return
+  }
+  if (/^\/extra(@\w+)?(\s|$)/.test(commandText)) {
+    await handleExtraCommand(message, chat, sender, commandText.split(/\s+/)[1])
     return
   }
 
@@ -661,6 +759,13 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       errors: result.errors.length > 0 ? result.errors : undefined,
       latencyMs: Date.now() - started
     })
+    // Spam caught but we couldn't act → tell admins to grant rights (once/hr).
+    if (!result.applied && shouldWarnMissingRights(chat.id, result.errors)) {
+      const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
+      const sent = await gateway.tg.sendText(chat.id, viewHtml(locale.notification.missingRights)).catch(() => null)
+      if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'missing_rights')
+      log.warn('missing_rights', { chatId: chat.id, chat: chat.title ?? undefined, action: verdict.action })
+    }
   } else if (verdict.action === 'observe') {
     log.debug('observe', {
       chatId: chat.id, userId: sender.id, messageId: message.id, ...logContext,
@@ -676,6 +781,8 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       authorKind: normalized.channelComment ? 'channel_post' : 'user',
       textPreview: normalized.text
     })
+    // Hashtag triggers fire only on messages that survived moderation.
+    if (normalized.text.includes('#')) await fireExtras(message, chat, normalized.text)
   }
 
   // ── record + notify ─────────────────────────────────────────────────

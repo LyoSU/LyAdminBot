@@ -46,7 +46,8 @@ export const ru: Locale = {
     notSpamButton: '✅ Не спам',
     overrideDone: 'Ок, отменил. Юзер разблокирован и теперь в доверенных этого чата.',
     overrideAlreadyDone: 'Уже отменено.',
-    adminOnly: 'Только для админов этого чата.'
+    adminOnly: 'Только для админов этого чата.',
+    missingRights: '⚠️ Нашёл спам, но нет прав его убрать. Дайте мне права удалять сообщения и банить пользователей.'
   },
 
   reasons: {
@@ -137,6 +138,15 @@ export const ru: Locale = {
     empty: 'Пока нет статистики.',
     messagesUnit: (count) => (count % 10 === 1 && count % 100 !== 11 ? 'сообщение' : 'сообщений'),
     bananUnit: () => '🍌'
+  },
+
+  extra: {
+    saved: (name) => `✅ Сохранил #${name}`,
+    deleted: (name) => `🗑 Удалил #${name}`,
+    notFound: (name) => `Нет такого: #${name}`,
+    usage: 'Ответь на сообщение командой /extra имя — сохраню под #имя. /extra имя без ответа — удалит.',
+    listTitle: '📂 Сохранённые триггеры:',
+    listEmpty: 'Здесь пока нет триггеров.'
   },
 
   banan: {

@@ -7,6 +7,7 @@
  */
 import { MongoClient, ObjectId, type Collection, type Db, type Document } from 'mongodb'
 import type { Verdict } from '@lyadmin/core'
+import { normalizeExtra, type NormalizedExtra } from './extras.js'
 
 const DECISIONS_TTL_DAYS = 90
 const LLM_CACHE_TTL_DAYS = 7
@@ -120,6 +121,49 @@ export class MongoStore {
         ? Number((r as { banan?: { num?: number } }).banan?.num ?? 0)
         : Number((r as { stats?: { messagesCount?: number } }).stats?.messagesCount ?? 0)
     }))
+  }
+
+  // ── custom hashtag triggers (extras) ────────────────────────────────
+
+  /** All extras for a chat, normalized from either storage shape. */
+  async getExtras(chatId: number): Promise<NormalizedExtra[]> {
+    const group = await this.groups.findOne(
+      { group_id: chatId },
+      { projection: { 'settings.extras': 1 } }
+    ) as { settings?: { extras?: unknown[] } } | null
+    const raw = group?.settings?.extras ?? []
+    return raw.map(normalizeExtra).filter((e): e is NormalizedExtra => e !== null)
+  }
+
+  /** Per-message extra cap (v1 settings.maxExtra, default 1). */
+  async getMaxExtra(chatId: number): Promise<number> {
+    const group = await this.groups.findOne(
+      { group_id: chatId },
+      { projection: { 'settings.maxExtra': 1 } }
+    ) as { settings?: { maxExtra?: number } } | null
+    const n = Number(group?.settings?.maxExtra)
+    return Number.isFinite(n) && n > 0 ? n : 1
+  }
+
+  /** Upsert an extra by name (case-insensitive replace), v2 shape. */
+  async saveExtra(chatId: number, extra: NormalizedExtra): Promise<void> {
+    const existing = await this.getExtras(chatId)
+    const kept = existing.filter((e) => e.name.toLowerCase() !== extra.name.toLowerCase())
+    kept.push(extra)
+    await this.groups.updateOne(
+      { group_id: chatId },
+      { $set: { 'settings.extras': kept }, $setOnInsert: { group_id: chatId } },
+      { upsert: true }
+    )
+  }
+
+  /** Remove an extra by name. Returns true if one was removed. */
+  async deleteExtra(chatId: number, name: string): Promise<boolean> {
+    const existing = await this.getExtras(chatId)
+    const kept = existing.filter((e) => e.name.toLowerCase() !== name.toLowerCase())
+    if (kept.length === existing.length) return false
+    await this.groups.updateOne({ group_id: chatId }, { $set: { 'settings.extras': kept } })
+    return true
   }
 
   /** v2-additive per-user UI locale (users.v2Locale). */
