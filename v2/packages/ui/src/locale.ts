@@ -73,6 +73,17 @@ export interface Locale {
     accepted: string
   }
 
+  /** Manual /banan moderation (admin mute with personality). */
+  banan: {
+    /** "name muted for duration". Inputs arrive pre-escaped. */
+    success: (name: string, duration: string) => string
+    lifted: (name: string) => string
+    self: (name: string, duration: string) => string
+    needReply: string
+    undoButton: string
+    units: { m: string; h: string; d: string }
+  }
+
   /** Captcha gate for suspicious newcomers. */
   captcha: {
     /** Group prompt (HTML). `name` arrives pre-escaped. */

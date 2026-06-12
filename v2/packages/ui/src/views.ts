@@ -50,7 +50,8 @@ export const callbackData = {
   langSet: (code: string): string => `lang:${code}`
 }
 
-const escapeHtml = (s: string): string =>
+/** For app-layer strings that interpolate user-controlled text into HTML. */
+export const escapeHtml = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 /**

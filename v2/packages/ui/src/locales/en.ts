@@ -117,6 +117,15 @@ export const en: Locale = {
     accepted: 'Got it, thanks.'
   },
 
+  banan: {
+    success: (name, duration) => `🍌 ${name} gets the banana for ${duration}`,
+    lifted: (name) => `🍌 ${name} loses the banana`,
+    self: (name, duration) => `🍌 ${name} banana'd themselves for ${duration}. Respect`,
+    needReply: 'Use /banan as a reply, or plain /banan to banana yourself.',
+    undoButton: '↩️ Undo',
+    units: { m: 'min', h: 'h', d: 'd' }
+  },
+
   captcha: {
     prompt: (name) => `👋 ${name}, tap the button to keep chatting. Quick check that you are not a bot.`,
     button: '🙋 I am human',

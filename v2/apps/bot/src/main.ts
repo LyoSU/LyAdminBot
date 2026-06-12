@@ -20,11 +20,13 @@ import {
   groupDocToChatPolicy, presetToThreshold, userDocToHistory
 } from '@lyadmin/data'
 import {
-  captchaPrompt, compactNotification, helpView, langPicker, parseCallback,
-  resolveLocale, settingsDeepLink, settingsPanel, startCard, startGroupHint,
-  votePrompt, whyView, LOCALES, type Locale, type ViewMessage
+  captchaPrompt, compactNotification, escapeHtml as escapeName, helpView,
+  langPicker, parseCallback, resolveLocale, settingsDeepLink, settingsPanel,
+  startCard, startGroupHint, votePrompt, whyView,
+  LOCALES, type Locale, type ViewMessage
 } from '@lyadmin/ui'
 import { loadConfig } from './config.js'
+import { formatDuration, parseBananDuration } from './duration.js'
 
 const config = loadConfig()
 
@@ -221,6 +223,73 @@ const handlePrivateMessage = async (message: Message): Promise<void> => {
   await sendView(message, startCard(locale, sender.displayName, selfUsername ?? ''))
 }
 
+/** Target labels for undo notifications (memory, bounded like recentVerdicts). */
+const bananLabels = new Map<string, string>()
+const rememberBananLabel = (chatId: number, userId: number, label: string): void => {
+  bananLabels.set(`${chatId}:${userId}`, label)
+  if (bananLabels.size > 2000) {
+    const firstKey = bananLabels.keys().next().value
+    if (firstKey) bananLabels.delete(firstKey)
+  }
+}
+
+/**
+ * /banan — manual moderation with personality, v1 semantics:
+ *   reply + `/banan 5m|2h|3d` → mute for that long (admins only)
+ *   reply + `/banan` on an already-restricted user → lift the mute
+ *   `/banan` with no reply → self-banan (anyone, the classic joke)
+ */
+const handleBanan = async (message: Message, chat: Chat, caller: User, arg: string | undefined): Promise<void> => {
+  const locale = await localeFor(caller.id, caller.language)
+  const groupDoc = await store.getGroupDoc(chat.id).catch(() => null)
+  const defaultSeconds = Number((groupDoc as { settings?: { banan?: { default?: number } } } | null)
+    ?.settings?.banan?.default) || 600
+  const { seconds, explicit } = parseBananDuration(arg, defaultSeconds)
+  const human = formatDuration(seconds, locale.banan.units)
+  const dropCommand = (): Promise<void> =>
+    gateway.tg.deleteMessagesById(chat.id, [message.id]).catch(() => { /* no rights */ })
+
+  const replied = await gateway.fetchRepliedMessage(message)
+
+  // Self-banan: no reply needed, anyone can sit on their own banana.
+  if (!replied) {
+    const ok = await gateway.moderationActions.mute(chat.id, caller.id, seconds)
+      .then(() => true).catch(() => false)
+    if (ok) {
+      await gateway.tg.sendText(chat.id, viewHtml(locale.banan.self(escapeName(caller.displayName), human)))
+        .catch(() => { /* non-fatal */ })
+    }
+    return
+  }
+
+  const target = replied.sender
+  if (!(target instanceof User) || target.isBot || target.id === selfId) return
+  if (!(await isChatAdmin(chat.id, caller.id))) return // bananing others is admin-only
+  if (await isChatAdmin(chat.id, target.id)) return    // admins are banana-proof
+
+  // No explicit duration on an already-restricted target = lift the mute.
+  if (!explicit) {
+    const member = await gateway.tg.getChatMember({ chatId: chat.id, userId: target.id }).catch(() => null)
+    if (member?.status === 'restricted') {
+      await gateway.tg.restrictChatMember({ chatId: chat.id, userId: target.id, restrictions: {} })
+        .catch(() => { /* ok */ })
+      await dropCommand()
+      await gateway.tg.sendText(chat.id, viewHtml(locale.banan.lifted(escapeName(target.displayName))))
+        .catch(() => { /* non-fatal */ })
+      return
+    }
+  }
+
+  const ok = await gateway.moderationActions.mute(chat.id, target.id, seconds)
+    .then(() => true).catch(() => false)
+  await dropCommand()
+  if (!ok) return
+  rememberBananLabel(chat.id, target.id, target.displayName)
+  await gateway.tg.sendText(chat.id, viewHtml(locale.banan.success(escapeName(target.displayName), human)), {
+    replyMarkup: toKeyboard([[{ text: locale.banan.undoButton, data: `un:${chat.id}:${target.id}` }]])
+  }).catch(() => { /* non-fatal */ })
+}
+
 /**
  * /report: one flow for everyone. The report opens (or joins) a community
  * vote and casts the reporter's spam ballot. tallyVotes resolves an admin
@@ -344,6 +413,10 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   }
   if (/^\/report(@\w+)?$/.test(commandText)) {
     await handleReport(message, chat, sender)
+    return
+  }
+  if (/^\/banan(@\w+)?(\s|$)/.test(commandText)) {
+    await handleBanan(message, chat, sender, commandText.split(/\s+/)[1])
     return
   }
 
@@ -533,6 +606,28 @@ const wireCallbacks = (): void => {
         chatId: query.user.id, message: query.messageId,
         text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons)
       }).catch(() => { /* unchanged content → MESSAGE_NOT_MODIFIED, fine */ })
+      await query.answer({})
+      return
+    }
+
+    if (kind === 'un') {
+      const [chatIdRaw = '', userIdRaw = ''] = parts
+      const chatId = Number(chatIdRaw)
+      const userId = Number(userIdRaw)
+      if (!(await isChatAdmin(chatId, query.user.id))) {
+        await query.answer({ text: locale.notification.adminOnly, alert: true })
+        return
+      }
+      await gateway.tg.restrictChatMember({ chatId, userId, restrictions: {} })
+        .catch(() => { /* already expired */ })
+      const label = bananLabels.get(`${chatId}:${userId}`)
+      if (label) {
+        await gateway.tg.editMessage({
+          chatId, message: query.messageId, text: viewHtml(locale.banan.lifted(escapeName(label)))
+        }).catch(() => { /* ok */ })
+      } else {
+        await gateway.tg.deleteMessagesById(chatId, [query.messageId]).catch(() => { /* ok */ })
+      }
       await query.answer({})
       return
     }

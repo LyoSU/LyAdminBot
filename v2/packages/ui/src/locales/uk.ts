@@ -117,6 +117,15 @@ export const uk: Locale = {
     accepted: 'Прийняв, дякую.'
   },
 
+  banan: {
+    success: (name, duration) => `🍌 ${name} отримує банан на ${duration}`,
+    lifted: (name) => `🍌 ${name} позбавляється банана`,
+    self: (name, duration) => `🍌 ${name} сам себе забанив на ${duration}. Поважаю`,
+    needReply: 'Зроби /banan відповіддю на повідомлення, або /banan без реплая для себе.',
+    undoButton: '↩️ Скасувати',
+    units: { m: 'хв', h: 'год', d: 'дн' }
+  },
+
   captcha: {
     prompt: (name) => `👋 ${name}, тисни кнопку і пиши далі. Це швидка перевірка, що ти не бот.`,
     button: '🙋 Я людина',
