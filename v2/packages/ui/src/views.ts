@@ -11,11 +11,16 @@ import type { Verdict } from '@lyadmin/core'
 import type { Locale } from './locale.js'
 import { uk } from './locales/uk.js'
 import { en } from './locales/en.js'
+import { ru } from './locales/ru.js'
 
-export const LOCALES: Record<string, Locale> = { uk, en }
+export const LOCALES: Record<string, Locale> = { uk, en, ru }
 
-export const resolveLocale = (code: string | null | undefined): Locale =>
-  (code && LOCALES[code]) || (code?.startsWith('uk') ? uk : en)
+export const resolveLocale = (code: string | null | undefined): Locale => {
+  if (code && LOCALES[code]) return LOCALES[code]
+  if (code?.startsWith('uk')) return uk
+  if (code?.startsWith('ru') || code?.startsWith('be')) return ru
+  return en
+}
 
 export interface ButtonSpec {
   text: string

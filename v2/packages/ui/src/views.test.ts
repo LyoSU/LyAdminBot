@@ -81,10 +81,19 @@ describe('locales', () => {
     }
   })
 
-  it('resolveLocale falls back to en and supports uk', () => {
+  it('resolveLocale falls back to en and supports uk/ru/be', () => {
     expect(resolveLocale('uk').languageName).toBe('Українська')
+    expect(resolveLocale('ru').languageName).toBe('Русский')
+    expect(resolveLocale('be').languageName).toBe('Русский')
     expect(resolveLocale('de').languageName).toBe('English')
     expect(resolveLocale(null).languageName).toBe('English')
+  })
+
+  it('all locales expose the same reason codes', () => {
+    const reference = Object.keys(LOCALES['en']!.reasons).sort()
+    for (const [code, locale] of Object.entries(LOCALES)) {
+      expect(Object.keys(locale.reasons).sort(), `locale ${code}`).toEqual(reference)
+    }
   })
 })
 

@@ -16,6 +16,7 @@ import {
 import {
   MongoStore, MongoSignaturePort, QdrantVectorPort, OpenAiModerationPort,
   OpenRouterLlmPort, MemoryVelocityPort, MemorySessionPort,
+  MemoryConversationWindow,
   groupDocToChatPolicy, presetToThreshold, userDocToHistory
 } from '@lyadmin/data'
 import {
@@ -31,6 +32,7 @@ const store = new MongoStore()
 const sessionPort = new MemorySessionPort()
 const velocityPort = new MemoryVelocityPort()
 const signaturePort = new MongoSignaturePort(store)
+const conversationWindow = new MemoryConversationWindow()
 
 const buildPorts = (): PipelinePorts => {
   const ports: PipelinePorts = {
@@ -387,7 +389,9 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     enrichment: {
       bio: profile.bio,
       resolvedMentions: [],
-      conversationWindow: [],
+      // Preceding chat lines — the current message is recorded after the
+      // verdict so spam never pollutes its own context window.
+      conversationWindow: conversationWindow.snapshot(chat.id),
       photoBase64
     }
   }
@@ -410,6 +414,16 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     },
     gateway.moderationActions
   )
+
+  // The message joins the chat context only if it stayed in the chat —
+  // deleted spam must not poison the window for the next evaluation.
+  const removed = result.applied && (verdict.action === 'delete' || verdict.action === 'mute' || verdict.action === 'ban')
+  if (!removed && normalized.text.trim().length > 0) {
+    conversationWindow.record(chat.id, {
+      authorKind: normalized.channelComment ? 'channel_post' : 'user',
+      textPreview: normalized.text
+    })
+  }
 
   // ── record + notify ─────────────────────────────────────────────────
   await store.recordDecision({
