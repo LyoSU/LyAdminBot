@@ -75,7 +75,8 @@ export const uk: Locale = {
     hidden_url_new: 'приховане посилання від новачка',
     low_information: 'недостатньо інформації, спостерігаємо',
     admin_report: 'адмін репортнув як спам',
-    community_vote: 'спільнота проголосувала: спам'
+    community_vote: 'спільнота проголосувала: спам',
+    forward_blacklist: 'переслано з відомого спам-джерела'
   },
   reasonFallback: 'підозріла активність',
 
@@ -87,6 +88,7 @@ export const uk: Locale = {
       deterministic: 'детерміноване правило',
       signature: 'база сигнатур',
       vector: 'семантичний пошук',
+      forward: 'чорний список джерел форвардів',
       velocity: 'крос-чатова швидкість',
       moderation: 'модерація контенту',
       llm: 'ШІ-аналіз',

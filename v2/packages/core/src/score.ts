@@ -35,6 +35,7 @@ export const SIGNAL_WEIGHTS: Record<string, number> = {
 
   // ── message structure ──
   forward_hidden_user: 1.5,
+  forward_source_suspicious: 1.6,
   many_url_buttons: 2.0,
   hidden_url: 2.0,
   private_invite_link: 1.8,

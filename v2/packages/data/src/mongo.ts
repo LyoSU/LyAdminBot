@@ -39,6 +39,7 @@ export class MongoStore {
   get groupMembers(): Collection<Document> { return this.collection('groupmembers') }
   get spamSignatures(): Collection<Document> { return this.collection('spamsignatures') }
   get modEvents(): Collection<Document> { return this.collection('modevents') }
+  get forwardBlacklist(): Collection<Document> { return this.collection('forwardblacklists') }
 
   // v2 collections
   get decisions(): Collection<Document> { return this.collection('pipeline_decisions') }

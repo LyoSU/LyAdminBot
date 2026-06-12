@@ -117,7 +117,7 @@ describe('normalizeMessage — forwards & replies', () => {
     const msg = makeMessage({
       fwdFrom: { _: 'messageFwdHeader', fromName: 'Someone Hidden', date: 1_779_000_000 }
     })
-    expect(normalizeMessage(msg).forward).toEqual({ kind: 'hidden_user', title: 'Someone Hidden' })
+    expect(normalizeMessage(msg).forward).toEqual({ kind: 'hidden_user', title: 'Someone Hidden', sourceId: null })
   })
 
   it('maps channel forwards', () => {

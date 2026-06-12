@@ -108,7 +108,8 @@ export interface NormalizedMessage {
   mentions: string[]
   attachments: MessageAttachmentInfo[]
   inlineButtons: InlineButtonInfo[]
-  forward: { kind: 'user' | 'hidden_user' | 'channel' | 'chat'; title: string | null } | null
+  /** sourceId: numeric origin id when Telegram exposes it (hidden users have none). */
+  forward: { kind: 'user' | 'hidden_user' | 'channel' | 'chat'; title: string | null; sourceId?: number | null } | null
   replyTo: { authorId: number | null; isSelf: boolean; ageSeconds: number | null; textPreview: string | null } | null
   /** Comment under a channel post (discussion group). */
   channelComment: { channelTitle: string | null; postPreview: string | null } | null
@@ -179,6 +180,7 @@ export type VerdictAction =
 export type DecidedBy =
   | 'custom_rule'
   | 'deterministic'   // rule with measured precision
+  | 'forward'         // blacklisted forward source
   | 'signature'
   | 'vector'
   | 'velocity'

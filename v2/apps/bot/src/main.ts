@@ -6,7 +6,8 @@
 import { BotKeyboard, Chat, User, html, type Message } from '@mtcute/node'
 import {
   evaluateMessage, tallyVotes,
-  type EvaluationInput, type PipelinePorts, type Verdict, type VoteBallot
+  type EvaluationInput, type ForwardOrigin, type PipelinePorts,
+  type Verdict, type VoteBallot
 } from '@lyadmin/core'
 import {
   TelegramGateway, applyVerdict, buildUserSnapshot, normalizeMessage,
@@ -14,9 +15,9 @@ import {
   type IncomingMessage
 } from '@lyadmin/adapters'
 import {
-  MongoStore, MongoSignaturePort, QdrantVectorPort, OpenAiModerationPort,
-  OpenRouterLlmPort, MemoryVelocityPort, MemorySessionPort,
-  MemoryConversationWindow,
+  MongoStore, MongoSignaturePort, MongoForwardPort, QdrantVectorPort,
+  OpenAiModerationPort, OpenRouterLlmPort, MemoryVelocityPort,
+  MemorySessionPort, MemoryConversationWindow,
   groupDocToChatPolicy, presetToThreshold, userDocToHistory
 } from '@lyadmin/data'
 import {
@@ -34,13 +35,15 @@ const store = new MongoStore()
 const sessionPort = new MemorySessionPort()
 const velocityPort = new MemoryVelocityPort()
 const signaturePort = new MongoSignaturePort(store)
+const forwardPort = new MongoForwardPort(store)
 const conversationWindow = new MemoryConversationWindow()
 
 const buildPorts = (): PipelinePorts => {
   const ports: PipelinePorts = {
     signatures: signaturePort,
     velocity: velocityPort,
-    session: sessionPort
+    session: sessionPort,
+    forwards: forwardPort
   }
   if (config.qdrantUrl && config.openaiApiKey) {
     ports.vectors = new QdrantVectorPort({
@@ -78,6 +81,16 @@ const rememberVerdict = (chatId: number, messageId: number, verdict: Verdict): v
   if (recentVerdicts.size > 2000) {
     const firstKey = recentVerdicts.keys().next().value
     if (firstKey) recentVerdicts.delete(firstKey)
+  }
+}
+
+/** Forward origins of recently actioned messages — for clean-reports on override. */
+const recentForwards = new Map<string, ForwardOrigin>()
+const rememberForward = (chatId: number, messageId: number, forward: ForwardOrigin): void => {
+  recentForwards.set(`${chatId}:${messageId}`, forward)
+  if (recentForwards.size > 2000) {
+    const firstKey = recentForwards.keys().next().value
+    if (firstKey) recentForwards.delete(firstKey)
   }
 }
 
@@ -561,6 +574,14 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   if (result.applied && verdict.action !== 'none' && verdict.action !== 'observe' && verdict.action !== 'captcha') {
     sessionPort.reset(chat.id, sender.id)
     rememberVerdict(chat.id, message.id, verdict)
+    // Forwarded spam builds the long-term reputation of its origin.
+    if (normalized.forward) {
+      rememberForward(chat.id, message.id, normalized.forward)
+      if (verdict.pSpam >= 0.9) {
+        await forwardPort.reportSpam(normalized.forward, chat.id, normalized.text || null)
+          .catch(() => { /* reputation is best-effort */ })
+      }
+    }
     const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
 
     // Grey-zone verdicts ask the community: the vote prompt (with the quoted
@@ -793,6 +814,12 @@ const wireCallbacks = (): void => {
       // The admin vouched — auto-trust this user in this chat from now on.
       await store.addTrustedUser(chatId, Number(userIdRaw))
         .catch(() => { /* trust write is best-effort */ })
+      // A forwarded FP also earns its origin a clean point (v1 2:1 math).
+      const forward = recentForwards.get(`${chatIdRaw}:${messageIdRaw}`)
+      if (forward) {
+        await forwardPort.reportClean(forward).catch(() => { /* best-effort */ })
+        recentForwards.delete(`${chatIdRaw}:${messageIdRaw}`)
+      }
       recentVerdicts.delete(`${chatIdRaw}:${messageIdRaw}`)
       await query.answer({ text: locale.notification.overrideDone })
       // Remove the notification message itself — keep chats clean.

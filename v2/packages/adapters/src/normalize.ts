@@ -181,13 +181,17 @@ export const normalizeMessage = (msg: Message, ctx: NormalizeContext = {}): Norm
   if (msg.forward) {
     const sender = msg.forward.sender
     if (!sender || (typeof sender === 'object' && 'type' in sender && sender.type === 'anonymous')) {
-      forward = { kind: 'hidden_user', title: sender?.displayName ?? null }
+      forward = { kind: 'hidden_user', title: sender?.displayName ?? null, sourceId: null }
     } else if (sender instanceof User) {
-      forward = { kind: 'user', title: sender.displayName }
+      forward = { kind: 'user', title: sender.displayName, sourceId: sender.id }
     } else if (sender instanceof Chat) {
-      forward = { kind: sender.chatType === 'channel' ? 'channel' : 'chat', title: sender.title ?? null }
+      forward = {
+        kind: sender.chatType === 'channel' ? 'channel' : 'chat',
+        title: sender.title ?? null,
+        sourceId: sender.id
+      }
     } else {
-      forward = { kind: 'hidden_user', title: null }
+      forward = { kind: 'hidden_user', title: null, sourceId: null }
     }
   }
 

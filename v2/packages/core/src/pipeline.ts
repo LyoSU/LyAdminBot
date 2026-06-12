@@ -196,6 +196,28 @@ export const evaluateMessage = async (
 
   // ── 5. knowledge ports ──────────────────────────────────────────────
 
+  // Forward-source reputation first: one indexed read, and a blacklisted
+  // origin (built from confirmed votes across chats) is decisive evidence.
+  if (ports.forwards && input.message.forward) {
+    const reputation = await safe('forwards', () => ports.forwards!.check(input.message.forward!))
+    if (reputation === 'blacklisted') {
+      return finalize(
+        {
+          pSpam: 0.95,
+          decidedBy: 'forward',
+          ruleId: 'forward_blacklist',
+          reasonCode: 'forward_blacklist',
+          reasonEvidence: input.message.forward.title
+        },
+        signals
+      )
+    }
+    if (reputation === 'suspicious') {
+      const title = input.message.forward.title
+      signals.push(title ? { name: 'forward_source_suspicious', evidence: title } : { name: 'forward_source_suspicious' })
+    }
+  }
+
   if (ports.signatures) {
     const match = await safe('signatures', () => ports.signatures!.match(text))
     if (match) {

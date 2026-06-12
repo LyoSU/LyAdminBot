@@ -75,7 +75,8 @@ export const ru: Locale = {
     hidden_url_new: 'скрытая ссылка от новичка',
     low_information: 'мало информации, наблюдаем',
     admin_report: 'админ зарепортил как спам',
-    community_vote: 'сообщество проголосовало: спам'
+    community_vote: 'сообщество проголосовало: спам',
+    forward_blacklist: 'переслано из известного спам-источника'
   },
   reasonFallback: 'подозрительная активность',
 
@@ -87,6 +88,7 @@ export const ru: Locale = {
       deterministic: 'детерминированное правило',
       signature: 'база сигнатур',
       vector: 'семантический поиск',
+      forward: 'чёрный список источников форвардов',
       velocity: 'кросс-чатовая скорость',
       moderation: 'модерация контента',
       llm: 'ИИ-анализ',

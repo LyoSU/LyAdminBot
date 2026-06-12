@@ -74,6 +74,15 @@ export interface SessionPort {
   append(chatId: number, userId: number, text: string): Promise<SessionWindow>
 }
 
+/** Long-term reputation of a forward origin (v1 forwardblacklists). */
+export type ForwardReputation = 'clean' | 'suspicious' | 'blacklisted'
+
+export type ForwardOrigin = NonNullable<EvaluationInput['message']['forward']>
+
+export interface ForwardPort {
+  check(forward: ForwardOrigin): Promise<ForwardReputation | null>
+}
+
 export interface PipelinePorts {
   signatures?: SignaturePort
   velocity?: VelocityPort
@@ -81,4 +90,5 @@ export interface PipelinePorts {
   moderation?: ModerationPort
   llm?: LlmPort
   session?: SessionPort
+  forwards?: ForwardPort
 }

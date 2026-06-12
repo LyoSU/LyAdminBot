@@ -302,3 +302,38 @@ describe('evaluateMessage — resilience', () => {
     expect(Array.isArray(v.signals)).toBe(true)
   })
 })
+
+describe('evaluateMessage — forward reputation', () => {
+  const spamForward = {
+    msg: {
+      text: 'Заробіток без вкладень, пиши в особисті прямо зараз!',
+      forward: { kind: 'channel' as const, title: 'Промо', sourceId: -100555 }
+    },
+    user: newcomer
+  }
+
+  it('a blacklisted forward source decides', async () => {
+    const v = await evaluateMessage(makeInput(spamForward), {
+      forwards: { check: async () => 'blacklisted' }
+    })
+    expect(v.decidedBy).toBe('forward')
+    expect(v.reasonCode).toBe('forward_blacklist')
+    expect(v.pSpam).toBeGreaterThanOrEqual(0.9)
+  })
+
+  it('a suspicious source only contributes a signal', async () => {
+    const v = await evaluateMessage(makeInput(spamForward), {
+      forwards: { check: async () => 'suspicious' }
+    })
+    expect(v.decidedBy).not.toBe('forward')
+    expect(v.signals.map((s) => s.name)).toContain('forward_source_suspicious')
+  })
+
+  it('the port is not consulted for non-forwarded messages', async () => {
+    let called = false
+    await evaluateMessage(makeInput({ user: newcomer }), {
+      forwards: { check: async () => { called = true; return 'blacklisted' } }
+    })
+    expect(called).toBe(false)
+  })
+})

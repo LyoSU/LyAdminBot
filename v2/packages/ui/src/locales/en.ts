@@ -75,7 +75,8 @@ export const en: Locale = {
     hidden_url_new: 'deceptive link from a newcomer',
     low_information: 'not enough information, observing',
     admin_report: 'an admin reported this as spam',
-    community_vote: 'the community voted: spam'
+    community_vote: 'the community voted: spam',
+    forward_blacklist: 'forwarded from a known spam source'
   },
   reasonFallback: 'suspicious activity',
 
@@ -87,6 +88,7 @@ export const en: Locale = {
       deterministic: 'deterministic rule',
       signature: 'signature database',
       vector: 'semantic search',
+      forward: 'forward-source blacklist',
       velocity: 'cross-chat velocity',
       moderation: 'content moderation',
       llm: 'AI analysis',
