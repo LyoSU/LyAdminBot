@@ -87,3 +87,14 @@ assets/emojis/*
 
 # Git worktrees (isolated dev workspaces)
 .worktrees/
+
+# v2 (TypeScript monorepo)
+dist/
+*.tsbuildinfo
+.mtcute-session/
+*.session
+*.session-shm
+*.session-wal
+.spike-session*
+*-session*
+.env.local
