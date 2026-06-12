@@ -412,6 +412,48 @@ const handleBanan = async (message: Message, chat: Chat, caller: User, arg: stri
 }
 
 /**
+ * /kick — admin removes a member (ban then unban, so they can rejoin).
+ * Reply required; admins are kick-proof; the notice auto-deletes.
+ */
+const handleKick = async (message: Message, chat: Chat, caller: User): Promise<void> => {
+  const locale = await localeFor(caller.id, caller.language)
+  if (!(await isChatAdmin(chat.id, caller.id))) return
+  const dropCommand = (): Promise<void> =>
+    gateway.tg.deleteMessagesById(chat.id, [message.id]).catch(() => { /* no rights */ })
+  const replied = await gateway.fetchRepliedMessage(message)
+  if (!replied) {
+    await sendView(message, { text: locale.kick.needReply, buttons: [] })
+    return
+  }
+  const target = replied.sender
+  if (!(target instanceof User) || target.isBot || target.id === selfId) return
+  if (await isChatAdmin(chat.id, target.id)) return
+  const ok = await gateway.tg.banChatMember({ chatId: chat.id, participantId: target.id })
+    .then(() => gateway.tg.unbanChatMember({ chatId: chat.id, participantId: target.id }))
+    .then(() => true).catch(() => false)
+  await dropCommand()
+  if (!ok) {
+    if (shouldWarnMissingRights(chat.id, ['CHAT_ADMIN_REQUIRED'])) {
+      const sent = await gateway.tg.sendText(chat.id, viewHtml(locale.notification.missingRights)).catch(() => null)
+      if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'missing_rights')
+    }
+    return
+  }
+  log.info('kick', { chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName, by: caller.id })
+  const sent = await gateway.tg.sendText(chat.id, viewHtml(locale.kick.success(escapeName(target.displayName)))).catch(() => null)
+  if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'kick')
+}
+
+/** /del — admin deletes the replied-to message (and the command). */
+const handleDelete = async (message: Message, chat: Chat, caller: User): Promise<void> => {
+  if (!(await isChatAdmin(chat.id, caller.id))) return
+  const replied = await gateway.fetchRepliedMessage(message)
+  const ids = [message.id, ...(replied ? [replied.id] : [])]
+  await gateway.tg.deleteMessagesById(chat.id, ids).catch(() => { /* no rights */ })
+  if (replied) log.info('manual_delete', { chatId: chat.id, by: caller.id, messageId: replied.id })
+}
+
+/**
  * /report: one flow for everyone. The report opens (or joins) a community
  * vote and casts the reporter's spam ballot. tallyVotes resolves an admin
  * ballot instantly, so an admin report is an immediate verdict while a
@@ -712,6 +754,14 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   }
   if (/^\/banan(@\w+)?(\s|$)/.test(commandText)) {
     await handleBanan(message, chat, sender, commandText.split(/\s+/)[1])
+    return
+  }
+  if (/^\/kick(@\w+)?$/.test(commandText)) {
+    await handleKick(message, chat, sender)
+    return
+  }
+  if (/^\/del(@\w+)?$/.test(commandText)) {
+    await handleDelete(message, chat, sender)
     return
   }
   if (/^\/mystats(@\w+)?$/.test(commandText) && selfUsername) {

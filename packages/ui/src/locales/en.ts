@@ -140,6 +140,11 @@ export const en: Locale = {
     bananUnit: () => '🍌'
   },
 
+  kick: {
+    success: (name) => `👋 ${name} was removed from the chat.`,
+    needReply: 'Reply to the message of whoever you want to kick with /kick.'
+  },
+
   welcome: {
     enabled: '👋 Welcome greetings on.',
     disabled: '👋 Welcome greetings off.',

@@ -140,6 +140,11 @@ export const uk: Locale = {
     bananUnit: () => '🍌'
   },
 
+  kick: {
+    success: (name) => `👋 ${name} вилетів із чату.`,
+    needReply: 'Зроби /kick відповіддю на повідомлення того, кого хочеш вигнати.'
+  },
+
   welcome: {
     enabled: '👋 Вітання увімкнено.',
     disabled: '👋 Вітання вимкнено.',

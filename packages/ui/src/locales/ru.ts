@@ -140,6 +140,11 @@ export const ru: Locale = {
     bananUnit: () => '🍌'
   },
 
+  kick: {
+    success: (name) => `👋 ${name} вылетел из чата.`,
+    needReply: 'Ответь командой /kick на сообщение того, кого хочешь выгнать.'
+  },
+
   welcome: {
     enabled: '👋 Приветствия включены.',
     disabled: '👋 Приветствия выключены.',

@@ -97,6 +97,12 @@ export interface Locale {
     bananUnit: (count: number) => string
   }
 
+  /** /kick — admin removes a member (they can rejoin). */
+  kick: {
+    success: (name: string) => string
+    needReply: string
+  }
+
   /** Welcome greetings for new members (off by default). */
   welcome: {
     enabled: string
