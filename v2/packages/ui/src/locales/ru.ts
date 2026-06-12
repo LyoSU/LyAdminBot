@@ -117,6 +117,17 @@ export const ru: Locale = {
     accepted: 'Принял, спасибо.'
   },
 
+  stats: {
+    title: '📊 Твоя статистика',
+    inChat: (count) => `Сообщений в этом чате: ${count}`,
+    global: (count) => `Сообщений всего: ${count}`,
+    reputation: (score, status) => `Репутация: ${score} (${status})`,
+    repStatus: { trusted: 'доверенный', neutral: 'нейтральный', suspicious: 'подозрительный', restricted: 'ограниченный' },
+    bananCaught: (count) => `Бананов поймано: ${count} 🍌`,
+    openInPm: 'Статистика придёт в личку.',
+    openButton: '📊 Моя статистика'
+  },
+
   banan: {
     success: (name, duration) => `🍌 ${name} получает банан на ${duration}`,
     lifted: (name) => `🍌 ${name} лишается банана`,

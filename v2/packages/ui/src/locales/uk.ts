@@ -117,6 +117,17 @@ export const uk: Locale = {
     accepted: 'Прийняв, дякую.'
   },
 
+  stats: {
+    title: '📊 Твоя статистика',
+    inChat: (count) => `Повідомлень у цьому чаті: ${count}`,
+    global: (count) => `Повідомлень всюди: ${count}`,
+    reputation: (score, status) => `Репутація: ${score} (${status})`,
+    repStatus: { trusted: 'довірений', neutral: 'нейтральний', suspicious: 'підозрілий', restricted: 'обмежений' },
+    bananCaught: (count) => `Бананів зловлено: ${count} 🍌`,
+    openInPm: 'Статистика прийде в особисті.',
+    openButton: '📊 Моя статистика'
+  },
+
   banan: {
     success: (name, duration) => `🍌 ${name} отримує банан на ${duration}`,
     lifted: (name) => `🍌 ${name} позбавляється банана`,

@@ -73,6 +73,18 @@ export interface Locale {
     accepted: string
   }
 
+  /** /mystats personal panel (PM only). */
+  stats: {
+    title: string
+    inChat: (count: number) => string
+    global: (count: number) => string
+    reputation: (score: number, status: string) => string
+    repStatus: Record<'trusted' | 'neutral' | 'suspicious' | 'restricted', string>
+    bananCaught: (count: number) => string
+    openInPm: string
+    openButton: string
+  }
+
   /** Manual /banan moderation (admin mute with personality). */
   banan: {
     /** "name muted for duration". Inputs arrive pre-escaped. */

@@ -76,6 +76,20 @@ export class MongoStore {
     return (member as { stats?: { messagesCount?: number } } | null)?.stats?.messagesCount ?? 0
   }
 
+  /** Member stats for /mystats (reads the same doc touchMember maintains). */
+  async getMemberStats(chatId: number, telegramId: number): Promise<{ messagesCount: number; bananCount: number }> {
+    const group = await this.groups.findOne({ group_id: chatId }, { projection: { _id: 1 } })
+    if (!group) return { messagesCount: 0, bananCount: 0 }
+    const member = await this.groupMembers.findOne(
+      { group: group['_id'], telegram_id: telegramId },
+      { projection: { 'stats.messagesCount': 1, 'banan.num': 1 } }
+    ) as { stats?: { messagesCount?: number }; banan?: { num?: number } } | null
+    return {
+      messagesCount: member?.stats?.messagesCount ?? 0,
+      bananCount: member?.banan?.num ?? 0
+    }
+  }
+
   /** v2-additive per-user UI locale (users.v2Locale). */
   async getUserLocale(telegramId: number): Promise<string | null> {
     const doc = await this.users.findOne(
@@ -105,6 +119,38 @@ export class MongoStore {
       },
       { upsert: true }
     )
+  }
+
+  /**
+   * Per-chat member counters (v1 groupmembers shape). v1 stopped writing
+   * these the moment it was switched off, so v2 must maintain them or
+   * every user would look like a newcomer forever.
+   *
+   * Returns the message count BEFORE this message — that is what the
+   * "new in chat" signal must see.
+   */
+  async touchMember(chatId: number, telegramId: number, textLength: number): Promise<number> {
+    const group = await this.groups.findOneAndUpdate(
+      { group_id: chatId },
+      { $setOnInsert: { group_id: chatId } },
+      { upsert: true, returnDocument: 'after', projection: { _id: 1 } }
+    )
+    if (!group) return 0
+    const now = new Date()
+    const before = await this.groupMembers.findOneAndUpdate(
+      { group: group['_id'], telegram_id: telegramId },
+      {
+        $setOnInsert: {
+          group: group['_id'],
+          telegram_id: telegramId,
+          'stats.joinedAt': now,
+          'stats.firstMessageAt': now
+        },
+        $inc: { 'stats.messagesCount': 1, 'stats.textTotal': Math.max(0, textLength) }
+      },
+      { upsert: true, returnDocument: 'before', projection: { 'stats.messagesCount': 1 } }
+    )
+    return (before as { stats?: { messagesCount?: number } } | null)?.stats?.messagesCount ?? 0
   }
 
   async recordDecision(params: {

@@ -194,6 +194,24 @@ const renderSettingsPanel = async (locale: Locale, chatId: number): Promise<View
   })
 }
 
+/** /mystats panel body (PM only). chatId adds the per-chat lines. */
+const renderMyStats = async (locale: Locale, userId: number, chatId: number | null): Promise<string> => {
+  const userDoc = await store.getUserDoc(userId).catch(() => null) as {
+    globalStats?: { totalMessages?: number }
+    reputation?: { score?: number; status?: 'trusted' | 'neutral' | 'suspicious' | 'restricted' }
+  } | null
+  const lines = [locale.stats.title, '']
+  if (chatId !== null) {
+    const member = await store.getMemberStats(chatId, userId).catch(() => ({ messagesCount: 0, bananCount: 0 }))
+    lines.push(locale.stats.inChat(member.messagesCount))
+    if (member.bananCount > 0) lines.push(locale.stats.bananCaught(member.bananCount))
+  }
+  lines.push(locale.stats.global(userDoc?.globalStats?.totalMessages ?? 0))
+  const status = userDoc?.reputation?.status ?? 'neutral'
+  lines.push(locale.stats.reputation(userDoc?.reputation?.score ?? 50, locale.stats.repStatus[status]))
+  return lines.join('\n')
+}
+
 /** PM entry: /start card, /help, /lang, settings deep links. */
 const handlePrivateMessage = async (message: Message): Promise<void> => {
   const sender = message.sender
@@ -209,9 +227,21 @@ const handlePrivateMessage = async (message: Message): Promise<void> => {
     await sendView(message, langPicker(locale))
     return
   }
+  if (/^\/mystats/.test(text)) {
+    await sendView(message, { text: await renderMyStats(locale, sender.id, null), buttons: [] })
+    return
+  }
   if (!text.startsWith('/start')) return
 
   const payload = text.split(/\s+/)[1] ?? ''
+  if (payload.startsWith('mystats_')) {
+    const chatId = Number(payload.slice('mystats_'.length))
+    await sendView(message, {
+      text: await renderMyStats(locale, sender.id, Number.isFinite(chatId) ? chatId : null),
+      buttons: []
+    })
+    return
+  }
   if (payload.startsWith('settings_')) {
     const chatId = Number(payload.slice('settings_'.length))
     if (Number.isFinite(chatId) && await isChatAdmin(chatId, sender.id)) {
@@ -419,6 +449,14 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     await handleBanan(message, chat, sender, commandText.split(/\s+/)[1])
     return
   }
+  if (/^\/mystats(@\w+)?$/.test(commandText) && selfUsername) {
+    const locale = await localeFor(sender.id, sender.language)
+    await sendView(message, {
+      text: locale.stats.openInPm,
+      buttons: [[{ text: locale.stats.openButton, url: `https://t.me/${selfUsername}?start=mystats_${chat.id}` }]]
+    })
+    return
+  }
 
   if (!policy.enabled) return
 
@@ -429,9 +467,10 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   // ── user snapshot ───────────────────────────────────────────────────
   await store.touchUser(sender.id).catch(() => { /* counters are best-effort */ })
   const userDoc = await store.getUserDoc(sender.id).catch(() => null)
-  const memberCount = await store.getMemberMessageCount(
-    (groupDoc as { _id?: unknown } | null)?._id, sender.id
-  ).catch(() => 0)
+  // Increments the per-chat counters and returns the pre-increment count —
+  // exactly what the "new in chat" signal must see.
+  const memberCount = await store.touchMember(chat.id, sender.id, normalized.text.length)
+    .catch(() => 0)
   const history = userDocToHistory(userDoc as never, memberCount)
 
   const newish = (history?.messagesGlobal ?? 0) <= 5 || memberCount <= 3

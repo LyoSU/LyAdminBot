@@ -117,6 +117,17 @@ export const en: Locale = {
     accepted: 'Got it, thanks.'
   },
 
+  stats: {
+    title: '📊 Your stats',
+    inChat: (count) => `Messages in this chat: ${count}`,
+    global: (count) => `Messages everywhere: ${count}`,
+    reputation: (score, status) => `Reputation: ${score} (${status})`,
+    repStatus: { trusted: 'trusted', neutral: 'neutral', suspicious: 'suspicious', restricted: 'restricted' },
+    bananCaught: (count) => `Bananas caught: ${count} 🍌`,
+    openInPm: 'Stats are on the way to your PM.',
+    openButton: '📊 My stats'
+  },
+
   banan: {
     success: (name, duration) => `🍌 ${name} gets the banana for ${duration}`,
     lifted: (name) => `🍌 ${name} loses the banana`,
