@@ -99,20 +99,39 @@ export const parseCallback = (data: string): { kind: string; parts: string[] } =
   return { kind, parts }
 }
 
+/**
+ * Deep link that opens the expanded "Why?" card in PM. The full explanation
+ * (and admin override) lives in the bot DM, not in the group — so the group
+ * notification stays a single ephemeral line that auto-deletes.
+ */
+export const whyDeepLink = (
+  botUsername: string,
+  chatId: number,
+  messageId: number,
+  userId: number
+): string => `https://t.me/${botUsername}?start=why_${chatId}_${messageId}_${userId}`
+
 /** One-line moderation notice posted after an enforcement action. */
 export const compactNotification = (
   locale: Locale,
   verdict: Verdict,
-  target: { chatId: number; messageId: number; userId: number; userLabel: string }
+  target: { chatId: number; messageId: number; userId: number; userLabel: string },
+  options: { botUsername?: string | undefined } = {}
 ): ViewMessage => {
   const action = verdict.action
   if (action === 'none' || action === 'observe') {
     throw new Error('compactNotification is only for enforcement actions')
   }
+  // With a known bot username the [Why?] button leaves the group entirely:
+  // a t.me deep link opens the expanded card in PM. Without it (e.g. in unit
+  // tests) it falls back to the in-group callback.
+  const whyButton = options.botUsername
+    ? { text: locale.notification.whyButton, url: whyDeepLink(options.botUsername, target.chatId, target.messageId, target.userId) }
+    : { text: locale.notification.whyButton, data: callbackData.why(target.chatId, target.messageId) }
   return {
     text: locale.notification.compact(locale.actions[action], escapeHtml(target.userLabel)),
     buttons: [[
-      { text: locale.notification.whyButton, data: callbackData.why(target.chatId, target.messageId) },
+      whyButton,
       { text: locale.notification.notSpamButton, data: callbackData.override(target.chatId, target.messageId, target.userId) }
     ]]
   }
@@ -135,6 +154,23 @@ export const whyView = (locale: Locale, verdict: Verdict): string => {
   }
   return lines.join('\n')
 }
+
+/**
+ * Expanded "Why?" card for PM. Same body as whyView; admins additionally get
+ * the override button, since the group notification has auto-deleted by the
+ * time they open this.
+ */
+export const whyCard = (
+  locale: Locale,
+  verdict: Verdict,
+  target: { chatId: number; messageId: number; userId: number },
+  options: { canOverride: boolean }
+): ViewMessage => ({
+  text: whyView(locale, verdict),
+  buttons: options.canOverride
+    ? [[{ text: locale.notification.notSpamButton, data: callbackData.override(target.chatId, target.messageId, target.userId) }]]
+    : []
+})
 
 /** Group /settings response: deep link to PM, never a panel in the chat. */
 export const settingsDeepLink = (

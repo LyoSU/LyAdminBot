@@ -99,7 +99,8 @@ export const ru: Locale = {
       error: 'ошибка'
     },
     evidenceTitle: 'Доказательство',
-    signalsTitle: 'Сигналы'
+    signalsTitle: 'Сигналы',
+    expired: 'Это решение уже устарело — деталей не осталось.'
   },
 
   vote: {

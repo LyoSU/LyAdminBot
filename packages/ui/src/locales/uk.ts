@@ -99,7 +99,8 @@ export const uk: Locale = {
       error: 'помилка'
     },
     evidenceTitle: 'Доказ',
-    signalsTitle: 'Сигнали'
+    signalsTitle: 'Сигнали',
+    expired: 'Це рішення вже застаріло — деталей не лишилось.'
   },
 
   vote: {

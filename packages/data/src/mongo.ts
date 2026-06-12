@@ -40,6 +40,8 @@ export class MongoStore {
   get spamSignatures(): Collection<Document> { return this.collection('spamsignatures') }
   get modEvents(): Collection<Document> { return this.collection('modevents') }
   get forwardBlacklist(): Collection<Document> { return this.collection('forwardblacklists') }
+  // v1 ScheduledDeletion model → Mongoose collection 'scheduleddeletions'.
+  get scheduledDeletions(): Collection<Document> { return this.collection('scheduleddeletions') }
 
   // v2 collections
   get decisions(): Collection<Document> { return this.collection('pipeline_decisions') }
@@ -55,6 +57,9 @@ export class MongoStore {
     await this.llmCache.createIndex({ key: 1 }, { unique: true })
     await this.votes.createIndex({ chatId: 1, messageId: 1 }, { unique: true })
     await this.votes.createIndex({ createdAt: 1 }, { expireAfterSeconds: 7 * 86400 })
+    // Scheduled deletions: single deleteAt index doubles as the due-query
+    // index and a 1h TTL backstop (3600s after deleteAt) if a sweep is missed.
+    await this.scheduledDeletions.createIndex({ deleteAt: 1 }, { expireAfterSeconds: 3600 })
   }
 
   // ── reads used per message ───────────────────────────────────────────
@@ -246,6 +251,47 @@ export class MongoStore {
       // The driver's PushOperator<Document> rejects concrete array elements.
       { $push: { ballots: ballot } } as never
     )
+  }
+
+  // ── scheduled deletions (persistent, survives restarts) ──────────────
+
+  /**
+   * Persist a message for later deletion. The bot also sets an in-memory
+   * timer for the fast path; this row is the crash-recovery backstop.
+   */
+  async scheduleDeletion(params: {
+    chatId: number
+    messageId: number
+    delayMs: number
+    source?: string
+  }): Promise<void> {
+    await this.scheduledDeletions.insertOne({
+      chatId: params.chatId,
+      messageId: params.messageId,
+      deleteAt: new Date(Date.now() + params.delayMs),
+      source: params.source ?? 'other',
+      createdAt: new Date()
+    })
+  }
+
+  /** Drop a pending row (after the in-memory timer already deleted it). */
+  async unscheduleDeletion(chatId: number, messageId: number): Promise<void> {
+    await this.scheduledDeletions.deleteOne({ chatId, messageId })
+  }
+
+  /**
+   * Claim all due deletions: returns the targets and removes their rows in
+   * one pass, so the periodic sweep never double-processes. Single bot
+   * instance + idempotent Telegram delete makes the find→delete race safe.
+   */
+  async claimDueDeletions(limit = 200): Promise<{ chatId: number; messageId: number }[]> {
+    const due = await this.scheduledDeletions
+      .find({ deleteAt: { $lte: new Date() } })
+      .limit(limit)
+      .toArray()
+    if (due.length === 0) return []
+    await this.scheduledDeletions.deleteMany({ _id: { $in: due.map((d) => d['_id']) } })
+    return due.map((d) => ({ chatId: Number(d['chatId']), messageId: Number(d['messageId']) }))
   }
 
   /** Close atomically — only one caller wins, so resolution actions run once. */

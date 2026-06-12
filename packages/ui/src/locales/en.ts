@@ -99,7 +99,8 @@ export const en: Locale = {
       error: 'error'
     },
     evidenceTitle: 'Evidence',
-    signalsTitle: 'Signals'
+    signalsTitle: 'Signals',
+    expired: 'This decision has expired — no details left.'
   },
 
   vote: {

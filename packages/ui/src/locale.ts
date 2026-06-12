@@ -51,6 +51,7 @@ export interface Locale {
     decidedBy: Record<string, string>
     evidenceTitle: string
     signalsTitle: string
+    expired: string
   }
 
   /** Community vote on a reported / grey-zone message. */

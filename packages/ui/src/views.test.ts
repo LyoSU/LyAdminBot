@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Verdict } from '@lyadmin/core'
-import { callbackData, captchaPrompt, compactNotification, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, votePrompt, whyView, LOCALES } from './views.js'
+import { callbackData, captchaPrompt, compactNotification, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, votePrompt, whyCard, whyDeepLink, whyView, LOCALES } from './views.js'
 import { uk } from './locales/uk.js'
 
 const makeVerdict = (overrides: Partial<Verdict> = {}): Verdict => ({
@@ -46,6 +46,41 @@ describe('compactNotification', () => {
     })
     expect(view.text).not.toContain('<a')
     expect(view.text).toContain('&lt;a href="https://evil.example"&gt;Іван&lt;/a&gt;')
+  })
+
+  it('without botUsername the why button stays a callback', () => {
+    const view = compactNotification(uk, makeVerdict(), target)
+    const why = view.buttons[0]![0]!
+    expect(why.data).toBe('why:-100123:7')
+    expect(why.url).toBeUndefined()
+  })
+
+  it('with botUsername the why button becomes a PM deep link, override stays callback', () => {
+    const view = compactNotification(uk, makeVerdict(), target, { botUsername: 'LyAdminBot' })
+    const [why, override] = view.buttons[0]!
+    expect(why!.url).toBe('https://t.me/LyAdminBot?start=why_-100123_7_42')
+    expect(why!.data).toBeUndefined()
+    expect(override!.data).toBe('ovr:-100123:7:42')
+  })
+})
+
+describe('whyDeepLink', () => {
+  it('encodes chat/message/user into a start payload', () => {
+    expect(whyDeepLink('LyAdminBot', -1001234567890, 555, 42))
+      .toBe('https://t.me/LyAdminBot?start=why_-1001234567890_555_42')
+  })
+})
+
+describe('whyCard', () => {
+  it('renders the why text and offers override for admins', () => {
+    const view = whyCard(uk, makeVerdict(), target, { canOverride: true })
+    expect(view.text).toContain('93%')
+    expect(view.buttons[0]![0]!.data).toBe('ovr:-100123:7:42')
+  })
+
+  it('omits the override button for non-admins', () => {
+    const view = whyCard(uk, makeVerdict(), target, { canOverride: false })
+    expect(view.buttons).toHaveLength(0)
   })
 })
 

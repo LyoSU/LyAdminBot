@@ -23,7 +23,7 @@ import {
 import {
   captchaPrompt, compactNotification, escapeHtml as escapeName, helpView,
   langPicker, parseCallback, resolveLocale, settingsDeepLink, settingsPanel,
-  startCard, startGroupHint, votePrompt, whyView,
+  startCard, startGroupHint, votePrompt, whyCard, whyView,
   LOCALES, type Locale, type ViewMessage
 } from '@lyadmin/ui'
 import { loadConfig } from './config.js'
@@ -150,6 +150,39 @@ const localeFor = async (userId: number, clientLanguage: string | null): Promise
 const viewHtml = (text: string): ReturnType<typeof html> =>
   html(text.replace(/\n/g, '<br>'))
 
+/**
+ * Auto-delete TTLs for transient in-group chrome (ms). The compact mod
+ * notification and the banan/vote prompts are ephemeral — they clean
+ * themselves up so chats stay readable. Mirrors v1 cleanup-policy.
+ */
+const NOTIFY_TTL_COMPACT_MS = 90 * 1000
+const NOTIFY_TTL_BANAN_MS = 60 * 1000
+const NOTIFY_TTL_VOTE_RESULT_MS = 2 * 60 * 1000
+
+/**
+ * Scheduled deletion, persistent. The row in `scheduleddeletions` survives a
+ * restart; an in-memory timer handles the fast path and clears the row once
+ * the message is gone. A periodic sweep (processDueDeletions) is the backstop
+ * for anything scheduled before the last restart.
+ */
+const scheduleDelete = (chatId: number, messageId: number, delayMs: number, source: string): void => {
+  store.scheduleDeletion({ chatId, messageId, delayMs, source }).catch(() => { /* sweep is the backstop */ })
+  setTimeout(() => {
+    void (async () => {
+      await gateway.tg.deleteMessagesById(chatId, [messageId]).catch(() => { /* already gone */ })
+      await store.unscheduleDeletion(chatId, messageId).catch(() => { /* sweep / TTL collects it */ })
+    })()
+  }, delayMs).unref?.()
+}
+
+/** Backstop sweep: delete everything whose deleteAt has passed. */
+const processDueDeletions = async (): Promise<void> => {
+  const due = await store.claimDueDeletions(200).catch(() => [])
+  for (const d of due) {
+    await gateway.tg.deleteMessagesById(d.chatId, [d.messageId]).catch(() => { /* already gone */ })
+  }
+}
+
 const sendView = async (message: Message, view: ViewMessage): Promise<void> => {
   await gateway.tg.replyText(message, viewHtml(view.text), {
     ...(view.buttons.length > 0 ? { replyMarkup: toKeyboard(view.buttons) } : {})
@@ -255,6 +288,21 @@ const handlePrivateMessage = async (message: Message): Promise<void> => {
     })
     return
   }
+  if (payload.startsWith('why_')) {
+    // why_<chatId>_<messageId>_<userId>; chatId is negative but holds no '_'.
+    const [chatIdRaw = '', messageIdRaw = '', userIdRaw = ''] = payload.slice('why_'.length).split('_')
+    const chatId = Number(chatIdRaw)
+    const verdict = recentVerdicts.get(`${chatId}:${Number(messageIdRaw)}`)
+    if (verdict) {
+      const canOverride = Number.isFinite(chatId) && await isChatAdmin(chatId, sender.id)
+      await sendView(message, whyCard(locale, verdict, {
+        chatId, messageId: Number(messageIdRaw), userId: Number(userIdRaw)
+      }, { canOverride }))
+    } else {
+      await sendView(message, { text: locale.why.expired, buttons: [] })
+    }
+    return
+  }
   if (payload.startsWith('settings_')) {
     const chatId = Number(payload.slice('settings_'.length))
     if (Number.isFinite(chatId) && await isChatAdmin(chatId, sender.id)) {
@@ -328,9 +376,10 @@ const handleBanan = async (message: Message, chat: Chat, caller: User, arg: stri
   await dropCommand()
   if (!ok) return
   rememberBananLabel(chat.id, target.id, target.displayName)
-  await gateway.tg.sendText(chat.id, viewHtml(locale.banan.success(escapeName(target.displayName), human)), {
+  const sent = await gateway.tg.sendText(chat.id, viewHtml(locale.banan.success(escapeName(target.displayName), human)), {
     replyMarkup: toKeyboard([[{ text: locale.banan.undoButton, data: `un:${chat.id}:${target.id}` }]])
-  }).catch(() => { /* non-fatal */ })
+  }).catch(() => null)
+  if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'banan')
 }
 
 /**
@@ -399,9 +448,10 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
     rememberVerdict(chat.id, replied.id, verdict)
     const view = compactNotification(locale, verdict, {
       chatId: chat.id, messageId: replied.id, userId: target.id, userLabel: target.displayName
-    })
-    await gateway.tg.sendText(chat.id, viewHtml(view.text), { replyMarkup: toKeyboard(view.buttons) })
-      .catch(() => { /* non-fatal */ })
+    }, { botUsername: selfUsername ?? undefined })
+    const sent = await gateway.tg.sendText(chat.id, viewHtml(view.text), { replyMarkup: toKeyboard(view.buttons) })
+      .catch(() => null)
+    if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_COMPACT_MS, 'mod_event:admin_report')
     return
   }
 
@@ -607,10 +657,11 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
 
     const view = compactNotification(locale, verdict, {
       chatId: chat.id, messageId: message.id, userId: sender.id, userLabel: sender.displayName
-    })
-    await gateway.tg.sendText(chat.id, viewHtml(view.text), {
+    }, { botUsername: selfUsername ?? undefined })
+    const sent = await gateway.tg.sendText(chat.id, viewHtml(view.text), {
       replyMarkup: toKeyboard(view.buttons)
-    }).catch(() => { /* notification failure is non-fatal */ })
+    }).catch(() => null)
+    if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_COMPACT_MS, `mod_event:${verdict.action}`)
   }
 }
 
@@ -755,6 +806,8 @@ const wireCallbacks = (): void => {
         chatId, message: query.messageId,
         text: viewHtml(tally.outcome === 'spam' ? locale.vote.resolvedSpam : locale.vote.resolvedHam)
       }).catch(() => { /* ok */ })
+      // The resolved prompt lingers briefly as a receipt, then cleans up.
+      scheduleDelete(chatId, query.messageId, NOTIFY_TTL_VOTE_RESULT_MS, 'vote_result')
       await query.answer({ text: locale.vote.counted })
       return
     }
@@ -836,6 +889,12 @@ const main = async (): Promise<void> => {
   selfId = self.id
   selfUsername = self.username
   console.log(`[bot] started as @${self.username} (${self.id})`)
+
+  // Clear deletions that came due while we were down, then sweep periodically
+  // as the backstop for the in-memory timers.
+  await processDueDeletions()
+  const sweepTimer = setInterval(() => { void processDueDeletions() }, 60 * 1000)
+  sweepTimer.unref?.()
 
   const shutdown = async (): Promise<void> => {
     console.log('[bot] shutting down…')
