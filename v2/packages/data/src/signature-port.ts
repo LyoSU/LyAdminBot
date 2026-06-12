@@ -11,6 +11,14 @@ import { computeSignatureHashes } from './hashing.js'
 
 const CONFIRMED_PSPAM = 0.96
 
+/**
+ * Greeting-length guard. The prod corpus is partly poisoned by velocity
+ * waves of innocent-looking short texts ("утра доброго" earned people
+ * auto-bans in v1). A signature this short must never decide on its own —
+ * it stays a candidate-strength signal and the pipeline weighs the rest.
+ */
+const MIN_DECIDE_LENGTH = 25
+
 interface SignatureDoc extends Document {
   status?: 'candidate' | 'confirmed'
   disabledAt?: Date
@@ -32,8 +40,9 @@ export class MongoSignaturePort implements SignaturePort {
     ) as SignatureDoc | null
     if (!doc) return null
 
+    const decisive = doc.status === 'confirmed' && text.trim().length >= MIN_DECIDE_LENGTH
     return {
-      status: doc.status === 'confirmed' ? 'confirmed' : 'candidate',
+      status: decisive ? 'confirmed' : 'candidate',
       pSpam: CONFIRMED_PSPAM,
       signatureId: String(doc._id)
     }
