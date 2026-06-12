@@ -53,6 +53,26 @@ export interface Locale {
     signalsTitle: string
   }
 
+  /** Community vote on a reported / grey-zone message. */
+  vote: {
+    /** Prompt above the quoted text (HTML). Inputs arrive pre-escaped. */
+    prompt: (userLabel: string, textPreview: string) => string
+    spamButton: (count: number) => string
+    hamButton: (count: number) => string
+    counted: string
+    resolvedSpam: string
+    resolvedHam: string
+    alreadyEnded: string
+  }
+
+  /** Report command feedback. */
+  report: {
+    needReply: string
+    cantReportAdmin: string
+    rateLimited: string
+    accepted: string
+  }
+
   /** Captcha gate for suspicious newcomers. */
   captcha: {
     /** Group prompt (HTML). `name` arrives pre-escaped. */

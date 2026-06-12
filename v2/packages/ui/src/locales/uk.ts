@@ -73,7 +73,9 @@ export const uk: Locale = {
     private_invite_new: 'закрите запрошення від нового акаунта',
     identity_churn_promo: 'часта зміна імені + реклама',
     hidden_url_new: 'приховане посилання від новачка',
-    low_information: 'недостатньо інформації — спостерігаємо'
+    low_information: 'недостатньо інформації, спостерігаємо',
+    admin_report: 'адмін репортнув як спам',
+    community_vote: 'спільнота проголосувала: спам'
   },
   reasonFallback: 'підозріла активність',
 
@@ -96,6 +98,23 @@ export const uk: Locale = {
     },
     evidenceTitle: 'Доказ',
     signalsTitle: 'Сигнали'
+  },
+
+  vote: {
+    prompt: (userLabel, textPreview) => `🤔 Це спам? Повідомлення від ${userLabel}:\n\n"${textPreview}"`,
+    spamButton: (count) => `🗑 Спам (${count})`,
+    hamButton: (count) => `👌 Норм (${count})`,
+    counted: 'Голос зараховано.',
+    resolvedSpam: '🗑 Спільнота вирішила: спам. Прибрав.',
+    resolvedHam: '👌 Спільнота вирішила: не спам.',
+    alreadyEnded: 'Голосування вже закрите.'
+  },
+
+  report: {
+    needReply: 'Зроби /report відповіддю на повідомлення, яке хочеш репортнути.',
+    cantReportAdmin: 'Адмінів репортити не можна.',
+    rateLimited: 'Забагато репортів. Почекай кілька хвилин.',
+    accepted: 'Прийняв, дякую.'
   },
 
   captcha: {

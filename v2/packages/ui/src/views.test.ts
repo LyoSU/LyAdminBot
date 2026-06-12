@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Verdict } from '@lyadmin/core'
-import { callbackData, captchaPrompt, compactNotification, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, whyView, LOCALES } from './views.js'
+import { callbackData, captchaPrompt, compactNotification, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, votePrompt, whyView, LOCALES } from './views.js'
 import { uk } from './locales/uk.js'
 
 const makeVerdict = (overrides: Partial<Verdict> = {}): Verdict => ({
@@ -104,6 +104,25 @@ describe('settings', () => {
     for (const data of datas) {
       expect(data).toMatch(/^set:-1001234567890:/)
       expect(Buffer.byteLength(data)).toBeLessThanOrEqual(64)
+    }
+  })
+})
+
+describe('votePrompt', () => {
+  it('quotes the text safely, shows live counts, buttons carry vote ids', () => {
+    const view = votePrompt(uk, {
+      chatId: -100123, messageId: 7, userLabel: '<i>Іра</i>', textPreview: '<b>купи</b> крипту'
+    }, { spam: 2, ham: 1, outcome: 'pending' })
+    expect(view.text).toContain('&lt;b&gt;купи&lt;/b&gt; крипту')
+    expect(view.text).toContain('&lt;i&gt;Іра&lt;/i&gt;')
+    expect(view.text).not.toMatch(/—|«|»/)
+    const [spamBtn, hamBtn] = view.buttons[0] ?? []
+    expect(spamBtn?.data).toBe('vt:-100123:7:s')
+    expect(hamBtn?.data).toBe('vt:-100123:7:h')
+    expect(spamBtn?.text).toContain('2')
+    expect(hamBtn?.text).toContain('1')
+    for (const btn of view.buttons.flat()) {
+      expect(Buffer.byteLength(btn.data ?? '')).toBeLessThanOrEqual(64)
     }
   })
 })

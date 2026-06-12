@@ -44,6 +44,7 @@ export class MongoStore {
   get decisions(): Collection<Document> { return this.collection('pipeline_decisions') }
   get feedback(): Collection<Document> { return this.collection('pipeline_feedback') }
   get llmCache(): Collection<Document> { return this.collection('llm_cache') }
+  get votes(): Collection<Document> { return this.collection('pipeline_votes') }
 
   private async ensureIndexes(): Promise<void> {
     await this.decisions.createIndex({ createdAt: 1 }, { expireAfterSeconds: DECISIONS_TTL_DAYS * 86400 })
@@ -51,6 +52,8 @@ export class MongoStore {
     await this.feedback.createIndex({ chatId: 1, messageId: 1 })
     await this.llmCache.createIndex({ createdAt: 1 }, { expireAfterSeconds: LLM_CACHE_TTL_DAYS * 86400 })
     await this.llmCache.createIndex({ key: 1 }, { unique: true })
+    await this.votes.createIndex({ chatId: 1, messageId: 1 }, { unique: true })
+    await this.votes.createIndex({ createdAt: 1 }, { expireAfterSeconds: 7 * 86400 })
   }
 
   // ── reads used per message ───────────────────────────────────────────
@@ -142,6 +145,69 @@ export class MongoStore {
       { group_id: chatId },
       { $addToSet: { 'settings.openaiSpamCheck.trustedUsers': userId } }
     )
+  }
+
+  // ── community votes (survive restarts; TTL 7d like modevents) ─────────
+
+  /** Open a vote. Returns false when one already exists for this message. */
+  async openVote(params: {
+    chatId: number
+    messageId: number
+    targetUserId: number
+    targetLabel: string
+    textPreview: string
+    openedBy: number
+  }): Promise<boolean> {
+    try {
+      await this.votes.insertOne({
+        chatId: params.chatId,
+        messageId: params.messageId,
+        targetUserId: params.targetUserId,
+        targetLabel: params.targetLabel.slice(0, 64),
+        textPreview: params.textPreview.slice(0, 200),
+        openedBy: params.openedBy,
+        promptMessageId: null,
+        ballots: [],
+        status: 'open',
+        createdAt: new Date()
+      })
+      return true
+    } catch {
+      return false // duplicate key — vote already open
+    }
+  }
+
+  async setVotePrompt(chatId: number, messageId: number, promptMessageId: number): Promise<void> {
+    await this.votes.updateOne({ chatId, messageId }, { $set: { promptMessageId } })
+  }
+
+  async getVote(chatId: number, messageId: number): Promise<Document | null> {
+    return this.votes.findOne({ chatId, messageId })
+  }
+
+  /** Append a ballot (idempotent per user: previous ballots stay, tally takes the latest). */
+  async castBallot(params: {
+    chatId: number
+    messageId: number
+    userId: number
+    isAdmin: boolean
+    choice: 'spam' | 'ham'
+  }): Promise<void> {
+    const ballot = { userId: params.userId, isAdmin: params.isAdmin, choice: params.choice, at: new Date() }
+    await this.votes.updateOne(
+      { chatId: params.chatId, messageId: params.messageId, status: 'open' },
+      // The driver's PushOperator<Document> rejects concrete array elements.
+      { $push: { ballots: ballot } } as never
+    )
+  }
+
+  /** Close atomically — only one caller wins, so resolution actions run once. */
+  async closeVote(chatId: number, messageId: number, outcome: 'spam' | 'ham'): Promise<boolean> {
+    const result = await this.votes.updateOne(
+      { chatId, messageId, status: 'open' },
+      { $set: { status: outcome, closedAt: new Date() } }
+    )
+    return result.modifiedCount === 1
   }
 
   /**

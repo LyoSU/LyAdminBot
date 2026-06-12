@@ -38,6 +38,8 @@ export const callbackData = {
   settings: (chatId: number, screen: string, value = ''): string =>
     `set:${chatId}:${screen}${value ? `:${value}` : ''}`,
   captcha: (chatId: number, userId: number): string => `cap:${chatId}:${userId}`,
+  vote: (chatId: number, messageId: number, choice: 'spam' | 'ham'): string =>
+    `vt:${chatId}:${messageId}:${choice === 'spam' ? 's' : 'h'}`,
   help: (): string => 'help',
   langPicker: (): string => 'lang',
   langSet: (code: string): string => `lang:${code}`
@@ -176,6 +178,22 @@ export const settingsPanel = (locale: Locale, chatId: number, state: SettingsSta
     ]
   }
 }
+
+/**
+ * Community vote prompt. Counts live on the buttons; both the quoted text
+ * and the user label are escaped here — they are attacker-controlled.
+ */
+export const votePrompt = (
+  locale: Locale,
+  target: { chatId: number; messageId: number; userLabel: string; textPreview: string },
+  tally: { spam: number; ham: number; outcome: string }
+): ViewMessage => ({
+  text: locale.vote.prompt(escapeHtml(target.userLabel), escapeHtml(target.textPreview.slice(0, 200))),
+  buttons: [[
+    { text: locale.vote.spamButton(tally.spam), data: callbackData.vote(target.chatId, target.messageId, 'spam') },
+    { text: locale.vote.hamButton(tally.ham), data: callbackData.vote(target.chatId, target.messageId, 'ham') }
+  ]]
+})
 
 /**
  * Captcha gate prompt posted in the group. The target user proves liveness

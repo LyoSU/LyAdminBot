@@ -5,8 +5,8 @@
  */
 import { BotKeyboard, Chat, User, html, type Message } from '@mtcute/node'
 import {
-  evaluateMessage,
-  type EvaluationInput, type PipelinePorts, type Verdict
+  evaluateMessage, tallyVotes,
+  type EvaluationInput, type PipelinePorts, type Verdict, type VoteBallot
 } from '@lyadmin/core'
 import {
   TelegramGateway, applyVerdict, buildUserSnapshot, normalizeMessage,
@@ -21,7 +21,7 @@ import {
 import {
   captchaPrompt, compactNotification, helpView, langPicker, parseCallback,
   resolveLocale, settingsDeepLink, settingsPanel, startCard, startGroupHint,
-  whyView, LOCALES, type Locale, type ViewMessage
+  votePrompt, whyView, LOCALES, type Locale, type ViewMessage
 } from '@lyadmin/ui'
 import { loadConfig } from './config.js'
 
@@ -30,10 +30,11 @@ const config = loadConfig()
 const store = new MongoStore()
 const sessionPort = new MemorySessionPort()
 const velocityPort = new MemoryVelocityPort()
+const signaturePort = new MongoSignaturePort(store)
 
 const buildPorts = (): PipelinePorts => {
   const ports: PipelinePorts = {
-    signatures: new MongoSignaturePort(store),
+    signatures: signaturePort,
     velocity: velocityPort,
     session: sessionPort
   }
@@ -138,6 +139,45 @@ const sendView = async (message: Message, view: ViewMessage): Promise<void> => {
   }).catch(() => { /* user may have blocked the bot / no rights */ })
 }
 
+/** Report rate limit: 3 reports per reporter per 5 minutes. */
+const REPORT_WINDOW_MS = 5 * 60 * 1000
+const reportTimes = new Map<number, number[]>()
+const reportAllowed = (userId: number): boolean => {
+  const now = Date.now()
+  const recent = (reportTimes.get(userId) ?? []).filter((t) => now - t < REPORT_WINDOW_MS)
+  if (recent.length >= 3) { reportTimes.set(userId, recent); return false }
+  recent.push(now)
+  reportTimes.set(userId, recent)
+  if (reportTimes.size > 2000) {
+    for (const [key, times] of reportTimes) {
+      if (times.every((t) => now - t >= REPORT_WINDOW_MS)) reportTimes.delete(key)
+    }
+  }
+  return true
+}
+
+const MUTE_AFTER_VOTE_SECONDS = 24 * 60 * 60
+
+/**
+ * A vote resolved to spam (instant admin ballot or community threshold):
+ * remove the message, mute the author, learn the signature so the same
+ * text is caught automatically next time.
+ */
+const enforceVoteSpam = async (vote: {
+  chatId: number
+  messageId: number
+  targetUserId: number
+  textPreview: string
+}, learnSource: string): Promise<void> => {
+  await gateway.moderationActions.deleteMessage(vote.chatId, vote.messageId)
+    .catch(() => { /* already gone */ })
+  await gateway.moderationActions.mute(vote.chatId, vote.targetUserId, MUTE_AFTER_VOTE_SECONDS)
+    .catch(() => { /* may lack rights */ })
+  if (vote.textPreview.trim().length > 0) {
+    await signaturePort.learn(vote.textPreview, learnSource, 'confirmed').catch(() => { /* best-effort */ })
+  }
+}
+
 /** Settings panel always renders from a fresh group document. */
 const renderSettingsPanel = async (locale: Locale, chatId: number): Promise<ViewMessage> => {
   const groupDoc = await store.getGroupDoc(chatId).catch(() => null)
@@ -179,6 +219,96 @@ const handlePrivateMessage = async (message: Message): Promise<void> => {
   await sendView(message, startCard(locale, sender.displayName, selfUsername ?? ''))
 }
 
+/**
+ * /report: one flow for everyone. The report opens (or joins) a community
+ * vote and casts the reporter's spam ballot. tallyVotes resolves an admin
+ * ballot instantly, so an admin report is an immediate verdict while a
+ * regular report starts the vote — no duplicate enforcement paths.
+ */
+const handleReport = async (message: Message, chat: Chat, reporter: User): Promise<void> => {
+  const locale = await localeFor(reporter.id, reporter.language)
+  // The /report command itself never stays in the chat.
+  const dropCommand = (): Promise<void> =>
+    gateway.tg.deleteMessagesById(chat.id, [message.id]).catch(() => { /* no rights */ })
+
+  const replied = await gateway.fetchRepliedMessage(message)
+  if (!replied) {
+    await sendView(message, { text: locale.report.needReply, buttons: [] })
+    return
+  }
+  const target = replied.sender
+  if (!(target instanceof User) || target.isBot || target.id === selfId || target.id === reporter.id) {
+    await dropCommand()
+    return
+  }
+  if (await isChatAdmin(chat.id, target.id)) {
+    await sendView(message, { text: locale.report.cantReportAdmin, buttons: [] })
+    return
+  }
+  if (!reportAllowed(reporter.id)) {
+    await sendView(message, { text: locale.report.rateLimited, buttons: [] })
+    return
+  }
+
+  const textPreview = (replied.text ?? '').slice(0, 200)
+  await store.openVote({
+    chatId: chat.id,
+    messageId: replied.id,
+    targetUserId: target.id,
+    targetLabel: target.displayName,
+    textPreview,
+    openedBy: reporter.id
+  }).catch(() => false) // duplicate vote → just add the ballot below
+
+  const reporterIsAdmin = await isChatAdmin(chat.id, reporter.id)
+  await store.castBallot({
+    chatId: chat.id, messageId: replied.id,
+    userId: reporter.id, isAdmin: reporterIsAdmin, choice: 'spam'
+  }).catch(() => { /* vote may have closed a moment ago */ })
+  await dropCommand()
+
+  const vote = await store.getVote(chat.id, replied.id).catch(() => null)
+  if (!vote || vote['status'] !== 'open') return
+  const tally = tallyVotes((vote['ballots'] ?? []) as VoteBallot[])
+
+  if (tally.outcome === 'spam') {
+    // Admin ballot resolved instantly.
+    if (!(await store.closeVote(chat.id, replied.id, 'spam'))) return
+    await enforceVoteSpam({
+      chatId: chat.id, messageId: replied.id, targetUserId: target.id, textPreview
+    }, 'admin_report')
+    const verdict: Verdict = {
+      pSpam: 0.99, action: 'mute', needsVote: false, decidedBy: 'deterministic',
+      ruleId: 'admin_report', signals: [], reasonCode: 'admin_report',
+      reasonEvidence: textPreview || null, meta: {}
+    }
+    rememberVerdict(chat.id, replied.id, verdict)
+    const view = compactNotification(locale, verdict, {
+      chatId: chat.id, messageId: replied.id, userId: target.id, userLabel: target.displayName
+    })
+    await gateway.tg.sendText(chat.id, viewHtml(view.text), { replyMarkup: toKeyboard(view.buttons) })
+      .catch(() => { /* non-fatal */ })
+    return
+  }
+
+  // Community path: post (or refresh) the vote prompt.
+  const view = votePrompt(locale, {
+    chatId: chat.id, messageId: replied.id,
+    userLabel: target.displayName, textPreview
+  }, tally)
+  if (vote['promptMessageId']) {
+    await gateway.tg.editMessage({
+      chatId: chat.id, message: vote['promptMessageId'] as number,
+      text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons)
+    }).catch(() => { /* unchanged */ })
+  } else {
+    const prompt = await gateway.tg.sendText(chat.id, viewHtml(view.text), {
+      replyMarkup: toKeyboard(view.buttons)
+    }).catch(() => null)
+    if (prompt) await store.setVotePrompt(chat.id, replied.id, prompt.id).catch(() => { /* ok */ })
+  }
+}
+
 const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void> => {
   const chat = message.chat
   if (!(chat instanceof Chat)) {
@@ -208,6 +338,10 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   if (/^\/(start|help)(@\w+)?$/.test(commandText)) {
     const locale = await localeFor(sender.id, sender.language)
     await sendView(message, startGroupHint(locale))
+    return
+  }
+  if (/^\/report(@\w+)?$/.test(commandText)) {
+    await handleReport(message, chat, sender)
     return
   }
 
@@ -302,6 +436,28 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     sessionPort.reset(chat.id, sender.id)
     rememberVerdict(chat.id, message.id, verdict)
     const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
+
+    // Grey-zone verdicts ask the community: the vote prompt (with the quoted
+    // text) replaces the compact line. An admin's 👌 resolves it instantly,
+    // which doubles as the override path for voted decisions.
+    if (verdict.needsVote && policy.votingEnabled) {
+      const opened = await store.openVote({
+        chatId: chat.id, messageId: message.id, targetUserId: sender.id,
+        targetLabel: sender.displayName, textPreview: normalized.text, openedBy: selfId
+      }).catch(() => false)
+      if (opened) {
+        const view = votePrompt(locale, {
+          chatId: chat.id, messageId: message.id,
+          userLabel: sender.displayName, textPreview: normalized.text
+        }, { spam: 0, ham: 0, outcome: 'pending' })
+        const prompt = await gateway.tg.sendText(chat.id, viewHtml(view.text), {
+          replyMarkup: toKeyboard(view.buttons)
+        }).catch(() => null)
+        if (prompt) await store.setVotePrompt(chat.id, message.id, prompt.id).catch(() => { /* ok */ })
+        return
+      }
+    }
+
     const view = compactNotification(locale, verdict, {
       chatId: chat.id, messageId: message.id, userId: sender.id, userLabel: sender.displayName
     })
@@ -364,6 +520,73 @@ const wireCallbacks = (): void => {
         text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons)
       }).catch(() => { /* unchanged content → MESSAGE_NOT_MODIFIED, fine */ })
       await query.answer({})
+      return
+    }
+
+    if (kind === 'vt') {
+      const [chatIdRaw = '', messageIdRaw = '', choiceRaw = ''] = parts
+      const chatId = Number(chatIdRaw)
+      const messageId = Number(messageIdRaw)
+      const choice = choiceRaw === 's' ? 'spam' : choiceRaw === 'h' ? 'ham' : null
+      if (!Number.isFinite(chatId) || !Number.isFinite(messageId) || !choice) {
+        await query.answer({})
+        return
+      }
+      const existing = await store.getVote(chatId, messageId).catch(() => null)
+      if (!existing || existing['status'] !== 'open') {
+        await query.answer({ text: locale.vote.alreadyEnded })
+        return
+      }
+      const voterIsAdmin = await isChatAdmin(chatId, query.user.id)
+      await store.castBallot({ chatId, messageId, userId: query.user.id, isAdmin: voterIsAdmin, choice })
+        .catch(() => { /* race with close — tally below re-checks */ })
+
+      const vote = await store.getVote(chatId, messageId).catch(() => null)
+      if (!vote) { await query.answer({}); return }
+      const tally = tallyVotes((vote['ballots'] ?? []) as VoteBallot[])
+
+      if (tally.outcome === 'pending') {
+        const view = votePrompt(locale, {
+          chatId, messageId,
+          userLabel: String(vote['targetLabel'] ?? ''), textPreview: String(vote['textPreview'] ?? '')
+        }, tally)
+        await gateway.tg.editMessage({
+          chatId, message: query.messageId,
+          text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons)
+        }).catch(() => { /* unchanged */ })
+        await query.answer({ text: locale.vote.counted })
+        return
+      }
+
+      // Resolution runs exactly once — closeVote is atomic.
+      if (!(await store.closeVote(chatId, messageId, tally.outcome))) {
+        await query.answer({ text: locale.vote.alreadyEnded })
+        return
+      }
+      if (tally.outcome === 'spam') {
+        await enforceVoteSpam({
+          chatId, messageId,
+          targetUserId: Number(vote['targetUserId'] ?? 0),
+          textPreview: String(vote['textPreview'] ?? '')
+        }, 'community_vote')
+      } else {
+        // Ham: lift whatever the pipeline applied. Admin ham ballot carries
+        // override authority → the user also becomes trusted in this chat.
+        const targetUserId = Number(vote['targetUserId'] ?? 0)
+        await gateway.tg.restrictChatMember({ chatId, userId: targetUserId, restrictions: {} })
+          .catch(() => { /* was not muted */ })
+        await gateway.tg.unbanChatMember({ chatId, participantId: targetUserId })
+          .catch(() => { /* was not banned */ })
+        const ballots = (vote['ballots'] ?? []) as VoteBallot[]
+        if (ballots.some((b) => b.isAdmin && b.choice === 'ham')) {
+          await store.addTrustedUser(chatId, targetUserId).catch(() => { /* best-effort */ })
+        }
+      }
+      await gateway.tg.editMessage({
+        chatId, message: query.messageId,
+        text: viewHtml(tally.outcome === 'spam' ? locale.vote.resolvedSpam : locale.vote.resolvedHam)
+      }).catch(() => { /* ok */ })
+      await query.answer({ text: locale.vote.counted })
       return
     }
 

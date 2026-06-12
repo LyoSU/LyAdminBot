@@ -73,7 +73,9 @@ export const en: Locale = {
     private_invite_new: 'private invite from a new account',
     identity_churn_promo: 'frequent renames + promo content',
     hidden_url_new: 'deceptive link from a newcomer',
-    low_information: 'not enough information — observing'
+    low_information: 'not enough information, observing',
+    admin_report: 'an admin reported this as spam',
+    community_vote: 'the community voted: spam'
   },
   reasonFallback: 'suspicious activity',
 
@@ -96,6 +98,23 @@ export const en: Locale = {
     },
     evidenceTitle: 'Evidence',
     signalsTitle: 'Signals'
+  },
+
+  vote: {
+    prompt: (userLabel, textPreview) => `🤔 Is this spam? Message from ${userLabel}:\n\n"${textPreview}"`,
+    spamButton: (count) => `🗑 Spam (${count})`,
+    hamButton: (count) => `👌 Fine (${count})`,
+    counted: 'Vote counted.',
+    resolvedSpam: '🗑 The community says spam. Removed.',
+    resolvedHam: '👌 The community says it is fine.',
+    alreadyEnded: 'This vote is already closed.'
+  },
+
+  report: {
+    needReply: 'Use /report as a reply to the message you want to report.',
+    cantReportAdmin: 'Admins cannot be reported.',
+    rateLimited: 'Too many reports. Wait a few minutes.',
+    accepted: 'Got it, thanks.'
   },
 
   captcha: {
