@@ -131,6 +131,14 @@ export const en: Locale = {
     openButton: '📊 My stats'
   },
 
+  top: {
+    titleMessages: '🏆 Most active in chat',
+    titleBanan: '🍌 Banana leaderboard',
+    empty: 'No stats yet.',
+    messagesUnit: (count) => (count === 1 ? 'message' : 'messages'),
+    bananUnit: () => '🍌'
+  },
+
   banan: {
     success: (name, duration) => `🍌 ${name} gets the banana for ${duration}`,
     lifted: (name) => `🍌 ${name} loses the banana`,

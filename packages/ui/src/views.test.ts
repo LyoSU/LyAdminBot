@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Verdict } from '@lyadmin/core'
-import { callbackData, captchaPrompt, compactNotification, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, votePrompt, whyCard, whyDeepLink, whyView, LOCALES } from './views.js'
+import { callbackData, captchaPrompt, compactNotification, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, votePrompt, whyCard, whyDeepLink, whyView, LOCALES } from './views.js'
 import { uk } from './locales/uk.js'
 
 const makeVerdict = (overrides: Partial<Verdict> = {}): Verdict => ({
@@ -102,6 +102,42 @@ describe('whyView', () => {
     const text = whyView(uk, makeVerdict())
     expect(text).toContain('external_url')
     expect(text).not.toContain('is_reply')
+  })
+})
+
+describe('topList', () => {
+  const entries = [
+    { name: 'Аня', value: 120 },
+    { name: 'Богдан', value: 90 },
+    { name: 'Влад', value: 30 },
+    { name: 'Гліб', value: 5 }
+  ]
+
+  it('medals the top three and numbers the rest', () => {
+    const view = topList(uk, 'messages', entries)
+    expect(view.text).toContain('🥇')
+    expect(view.text).toContain('🥈')
+    expect(view.text).toContain('🥉')
+    expect(view.text).toContain('4.')
+    expect(view.text).toContain('Аня')
+    expect(view.text).toContain('120')
+  })
+
+  it('shows an empty-state line when there is no data', () => {
+    const view = topList(uk, 'messages', [])
+    expect(view.text).toBe(uk.top.empty)
+    expect(view.buttons).toHaveLength(0)
+  })
+
+  it('escapes attacker-controlled names', () => {
+    const view = topList(uk, 'banan', [{ name: '<b>x</b>', value: 3 }])
+    expect(view.text).not.toContain('<b>')
+    expect(view.text).toContain('&lt;b&gt;x&lt;/b&gt;')
+  })
+
+  it('uses the banan title and unit for the banan board', () => {
+    const view = topList(uk, 'banan', entries)
+    expect(view.text).toContain(uk.top.titleBanan)
   })
 })
 

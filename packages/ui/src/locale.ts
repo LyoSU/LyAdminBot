@@ -86,6 +86,15 @@ export interface Locale {
     openButton: string
   }
 
+  /** /top and /top-banan group leaderboards. */
+  top: {
+    titleMessages: string
+    titleBanan: string
+    empty: string
+    messagesUnit: (count: number) => string
+    bananUnit: (count: number) => string
+  }
+
   /** Manual /banan moderation (admin mute with personality). */
   banan: {
     /** "name muted for duration". Inputs arrive pre-escaped. */

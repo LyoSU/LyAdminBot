@@ -96,6 +96,32 @@ export class MongoStore {
     }
   }
 
+  /**
+   * Group leaderboard rows for /top (by messages) and /top-banan (by banana
+   * count). Reads the same groupmembers doc touchMember maintains; returns
+   * telegram ids + values, name resolution is the caller's job.
+   */
+  async getTopMembers(
+    chatId: number,
+    by: 'messages' | 'banan',
+    limit: number
+  ): Promise<{ telegramId: number; value: number }[]> {
+    const group = await this.groups.findOne({ group_id: chatId }, { projection: { _id: 1 } })
+    if (!group) return []
+    const field = by === 'banan' ? 'banan.num' : 'stats.messagesCount'
+    const rows = await this.groupMembers
+      .find({ group: group['_id'], [field]: { $gt: 0 } }, { projection: { telegram_id: 1, [field]: 1 } })
+      .sort({ [field]: -1 })
+      .limit(limit)
+      .toArray()
+    return rows.map((r) => ({
+      telegramId: Number(r['telegram_id']),
+      value: by === 'banan'
+        ? Number((r as { banan?: { num?: number } }).banan?.num ?? 0)
+        : Number((r as { stats?: { messagesCount?: number } }).stats?.messagesCount ?? 0)
+    }))
+  }
+
   /** v2-additive per-user UI locale (users.v2Locale). */
   async getUserLocale(telegramId: number): Promise<string | null> {
     const doc = await this.users.findOne(

@@ -37,10 +37,13 @@ export class QdrantVectorPort implements VectorPort {
   private readonly openai: OpenAI
 
   constructor(config: QdrantVectorPortConfig) {
+    // checkCompatibility:false silences the client/server version mismatch
+    // warning — the REST surface we use (upsert/search/scroll) is stable
+    // across these minor versions.
     this.qdrant = new QdrantClient(
       config.qdrantApiKey !== undefined
-        ? { url: config.qdrantUrl, apiKey: config.qdrantApiKey }
-        : { url: config.qdrantUrl }
+        ? { url: config.qdrantUrl, apiKey: config.qdrantApiKey, checkCompatibility: false }
+        : { url: config.qdrantUrl, checkCompatibility: false }
     )
     this.openai = new OpenAI({ apiKey: config.openaiApiKey })
   }

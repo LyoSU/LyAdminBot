@@ -172,6 +172,28 @@ export const whyCard = (
     : []
 })
 
+const MEDALS = ['🥇', '🥈', '🥉']
+
+/**
+ * Group leaderboard for /top (by messages) and /top-banan (by banana count).
+ * Top three get medals, the rest a plain rank. Names are attacker-controlled
+ * → escaped here.
+ */
+export const topList = (
+  locale: Locale,
+  kind: 'messages' | 'banan',
+  entries: { name: string; value: number }[]
+): ViewMessage => {
+  if (entries.length === 0) return { text: locale.top.empty, buttons: [] }
+  const title = kind === 'banan' ? locale.top.titleBanan : locale.top.titleMessages
+  const unit = kind === 'banan' ? locale.top.bananUnit : locale.top.messagesUnit
+  const lines = entries.map((e, i) => {
+    const badge = MEDALS[i] ?? `${i + 1}.`
+    return `${badge} ${escapeHtml(e.name)} · ${e.value} ${unit(e.value)}`
+  })
+  return { text: [title, '', ...lines].join('\n'), buttons: [] }
+}
+
 /** Group /settings response: deep link to PM, never a panel in the chat. */
 export const settingsDeepLink = (
   locale: Locale,

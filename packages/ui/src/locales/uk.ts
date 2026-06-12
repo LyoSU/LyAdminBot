@@ -131,6 +131,14 @@ export const uk: Locale = {
     openButton: '📊 Моя статистика'
   },
 
+  top: {
+    titleMessages: '🏆 Найактивніші в чаті',
+    titleBanan: '🍌 Топ за бананами',
+    empty: 'Поки нема статистики.',
+    messagesUnit: (count) => (count % 10 === 1 && count % 100 !== 11 ? 'повідомлення' : 'повідомлень'),
+    bananUnit: () => '🍌'
+  },
+
   banan: {
     success: (name, duration) => `🍌 ${name} отримує банан на ${duration}`,
     lifted: (name) => `🍌 ${name} позбавляється банана`,

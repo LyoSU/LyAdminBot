@@ -23,7 +23,7 @@ import {
 import {
   captchaPrompt, compactNotification, escapeHtml as escapeName, helpView,
   langPicker, parseCallback, resolveLocale, settingsDeepLink, settingsPanel,
-  startCard, startGroupHint, votePrompt, whyCard, whyView,
+  startCard, startGroupHint, topList, votePrompt, whyCard, whyView,
   LOCALES, type Locale, type ViewMessage
 } from '@lyadmin/ui'
 import { loadConfig } from './config.js'
@@ -159,6 +159,7 @@ const viewHtml = (text: string): ReturnType<typeof html> =>
 const NOTIFY_TTL_COMPACT_MS = 90 * 1000
 const NOTIFY_TTL_BANAN_MS = 60 * 1000
 const NOTIFY_TTL_VOTE_RESULT_MS = 2 * 60 * 1000
+const NOTIFY_TTL_TOP_MS = 10 * 60 * 1000
 
 /**
  * Scheduled deletion, persistent. The row in `scheduleddeletions` survives a
@@ -348,7 +349,7 @@ const handleBanan = async (message: Message, chat: Chat, caller: User, arg: stri
     const ok = await gateway.moderationActions.mute(chat.id, caller.id, seconds)
       .then(() => true).catch(() => false)
     if (ok) {
-      log.info('banan', { chatId: chat.id, userId: caller.id, by: caller.id, kind: 'self', seconds })
+      log.info('banan', { chatId: chat.id, chat: chat.title ?? undefined, userId: caller.id, user: caller.displayName, by: caller.id, kind: 'self', seconds })
       await gateway.tg.sendText(chat.id, viewHtml(locale.banan.self(escapeName(caller.displayName), human)))
         .catch(() => { /* non-fatal */ })
     }
@@ -367,7 +368,7 @@ const handleBanan = async (message: Message, chat: Chat, caller: User, arg: stri
       await gateway.tg.restrictChatMember({ chatId: chat.id, userId: target.id, restrictions: {} })
         .catch(() => { /* ok */ })
       await dropCommand()
-      log.info('banan_lifted', { chatId: chat.id, userId: target.id, by: caller.id })
+      log.info('banan_lifted', { chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName, by: caller.id, byName: caller.displayName })
       await gateway.tg.sendText(chat.id, viewHtml(locale.banan.lifted(escapeName(target.displayName))))
         .catch(() => { /* non-fatal */ })
       return
@@ -378,7 +379,7 @@ const handleBanan = async (message: Message, chat: Chat, caller: User, arg: stri
     .then(() => true).catch(() => false)
   await dropCommand()
   if (!ok) return
-  log.info('banan', { chatId: chat.id, userId: target.id, by: caller.id, kind: 'admin', seconds })
+  log.info('banan', { chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName, by: caller.id, byName: caller.displayName, kind: 'admin', seconds })
   rememberBananLabel(chat.id, target.id, target.displayName)
   const sent = await gateway.tg.sendText(chat.id, viewHtml(locale.banan.success(escapeName(target.displayName), human)), {
     replyMarkup: toKeyboard([[{ text: locale.banan.undoButton, data: `un:${chat.id}:${target.id}` }]])
@@ -428,7 +429,11 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
   }).catch(() => false) // duplicate vote → just add the ballot below
 
   const reporterIsAdmin = await isChatAdmin(chat.id, reporter.id)
-  log.info('report', { chatId: chat.id, userId: target.id, by: reporter.id, byAdmin: reporterIsAdmin, messageId: replied.id })
+  log.info('report', {
+    chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName,
+    by: reporter.id, byName: reporter.displayName, byAdmin: reporterIsAdmin, messageId: replied.id,
+    text: textPreview ? textPreview.slice(0, 160) : undefined
+  })
   await store.castBallot({
     chatId: chat.id, messageId: replied.id,
     userId: reporter.id, isAdmin: reporterIsAdmin, choice: 'spam'
@@ -479,6 +484,30 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
   }
 }
 
+/**
+ * /top (by messages) and /top-banan (by banana count). One ephemeral
+ * leaderboard message; names resolved live via MTProto so they never go stale.
+ */
+const handleTop = async (message: Message, chat: Chat, caller: User, kind: 'messages' | 'banan'): Promise<void> => {
+  const locale = await localeFor(caller.id, caller.language)
+  const rows = await store.getTopMembers(chat.id, kind, 10).catch(() => [])
+  let entries: { name: string; value: number }[] = []
+  if (rows.length > 0) {
+    const users = await gateway.tg.getUsers(rows.map((r) => r.telegramId)).catch(() => [])
+    const nameById = new Map<number, string>()
+    for (const u of users) {
+      if (u instanceof User) nameById.set(u.id, u.displayName)
+    }
+    entries = rows.map((r) => ({ name: nameById.get(r.telegramId) ?? `id${r.telegramId}`, value: r.value }))
+  }
+  const view = topList(locale, kind, entries)
+  const sent = await gateway.tg.replyText(message, viewHtml(view.text)).catch(() => null)
+  if (sent) {
+    scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'cmd_top')
+    scheduleDelete(chat.id, message.id, NOTIFY_TTL_TOP_MS, 'cmd_top')
+  }
+}
+
 const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void> => {
   const chat = message.chat
   if (!(chat instanceof Chat)) {
@@ -524,6 +553,22 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       text: locale.stats.openInPm,
       buttons: [[{ text: locale.stats.openButton, url: `https://t.me/${selfUsername}?start=mystats_${chat.id}` }]]
     })
+    return
+  }
+  if (/^\/top[-_]banan(@\w+)?$/.test(commandText)) {
+    await handleTop(message, chat, sender, 'banan')
+    return
+  }
+  if (/^\/top(@\w+)?$/.test(commandText)) {
+    await handleTop(message, chat, sender, 'messages')
+    return
+  }
+  if (/^\/ping(@\w+)?$/.test(commandText)) {
+    const sent = await gateway.tg.replyText(message, '🏓 pong').catch(() => null)
+    if (sent) {
+      scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'cmd_ping')
+      scheduleDelete(chat.id, message.id, NOTIFY_TTL_BANAN_MS, 'cmd_ping')
+    }
     return
   }
 
@@ -597,10 +642,18 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   )
 
   // Operational log: one line per actioned message (and per skipped action),
-  // so prod moderation is fully auditable from the container logs.
+  // so prod moderation is fully auditable from the container logs. Carries the
+  // human context (chat title, sender name/@username, message text) so a line
+  // is readable on its own without cross-referencing ids.
+  const logContext = {
+    chat: chat.title ?? undefined,
+    user: sender.displayName,
+    username: sender.username ?? undefined,
+    text: normalized.text ? normalized.text.slice(0, 160) : undefined
+  }
   if (verdict.action !== 'none' && verdict.action !== 'observe') {
     log.info('moderation', {
-      chatId: chat.id, userId: sender.id, messageId: message.id,
+      chatId: chat.id, userId: sender.id, messageId: message.id, ...logContext,
       action: verdict.action, applied: result.applied, skipped: result.skippedReason ?? undefined,
       pSpam: Math.round(verdict.pSpam * 100) / 100, decidedBy: verdict.decidedBy,
       ruleId: verdict.ruleId ?? undefined, reason: verdict.reasonCode,
@@ -610,7 +663,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     })
   } else if (verdict.action === 'observe') {
     log.debug('observe', {
-      chatId: chat.id, userId: sender.id, messageId: message.id,
+      chatId: chat.id, userId: sender.id, messageId: message.id, ...logContext,
       pSpam: Math.round(verdict.pSpam * 100) / 100, reason: verdict.reasonCode
     })
   }
@@ -637,7 +690,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
 
   if (result.captchaRequired && result.applied) {
     issueCaptcha(chat.id, sender.id)
-    log.info('captcha_issued', { chatId: chat.id, userId: sender.id })
+    log.info('captcha_issued', { chatId: chat.id, userId: sender.id, ...logContext })
     const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
     const view = captchaPrompt(locale, {
       chatId: chat.id, userId: sender.id, userLabel: sender.displayName
@@ -669,7 +722,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
         targetLabel: sender.displayName, textPreview: normalized.text, openedBy: selfId
       }).catch(() => false)
       if (opened) {
-        log.info('vote_opened', { chatId: chat.id, userId: sender.id, messageId: message.id, pSpam: Math.round(verdict.pSpam * 100) / 100, reason: verdict.reasonCode })
+        log.info('vote_opened', { chatId: chat.id, userId: sender.id, messageId: message.id, ...logContext, pSpam: Math.round(verdict.pSpam * 100) / 100, reason: verdict.reasonCode })
         const view = votePrompt(locale, {
           chatId: chat.id, messageId: message.id,
           userLabel: sender.displayName, textPreview: normalized.text
