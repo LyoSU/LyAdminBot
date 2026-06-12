@@ -1,0 +1,78 @@
+/**
+ * Locale contract. uk and en are hand-written reference locales;
+ * other languages derive from them (post-v1).
+ *
+ * UX rules baked into the type system:
+ *  - reason CODES are localized here; raw LLM text never reaches users
+ *  - no country flags anywhere (language names are plain text)
+ */
+import type { VerdictAction } from '@lyadmin/core'
+
+export interface Locale {
+  /** Language name in its own language, NO flag emoji. */
+  languageName: string
+
+  start: {
+    /** PM welcome card (HTML). `name` arrives pre-escaped. */
+    privateCard: (name: string) => string
+    /** One-line hint when /start is used inside a group (HTML). */
+    groupHint: string
+    addToGroupButton: string
+    helpButton: string
+    langButton: string
+  }
+
+  /** /help — full command reference (HTML). */
+  helpText: string
+
+  lang: {
+    pickerTitle: string
+    saved: string
+  }
+
+  actions: Record<Exclude<VerdictAction, 'none' | 'observe'>, string>
+
+  /** One-line compact moderation notice: {action} {user}. */
+  notification: {
+    compact: (action: string, userLabel: string) => string
+    whyButton: string
+    notSpamButton: string
+    overrideDone: string
+    overrideAlreadyDone: string
+    adminOnly: string
+  }
+
+  reasons: Record<string, string>
+  reasonFallback: string
+
+  why: {
+    title: string
+    probability: (percent: number) => string
+    decidedBy: Record<string, string>
+    evidenceTitle: string
+    signalsTitle: string
+  }
+
+  /** Captcha gate for suspicious newcomers. */
+  captcha: {
+    /** Group prompt (HTML). `name` arrives pre-escaped. */
+    prompt: (name: string) => string
+    button: string
+    passed: string
+    notForYou: string
+  }
+
+  settings: {
+    openInPm: string
+    openInPmButton: string
+    title: string
+    preset: string
+    presets: { soft: string; standard: string; strict: string }
+    captcha: string
+    voting: string
+    enabled: string
+    on: string
+    off: string
+    back: string
+  }
+}

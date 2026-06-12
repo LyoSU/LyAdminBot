@@ -1,0 +1,12 @@
+{
+  "name": "@lyadmin/core",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  }
+}

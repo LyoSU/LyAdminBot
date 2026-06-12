@@ -1,0 +1,17 @@
+{
+  "name": "@lyadmin/adapters",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@lyadmin/core": "workspace:*",
+    "@mtcute/node": "^0.30.0",
+    "@mtcute/dispatcher": "^0.30.0"
+  },
+  "scripts": {
+    "test": "vitest run"
+  }
+}

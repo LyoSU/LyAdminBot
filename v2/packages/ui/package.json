@@ -1,0 +1,15 @@
+{
+  "name": "@lyadmin/ui",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@lyadmin/core": "workspace:*"
+  },
+  "scripts": {
+    "test": "vitest run"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@lyadmin/bot",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "dependencies": {
+    "@lyadmin/adapters": "workspace:*",
+    "@lyadmin/core": "workspace:*",
+    "@lyadmin/data": "workspace:*",
+    "@lyadmin/ui": "workspace:*",
+    "@mtcute/node": "^0.30.0"
+  },
+  "scripts": {
+    "start": "tsx src/main.ts"
+  }
+}

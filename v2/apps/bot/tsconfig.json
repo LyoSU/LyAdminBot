@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "types": ["node"]
+  },
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/adapters" },
+    { "path": "../../packages/data" },
+    { "path": "../../packages/ui" }
+  ],
+  "include": ["src"]
+}

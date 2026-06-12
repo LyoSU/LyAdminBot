@@ -1,0 +1,121 @@
+import type { Locale } from '../locale.js'
+
+export const en: Locale = {
+  languageName: 'English',
+
+  start: {
+    privateCard: (name) => [
+      `Hey, <b>${name}</b>! 👋`,
+      '',
+      '🛡 Anti-spam for groups.',
+      'I catch spam, ban scammers, clean up ads.',
+      '',
+      'Add me to a group → grant admin rights → done.'
+    ].join('\n'),
+    groupHint: '🛡 I catch spam and ban scammers.\n<code>/settings</code> for admins · <code>/help</code> commands',
+    addToGroupButton: '➕ Add to group',
+    helpButton: '❓ Commands',
+    langButton: '🌐 Language'
+  },
+
+  helpText: [
+    '🛡 <b>Commands</b>',
+    '/report — report spam (as a reply)',
+    '/settings — anti-spam for admins (opens in PM)',
+    '/lang — language',
+    '',
+    'I remove spam on my own. Every action has <b>[🤨 Why?]</b> with the reason',
+    'and <b>[✅ Not spam]</b> for admins: reverts the call and teaches me.'
+  ].join('\n'),
+
+  lang: {
+    pickerTitle: 'Pick a language:',
+    saved: 'Done, English it is'
+  },
+
+  actions: {
+    captcha: '👋 checking',
+    delete: '🧹 spam removed',
+    mute: '🔇 muted',
+    ban: '🔨 banned'
+  },
+
+  notification: {
+    compact: (action, userLabel) => `${action} · ${userLabel}`,
+    whyButton: '🤨 Why?',
+    notSpamButton: '✅ Not spam',
+    overrideDone: 'Done, reverted. User is back and trusted in this chat now.',
+    overrideAlreadyDone: 'Already reverted.',
+    adminOnly: 'Chat admins only.'
+  },
+
+  reasons: {
+    job_scam: 'looks like a job scam',
+    crypto_scam: 'crypto scam',
+    gambling_promo: 'casino/betting promo',
+    adult_promo: 'adult promo',
+    ad_network: 'ad placement offer',
+    flirt_bait: 'flirt bait',
+    phishing: 'phishing link',
+    channel_promo: 'unsolicited channel promo',
+    guest_bot_promo: 'guest-bot promo delivery',
+    flood: 'flood / mass posting',
+    prompt_injection: 'attempted moderation hijack',
+    other_spam: 'spam',
+    known_spam_signature: 'matches confirmed spam',
+    semantic_spam_match: 'very similar to known spam',
+    velocity_exceeded: 'same message across multiple chats',
+    custom_deny: 'blocked by a chat rule',
+    scam_flag_new: 'Telegram flagged the account as scam',
+    external_ban_new: 'account is in spammer databases',
+    external_high_factor_new: 'account is in spammer databases',
+    edit_injected_promo: 'message was edited to insert promo',
+    private_invite_new: 'private invite from a new account',
+    identity_churn_promo: 'frequent renames + promo content',
+    hidden_url_new: 'deceptive link from a newcomer',
+    low_information: 'not enough information — observing'
+  },
+  reasonFallback: 'suspicious activity',
+
+  why: {
+    title: 'Why this decision',
+    probability: (percent) => `Spam probability: ${percent}%`,
+    decidedBy: {
+      custom_rule: 'chat rule',
+      deterministic: 'deterministic rule',
+      signature: 'signature database',
+      vector: 'semantic search',
+      velocity: 'cross-chat velocity',
+      moderation: 'content moderation',
+      llm: 'AI analysis',
+      llm_cached: 'AI analysis (cached)',
+      session: 'message series analysis',
+      score: 'signal score',
+      abstain: 'abstained',
+      error: 'error'
+    },
+    evidenceTitle: 'Evidence',
+    signalsTitle: 'Signals'
+  },
+
+  captcha: {
+    prompt: (name) => `👋 ${name}, tap the button to keep chatting. Quick check that you are not a bot.`,
+    button: '🙋 I am human',
+    passed: 'Done, go ahead.',
+    notForYou: 'This button is not for you.'
+  },
+
+  settings: {
+    openInPm: 'Settings are available in private messages.',
+    openInPmButton: '⚙️ Open settings',
+    title: 'Anti-spam settings',
+    preset: 'Mode',
+    presets: { soft: 'Soft', standard: 'Standard', strict: 'Strict' },
+    captcha: 'Captcha for newcomers',
+    voting: 'Community voting',
+    enabled: 'Anti-spam',
+    on: 'On',
+    off: 'Off',
+    back: '‹ Back'
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@lyadmin/replay",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "dependencies": {
+    "@lyadmin/core": "workspace:*",
+    "@lyadmin/data": "workspace:*",
+    "mongodb": "^6.10.0"
+  },
+  "scripts": {
+    "replay": "tsx src/replay.ts"
+  }
+}

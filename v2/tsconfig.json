@@ -1,0 +1,11 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/adapters" },
+    { "path": "packages/data" },
+    { "path": "packages/ui" },
+    { "path": "apps/bot" },
+    { "path": "tools/replay" }
+  ]
+}

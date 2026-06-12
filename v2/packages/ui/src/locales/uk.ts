@@ -1,0 +1,121 @@
+import type { Locale } from '../locale.js'
+
+export const uk: Locale = {
+  languageName: 'Українська',
+
+  start: {
+    privateCard: (name) => [
+      `Йо, <b>${name}</b>! 👋`,
+      '',
+      '🛡 Антиспам для груп.',
+      'Ловлю спам, баню шахраїв, чищу рекламу.',
+      '',
+      'Додай в групу → дай права адміна → готово.'
+    ].join('\n'),
+    groupHint: '🛡 Ловлю спам, баню шахраїв.\n<code>/settings</code> для адмінів · <code>/help</code> команди',
+    addToGroupButton: '➕ Додати в групу',
+    helpButton: '❓ Команди',
+    langButton: '🌐 Мова'
+  },
+
+  helpText: [
+    '🛡 <b>Команди</b>',
+    '/report — скарга на спам (у відповідь)',
+    '/settings — антиспам для адмінів (відкриється в ПП)',
+    '/lang — мова',
+    '',
+    'Спам зношу сам. Під кожною дією є <b>[🤨 За що?]</b> з поясненням',
+    'і <b>[✅ Не спам]</b> для адмінів: скасовує рішення і вчить мене.'
+  ].join('\n'),
+
+  lang: {
+    pickerTitle: 'Обери мову:',
+    saved: 'Готово, тепер українською'
+  },
+
+  actions: {
+    captcha: '👋 перевірка',
+    delete: '🧹 спам видалено',
+    mute: '🔇 мут',
+    ban: '🔨 бан'
+  },
+
+  notification: {
+    compact: (action, userLabel) => `${action} · ${userLabel}`,
+    whyButton: '🤨 За що?',
+    notSpamButton: '✅ Не спам',
+    overrideDone: 'Ок, скасував. Юзер розблокований і тепер у довірених цього чату.',
+    overrideAlreadyDone: 'Уже скасовано.',
+    adminOnly: 'Тільки для адмінів цього чату.'
+  },
+
+  reasons: {
+    job_scam: 'схоже на шахрайську "вакансію"',
+    crypto_scam: 'криптошахрайство',
+    gambling_promo: 'реклама казино/ставок',
+    adult_promo: 'реклама 18+',
+    ad_network: 'продаж реклами/розміщень',
+    flirt_bait: 'флірт-приманка',
+    phishing: 'фішингове посилання',
+    channel_promo: 'непрохана реклама каналу',
+    guest_bot_promo: 'промо через гостьового бота',
+    flood: 'флуд/масова розсилка',
+    prompt_injection: 'спроба обдурити модерацію',
+    other_spam: 'спам',
+    known_spam_signature: 'збіг із підтвердженим спамом',
+    semantic_spam_match: 'дуже схоже на відомий спам',
+    velocity_exceeded: 'те саме повідомлення в кількох чатах поспіль',
+    custom_deny: 'заборонено правилом чату',
+    scam_flag_new: 'Telegram позначив акаунт як шахрайський',
+    external_ban_new: 'акаунт у базах спамерів',
+    external_high_factor_new: 'акаунт у базах спамерів',
+    edit_injected_promo: 'у повідомлення відредаговано рекламу',
+    private_invite_new: 'закрите запрошення від нового акаунта',
+    identity_churn_promo: 'часта зміна імені + реклама',
+    hidden_url_new: 'приховане посилання від новачка',
+    low_information: 'недостатньо інформації — спостерігаємо'
+  },
+  reasonFallback: 'підозріла активність',
+
+  why: {
+    title: 'Чому це рішення',
+    probability: (percent) => `Імовірність спаму: ${percent}%`,
+    decidedBy: {
+      custom_rule: 'правило чату',
+      deterministic: 'детерміноване правило',
+      signature: 'база сигнатур',
+      vector: 'семантичний пошук',
+      velocity: 'крос-чатова швидкість',
+      moderation: 'модерація контенту',
+      llm: 'ШІ-аналіз',
+      llm_cached: 'ШІ-аналіз (кеш)',
+      session: 'аналіз серії повідомлень',
+      score: 'сума сигналів',
+      abstain: 'утримання',
+      error: 'помилка'
+    },
+    evidenceTitle: 'Доказ',
+    signalsTitle: 'Сигнали'
+  },
+
+  captcha: {
+    prompt: (name) => `👋 ${name}, тисни кнопку і пиши далі. Це швидка перевірка, що ти не бот.`,
+    button: '🙋 Я людина',
+    passed: 'Готово, пиши.',
+    notForYou: 'Ця кнопка не для тебе.'
+  },
+
+  settings: {
+    openInPm: 'Налаштування доступні в особистих повідомленнях.',
+    openInPmButton: '⚙️ Відкрити налаштування',
+    title: 'Налаштування антиспаму',
+    preset: 'Режим',
+    presets: { soft: 'М’який', standard: 'Стандарт', strict: 'Суворий' },
+    captcha: 'Капча для новачків',
+    voting: 'Голосування спільноти',
+    enabled: 'Антиспам',
+    on: 'Увімкнено',
+    off: 'Вимкнено',
+    back: '‹ Назад'
+  }
+}
