@@ -140,6 +140,15 @@ export const uk: Locale = {
     bananUnit: () => '🍌'
   },
 
+  welcome: {
+    enabled: '👋 Вітання увімкнено.',
+    disabled: '👋 Вітання вимкнено.',
+    textSet: '✅ Текст вітання збережено. Підстановка %name% працює.',
+    gifSet: '✅ Гіфку для вітання збережено.',
+    usage: '/welcome — увімкнути/вимкнути. /welcome текст з %name% — задати привітання. Відповідь гіфкою на /welcome — задати гіфку.',
+    defaultGreeting: (name) => `👋 Вітаємо, ${name}!`
+  },
+
   extra: {
     saved: (name) => `✅ Збережено #${name}`,
     deleted: (name) => `🗑 Видалено #${name}`,

@@ -140,6 +140,15 @@ export const en: Locale = {
     bananUnit: () => '🍌'
   },
 
+  welcome: {
+    enabled: '👋 Welcome greetings on.',
+    disabled: '👋 Welcome greetings off.',
+    textSet: '✅ Welcome text saved. %name% is substituted.',
+    gifSet: '✅ Welcome gif saved.',
+    usage: '/welcome — toggle on/off. /welcome text with %name% — set the greeting. Reply to a gif with /welcome — set the gif.',
+    defaultGreeting: (name) => `👋 Welcome, ${name}!`
+  },
+
   extra: {
     saved: (name) => `✅ Saved #${name}`,
     deleted: (name) => `🗑 Deleted #${name}`,

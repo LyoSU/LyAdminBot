@@ -166,6 +166,49 @@ export class MongoStore {
     return true
   }
 
+  // ── welcome messages (off by default) ───────────────────────────────
+
+  /** Welcome config for a chat (v1 settings.welcome shape). */
+  async getWelcome(chatId: number): Promise<{ enable: boolean; texts: string[]; gifs: string[]; timer: number }> {
+    const group = await this.groups.findOne(
+      { group_id: chatId },
+      { projection: { 'settings.welcome': 1 } }
+    ) as { settings?: { welcome?: { enable?: boolean; texts?: unknown[]; gifs?: unknown[]; timer?: number } } } | null
+    const w = group?.settings?.welcome
+    return {
+      enable: w?.enable === true,
+      texts: (w?.texts ?? []).filter((t): t is string => typeof t === 'string' && t.length > 0),
+      gifs: (w?.gifs ?? []).filter((g): g is string => typeof g === 'string' && g.length > 0),
+      timer: Number.isFinite(Number(w?.timer)) && Number(w?.timer) > 0 ? Number(w?.timer) : 60
+    }
+  }
+
+  async setWelcomeEnabled(chatId: number, enable: boolean): Promise<void> {
+    await this.groups.updateOne(
+      { group_id: chatId },
+      { $set: { 'settings.welcome.enable': enable }, $setOnInsert: { group_id: chatId } },
+      { upsert: true }
+    )
+  }
+
+  /** Set a single welcome text (with %name%) and enable greetings. */
+  async setWelcomeText(chatId: number, text: string): Promise<void> {
+    await this.groups.updateOne(
+      { group_id: chatId },
+      { $set: { 'settings.welcome.texts': [text], 'settings.welcome.enable': true }, $setOnInsert: { group_id: chatId } },
+      { upsert: true }
+    )
+  }
+
+  /** Set a single welcome gif/animation (file id) and enable greetings. */
+  async setWelcomeGif(chatId: number, fileId: string): Promise<void> {
+    await this.groups.updateOne(
+      { group_id: chatId },
+      { $set: { 'settings.welcome.gifs': [fileId], 'settings.welcome.enable': true }, $setOnInsert: { group_id: chatId } },
+      { upsert: true }
+    )
+  }
+
   /** v2-additive per-user UI locale (users.v2Locale). */
   async getUserLocale(telegramId: number): Promise<string | null> {
     const doc = await this.users.findOne(

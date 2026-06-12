@@ -97,6 +97,17 @@ export interface Locale {
     bananUnit: (count: number) => string
   }
 
+  /** Welcome greetings for new members (off by default). */
+  welcome: {
+    enabled: string
+    disabled: string
+    textSet: string
+    gifSet: string
+    usage: string
+    /** Default greeting if an admin enables welcome without setting text. */
+    defaultGreeting: (name: string) => string
+  }
+
   /** Custom hashtag triggers (extras). */
   extra: {
     saved: (name: string) => string

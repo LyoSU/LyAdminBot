@@ -514,6 +514,74 @@ const mediaFileId = (msg: Message): string | null => {
   return media && typeof media.fileId === 'string' ? media.fileId : null
 }
 
+const pickRandom = <T>(arr: T[]): T | null => (arr.length === 0 ? null : arr[Math.floor(Math.random() * arr.length)] ?? null)
+
+/** New members from a join service message (added, via link, or approved). */
+const extractJoiners = async (message: Message): Promise<User[]> => {
+  const action = message.action
+  if (!action) return []
+  if (action.type === 'users_added') {
+    const ids = action.users.filter((id) => id !== selfId)
+    if (ids.length === 0) return []
+    const users = await gateway.tg.getUsers(ids).catch(() => [])
+    const out: User[] = []
+    for (const u of users) if (u instanceof User) out.push(u)
+    return out
+  }
+  if (action.type === 'user_joined_link' || action.type === 'user_joined_approved') {
+    return message.sender instanceof User ? [message.sender] : []
+  }
+  return []
+}
+
+/** Greet new members when welcome is enabled (off by default). */
+const handleWelcomeGreeting = async (message: Message, chat: Chat, joiners: User[]): Promise<void> => {
+  if (joiners.length === 0) return
+  const welcome = await store.getWelcome(chat.id).catch(() => null)
+  if (!welcome || !welcome.enable) return
+  const groupDoc = await store.getGroupDoc(chat.id).catch(() => null)
+  const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
+  const names = joiners.map((j) => `<b>${escapeName(j.displayName)}</b>`).join(', ')
+  const template = pickRandom(welcome.texts)
+  const body = template ? template.replace(/%name%/g, names) : locale.welcome.defaultGreeting(names)
+  const gif = pickRandom(welcome.gifs)
+  const sent = gif
+    ? await gateway.tg.sendMedia(chat.id, gif, { replyTo: message.id, caption: viewHtml(body) }).catch(() => null)
+    : await gateway.tg.sendText(chat.id, viewHtml(body), { replyTo: message.id }).catch(() => null)
+  if (sent) scheduleDelete(chat.id, sent.id, welcome.timer * 1000, 'welcome')
+  log.info('welcome', { chatId: chat.id, chat: chat.title ?? undefined, joiners: joiners.map((j) => j.id) })
+}
+
+/** /welcome: toggle, or set text (`/welcome <text>`), or set gif (reply). */
+const handleWelcomeCommand = async (message: Message, chat: Chat, caller: User, rest: string): Promise<void> => {
+  if (!(await isChatAdmin(chat.id, caller.id))) return
+  const locale = await localeFor(caller.id, caller.language)
+  const ack = async (text: string): Promise<void> => {
+    const sent = await gateway.tg.replyText(message, viewHtml(text)).catch(() => null)
+    if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'welcome_ack')
+  }
+  const replied = await gateway.fetchRepliedMessage(message)
+  if (replied) {
+    const fileId = mediaFileId(replied)
+    if (fileId) {
+      await store.setWelcomeGif(chat.id, fileId).catch(() => { /* best-effort */ })
+      log.info('welcome_set', { chatId: chat.id, by: caller.id, kind: 'gif' })
+      await ack(locale.welcome.gifSet)
+      return
+    }
+  }
+  if (rest.trim().length > 0) {
+    await store.setWelcomeText(chat.id, rest.trim()).catch(() => { /* best-effort */ })
+    log.info('welcome_set', { chatId: chat.id, by: caller.id, kind: 'text' })
+    await ack(locale.welcome.textSet)
+    return
+  }
+  const current = await store.getWelcome(chat.id).catch(() => ({ enable: false }))
+  await store.setWelcomeEnabled(chat.id, !current.enable).catch(() => { /* best-effort */ })
+  log.info('welcome_toggle', { chatId: chat.id, by: caller.id, enabled: !current.enable })
+  await ack(!current.enable ? locale.welcome.enabled : locale.welcome.disabled)
+}
+
 /**
  * /extra <name> (admin): reply to a message → save it under #name; no reply →
  * delete that extra. /extras → list names. Triggers fire on #name hashtags.
@@ -606,6 +674,15 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     return
   }
   if (chat.chatType !== 'supergroup' && chat.chatType !== 'group') return
+
+  // Service messages (joins, leaves, pins…) never go through the spam
+  // pipeline. Join service messages may trigger a welcome greeting.
+  if (message.action) {
+    const joiners = await extractJoiners(message)
+    if (joiners.length > 0) await handleWelcomeGreeting(message, chat, joiners)
+    return
+  }
+
   const sender = message.sender
   if (!(sender instanceof User)) return // anonymous admins / channel posts
   if (sender.id === selfId) return
@@ -667,6 +744,10 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   }
   if (/^\/extra(@\w+)?(\s|$)/.test(commandText)) {
     await handleExtraCommand(message, chat, sender, commandText.split(/\s+/)[1])
+    return
+  }
+  if (/^\/welcome(@\w+)?(\s|$)/.test(commandText)) {
+    await handleWelcomeCommand(message, chat, sender, commandText.replace(/^\/welcome(@\w+)?\s*/, ''))
     return
   }
 

@@ -140,6 +140,15 @@ export const ru: Locale = {
     bananUnit: () => '🍌'
   },
 
+  welcome: {
+    enabled: '👋 Приветствия включены.',
+    disabled: '👋 Приветствия выключены.',
+    textSet: '✅ Текст приветствия сохранён. Подстановка %name% работает.',
+    gifSet: '✅ Гифка для приветствия сохранена.',
+    usage: '/welcome — включить/выключить. /welcome текст с %name% — задать приветствие. Ответ гифкой на /welcome — задать гифку.',
+    defaultGreeting: (name) => `👋 Добро пожаловать, ${name}!`
+  },
+
   extra: {
     saved: (name) => `✅ Сохранил #${name}`,
     deleted: (name) => `🗑 Удалил #${name}`,

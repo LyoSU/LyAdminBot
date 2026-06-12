@@ -25,7 +25,19 @@ export const formatLogLine = (
   return JSON.stringify(out)
 }
 
+const LEVEL_ORDER: Record<LogLevel, number> = { debug: 10, info: 20, warn: 30, error: 40 }
+
+/**
+ * Minimum level to emit. Defaults to 'info' so the chatty per-message
+ * `observe` debug lines stay out of prod; set LOG_LEVEL=debug to see them.
+ */
+const minLevel = (): number => {
+  const env = (process.env['LOG_LEVEL'] ?? 'info').toLowerCase()
+  return LEVEL_ORDER[env as LogLevel] ?? LEVEL_ORDER.info
+}
+
 const emit = (level: LogLevel, event: string, fields?: LogFields): void => {
+  if (LEVEL_ORDER[level] < minLevel()) return
   const line = formatLogLine(level, event, fields, new Date())
   if (level === 'error' || level === 'warn') process.stderr.write(line + '\n')
   else process.stdout.write(line + '\n')
