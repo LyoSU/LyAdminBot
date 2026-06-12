@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+.mtcute-session
+**/.mtcute-session
+*.session
+*.session-shm
+*.session-wal
+*-session*
+.env
+*.log
+Dockerfile
+.dockerignore
