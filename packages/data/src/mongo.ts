@@ -228,6 +228,22 @@ export class MongoStore {
 
   // ── writes ───────────────────────────────────────────────────────────
 
+  /**
+   * Persist external ban-database lookups under user.externalBan.{lols,cas}.
+   * Each side is written only when present, so a single failed source never
+   * overwrites a previously-cached good answer with a hole.
+   */
+  async saveExternalBan(
+    telegramId: number,
+    lookup: { lols: object | null; cas: object | null }
+  ): Promise<void> {
+    const set: Record<string, unknown> = {}
+    if (lookup.lols) set['externalBan.lols'] = lookup.lols
+    if (lookup.cas) set['externalBan.cas'] = lookup.cas
+    if (Object.keys(set).length === 0) return
+    await this.users.updateOne({ telegram_id: telegramId }, { $set: set }, { upsert: true })
+  }
+
   /** Track first-seen + global message counters (additive to v1 fields). */
   async touchUser(telegramId: number): Promise<void> {
     await this.users.updateOne(

@@ -12,6 +12,7 @@ import {
 import {
   TelegramGateway, applyVerdict, buildUserSnapshot, normalizeMessage,
   fetchUserProfile, downloadPhotoBase64,
+  fetchExternalBan, needsExternalRecheck,
   type IncomingMessage
 } from '@lyadmin/adapters'
 import {
@@ -19,7 +20,7 @@ import {
   OpenAiModerationPort, OpenRouterLlmPort, MemoryVelocityPort,
   MemorySessionPort, MemoryConversationWindow,
   matchExtras,
-  groupDocToChatPolicy, presetToThreshold, userDocToHistory,
+  groupDocToChatPolicy, presetToThreshold, userDocToHistory, mergeExternalBan,
   type NormalizedExtra
 } from '@lyadmin/data'
 import {
@@ -822,7 +823,27 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     ? await fetchUserProfile(gateway.tg, sender.id)
     : { bio: null, avatars: null, unofficialClientRisk: null }
 
-  const user = buildUserSnapshot(sender, history === null ? null : { ...history, avatars: profile.avatars }, undefined, {
+  // External ban databases (lols/CAS): refresh a newish sender past the TTL,
+  // persist the result, and use it for THIS message so a first post is caught.
+  let externalBan = history?.externalBan ?? null
+  if (newish && policy.externalBanEnabled) {
+    const cached = (userDoc as { externalBan?: {
+      lols?: { checkedAt?: Date }; cas?: { checkedAt?: Date }
+    } } | null)?.externalBan
+    const now = Date.now()
+    if (needsExternalRecheck(cached?.lols?.checkedAt, now) || needsExternalRecheck(cached?.cas?.checkedAt, now)) {
+      const fresh = await fetchExternalBan(sender.id)
+      if (fresh) {
+        store.saveExternalBan(sender.id, fresh).catch(() => { /* cache is best-effort */ })
+        externalBan = mergeExternalBan({
+          lols: fresh.lols ?? (cached?.lols as never),
+          cas: fresh.cas ?? (cached?.cas as never)
+        })
+      }
+    }
+  }
+
+  const user = buildUserSnapshot(sender, history === null ? null : { ...history, avatars: profile.avatars, externalBan }, undefined, {
     unofficialClientRisk: profile.unofficialClientRisk
   })
 

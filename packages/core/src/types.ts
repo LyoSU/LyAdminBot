@@ -148,6 +148,8 @@ export interface ChatPolicy {
   preset: StrictnessPreset
   captchaEnabled: boolean
   votingEnabled: boolean
+  /** Honour external ban databases (lols/CAS); v1 `settings.banDatabase`. */
+  externalBanEnabled: boolean
   reactionModeration: boolean
   customRules: string[] // "ALLOW: ..." / "DENY: ..."
   trustedUserIds: number[]

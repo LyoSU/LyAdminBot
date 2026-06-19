@@ -49,7 +49,7 @@ const LIMIT = argValue('--limit', 5000)
 
 const defaultPolicy: ChatPolicy = {
   enabled: true, preset: 'standard', captchaEnabled: false, votingEnabled: true,
-  reactionModeration: false, customRules: [], trustedUserIds: []
+  reactionModeration: false, externalBanEnabled: true, customRules: [], trustedUserIds: []
 }
 
 const unknownUser = (userId: number): UserSnapshot => ({

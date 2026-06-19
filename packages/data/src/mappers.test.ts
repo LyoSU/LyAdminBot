@@ -46,6 +46,16 @@ describe('groupDocToChatPolicy', () => {
     expect(policy.votingEnabled).toBe(true)
     expect(policy.captchaEnabled).toBe(false)
   })
+
+  it('external ban databases are on by default (v1 banDatabase parity)', () => {
+    expect(groupDocToChatPolicy(null).externalBanEnabled).toBe(true)
+    expect(groupDocToChatPolicy({ group_id: -1, settings: {} }).externalBanEnabled).toBe(true)
+  })
+
+  it('respects a group that turned external ban databases off', () => {
+    const policy = groupDocToChatPolicy({ group_id: -1, settings: { banDatabase: false } })
+    expect(policy.externalBanEnabled).toBe(false)
+  })
 })
 
 describe('countRecentChanges (v1 semantics)', () => {
@@ -90,6 +100,14 @@ describe('userDocToHistory', () => {
   it('cas-only ban maps to banned with zero spam factor', () => {
     const history = userDocToHistory({ telegram_id: 1, externalBan: { cas: { banned: true } } }, 0, NOW)!
     expect(history.externalBan).toEqual({ banned: true, spamFactor: 0 })
+  })
+
+  it('a flagged scammer maps to a maximal spam factor', () => {
+    const history = userDocToHistory(
+      { telegram_id: 1, externalBan: { lols: { banned: false, spamFactor: 0.1, scammer: true } } },
+      0, NOW
+    )!
+    expect(history.externalBan).toEqual({ banned: false, spamFactor: 1 })
   })
 
   it('null doc → null history', () => {

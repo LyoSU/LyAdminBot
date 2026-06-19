@@ -20,7 +20,7 @@ const makeInput = (chatId: number, userId: number, text: string): EvaluationInpu
   },
   policy: {
     enabled: true, preset: 'standard', captchaEnabled: false, votingEnabled: true,
-    reactionModeration: false, customRules: [], trustedUserIds: []
+    reactionModeration: false, externalBanEnabled: true, customRules: [], trustedUserIds: []
   },
   enrichment: { bio: null, resolvedMentions: [], conversationWindow: [], photoBase64: null }
 })

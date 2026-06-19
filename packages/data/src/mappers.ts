@@ -9,9 +9,10 @@ export interface GroupDoc {
   group_id: number
   settings?: {
     locale?: string
+    /** v1 toggle for the external ban databases (lols/CAS). Default true. */
+    banDatabase?: boolean
     openaiSpamCheck?: {
       enabled?: boolean
-      globalBan?: boolean
       confidenceThreshold?: number
       customRules?: string[]
       trustedUsers?: number[]
@@ -53,6 +54,7 @@ export const groupDocToChatPolicy = (doc: GroupDoc | null): ChatPolicy => {
     preset: thresholdToPreset(spam?.confidenceThreshold),
     captchaEnabled: doc?.settings?.captcha?.enabled ?? false,
     votingEnabled: doc?.settings?.voting?.enabled ?? true,
+    externalBanEnabled: doc?.settings?.banDatabase ?? true,
     reactionModeration: false, // v2 feature, shadow-off for the first month
     customRules: spam?.customRules ?? [],
     trustedUserIds: spam?.trustedUsers ?? []
@@ -73,7 +75,7 @@ export interface UserDoc {
     status?: 'trusted' | 'neutral' | 'suspicious' | 'restricted'
   }
   externalBan?: {
-    lols?: { banned?: boolean; spamFactor?: number }
+    lols?: { banned?: boolean; spamFactor?: number; scammer?: boolean }
     cas?: { banned?: boolean }
   }
   nameHistory?: { value?: string; seenAt?: Date | string }[]
@@ -115,6 +117,27 @@ export interface UserHistoryView {
   avatars: { count: number; latestSetDaysAgo: number | null } | null
 }
 
+/** Sub-document shape persisted by the external ban-database lookups. */
+export interface ExternalBanSubdoc {
+  lols?: { banned?: boolean; spamFactor?: number; scammer?: boolean } | null
+  cas?: { banned?: boolean } | null
+}
+
+/**
+ * Collapse the per-source records into one domain value. banned is the OR of
+ * both databases; a confirmed scammer is treated as maximally spammy
+ * regardless of the reported factor. Returns null when there is nothing to say.
+ */
+export const mergeExternalBan = (
+  externalBan: ExternalBanSubdoc | null | undefined
+): { banned: boolean; spamFactor: number } | null => {
+  const lols = externalBan?.lols
+  const cas = externalBan?.cas
+  const banned = Boolean(lols?.banned) || Boolean(cas?.banned)
+  const spamFactor = lols?.scammer ? 1 : (lols?.spamFactor ?? 0)
+  return banned || spamFactor > 0 ? { banned, spamFactor } : null
+}
+
 export const userDocToHistory = (
   doc: UserDoc | null,
   messagesInChat: number,
@@ -122,10 +145,6 @@ export const userDocToHistory = (
 ): UserHistoryView | null => {
   if (!doc) return null
   const stats = doc.globalStats ?? {}
-  const lols = doc.externalBan?.lols
-  const cas = doc.externalBan?.cas
-  const banned = Boolean(lols?.banned) || Boolean(cas?.banned)
-  const spamFactor = lols?.spamFactor ?? 0
   return {
     firstSeenUnix: stats.firstSeen ? Math.floor(new Date(stats.firstSeen).getTime() / 1000) : null,
     messagesInChat,
@@ -134,7 +153,7 @@ export const userDocToHistory = (
     spamDetections: stats.spamDetections ?? 0,
     reputationScore: doc.reputation?.score ?? 50,
     reputationStatus: doc.reputation?.status ?? 'neutral',
-    externalBan: banned || spamFactor > 0 ? { banned, spamFactor } : null,
+    externalBan: mergeExternalBan(doc.externalBan),
     nameChurn24h: countRecentChanges(doc.nameHistory, nowMs),
     usernameChurn24h: countRecentChanges(doc.usernameHistory, nowMs),
     avatars: null // avatars come from live enrichment, not Mongo
