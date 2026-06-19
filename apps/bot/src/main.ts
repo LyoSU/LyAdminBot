@@ -87,6 +87,16 @@ const rememberVerdict = (chatId: number, messageId: number, verdict: Verdict): v
     if (firstKey) recentVerdicts.delete(firstKey)
   }
 }
+/**
+ * Verdict for the Why?/override path: the in-process cache first, then the
+ * persisted decision (pipeline_decisions, 90d) so a restart never silently
+ * strips the Why? card or the admin's undo path.
+ */
+const recallVerdict = async (chatId: number, messageId: number): Promise<Verdict | null> => {
+  const cached = recentVerdicts.get(`${chatId}:${messageId}`)
+  if (cached) return cached
+  return store.getDecision(chatId, messageId).catch(() => null)
+}
 
 /** Forward origins of recently actioned messages — for clean-reports on override. */
 const recentForwards = new Map<string, ForwardOrigin>()
@@ -244,14 +254,15 @@ const enforceVoteSpam = async (vote: {
   chatId: number
   messageId: number
   targetUserId: number
-  textPreview: string
+  /** Full text to learn (not the truncated display preview). */
+  learnText: string
 }, learnSource: string): Promise<void> => {
   await gateway.moderationActions.deleteMessage(vote.chatId, vote.messageId)
     .catch(() => { /* already gone */ })
   await gateway.moderationActions.mute(vote.chatId, vote.targetUserId, MUTE_AFTER_VOTE_SECONDS)
     .catch(() => { /* may lack rights */ })
-  if (vote.textPreview.trim().length > 0) {
-    await signaturePort.learn(vote.textPreview, learnSource, 'confirmed').catch(() => { /* best-effort */ })
+  if (vote.learnText.trim().length > 0) {
+    await signaturePort.learn(vote.learnText, learnSource, 'confirmed').catch(() => { /* best-effort */ })
   }
 }
 
@@ -319,7 +330,7 @@ const handlePrivateMessage = async (message: Message): Promise<void> => {
     // why_<chatId>_<messageId>_<userId>; chatId is negative but holds no '_'.
     const [chatIdRaw = '', messageIdRaw = '', userIdRaw = ''] = payload.slice('why_'.length).split('_')
     const chatId = Number(chatIdRaw)
-    const verdict = recentVerdicts.get(`${chatId}:${Number(messageIdRaw)}`)
+    const verdict = await recallVerdict(chatId, Number(messageIdRaw))
     if (verdict) {
       const canOverride = Number.isFinite(chatId) && await isChatAdmin(chatId, sender.id)
       await sendView(message, whyCard(locale, verdict, {
@@ -445,6 +456,35 @@ const handleKick = async (message: Message, chat: Chat, caller: User): Promise<v
   if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'kick')
 }
 
+/**
+ * /untrust — admin revokes the chat-level auto-trust an override granted.
+ * The reversible counterpart to the override's addTrustedUser, closing the
+ * "one wrong override protects a spammer forever" gap. Reply required.
+ */
+const handleUntrust = async (message: Message, chat: Chat, caller: User): Promise<void> => {
+  const locale = await localeFor(caller.id, caller.language)
+  if (!(await isChatAdmin(chat.id, caller.id))) return
+  const dropCommand = (): Promise<void> =>
+    gateway.tg.deleteMessagesById(chat.id, [message.id]).catch(() => { /* no rights */ })
+  const replied = await gateway.fetchRepliedMessage(message)
+  if (!replied) {
+    await sendView(message, { text: locale.untrust.needReply, buttons: [] })
+    return
+  }
+  const target = replied.sender
+  if (!(target instanceof User)) return
+  const removed = await store.removeTrustedUser(chat.id, target.id).catch(() => false)
+  await dropCommand()
+  log.info('untrust', {
+    chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName,
+    by: caller.id, byName: caller.displayName, wasTrusted: removed
+  })
+  const text = removed ? locale.untrust.success(escapeName(target.displayName))
+    : locale.untrust.notTrusted(escapeName(target.displayName))
+  const sent = await gateway.tg.sendText(chat.id, viewHtml(text)).catch(() => null)
+  if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'untrust')
+}
+
 /** /del — admin deletes the replied-to message (and the command). */
 const handleDelete = async (message: Message, chat: Chat, caller: User): Promise<void> => {
   if (!(await isChatAdmin(chat.id, caller.id))) return
@@ -485,13 +525,15 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
     return
   }
 
-  const textPreview = (replied.text ?? '').slice(0, 200)
+  const fullText = replied.text ?? ''
+  const textPreview = fullText.slice(0, 200)
   await store.openVote({
     chatId: chat.id,
     messageId: replied.id,
     targetUserId: target.id,
     targetLabel: target.displayName,
     textPreview,
+    learnText: fullText,
     openedBy: reporter.id
   }).catch(() => false) // duplicate vote → just add the ballot below
 
@@ -516,7 +558,7 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
     if (!(await store.closeVote(chat.id, replied.id, 'spam'))) return
     log.info('vote_resolved', { chatId: chat.id, userId: target.id, messageId: replied.id, outcome: 'spam', by: 'admin_report' })
     await enforceVoteSpam({
-      chatId: chat.id, messageId: replied.id, targetUserId: target.id, textPreview
+      chatId: chat.id, messageId: replied.id, targetUserId: target.id, learnText: fullText
     }, 'admin_report')
     const verdict: Verdict = {
       pSpam: 0.99, action: 'mute', needsVote: false, decidedBy: 'deterministic',
@@ -761,6 +803,10 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     await handleKick(message, chat, sender)
     return
   }
+  if (/^\/untrust(@\w+)?$/.test(commandText)) {
+    await handleUntrust(message, chat, sender)
+    return
+  }
   if (/^\/del(@\w+)?$/.test(commandText)) {
     await handleDelete(message, chat, sender)
     return
@@ -823,10 +869,12 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     ? await fetchUserProfile(gateway.tg, sender.id)
     : { bio: null, avatars: null, unofficialClientRisk: null }
 
-  // External ban databases (lols/CAS): refresh a newish sender past the TTL,
-  // persist the result, and use it for THIS message so a first post is caught.
+  // External ban databases (lols/CAS): one cheap HTTP call, so it runs for
+  // EVERY sender (not just newish) — an established member added to CAS
+  // tomorrow must still be re-checked once the TTL lapses. Persist the
+  // result and use it for THIS message so a first post is caught.
   let externalBan = history?.externalBan ?? null
-  if (newish && policy.externalBanEnabled) {
+  if (policy.externalBanEnabled) {
     const cached = (userDoc as { externalBan?: {
       lols?: { checkedAt?: Date }; cas?: { checkedAt?: Date }
     } } | null)?.externalBan
@@ -1134,7 +1182,7 @@ const wireCallbacks = (): void => {
         await enforceVoteSpam({
           chatId, messageId,
           targetUserId: Number(vote['targetUserId'] ?? 0),
-          textPreview: String(vote['textPreview'] ?? '')
+          learnText: String(vote['learnText'] ?? vote['textPreview'] ?? '')
         }, 'community_vote')
       } else {
         // Ham: lift whatever the pipeline applied. Admin ham ballot carries
@@ -1183,7 +1231,7 @@ const wireCallbacks = (): void => {
 
     if (kind === 'why') {
       const [chatId = '', messageId = ''] = parts
-      const verdict = recentVerdicts.get(`${chatId}:${messageId}`)
+      const verdict = await recallVerdict(Number(chatId), Number(messageId))
       await query.answer({
         text: verdict ? whyView(locale, verdict).slice(0, 200) : '…',
         alert: true
@@ -1198,7 +1246,7 @@ const wireCallbacks = (): void => {
         await query.answer({ text: locale.notification.adminOnly, alert: true })
         return
       }
-      const verdict = recentVerdicts.get(`${chatIdRaw}:${messageIdRaw}`)
+      const verdict = await recallVerdict(chatId, Number(messageIdRaw))
       await store.recordOverride({
         chatId,
         messageId: Number(messageIdRaw),

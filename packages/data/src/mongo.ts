@@ -317,6 +317,29 @@ export class MongoStore {
   }
 
   /**
+   * Rebuild a best-effort Verdict from the persisted decision, so the Why?
+   * card and admin override survive a restart (the in-process verdict cache
+   * is lost, but pipeline_decisions keeps the record for 90d). Signal
+   * evidence is not persisted, so only signal names come back.
+   */
+  async getDecision(chatId: number, messageId: number): Promise<Verdict | null> {
+    const doc = await this.decisions.findOne({ chatId, messageId }, { sort: { createdAt: -1 } })
+    if (!doc) return null
+    const signalNames = Array.isArray(doc['signals']) ? (doc['signals'] as unknown[]) : []
+    return {
+      pSpam: Number(doc['pSpam'] ?? 0),
+      action: (doc['action'] ?? 'none') as Verdict['action'],
+      needsVote: Boolean(doc['needsVote']),
+      decidedBy: (doc['decidedBy'] ?? 'error') as Verdict['decidedBy'],
+      ruleId: (doc['ruleId'] as string | null) ?? null,
+      signals: signalNames.map((n) => ({ name: String(n) })),
+      reasonCode: String(doc['reasonCode'] ?? 'unknown'),
+      reasonEvidence: (doc['textPreview'] as string | null) ?? null,
+      meta: (doc['meta'] as Record<string, string | number | boolean>) ?? {}
+    }
+  }
+
+  /**
    * Admin override implies chat-level trust: the admin has vouched for
    * this user, so the same person must never be auto-actioned here again.
    * (Trusted is a policy CAP, not a blind pass — promo content still goes
@@ -330,6 +353,16 @@ export class MongoStore {
     )
   }
 
+  /** Reverse of addTrustedUser — revoke an auto-trust an admin granted by mistake.
+   * Returns whether the user was actually in the trusted list. */
+  async removeTrustedUser(chatId: number, userId: number): Promise<boolean> {
+    const res = await this.groups.updateOne(
+      { group_id: chatId },
+      { $pull: { 'settings.openaiSpamCheck.trustedUsers': userId } } as never
+    )
+    return res.modifiedCount > 0
+  }
+
   // ── community votes (survive restarts; TTL 7d like modevents) ─────────
 
   /** Open a vote. Returns false when one already exists for this message. */
@@ -339,6 +372,8 @@ export class MongoStore {
     targetUserId: number
     targetLabel: string
     textPreview: string
+    /** Full message text for signature learning on resolution (preview is display-only). */
+    learnText?: string
     openedBy: number
   }): Promise<boolean> {
     try {
@@ -348,6 +383,7 @@ export class MongoStore {
         targetUserId: params.targetUserId,
         targetLabel: params.targetLabel.slice(0, 64),
         textPreview: params.textPreview.slice(0, 200),
+        learnText: (params.learnText ?? params.textPreview).slice(0, 1000),
         openedBy: params.openedBy,
         promptMessageId: null,
         ballots: [],

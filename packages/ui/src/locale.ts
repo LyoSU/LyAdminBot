@@ -103,6 +103,13 @@ export interface Locale {
     needReply: string
   }
 
+  /** /untrust — admin revokes the auto-trust granted by an override. */
+  untrust: {
+    success: (name: string) => string
+    needReply: string
+    notTrusted: (name: string) => string
+  }
+
   /** Welcome greetings for new members (off by default). */
   welcome: {
     enabled: string

@@ -145,6 +145,12 @@ export const en: Locale = {
     needReply: 'Reply to the message of whoever you want to kick with /kick.'
   },
 
+  untrust: {
+    success: (name) => `🔓 Trust revoked for ${name}. Their messages go through the checks again.`,
+    needReply: 'Reply to the message of whoever you want to untrust with /untrust.',
+    notTrusted: (name) => `${name} was not in the trusted list anyway.`
+  },
+
   welcome: {
     enabled: '👋 Welcome greetings on.',
     disabled: '👋 Welcome greetings off.',
