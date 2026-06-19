@@ -246,6 +246,22 @@ export class MongoStore {
     await this.users.updateOne({ telegram_id: telegramId }, { $set: set }, { upsert: true })
   }
 
+  /**
+   * Recent confirmed-spam sample texts — the raw material for the LLM
+   * "active campaigns this week" briefing (dynamic few-shot self-learning).
+   */
+  async recentConfirmedSpamSamples(limit: number, sinceMs: number): Promise<string[]> {
+    const docs = await this.spamSignatures
+      .find(
+        { status: 'confirmed', lastSeenAt: { $gte: new Date(sinceMs) } },
+        { projection: { sampleText: 1 }, sort: { lastSeenAt: -1 }, limit }
+      )
+      .toArray()
+    return docs
+      .map((d) => String((d as { sampleText?: string }).sampleText ?? ''))
+      .filter((t) => t.trim().length > 0)
+  }
+
   /** Track first-seen + global message counters (additive to v1 fields). */
   async touchUser(telegramId: number): Promise<void> {
     await this.users.updateOne(

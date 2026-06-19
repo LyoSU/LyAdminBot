@@ -6,6 +6,7 @@
  * Status mapping for points written by v1 (which had no status field):
  * confirmed = explicitly marked OR seen often enough to be cross-verified.
  */
+import { randomUUID } from 'node:crypto'
 import { QdrantClient } from '@qdrant/js-client-rest'
 import OpenAI from 'openai'
 import type { VectorMatch, VectorPort } from '@lyadmin/core'
@@ -81,6 +82,34 @@ export class QdrantVectorPort implements VectorPort {
       }
     }
     return null
+  }
+
+  /**
+   * Self-learning ingest: embed a community-confirmed spam text and upsert it
+   * as a confirmed point, so the vector layer learns alongside signatures
+   * (previously Qdrant was read-only and frozen at its v1 state). Best-effort:
+   * a failed embed/upsert never throws into the moderation path.
+   */
+  async learn(text: string, source: string): Promise<void> {
+    if (!hasTextualContent(text)) return
+    const embedding = await this.embed(text)
+    if (!embedding) return
+    try {
+      await this.qdrant.upsert(SPAM_COLLECTION, {
+        points: [{
+          id: randomUUID(),
+          vector: embedding,
+          payload: {
+            classification: 'spam',
+            status: 'confirmed',
+            source,
+            hitCount: CONFIRMED_HIT_COUNT,
+            confidence: CONFIRMED_CONFIDENCE,
+            createdAt: new Date().toISOString()
+          }
+        }]
+      })
+    } catch { /* best-effort, mirrors signaturePort.learn */ }
   }
 
   private async embed(text: string): Promise<number[] | null> {

@@ -41,6 +41,15 @@ const velocityPort = new MemoryVelocityPort()
 const signaturePort = new MongoSignaturePort(store)
 const forwardPort = new MongoForwardPort(store)
 const conversationWindow = new MemoryConversationWindow()
+// Module-level handle so the vote path can self-learn into Qdrant, not just
+// search it. Null when embeddings/Qdrant are not configured.
+const vectorPort = config.qdrantUrl && config.openaiApiKey
+  ? new QdrantVectorPort({
+      qdrantUrl: config.qdrantUrl,
+      qdrantApiKey: config.qdrantApiKey ?? undefined,
+      openaiApiKey: config.openaiApiKey
+    })
+  : null
 
 const buildPorts = (): PipelinePorts => {
   const ports: PipelinePorts = {
@@ -49,13 +58,7 @@ const buildPorts = (): PipelinePorts => {
     session: sessionPort,
     forwards: forwardPort
   }
-  if (config.qdrantUrl && config.openaiApiKey) {
-    ports.vectors = new QdrantVectorPort({
-      qdrantUrl: config.qdrantUrl,
-      qdrantApiKey: config.qdrantApiKey ?? undefined,
-      openaiApiKey: config.openaiApiKey
-    })
-  }
+  if (vectorPort) ports.vectors = vectorPort
   if (config.openaiApiKey) {
     ports.moderation = new OpenAiModerationPort(config.openaiApiKey)
   }
@@ -63,10 +66,27 @@ const buildPorts = (): PipelinePorts => {
     ports.llm = new OpenRouterLlmPort({
       apiKey: config.openrouterApiKey,
       cheapModel: config.llmCheapModel,
-      strongModel: config.llmStrongModel
+      strongModel: config.llmStrongModel,
+      briefingProvider: campaignBriefing
     }, store)
   }
   return ports
+}
+
+// Daily campaign briefing for the LLM: recent confirmed-spam samples, cached
+// so the per-classify hook stays cheap. Null when there is nothing fresh.
+const BRIEFING_TTL_MS = 10 * 60 * 1000
+const BRIEFING_WINDOW_MS = 7 * 86400 * 1000
+let briefingCache: { text: string | null; at: number } = { text: null, at: 0 }
+const campaignBriefing = async (): Promise<string | null> => {
+  const now = Date.now()
+  if (briefingCache.at !== 0 && now - briefingCache.at < BRIEFING_TTL_MS) return briefingCache.text
+  const samples = await store.recentConfirmedSpamSamples(8, now - BRIEFING_WINDOW_MS).catch(() => [])
+  const text = samples.length > 0
+    ? samples.map((s) => `- ${s.replace(/\s+/g, ' ').slice(0, 120)}`).join('\n')
+    : null
+  briefingCache = { text, at: now }
+  return text
 }
 
 const gateway = new TelegramGateway({
@@ -263,6 +283,9 @@ const enforceVoteSpam = async (vote: {
     .catch(() => { /* may lack rights */ })
   if (vote.learnText.trim().length > 0) {
     await signaturePort.learn(vote.learnText, learnSource, 'confirmed').catch(() => { /* best-effort */ })
+    // Seed the vector layer too, so semantic matching learns alongside
+    // signatures instead of staying frozen at the v1 snapshot.
+    await vectorPort?.learn(vote.learnText, learnSource).catch(() => { /* best-effort */ })
   }
 }
 
