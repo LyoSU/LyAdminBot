@@ -1,0 +1,15 @@
+{
+  "name": "@lyadmin/cas-harvest",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "dependencies": {
+    "@lyadmin/adapters": "workspace:*",
+    "@lyadmin/core": "workspace:*",
+    "@lyadmin/data": "workspace:*",
+    "mongodb": "^6.10.0"
+  },
+  "scripts": {
+    "harvest": "tsx src/harvest.ts"
+  }
+}

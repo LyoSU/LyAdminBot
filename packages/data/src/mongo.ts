@@ -49,6 +49,8 @@ export class MongoStore {
   get feedback(): Collection<Document> { return this.collection('pipeline_feedback') }
   get llmCache(): Collection<Document> { return this.collection('llm_cache') }
   get votes(): Collection<Document> { return this.collection('pipeline_votes') }
+  /** Resume cursor for the offline CAS signature harvester (tools/cas-harvest). */
+  get harvestState(): Collection<Document> { return this.collection('cas_harvest_state') }
 
   private async ensureIndexes(): Promise<void> {
     await this.decisions.createIndex({ createdAt: 1 }, { expireAfterSeconds: DECISIONS_TTL_DAYS * 86400 })

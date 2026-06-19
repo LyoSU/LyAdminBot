@@ -77,6 +77,21 @@ importers:
         specifier: workspace:*
         version: link:../core
 
+  tools/cas-harvest:
+    dependencies:
+      '@lyadmin/adapters':
+        specifier: workspace:*
+        version: link:../../packages/adapters
+      '@lyadmin/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@lyadmin/data':
+        specifier: workspace:*
+        version: link:../../packages/data
+      mongodb:
+        specifier: ^6.10.0
+        version: 6.21.0
+
   tools/replay:
     dependencies:
       '@lyadmin/core':
