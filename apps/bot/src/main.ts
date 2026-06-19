@@ -1035,7 +1035,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   }
 
   if (result.applied && verdict.action !== 'none' && verdict.action !== 'observe' && verdict.action !== 'captcha') {
-    sessionPort.reset(chat.id, sender.id)
+    void sessionPort.reset(chat.id, sender.id).catch(() => { /* best-effort */ })
     rememberVerdict(chat.id, message.id, verdict)
     // Forwarded spam builds the long-term reputation of its origin.
     if (normalized.forward) {

@@ -6,11 +6,18 @@
  * Status mapping for points written by v1 (which had no status field):
  * confirmed = explicitly marked OR seen often enough to be cross-verified.
  */
-import { randomUUID } from 'node:crypto'
 import { QdrantClient } from '@qdrant/js-client-rest'
 import OpenAI from 'openai'
 import type { VectorMatch, VectorPort } from '@lyadmin/core'
 import { hasTextualContent } from '@lyadmin/core'
+import { sha256 } from './hashing.js'
+
+/** Deterministic point id from the text, so re-learning the same spam upserts
+ * the same point instead of piling up duplicate vectors. */
+const pointIdFor = (text: string): string => {
+  const h = sha256(text)
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`
+}
 
 const SPAM_COLLECTION = 'spam_vectors'
 const EMBEDDING_MODEL = 'text-embedding-3-small'
@@ -97,7 +104,7 @@ export class QdrantVectorPort implements VectorPort {
     try {
       await this.qdrant.upsert(SPAM_COLLECTION, {
         points: [{
-          id: randomUUID(),
+          id: pointIdFor(text),
           vector: embedding,
           payload: {
             classification: 'spam',

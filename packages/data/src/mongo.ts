@@ -58,6 +58,8 @@ export class MongoStore {
   private async ensureIndexes(): Promise<void> {
     await this.decisions.createIndex({ createdAt: 1 }, { expireAfterSeconds: DECISIONS_TTL_DAYS * 86400 })
     await this.decisions.createIndex({ chatId: 1, userId: 1, createdAt: -1 })
+    // Why?/override lookup (getDecision) filters by chat+message.
+    await this.decisions.createIndex({ chatId: 1, messageId: 1, createdAt: -1 })
     await this.feedback.createIndex({ chatId: 1, messageId: 1 })
     await this.llmCache.createIndex({ createdAt: 1 }, { expireAfterSeconds: LLM_CACHE_TTL_DAYS * 86400 })
     await this.llmCache.createIndex({ key: 1 }, { unique: true })
