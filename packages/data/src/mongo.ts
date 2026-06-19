@@ -254,6 +254,25 @@ export class MongoStore {
   }
 
   /**
+   * False-positive counts grouped by what decided them — the input to the
+   * calibration runbook (docs/calibration.md). Each pipeline_feedback
+   * `override_not_spam` is an admin-confirmed FP; grouping by decidedBy/ruleId
+   * shows which signals/rules to demote in score.ts.
+   */
+  async falsePositivesByRule(sinceMs: number): Promise<{ decidedBy: string; ruleId: string | null; count: number }[]> {
+    const rows = await this.feedback.aggregate([
+      { $match: { kind: 'override_not_spam', createdAt: { $gte: new Date(sinceMs) } } },
+      { $group: { _id: { decidedBy: '$decidedBy', ruleId: '$ruleId' }, count: { $sum: 1 } } },
+      { $sort: { count: -1 } }
+    ]).toArray()
+    return rows.map((r) => ({
+      decidedBy: String((r['_id'] as { decidedBy?: string }).decidedBy ?? 'unknown'),
+      ruleId: ((r['_id'] as { ruleId?: string | null }).ruleId ?? null),
+      count: Number(r['count'] ?? 0)
+    }))
+  }
+
+  /**
    * Recent confirmed-spam sample texts — the raw material for the LLM
    * "active campaigns this week" briefing (dynamic few-shot self-learning).
    */
