@@ -7,7 +7,7 @@ export const en: Locale = {
     privateCard: (name) => [
       `Hey, <b>${name}</b>! 👋`,
       '',
-      '🛡 Anti-spam for groups.',
+      '🛡 <b>Anti-spam for groups.</b>',
       'I catch spam, ban scammers, clean up ads.',
       '',
       'Add me to a group → grant admin rights → done.'
@@ -92,7 +92,13 @@ export const en: Locale = {
     noticedTitle: 'What I noticed:',
     signalLabels: {
       external_ban: 'the account is in spam databases',
-      external_high_spam_factor: 'a high spam score in spam databases',
+      external_repeat_offender: 'listed in spam databases more than once',
+      fresh_external_ban: 'recently added to spam databases',
+      many_shared_chats: 'in many of our chats at once',
+      promo_in_bio: 'promo or a contact in the bio',
+      personal_channel: 'a channel linked on the profile',
+      restricted_for_spam: 'Telegram restricted them for spam',
+      just_joined: 'joined and posted right away',
       scam_flag: 'Telegram flagged the account as a scam',
       fake_flag: 'Telegram flagged the account as fake',
       restricted_flag: 'the account is restricted by Telegram',
@@ -171,7 +177,7 @@ export const en: Locale = {
   },
 
   vote: {
-    prompt: (userLabel, textPreview) => `🤔 Is this spam? Message from ${userLabel}:\n\n"${textPreview}"`,
+    prompt: (userLabel, textPreview) => `🤔 <b>Is this spam?</b> Message from ${userLabel}:\n\n"${textPreview}"`,
     spamButton: (count) => `🗑 Spam (${count})`,
     hamButton: (count) => `👌 Fine (${count})`,
     counted: 'Vote counted.',
@@ -188,7 +194,7 @@ export const en: Locale = {
   },
 
   stats: {
-    title: '📊 Your stats',
+    title: '📊 <b>Your stats</b>',
     inChat: (count) => `Messages in this chat: ${count}`,
     global: (count) => `Messages everywhere: ${count}`,
     reputation: (score, status) => `Reputation: ${score} (${status})`,
@@ -199,8 +205,8 @@ export const en: Locale = {
   },
 
   top: {
-    titleMessages: '🏆 Most active in chat',
-    titleBanan: '🍌 Banana leaderboard',
+    titleMessages: '🏆 <b>Most active in chat</b>',
+    titleBanan: '🍌 <b>Banana leaderboard</b>',
     empty: 'No stats yet.',
     messagesUnit: (count) => (count === 1 ? 'message' : 'messages'),
     bananUnit: () => '🍌'
@@ -222,7 +228,11 @@ export const en: Locale = {
     disabled: '👋 Welcome greetings off.',
     textSet: '✅ Welcome text saved. %name% is substituted.',
     gifSet: '✅ Welcome gif saved.',
-    usage: '/welcome — toggle on/off. /welcome text with %name% — set the greeting. Reply to a gif with /welcome — set the gif.',
+    usage: [
+      '/welcome — toggle on/off',
+      '/welcome <text with %name%> — set the greeting',
+      'reply to a gif with /welcome — set the gif'
+    ].join('\n'),
     defaultGreeting: (name) => `👋 Welcome, ${name}!`
   },
 
@@ -230,7 +240,10 @@ export const en: Locale = {
     saved: (name) => `✅ Saved #${name}`,
     deleted: (name) => `🗑 Deleted #${name}`,
     notFound: (name) => `No such trigger: #${name}`,
-    usage: 'Reply to a message with /extra name to save it under #name. /extra name with no reply deletes it.',
+    usage: [
+      '/extra name (replying to a message) — saves it under #name',
+      '/extra name (no reply) — deletes the trigger'
+    ].join('\n'),
     listTitle: '📂 Saved triggers:',
     listEmpty: 'No triggers here yet.'
   },
@@ -254,7 +267,7 @@ export const en: Locale = {
   settings: {
     openInPm: 'Settings are available in private messages.',
     openInPmButton: '⚙️ Open settings',
-    title: 'Anti-spam settings',
+    title: '⚙️ <b>Anti-spam settings</b>',
     preset: 'Mode',
     presets: { soft: 'Soft', standard: 'Standard', strict: 'Strict' },
     captcha: 'Captcha for newcomers',

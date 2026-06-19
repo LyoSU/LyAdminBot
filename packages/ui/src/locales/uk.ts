@@ -5,12 +5,12 @@ export const uk: Locale = {
 
   start: {
     privateCard: (name) => [
-      `Йо, <b>${name}</b>! 👋`,
+      `Привіт, <b>${name}</b>! 👋`,
       '',
-      '🛡 Антиспам для груп.',
+      '🛡 <b>Антиспам для груп.</b>',
       'Ловлю спам, баню шахраїв, чищу рекламу.',
       '',
-      'Додай в групу → дай права адміна → готово.'
+      'Додай у групу → дай права адміна → готово.'
     ].join('\n'),
     groupHint: '🛡 Ловлю спам, баню шахраїв.\n<code>/settings</code> для адмінів · <code>/help</code> команди',
     addToGroupButton: '➕ Додати в групу',
@@ -92,7 +92,13 @@ export const uk: Locale = {
     noticedTitle: 'Що я помітив:',
     signalLabels: {
       external_ban: 'акаунт у спам-базах',
-      external_high_spam_factor: 'високий спам-фактор у базах',
+      external_repeat_offender: 'кілька разів у спам-базах',
+      fresh_external_ban: 'нещодавно потрапив у спам-бази',
+      many_shared_chats: 'одразу в багатьох наших чатах',
+      promo_in_bio: 'реклама або контакт у біо',
+      personal_channel: 'канал прив’язаний до профілю',
+      restricted_for_spam: 'Telegram обмежив за спам',
+      just_joined: 'щойно зайшов і одразу пише',
       scam_flag: 'Telegram позначив акаунт як шахрайський',
       fake_flag: 'Telegram позначив акаунт як фейковий',
       restricted_flag: 'акаунт обмежений Telegram',
@@ -171,7 +177,7 @@ export const uk: Locale = {
   },
 
   vote: {
-    prompt: (userLabel, textPreview) => `🤔 Це спам? Повідомлення від ${userLabel}:\n\n"${textPreview}"`,
+    prompt: (userLabel, textPreview) => `🤔 <b>Це спам?</b> Повідомлення від ${userLabel}:\n\n"${textPreview}"`,
     spamButton: (count) => `🗑 Спам (${count})`,
     hamButton: (count) => `👌 Норм (${count})`,
     counted: 'Голос зараховано.',
@@ -188,7 +194,7 @@ export const uk: Locale = {
   },
 
   stats: {
-    title: '📊 Твоя статистика',
+    title: '📊 <b>Твоя статистика</b>',
     inChat: (count) => `Повідомлень у цьому чаті: ${count}`,
     global: (count) => `Повідомлень всюди: ${count}`,
     reputation: (score, status) => `Репутація: ${score} (${status})`,
@@ -199,8 +205,8 @@ export const uk: Locale = {
   },
 
   top: {
-    titleMessages: '🏆 Найактивніші в чаті',
-    titleBanan: '🍌 Топ за бананами',
+    titleMessages: '🏆 <b>Найактивніші в чаті</b>',
+    titleBanan: '🍌 <b>Топ за бананами</b>',
     empty: 'Поки нема статистики.',
     messagesUnit: (count) => (count % 10 === 1 && count % 100 !== 11 ? 'повідомлення' : 'повідомлень'),
     bananUnit: () => '🍌'
@@ -222,7 +228,11 @@ export const uk: Locale = {
     disabled: '👋 Вітання вимкнено.',
     textSet: '✅ Текст вітання збережено. Підстановка %name% працює.',
     gifSet: '✅ Гіфку для вітання збережено.',
-    usage: '/welcome — увімкнути/вимкнути. /welcome текст з %name% — задати привітання. Відповідь гіфкою на /welcome — задати гіфку.',
+    usage: [
+      '/welcome — увімкнути/вимкнути',
+      '/welcome <текст з %name%> — задати привітання',
+      'відповідь гіфкою на /welcome — задати гіфку'
+    ].join('\n'),
     defaultGreeting: (name) => `👋 Вітаємо, ${name}!`
   },
 
@@ -230,7 +240,10 @@ export const uk: Locale = {
     saved: (name) => `✅ Збережено #${name}`,
     deleted: (name) => `🗑 Видалено #${name}`,
     notFound: (name) => `Нема такого: #${name}`,
-    usage: 'Відповідай на повідомлення командою /extra назва — збережу його під #назва. /extra назва без відповіді — видалить.',
+    usage: [
+      '/extra назва (у відповідь на повідомлення) — збережу його під #назва',
+      '/extra назва (без відповіді) — видалить тригер'
+    ].join('\n'),
     listTitle: '📂 Збережені тригери:',
     listEmpty: 'Тут поки нема тригерів.'
   },
@@ -254,7 +267,7 @@ export const uk: Locale = {
   settings: {
     openInPm: 'Налаштування доступні в особистих повідомленнях.',
     openInPmButton: '⚙️ Відкрити налаштування',
-    title: 'Налаштування антиспаму',
+    title: '⚙️ <b>Налаштування антиспаму</b>',
     preset: 'Режим',
     presets: { soft: 'М’який', standard: 'Стандарт', strict: 'Суворий' },
     captcha: 'Капча для новачків',

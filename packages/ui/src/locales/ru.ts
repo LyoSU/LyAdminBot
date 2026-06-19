@@ -7,7 +7,7 @@ export const ru: Locale = {
     privateCard: (name) => [
       `Привет, <b>${name}</b>! 👋`,
       '',
-      '🛡 Антиспам для групп.',
+      '🛡 <b>Антиспам для групп.</b>',
       'Ловлю спам, баню мошенников, чищу рекламу.',
       '',
       'Добавь в группу → дай права админа → готово.'
@@ -92,7 +92,13 @@ export const ru: Locale = {
     noticedTitle: 'Что я заметил:',
     signalLabels: {
       external_ban: 'аккаунт в спам-базах',
-      external_high_spam_factor: 'высокий спам-фактор в базах',
+      external_repeat_offender: 'несколько раз в спам-базах',
+      fresh_external_ban: 'недавно попал в спам-базы',
+      many_shared_chats: 'сразу во многих наших чатах',
+      promo_in_bio: 'реклама или контакт в био',
+      personal_channel: 'канал привязан к профилю',
+      restricted_for_spam: 'Telegram ограничил за спам',
+      just_joined: 'только зашёл и сразу пишет',
       scam_flag: 'Telegram пометил аккаунт как мошеннический',
       fake_flag: 'Telegram пометил аккаунт как фейковый',
       restricted_flag: 'аккаунт ограничен Telegram',
@@ -171,7 +177,7 @@ export const ru: Locale = {
   },
 
   vote: {
-    prompt: (userLabel, textPreview) => `🤔 Это спам? Сообщение от ${userLabel}:\n\n"${textPreview}"`,
+    prompt: (userLabel, textPreview) => `🤔 <b>Это спам?</b> Сообщение от ${userLabel}:\n\n"${textPreview}"`,
     spamButton: (count) => `🗑 Спам (${count})`,
     hamButton: (count) => `👌 Норм (${count})`,
     counted: 'Голос засчитан.',
@@ -188,7 +194,7 @@ export const ru: Locale = {
   },
 
   stats: {
-    title: '📊 Твоя статистика',
+    title: '📊 <b>Твоя статистика</b>',
     inChat: (count) => `Сообщений в этом чате: ${count}`,
     global: (count) => `Сообщений всего: ${count}`,
     reputation: (score, status) => `Репутация: ${score} (${status})`,
@@ -199,8 +205,8 @@ export const ru: Locale = {
   },
 
   top: {
-    titleMessages: '🏆 Самые активные в чате',
-    titleBanan: '🍌 Топ по бананам',
+    titleMessages: '🏆 <b>Самые активные в чате</b>',
+    titleBanan: '🍌 <b>Топ по бананам</b>',
     empty: 'Пока нет статистики.',
     messagesUnit: (count) => (count % 10 === 1 && count % 100 !== 11 ? 'сообщение' : 'сообщений'),
     bananUnit: () => '🍌'
@@ -222,7 +228,11 @@ export const ru: Locale = {
     disabled: '👋 Приветствия выключены.',
     textSet: '✅ Текст приветствия сохранён. Подстановка %name% работает.',
     gifSet: '✅ Гифка для приветствия сохранена.',
-    usage: '/welcome — включить/выключить. /welcome текст с %name% — задать приветствие. Ответ гифкой на /welcome — задать гифку.',
+    usage: [
+      '/welcome — включить/выключить',
+      '/welcome <текст с %name%> — задать приветствие',
+      'ответь гифкой на /welcome — задать гифку'
+    ].join('\n'),
     defaultGreeting: (name) => `👋 Добро пожаловать, ${name}!`
   },
 
@@ -230,7 +240,10 @@ export const ru: Locale = {
     saved: (name) => `✅ Сохранил #${name}`,
     deleted: (name) => `🗑 Удалил #${name}`,
     notFound: (name) => `Нет такого: #${name}`,
-    usage: 'Ответь на сообщение командой /extra имя — сохраню под #имя. /extra имя без ответа — удалит.',
+    usage: [
+      '/extra имя (в ответ на сообщение) — сохраню под #имя',
+      '/extra имя (без ответа) — удалит триггер'
+    ].join('\n'),
     listTitle: '📂 Сохранённые триггеры:',
     listEmpty: 'Здесь пока нет триггеров.'
   },
@@ -254,7 +267,7 @@ export const ru: Locale = {
   settings: {
     openInPm: 'Настройки доступны в личных сообщениях.',
     openInPmButton: '⚙️ Открыть настройки',
-    title: 'Настройки антиспама',
+    title: '⚙️ <b>Настройки антиспама</b>',
     preset: 'Режим',
     presets: { soft: 'Мягкий', standard: 'Стандарт', strict: 'Строгий' },
     captcha: 'Капча для новичков',

@@ -211,7 +211,7 @@ describe('topList', () => {
 
   it('escapes attacker-controlled names', () => {
     const view = topList(uk, 'banan', [{ name: '<b>x</b>', value: 3 }])
-    expect(view.text).not.toContain('<b>')
+    expect(view.text).not.toContain('<b>x</b>') // the name's own tags are escaped
     expect(view.text).toContain('&lt;b&gt;x&lt;/b&gt;')
   })
 

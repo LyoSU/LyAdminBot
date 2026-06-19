@@ -261,19 +261,24 @@ export const userProfileLines = (locale: Locale, facts: UserFacts, options: { ht
   lines.push(p.activity(facts.messagesGlobal, facts.groupsActive))
   lines.push(`${p.reputation(locale.stats.repStatus[facts.reputationStatus])}${facts.premium ? ` · ${p.premium}` : ''}`)
 
+  // Risk flags grouped under a blank line, so the "who" block reads apart
+  // from the "what's wrong" block.
+  const risk: string[] = []
   if (facts.externalBan?.banned) {
     const ago = facts.externalBan.bannedAtDaysAgo !== null
       ? humanSpan(locale, facts.externalBan.bannedAtDaysAgo * 86400)
       : ''
-    lines.push(`🚫 ${p.externalBan(ago, facts.externalBan.offenses)}`)
+    risk.push(`🚫 ${p.externalBan(ago, facts.externalBan.offenses)}`)
   }
   if (facts.joinedAgoSeconds !== null) {
-    lines.push(`🆕 ${p.justJoined(humanSpan(locale, facts.joinedAgoSeconds))}`)
+    risk.push(`🆕 ${p.justJoined(humanSpan(locale, facts.joinedAgoSeconds))}`)
   }
   const extras: string[] = []
   if (facts.promoInBio) extras.push(p.promoInBio)
   if (facts.personalChannel) extras.push(p.personalChannel)
-  if (extras.length > 0) lines.push(`⚠️ ${extras.join(' · ')}`)
+  if (extras.length > 0) risk.push(`⚠️ ${extras.join(' · ')}`)
+
+  if (risk.length > 0) lines.push('', ...risk)
 
   return lines
 }
