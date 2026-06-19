@@ -47,8 +47,12 @@ export interface UserSnapshot {
   spamDetections: number
   reputationScore: number // 0..100
   reputationStatus: 'restricted' | 'suspicious' | 'neutral' | 'trusted'
-  /** External ban databases (lols/cas), null — not checked. */
-  externalBan: { banned: boolean; spamFactor: number } | null
+  /**
+   * External ban databases (lols/cas), null — not checked. `bannedAt` is when
+   * the source added the ban (recency factor); `offenses` is the CAS repeat
+   * count (lols contributes 1).
+   */
+  externalBan: { banned: boolean; bannedAt: Date | null; offenses: number } | null
   /**
    * Telegram server flagged this user as a security risk for using an
    * unofficial client (userFull.unofficial_security_risk). Strongest
@@ -60,6 +64,17 @@ export interface UserSnapshot {
   /** Identity-churn counters over the last 24h. */
   nameChurn24h: number
   usernameChurn24h: number
+  /**
+   * Telegram restriction_reason codes (free with the user object), e.g.
+   * ['spam']. Empty when the account is unrestricted or the field is absent.
+   */
+  restrictionReasons: string[]
+  /**
+   * Seconds since the user joined THIS chat (channels.getParticipant.date),
+   * null when unknown (not fetched / not a member record). A tiny value means
+   * "joined and immediately posted".
+   */
+  joinedAgoSeconds: number | null
 }
 
 /** A mention from the message after resolution (adapters/enrich). */
@@ -133,6 +148,8 @@ export interface NormalizedMessage {
 /** Enrichment result — everything optional: the call budget may run out. */
 export interface Enrichment {
   bio: string | null
+  /** userFull.personal_channel_id — a channel the user linked to their profile. */
+  personalChannelId: number | null
   resolvedMentions: ResolvedMention[]
   conversationWindow: ConversationLine[]
   /** Message photo, when present and downloaded (for LLM vision). */

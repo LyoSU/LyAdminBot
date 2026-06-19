@@ -23,7 +23,7 @@ const makeUser = (overrides: Partial<UserSnapshot> = {}): UserSnapshot => ({
   messagesInChat: 25, messagesGlobal: 120, groupsActive: 2,
   spamDetections: 0, reputationScore: 65, reputationStatus: 'neutral',
   externalBan: null, unofficialClientRisk: null, avatars: { count: 2, latestSetDaysAgo: 200 },
-  nameChurn24h: 0, usernameChurn24h: 0,
+  nameChurn24h: 0, usernameChurn24h: 0, restrictionReasons: [], joinedAgoSeconds: null,
   ...overrides
 })
 
@@ -36,7 +36,7 @@ const makePolicy = (overrides: Partial<ChatPolicy> = {}): ChatPolicy => ({
 })
 
 const emptyEnrichment: Enrichment = {
-  bio: null, resolvedMentions: [], conversationWindow: [], photoBase64: null
+  bio: null, personalChannelId: null, resolvedMentions: [], conversationWindow: [], photoBase64: null
 }
 
 const makeInput = (over: {

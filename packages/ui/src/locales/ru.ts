@@ -148,6 +148,28 @@ export const ru: Locale = {
     expired: 'Это решение уже устарело — деталей не осталось.'
   },
 
+  profile: {
+    title: '👤 Профиль',
+    accountAge: (age) => `аккаунт ${age}`,
+    firstSeen: (seen) => `у нас ${seen}`,
+    activity: (messages, chats) => `${messages} сообщений · ${chats} наших чатов`,
+    reputation: (status) => `репутация: ${status}`,
+    premium: 'Premium',
+    externalBan: (ago, offenses) => [
+      'в спам-базах',
+      ...(ago ? [`бан ${ago} назад`] : []),
+      ...(offenses > 1 ? [`${offenses} нарушений`] : [])
+    ].join(' · '),
+    justJoined: (ago) => `в чате всего ${ago}`,
+    promoInBio: 'промо в био',
+    personalChannel: 'привязанный канал',
+    unknownAge: 'возраст неизвестен',
+    neverSeen: 'впервые',
+    units: { now: 'только что', m: 'м', h: 'ч', d: 'д', mo: 'мес', y: 'г' },
+    checkNeedReply: 'Ответьте командой /check на сообщение пользователя.',
+    notFound: 'Не удалось получить профиль.'
+  },
+
   vote: {
     prompt: (userLabel, textPreview) => `🤔 Это спам? Сообщение от ${userLabel}:\n\n"${textPreview}"`,
     spamButton: (count) => `🗑 Спам (${count})`,

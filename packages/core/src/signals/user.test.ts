@@ -21,6 +21,8 @@ const makeUser = (overrides: Partial<UserSnapshot> = {}): UserSnapshot => ({
   avatars: { count: 2, latestSetDaysAgo: 200 },
   nameChurn24h: 0,
   usernameChurn24h: 0,
+  restrictionReasons: [],
+  joinedAgoSeconds: null,
   ...overrides
 })
 
@@ -41,9 +43,39 @@ describe('extractUserSignals — suspicious', () => {
   })
 
   it('flags external ban databases', () => {
-    expect(names(makeUser({ externalBan: { banned: true, spamFactor: 0.3 } }))).toContain('external_ban')
-    expect(names(makeUser({ externalBan: { banned: false, spamFactor: 0.9 } }))).toContain('external_high_spam_factor')
-    expect(names(makeUser({ externalBan: { banned: false, spamFactor: 0.2 } }))).not.toContain('external_ban')
+    expect(names(makeUser({ externalBan: { banned: true, bannedAt: null, offenses: 1 } }))).toContain('external_ban')
+    expect(names(makeUser({ externalBan: { banned: false, bannedAt: null, offenses: 0 } }))).not.toContain('external_ban')
+  })
+
+  it('flags a repeat offender (CAS offenses >= 2), not a single listing', () => {
+    expect(names(makeUser({ externalBan: { banned: true, bannedAt: null, offenses: 3 } }))).toContain('external_repeat_offender')
+    expect(names(makeUser({ externalBan: { banned: true, bannedAt: null, offenses: 1 } }))).not.toContain('external_repeat_offender')
+  })
+
+  it('flags a freshly-added external ban (<48h), not an old one', () => {
+    const now = Date.parse('2026-06-19T12:00:00Z')
+    const fresh = makeUser({ externalBan: { banned: true, bannedAt: new Date('2026-06-19T09:00:00Z'), offenses: 1 } })
+    const old = makeUser({ externalBan: { banned: true, bannedAt: new Date('2026-06-01T00:00:00Z'), offenses: 1 } })
+    expect(extractUserSignals(fresh, now).map((s) => s.name)).toContain('fresh_external_ban')
+    expect(extractUserSignals(old, now).map((s) => s.name)).not.toContain('fresh_external_ban')
+  })
+
+  it('flags a spreader: many shared chats while globally new', () => {
+    expect(names(makeUser({ groupsActive: 8, messagesGlobal: 2 }))).toContain('many_shared_chats')
+    // an established user in many shared chats is NOT a spreader
+    expect(names(makeUser({ groupsActive: 8, messagesGlobal: 500 }))).not.toContain('many_shared_chats')
+  })
+
+  it('flags a Telegram spam/scam restriction reason, beyond the bare flag', () => {
+    expect(names(makeUser({ restrictionReasons: ['spam'] }))).toContain('restricted_for_spam')
+    expect(names(makeUser({ restrictionReasons: ['geoirrelevant'] }))).not.toContain('restricted_for_spam')
+    expect(names(makeUser({ restrictionReasons: [] }))).not.toContain('restricted_for_spam')
+  })
+
+  it('flags a user who joined moments before posting', () => {
+    expect(names(makeUser({ joinedAgoSeconds: 15 }))).toContain('just_joined')
+    expect(names(makeUser({ joinedAgoSeconds: 3600 }))).not.toContain('just_joined')
+    expect(names(makeUser({ joinedAgoSeconds: null }))).not.toContain('just_joined')
   })
 
   it('flags sleeper-awakened accounts (old account, fresh local activity)', () => {

@@ -94,25 +94,40 @@ describe('userDocToHistory', () => {
       telegram_id: 42,
       globalStats: { totalMessages: 300, groupsActive: 3, firstSeen: new Date(NOW - 100 * 86400 * 1000), spamDetections: 1 },
       reputation: { score: 70, status: 'neutral' },
-      externalBan: { lols: { banned: true, spamFactor: 0.9 } }
+      externalBan: { lols: { banned: true, bannedAt: new Date('2026-06-19T09:15:14Z'), offenses: 1 } }
     }, 25, NOW)!
     expect(history.messagesGlobal).toBe(300)
     expect(history.messagesInChat).toBe(25)
-    expect(history.externalBan).toEqual({ banned: true, spamFactor: 0.9 })
+    expect(history.externalBan).toEqual({ banned: true, bannedAt: new Date('2026-06-19T09:15:14Z'), offenses: 1 })
     expect(Math.round((NOW / 1000 - history.firstSeenUnix!) / 86400)).toBe(100)
   })
 
-  it('cas-only ban maps to banned with zero spam factor', () => {
-    const history = userDocToHistory({ telegram_id: 1, externalBan: { cas: { banned: true } } }, 0, NOW)!
-    expect(history.externalBan).toEqual({ banned: true, spamFactor: 0 })
+  it('cas-only ban maps to banned, carrying its offenses count', () => {
+    const history = userDocToHistory(
+      { telegram_id: 1, externalBan: { cas: { banned: true, offenses: 3 } } }, 0, NOW
+    )!
+    expect(history.externalBan).toEqual({ banned: true, bannedAt: null, offenses: 3 })
   })
 
-  it('a flagged scammer maps to a maximal spam factor', () => {
+  it('merges both sources: OR on banned, max offenses, most-recent bannedAt', () => {
     const history = userDocToHistory(
-      { telegram_id: 1, externalBan: { lols: { banned: false, spamFactor: 0.1, scammer: true } } },
+      { telegram_id: 1, externalBan: {
+        lols: { banned: true, bannedAt: new Date('2026-06-01T00:00:00Z'), offenses: 1 },
+        cas: { banned: true, bannedAt: new Date('2026-06-19T09:00:00Z'), offenses: 4 }
+      } },
       0, NOW
     )!
-    expect(history.externalBan).toEqual({ banned: false, spamFactor: 1 })
+    expect(history.externalBan).toEqual({
+      banned: true, bannedAt: new Date('2026-06-19T09:00:00Z'), offenses: 4
+    })
+  })
+
+  it('reads bannedAt back from a Mongo string timestamp', () => {
+    const history = userDocToHistory(
+      { telegram_id: 1, externalBan: { lols: { banned: true, bannedAt: '2026-06-19T09:15:14Z', offenses: 1 } } },
+      0, NOW
+    )!
+    expect(history.externalBan?.bannedAt).toEqual(new Date('2026-06-19T09:15:14Z'))
   })
 
   it('null doc → null history', () => {

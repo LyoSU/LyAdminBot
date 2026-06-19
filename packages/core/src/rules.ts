@@ -64,9 +64,6 @@ export const applyDeterministicRules = (signals: Signal[]): DeterministicVerdict
   if (has('external_ban') && has('new_globally') && !isEstablished) {
     return { kind: 'spam', ruleId: 'external_ban_new', pSpam: 0.96 }
   }
-  if (has('external_high_spam_factor') && has('new_globally') && !isEstablished) {
-    return { kind: 'spam', ruleId: 'external_high_factor_new', pSpam: 0.95 }
-  }
 
   // Edit-to-inject: message edited to insert URL/mention/invisibles.
   // Structurally near-zero FP; established users exempt (admins fix links).

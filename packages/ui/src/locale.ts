@@ -69,6 +69,28 @@ export interface Locale {
     expired: string
   }
 
+  /** User profile card — shared by /check and the "Why?" card's context block. */
+  profile: {
+    title: string
+    accountAge: (age: string) => string
+    firstSeen: (seen: string) => string
+    activity: (messages: number, chats: number) => string
+    reputation: (status: string) => string
+    premium: string
+    externalBan: (ago: string, offenses: number) => string
+    justJoined: (ago: string) => string
+    promoInBio: string
+    personalChannel: string
+    /** Shown in place of an age when the account age is unknown / never seen. */
+    unknownAge: string
+    neverSeen: string
+    /** Relative-span unit suffixes for the duration humanizer. */
+    units: { now: string; m: string; h: string; d: string; mo: string; y: string }
+    /** /check command feedback. */
+    checkNeedReply: string
+    notFound: string
+  }
+
   /** Community vote on a reported / grey-zone message. */
   vote: {
     /** Prompt above the quoted text (HTML). Inputs arrive pre-escaped. */

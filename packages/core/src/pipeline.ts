@@ -18,6 +18,7 @@ import type { EvaluationInput, Signal, Verdict, VerdictAction, DecidedBy } from 
 import type { LlmVerdict, PipelinePorts } from './ports.js'
 import { extractMessageSignals } from './signals/message.js'
 import { extractUserSignals } from './signals/user.js'
+import { extractBioSignals } from './signals/bio.js'
 import { applyDeterministicRules } from './rules.js'
 import { parseCustomRule, customRuleMatches } from './custom-rules.js'
 import { scoreSignals } from './score.js'
@@ -125,7 +126,8 @@ export const evaluateMessage = async (
 
   const signals: Signal[] = [
     ...extractMessageSignals(input.message),
-    ...extractUserSignals(input.user)
+    ...extractUserSignals(input.user),
+    ...extractBioSignals(input.enrichment.bio)
   ]
   // Chat-level trusted list is equivalent to trusted reputation.
   if (input.policy.trustedUserIds.includes(input.user.id) &&
@@ -135,6 +137,11 @@ export const evaluateMessage = async (
   // Enrichment: a bot mention resolved among the mentions is promo-relevant.
   if (input.enrichment.resolvedMentions.some((m) => m.kind === 'bot')) {
     signals.push({ name: 'bot_mention' })
+  }
+  // A linked personal channel (userFull.personal_channel_id) is a promo vector
+  // on a new account; harmless on an established one (scoring weight is low).
+  if (input.enrichment.personalChannelId !== null) {
+    signals.push({ name: 'personal_channel' })
   }
 
   // ── 3. deterministic rules ──────────────────────────────────────────

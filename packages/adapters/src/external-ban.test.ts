@@ -20,21 +20,27 @@ const stubFetch = (byHost: Record<string, unknown | Error>) =>
 const NOW = new Date('2026-06-19T00:00:00Z')
 
 describe('parseLolsResponse', () => {
-  it('maps a banned account with its spam factor', () => {
+  it('maps a banned account with its ban timestamp', () => {
     const rec = parseLolsResponse(
-      { ok: true, banned: true, spam_factor: 0.9, scammer: false },
+      { ok: true, banned: true, when: '2026-06-19 09:15:14 UTC', user_id: 42 },
       NOW
     )
-    expect(rec).toEqual({ banned: true, spamFactor: 0.9, scammer: false, checkedAt: NOW })
+    expect(rec).toEqual({
+      banned: true,
+      bannedAt: new Date('2026-06-19T09:15:14Z'),
+      offenses: 1,
+      checkedAt: NOW
+    })
   })
 
-  it('caches clean accounts too (negative cache), keeping spam_factor', () => {
-    const rec = parseLolsResponse({ ok: true, banned: false, spam_factor: 0.2 }, NOW)
-    expect(rec).toEqual({ banned: false, spamFactor: 0.2, scammer: false, checkedAt: NOW })
+  it('caches clean accounts too (negative cache), no ban timestamp', () => {
+    const rec = parseLolsResponse({ ok: true, banned: false }, NOW)
+    expect(rec).toEqual({ banned: false, bannedAt: null, offenses: 0, checkedAt: NOW })
   })
 
-  it('surfaces the scammer flag', () => {
-    expect(parseLolsResponse({ ok: true, banned: false, scammer: true }, NOW)?.scammer).toBe(true)
+  it('keeps banned even when the timestamp is unparseable', () => {
+    const rec = parseLolsResponse({ ok: true, banned: true, when: 'not-a-date' }, NOW)
+    expect(rec).toEqual({ banned: true, bannedAt: null, offenses: 1, checkedAt: NOW })
   })
 
   it('returns null when the API reports an invalid response (ok !== true)', () => {
@@ -45,19 +51,31 @@ describe('parseLolsResponse', () => {
     expect(parseLolsResponse(null, NOW)).toBeNull()
     expect(parseLolsResponse('boom', NOW)).toBeNull()
     expect(parseLolsResponse(42, NOW)).toBeNull()
-    expect(parseLolsResponse({ ok: true, spam_factor: 'NaN' }, NOW)?.spamFactor).toBe(0)
   })
 })
 
 describe('parseCasResponse', () => {
-  it('treats ok=true as banned (CAS semantics)', () => {
-    const rec = parseCasResponse({ ok: true, result: { offenses: 3 } }, NOW)
-    expect(rec).toEqual({ banned: true, spamFactor: 0, scammer: false, checkedAt: NOW })
+  it('treats ok=true as banned, capturing offenses and time_added', () => {
+    const rec = parseCasResponse(
+      { ok: true, result: { offenses: 3, time_added: '2026-06-19T09:22:13.000Z' } },
+      NOW
+    )
+    expect(rec).toEqual({
+      banned: true,
+      bannedAt: new Date('2026-06-19T09:22:13.000Z'),
+      offenses: 3,
+      checkedAt: NOW
+    })
+  })
+
+  it('defaults offenses to 1 when banned but the count is missing', () => {
+    expect(parseCasResponse({ ok: true, result: {} }, NOW)?.offenses).toBe(1)
+    expect(parseCasResponse({ ok: true }, NOW)?.offenses).toBe(1)
   })
 
   it('treats ok=false as a clean negative-cache entry', () => {
     expect(parseCasResponse({ ok: false }, NOW)).toEqual({
-      banned: false, spamFactor: 0, scammer: false, checkedAt: NOW
+      banned: false, bannedAt: null, offenses: 0, checkedAt: NOW
     })
   })
 
@@ -109,12 +127,14 @@ describe('isQueryableUserId', () => {
 describe('fetchExternalBan', () => {
   it('queries both databases and merges the results', async () => {
     const fetchImpl = stubFetch({
-      'api.lols.bot': { ok: true, banned: true, spam_factor: 0.95 },
-      'api.cas.chat': { ok: true, result: {} }
+      'api.lols.bot': { ok: true, banned: true, when: '2026-06-19 09:15:14 UTC' },
+      'api.cas.chat': { ok: true, result: { offenses: 2 } }
     })
     const result = await fetchExternalBan(42, { fetchImpl, now: NOW })
-    expect(result?.lols).toEqual({ banned: true, spamFactor: 0.95, scammer: false, checkedAt: NOW })
-    expect(result?.cas).toEqual({ banned: true, spamFactor: 0, scammer: false, checkedAt: NOW })
+    expect(result?.lols).toEqual({
+      banned: true, bannedAt: new Date('2026-06-19T09:15:14Z'), offenses: 1, checkedAt: NOW
+    })
+    expect(result?.cas).toEqual({ banned: true, bannedAt: null, offenses: 2, checkedAt: NOW })
   })
 
   it('keeps one source when the other fails (no all-or-nothing)', async () => {
@@ -124,7 +144,7 @@ describe('fetchExternalBan', () => {
     })
     const result = await fetchExternalBan(42, { fetchImpl, now: NOW })
     expect(result?.lols).toBeNull()
-    expect(result?.cas).toEqual({ banned: false, spamFactor: 0, scammer: false, checkedAt: NOW })
+    expect(result?.cas).toEqual({ banned: false, bannedAt: null, offenses: 0, checkedAt: NOW })
   })
 
   it('never contacts a third party for a system / anonymous sender', async () => {

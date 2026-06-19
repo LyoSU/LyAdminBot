@@ -148,6 +148,28 @@ export const en: Locale = {
     expired: 'This decision has expired — no details left.'
   },
 
+  profile: {
+    title: '👤 Profile',
+    accountAge: (age) => `account ${age}`,
+    firstSeen: (seen) => `here ${seen}`,
+    activity: (messages, chats) => `${messages} messages · ${chats} of our chats`,
+    reputation: (status) => `reputation: ${status}`,
+    premium: 'Premium',
+    externalBan: (ago, offenses) => [
+      'in spam databases',
+      ...(ago ? [`banned ${ago} ago`] : []),
+      ...(offenses > 1 ? [`${offenses} offences`] : [])
+    ].join(' · '),
+    justJoined: (ago) => `in the chat only ${ago}`,
+    promoInBio: 'promo in bio',
+    personalChannel: 'linked channel',
+    unknownAge: 'age unknown',
+    neverSeen: 'first time',
+    units: { now: 'now', m: 'm', h: 'h', d: 'd', mo: 'mo', y: 'y' },
+    checkNeedReply: 'Reply to a user’s message with /check.',
+    notFound: 'Could not fetch the profile.'
+  },
+
   vote: {
     prompt: (userLabel, textPreview) => `🤔 Is this spam? Message from ${userLabel}:\n\n"${textPreview}"`,
     spamButton: (count) => `🗑 Spam (${count})`,

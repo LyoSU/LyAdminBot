@@ -204,21 +204,107 @@ export const whyView = (locale: Locale, verdict: Verdict, options: WhyOptions = 
 }
 
 /**
+ * Display-ready user facts for the profile card. Derived from a UserSnapshot
+ * (+ external-ban merge) by the app layer — the ui never sees raw domain types.
+ */
+export interface UserFacts {
+  userId: number
+  username: string | null
+  /** Account age estimated from the id, in days. Null — unknown. */
+  predictedAgeDays: number | null
+  /** Days since we first saw the account locally. Null — never seen. */
+  localAgeDays: number | null
+  messagesGlobal: number
+  groupsActive: number
+  reputationStatus: 'restricted' | 'suspicious' | 'neutral' | 'trusted'
+  premium: boolean
+  externalBan: { banned: boolean; bannedAtDaysAgo: number | null; offenses: number } | null
+  joinedAgoSeconds: number | null
+  promoInBio: boolean
+  personalChannel: boolean
+}
+
+/** Compact relative span ("щойно", "5хв", "3д", "2міс", "1р") from seconds. */
+const humanSpan = (locale: Locale, totalSeconds: number): string => {
+  const u = locale.profile.units
+  if (totalSeconds < 60) return u.now
+  const minutes = totalSeconds / 60
+  const hours = minutes / 60
+  const days = hours / 24
+  if (days >= 365) return `${Math.round(days / 365)}${u.y}`
+  if (days >= 30) return `${Math.round(days / 30)}${u.mo}`
+  if (days >= 1) return `${Math.round(days)}${u.d}`
+  if (hours >= 1) return `${Math.round(hours)}${u.h}`
+  return `${Math.round(minutes)}${u.m}`
+}
+
+/**
+ * User profile card (LolsBot-inspired, built only from data a bot can see).
+ * Rendered as plain text by default; pass `{ html: true }` for the PM surfaces.
+ * Returns an array of lines so callers can embed it inside a larger card.
+ */
+export const userProfileLines = (locale: Locale, facts: UserFacts, options: { html?: boolean } = {}): string[] => {
+  const asHtml = options.html ?? false
+  const b = asHtml ? (s: string): string => `<b>${s}</b>` : (s: string): string => s
+  const code = asHtml ? (s: string): string => `<code>${s}</code>` : (s: string): string => s
+  const p = locale.profile
+
+  const lines: string[] = [b(p.title)]
+
+  const idLine = `${code(String(facts.userId))}${facts.username ? ` · @${escapeHtml(facts.username)}` : ''}`
+  lines.push(idLine)
+
+  const age = facts.predictedAgeDays !== null ? `~${humanSpan(locale, facts.predictedAgeDays * 86400)}` : p.unknownAge
+  const seen = facts.localAgeDays !== null ? humanSpan(locale, facts.localAgeDays * 86400) : p.neverSeen
+  lines.push(`${p.accountAge(age)} · ${p.firstSeen(seen)}`)
+
+  lines.push(p.activity(facts.messagesGlobal, facts.groupsActive))
+  lines.push(`${p.reputation(locale.stats.repStatus[facts.reputationStatus])}${facts.premium ? ` · ${p.premium}` : ''}`)
+
+  if (facts.externalBan?.banned) {
+    const ago = facts.externalBan.bannedAtDaysAgo !== null
+      ? humanSpan(locale, facts.externalBan.bannedAtDaysAgo * 86400)
+      : ''
+    lines.push(`🚫 ${p.externalBan(ago, facts.externalBan.offenses)}`)
+  }
+  if (facts.joinedAgoSeconds !== null) {
+    lines.push(`🆕 ${p.justJoined(humanSpan(locale, facts.joinedAgoSeconds))}`)
+  }
+  const extras: string[] = []
+  if (facts.promoInBio) extras.push(p.promoInBio)
+  if (facts.personalChannel) extras.push(p.personalChannel)
+  if (extras.length > 0) lines.push(`⚠️ ${extras.join(' · ')}`)
+
+  return lines
+}
+
+/** Standalone profile card for /check. */
+export const userProfileCard = (locale: Locale, facts: UserFacts): ViewMessage => ({
+  text: userProfileLines(locale, facts, { html: true }).join('\n'),
+  buttons: []
+})
+
+/**
  * Expanded "Why?" card for PM. Rendered as HTML; admins additionally get the
  * override button and the technical footer, since the group notification has
- * auto-deleted by the time they open this.
+ * auto-deleted by the time they open this. When `facts` are supplied a compact
+ * profile block is appended under the verdict.
  */
 export const whyCard = (
   locale: Locale,
   verdict: Verdict,
   target: { chatId: number; messageId: number; userId: number },
-  options: { canOverride: boolean }
-): ViewMessage => ({
-  text: whyView(locale, verdict, { html: true, technical: options.canOverride }),
-  buttons: options.canOverride
-    ? [[{ text: locale.notification.notSpamButton, data: callbackData.override(target.chatId, target.messageId, target.userId) }]]
-    : []
-})
+  options: { canOverride: boolean; facts?: UserFacts | undefined }
+): ViewMessage => {
+  const body = whyView(locale, verdict, { html: true, technical: options.canOverride })
+  const profile = options.facts ? `\n\n${userProfileLines(locale, options.facts, { html: true }).join('\n')}` : ''
+  return {
+    text: body + profile,
+    buttons: options.canOverride
+      ? [[{ text: locale.notification.notSpamButton, data: callbackData.override(target.chatId, target.messageId, target.userId) }]]
+      : []
+  }
+}
 
 const MEDALS = ['🥇', '🥈', '🥉']
 

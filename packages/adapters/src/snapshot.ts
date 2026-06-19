@@ -15,15 +15,17 @@ export interface UserHistory {
   spamDetections: number
   reputationScore: number
   reputationStatus: UserSnapshot['reputationStatus']
-  externalBan: { banned: boolean; spamFactor: number } | null
+  externalBan: { banned: boolean; bannedAt: Date | null; offenses: number } | null
   nameChurn24h: number
   usernameChurn24h: number
   avatars: { count: number; latestSetDaysAgo: number | null } | null
 }
 
-/** Enrichment-sourced profile facts (users.getFullUser). */
+/** Enrichment-sourced profile facts (users.getFullUser + getParticipant). */
 export interface UserProfileFacts {
   unofficialClientRisk: boolean | null
+  /** Seconds since the user joined this chat (channels.getParticipant.date). */
+  joinedAgoSeconds?: number | null
 }
 
 export const buildUserSnapshot = (
@@ -44,6 +46,10 @@ export const buildUserSnapshot = (
     premium: sender.isPremium,
     bot: sender.isBot
   },
+  // restriction_reason ships free with the user constructor; keep the reason
+  // codes (e.g. 'spam') — empty for unrestricted users or when absent.
+  restrictionReasons: sender.restrictionReason?.map((r) => r.reason) ?? [],
+  joinedAgoSeconds: profile?.joinedAgoSeconds ?? null,
   predictedAgeDays: predictAccountAgeDays(sender.id, nowUnix),
   localAgeDays: history?.firstSeenUnix != null
     ? Math.max(0, (nowUnix - history.firstSeenUnix) / 86400)

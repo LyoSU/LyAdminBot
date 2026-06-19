@@ -60,7 +60,7 @@ const unknownUser = (userId: number): UserSnapshot => ({
   messagesInChat: 1, messagesGlobal: 1, groupsActive: 1,
   spamDetections: 0, reputationScore: 50, reputationStatus: 'neutral',
   externalBan: null, unofficialClientRisk: null, avatars: null,
-  nameChurn24h: 0, usernameChurn24h: 0
+  nameChurn24h: 0, usernameChurn24h: 0, restrictionReasons: [], joinedAgoSeconds: null
 })
 
 const extractUrls = (text: string): EvaluationInput['message']['urls'] => {
@@ -81,7 +81,7 @@ const toInput = (event: ModEvent): EvaluationInput => {
     chat: { id: event.chatId ?? 0, kind: 'group', title: '', topLanguage: null },
     user: unknownUser(event.targetId ?? 0),
     policy: defaultPolicy,
-    enrichment: { bio: null, resolvedMentions: [], conversationWindow: [], photoBase64: null }
+    enrichment: { bio: null, personalChannelId: null, resolvedMentions: [], conversationWindow: [], photoBase64: null }
   }
 }
 

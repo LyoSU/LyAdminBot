@@ -31,7 +31,11 @@ export const SIGNAL_WEIGHTS: Record<string, number> = {
 
   // ── external ban databases ──
   external_ban: 2.5,
-  external_high_spam_factor: 2.0,
+  // CAS repeat-offence count — stronger than a single listing. Replaces the
+  // dead external_high_spam_factor (lols dropped spam_factor).
+  external_repeat_offender: 2.0,
+  // Ban added <48h ago: an actively-spamming live account, not an old one.
+  fresh_external_ban: 1.0,
 
   // ── message structure ──
   forward_hidden_user: 1.5,
@@ -57,6 +61,17 @@ export const SIGNAL_WEIGHTS: Record<string, number> = {
   edited_message: 0.2,
   edit_injected_promo: 2.5,
 
+  // ── profile / bio ──
+  // Promo link/contact/phone in the bio. Low weight + a confirmed v1 FP class
+  // (innocent website bios) → only bites stacked with newness in the score.
+  promo_in_bio: 1.2,
+  // Linked personal channel — weak alone (legit users have them too).
+  personal_channel: 0.5,
+  // Telegram-labelled spam/scam restriction — stronger than the bare flag.
+  restricted_for_spam: 1.5,
+  // Joined the chat <2min before posting.
+  just_joined: 1.0,
+
   // ── user history / age ──
   sleeper_awakened: 1.2,
   fresh_account: 1.0,
@@ -64,6 +79,9 @@ export const SIGNAL_WEIGHTS: Record<string, number> = {
   avatar_recently_set: 0.6,
   new_in_chat: 0.4,
   new_globally: 0.8,
+  // Present in many chats we watch while barely posting — spreader pattern.
+  // Modest weight; replay should confirm before trusting it further.
+  many_shared_chats: 0.8,
   prior_spam_detections: 1.5,
   low_reputation: 1.2,
 

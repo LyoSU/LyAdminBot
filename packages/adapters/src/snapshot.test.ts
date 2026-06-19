@@ -58,4 +58,20 @@ describe('buildUserSnapshot', () => {
       buildUserSnapshot(makeSender(), null, NOW, { unofficialClientRisk: true }).unofficialClientRisk
     ).toBe(true)
   })
+
+  it('carries restriction_reason codes from the user constructor', () => {
+    expect(buildUserSnapshot(makeSender(), null, NOW).restrictionReasons).toEqual([])
+    const restricted = makeSender({
+      restricted: true,
+      restrictionReason: [{ _: 'restrictionReason', platform: 'all', reason: 'spam', text: 'spam' }]
+    })
+    expect(buildUserSnapshot(restricted, null, NOW).restrictionReasons).toEqual(['spam'])
+  })
+
+  it('carries the chat join recency from profile enrichment', () => {
+    expect(buildUserSnapshot(makeSender(), null, NOW).joinedAgoSeconds).toBeNull()
+    expect(
+      buildUserSnapshot(makeSender(), null, NOW, { unofficialClientRisk: null, joinedAgoSeconds: 12 }).joinedAgoSeconds
+    ).toBe(12)
+  })
 })

@@ -10,8 +10,17 @@
 /** Normalised record persisted under `user.externalBan.{lols,cas}`. */
 export interface ExternalBanRecord {
   banned: boolean
-  spamFactor: number
-  scammer: boolean
+  /**
+   * When the source DB added the ban (lols `when` / CAS `time_added`), null
+   * when unknown. Powers the "banned N ago" recency factor — a just-added
+   * ban means an actively-spamming live account, not an old rehabilitated one.
+   */
+  bannedAt: Date | null
+  /**
+   * Repeat-offence count from the source (CAS `offenses`). lols exposes no
+   * counter, so it contributes 1 when banned. 0 for clean accounts.
+   */
+  offenses: number
   checkedAt: Date
 }
 
@@ -31,31 +40,44 @@ const isObject = (v: unknown): v is Record<string, unknown> =>
 const finiteNumber = (v: unknown): number =>
   typeof v === 'number' && Number.isFinite(v) ? v : 0
 
+/** Lenient timestamp parse — anything unrecognised degrades to null. */
+const parseDate = (v: unknown): Date | null => {
+  if (typeof v !== 'string' && typeof v !== 'number') return null
+  const d = new Date(v)
+  return Number.isFinite(d.getTime()) ? d : null
+}
+
 /**
- * lols.bot `/account` response: `{ ok, banned, spam_factor, scammer, ... }`.
- * `ok` means "valid response"; the ban status is the separate `banned` field,
- * so clean accounts are cached too (negative cache) to honour the TTL.
+ * lols.bot `/account` response: `{ ok, banned, when, user_id }`. `ok` means
+ * "valid response"; the ban status is the separate `banned` field, so clean
+ * accounts are cached too (negative cache) to honour the TTL. `when` is the
+ * ban timestamp. (lols dropped the former `spam_factor`/`scammer` fields.)
  */
 export const parseLolsResponse = (body: unknown, now = new Date()): ExternalBanRecord | null => {
   if (!isObject(body) || body.ok !== true) return null
+  const banned = body.banned === true
   return {
-    banned: body.banned === true,
-    spamFactor: finiteNumber(body.spam_factor),
-    scammer: body.scammer === true,
+    banned,
+    bannedAt: banned ? parseDate(body.when) : null,
+    offenses: banned ? 1 : 0,
     checkedAt: now
   }
 }
 
 /**
  * CAS `/check` response: `ok === true` IS the ban verdict (not a transport
- * flag). CAS exposes no spam factor, so banned accounts map to factor 0.
+ * flag). When banned, `result` carries `{ offenses, reasons, time_added }`;
+ * a clean account is just `{ ok: false }`.
  */
 export const parseCasResponse = (body: unknown, now = new Date()): ExternalBanRecord | null => {
   if (!isObject(body) || typeof body.ok !== 'boolean') return null
+  const banned = body.ok === true
+  const result = isObject(body.result) ? body.result : undefined
   return {
-    banned: body.ok === true,
-    spamFactor: 0,
-    scammer: false,
+    banned,
+    bannedAt: banned ? parseDate(result?.['time_added']) : null,
+    // CAS counts repeat offences; default to 1 when banned but the count is missing.
+    offenses: banned ? finiteNumber(result?.['offenses']) || 1 : 0,
     checkedAt: now
   }
 }

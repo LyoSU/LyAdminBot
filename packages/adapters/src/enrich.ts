@@ -11,6 +11,8 @@ export interface UserProfileEnrichment {
   avatars: { count: number; latestSetDaysAgo: number | null } | null
   /** userFull.unofficial_security_risk — dangerous unofficial client. */
   unofficialClientRisk: boolean | null
+  /** userFull.personal_channel_id — a channel linked on the profile (promo vector). */
+  personalChannelId: number | null
 }
 
 export const fetchUserProfile = async (
@@ -18,7 +20,7 @@ export const fetchUserProfile = async (
   userId: number,
   nowUnix = Math.floor(Date.now() / 1000)
 ): Promise<UserProfileEnrichment> => {
-  const result: UserProfileEnrichment = { bio: null, avatars: null, unofficialClientRisk: null }
+  const result: UserProfileEnrichment = { bio: null, avatars: null, unofficialClientRisk: null, personalChannelId: null }
 
   let inputUser: tl.RawInputUser | null = null
   try {
@@ -36,6 +38,7 @@ export const fetchUserProfile = async (
     const full = await tg.call({ _: 'users.getFullUser', id: inputUser })
     result.bio = full.fullUser.about ?? null
     result.unofficialClientRisk = full.fullUser.unofficialSecurityRisk ?? false
+    result.personalChannelId = full.fullUser.personalChannelId ?? null
   } catch { /* budget item failed — keep going */ }
 
   // Call 2: avatar history with dates (photos.getUserPhotos)

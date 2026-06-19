@@ -17,10 +17,10 @@ const RECENT_REPLY_MAX_AGE_SECONDS = 3600
 
 // Phone numbers: international or local format with enough digits to be a
 // real dial target. Spaces/dashes/parens between digit groups are allowed.
-const PHONE_REGEX = /(?:\+|\b)\d[\d ().-]{8,}\d\b/
+export const PHONE_REGEX = /(?:\+|\b)\d[\d ().-]{8,}\d\b/
 
 // Cashtags: $BTC, $ETH — crypto-promo marker.
-const CASHTAG_REGEX = /\$[A-Z]{2,6}\b/
+export const CASHTAG_REGEX = /\$[A-Z]{2,6}\b/
 
 // Invisible characters used to break signature matching when injected
 // INSIDE words: word joiner, zero-width space, soft hyphen, BOM.

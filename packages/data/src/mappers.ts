@@ -77,8 +77,8 @@ export interface UserDoc {
     status?: 'trusted' | 'neutral' | 'suspicious' | 'restricted'
   }
   externalBan?: {
-    lols?: { banned?: boolean; spamFactor?: number; scammer?: boolean }
-    cas?: { banned?: boolean }
+    lols?: ExternalBanSourceDoc
+    cas?: ExternalBanSourceDoc
   }
   nameHistory?: { value?: string; seenAt?: Date | string }[]
   usernameHistory?: { value?: string; seenAt?: Date | string }[]
@@ -113,31 +113,47 @@ export interface UserHistoryView {
   spamDetections: number
   reputationScore: number
   reputationStatus: 'trusted' | 'neutral' | 'suspicious' | 'restricted'
-  externalBan: { banned: boolean; spamFactor: number } | null
+  externalBan: { banned: boolean; bannedAt: Date | null; offenses: number } | null
   nameChurn24h: number
   usernameChurn24h: number
   avatars: { count: number; latestSetDaysAgo: number | null } | null
 }
 
+/** Per-source record persisted under user.externalBan.{lols,cas}. */
+export interface ExternalBanSourceDoc {
+  banned?: boolean
+  bannedAt?: Date | string | null
+  offenses?: number
+  checkedAt?: Date | string
+}
+
 /** Sub-document shape persisted by the external ban-database lookups. */
 export interface ExternalBanSubdoc {
-  lols?: { banned?: boolean; spamFactor?: number; scammer?: boolean } | null
-  cas?: { banned?: boolean } | null
+  lols?: ExternalBanSourceDoc | null
+  cas?: ExternalBanSourceDoc | null
+}
+
+const toDate = (v: Date | string | null | undefined): Date | null => {
+  if (v === null || v === undefined) return null
+  const d = new Date(v)
+  return Number.isFinite(d.getTime()) ? d : null
 }
 
 /**
  * Collapse the per-source records into one domain value. banned is the OR of
- * both databases; a confirmed scammer is treated as maximally spammy
- * regardless of the reported factor. Returns null when there is nothing to say.
+ * both databases; offenses takes the strongest source's count; bannedAt is the
+ * most recent listing (recency factor). Returns null when there is nothing to say.
  */
 export const mergeExternalBan = (
   externalBan: ExternalBanSubdoc | null | undefined
-): { banned: boolean; spamFactor: number } | null => {
+): { banned: boolean; bannedAt: Date | null; offenses: number } | null => {
   const lols = externalBan?.lols
   const cas = externalBan?.cas
   const banned = Boolean(lols?.banned) || Boolean(cas?.banned)
-  const spamFactor = lols?.scammer ? 1 : (lols?.spamFactor ?? 0)
-  return banned || spamFactor > 0 ? { banned, spamFactor } : null
+  const offenses = Math.max(lols?.offenses ?? 0, cas?.offenses ?? 0)
+  const dates = [toDate(lols?.bannedAt), toDate(cas?.bannedAt)].filter((d): d is Date => d !== null)
+  const bannedAt = dates.length > 0 ? new Date(Math.max(...dates.map((d) => d.getTime()))) : null
+  return banned || offenses > 0 ? { banned, bannedAt, offenses } : null
 }
 
 export const userDocToHistory = (

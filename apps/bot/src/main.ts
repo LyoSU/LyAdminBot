@@ -5,9 +5,9 @@
  */
 import { BotKeyboard, Chat, User, html, type Message } from '@mtcute/node'
 import {
-  evaluateMessage, tallyVotes,
+  evaluateMessage, tallyVotes, extractBioSignals,
   type EvaluationInput, type ForwardOrigin, type PipelinePorts,
-  type Verdict, type VoteBallot
+  type UserSnapshot, type Verdict, type VoteBallot
 } from '@lyadmin/core'
 import {
   TelegramGateway, applyVerdict, buildUserSnapshot, normalizeMessage,
@@ -26,8 +26,8 @@ import {
 import {
   captchaPrompt, compactNotification, escapeHtml as escapeName, helpView,
   langPicker, parseCallback, resolveLocale, settingsDeepLink, settingsPanel,
-  startCard, startGroupHint, topList, votePrompt, whyCard, whyView,
-  LOCALES, type Locale, type ViewMessage
+  startCard, startGroupHint, topList, userProfileCard, votePrompt, whyCard, whyView,
+  LOCALES, type Locale, type UserFacts, type ViewMessage
 } from '@lyadmin/ui'
 import { loadConfig } from './config.js'
 import { formatDuration, parseBananDuration } from './duration.js'
@@ -118,6 +118,51 @@ const recallVerdict = async (chatId: number, messageId: number): Promise<Verdict
   const cached = recentVerdicts.get(`${chatId}:${messageId}`)
   if (cached) return cached
   return store.getDecision(chatId, messageId).catch(() => null)
+}
+
+/**
+ * Display-ready user facts captured at decision time, so the "Why?" card can
+ * show a profile block. In-memory only (mirrors recentVerdicts) — after a
+ * restart the card degrades to the verdict alone, exactly like signal
+ * evidence does. /check always builds facts live instead.
+ */
+const recentFacts = new Map<string, UserFacts>()
+const rememberFacts = (chatId: number, messageId: number, facts: UserFacts): void => {
+  recentFacts.set(`${chatId}:${messageId}`, facts)
+  if (recentFacts.size > 2000) {
+    const firstKey = recentFacts.keys().next().value
+    if (firstKey) recentFacts.delete(firstKey)
+  }
+}
+const recallFacts = (chatId: number, messageId: number): UserFacts | undefined =>
+  recentFacts.get(`${chatId}:${messageId}`)
+
+/** Map a UserSnapshot to the ui's display contract. */
+const factsFromSnapshot = (
+  user: UserSnapshot,
+  flags: { promoInBio: boolean; personalChannel: boolean }
+): UserFacts => {
+  const eb = user.externalBan
+  return {
+    userId: user.id,
+    username: user.username,
+    predictedAgeDays: user.predictedAgeDays,
+    localAgeDays: user.localAgeDays,
+    messagesGlobal: user.messagesGlobal,
+    groupsActive: user.groupsActive,
+    reputationStatus: user.reputationStatus,
+    premium: user.flags.premium,
+    externalBan: eb
+      ? {
+          banned: eb.banned,
+          bannedAtDaysAgo: eb.bannedAt ? Math.max(0, (Date.now() - eb.bannedAt.getTime()) / 86_400_000) : null,
+          offenses: eb.offenses
+        }
+      : null,
+    joinedAgoSeconds: user.joinedAgoSeconds,
+    promoInBio: flags.promoInBio,
+    personalChannel: flags.personalChannel
+  }
 }
 
 /** Forward origins of recently actioned messages — for clean-reports on override. */
@@ -360,7 +405,7 @@ const handlePrivateMessage = async (message: Message): Promise<void> => {
       const canOverride = Number.isFinite(chatId) && await isChatAdmin(chatId, sender.id)
       await sendView(message, whyCard(locale, verdict, {
         chatId, messageId: Number(messageIdRaw), userId: Number(userIdRaw)
-      }, { canOverride }))
+      }, { canOverride, facts: recallFacts(chatId, Number(messageIdRaw)) }))
     } else {
       await sendView(message, { text: locale.why.expired, buttons: [] })
     }
@@ -508,6 +553,50 @@ const handleUntrust = async (message: Message, chat: Chat, caller: User): Promis
     : locale.untrust.notTrusted(escapeName(target.displayName))
   const sent = await gateway.tg.sendText(chat.id, viewHtml(text)).catch(() => null)
   if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'untrust')
+}
+
+/**
+ * /check — admin looks up the profile of the replied-to user. Builds a LIVE
+ * snapshot (history + getFullUser + external-ban + join time) and renders the
+ * profile card. Reply required; admin-only; the card auto-deletes.
+ */
+const handleCheck = async (message: Message, chat: Chat, caller: User): Promise<void> => {
+  const locale = await localeFor(caller.id, caller.language)
+  if (!(await isChatAdmin(chat.id, caller.id))) return
+  const dropCommand = (): Promise<void> =>
+    gateway.tg.deleteMessagesById(chat.id, [message.id]).catch(() => { /* no rights */ })
+  const replied = await gateway.fetchRepliedMessage(message)
+  await dropCommand()
+  if (!replied || !(replied.sender instanceof User)) {
+    const sent = await gateway.tg.sendText(chat.id, viewHtml(locale.profile.checkNeedReply)).catch(() => null)
+    if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'check')
+    return
+  }
+  const target = replied.sender
+
+  const userDoc = await store.getUserDoc(target.id).catch(() => null)
+  const history = userDocToHistory(userDoc as never, 0)
+  const profile = await fetchUserProfile(gateway.tg, target.id)
+  let externalBan = history?.externalBan ?? null
+  const fresh = await fetchExternalBan(target.id).catch(() => null)
+  if (fresh) externalBan = mergeExternalBan({ lols: fresh.lols as never, cas: fresh.cas as never })
+  const joinedDate = await gateway.tg.getChatMember({ chatId: chat.id, userId: target.id })
+    .then((m) => m?.joinedDate ?? null).catch(() => null)
+  const joinedAgoSeconds = joinedDate ? Math.max(0, (Date.now() - joinedDate.getTime()) / 1000) : null
+
+  const user = buildUserSnapshot(
+    target,
+    history === null ? null : { ...history, avatars: profile.avatars, externalBan },
+    undefined,
+    { unofficialClientRisk: profile.unofficialClientRisk, joinedAgoSeconds }
+  )
+  const facts = factsFromSnapshot(user, {
+    promoInBio: extractBioSignals(profile.bio).length > 0,
+    personalChannel: profile.personalChannelId !== null
+  })
+  log.info('check', { chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName, by: caller.id })
+  const sent = await gateway.tg.sendText(chat.id, viewHtml(userProfileCard(locale, facts).text)).catch(() => null)
+  if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'check')
 }
 
 /** /del — admin deletes the replied-to message (and the command). */
@@ -832,6 +921,10 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     await handleUntrust(message, chat, sender)
     return
   }
+  if (/^\/check(@\w+)?$/.test(commandText)) {
+    await handleCheck(message, chat, sender)
+    return
+  }
   if (/^\/del(@\w+)?$/.test(commandText)) {
     await handleDelete(message, chat, sender)
     return
@@ -892,7 +985,18 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   // Budget calls 2-3: profile enrichment only for newish senders.
   const profile = newish
     ? await fetchUserProfile(gateway.tg, sender.id)
-    : { bio: null, avatars: null, unofficialClientRisk: null }
+    : { bio: null, avatars: null, unofficialClientRisk: null, personalChannelId: null }
+
+  // Authoritative chat join time (channels.getParticipant). Only for newish
+  // senders — "joined seconds ago then posted" is the pattern it catches, and
+  // it costs one admin-only call. Degrades to null on anything unexpected.
+  let joinedAgoSeconds: number | null = null
+  if (newish) {
+    const joinedDate = await gateway.tg.getChatMember({ chatId: chat.id, userId: sender.id })
+      .then((m) => m?.joinedDate ?? null)
+      .catch(() => null)
+    if (joinedDate) joinedAgoSeconds = Math.max(0, (Date.now() - joinedDate.getTime()) / 1000)
+  }
 
   // External ban databases (lols/CAS): one cheap HTTP call, so it runs for
   // EVERY sender (not just newish) — an established member added to CAS
@@ -917,7 +1021,8 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   }
 
   const user = buildUserSnapshot(sender, history === null ? null : { ...history, avatars: profile.avatars, externalBan }, undefined, {
-    unofficialClientRisk: profile.unofficialClientRisk
+    unofficialClientRisk: profile.unofficialClientRisk,
+    joinedAgoSeconds
   })
 
   // Photo for LLM vision — only when a newish user posts media.
@@ -939,6 +1044,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     policy,
     enrichment: {
       bio: profile.bio,
+      personalChannelId: profile.personalChannelId,
       resolvedMentions: resolveMentionKinds(normalized.mentions),
       // Preceding chat lines — the current message is recorded after the
       // verdict so spam never pollutes its own context window.
@@ -1037,6 +1143,10 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   if (result.applied && verdict.action !== 'none' && verdict.action !== 'observe' && verdict.action !== 'captcha') {
     void sessionPort.reset(chat.id, sender.id).catch(() => { /* best-effort */ })
     rememberVerdict(chat.id, message.id, verdict)
+    rememberFacts(chat.id, message.id, factsFromSnapshot(user, {
+      promoInBio: verdict.signals.some((s) => s.name === 'promo_in_bio'),
+      personalChannel: input.enrichment.personalChannelId !== null
+    }))
     // Forwarded spam builds the long-term reputation of its origin.
     if (normalized.forward) {
       rememberForward(chat.id, message.id, normalized.forward)

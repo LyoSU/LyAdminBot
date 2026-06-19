@@ -148,6 +148,28 @@ export const uk: Locale = {
     expired: 'Це рішення вже застаріло — деталей не лишилось.'
   },
 
+  profile: {
+    title: '👤 Профіль',
+    accountAge: (age) => `акаунт ${age}`,
+    firstSeen: (seen) => `у нас ${seen}`,
+    activity: (messages, chats) => `${messages} повідомлень · ${chats} наших чатів`,
+    reputation: (status) => `репутація: ${status}`,
+    premium: 'Premium',
+    externalBan: (ago, offenses) => [
+      'у спам-базах',
+      ...(ago ? [`бан ${ago} тому`] : []),
+      ...(offenses > 1 ? [`${offenses} порушень`] : [])
+    ].join(' · '),
+    justJoined: (ago) => `у чаті лише ${ago}`,
+    promoInBio: 'промо в біо',
+    personalChannel: 'лінкований канал',
+    unknownAge: 'вік невідомий',
+    neverSeen: 'вперше',
+    units: { now: 'щойно', m: 'хв', h: 'год', d: 'д', mo: 'міс', y: 'р' },
+    checkNeedReply: 'Відповідайте командою /check на повідомлення користувача.',
+    notFound: 'Не вдалося отримати профіль.'
+  },
+
   vote: {
     prompt: (userLabel, textPreview) => `🤔 Це спам? Повідомлення від ${userLabel}:\n\n"${textPreview}"`,
     spamButton: (count) => `🗑 Спам (${count})`,

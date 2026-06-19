@@ -16,13 +16,14 @@ const makeInput = (chatId: number, userId: number, text: string): EvaluationInpu
     flags: { scam: false, fake: false, restricted: false, verified: false, premium: false, bot: false },
     predictedAgeDays: null, localAgeDays: null, messagesInChat: 0, messagesGlobal: 0,
     groupsActive: 0, spamDetections: 0, reputationScore: 50, reputationStatus: 'neutral',
-    externalBan: null, unofficialClientRisk: null, avatars: null, nameChurn24h: 0, usernameChurn24h: 0
+    externalBan: null, unofficialClientRisk: null, avatars: null, nameChurn24h: 0, usernameChurn24h: 0,
+    restrictionReasons: [], joinedAgoSeconds: null
   },
   policy: {
     enabled: true, preset: 'standard', captchaEnabled: false, votingEnabled: true,
     reactionModeration: false, externalBanEnabled: true, customRules: [], trustedUserIds: []
   },
-  enrichment: { bio: null, resolvedMentions: [], conversationWindow: [], photoBase64: null }
+  enrichment: { bio: null, personalChannelId: null, resolvedMentions: [], conversationWindow: [], photoBase64: null }
 })
 
 const SPAM = 'Потрібні люди на склад оплата щодня пиши в особисті'

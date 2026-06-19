@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Verdict } from '@lyadmin/core'
-import { callbackData, captchaPrompt, compactNotification, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, votePrompt, whyCard, whyDeepLink, whyView, LOCALES } from './views.js'
+import { callbackData, captchaPrompt, compactNotification, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, userProfileLines, votePrompt, whyCard, whyDeepLink, whyView, LOCALES, type UserFacts } from './views.js'
 import { uk } from './locales/uk.js'
 
 const makeVerdict = (overrides: Partial<Verdict> = {}): Verdict => ({
@@ -134,6 +134,54 @@ describe('whyView', () => {
     }))
     expect(text).toContain('зовнішнє посилання')
     expect(text).not.toContain('totally_unknown_signal')
+  })
+})
+
+describe('userProfileLines', () => {
+  const facts = (over: Partial<UserFacts> = {}): UserFacts => ({
+    userId: 7856024228, username: 'verdont_luna', predictedAgeDays: 800, localAgeDays: 0.003,
+    messagesGlobal: 26, groupsActive: 8, reputationStatus: 'suspicious', premium: false,
+    externalBan: { banned: true, bannedAtDaysAgo: 0.003, offenses: 3 }, joinedAgoSeconds: 240,
+    promoInBio: true, personalChannel: false, ...over
+  })
+
+  it('renders the LolsBot-style essentials in human language', () => {
+    const text = userProfileLines(uk, facts()).join('\n')
+    expect(text).toContain('👤')
+    expect(text).toContain('@verdont_luna')
+    expect(text).toContain('26 повідомлень')
+    expect(text).toContain('8 наших чатів')
+    expect(text).toContain('репутація: підозрілий')
+    expect(text).toContain('спам-базах')
+    expect(text).toContain('промо в біо')
+  })
+
+  it('humanizes spans (account ~years, just-joined minutes)', () => {
+    const text = userProfileLines(uk, facts({ predictedAgeDays: 800, joinedAgoSeconds: 240 })).join('\n')
+    expect(text).toMatch(/акаунт ~2р/)   // 800d ≈ 2 years
+    expect(text).toMatch(/у чаті лише 4хв/) // 240s = 4 min
+  })
+
+  it('omits ban/join/promo lines when absent', () => {
+    const text = userProfileLines(uk, facts({
+      externalBan: null, joinedAgoSeconds: null, promoInBio: false, personalChannel: false
+    })).join('\n')
+    expect(text).not.toContain('спам-базах')
+    expect(text).not.toContain('🆕')
+    expect(text).not.toContain('⚠️')
+  })
+
+  it('escapes an attacker-controlled username', () => {
+    const text = userProfileLines(uk, facts({ username: '<b>x' }), { html: true }).join('\n')
+    expect(text).toContain('&lt;b&gt;x')
+    expect(text).not.toContain('<b>x')
+  })
+
+  it('shows the override + profile block in the why card for admins', () => {
+    const view = whyCard(uk, makeVerdict(), target, { canOverride: true, facts: facts() })
+    expect(view.text).toContain('👤')
+    expect(view.text).toContain('@verdont_luna')
+    expect(view.buttons[0]![0]!.data).toBe('ovr:-100123:7:42')
   })
 })
 
