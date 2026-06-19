@@ -17,8 +17,8 @@ import {
 } from '@lyadmin/adapters'
 import {
   MongoStore, MongoSignaturePort, MongoForwardPort, QdrantVectorPort,
-  OpenAiModerationPort, OpenRouterLlmPort, MemoryVelocityPort,
-  MemorySessionPort, MemoryConversationWindow,
+  OpenAiModerationPort, OpenRouterLlmPort,
+  PersistentVelocityPort, PersistentSessionPort, MemoryConversationWindow,
   matchExtras,
   groupDocToChatPolicy, presetToThreshold, userDocToHistory, mergeExternalBan,
   type NormalizedExtra
@@ -36,8 +36,10 @@ import { log } from './logger.js'
 const config = loadConfig()
 
 const store = new MongoStore()
-const sessionPort = new MemorySessionPort()
-const velocityPort = new MemoryVelocityPort()
+// Velocity/session live in Mongo (TTL-expired) so the flood window and
+// abstain accumulation survive restarts and are shared across instances.
+const sessionPort = new PersistentSessionPort(store)
+const velocityPort = new PersistentVelocityPort(store)
 const signaturePort = new MongoSignaturePort(store)
 const forwardPort = new MongoForwardPort(store)
 const conversationWindow = new MemoryConversationWindow()

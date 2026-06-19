@@ -51,6 +51,9 @@ export class MongoStore {
   get votes(): Collection<Document> { return this.collection('pipeline_votes') }
   /** Resume cursor for the offline CAS signature harvester (tools/cas-harvest). */
   get harvestState(): Collection<Document> { return this.collection('cas_harvest_state') }
+  // Persistent moderation state (survives restarts; TTL-expired).
+  get velocityEvents(): Collection<Document> { return this.collection('velocity_events') }
+  get sessionWindows(): Collection<Document> { return this.collection('session_windows') }
 
   private async ensureIndexes(): Promise<void> {
     await this.decisions.createIndex({ createdAt: 1 }, { expireAfterSeconds: DECISIONS_TTL_DAYS * 86400 })
@@ -63,6 +66,10 @@ export class MongoStore {
     // Scheduled deletions: single deleteAt index doubles as the due-query
     // index and a 1h TTL backstop (3600s after deleteAt) if a sweep is missed.
     await this.scheduledDeletions.createIndex({ deleteAt: 1 }, { expireAfterSeconds: 3600 })
+    // Velocity/session windows expire to bound growth and define the window:
+    // 10 min for the flood window, 30 min for the abstain session.
+    await this.velocityEvents.createIndex({ firstSeenAt: 1 }, { expireAfterSeconds: 600 })
+    await this.sessionWindows.createIndex({ startedAt: 1 }, { expireAfterSeconds: 1800 })
   }
 
   // ── reads used per message ───────────────────────────────────────────
@@ -260,6 +267,43 @@ export class MongoStore {
     return docs
       .map((d) => String((d as { sampleText?: string }).sampleText ?? ''))
       .filter((t) => t.trim().length > 0)
+  }
+
+  // ── VelocityBackend / SessionBackend (persistent-ports.ts) ───────────
+
+  /** One velocity sighting of `hash`; the doc TTL-expires to define the window. */
+  async bumpVelocity(hash: string, chatId: number, userId: number): Promise<{ count: number; chatCount: number; userCount: number }> {
+    const doc = await this.velocityEvents.findOneAndUpdate(
+      { _id: hash } as never,
+      {
+        $inc: { count: 1 },
+        $addToSet: { chats: chatId, users: userId },
+        $setOnInsert: { firstSeenAt: new Date() }
+      } as never,
+      { upsert: true, returnDocument: 'after' }
+    ) as { count?: number; chats?: number[]; users?: number[] } | null
+    return {
+      count: doc?.count ?? 1,
+      chatCount: doc?.chats?.length ?? 1,
+      userCount: doc?.users?.length ?? 1
+    }
+  }
+
+  /** Append to a session window (TTL-expired), trimmed to the last maxMessages. */
+  async appendSession(key: string, text: string, maxMessages: number): Promise<string[]> {
+    const doc = await this.sessionWindows.findOneAndUpdate(
+      { _id: key } as never,
+      {
+        $push: { texts: { $each: text ? [text] : [], $slice: -maxMessages } },
+        $setOnInsert: { startedAt: new Date() }
+      } as never,
+      { upsert: true, returnDocument: 'after' }
+    ) as { texts?: string[] } | null
+    return doc?.texts ?? []
+  }
+
+  async resetSession(key: string): Promise<void> {
+    await this.sessionWindows.deleteOne({ _id: key } as never)
   }
 
   /** Track first-seen + global message counters (additive to v1 fields). */
