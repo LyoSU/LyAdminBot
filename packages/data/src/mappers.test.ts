@@ -56,6 +56,11 @@ describe('groupDocToChatPolicy', () => {
     const policy = groupDocToChatPolicy({ group_id: -1, settings: { banDatabase: false } })
     expect(policy.externalBanEnabled).toBe(false)
   })
+
+  it('reaction moderation is off by default but reachable when a group enables it', () => {
+    expect(groupDocToChatPolicy(null).reactionModeration).toBe(false)
+    expect(groupDocToChatPolicy({ group_id: -1, settings: { reactionModeration: true } }).reactionModeration).toBe(true)
+  })
 })
 
 describe('countRecentChanges (v1 semantics)', () => {

@@ -27,6 +27,19 @@ describe('applyDeterministicRules — spam rules', () => {
     expect(applyDeterministicRules(s('external_ban'))).toBeNull()
   })
 
+  it('unofficial-client newcomer is deterministic spam (heaviest weight gets a rule)', () => {
+    const verdict = applyDeterministicRules(s('unofficial_client_risk', 'new_globally'))
+    expect(verdict?.kind).toBe('spam')
+    expect(verdict?.ruleId).toBe('unofficial_client_new')
+    expect(verdict?.pSpam).toBeGreaterThanOrEqual(0.95)
+  })
+
+  it('unofficial-client risk on an established account falls through to scoring', () => {
+    expect(
+      applyDeterministicRules([...s('unofficial_client_risk'), ...t('established_user')])
+    ).toBeNull()
+  })
+
   it('edit injecting promo from a non-established user is deterministic spam', () => {
     const verdict = applyDeterministicRules(s('edit_injected_promo', 'edited_message'))
     expect(verdict?.ruleId).toBe('edit_injected_promo')

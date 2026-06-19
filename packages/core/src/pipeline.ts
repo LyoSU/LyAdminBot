@@ -19,6 +19,7 @@ import type { LlmVerdict, PipelinePorts } from './ports.js'
 import { extractMessageSignals } from './signals/message.js'
 import { extractUserSignals } from './signals/user.js'
 import { applyDeterministicRules } from './rules.js'
+import { parseCustomRule, customRuleMatches } from './custom-rules.js'
 import { scoreSignals } from './score.js'
 import { decideAction, type PolicyDecision } from './policy.js'
 import { shouldAbstain } from './text/abstain.js'
@@ -102,13 +103,10 @@ export const evaluateMessage = async (
   if (!input.policy.enabled) return none('abstain', 'spam_check_disabled')
 
   const text = input.message.text ?? ''
-  const lowerText = text.toLowerCase()
-  for (const [index, rule] of input.policy.customRules.entries()) {
-    const match = /^(ALLOW|DENY)\s*:\s*(.+)$/i.exec(rule.trim())
-    if (!match) continue
-    const pattern = (match[2] ?? '').trim().toLowerCase()
-    if (!pattern || !lowerText.includes(pattern)) continue
-    if ((match[1] ?? '').toUpperCase() === 'ALLOW') {
+  for (const [index, raw] of input.policy.customRules.entries()) {
+    const rule = parseCustomRule(raw)
+    if (!rule || !customRuleMatches(text, rule.pattern)) continue
+    if (rule.kind === 'allow') {
       return none('custom_rule', 'custom_allow')
     }
     return finalize(
@@ -117,7 +115,7 @@ export const evaluateMessage = async (
         decidedBy: 'custom_rule',
         ruleId: `custom:${index}`,
         reasonCode: 'custom_deny',
-        reasonEvidence: pattern
+        reasonEvidence: rule.pattern
       },
       []
     )

@@ -12,7 +12,7 @@ import {
 import {
   TelegramGateway, applyVerdict, buildUserSnapshot, normalizeMessage,
   fetchUserProfile, downloadPhotoBase64,
-  fetchExternalBan, needsExternalRecheck,
+  fetchExternalBan, needsExternalRecheck, resolveMentionKinds,
   type IncomingMessage
 } from '@lyadmin/adapters'
 import {
@@ -858,13 +858,15 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       id: chat.id,
       kind: normalized.channelComment ? 'discussion' : 'group',
       title: chat.title ?? '',
-      topLanguage: null
+      // Best available proxy for the chat's main language until a stats layer
+      // exists: the group's configured UI locale (uk/ru/en/by/tr).
+      topLanguage: (groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale ?? null
     },
     user,
     policy,
     enrichment: {
       bio: profile.bio,
-      resolvedMentions: [],
+      resolvedMentions: resolveMentionKinds(normalized.mentions),
       // Preceding chat lines — the current message is recorded after the
       // verdict so spam never pollutes its own context window.
       conversationWindow: conversationWindow.snapshot(chat.id),

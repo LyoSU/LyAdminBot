@@ -11,6 +11,8 @@ export interface GroupDoc {
     locale?: string
     /** v1 toggle for the external ban databases (lols/CAS). Default true. */
     banDatabase?: boolean
+    /** Opt-in reaction-based moderation (off by default). */
+    reactionModeration?: boolean
     openaiSpamCheck?: {
       enabled?: boolean
       confidenceThreshold?: number
@@ -55,7 +57,7 @@ export const groupDocToChatPolicy = (doc: GroupDoc | null): ChatPolicy => {
     captchaEnabled: doc?.settings?.captcha?.enabled ?? false,
     votingEnabled: doc?.settings?.voting?.enabled ?? true,
     externalBanEnabled: doc?.settings?.banDatabase ?? true,
-    reactionModeration: false, // v2 feature, shadow-off for the first month
+    reactionModeration: doc?.settings?.reactionModeration ?? false,
     customRules: spam?.customRules ?? [],
     trustedUserIds: spam?.trustedUsers ?? []
   }

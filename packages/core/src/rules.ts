@@ -50,6 +50,14 @@ export const applyDeterministicRules = (signals: Signal[]): DeterministicVerdict
     return { kind: 'spam', ruleId: 'scam_flag_new', pSpam: 0.97 }
   }
 
+  // Telegram's own dangerous-unofficial-client flag (userFull
+  // .unofficial_security_risk). Per product decision this outweighs even
+  // scam/fake, so unlike scam_flag_new it does not require newness — only
+  // an established/trusted local member is spared the deterministic call.
+  if (has('unofficial_client_risk') && !isEstablished) {
+    return { kind: 'spam', ruleId: 'unofficial_client_new', pSpam: 0.97 }
+  }
+
   // External ban databases (CAS/lols) + no meaningful local history.
   // Local-history requirement guards against rehabilitated accounts —
   // the known FP class of these databases.
