@@ -137,28 +137,76 @@ export const compactNotification = (
   }
 }
 
-/** Expanded "Why?" view. Alert-sized: keep it terse. */
-export const whyView = (locale: Locale, verdict: Verdict): string => {
+export interface WhyOptions {
+  /**
+   * Emit Telegram HTML (bold verdict, blockquote evidence, dim footer). The
+   * PM card renders HTML; the in-group callback toast does not, so it leaves
+   * this off and gets clean plain text.
+   */
+  html?: boolean
+  /**
+   * Append the technical footer (decidedBy · ruleId + raw signal codes).
+   * Admins only — it is developer-facing noise for everyone else.
+   */
+  technical?: boolean
+}
+
+/**
+ * Human "Why?" view. Built as a structured list, then rendered to plain text
+ * (default, for the alert toast) or Telegram HTML (for the PM card). Raw
+ * machine tokens — decidedBy, ruleId, signal names — only surface in the
+ * admin-only technical footer; everyone else sees plain language. Unmapped
+ * signals are dropped from the human list so no code ever leaks.
+ */
+export const whyView = (locale: Locale, verdict: Verdict, options: WhyOptions = {}): string => {
+  const { html: asHtml = false, technical = false } = options
+  const esc = asHtml ? escapeHtml : (s: string): string => s
+  const b = asHtml ? (s: string): string => `<b>${s}</b>` : (s: string): string => s
+  const dim = asHtml ? (s: string): string => `<i>${s}</i>` : (s: string): string => s
+
   const lines: string[] = []
+  lines.push(b(esc(locale.why.title)))
+
+  const pct = Math.round(verdict.pSpam * 100)
+  const confidence = verdict.pSpam >= 0.85
+    ? locale.why.confidence.high
+    : verdict.pSpam >= 0.6
+      ? locale.why.confidence.medium
+      : locale.why.confidence.low
+  lines.push('', b(esc(confidence(pct))))
+
   const reason = locale.reasons[verdict.reasonCode] ?? locale.reasonFallback
-  lines.push(`${locale.why.title}: ${reason}`)
-  lines.push(locale.why.probability(Math.round(verdict.pSpam * 100)))
-  const decidedBy = locale.why.decidedBy[verdict.decidedBy] ?? verdict.decidedBy
-  lines.push(`· ${decidedBy}${verdict.ruleId ? ` (${verdict.ruleId})` : ''}`)
-  if (verdict.reasonEvidence) {
-    lines.push(`${locale.why.evidenceTitle}: "${verdict.reasonEvidence.slice(0, 120)}"`)
-  }
+  lines.push(esc(locale.why.reasonLine(reason)))
+
   const suspicious = verdict.signals.filter((s) => !s.negative).map((s) => s.name)
-  if (suspicious.length > 0) {
-    lines.push(`${locale.why.signalsTitle}: ${suspicious.slice(0, 6).join(', ')}`)
+  const humanized = suspicious
+    .map((name) => locale.why.signalLabels[name])
+    .filter((label): label is string => Boolean(label))
+    .slice(0, 6)
+  if (humanized.length > 0) {
+    lines.push('', esc(locale.why.noticedTitle))
+    for (const label of humanized) lines.push(`• ${esc(label)}`)
   }
+
+  if (verdict.reasonEvidence) {
+    const quote = esc(verdict.reasonEvidence.slice(0, 200))
+    lines.push('', esc(locale.why.messageTitle))
+    lines.push(asHtml ? `<blockquote>${quote}</blockquote>` : `"${quote}"`)
+  }
+
+  if (technical) {
+    const decidedBy = locale.why.decidedBy[verdict.decidedBy] ?? verdict.decidedBy
+    lines.push('', dim(esc(`${decidedBy}${verdict.ruleId ? ` · ${verdict.ruleId}` : ''}`)))
+    if (suspicious.length > 0) lines.push(dim(esc(suspicious.slice(0, 8).join(', '))))
+  }
+
   return lines.join('\n')
 }
 
 /**
- * Expanded "Why?" card for PM. Same body as whyView; admins additionally get
- * the override button, since the group notification has auto-deleted by the
- * time they open this.
+ * Expanded "Why?" card for PM. Rendered as HTML; admins additionally get the
+ * override button and the technical footer, since the group notification has
+ * auto-deleted by the time they open this.
  */
 export const whyCard = (
   locale: Locale,
@@ -166,7 +214,7 @@ export const whyCard = (
   target: { chatId: number; messageId: number; userId: number },
   options: { canOverride: boolean }
 ): ViewMessage => ({
-  text: whyView(locale, verdict),
+  text: whyView(locale, verdict, { html: true, technical: options.canOverride }),
   buttons: options.canOverride
     ? [[{ text: locale.notification.notSpamButton, data: callbackData.override(target.chatId, target.messageId, target.userId) }]]
     : []

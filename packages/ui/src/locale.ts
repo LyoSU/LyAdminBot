@@ -48,11 +48,24 @@ export interface Locale {
   reasonFallback: string
 
   why: {
+    /** Card header, e.g. "🛡 Why I acted". */
     title: string
-    probability: (percent: number) => string
+    /** Verdict line with a traffic-light emoji, chosen by pSpam bucket. */
+    confidence: {
+      high: (percent: number) => string
+      medium: (percent: number) => string
+      low: (percent: number) => string
+    }
+    /** Human one-liner for the decision, e.g. "Reason: …". */
+    reasonLine: (reason: string) => string
+    /** Header above the bulleted, humanized signal list. */
+    noticedTitle: string
+    /** Machine signal name → plain phrase. Unmapped signals are hidden. */
+    signalLabels: Record<string, string>
+    /** Header above the quoted offending message. */
+    messageTitle: string
+    /** Technical footer (admins only): how the verdict was reached. */
     decidedBy: Record<string, string>
-    evidenceTitle: string
-    signalsTitle: string
     expired: string
   }
 

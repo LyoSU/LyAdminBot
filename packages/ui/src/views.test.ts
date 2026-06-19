@@ -72,25 +72,48 @@ describe('whyDeepLink', () => {
 })
 
 describe('whyCard', () => {
-  it('renders the why text and offers override for admins', () => {
+  it('renders an HTML card and offers override + technical footer for admins', () => {
     const view = whyCard(uk, makeVerdict(), target, { canOverride: true })
     expect(view.text).toContain('93%')
+    expect(view.text).toContain('<b>') // verdict line is emphasized
+    expect(view.text).toContain('ШІ-аналіз') // technical footer (admins only)
+    expect(view.text).toContain('external_url') // raw codes only in footer
     expect(view.buttons[0]![0]!.data).toBe('ovr:-100123:7:42')
   })
 
-  it('omits the override button for non-admins', () => {
+  it('omits override button AND technical footer for non-admins', () => {
     const view = whyCard(uk, makeVerdict(), target, { canOverride: false })
     expect(view.buttons).toHaveLength(0)
+    expect(view.text).not.toContain('ШІ-аналіз') // no decidedBy jargon
+    expect(view.text).not.toContain('external_url') // no raw signal codes
+    expect(view.text).toContain('зовнішнє посилання') // humanized instead
+  })
+
+  it('wraps the offending message in a blockquote', () => {
+    const view = whyCard(uk, makeVerdict(), target, { canOverride: false })
+    expect(view.text).toContain('<blockquote>оплата щодня</blockquote>')
+  })
+
+  it('escapes HTML in attacker-controlled evidence', () => {
+    const view = whyCard(uk, makeVerdict({ reasonEvidence: '<b>x</b> & <a>' }), target, { canOverride: false })
+    expect(view.text).toContain('&lt;b&gt;x&lt;/b&gt; &amp; &lt;a&gt;')
+    expect(view.text).not.toContain('<b>x</b>')
   })
 })
 
 describe('whyView', () => {
-  it('localizes the reason code and never shows raw LLM text fields', () => {
+  it('renders plain text (no tags) for the in-group alert toast', () => {
     const text = whyView(uk, makeVerdict())
-    expect(text).toContain('шахрайську "вакансію"')
+    expect(text).not.toMatch(/<[a-z]/) // no HTML in the toast surface
     expect(text).toContain('93%')
-    expect(text).toContain('ШІ-аналіз')
+    expect(text).toContain('шахрайську "вакансію"')
     expect(text).toContain('оплата щодня') // evidence quote is allowed
+  })
+
+  it('shows a confidence bucket by pSpam, not a bare percentage', () => {
+    expect(whyView(uk, makeVerdict({ pSpam: 0.96 }))).toContain('🔴')
+    expect(whyView(uk, makeVerdict({ pSpam: 0.7 }))).toContain('🟠')
+    expect(whyView(uk, makeVerdict({ pSpam: 0.4 }))).toContain('🟡')
   })
 
   it('falls back gracefully for unknown reason codes', () => {
@@ -98,10 +121,19 @@ describe('whyView', () => {
     expect(text).toContain(uk.reasonFallback)
   })
 
-  it('lists only suspicious signals, not trust signals', () => {
+  it('humanizes suspicious signals and hides trust signals + raw codes', () => {
     const text = whyView(uk, makeVerdict())
-    expect(text).toContain('external_url')
-    expect(text).not.toContain('is_reply')
+    expect(text).toContain('зовнішнє посилання') // external_url, humanized
+    expect(text).not.toContain('external_url') // never the raw code (no footer)
+    expect(text).not.toContain('is_reply') // trust signals excluded
+  })
+
+  it('drops unmapped signals from the human list rather than leaking the code', () => {
+    const text = whyView(uk, makeVerdict({
+      signals: [{ name: 'external_url' }, { name: 'totally_unknown_signal' }]
+    }))
+    expect(text).toContain('зовнішнє посилання')
+    expect(text).not.toContain('totally_unknown_signal')
   })
 })
 
