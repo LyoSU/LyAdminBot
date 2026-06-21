@@ -30,6 +30,29 @@ export interface Locale {
     saved: string
   }
 
+  /**
+   * Descriptions for the Telegram command menu (setMyCommands). Keyed by
+   * command name; the slash-menu autocomplete shows these next to each command.
+   */
+  commands: {
+    start: string
+    help: string
+    lang: string
+    mystats: string
+    report: string
+    settings: string
+    banan: string
+    kick: string
+    del: string
+    untrust: string
+    check: string
+    top: string
+    topBanan: string
+    extras: string
+    welcome: string
+    ping: string
+  }
+
   actions: Record<Exclude<VerdictAction, 'none' | 'observe'>, string>
 
   /** One-line compact moderation notice: {action} {user}. */
@@ -195,6 +218,11 @@ export interface Locale {
     captcha: string
     voting: string
     enabled: string
+    /** External ban databases (lols/CAS) toggle label. */
+    banDatabase: string
+    /** Group interface-language row label + toast on change. */
+    language: string
+    languageSaved: string
     on: string
     off: string
     back: string

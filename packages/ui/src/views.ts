@@ -12,13 +12,17 @@ import type { Locale } from './locale.js'
 import { uk } from './locales/uk.js'
 import { en } from './locales/en.js'
 import { ru } from './locales/ru.js'
+import { tr } from './locales/tr.js'
+import { by } from './locales/by.js'
 
-export const LOCALES: Record<string, Locale> = { uk, en, ru }
+export const LOCALES: Record<string, Locale> = { uk, en, ru, tr, by }
 
 export const resolveLocale = (code: string | null | undefined): Locale => {
   if (code && LOCALES[code]) return LOCALES[code]
   if (code?.startsWith('uk')) return uk
-  if (code?.startsWith('ru') || code?.startsWith('be')) return ru
+  if (code?.startsWith('ru')) return ru
+  if (code?.startsWith('be') || code?.startsWith('by')) return by
+  if (code?.startsWith('tr')) return tr
   return en
 }
 
@@ -352,6 +356,10 @@ export interface SettingsState {
   preset: 'soft' | 'standard' | 'strict'
   captchaEnabled: boolean
   votingEnabled: boolean
+  /** External ban databases (lols/CAS) toggle. */
+  externalBanEnabled: boolean
+  /** Current group interface-language code (uk/en/ru/tr/by). */
+  locale: string
 }
 
 /** PM settings panel. Every button carries the target chatId. */
@@ -360,6 +368,18 @@ export const settingsPanel = (locale: Locale, chatId: number, state: SettingsSta
   const presetLabel = locale.settings.presets[state.preset]
   const mark = (preset: SettingsState['preset']): string =>
     state.preset === preset ? `· ${locale.settings.presets[preset]} ·` : locale.settings.presets[preset]
+  const langName = (code: string): string => LOCALES[code]?.languageName ?? code
+
+  // Language buttons, chunked into rows of three so long names stay readable.
+  const langCodes = Object.keys(LOCALES)
+  const langRows: ButtonSpec[][] = []
+  for (let i = 0; i < langCodes.length; i += 3) {
+    langRows.push(langCodes.slice(i, i + 3).map((code) => ({
+      text: state.locale === code ? `· ${langName(code)} ·` : langName(code),
+      data: callbackData.settings(chatId, 'lang', code)
+    })))
+  }
+
   return {
     text: [
       locale.settings.title,
@@ -367,7 +387,9 @@ export const settingsPanel = (locale: Locale, chatId: number, state: SettingsSta
       `${locale.settings.enabled}: ${onOff(state.enabled)}`,
       `${locale.settings.preset}: ${presetLabel}`,
       `${locale.settings.captcha}: ${onOff(state.captchaEnabled)}`,
-      `${locale.settings.voting}: ${onOff(state.votingEnabled)}`
+      `${locale.settings.voting}: ${onOff(state.votingEnabled)}`,
+      `${locale.settings.banDatabase}: ${onOff(state.externalBanEnabled)}`,
+      `${locale.settings.language}: ${langName(state.locale)}`
     ].join('\n'),
     buttons: [
       [{ text: `${locale.settings.enabled}: ${onOff(state.enabled)}`, data: callbackData.settings(chatId, 'toggle_enabled') }],
@@ -377,7 +399,9 @@ export const settingsPanel = (locale: Locale, chatId: number, state: SettingsSta
         { text: mark('strict'), data: callbackData.settings(chatId, 'preset', 'strict') }
       ],
       [{ text: `${locale.settings.captcha}: ${onOff(state.captchaEnabled)}`, data: callbackData.settings(chatId, 'toggle_captcha') }],
-      [{ text: `${locale.settings.voting}: ${onOff(state.votingEnabled)}`, data: callbackData.settings(chatId, 'toggle_voting') }]
+      [{ text: `${locale.settings.voting}: ${onOff(state.votingEnabled)}`, data: callbackData.settings(chatId, 'toggle_voting') }],
+      [{ text: `${locale.settings.banDatabase}: ${onOff(state.externalBanEnabled)}`, data: callbackData.settings(chatId, 'toggle_bandb') }],
+      ...langRows
     ]
   }
 }

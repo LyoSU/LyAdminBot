@@ -560,12 +560,16 @@ export class MongoStore {
     confidenceThreshold?: number
     captchaEnabled?: boolean
     votingEnabled?: boolean
+    banDatabase?: boolean
+    locale?: string
   }): Promise<void> {
     const set: Record<string, unknown> = {}
     if (patch.enabled !== undefined) set['settings.openaiSpamCheck.enabled'] = patch.enabled
     if (patch.confidenceThreshold !== undefined) set['settings.openaiSpamCheck.confidenceThreshold'] = patch.confidenceThreshold
     if (patch.captchaEnabled !== undefined) set['settings.captcha.enabled'] = patch.captchaEnabled
     if (patch.votingEnabled !== undefined) set['settings.voting.enabled'] = patch.votingEnabled
+    if (patch.banDatabase !== undefined) set['settings.banDatabase'] = patch.banDatabase
+    if (patch.locale !== undefined) set['settings.locale'] = patch.locale
     if (Object.keys(set).length === 0) return
     await this.groups.updateOne(
       { group_id: chatId },

@@ -232,10 +232,12 @@ describe('locales', () => {
     }
   })
 
-  it('resolveLocale falls back to en and supports uk/ru/be', () => {
+  it('resolveLocale falls back to en and supports uk/ru/be/tr/by', () => {
     expect(resolveLocale('uk').languageName).toBe('Українська')
     expect(resolveLocale('ru').languageName).toBe('Русский')
-    expect(resolveLocale('be').languageName).toBe('Русский')
+    expect(resolveLocale('be').languageName).toBe('Беларуская')
+    expect(resolveLocale('by').languageName).toBe('Беларуская')
+    expect(resolveLocale('tr').languageName).toBe('Türkçe')
     expect(resolveLocale('de').languageName).toBe('English')
     expect(resolveLocale(null).languageName).toBe('English')
   })
@@ -257,7 +259,8 @@ describe('settings', () => {
 
   it('every panel button carries the target chatId (the panel lives in PM)', () => {
     const view = settingsPanel(uk, -1001234567890, {
-      enabled: true, preset: 'standard', captchaEnabled: false, votingEnabled: true
+      enabled: true, preset: 'standard', captchaEnabled: false, votingEnabled: true,
+      externalBanEnabled: true, locale: 'uk'
     })
     const datas = view.buttons.flat().map((b) => b.data ?? '')
     expect(datas.length).toBeGreaterThan(0)

@@ -30,6 +30,7 @@ import {
   LOCALES, type Locale, type UserFacts, type ViewMessage
 } from '@lyadmin/ui'
 import { loadConfig } from './config.js'
+import { registerBotCommands } from './commands.js'
 import { formatDuration, parseBananDuration } from './duration.js'
 import { log } from './logger.js'
 
@@ -340,11 +341,14 @@ const enforceVoteSpam = async (vote: {
 const renderSettingsPanel = async (locale: Locale, chatId: number): Promise<ViewMessage> => {
   const groupDoc = await store.getGroupDoc(chatId).catch(() => null)
   const policy = groupDocToChatPolicy(groupDoc as never)
+  const groupLocale = (groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale ?? 'en'
   return settingsPanel(locale, chatId, {
     enabled: policy.enabled,
     preset: policy.preset,
     captchaEnabled: policy.captchaEnabled,
-    votingEnabled: policy.votingEnabled
+    votingEnabled: policy.votingEnabled,
+    externalBanEnabled: policy.externalBanEnabled,
+    locale: groupLocale
   })
 }
 
@@ -1232,6 +1236,10 @@ const wireCallbacks = (): void => {
         await store.updateGroupSettings(chatId, { votingEnabled: !policy.votingEnabled })
       } else if (action === 'preset' && (value === 'soft' || value === 'standard' || value === 'strict')) {
         await store.updateGroupSettings(chatId, { confidenceThreshold: presetToThreshold(value) })
+      } else if (action === 'toggle_bandb') {
+        await store.updateGroupSettings(chatId, { banDatabase: !policy.externalBanEnabled })
+      } else if (action === 'lang' && LOCALES[value]) {
+        await store.updateGroupSettings(chatId, { locale: value })
       } else {
         await query.answer({})
         return
@@ -1242,7 +1250,7 @@ const wireCallbacks = (): void => {
         chatId: query.user.id, message: query.messageId,
         text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons)
       }).catch(() => { /* unchanged content → MESSAGE_NOT_MODIFIED, fine */ })
-      await query.answer({})
+      await query.answer(action === 'lang' ? { text: locale.settings.languageSaved } : {})
       return
     }
 
@@ -1425,6 +1433,10 @@ const main = async (): Promise<void> => {
   selfId = self.id
   selfUsername = self.username
   log.info('started', { username: self.username, id: self.id })
+
+  // Populate the Telegram command menu (slash button + autocomplete). Fire and
+  // forget — it self-swallows errors and must not delay readiness.
+  void registerBotCommands(gateway.tg)
 
   // Clear deletions that came due while we were down, then sweep periodically
   // as the backstop for the in-memory timers.

@@ -33,6 +33,25 @@ export const en: Locale = {
     saved: 'Done, English it is'
   },
 
+  commands: {
+    start: 'Start using the bot',
+    help: 'Help and commands',
+    lang: 'Choose language',
+    mystats: 'My stats',
+    report: 'Report spam (reply)',
+    settings: 'Anti-spam settings (admins)',
+    banan: 'Mute via reply (/banan 5m)',
+    kick: 'Kick a member (reply)',
+    del: 'Delete a message (reply)',
+    untrust: 'Revoke trust (reply)',
+    check: 'Look up a profile (reply)',
+    top: 'Top active members',
+    topBanan: 'Top by bananas',
+    extras: 'Saved triggers',
+    welcome: 'Newcomer greetings',
+    ping: 'Check the bot is alive'
+  },
+
   actions: {
     captcha: '👋 checking',
     delete: '🧹 spam removed',
@@ -273,6 +292,9 @@ export const en: Locale = {
     captcha: 'Captcha for newcomers',
     voting: 'Community voting',
     enabled: 'Anti-spam',
+    banDatabase: 'Spammer databases',
+    language: 'Bot language in this chat',
+    languageSaved: 'Chat language updated',
     on: 'On',
     off: 'Off',
     back: '‹ Back'
