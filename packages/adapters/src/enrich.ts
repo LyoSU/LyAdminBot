@@ -4,7 +4,7 @@
  * the gateway/app layer decides; this module just executes cheaply
  * and degrades to nulls on any failure.
  */
-import { Long, type TelegramClient, type tl } from '@mtcute/node'
+import { Long, Photo, type TelegramClient, type tl } from '@mtcute/node'
 
 export interface UserProfileEnrichment {
   bio: string | null
@@ -73,4 +73,92 @@ export const downloadPhotoBase64 = async (
   } catch {
     return null
   }
+}
+
+/** Wrap a raw TL photo into a downloadable Photo and return it as base64. */
+const rawPhotoToBase64 = async (
+  tg: TelegramClient,
+  raw: tl.RawPhoto,
+  maxBytes: number
+): Promise<string | null> => {
+  try {
+    const buffer = await tg.downloadAsBuffer(new Photo(raw))
+    if (buffer.byteLength > maxBytes) return null
+    return Buffer.from(buffer).toString('base64')
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Download the sender's current (newest) avatar as base64 for NSFW
+ * moderation. Bot-accessible: photos.getUserPhotos + file download both work
+ * for bots. Degrades to null on any failure or oversized image.
+ */
+export const downloadAvatarBase64 = async (
+  tg: TelegramClient,
+  userId: number,
+  maxBytes = 2 * 1024 * 1024
+): Promise<string | null> => {
+  let inputUser: tl.RawInputUser | null = null
+  try {
+    const peer = await tg.resolvePeer(userId)
+    if (peer._ === 'inputPeerUser') {
+      inputUser = { _: 'inputUser', userId: peer.userId, accessHash: peer.accessHash }
+    }
+  } catch {
+    return null
+  }
+  if (!inputUser) return null
+
+  try {
+    const photos = await tg.call({
+      _: 'photos.getUserPhotos', userId: inputUser, offset: 0, maxId: Long.ZERO, limit: 1
+    })
+    const latest = photos.photos.find((p): p is tl.RawPhoto => p._ === 'photo')
+    if (!latest) return null
+    return await rawPhotoToBase64(tg, latest, maxBytes)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Download up to `max` of the sender's active stories as base64 for NSFW
+ * moderation. Best-effort: stories are a user-only MTProto surface, so on a
+ * bot account stories.getPeerStories typically errors and this returns []
+ * (nsfw_stories then simply never fires). Only photo stories are moderated.
+ */
+export const downloadStoriesBase64 = async (
+  tg: TelegramClient,
+  userId: number,
+  max = 3,
+  maxBytes = 2 * 1024 * 1024
+): Promise<string[]> => {
+  let inputPeer: tl.TypeInputPeer
+  try {
+    inputPeer = await tg.resolvePeer(userId)
+  } catch {
+    return []
+  }
+
+  let items: tl.TypeStoryItem[]
+  try {
+    const peerStories = await tg.call({ _: 'stories.getPeerStories', peer: inputPeer })
+    items = peerStories.stories.stories
+  } catch {
+    return [] // user-only surface — expected to fail on a bot account
+  }
+
+  const out: string[] = []
+  for (const item of items) {
+    if (out.length >= max) break
+    if (item._ !== 'storyItem') continue
+    if (item.media._ !== 'messageMediaPhoto') continue
+    const photo = item.media.photo
+    if (!photo || photo._ !== 'photo') continue
+    const base64 = await rawPhotoToBase64(tg, photo, maxBytes)
+    if (base64) out.push(base64)
+  }
+  return out
 }

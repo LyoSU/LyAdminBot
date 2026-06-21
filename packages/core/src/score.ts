@@ -71,6 +71,11 @@ export const SIGNAL_WEIGHTS: Record<string, number> = {
   restricted_for_spam: 1.5,
   // Joined the chat <2min before posting.
   just_joined: 1.0,
+  // NSFW profile media on a (by-construction) newish account. Strong on its
+  // own but kept in the votable band; stacks with newness to cross action.
+  // Starting weights — replay re-fits against confirmed decisions.
+  nsfw_avatar: 2.5,
+  nsfw_stories: 2.2,
 
   // ── user history / age ──
   sleeper_awakened: 1.2,

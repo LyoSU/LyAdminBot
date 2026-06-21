@@ -23,7 +23,7 @@ const makeInput = (chatId: number, userId: number, text: string): EvaluationInpu
     enabled: true, preset: 'standard', captchaEnabled: false, votingEnabled: true,
     reactionModeration: false, externalBanEnabled: true, customRules: [], trustedUserIds: []
   },
-  enrichment: { bio: null, personalChannelId: null, resolvedMentions: [], conversationWindow: [], photoBase64: null }
+  enrichment: { bio: null, personalChannelId: null, resolvedMentions: [], conversationWindow: [], photoBase64: null, avatarBase64: null, storyBase64: [] }
 })
 
 const SPAM = 'Потрібні люди на склад оплата щодня пиши в особисті'

@@ -160,7 +160,10 @@ export const ru: Locale = {
       unknown_media: 'нераспознанное вложение',
       guest_bot_delivery: 'доставлено через гостевого бота',
       edited_message: 'сообщение отредактировано',
-      edit_injected_promo: 'реклама вставлена редактированием'
+      edit_injected_promo: 'реклама вставлена редактированием',
+      moderation_flagged: 'NSFW в тексте или фото',
+      nsfw_avatar: 'NSFW на аватарке',
+      nsfw_stories: 'NSFW в историях'
     },
     messageTitle: 'Сообщение:',
     decidedBy: {

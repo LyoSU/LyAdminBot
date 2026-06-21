@@ -17,27 +17,27 @@ export class OpenAiModerationPort implements ModerationPort {
 
   async check(text: string, photoBase64: string | null): Promise<ModerationResult | null> {
     if (!text && !photoBase64) return null
-    try {
-      const input: OpenAI.Moderations.ModerationMultiModalInput[] = []
-      if (text) input.push({ type: 'text', text: text.slice(0, 4000) })
-      if (photoBase64) {
-        input.push({
-          type: 'image_url',
-          image_url: { url: `data:image/jpeg;base64,${photoBase64}` }
-        })
-      }
-      const response = await this.openai.moderations.create({
-        model: MODERATION_MODEL,
-        input
+    // NOTE: we deliberately do NOT swallow API errors here. A dead/expired
+    // key (HTTP 401) used to return null silently, turning moderation into an
+    // invisible no-op. Letting it throw surfaces it via the pipeline's safe()
+    // wrapper as meta.portError_moderation in the per-message log.
+    const input: OpenAI.Moderations.ModerationMultiModalInput[] = []
+    if (text) input.push({ type: 'text', text: text.slice(0, 4000) })
+    if (photoBase64) {
+      input.push({
+        type: 'image_url',
+        image_url: { url: `data:image/jpeg;base64,${photoBase64}` }
       })
-      const result = response.results[0]
-      if (!result) return null
-      const categories = Object.entries(result.categories)
-        .filter(([, flagged]) => flagged === true)
-        .map(([name]) => name)
-      return { flagged: result.flagged, categories }
-    } catch {
-      return null
     }
+    const response = await this.openai.moderations.create({
+      model: MODERATION_MODEL,
+      input
+    })
+    const result = response.results[0]
+    if (!result) return null
+    const categories = Object.entries(result.categories)
+      .filter(([, flagged]) => flagged === true)
+      .map(([name]) => name)
+    return { flagged: result.flagged, categories }
   }
 }

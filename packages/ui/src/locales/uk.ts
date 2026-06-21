@@ -160,7 +160,10 @@ export const uk: Locale = {
       unknown_media: 'нерозпізнане вкладення',
       guest_bot_delivery: 'доставлено через гостьового бота',
       edited_message: 'повідомлення відредаговано',
-      edit_injected_promo: 'рекламу вставлено редагуванням'
+      edit_injected_promo: 'рекламу вставлено редагуванням',
+      moderation_flagged: 'NSFW у тексті або фото',
+      nsfw_avatar: 'NSFW на аватарці',
+      nsfw_stories: 'NSFW у сторіс'
     },
     messageTitle: 'Повідомлення:',
     decidedBy: {

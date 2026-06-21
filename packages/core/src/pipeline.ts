@@ -286,6 +286,27 @@ export const evaluateMessage = async (
     if (moderation?.flagged) {
       signals.push({ name: 'moderation_flagged', evidence: moderation.categories.join(', ') })
     }
+
+    // Profile-media NSFW. Avatar/stories are only downloaded for newish
+    // senders, so these signals are new-account signals by construction —
+    // a porn avatar on a fresh account is the classic escort/promo bot.
+    if (input.enrichment.avatarBase64) {
+      const avatar = await safe('moderation_avatar', () =>
+        ports.moderation!.check('', input.enrichment.avatarBase64))
+      if (avatar?.flagged) {
+        signals.push({ name: 'nsfw_avatar', evidence: avatar.categories.join(', ') })
+      }
+    }
+    if (input.enrichment.storyBase64.length > 0) {
+      const flaggedCategories = new Set<string>()
+      for (const story of input.enrichment.storyBase64) {
+        const result = await safe('moderation_story', () => ports.moderation!.check('', story))
+        if (result?.flagged) for (const c of result.categories) flaggedCategories.add(c)
+      }
+      if (flaggedCategories.size > 0) {
+        signals.push({ name: 'nsfw_stories', evidence: [...flaggedCategories].join(', ') })
+      }
+    }
   }
 
   // ── 6. score + LLM escalation ───────────────────────────────────────

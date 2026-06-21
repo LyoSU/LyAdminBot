@@ -11,7 +11,7 @@ import {
 } from '@lyadmin/core'
 import {
   TelegramGateway, applyVerdict, buildUserSnapshot, normalizeMessage,
-  fetchUserProfile, downloadPhotoBase64,
+  fetchUserProfile, downloadPhotoBase64, downloadAvatarBase64, downloadStoriesBase64,
   fetchExternalBan, needsExternalRecheck, resolveMentionKinds,
   type IncomingMessage
 } from '@lyadmin/adapters'
@@ -753,6 +753,38 @@ const extractJoiners = async (message: Message): Promise<User[]> => {
   return []
 }
 
+/**
+ * Avatar bytes downloaded at join time, cached so the joiner's first message
+ * reuses them instead of re-downloading. Keyed by user id; coarse TTL.
+ */
+const avatarCache = new Map<number, { base64: string | null; expiresAt: number }>()
+const AVATAR_CACHE_TTL_MS = 6 * 60 * 60 * 1000
+
+/**
+ * Early NSFW screen of joiners' avatars — catches porn/escort bots the moment
+ * they join, even if they never post. Best-effort and fire-and-forget: it only
+ * LOGS (moderation is a signal, not a verdict here); the authoritative signal
+ * is emitted on the first message. Caches the avatar bytes either way.
+ */
+const screenJoinerAvatars = async (chat: Chat, joiners: User[]): Promise<void> => {
+  if (!ports.moderation) return
+  for (const joiner of joiners) {
+    if (joiner.id === selfId) continue
+    const base64 = await downloadAvatarBase64(gateway.tg, joiner.id)
+    avatarCache.set(joiner.id, { base64, expiresAt: Date.now() + AVATAR_CACHE_TTL_MS })
+    if (!base64) continue
+    try {
+      const result = await ports.moderation.check('', base64)
+      if (result?.flagged) {
+        log.info('nsfw_avatar_join', {
+          chatId: chat.id, chat: chat.title ?? undefined,
+          userId: joiner.id, categories: result.categories
+        })
+      }
+    } catch { /* dead key / API error surfaces via the message-path meta log */ }
+  }
+}
+
 /** Greet new members when welcome is enabled (off by default). */
 const handleWelcomeGreeting = async (message: Message, chat: Chat, joiners: User[]): Promise<void> => {
   if (joiners.length === 0) return
@@ -898,7 +930,11 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   // pipeline. Join service messages may trigger a welcome greeting.
   if (message.action) {
     const joiners = await extractJoiners(message)
-    if (joiners.length > 0) await handleWelcomeGreeting(message, chat, joiners)
+    if (joiners.length > 0) {
+      await handleWelcomeGreeting(message, chat, joiners)
+      // Fire-and-forget: avatar download must never delay update handling.
+      void screenJoinerAvatars(chat, joiners).catch(() => { /* best-effort */ })
+    }
     return
   }
 
@@ -1050,6 +1086,19 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     ? await downloadPhotoBase64(gateway.tg, message.media)
     : null
 
+  // NSFW moderation of profile media — newish senders only (this gate is what
+  // makes nsfw_avatar/nsfw_stories new-account signals). Avatar reuses bytes
+  // cached at join when fresh; stories are best-effort (user-only surface).
+  let avatarBase64: string | null = null
+  let storyBase64: string[] = []
+  if (newish && ports.moderation) {
+    const cached = avatarCache.get(sender.id)
+    avatarBase64 = cached && cached.expiresAt > Date.now()
+      ? cached.base64
+      : await downloadAvatarBase64(gateway.tg, sender.id)
+    storyBase64 = await downloadStoriesBase64(gateway.tg, sender.id)
+  }
+
   const input: EvaluationInput = {
     message: normalized,
     chat: {
@@ -1069,7 +1118,9 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       // Preceding chat lines — the current message is recorded after the
       // verdict so spam never pollutes its own context window.
       conversationWindow: conversationWindow.snapshot(chat.id),
-      photoBase64
+      photoBase64,
+      avatarBase64,
+      storyBase64
     }
   }
 

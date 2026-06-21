@@ -160,7 +160,10 @@ export const en: Locale = {
       unknown_media: 'an unrecognized attachment',
       guest_bot_delivery: 'delivered through a guest bot',
       edited_message: 'the message was edited',
-      edit_injected_promo: 'promo inserted by an edit'
+      edit_injected_promo: 'promo inserted by an edit',
+      moderation_flagged: 'NSFW text or photo',
+      nsfw_avatar: 'NSFW profile photo',
+      nsfw_stories: 'NSFW story'
     },
     messageTitle: 'The message:',
     decidedBy: {

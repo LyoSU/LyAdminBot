@@ -154,6 +154,18 @@ export interface Enrichment {
   conversationWindow: ConversationLine[]
   /** Message photo, when present and downloaded (for LLM vision). */
   photoBase64: string | null
+  /**
+   * Sender's current avatar as base64, downloaded for NSFW moderation.
+   * Only populated for newish senders (the gate that makes nsfw_avatar a
+   * new-account signal by construction). Null when absent or download failed.
+   */
+  avatarBase64: string | null
+  /**
+   * Up to 3 active stories of the sender as base64, for NSFW moderation.
+   * Best-effort: stories are a user-only MTProto surface, so on a bot account
+   * this is usually empty and nsfw_stories simply never fires.
+   */
+  storyBase64: string[]
 }
 
 // ─────────────────────── chat policy ───────────────────────

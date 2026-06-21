@@ -81,7 +81,7 @@ const toInput = (event: ModEvent): EvaluationInput => {
     chat: { id: event.chatId ?? 0, kind: 'group', title: '', topLanguage: null },
     user: unknownUser(event.targetId ?? 0),
     policy: defaultPolicy,
-    enrichment: { bio: null, personalChannelId: null, resolvedMentions: [], conversationWindow: [], photoBase64: null }
+    enrichment: { bio: null, personalChannelId: null, resolvedMentions: [], conversationWindow: [], photoBase64: null, avatarBase64: null, storyBase64: [] }
   }
 }
 

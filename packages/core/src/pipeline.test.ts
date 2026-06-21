@@ -36,7 +36,8 @@ const makePolicy = (overrides: Partial<ChatPolicy> = {}): ChatPolicy => ({
 })
 
 const emptyEnrichment: Enrichment = {
-  bio: null, personalChannelId: null, resolvedMentions: [], conversationWindow: [], photoBase64: null
+  bio: null, personalChannelId: null, resolvedMentions: [], conversationWindow: [],
+  photoBase64: null, avatarBase64: null, storyBase64: []
 }
 
 const makeInput = (over: {
@@ -219,6 +220,36 @@ describe('evaluateMessage — knowledge ports', () => {
     }
     const v = await evaluateMessage(makeInput({ msg: { text: 'якийсь текст з натяками тут' } }), ports)
     expect(v.signals.some((s) => s.name === 'moderation_flagged')).toBe(true)
+  })
+
+  it('flagged avatar raises nsfw_avatar (only when an avatar is provided)', async () => {
+    // Flags only image inputs (no text) — mirrors a clean post + porn avatar.
+    const ports: PipelinePorts = {
+      moderation: {
+        check: async (text, image) =>
+          !text && image ? { flagged: true, categories: ['sexual'] } : { flagged: false, categories: [] }
+      }
+    }
+    const withAvatar = await evaluateMessage(
+      makeInput({ user: newcomer, enrichment: { avatarBase64: 'ZmFrZQ==' } }), ports)
+    expect(withAvatar.signals.some((s) => s.name === 'nsfw_avatar')).toBe(true)
+
+    const withoutAvatar = await evaluateMessage(makeInput({ user: newcomer }), ports)
+    expect(withoutAvatar.signals.some((s) => s.name === 'nsfw_avatar')).toBe(false)
+  })
+
+  it('any flagged story raises nsfw_stories once', async () => {
+    const ports: PipelinePorts = {
+      moderation: {
+        check: async (_text, image) =>
+          image === 'bad' ? { flagged: true, categories: ['sexual'] } : { flagged: false, categories: [] }
+      }
+    }
+    const v = await evaluateMessage(
+      makeInput({ user: newcomer, enrichment: { storyBase64: ['ok', 'bad', 'ok'] } }), ports)
+    const stories = v.signals.filter((s) => s.name === 'nsfw_stories')
+    expect(stories).toHaveLength(1)
+    expect(stories[0]?.evidence).toBe('sexual')
   })
 })
 

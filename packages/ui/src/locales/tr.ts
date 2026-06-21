@@ -160,7 +160,10 @@ export const tr: Locale = {
       unknown_media: 'tanınmayan bir ek',
       guest_bot_delivery: 'bir misafir bot üzerinden teslim edildi',
       edited_message: 'mesaj düzenlendi',
-      edit_injected_promo: 'düzenlemeyle eklenen reklam'
+      edit_injected_promo: 'düzenlemeyle eklenen reklam',
+      moderation_flagged: 'metin veya fotoğrafta NSFW',
+      nsfw_avatar: 'NSFW profil fotoğrafı',
+      nsfw_stories: 'NSFW hikaye'
     },
     messageTitle: 'Mesaj:',
     decidedBy: {

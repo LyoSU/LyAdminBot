@@ -160,7 +160,10 @@ export const by: Locale = {
       unknown_media: 'нераспазнанае ўкладанне',
       guest_bot_delivery: 'дастаўлена праз гасцявога бота',
       edited_message: 'паведамленне адрэдагавана',
-      edit_injected_promo: 'рэклама ўстаўлена рэдагаваннем'
+      edit_injected_promo: 'рэклама ўстаўлена рэдагаваннем',
+      moderation_flagged: 'NSFW у тэксце або фота',
+      nsfw_avatar: 'NSFW на аватарцы',
+      nsfw_stories: 'NSFW у сторыс'
     },
     messageTitle: 'Паведамленне:',
     decidedBy: {
