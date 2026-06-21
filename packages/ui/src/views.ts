@@ -47,6 +47,9 @@ export const callbackData = {
   settings: (chatId: number, screen: string, value = ''): string =>
     `set:${chatId}:${screen}${value ? `:${value}` : ''}`,
   captcha: (chatId: number, userId: number): string => `cap:${chatId}:${userId}`,
+  // Trust toggle on the /check card; flag = make-trusted (1) or untrust (0).
+  trust: (chatId: number, userId: number, makeTrusted: boolean): string =>
+    `tr:${chatId}:${userId}:${makeTrusted ? '1' : '0'}`,
   vote: (chatId: number, messageId: number, choice: 'spam' | 'ham'): string =>
     `vt:${chatId}:${messageId}:${choice === 'spam' ? 's' : 'h'}`,
   help: (): string => 'help',
@@ -287,10 +290,23 @@ export const userProfileLines = (locale: Locale, facts: UserFacts, options: { ht
   return lines
 }
 
-/** Standalone profile card for /check. */
-export const userProfileCard = (locale: Locale, facts: UserFacts): ViewMessage => ({
+/**
+ * Standalone profile card for /check. When `action` is supplied (admin caller)
+ * the card carries a trust/untrust toggle button — button-driven moderation,
+ * so no extra slash command is needed.
+ */
+export const userProfileCard = (
+  locale: Locale,
+  facts: UserFacts,
+  action: { chatId: number; isTrusted: boolean } | null = null
+): ViewMessage => ({
   text: userProfileLines(locale, facts, { html: true }).join('\n'),
-  buttons: []
+  buttons: action
+    ? [[{
+        text: action.isTrusted ? locale.trust.untrustButton : locale.trust.button,
+        data: callbackData.trust(action.chatId, facts.userId, !action.isTrusted)
+      }]]
+    : []
 })
 
 /**
@@ -358,8 +374,25 @@ export interface SettingsState {
   votingEnabled: boolean
   /** External ban databases (lols/CAS) toggle. */
   externalBanEnabled: boolean
+  /** Default /banan mute duration, in seconds. */
+  bananDefaultSeconds: number
   /** Current group interface-language code (uk/en/ru/tr/by). */
   locale: string
+}
+
+const langName = (code: string): string => LOCALES[code]?.languageName ?? code
+
+/** Preset mute durations (seconds) offered on the panel + their short labels. */
+const BANAN_PRESETS = [300, 1800, 3600, 86400] as const
+const bananLabel = (locale: Locale, seconds: number): string => {
+  const u = locale.banan.units
+  switch (seconds) {
+    case 300: return `5${u.m}`
+    case 1800: return `30${u.m}`
+    case 3600: return `1${u.h}`
+    case 86400: return `1${u.d}`
+    default: return `${seconds}s`
+  }
 }
 
 /** PM settings panel. Every button carries the target chatId. */
@@ -368,17 +401,11 @@ export const settingsPanel = (locale: Locale, chatId: number, state: SettingsSta
   const presetLabel = locale.settings.presets[state.preset]
   const mark = (preset: SettingsState['preset']): string =>
     state.preset === preset ? `· ${locale.settings.presets[preset]} ·` : locale.settings.presets[preset]
-  const langName = (code: string): string => LOCALES[code]?.languageName ?? code
 
-  // Language buttons, chunked into rows of three so long names stay readable.
-  const langCodes = Object.keys(LOCALES)
-  const langRows: ButtonSpec[][] = []
-  for (let i = 0; i < langCodes.length; i += 3) {
-    langRows.push(langCodes.slice(i, i + 3).map((code) => ({
-      text: state.locale === code ? `· ${langName(code)} ·` : langName(code),
-      data: callbackData.settings(chatId, 'lang', code)
-    })))
-  }
+  const bananRow: ButtonSpec[] = BANAN_PRESETS.map((sec) => ({
+    text: state.bananDefaultSeconds === sec ? `· ${bananLabel(locale, sec)} ·` : bananLabel(locale, sec),
+    data: callbackData.settings(chatId, 'banan_default', String(sec))
+  }))
 
   return {
     text: [
@@ -389,6 +416,7 @@ export const settingsPanel = (locale: Locale, chatId: number, state: SettingsSta
       `${locale.settings.captcha}: ${onOff(state.captchaEnabled)}`,
       `${locale.settings.voting}: ${onOff(state.votingEnabled)}`,
       `${locale.settings.banDatabase}: ${onOff(state.externalBanEnabled)}`,
+      `${locale.settings.banan}: ${bananLabel(locale, state.bananDefaultSeconds)}`,
       `${locale.settings.language}: ${langName(state.locale)}`
     ].join('\n'),
     buttons: [
@@ -401,8 +429,27 @@ export const settingsPanel = (locale: Locale, chatId: number, state: SettingsSta
       [{ text: `${locale.settings.captcha}: ${onOff(state.captchaEnabled)}`, data: callbackData.settings(chatId, 'toggle_captcha') }],
       [{ text: `${locale.settings.voting}: ${onOff(state.votingEnabled)}`, data: callbackData.settings(chatId, 'toggle_voting') }],
       [{ text: `${locale.settings.banDatabase}: ${onOff(state.externalBanEnabled)}`, data: callbackData.settings(chatId, 'toggle_bandb') }],
-      ...langRows
+      bananRow,
+      // Language lives behind its own screen to keep the root panel compact.
+      [{ text: `🌐 ${locale.settings.language}: ${langName(state.locale)}`, data: callbackData.settings(chatId, 'lang_open') }]
     ]
+  }
+}
+
+/** Language picker sub-screen, opened from the settings panel (edits in place). */
+export const langPanel = (locale: Locale, chatId: number, currentLocale: string): ViewMessage => {
+  const codes = Object.keys(LOCALES)
+  const rows: ButtonSpec[][] = []
+  for (let i = 0; i < codes.length; i += 2) {
+    rows.push(codes.slice(i, i + 2).map((code) => ({
+      text: currentLocale === code ? `· ${langName(code)} ·` : langName(code),
+      data: callbackData.settings(chatId, 'lang', code)
+    })))
+  }
+  rows.push([{ text: locale.settings.back, data: callbackData.settings(chatId, 'root') }])
+  return {
+    text: `🌐 <b>${locale.settings.language}</b>\n\n${langName(currentLocale)}`,
+    buttons: rows
   }
 }
 

@@ -19,13 +19,21 @@ export const en: Locale = {
   },
 
   helpText: [
-    '🛡 <b>Commands</b>',
+    '🛡 <b>What I do</b>',
+    'I catch spam and ban scammers on my own. Most actions are buttons, not commands.',
+    '',
+    '<b>Everyone:</b>',
     '/report — report spam (as a reply)',
-    '/settings — anti-spam for admins (opens in PM)',
+    '/mystats — my stats · /top, /top_banan — leaderboards',
     '/lang — language',
     '',
-    'I remove spam on my own. Every action has <b>[🤨 Why?]</b> with the reason',
-    'and <b>[✅ Not spam]</b> for admins: reverts the call and teaches me.'
+    '<b>Admins:</b>',
+    '/settings — settings panel (opens in PM, all buttons there)',
+    '/banan /kick /del — moderation as a reply',
+    '/check — user card with buttons (trust, etc.)',
+    '/welcome — newcomer greetings · /extra, /extras — triggers',
+    '',
+    'Under every decision: <b>[🤨 Why?]</b> and <b>[✅ Not spam]</b> for admins.'
   ].join('\n'),
 
   lang: {
@@ -242,6 +250,13 @@ export const en: Locale = {
     notTrusted: (name) => `${name} was not in the trusted list anyway.`
   },
 
+  trust: {
+    button: '✅ Trust',
+    untrustButton: '🔓 Untrust',
+    added: 'Added to this chat’s trusted users.',
+    removed: 'Trust revoked.'
+  },
+
   welcome: {
     enabled: '👋 Welcome greetings on.',
     disabled: '👋 Welcome greetings off.',
@@ -293,6 +308,7 @@ export const en: Locale = {
     voting: 'Community voting',
     enabled: 'Anti-spam',
     banDatabase: 'Spammer databases',
+    banan: 'Banan duration',
     language: 'Bot language in this chat',
     languageSaved: 'Chat language updated',
     on: 'On',

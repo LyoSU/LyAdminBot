@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Verdict } from '@lyadmin/core'
-import { callbackData, captchaPrompt, compactNotification, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, userProfileLines, votePrompt, whyCard, whyDeepLink, whyView, LOCALES, type UserFacts } from './views.js'
+import { callbackData, captchaPrompt, compactNotification, langPanel, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, userProfileCard, userProfileLines, votePrompt, whyCard, whyDeepLink, whyView, LOCALES, type UserFacts } from './views.js'
 import { uk } from './locales/uk.js'
 
 const makeVerdict = (overrides: Partial<Verdict> = {}): Verdict => ({
@@ -260,7 +260,7 @@ describe('settings', () => {
   it('every panel button carries the target chatId (the panel lives in PM)', () => {
     const view = settingsPanel(uk, -1001234567890, {
       enabled: true, preset: 'standard', captchaEnabled: false, votingEnabled: true,
-      externalBanEnabled: true, locale: 'uk'
+      externalBanEnabled: true, bananDefaultSeconds: 300, locale: 'uk'
     })
     const datas = view.buttons.flat().map((b) => b.data ?? '')
     expect(datas.length).toBeGreaterThan(0)
@@ -268,6 +268,38 @@ describe('settings', () => {
       expect(data).toMatch(/^set:-1001234567890:/)
       expect(Buffer.byteLength(data)).toBeLessThanOrEqual(64)
     }
+  })
+
+  it('language lives behind its own screen, not inline on the root panel', () => {
+    const root = settingsPanel(uk, -100123, {
+      enabled: true, preset: 'standard', captchaEnabled: false, votingEnabled: true,
+      externalBanEnabled: true, bananDefaultSeconds: 600, locale: 'uk'
+    })
+    const rootDatas = root.buttons.flat().map((b) => b.data ?? '')
+    // The root panel opens the language screen but never sets a language directly.
+    expect(rootDatas).toContain('set:-100123:lang_open')
+    expect(rootDatas.some((d) => d.startsWith('set:-100123:lang:'))).toBe(false)
+
+    const lang = langPanel(uk, -100123, 'uk')
+    const langDatas = lang.buttons.flat().map((b) => b.data ?? '')
+    // The sub-screen carries one button per locale plus a back-to-root button.
+    for (const code of Object.keys(LOCALES)) {
+      expect(langDatas).toContain(`set:-100123:lang:${code}`)
+    }
+    expect(langDatas).toContain('set:-100123:root')
+  })
+
+  it('/check card carries a trust toggle for admins', () => {
+    const facts: UserFacts = {
+      userId: 42, username: null, predictedAgeDays: null, localAgeDays: null,
+      messagesGlobal: 0, groupsActive: 0, reputationStatus: 'neutral', premium: false,
+      externalBan: null, joinedAgoSeconds: null, promoInBio: false, personalChannel: false
+    }
+    const trusted = userProfileCard(uk, facts, { chatId: -100123, isTrusted: true })
+    expect(trusted.buttons[0]?.[0]?.data).toBe('tr:-100123:42:0') // already trusted → untrust
+    const untrusted = userProfileCard(uk, facts, { chatId: -100123, isTrusted: false })
+    expect(untrusted.buttons[0]?.[0]?.data).toBe('tr:-100123:42:1') // not trusted → trust
+    expect(userProfileCard(uk, facts).buttons).toEqual([]) // no action context → no button
   })
 })
 

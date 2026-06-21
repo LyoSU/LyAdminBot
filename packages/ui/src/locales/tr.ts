@@ -19,13 +19,21 @@ export const tr: Locale = {
   },
 
   helpText: [
-    '🛡 <b>Komutlar</b>',
+    '🛡 <b>Neler yapabilirim</b>',
+    'Spam’i yakalar, dolandırıcıları kendim banlarım. Çoğu işlem komut değil, butonla.',
+    '',
+    '<b>Herkes:</b>',
     '/report — spam bildir (yanıt olarak)',
-    '/settings — yöneticiler için anti-spam (PM’de açılır)',
+    '/mystats — istatistiğim · /top, /top_banan — sıralamalar',
     '/lang — dil',
     '',
-    'Spam’i kendim temizlerim. Her işlemde nedeniyle birlikte <b>[🤨 Neden?]</b>',
-    've yöneticiler için <b>[✅ Spam değil]</b> var: işlemi geri alır ve bana öğretir.'
+    '<b>Yöneticiler:</b>',
+    '/settings — ayarlar paneli (PM’de açılır, gerisi butonlarla)',
+    '/banan /kick /del — yanıt olarak moderasyon',
+    '/check — butonlu kullanıcı kartı (güven vb.)',
+    '/welcome — yeni üye karşılama · /extra, /extras — tetikleyiciler',
+    '',
+    'Her kararın altında: <b>[🤨 Neden?]</b> ve yöneticiler için <b>[✅ Spam değil]</b>.'
   ].join('\n'),
 
   lang: {
@@ -242,6 +250,13 @@ export const tr: Locale = {
     notTrusted: (name) => `${name} zaten güvenilir listesinde değildi.`
   },
 
+  trust: {
+    button: '✅ Güven',
+    untrustButton: '🔓 Güveni kaldır',
+    added: 'Bu sohbetin güvenilir listesine eklendi.',
+    removed: 'Güven kaldırıldı.'
+  },
+
   welcome: {
     enabled: '👋 Karşılama mesajları açık.',
     disabled: '👋 Karşılama mesajları kapalı.',
@@ -293,6 +308,7 @@ export const tr: Locale = {
     voting: 'Topluluk oylaması',
     enabled: 'Anti-spam',
     banDatabase: 'Spam veritabanları',
+    banan: 'Banan süresi',
     language: 'Bu sohbette bot dili',
     languageSaved: 'Sohbet dili güncellendi',
     on: 'Açık',

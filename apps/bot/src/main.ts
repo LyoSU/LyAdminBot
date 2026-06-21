@@ -25,7 +25,7 @@ import {
 } from '@lyadmin/data'
 import {
   captchaPrompt, compactNotification, escapeHtml as escapeName, helpView,
-  langPicker, parseCallback, resolveLocale, settingsDeepLink, settingsPanel,
+  langPanel, langPicker, parseCallback, resolveLocale, settingsDeepLink, settingsPanel,
   startCard, startGroupHint, topList, userProfileCard, votePrompt, whyCard, whyView,
   LOCALES, type Locale, type UserFacts, type ViewMessage
 } from '@lyadmin/ui'
@@ -341,15 +341,24 @@ const enforceVoteSpam = async (vote: {
 const renderSettingsPanel = async (locale: Locale, chatId: number): Promise<ViewMessage> => {
   const groupDoc = await store.getGroupDoc(chatId).catch(() => null)
   const policy = groupDocToChatPolicy(groupDoc as never)
-  const groupLocale = (groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale ?? 'en'
+  const settings = (groupDoc as { settings?: { locale?: string; banan?: { default?: number } } } | null)?.settings
+  const bananDefaultSeconds = Number(settings?.banan?.default) || 600
   return settingsPanel(locale, chatId, {
     enabled: policy.enabled,
     preset: policy.preset,
     captchaEnabled: policy.captchaEnabled,
     votingEnabled: policy.votingEnabled,
     externalBanEnabled: policy.externalBanEnabled,
-    locale: groupLocale
+    bananDefaultSeconds,
+    locale: settings?.locale ?? 'en'
   })
+}
+
+/** Language sub-screen for the settings panel (rendered from a fresh doc). */
+const renderLangPanel = async (locale: Locale, chatId: number): Promise<ViewMessage> => {
+  const groupDoc = await store.getGroupDoc(chatId).catch(() => null)
+  const groupLocale = (groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale ?? 'en'
+  return langPanel(locale, chatId, groupLocale)
 }
 
 /** /mystats panel body (PM only). chatId adds the per-chat lines. */
@@ -599,7 +608,14 @@ const handleCheck = async (message: Message, chat: Chat, caller: User): Promise<
     personalChannel: profile.personalChannelId !== null
   })
   log.info('check', { chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName, by: caller.id })
-  const sent = await gateway.tg.sendText(chat.id, viewHtml(userProfileCard(locale, facts).text)).catch(() => null)
+  const checkPolicy = groupDocToChatPolicy(await store.getGroupDoc(chat.id).catch(() => null) as never)
+  const card = userProfileCard(locale, facts, {
+    chatId: chat.id,
+    isTrusted: checkPolicy.trustedUserIds.includes(target.id)
+  })
+  const sent = await gateway.tg.sendText(chat.id, viewHtml(card.text), {
+    ...(card.buttons.length > 0 ? { replyMarkup: toKeyboard(card.buttons) } : {})
+  }).catch(() => null)
   if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'check')
 }
 
@@ -1226,6 +1242,20 @@ const wireCallbacks = (): void => {
         await query.answer({ text: locale.notification.adminOnly, alert: true })
         return
       }
+      // Navigation only (no DB write): open the language sub-screen, or return
+      // to the root panel from it.
+      if (action === 'lang_open' || action === 'root') {
+        const navView = action === 'lang_open'
+          ? await renderLangPanel(locale, chatId)
+          : await renderSettingsPanel(locale, chatId)
+        await gateway.tg.editMessage({
+          chatId: query.user.id, message: query.messageId,
+          text: viewHtml(navView.text), replyMarkup: toKeyboard(navView.buttons)
+        }).catch(() => { /* unchanged → MESSAGE_NOT_MODIFIED, fine */ })
+        await query.answer({})
+        return
+      }
+
       const groupDoc = await store.getGroupDoc(chatId).catch(() => null)
       const policy = groupDocToChatPolicy(groupDoc as never)
       if (action === 'toggle_enabled') {
@@ -1238,6 +1268,10 @@ const wireCallbacks = (): void => {
         await store.updateGroupSettings(chatId, { confidenceThreshold: presetToThreshold(value) })
       } else if (action === 'toggle_bandb') {
         await store.updateGroupSettings(chatId, { banDatabase: !policy.externalBanEnabled })
+      } else if (action === 'banan_default') {
+        const sec = Number(value)
+        if (!Number.isFinite(sec) || sec <= 0) { await query.answer({}); return }
+        await store.updateGroupSettings(chatId, { bananDefault: sec })
       } else if (action === 'lang' && LOCALES[value]) {
         await store.updateGroupSettings(chatId, { locale: value })
       } else {
@@ -1245,12 +1279,37 @@ const wireCallbacks = (): void => {
         return
       }
       log.info('settings_changed', { chatId, by: query.user.id, action, value: value || undefined })
+      // Every mutation re-renders the root panel — including a language pick,
+      // which returns the admin from the sub-screen back to the main panel.
       const view = await renderSettingsPanel(locale, chatId)
       await gateway.tg.editMessage({
         chatId: query.user.id, message: query.messageId,
         text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons)
       }).catch(() => { /* unchanged content → MESSAGE_NOT_MODIFIED, fine */ })
       await query.answer(action === 'lang' ? { text: locale.settings.languageSaved } : {})
+      return
+    }
+
+    if (kind === 'tr') {
+      const [chatIdRaw = '', userIdRaw = '', flagRaw = ''] = parts
+      const chatId = Number(chatIdRaw)
+      const userId = Number(userIdRaw)
+      if (!Number.isFinite(chatId) || !Number.isFinite(userId)) { await query.answer({}); return }
+      if (!(await isChatAdmin(chatId, query.user.id))) {
+        await query.answer({ text: locale.notification.adminOnly, alert: true })
+        return
+      }
+      const makeTrusted = flagRaw === '1'
+      if (makeTrusted) await store.addTrustedUser(chatId, userId).catch(() => { /* best-effort */ })
+      else await store.removeTrustedUser(chatId, userId).catch(() => { /* best-effort */ })
+      log.info('trust', { chatId, userId, by: query.user.id, trusted: makeTrusted })
+      // Flip the card's single button to the opposite action (markup-only edit).
+      const flipped = toKeyboard([[{
+        text: makeTrusted ? locale.trust.untrustButton : locale.trust.button,
+        data: `tr:${chatId}:${userId}:${makeTrusted ? '0' : '1'}`
+      }]])
+      await gateway.tg.editMessage({ chatId, message: query.messageId, replyMarkup: flipped }).catch(() => { /* card may be gone */ })
+      await query.answer({ text: makeTrusted ? locale.trust.added : locale.trust.removed })
       return
     }
 

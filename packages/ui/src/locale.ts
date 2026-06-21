@@ -168,6 +168,18 @@ export interface Locale {
     notTrusted: (name: string) => string
   }
 
+  /** Trust toggle buttons on the /check profile card (admin-only). */
+  trust: {
+    /** Button shown when the user is NOT yet trusted. */
+    button: string
+    /** Button shown when the user IS already trusted. */
+    untrustButton: string
+    /** Toast after granting trust. */
+    added: string
+    /** Toast after revoking trust. */
+    removed: string
+  }
+
   /** Welcome greetings for new members (off by default). */
   welcome: {
     enabled: string
@@ -220,6 +232,8 @@ export interface Locale {
     enabled: string
     /** External ban databases (lols/CAS) toggle label. */
     banDatabase: string
+    /** Default /banan mute-duration row label. */
+    banan: string
     /** Group interface-language row label + toast on change. */
     language: string
     languageSaved: string

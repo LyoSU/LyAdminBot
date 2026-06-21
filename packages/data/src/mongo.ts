@@ -561,6 +561,7 @@ export class MongoStore {
     captchaEnabled?: boolean
     votingEnabled?: boolean
     banDatabase?: boolean
+    bananDefault?: number
     locale?: string
   }): Promise<void> {
     const set: Record<string, unknown> = {}
@@ -569,6 +570,7 @@ export class MongoStore {
     if (patch.captchaEnabled !== undefined) set['settings.captcha.enabled'] = patch.captchaEnabled
     if (patch.votingEnabled !== undefined) set['settings.voting.enabled'] = patch.votingEnabled
     if (patch.banDatabase !== undefined) set['settings.banDatabase'] = patch.banDatabase
+    if (patch.bananDefault !== undefined) set['settings.banan.default'] = patch.bananDefault
     if (patch.locale !== undefined) set['settings.locale'] = patch.locale
     if (Object.keys(set).length === 0) return
     await this.groups.updateOne(
