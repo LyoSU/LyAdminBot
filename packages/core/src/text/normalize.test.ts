@@ -26,6 +26,9 @@ describe('stripInvisible', () => {
     expect(stripInvisible('a​b‌c‍d‮e')).toBe('abcde')
   })
 
+  // Generous timeout: these property runs are fast in isolation (~2s) but can
+  // exceed vitest's 5s default purely from CPU starvation when the whole suite
+  // runs its files in parallel — a wall-clock flake, not a slow assertion.
   test('is idempotent for arbitrary strings', () => {
     fc.assert(
       fc.property(fc.string({ unit: 'binary' }), (s) => {
@@ -33,13 +36,13 @@ describe('stripInvisible', () => {
         return stripInvisible(once) === once
       })
     )
-  })
+  }, 20000)
 
   test('never increases string length', () => {
     fc.assert(
       fc.property(fc.string({ unit: 'binary' }), (s) => stripInvisible(s).length <= s.length)
     )
-  })
+  }, 20000)
 })
 
 describe('hasTextualContent', () => {
