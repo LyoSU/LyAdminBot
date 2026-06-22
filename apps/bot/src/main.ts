@@ -1022,6 +1022,15 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     return
   }
 
+  // Hashtag triggers ("extras") are a standalone chat utility — they fire
+  // independently of antispam state, so the `!policy.enabled` gate below must
+  // not silence them, and they never depend on the moderation pipeline
+  // completing. Uses raw message text (no normalize / replied fetch needed).
+  const rawText = message.text ?? ''
+  if (rawText.includes('#')) {
+    await fireExtras(message, chat, rawText).catch(() => { /* extras are best-effort */ })
+  }
+
   if (!policy.enabled) return
 
   // ── normalize (budget call 1: replied message, only for replies) ───
@@ -1185,8 +1194,6 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       authorKind: normalized.channelComment ? 'channel_post' : 'user',
       textPreview: normalized.text
     })
-    // Hashtag triggers fire only on messages that survived moderation.
-    if (normalized.text.includes('#')) await fireExtras(message, chat, normalized.text)
   }
 
   // ── record + notify ─────────────────────────────────────────────────
