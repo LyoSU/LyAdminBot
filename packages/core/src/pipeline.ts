@@ -21,7 +21,7 @@ import { extractUserSignals } from './signals/user.js'
 import { extractBioSignals } from './signals/bio.js'
 import { applyDeterministicRules } from './rules.js'
 import { parseCustomRule, customRuleMatches } from './custom-rules.js'
-import { scoreSignals } from './score.js'
+import { scoreSignals, hasDecisiveSignal } from './score.js'
 import { decideAction, type PolicyDecision } from './policy.js'
 import { shouldAbstain } from './text/abstain.js'
 
@@ -314,10 +314,17 @@ export const evaluateMessage = async (
   const { pSpam: scorePSpam, topContributors } = scoreSignals(signals)
   meta['scorePSpam'] = Number(scorePSpam.toFixed(4))
 
+  // A score resting only on account/profile *shape* (no message-content
+  // evidence, no hard verdict) carries no proof the message itself is spam —
+  // only that the sender looks suspicious. Such a verdict must never enforce
+  // blind: it goes to the LLM (which reads the text) even above the grey
+  // ceiling, and if the LLM can't clear it we observe instead of deleting.
+  const decisive = hasDecisiveSignal(signals)
   const inGreyZone = scorePSpam >= LLM_GREY_LOW && scorePSpam <= LLM_GREY_HIGH
+  const needsLlm = inGreyZone || (scorePSpam > LLM_GREY_HIGH && !decisive)
   let llmNeededButUnavailable = false
 
-  if (inGreyZone && ports.llm) {
+  if (needsLlm && ports.llm) {
     let llmVerdict: LlmVerdict | null =
       await safe('llm_cheap', () => ports.llm!.classify(input, 'cheap'))
     meta['llmTier'] = 'cheap'
@@ -355,6 +362,16 @@ export const evaluateMessage = async (
     reasonEvidence: null
   }
   const verdict = finalize(draft, signals)
+
+  // Soft-shape-only guard: the verdict rests purely on account/profile shape,
+  // the LLM is the only stage that could justify enforcing on it, and it didn't
+  // (unavailable, unconfigured, or — before this branch — it would have cleared
+  // the message and returned above). Never delete/mute/ban on shape alone:
+  // downgrade to observe. This is the structural fix for the 2026-06-21 FP.
+  const isEnforcement = (a: VerdictAction): boolean => a === 'delete' || a === 'mute' || a === 'ban'
+  if (!decisive && isEnforcement(verdict.action)) {
+    return { ...verdict, action: 'observe' as VerdictAction, needsVote: false, reasonCode: 'soft_shape_only' }
+  }
 
   // Fail-safe: when the LLM was needed but unavailable (rate limit, outage),
   // a grey-zone message must never silently pass as clean.

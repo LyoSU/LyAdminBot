@@ -368,3 +368,56 @@ describe('evaluateMessage — forward reputation', () => {
     expect(called).toBe(false)
   })
 })
+
+describe('evaluateMessage — soft-shape-only guard (2026-06-21 FP)', () => {
+  // Faithful reproduction of the production false positive: a benign question
+  // deleted on sleeper_awakened + new_globally + promo_in_bio + personal_channel
+  // — four signals about WHO sent the message, none about WHAT was sent. The
+  // stacked score (0.82) sat above the old LLM ceiling (0.75), so the only
+  // content-reading stage was skipped and the score deleted blind.
+  const softShapeOver = {
+    msg: { text: 'Чи я не правий і таке можна зробити? Бо я не розбирався в цьому ще' },
+    user: { predictedAgeDays: 1500, localAgeDays: 3, messagesGlobal: 2, messagesInChat: 10 },
+    enrichment: { bio: 'Мій сайт: example.com', personalChannelId: 7777 }
+  }
+
+  it('the four prod signals alone score above 0.75 (regression anchor)', async () => {
+    const v = await evaluateMessage(makeInput(softShapeOver), {})
+    expect(v.signals.map((s) => s.name)).toEqual(expect.arrayContaining(
+      ['sleeper_awakened', 'new_globally', 'promo_in_bio', 'personal_channel']))
+    expect(v.pSpam).toBeGreaterThan(0.75)
+  })
+
+  it('escalates to the LLM even above the grey ceiling, and the LLM clears it', async () => {
+    const calls: LlmTier[] = []
+    const ports: PipelinePorts = {
+      llm: {
+        classify: async (_i, tier) => {
+          calls.push(tier)
+          return { pSpam: 0.05, reasonCode: 'legit_question', evidence: null, cached: false }
+        }
+      }
+    }
+    const v = await evaluateMessage(makeInput(softShapeOver), ports)
+    expect(calls).toEqual(['cheap'])
+    expect(v.decidedBy).toBe('llm')
+    expect(v.action).toBe('none')
+  })
+
+  it('without an LLM, soft-shape-only never enforces — observe, not delete', async () => {
+    const v = await evaluateMessage(makeInput(softShapeOver), {})
+    expect(v.action).toBe('observe')
+    expect(v.decidedBy).toBe('score')
+  })
+
+  it('content evidence alongside soft shape still enforces on score (guard is narrow)', async () => {
+    const v = await evaluateMessage(makeInput({
+      ...softShapeOver,
+      msg: {
+        text: 'подивись обовʼязково тут',
+        urls: [{ visible: 'https://promo.example', target: 'https://promo.example', hidden: false }]
+      }
+    }), {})
+    expect(['delete', 'mute', 'ban']).toContain(v.action)
+  })
+})

@@ -102,6 +102,34 @@ export const SIGNAL_WEIGHTS: Record<string, number> = {
   established_user: -1.5
 }
 
+/**
+ * Account/profile *shape* heuristics. Each describes WHO sent the message —
+ * never WHAT was sent — and each is an established FP class on its own (the
+ * 2026-06 review: sleeper promos, innocent-website bios, linked channels). The
+ * weights keep any one of them below the action threshold, but nothing stops a
+ * *stack* of them from crossing it. So a verdict resting solely on these is not
+ * evidence of spam content: it must route through the LLM (which reads the
+ * text) and, failing that, observe — never enforce blind.
+ *
+ * Provenance: the 2026-06-21 FP, a benign question deleted on
+ * sleeper_awakened + new_globally + promo_in_bio + personal_channel (pSpam 0.82).
+ */
+export const SOFT_SHAPE_SIGNALS = new Set([
+  'sleeper_awakened', 'fresh_account', 'new_in_chat', 'new_globally',
+  'avatar_recently_set', 'many_shared_chats', 'just_joined',
+  'identity_churn_24h', 'promo_in_bio', 'personal_channel'
+])
+
+/**
+ * Whether the signals carry evidence that justifies enforcing *without reading
+ * the message text*: any message content/structure signal, or a hard account
+ * verdict (scam/fake/restricted/ban/unofficial-client/prior-detections/
+ * low-reputation). A score driven purely by soft-shape signals is NOT decisive.
+ * Negative (trust) signals never count.
+ */
+export const hasDecisiveSignal = (signals: Signal[]): boolean =>
+  signals.some((s) => !s.negative && !SOFT_SHAPE_SIGNALS.has(s.name))
+
 export interface ScoreResult {
   pSpam: number
   /** Distinct signals with non-zero weight, sorted by |weight| desc. */
