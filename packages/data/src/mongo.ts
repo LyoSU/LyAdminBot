@@ -39,7 +39,6 @@ export class MongoStore {
   get groups(): Collection<Document> { return this.collection('groups') }
   get groupMembers(): Collection<Document> { return this.collection('groupmembers') }
   get spamSignatures(): Collection<Document> { return this.collection('spamsignatures') }
-  get modEvents(): Collection<Document> { return this.collection('modevents') }
   get forwardBlacklist(): Collection<Document> { return this.collection('forwardblacklists') }
   // v1 ScheduledDeletion model → Mongoose collection 'scheduleddeletions'.
   get scheduledDeletions(): Collection<Document> { return this.collection('scheduleddeletions') }
