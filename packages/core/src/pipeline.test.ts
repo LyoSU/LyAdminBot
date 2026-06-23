@@ -20,7 +20,10 @@ const makeUser = (overrides: Partial<UserSnapshot> = {}): UserSnapshot => ({
   id: 42, username: 'someone', displayName: 'Someone', languageCode: 'uk',
   flags: { scam: false, fake: false, restricted: false, verified: false, premium: false, bot: false },
   predictedAgeDays: 800, localAgeDays: 400,
-  messagesInChat: 25, messagesGlobal: 120, groupsActive: 2,
+  // Below the established-regular exempt thresholds (10 in-chat / 50 global) on
+  // purpose: the default user must still run the full pipeline so port tests
+  // exercise the ports. Established users are tested explicitly below.
+  messagesInChat: 8, messagesGlobal: 40, groupsActive: 2,
   spamDetections: 0, reputationScore: 65, reputationStatus: 'neutral',
   externalBan: null, unofficialClientRisk: null, avatars: { count: 2, latestSetDaysAgo: 200 },
   nameChurn24h: 0, usernameChurn24h: 0, restrictionReasons: [], joinedAgoSeconds: null,
@@ -377,7 +380,9 @@ describe('evaluateMessage — soft-shape-only guard (2026-06-21 FP)', () => {
   // content-reading stage was skipped and the score deleted blind.
   const softShapeOver = {
     msg: { text: 'Чи я не правий і таке можна зробити? Бо я не розбирався в цьому ще' },
-    user: { predictedAgeDays: 1500, localAgeDays: 3, messagesGlobal: 2, messagesInChat: 10 },
+    // messagesInChat kept below the exempt bar (10) so the soft-shape guard —
+    // not the established-regular fast path — is what's under test here.
+    user: { predictedAgeDays: 1500, localAgeDays: 3, messagesGlobal: 2, messagesInChat: 8 },
     enrichment: { bio: 'Мій сайт: example.com', personalChannelId: 7777 }
   }
 
@@ -419,5 +424,84 @@ describe('evaluateMessage — soft-shape-only guard (2026-06-21 FP)', () => {
       }
     }), {})
     expect(['delete', 'mute', 'ban']).toContain(v.action)
+  })
+})
+
+describe('evaluateMessage — established-regular exempt', () => {
+  // A message that any newcomer would lose to a confirmed signature match.
+  const wouldMatch = {
+    text: 'Потрібні люди на склад, оплата щодня, пишіть в особисті',
+    urls: [{ visible: 'https://rabota.example', target: 'https://rabota.example', hidden: false }]
+  }
+  const confirmedSignature: PipelinePorts = {
+    signatures: { match: async () => ({ status: 'confirmed', pSpam: 0.96, signatureId: 'sig1' }) }
+  }
+
+  it('a regular in THIS chat (≥10 in-chat) is exempt without touching any port', async () => {
+    let sigCalled = false
+    const ports: PipelinePorts = {
+      signatures: { match: async () => { sigCalled = true; return { status: 'confirmed', pSpam: 0.96, signatureId: 'sig1' } } }
+    }
+    const v = await evaluateMessage(
+      makeInput({ msg: wouldMatch, user: { messagesInChat: 10, messagesGlobal: 12 } }), ports)
+    expect(v.action).toBe('none')
+    expect(v.decidedBy).toBe('deterministic')
+    expect(v.reasonCode).toBe('established_regular')
+    expect(v.meta['established_regular']).toBe(true)
+    expect(sigCalled).toBe(false)
+  })
+
+  it('the @syumer case: established globally (≥50) but new in THIS chat is still exempt', async () => {
+    const v = await evaluateMessage(
+      makeInput({ msg: wouldMatch, user: { messagesInChat: 1, messagesGlobal: 826, reputationStatus: 'trusted' } }),
+      confirmedSignature)
+    expect(v.action).toBe('none')
+    expect(v.reasonCode).toBe('established_regular')
+  })
+
+  it('below both thresholds runs the full pipeline (signature decides)', async () => {
+    const v = await evaluateMessage(
+      makeInput({ msg: wouldMatch, user: { messagesInChat: 9, messagesGlobal: 49 } }),
+      confirmedSignature)
+    expect(v.decidedBy).toBe('signature')
+  })
+
+  it('a hard account verdict cancels the exempt — the pipeline still decides', async () => {
+    const guards: Partial<UserSnapshot>[] = [
+      { externalBan: { banned: true, bannedAt: null, offenses: 2 } },
+      { flags: { scam: true, fake: false, restricted: false, verified: false, premium: false, bot: false } },
+      { spamDetections: 1 },
+      { reputationStatus: 'suspicious' },
+      { restrictionReasons: ['spam'] }
+    ]
+    for (const guard of guards) {
+      const v = await evaluateMessage(
+        makeInput({ msg: wouldMatch, user: { messagesInChat: 50, messagesGlobal: 900, ...guard } }),
+        confirmedSignature)
+      expect(v.decidedBy).toBe('signature')
+      expect(v.reasonCode).not.toBe('established_regular')
+    }
+  })
+
+  it('an external ban does NOT cancel exempt when the chat disabled external bans', async () => {
+    const v = await evaluateMessage(
+      makeInput({
+        msg: wouldMatch,
+        user: { messagesInChat: 50, externalBan: { banned: true, bannedAt: null, offenses: 2 } },
+        policy: { externalBanEnabled: false }
+      }),
+      confirmedSignature)
+    expect(v.reasonCode).toBe('established_regular')
+  })
+
+  it('an admin custom DENY still wins over the exempt', async () => {
+    const v = await evaluateMessage(
+      makeInput({
+        msg: { text: 'Продам казино акаунти дешево' },
+        user: { messagesInChat: 200, messagesGlobal: 5000 },
+        policy: { customRules: ['DENY: казино'] }
+      }), {})
+    expect(v.decidedBy).toBe('custom_rule')
+    expect(v.action).not.toBe('none')
   })
 })

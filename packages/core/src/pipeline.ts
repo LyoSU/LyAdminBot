@@ -14,7 +14,7 @@
  * is counted in meta.portErrors. A needed-but-unavailable LLM can only make
  * the outcome MORE cautious (observe), never clean.
  */
-import type { EvaluationInput, Signal, Verdict, VerdictAction, DecidedBy } from './types.js'
+import type { EvaluationInput, Signal, Verdict, VerdictAction, DecidedBy, UserSnapshot, ChatPolicy } from './types.js'
 import type { LlmVerdict, PipelinePorts } from './ports.js'
 import { extractMessageSignals } from './signals/message.js'
 import { extractUserSignals } from './signals/user.js'
@@ -41,6 +41,41 @@ const isNewish = (input: EvaluationInput): boolean =>
 const isTrusted = (input: EvaluationInput): boolean =>
   input.policy.trustedUserIds.includes(input.user.id) ||
   input.user.reputationStatus === 'trusted'
+
+/**
+ * Established-regular fast path. Posting enough — either in THIS chat or across
+ * the bot's whole network — earns a clean pass without running any heuristic or
+ * knowledge port: a regular's link should never be deleted on a signature/
+ * vector/velocity match the way a newcomer's would.
+ *
+ * The OR is deliberate: a member with local standing here OR a long history
+ * across our chats both count. Thresholds are conservative — the global bar
+ * matches ESTABLISHED_MIN_MESSAGES (50) from signal extraction.
+ */
+const EXEMPT_INCHAT_MIN = 10
+const EXEMPT_GLOBAL_MIN = 50
+
+/**
+ * Hard account verdicts that cancel the exempt: facts that mark the account as
+ * already-known-bad or compromised, all readable from the UserSnapshot with no
+ * port call. "Established regular" must not shield a CAS-banned account or one
+ * with prior confirmed spam — that would be the exact hole the threat model
+ * (a sold/compromised long-time account) warns about.
+ */
+const hasHardAccountVerdict = (u: UserSnapshot, policy: ChatPolicy): boolean =>
+  u.flags.scam ||
+  u.flags.fake ||
+  (policy.externalBanEnabled && u.externalBan?.banned === true) ||
+  u.spamDetections > 0 ||
+  u.reputationStatus === 'restricted' ||
+  u.reputationStatus === 'suspicious' ||
+  u.unofficialClientRisk === true ||
+  u.restrictionReasons.some((r) => /spam|scam/i.test(r))
+
+const isEstablishedRegular = (input: EvaluationInput): boolean =>
+  (input.user.messagesInChat >= EXEMPT_INCHAT_MIN ||
+    input.user.messagesGlobal >= EXEMPT_GLOBAL_MIN) &&
+  !hasHardAccountVerdict(input.user, input.policy)
 
 interface VerdictDraft {
   pSpam: number
@@ -120,6 +155,16 @@ export const evaluateMessage = async (
       },
       []
     )
+  }
+
+  // ── 1b. established-regular fast path ───────────────────────────────
+  // Runs AFTER custom rules (an admin DENY/ALLOW always wins) but BEFORE any
+  // heuristic or paid port: an established member skips the whole ladder.
+  if (isEstablishedRegular(input)) {
+    meta['established_regular'] = true
+    meta['messagesInChat'] = input.user.messagesInChat
+    meta['messagesGlobal'] = input.user.messagesGlobal
+    return none('deterministic', 'established_regular')
   }
 
   // ── 2. signals ──────────────────────────────────────────────────────
