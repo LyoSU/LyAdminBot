@@ -34,15 +34,13 @@ const SLASH_NAME: Record<CommandKey, string> = {
 const SCOPES: { scope: tl.TypeBotCommandScope; keys: CommandKey[] }[] = [
   { scope: { _: 'botCommandScopeDefault' }, keys: ['start', 'help'] },
   { scope: { _: 'botCommandScopeUsers' }, keys: ['start', 'help', 'lang', 'mystats'] },
-  // Regular group members: only what a non-admin can actually use in a chat.
-  { scope: { _: 'botCommandScopeChats' }, keys: ['report', 'help'] },
-  // Admins get the full group toolset.
+  // Regular group members: no menu at all. An empty list overrides the wider
+  // `Default` scope that Telegram would otherwise resolve them to.
+  { scope: { _: 'botCommandScopeChats' }, keys: [] },
+  // Admins: just the core moderation actions plus settings.
   {
     scope: { _: 'botCommandScopeChatAdmins' },
-    keys: [
-      'report', 'banan', 'kick', 'del', 'untrust', 'check',
-      'top', 'topBanan', 'extras', 'welcome', 'settings', 'mystats', 'help'
-    ]
+    keys: ['banan', 'kick', 'settings']
   }
 ]
 
@@ -60,6 +58,16 @@ export const registerBotCommands = async (tg: TelegramClient): Promise<void> => 
   const fallback = LOCALES['en'] ?? Object.values(LOCALES)[0]
   if (!fallback) return
   for (const { scope, keys } of SCOPES) {
+    // Empty scope is language-agnostic — one call clears the menu for every
+    // locale, so skip the per-language loop entirely.
+    if (keys.length === 0) {
+      try {
+        await tg.setMyCommands({ commands: [], scope })
+      } catch (err) {
+        log.warn('setMyCommands clear failed', { scope: scope._, err: err instanceof Error ? err.message : String(err) })
+      }
+      continue
+    }
     for (const [code, locale] of Object.entries(LOCALES)) {
       try {
         await tg.setMyCommands({ commands: buildCommands(locale, keys), scope, langCode: LANG_CODE[code] ?? code })
