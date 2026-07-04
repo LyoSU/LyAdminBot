@@ -1191,6 +1191,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   const removed = result.applied && (verdict.action === 'delete' || verdict.action === 'mute' || verdict.action === 'ban')
   if (!removed && normalized.text.trim().length > 0) {
     conversationWindow.record(chat.id, {
+      authorId: normalized.channelComment ? null : sender.id,
       authorKind: normalized.channelComment ? 'channel_post' : 'user',
       textPreview: normalized.text
     })

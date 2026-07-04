@@ -106,6 +106,11 @@ export interface InlineButtonInfo {
 
 /** One line of the conversation window (LLM context). */
 export interface ConversationLine {
+  /**
+   * Telegram id of the author — lets the LLM prompt distinguish the sender
+   * under review from other members. Null for channel posts (no user author).
+   */
+  authorId: number | null
   authorKind: 'user' | 'admin' | 'channel_post'
   textPreview: string // ≤ 120 chars
 }
