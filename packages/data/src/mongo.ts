@@ -1,7 +1,7 @@
 /**
  * Mongo store: same database and collections as v1 (byte-compatible,
  * additive-only). New collections introduced by v2:
- *   pipeline_decisions — every verdict, TTL 90d (replay + calibration)
+ *   pipeline_decisions — every verdict, TTL 14d (replay + calibration)
  *   pipeline_feedback  — admin overrides, permanent (ham labels)
  *   llm_cache          — LLM verdict cache, TTL 7d
  */
@@ -9,7 +9,9 @@ import { MongoClient, ObjectId, type Collection, type Db, type Document } from '
 import type { Verdict } from '@lyadmin/core'
 import { normalizeExtra, type NormalizedExtra } from './extras.js'
 
-const DECISIONS_TTL_DAYS = 90
+// 14d is the free-tier (Atlas M0, 512 MB) sustainable ceiling: at the observed
+// write rate 90d retention refills the cluster past quota and blocks writes.
+const DECISIONS_TTL_DAYS = 14
 const LLM_CACHE_TTL_DAYS = 7
 
 export class MongoStore {
@@ -54,23 +56,54 @@ export class MongoStore {
   get velocityEvents(): Collection<Document> { return this.collection('velocity_events') }
   get sessionWindows(): Collection<Document> { return this.collection('session_windows') }
 
+  /**
+   * Create a TTL index, tolerating an already-present index on the same key
+   * with a *different* expiry. `createIndex` is not an upsert: re-issuing it
+   * with a changed expireAfterSeconds throws IndexOptionsConflict. The clean
+   * fix (`collMod`) is blocked on shared Atlas tiers (M0), so the only way to
+   * retune a TTL there is drop + recreate.
+   */
+  private async ensureTtlIndex(
+    collection: Collection<Document>,
+    keySpec: Document,
+    expireAfterSeconds: number,
+  ): Promise<void> {
+    const key = JSON.stringify(keySpec)
+    const existing = (await collection.indexes()).find((ix) => JSON.stringify(ix.key) === key)
+    if (existing && existing.expireAfterSeconds !== expireAfterSeconds) {
+      try {
+        await collection.dropIndex(existing.name as string)
+      } catch (err) {
+        // If even dropIndex is denied (stricter M0 policies), keep the stale
+        // TTL rather than crash startup — a bounded-but-wrong retention beats
+        // an unbootable bot. Surface it so the mismatch shows up in logs.
+        console.warn(
+          `[mongo] cannot retune TTL index ${existing.name ?? key} on ${collection.collectionName} ` +
+            `(${existing.expireAfterSeconds}s → ${expireAfterSeconds}s): ${(err as Error).message}`,
+        )
+        return
+      }
+    }
+    await collection.createIndex(keySpec, { expireAfterSeconds })
+  }
+
   private async ensureIndexes(): Promise<void> {
-    await this.decisions.createIndex({ createdAt: 1 }, { expireAfterSeconds: DECISIONS_TTL_DAYS * 86400 })
+    await this.ensureTtlIndex(this.decisions, { createdAt: 1 }, DECISIONS_TTL_DAYS * 86400)
     await this.decisions.createIndex({ chatId: 1, userId: 1, createdAt: -1 })
     // Why?/override lookup (getDecision) filters by chat+message.
     await this.decisions.createIndex({ chatId: 1, messageId: 1, createdAt: -1 })
     await this.feedback.createIndex({ chatId: 1, messageId: 1 })
-    await this.llmCache.createIndex({ createdAt: 1 }, { expireAfterSeconds: LLM_CACHE_TTL_DAYS * 86400 })
+    await this.ensureTtlIndex(this.llmCache, { createdAt: 1 }, LLM_CACHE_TTL_DAYS * 86400)
     await this.llmCache.createIndex({ key: 1 }, { unique: true })
     await this.votes.createIndex({ chatId: 1, messageId: 1 }, { unique: true })
-    await this.votes.createIndex({ createdAt: 1 }, { expireAfterSeconds: 7 * 86400 })
+    await this.ensureTtlIndex(this.votes, { createdAt: 1 }, 7 * 86400)
     // Scheduled deletions: single deleteAt index doubles as the due-query
     // index and a 1h TTL backstop (3600s after deleteAt) if a sweep is missed.
-    await this.scheduledDeletions.createIndex({ deleteAt: 1 }, { expireAfterSeconds: 3600 })
+    await this.ensureTtlIndex(this.scheduledDeletions, { deleteAt: 1 }, 3600)
     // Velocity/session windows expire to bound growth and define the window:
     // 10 min for the flood window, 30 min for the abstain session.
-    await this.velocityEvents.createIndex({ firstSeenAt: 1 }, { expireAfterSeconds: 600 })
-    await this.sessionWindows.createIndex({ startedAt: 1 }, { expireAfterSeconds: 1800 })
+    await this.ensureTtlIndex(this.velocityEvents, { firstSeenAt: 1 }, 600)
+    await this.ensureTtlIndex(this.sessionWindows, { startedAt: 1 }, 1800)
   }
 
   // ── reads used per message ───────────────────────────────────────────
