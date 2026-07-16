@@ -270,6 +270,10 @@ export const en: Locale = {
       '/welcome <text with %name%> — set the greeting',
       'reply to a gif with /welcome — set the gif'
     ].join('\n'),
+    limit: '⚠️ Limit reached — remove something in settings first.',
+    duplicate: 'ℹ️ Already added.',
+    tooLong: '⚠️ Text too long (max 1000 characters).',
+    saveFailed: '⚠️ Could not save.',
     defaultGreeting: (name) => `👋 Welcome, ${name}!`
   },
 

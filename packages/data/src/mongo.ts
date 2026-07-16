@@ -8,6 +8,10 @@
 import { MongoClient, ObjectId, type Collection, type Db, type Document } from 'mongodb'
 import type { Verdict } from '@lyadmin/core'
 import { normalizeExtra, type NormalizedExtra } from './extras.js'
+import {
+  addWelcomeItem, removeAt, type AddReason,
+  MAX_WELCOME_TEXTS, MAX_WELCOME_GIFS, MAX_WELCOME_TEXT_LEN
+} from './welcome.js'
 
 // 14d is the free-tier (Atlas M0, 512 MB) sustainable ceiling: at the observed
 // write rate 90d retention refills the cluster past quota and blocks writes.
@@ -178,14 +182,24 @@ export class MongoStore {
     return raw.map(normalizeExtra).filter((e): e is NormalizedExtra => e !== null)
   }
 
-  /** Per-message extra cap (v1 settings.maxExtra, default 1). */
+  /** Per-message extra cap (v1 settings.maxExtra, default 3 as in v1). */
   async getMaxExtra(chatId: number): Promise<number> {
     const group = await this.groups.findOne(
       { group_id: chatId },
       { projection: { 'settings.maxExtra': 1 } }
     ) as { settings?: { maxExtra?: number } } | null
     const n = Number(group?.settings?.maxExtra)
-    return Number.isFinite(n) && n > 0 ? n : 1
+    return Number.isFinite(n) && n > 0 ? n : 3
+  }
+
+  /** Clamp and persist the per-message extra cap (1..10). */
+  async setMaxExtra(chatId: number, n: number): Promise<void> {
+    const clamped = Math.max(1, Math.min(10, Math.round(n)))
+    await this.groups.updateOne(
+      { group_id: chatId },
+      { $set: { 'settings.maxExtra': clamped }, $setOnInsert: { group_id: chatId } },
+      { upsert: true }
+    )
   }
 
   /** Upsert an extra by name (case-insensitive replace), v2 shape. */
@@ -234,22 +248,54 @@ export class MongoStore {
     )
   }
 
-  /** Set a single welcome text (with %name%) and enable greetings. */
-  async setWelcomeText(chatId: number, text: string): Promise<void> {
+  /**
+   * Append a welcome text (with %name%), dedup + capped, and enable greetings.
+   * Returns whether it was added and, if not, the machine-readable reason.
+   */
+  async addWelcomeText(chatId: number, text: string): Promise<{ added: boolean; reason?: AddReason }> {
+    const { texts } = await this.getWelcome(chatId)
+    const result = addWelcomeItem(texts, text, { max: MAX_WELCOME_TEXTS, maxLen: MAX_WELCOME_TEXT_LEN })
+    if (!result.added) return result.reason !== undefined ? { added: false, reason: result.reason } : { added: false }
     await this.groups.updateOne(
       { group_id: chatId },
-      { $set: { 'settings.welcome.texts': [text], 'settings.welcome.enable': true }, $setOnInsert: { group_id: chatId } },
+      { $set: { 'settings.welcome.texts': result.list, 'settings.welcome.enable': true }, $setOnInsert: { group_id: chatId } },
       { upsert: true }
     )
+    return { added: true }
   }
 
-  /** Set a single welcome gif/animation (file id) and enable greetings. */
-  async setWelcomeGif(chatId: number, fileId: string): Promise<void> {
+  /** Remove the welcome text at `index`. Returns true if one was removed. */
+  async removeWelcomeText(chatId: number, index: number): Promise<boolean> {
+    const { texts } = await this.getWelcome(chatId)
+    const next = removeAt(texts, index)
+    if (next.length === texts.length) return false
+    await this.groups.updateOne({ group_id: chatId }, { $set: { 'settings.welcome.texts': next } })
+    return true
+  }
+
+  /**
+   * Append a welcome gif/animation (file id), dedup + capped, and enable
+   * greetings. Returns whether it was added and, if not, the reason.
+   */
+  async addWelcomeGif(chatId: number, fileId: string): Promise<{ added: boolean; reason?: AddReason }> {
+    const { gifs } = await this.getWelcome(chatId)
+    const result = addWelcomeItem(gifs, fileId, { max: MAX_WELCOME_GIFS })
+    if (!result.added) return result.reason !== undefined ? { added: false, reason: result.reason } : { added: false }
     await this.groups.updateOne(
       { group_id: chatId },
-      { $set: { 'settings.welcome.gifs': [fileId], 'settings.welcome.enable': true }, $setOnInsert: { group_id: chatId } },
+      { $set: { 'settings.welcome.gifs': result.list, 'settings.welcome.enable': true }, $setOnInsert: { group_id: chatId } },
       { upsert: true }
     )
+    return { added: true }
+  }
+
+  /** Remove the welcome gif at `index`. Returns true if one was removed. */
+  async removeWelcomeGif(chatId: number, index: number): Promise<boolean> {
+    const { gifs } = await this.getWelcome(chatId)
+    const next = removeAt(gifs, index)
+    if (next.length === gifs.length) return false
+    await this.groups.updateOne({ group_id: chatId }, { $set: { 'settings.welcome.gifs': next } })
+    return true
   }
 
   /** v2-additive per-user UI locale (users.v2Locale). */

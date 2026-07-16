@@ -19,7 +19,7 @@ import {
   MongoStore, MongoSignaturePort, MongoForwardPort, QdrantVectorPort,
   OpenAiModerationPort, OpenRouterLlmPort,
   PersistentVelocityPort, PersistentSessionPort, MemoryConversationWindow,
-  matchExtras,
+  matchExtras, buildWelcomeGreeting, PendingInput,
   groupDocToChatPolicy, presetToThreshold, userDocToHistory, mergeExternalBan,
   type NormalizedExtra
 } from '@lyadmin/data'
@@ -44,6 +44,9 @@ const velocityPort = new PersistentVelocityPort(store)
 const signaturePort = new MongoSignaturePort(store)
 const forwardPort = new MongoForwardPort(store)
 const conversationWindow = new MemoryConversationWindow()
+// Transient per-admin input state for the PM welcome/extras editor. Memory-only
+// on purpose — a half-finished "add" is not worth persisting across restarts.
+const pendingInput = new PendingInput()
 // Module-level handle so the vote path can self-learn into Qdrant, not just
 // search it. Null when embeddings/Qdrant are not configured.
 const vectorPort = config.qdrantUrl && config.openaiApiKey
@@ -794,16 +797,34 @@ const handleWelcomeGreeting = async (message: Message, chat: Chat, joiners: User
   const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
   const names = joiners.map((j) => `<b>${escapeName(j.displayName)}</b>`).join(', ')
   const template = pickRandom(welcome.texts)
-  const body = template ? template.replace(/%name%/g, names) : locale.welcome.defaultGreeting(names)
+  // Escape the admin-authored template before it touches the HTML parser; a
+  // stray `<`/`&` used to throw inside html() and get swallowed → newcomers saw
+  // nothing. %name% is our placeholder, substituted after escaping.
+  const body = buildWelcomeGreeting(template, names, locale.welcome.defaultGreeting(names))
   const gif = pickRandom(welcome.gifs)
   const sent = gif
-    ? await gateway.tg.sendMedia(chat.id, gif, { replyTo: message.id, caption: viewHtml(body) }).catch(() => null)
-    : await gateway.tg.sendText(chat.id, viewHtml(body), { replyTo: message.id }).catch(() => null)
+    ? await gateway.tg.sendMedia(chat.id, gif, { replyTo: message.id, caption: viewHtml(body) })
+        .catch((err) => { log.warn('welcome_send_failed', { chatId: chat.id, kind: 'media', err: String(err) }); return null })
+    : await gateway.tg.sendText(chat.id, viewHtml(body), { replyTo: message.id })
+        .catch((err) => { log.warn('welcome_send_failed', { chatId: chat.id, kind: 'text', err: String(err) }); return null })
   if (sent) scheduleDelete(chat.id, sent.id, welcome.timer * 1000, 'welcome')
   log.info('welcome', { chatId: chat.id, chat: chat.title ?? undefined, joiners: joiners.map((j) => j.id) })
 }
 
-/** /welcome: toggle, or set text (`/welcome <text>`), or set gif (reply). */
+/** Map an add-list rejection reason to a localized one-liner. */
+const welcomeAddIssue = (locale: Locale, reason: string | undefined): string => {
+  if (reason === 'limit') return locale.welcome.limit
+  if (reason === 'duplicate') return locale.welcome.duplicate
+  if (reason === 'too_long') return locale.welcome.tooLong
+  return locale.welcome.saveFailed
+}
+
+/**
+ * /welcome quick command (in-group shortcut; full management lives in the PM
+ * editor). Adds an inline text and/or a replied gif — they are independent, so
+ * a reply-with-caption saves BOTH (the earlier bug returned after the gif and
+ * silently dropped the text). Bare /welcome with no content toggles greetings.
+ */
 const handleWelcomeCommand = async (message: Message, chat: Chat, caller: User, rest: string): Promise<void> => {
   if (!(await isChatAdmin(chat.id, caller.id))) return
   const locale = await localeFor(caller.id, caller.language)
@@ -812,21 +833,25 @@ const handleWelcomeCommand = async (message: Message, chat: Chat, caller: User, 
     if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'welcome_ack')
   }
   const replied = await gateway.fetchRepliedMessage(message)
-  if (replied) {
-    const fileId = mediaFileId(replied)
+  const fileId = replied ? mediaFileId(replied) : null
+  const text = rest.trim()
+
+  if (fileId || text) {
+    const lines: string[] = []
     if (fileId) {
-      await store.setWelcomeGif(chat.id, fileId).catch(() => { /* best-effort */ })
-      log.info('welcome_set', { chatId: chat.id, by: caller.id, kind: 'gif' })
-      await ack(locale.welcome.gifSet)
-      return
+      const r = await store.addWelcomeGif(chat.id, fileId).catch(() => ({ added: false, reason: undefined }))
+      lines.push(r.added ? locale.welcome.gifSet : welcomeAddIssue(locale, r.reason))
+      log.info('welcome_set', { chatId: chat.id, by: caller.id, kind: 'gif', added: r.added })
     }
-  }
-  if (rest.trim().length > 0) {
-    await store.setWelcomeText(chat.id, rest.trim()).catch(() => { /* best-effort */ })
-    log.info('welcome_set', { chatId: chat.id, by: caller.id, kind: 'text' })
-    await ack(locale.welcome.textSet)
+    if (text) {
+      const r = await store.addWelcomeText(chat.id, text).catch(() => ({ added: false, reason: undefined }))
+      lines.push(r.added ? locale.welcome.textSet : welcomeAddIssue(locale, r.reason))
+      log.info('welcome_set', { chatId: chat.id, by: caller.id, kind: 'text', added: r.added })
+    }
+    await ack(lines.join('\n'))
     return
   }
+
   const current = await store.getWelcome(chat.id).catch(() => ({ enable: false }))
   await store.setWelcomeEnabled(chat.id, !current.enable).catch(() => { /* best-effort */ })
   log.info('welcome_toggle', { chatId: chat.id, by: caller.id, enabled: !current.enable })
@@ -882,13 +907,20 @@ const fireExtras = async (message: Message, chat: Chat, text: string): Promise<v
   ])
   if (extras.length === 0) return
   for (const extra of matchExtras(text, extras, maxExtra)) {
+    // extra.text is admin-authored — escape it before the HTML parser, else a
+    // stray `<`/`&` throws and (previously, silently) drops the whole trigger.
     if (extra.fileId) {
       await gateway.tg.sendMedia(chat.id, extra.fileId, {
         replyTo: message.id,
-        ...(extra.text ? { caption: viewHtml(extra.text) } : {})
-      }).catch(() => { /* file id may have expired — skip */ })
+        ...(extra.text ? { caption: viewHtml(escapeName(extra.text)) } : {})
+      }).catch((err) => {
+        log.warn('extra_send_failed', { chatId: chat.id, name: extra.name, kind: 'media', err: String(err) })
+      })
     } else if (extra.text) {
-      await gateway.tg.replyText(message, viewHtml(extra.text)).catch(() => { /* non-fatal */ })
+      await gateway.tg.replyText(message, viewHtml(escapeName(extra.text)))
+        .catch((err) => {
+          log.warn('extra_send_failed', { chatId: chat.id, name: extra.name, kind: 'text', err: String(err) })
+        })
     }
   }
 }

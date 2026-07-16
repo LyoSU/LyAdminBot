@@ -187,6 +187,11 @@ export interface Locale {
     textSet: string
     gifSet: string
     usage: string
+    /** Add-list rejection toasts (multi-item welcome). */
+    limit: string
+    duplicate: string
+    tooLong: string
+    saveFailed: string
     /** Default greeting if an admin enables welcome without setting text. */
     defaultGreeting: (name: string) => string
   }

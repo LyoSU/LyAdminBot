@@ -270,6 +270,10 @@ export const tr: Locale = {
       '/welcome <%name% içeren metin> — karşılamayı ayarla',
       'bir gif’e /welcome ile yanıt ver — gif’i ayarla'
     ].join('\n'),
+    limit: '⚠️ Limite ulaşıldı — önce ayarlardan bir şey sil.',
+    duplicate: 'ℹ️ Zaten eklendi.',
+    tooLong: '⚠️ Metin çok uzun (en fazla 1000 karakter).',
+    saveFailed: '⚠️ Kaydedilemedi.',
     defaultGreeting: (name) => `👋 Hoş geldin, ${name}!`
   },
 
