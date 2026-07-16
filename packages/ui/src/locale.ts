@@ -194,6 +194,30 @@ export interface Locale {
     saveFailed: string
     /** Default greeting if an admin enables welcome without setting text. */
     defaultGreeting: (name: string) => string
+    /** PM welcome editor (opened from /settings). */
+    editor: {
+      title: (state: string, nTexts: number, nGifs: number) => string
+      enable: string
+      disable: string
+      texts: (n: number) => string
+      gifs: (n: number) => string
+      preview: string
+      textsTitle: (n: number, max: number) => string
+      textsItem: (i: number, preview: string) => string
+      textsEmpty: string
+      addText: string
+      gifsTitle: (n: number, max: number) => string
+      gifsItem: (i: number) => string
+      gifsEmpty: string
+      addGif: string
+      promptText: string
+      promptGif: string
+      added: string
+      cancelled: string
+      invalidGif: string
+      removed: string
+      previewEmpty: string
+    }
   }
 
   /** Custom hashtag triggers (extras). */
@@ -204,6 +228,20 @@ export interface Locale {
     usage: string
     listTitle: string
     listEmpty: string
+    /** PM extras editor (opened from /settings). */
+    editor: {
+      title: (n: number, max: number) => string
+      item: (i: number, icon: string, name: string) => string
+      empty: string
+      add: string
+      maxLabel: (n: number) => string
+      promptName: string
+      promptContent: (name: string) => string
+      added: (name: string) => string
+      cancelled: string
+      invalidName: string
+      removed: string
+    }
   }
 
   /** Manual /banan moderation (admin mute with personality). */
@@ -242,6 +280,9 @@ export interface Locale {
     /** Group interface-language row label + toast on change. */
     language: string
     languageSaved: string
+    /** Root-panel buttons that open the welcome / extras editors. */
+    welcome: string
+    extras: string
     on: string
     off: string
     back: string

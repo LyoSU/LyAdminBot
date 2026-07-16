@@ -21,12 +21,13 @@ import {
   PersistentVelocityPort, PersistentSessionPort, MemoryConversationWindow,
   matchExtras, buildWelcomeGreeting, PendingInput,
   groupDocToChatPolicy, presetToThreshold, userDocToHistory, mergeExternalBan,
-  type NormalizedExtra
+  type NormalizedExtra, type PendingEntry
 } from '@lyadmin/data'
 import {
   captchaPrompt, compactNotification, escapeHtml as escapeName, helpView,
   langPanel, langPicker, parseCallback, resolveLocale, settingsDeepLink, settingsPanel,
   startCard, startGroupHint, topList, userProfileCard, votePrompt, whyCard, whyView,
+  welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor,
   LOCALES, type Locale, type UserFacts, type ViewMessage
 } from '@lyadmin/ui'
 import { loadConfig } from './config.js'
@@ -364,6 +365,27 @@ const renderLangPanel = async (locale: Locale, chatId: number): Promise<ViewMess
   return langPanel(locale, chatId, groupLocale)
 }
 
+// ── Welcome / extras editor sub-screens (rendered fresh from Mongo) ─────────
+const renderWelcomeEditor = async (locale: Locale, chatId: number): Promise<ViewMessage> => {
+  const w = await store.getWelcome(chatId).catch(() => ({ enable: false, texts: [], gifs: [] }))
+  return welcomeEditor(locale, chatId, { enable: w.enable, textsCount: w.texts.length, gifsCount: w.gifs.length })
+}
+const renderWelcomeTexts = async (locale: Locale, chatId: number, page: number): Promise<ViewMessage> => {
+  const w = await store.getWelcome(chatId).catch(() => ({ texts: [] as string[] }))
+  return welcomeTextsScreen(locale, chatId, w.texts, page)
+}
+const renderWelcomeGifs = async (locale: Locale, chatId: number, page: number): Promise<ViewMessage> => {
+  const w = await store.getWelcome(chatId).catch(() => ({ gifs: [] as string[] }))
+  return welcomeGifsScreen(locale, chatId, w.gifs, page)
+}
+const renderExtrasEditor = async (locale: Locale, chatId: number, page: number): Promise<ViewMessage> => {
+  const [extras, maxExtra] = await Promise.all([
+    store.getExtras(chatId).catch(() => [] as NormalizedExtra[]),
+    store.getMaxExtra(chatId).catch(() => 3)
+  ])
+  return extrasEditor(locale, chatId, extras.map((e) => ({ name: e.name, hasMedia: e.fileId !== null })), maxExtra, page)
+}
+
 /** /mystats panel body (PM only). chatId adds the per-chat lines. */
 const renderMyStats = async (locale: Locale, userId: number, chatId: number | null): Promise<string> => {
   const userDoc = await store.getUserDoc(userId).catch(() => null) as {
@@ -382,12 +404,88 @@ const renderMyStats = async (locale: Locale, userId: number, chatId: number | nu
   return lines.join('\n')
 }
 
-/** PM entry: /start card, /help, /lang, settings deep links. */
+/**
+ * Send the admin a live preview of the greeting a newcomer would see, using
+ * their own name in the %name% slot. Best-effort — a preview must never throw.
+ */
+const sendWelcomePreview = async (userId: number, sampleName: string, chatId: number, locale: Locale): Promise<void> => {
+  const w = await store.getWelcome(chatId).catch(() => ({ texts: [] as string[], gifs: [] as string[] }))
+  if (w.texts.length === 0 && w.gifs.length === 0) {
+    await gateway.tg.sendText(userId, viewHtml(locale.welcome.editor.previewEmpty)).catch(() => { /* PM closed */ })
+    return
+  }
+  const names = `<b>${escapeName(sampleName)}</b>`
+  const body = buildWelcomeGreeting(pickRandom(w.texts), names, locale.welcome.defaultGreeting(names))
+  const gif = pickRandom(w.gifs)
+  if (gif) {
+    await gateway.tg.sendMedia(userId, gif, { caption: viewHtml(body) })
+      .catch((err) => { log.warn('welcome_preview_failed', { chatId, err: String(err) }) })
+  } else {
+    await gateway.tg.sendText(userId, viewHtml(body)).catch(() => { /* PM closed */ })
+  }
+}
+
+/**
+ * Capture the next PM message as input for an in-progress editor flow (add a
+ * welcome text/gif, name/define an extra). After a successful add we echo the
+ * refreshed list so the admin can keep adding without re-opening the menu.
+ */
+const handlePendingInput = async (message: Message, userId: number, entry: PendingEntry, locale: Locale): Promise<void> => {
+  const reply = (text: string): Promise<void> =>
+    gateway.tg.sendText(userId, viewHtml(text)).then(() => undefined).catch(() => { /* PM closed */ })
+  const text = (message.text ?? '').trim()
+
+  if (entry.type === 'welcome.text') {
+    const r = await store.addWelcomeText(entry.chatId, text).catch(() => ({ added: false as const, reason: undefined }))
+    await reply(r.added ? locale.welcome.editor.added : welcomeAddIssue(locale, r.reason))
+    await sendView(message, await renderWelcomeTexts(locale, entry.chatId, 0))
+    return
+  }
+  if (entry.type === 'welcome.gif') {
+    const fileId = mediaFileId(message)
+    if (!fileId) { await reply(locale.welcome.editor.invalidGif); return }
+    const r = await store.addWelcomeGif(entry.chatId, fileId).catch(() => ({ added: false as const, reason: undefined }))
+    await reply(r.added ? locale.welcome.editor.added : welcomeAddIssue(locale, r.reason))
+    await sendView(message, await renderWelcomeGifs(locale, entry.chatId, 0))
+    return
+  }
+  if (entry.type === 'extra.name') {
+    const name = text.replace(/^#/, '')
+    if (!/^[\p{L}\p{N}_]+$/u.test(name)) { await reply(locale.extra.editor.invalidName); return }
+    // Second step of the flow: now wait for the content under this name.
+    pendingInput.set(userId, { type: 'extra.content', chatId: entry.chatId, arg: name })
+    await reply(locale.extra.editor.promptContent(name))
+    return
+  }
+  if (entry.type === 'extra.content') {
+    const name = entry.arg ?? ''
+    const fileId = mediaFileId(message)
+    if (!text && !fileId) { await reply(locale.extra.editor.cancelled); return }
+    const extra: NormalizedExtra = { name, text, fileId }
+    await store.saveExtra(entry.chatId, extra).catch(() => { /* best-effort */ })
+    await reply(locale.extra.editor.added(name))
+    await sendView(message, await renderExtrasEditor(locale, entry.chatId, 0))
+    return
+  }
+}
+
+/** PM entry: /start card, /help, /lang, settings deep links, editor input. */
 const handlePrivateMessage = async (message: Message): Promise<void> => {
   const sender = message.sender
   if (!(sender instanceof User) || sender.isBot) return
   const text = (message.text ?? '').trim()
   const locale = await localeFor(sender.id, sender.language)
+
+  // In-progress editor flow: this message is the input the admin was asked for.
+  const pending = pendingInput.take(sender.id)
+  if (pending) {
+    if (/^\/cancel\b/i.test(text)) {
+      await gateway.tg.sendText(sender.id, viewHtml(locale.welcome.editor.cancelled)).catch(() => { /* PM closed */ })
+      return
+    }
+    await handlePendingInput(message, sender.id, pending, locale)
+    return
+  }
 
   if (/^\/help/.test(text)) {
     await sendView(message, helpView(locale))
@@ -1378,6 +1476,84 @@ const wireCallbacks = (): void => {
         text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons)
       }).catch(() => { /* unchanged content → MESSAGE_NOT_MODIFIED, fine */ })
       await query.answer(action === 'lang' ? { text: locale.settings.languageSaved } : {})
+      return
+    }
+
+    // Pager labels / max-count display carry no action.
+    if (kind === 'noop') { await query.answer({}); return }
+
+    // PM welcome + extras editors. Both share chatId + admin gate + in-place
+    // message edits; content input is captured via pendingInput, not callbacks.
+    if (kind === 'wel' || kind === 'ext') {
+      const [chatIdRaw = '', action = '', arg = ''] = parts
+      const chatId = Number(chatIdRaw)
+      if (!Number.isFinite(chatId) || !(await isChatAdmin(chatId, query.user.id))) {
+        await query.answer({ text: locale.notification.adminOnly, alert: true })
+        return
+      }
+      const edit = async (view: ViewMessage): Promise<void> => {
+        await gateway.tg.editMessage({
+          chatId: query.user.id, message: query.messageId,
+          text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons)
+        }).catch(() => { /* unchanged content / message gone */ })
+      }
+      const page = Number(arg) || 0
+
+      if (kind === 'wel') {
+        if (action === 'toggle') {
+          const cur = await store.getWelcome(chatId).catch(() => ({ enable: false }))
+          await store.setWelcomeEnabled(chatId, !cur.enable).catch(() => { /* best-effort */ })
+        } else if (action === 'tdel') {
+          await store.removeWelcomeText(chatId, Number(arg)).catch(() => false)
+          await edit(await renderWelcomeTexts(locale, chatId, 0))
+          await query.answer({ text: locale.welcome.editor.removed }); return
+        } else if (action === 'gdel') {
+          await store.removeWelcomeGif(chatId, Number(arg)).catch(() => false)
+          await edit(await renderWelcomeGifs(locale, chatId, 0))
+          await query.answer({ text: locale.welcome.editor.removed }); return
+        } else if (action === 'taddc') {
+          pendingInput.set(query.user.id, { type: 'welcome.text', chatId })
+          await gateway.tg.sendText(query.user.id, viewHtml(locale.welcome.editor.promptText)).catch(() => { /* PM closed */ })
+          await query.answer({}); return
+        } else if (action === 'gaddc') {
+          pendingInput.set(query.user.id, { type: 'welcome.gif', chatId })
+          await gateway.tg.sendText(query.user.id, viewHtml(locale.welcome.editor.promptGif)).catch(() => { /* PM closed */ })
+          await query.answer({}); return
+        } else if (action === 'preview') {
+          await sendWelcomePreview(query.user.id, query.user.displayName ?? 'Alex', chatId, locale)
+          await query.answer({}); return
+        }
+        const view = action === 'texts' ? await renderWelcomeTexts(locale, chatId, 0)
+          : action === 'gifs' ? await renderWelcomeGifs(locale, chatId, 0)
+          : action === 'tpage' ? await renderWelcomeTexts(locale, chatId, page)
+          : action === 'gpage' ? await renderWelcomeGifs(locale, chatId, page)
+          : await renderWelcomeEditor(locale, chatId)
+        await edit(view)
+        await query.answer({})
+        return
+      }
+
+      // kind === 'ext'
+      if (action === 'del') {
+        const extras = await store.getExtras(chatId).catch(() => [] as NormalizedExtra[])
+        const target = extras[Number(arg)]
+        if (target) await store.deleteExtra(chatId, target.name).catch(() => false)
+        await edit(await renderExtrasEditor(locale, chatId, 0))
+        await query.answer({ text: locale.extra.editor.removed }); return
+      }
+      if (action === 'maxinc' || action === 'maxdec') {
+        const cur = await store.getMaxExtra(chatId).catch(() => 3)
+        await store.setMaxExtra(chatId, cur + (action === 'maxinc' ? 1 : -1)).catch(() => { /* best-effort */ })
+        await edit(await renderExtrasEditor(locale, chatId, 0))
+        await query.answer({}); return
+      }
+      if (action === 'addc') {
+        pendingInput.set(query.user.id, { type: 'extra.name', chatId })
+        await gateway.tg.sendText(query.user.id, viewHtml(locale.extra.editor.promptName)).catch(() => { /* PM closed */ })
+        await query.answer({}); return
+      }
+      await edit(await renderExtrasEditor(locale, chatId, action === 'page' ? page : 0))
+      await query.answer({})
       return
     }
 

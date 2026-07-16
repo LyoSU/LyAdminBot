@@ -54,7 +54,14 @@ export const callbackData = {
     `vt:${chatId}:${messageId}:${choice === 'spam' ? 's' : 'h'}`,
   help: (): string => 'help',
   langPicker: (): string => 'lang',
-  langSet: (code: string): string => `lang:${code}`
+  langSet: (code: string): string => `lang:${code}`,
+  // PM welcome/extras editor. Content (text) never travels in callback data —
+  // it is captured via a pending-input prompt — so only chatId + action +
+  // numeric index/page appear here, well within Telegram's 64-byte cap.
+  welcome: (chatId: number, action: string, arg = ''): string =>
+    `wel:${chatId}:${action}${arg !== '' ? `:${arg}` : ''}`,
+  extras: (chatId: number, action: string, arg = ''): string =>
+    `ext:${chatId}:${action}${arg !== '' ? `:${arg}` : ''}`
 }
 
 /** For app-layer strings that interpolate user-controlled text into HTML. */
@@ -430,6 +437,11 @@ export const settingsPanel = (locale: Locale, chatId: number, state: SettingsSta
       [{ text: `${locale.settings.voting}: ${onOff(state.votingEnabled)}`, data: callbackData.settings(chatId, 'toggle_voting') }],
       [{ text: `${locale.settings.banDatabase}: ${onOff(state.externalBanEnabled)}`, data: callbackData.settings(chatId, 'toggle_bandb') }],
       bananRow,
+      // Welcome + extras editors live behind their own screens.
+      [
+        { text: locale.settings.welcome, data: callbackData.welcome(chatId, 'open') },
+        { text: locale.settings.extras, data: callbackData.extras(chatId, 'open') }
+      ],
       // Language lives behind its own screen to keep the root panel compact.
       [{ text: `🌐 ${locale.settings.language}: ${langName(state.locale)}`, data: callbackData.settings(chatId, 'lang_open') }]
     ]
@@ -451,6 +463,160 @@ export const langPanel = (locale: Locale, chatId: number, currentLocale: string)
     text: `🌐 <b>${locale.settings.language}</b>\n\n${langName(currentLocale)}`,
     buttons: rows
   }
+}
+
+// ── PM welcome / extras editor (opened from /settings) ─────────────────────
+
+const truncate = (s: string, max: number): string =>
+  s.length <= max ? s : `${s.slice(0, max - 1)}…`
+
+/** Chunk delete buttons + build a ‹ N/M › pager row (empty when single page). */
+const paginate = <T>(
+  items: T[],
+  page: number,
+  perPage: number,
+  pageCb: (p: number) => string
+): { pageItems: { item: T; index: number }[]; nav: ButtonSpec[] } => {
+  const pages = Math.max(1, Math.ceil(items.length / perPage))
+  const p = Math.max(0, Math.min(page, pages - 1))
+  const slice = items.slice(p * perPage, p * perPage + perPage)
+  const pageItems = slice.map((item, i) => ({ item, index: p * perPage + i }))
+  const nav: ButtonSpec[] = pages > 1
+    ? [
+        { text: '‹', data: pageCb(p === 0 ? pages - 1 : p - 1) },
+        { text: `${p + 1}/${pages}`, data: 'noop' },
+        { text: '›', data: pageCb(p === pages - 1 ? 0 : p + 1) }
+      ]
+    : []
+  return { pageItems, nav }
+}
+
+/** Welcome editor root: toggle + counts + navigation to the text/gif lists. */
+export const welcomeEditor = (
+  locale: Locale,
+  chatId: number,
+  state: { enable: boolean; textsCount: number; gifsCount: number }
+): ViewMessage => {
+  const e = locale.welcome.editor
+  const stateStr = state.enable ? locale.settings.on : locale.settings.off
+  const buttons: ButtonSpec[][] = [
+    [{
+      text: state.enable ? e.disable : e.enable,
+      data: callbackData.welcome(chatId, 'toggle')
+    }],
+    [
+      { text: e.texts(state.textsCount), data: callbackData.welcome(chatId, 'texts') },
+      { text: e.gifs(state.gifsCount), data: callbackData.welcome(chatId, 'gifs') }
+    ]
+  ]
+  if (state.textsCount > 0 || state.gifsCount > 0) {
+    buttons.push([{ text: e.preview, data: callbackData.welcome(chatId, 'preview') }])
+  }
+  buttons.push([{ text: locale.settings.back, data: callbackData.settings(chatId, 'root') }])
+  return { text: e.title(stateStr, state.textsCount, state.gifsCount), buttons }
+}
+
+/** Paginated welcome-texts list with per-item delete + add. */
+export const welcomeTextsScreen = (
+  locale: Locale,
+  chatId: number,
+  texts: string[],
+  page = 0
+): ViewMessage => {
+  const e = locale.welcome.editor
+  if (texts.length === 0) {
+    return {
+      text: e.textsEmpty,
+      buttons: [
+        [{ text: e.addText, data: callbackData.welcome(chatId, 'taddc') }],
+        [{ text: locale.settings.back, data: callbackData.welcome(chatId, 'open') }]
+      ]
+    }
+  }
+  const { pageItems, nav } = paginate(texts, page, 5, (p) => callbackData.welcome(chatId, 'tpage', String(p)))
+  const list = pageItems
+    .map(({ item, index }) => e.textsItem(index + 1, truncate(item.replace(/\n/g, ' '), 50)))
+    .join('\n')
+  const delRow = pageItems.map(({ index }) => ({
+    text: `${index + 1} 🗑`,
+    data: callbackData.welcome(chatId, 'tdel', String(index))
+  }))
+  const buttons: ButtonSpec[][] = []
+  for (let i = 0; i < delRow.length; i += 5) buttons.push(delRow.slice(i, i + 5))
+  if (nav.length) buttons.push(nav)
+  buttons.push([{ text: e.addText, data: callbackData.welcome(chatId, 'taddc') }])
+  buttons.push([{ text: locale.settings.back, data: callbackData.welcome(chatId, 'open') }])
+  return { text: e.textsTitle(texts.length, 20) + '\n\n' + list, buttons }
+}
+
+/** Paginated welcome-gifs list. Gifs can't preview inline, so rows are #N. */
+export const welcomeGifsScreen = (
+  locale: Locale,
+  chatId: number,
+  gifs: string[],
+  page = 0
+): ViewMessage => {
+  const e = locale.welcome.editor
+  if (gifs.length === 0) {
+    return {
+      text: e.gifsEmpty,
+      buttons: [
+        [{ text: e.addGif, data: callbackData.welcome(chatId, 'gaddc') }],
+        [{ text: locale.settings.back, data: callbackData.welcome(chatId, 'open') }]
+      ]
+    }
+  }
+  const { pageItems, nav } = paginate(gifs, page, 8, (p) => callbackData.welcome(chatId, 'gpage', String(p)))
+  const list = pageItems.map(({ index }) => e.gifsItem(index + 1)).join('\n')
+  const delRow = pageItems.map(({ index }) => ({
+    text: `${index + 1} 🗑`,
+    data: callbackData.welcome(chatId, 'gdel', String(index))
+  }))
+  const buttons: ButtonSpec[][] = []
+  for (let i = 0; i < delRow.length; i += 5) buttons.push(delRow.slice(i, i + 5))
+  if (nav.length) buttons.push(nav)
+  buttons.push([{ text: e.addGif, data: callbackData.welcome(chatId, 'gaddc') }])
+  buttons.push([{ text: locale.settings.back, data: callbackData.welcome(chatId, 'open') }])
+  return { text: e.gifsTitle(gifs.length, 20) + '\n\n' + list, buttons }
+}
+
+/** Paginated extras list with per-item delete, add, and a maxExtra stepper. */
+export const extrasEditor = (
+  locale: Locale,
+  chatId: number,
+  extras: { name: string; hasMedia: boolean }[],
+  maxExtra: number,
+  page = 0
+): ViewMessage => {
+  const e = locale.extra.editor
+  const buttons: ButtonSpec[][] = []
+  if (extras.length === 0) {
+    return {
+      text: e.empty,
+      buttons: [
+        [{ text: e.add, data: callbackData.extras(chatId, 'addc') }],
+        [{ text: locale.settings.back, data: callbackData.settings(chatId, 'root') }]
+      ]
+    }
+  }
+  const { pageItems, nav } = paginate(extras, page, 8, (p) => callbackData.extras(chatId, 'page', String(p)))
+  const list = pageItems
+    .map(({ item, index }) => e.item(index + 1, item.hasMedia ? '📎' : '📝', escapeHtml(item.name)))
+    .join('\n')
+  const delRow = pageItems.map(({ index }) => ({
+    text: `${index + 1} 🗑`,
+    data: callbackData.extras(chatId, 'del', String(index))
+  }))
+  for (let i = 0; i < delRow.length; i += 5) buttons.push(delRow.slice(i, i + 5))
+  if (nav.length) buttons.push(nav)
+  buttons.push([
+    { text: '−', data: callbackData.extras(chatId, 'maxdec') },
+    { text: e.maxLabel(maxExtra), data: 'noop' },
+    { text: '+', data: callbackData.extras(chatId, 'maxinc') }
+  ])
+  buttons.push([{ text: e.add, data: callbackData.extras(chatId, 'addc') }])
+  buttons.push([{ text: locale.settings.back, data: callbackData.settings(chatId, 'root') }])
+  return { text: e.title(extras.length, maxExtra) + '\n\n' + list, buttons }
 }
 
 /**

@@ -274,7 +274,31 @@ export const en: Locale = {
     duplicate: 'ℹ️ Already added.',
     tooLong: '⚠️ Text too long (max 1000 characters).',
     saveFailed: '⚠️ Could not save.',
-    defaultGreeting: (name) => `👋 Welcome, ${name}!`
+    defaultGreeting: (name) => `👋 Welcome, ${name}!`,
+    editor: {
+      title: (state, nTexts, nGifs) =>
+        `👋 <b>Newcomer greeting</b>\n\nStatus: ${state}\nTexts: ${nTexts} · Gifs: ${nGifs}\n\nWith several, the bot picks a random one each time.`,
+      enable: '🔔 Enable',
+      disable: '🔕 Disable',
+      texts: (n) => `📝 Texts (${n})`,
+      gifs: (n) => `🎞 Gifs (${n})`,
+      preview: '👁 Preview',
+      textsTitle: (n, max) => `📝 <b>Greeting texts</b> (${n}/${max})`,
+      textsItem: (i, preview) => `${i}. ${preview}`,
+      textsEmpty: '📝 <b>Greeting texts</b>\n\nEmpty for now. Add the first — you can use <code>%name%</code> for the newcomer’s name.',
+      addText: '➕ Add text',
+      gifsTitle: (n, max) => `🎞 <b>Greeting gifs</b> (${n}/${max})`,
+      gifsItem: (i) => `${i}. 🎞 gif #${i}`,
+      gifsEmpty: '🎞 <b>Greeting gifs</b>\n\nEmpty for now. Add the first — send a gif, video or photo.',
+      addGif: '➕ Add gif',
+      promptText: '📝 Send the greeting text in one message.\nYou can include <code>%name%</code> — I’ll substitute the newcomer’s name.\n\n/cancel to abort.',
+      promptGif: '🎞 Send a gif, video or photo in one message.\n\n/cancel to abort.',
+      added: '✅ Added.',
+      cancelled: '❌ Cancelled.',
+      invalidGif: '⚠️ That’s not media. Send a gif, video or photo.',
+      removed: '🗑 Removed.',
+      previewEmpty: 'Nothing to show yet — add a text or a gif.'
+    }
   },
 
   extra: {
@@ -286,7 +310,21 @@ export const en: Locale = {
       '/extra name (no reply) — deletes the trigger'
     ].join('\n'),
     listTitle: '📂 Saved triggers:',
-    listEmpty: 'No triggers here yet.'
+    listEmpty: 'No triggers here yet.',
+    editor: {
+      title: (n, max) =>
+        `#️⃣ <b>Triggers</b> (${n})\n\nType <code>#name</code> in the chat and the bot sends the saved reply.\nMax fires per message: ${max}.`,
+      item: (i, icon, name) => `${i}. ${icon} #${name}`,
+      empty: '#️⃣ <b>Triggers</b>\n\nEmpty for now. Add the first — a name plus text or media.',
+      add: '➕ Add trigger',
+      maxLabel: (n) => `Max: ${n}`,
+      promptName: '#️⃣ Send the trigger name (without #), one word.\n\n/cancel to abort.',
+      promptContent: (name) => `Now send the content for <code>#${name}</code> — text or media (gif/photo/video).\n\n/cancel to abort.`,
+      added: (name) => `✅ Trigger #${name} saved.`,
+      cancelled: '❌ Cancelled.',
+      invalidName: '⚠️ The name must be one word, no spaces (letters/digits/_).',
+      removed: '🗑 Removed.'
+    }
   },
 
   banan: {
@@ -318,6 +356,8 @@ export const en: Locale = {
     banan: 'Banan duration',
     language: 'Bot language in this chat',
     languageSaved: 'Chat language updated',
+    welcome: '👋 Welcome',
+    extras: '#️⃣ Triggers',
     on: 'On',
     off: 'Off',
     back: '‹ Back'

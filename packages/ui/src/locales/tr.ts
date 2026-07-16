@@ -274,7 +274,31 @@ export const tr: Locale = {
     duplicate: 'ℹ️ Zaten eklendi.',
     tooLong: '⚠️ Metin çok uzun (en fazla 1000 karakter).',
     saveFailed: '⚠️ Kaydedilemedi.',
-    defaultGreeting: (name) => `👋 Hoş geldin, ${name}!`
+    defaultGreeting: (name) => `👋 Hoş geldin, ${name}!`,
+    editor: {
+      title: (state, nTexts, nGifs) =>
+        `👋 <b>Yeni üye karşılaması</b>\n\nDurum: ${state}\nMetin: ${nTexts} · Gif: ${nGifs}\n\nBirden fazlaysa bot her seferinde rastgele birini seçer.`,
+      enable: '🔔 Aç',
+      disable: '🔕 Kapat',
+      texts: (n) => `📝 Metinler (${n})`,
+      gifs: (n) => `🎞 Gifler (${n})`,
+      preview: '👁 Önizle',
+      textsTitle: (n, max) => `📝 <b>Karşılama metinleri</b> (${n}/${max})`,
+      textsItem: (i, preview) => `${i}. ${preview}`,
+      textsEmpty: '📝 <b>Karşılama metinleri</b>\n\nHenüz boş. İlkini ekle — yeni üyenin adı için <code>%name%</code> kullanabilirsin.',
+      addText: '➕ Metin ekle',
+      gifsTitle: (n, max) => `🎞 <b>Karşılama gifleri</b> (${n}/${max})`,
+      gifsItem: (i) => `${i}. 🎞 gif #${i}`,
+      gifsEmpty: '🎞 <b>Karşılama gifleri</b>\n\nHenüz boş. İlkini ekle — bir gif, video veya fotoğraf gönder.',
+      addGif: '➕ Gif ekle',
+      promptText: '📝 Karşılama metnini tek mesajda gönder.\n<code>%name%</code> ekleyebilirsin — yeni üyenin adını koyarım.\n\nİptal için /cancel.',
+      promptGif: '🎞 Bir gif, video veya fotoğraf tek mesajda gönder.\n\nİptal için /cancel.',
+      added: '✅ Eklendi.',
+      cancelled: '❌ İptal edildi.',
+      invalidGif: '⚠️ Bu bir medya değil. Bir gif, video veya fotoğraf gönder.',
+      removed: '🗑 Silindi.',
+      previewEmpty: 'Gösterilecek bir şey yok — metin veya gif ekle.'
+    }
   },
 
   extra: {
@@ -286,7 +310,21 @@ export const tr: Locale = {
       '/extra ad (yanıt yok) — tetikleyiciyi siler'
     ].join('\n'),
     listTitle: '📂 Kayıtlı tetikleyiciler:',
-    listEmpty: 'Burada henüz tetikleyici yok.'
+    listEmpty: 'Burada henüz tetikleyici yok.',
+    editor: {
+      title: (n, max) =>
+        `#️⃣ <b>Tetikleyiciler</b> (${n})\n\nSohbette <code>#ad</code> yaz, bot kayıtlıyı gönderir.\nMesaj başına en fazla: ${max}.`,
+      item: (i, icon, name) => `${i}. ${icon} #${name}`,
+      empty: '#️⃣ <b>Tetikleyiciler</b>\n\nHenüz boş. İlkini ekle — ad + metin veya medya.',
+      add: '➕ Tetikleyici ekle',
+      maxLabel: (n) => `Maks: ${n}`,
+      promptName: '#️⃣ Tetikleyici adını (# olmadan) tek kelime gönder.\n\nİptal için /cancel.',
+      promptContent: (name) => `Şimdi <code>#${name}</code> için içeriği gönder — metin veya medya (gif/foto/video).\n\nİptal için /cancel.`,
+      added: (name) => `✅ #${name} tetikleyicisi kaydedildi.`,
+      cancelled: '❌ İptal edildi.',
+      invalidName: '⚠️ Ad tek kelime olmalı, boşluksuz (harf/rakam/_).',
+      removed: '🗑 Silindi.'
+    }
   },
 
   banan: {
@@ -318,6 +356,8 @@ export const tr: Locale = {
     banan: 'Banan süresi',
     language: 'Bu sohbette bot dili',
     languageSaved: 'Sohbet dili güncellendi',
+    welcome: '👋 Karşılama',
+    extras: '#️⃣ Tetikleyiciler',
     on: 'Açık',
     off: 'Kapalı',
     back: '‹ Geri'

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Verdict } from '@lyadmin/core'
-import { callbackData, captchaPrompt, compactNotification, langPanel, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, userProfileCard, userProfileLines, votePrompt, whyCard, whyDeepLink, whyView, LOCALES, type UserFacts } from './views.js'
+import { callbackData, captchaPrompt, compactNotification, langPanel, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, userProfileCard, userProfileLines, votePrompt, whyCard, whyDeepLink, whyView, welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor, LOCALES, type UserFacts } from './views.js'
 import { uk } from './locales/uk.js'
 
 const makeVerdict = (overrides: Partial<Verdict> = {}): Verdict => ({
@@ -265,7 +265,9 @@ describe('settings', () => {
     const datas = view.buttons.flat().map((b) => b.data ?? '')
     expect(datas.length).toBeGreaterThan(0)
     for (const data of datas) {
-      expect(data).toMatch(/^set:-1001234567890:/)
+      // Root panel routes to the antispam (set:), welcome (wel:) and extras
+      // (ext:) handlers — all must carry the target chatId and stay ≤64 bytes.
+      expect(data).toMatch(/^(set|wel|ext):-1001234567890:/)
       expect(Buffer.byteLength(data)).toBeLessThanOrEqual(64)
     }
   })
@@ -338,5 +340,65 @@ describe('parseCallback', () => {
   it('round-trips callback data', () => {
     expect(parseCallback('ovr:-100:7:42')).toEqual({ kind: 'ovr', parts: ['-100', '7', '42'] })
     expect(parseCallback('')).toEqual({ kind: '', parts: [] })
+  })
+})
+
+describe('welcome editor', () => {
+  const chatId = -100500
+
+  it('root shows counts and hides preview when empty', () => {
+    const view = welcomeEditor(uk, chatId, { enable: false, textsCount: 0, gifsCount: 0 })
+    expect(view.text).toContain('Привітання')
+    const labels = view.buttons.flat().map((b) => b.text)
+    expect(labels.some((t) => t.includes('👁'))).toBe(false)
+  })
+
+  it('root shows a preview button once there is content', () => {
+    const view = welcomeEditor(uk, chatId, { enable: true, textsCount: 2, gifsCount: 1 })
+    const preview = view.buttons.flat().find((b) => b.text.includes('👁'))
+    expect(preview?.data).toBe(callbackData.welcome(chatId, 'preview'))
+  })
+
+  it('texts screen lists items with per-index delete callbacks', () => {
+    const view = welcomeTextsScreen(uk, chatId, ['hello %name%', 'hi'], 0)
+    expect(view.text).toContain('1. hello %name%')
+    const del = view.buttons.flat().find((b) => b.data === callbackData.welcome(chatId, 'tdel', '0'))
+    expect(del?.text).toBe('1 🗑')
+  })
+
+  it('texts screen shows an add button in the empty state', () => {
+    const view = welcomeTextsScreen(uk, chatId, [], 0)
+    const add = view.buttons.flat().find((b) => b.data === callbackData.welcome(chatId, 'taddc'))
+    expect(add).toBeTruthy()
+  })
+
+  it('gifs screen paginates past one page', () => {
+    const gifs = Array.from({ length: 20 }, (_, i) => `file${i}`)
+    const view = welcomeGifsScreen(uk, chatId, gifs, 0)
+    const nav = view.buttons.flat().find((b) => b.text === '›')
+    expect(nav?.data).toBe(callbackData.welcome(chatId, 'gpage', '1'))
+  })
+})
+
+describe('extras editor', () => {
+  const chatId = -100500
+
+  it('marks media vs text extras and wires delete + max stepper', () => {
+    const view = extrasEditor(uk, chatId, [
+      { name: 'rules', hasMedia: false },
+      { name: 'meme', hasMedia: true }
+    ], 3, 0)
+    expect(view.text).toContain('📝 #rules')
+    expect(view.text).toContain('📎 #meme')
+    const inc = view.buttons.flat().find((b) => b.data === callbackData.extras(chatId, 'maxinc'))
+    const del0 = view.buttons.flat().find((b) => b.data === callbackData.extras(chatId, 'del', '0'))
+    expect(inc?.text).toBe('+')
+    expect(del0?.text).toBe('1 🗑')
+  })
+
+  it('empty state offers add + back only', () => {
+    const view = extrasEditor(uk, chatId, [], 3, 0)
+    const add = view.buttons.flat().find((b) => b.data === callbackData.extras(chatId, 'addc'))
+    expect(add).toBeTruthy()
   })
 })
