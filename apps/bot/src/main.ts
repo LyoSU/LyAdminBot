@@ -6,12 +6,13 @@
 import { BotKeyboard, Chat, User, html, type Message } from '@mtcute/node'
 import {
   evaluateMessage, tallyVotes, extractBioSignals, isEnforcementAction,
+  shouldAutoLearn, autoLearnSource,
   type EvaluationInput, type ForwardOrigin, type PipelinePorts,
   type UserSnapshot, type Verdict, type VoteBallot
 } from '@lyadmin/core'
 import {
   TelegramGateway, applyVerdict, buildUserSnapshot, normalizeMessage,
-  fetchUserProfile, downloadPhotoBase64, downloadAvatarBase64, downloadStoriesBase64,
+  fetchUserProfile, downloadPhotoBase64, downloadAvatarBase64, downloadStoriesBase64, rawPhotoToBase64,
   fetchExternalBan, needsExternalRecheck, resolveMentionKinds,
   type IncomingMessage
 } from '@lyadmin/adapters'
@@ -322,6 +323,25 @@ const shouldWarnMissingRights = (chatId: number, errors: string[]): boolean => {
  * remove the message, mute the author, learn the signature so the same
  * text is caught automatically next time.
  */
+/**
+ * Learn from a confident automatic verdict. Stored as `candidate`, never
+ * `confirmed`: a self-learned signature should raise a signal on the next
+ * occurrence, not decide on its own. Human confirmation still comes from votes.
+ *
+ * The eligibility rule lives in @lyadmin/core (`shouldAutoLearn`) so it can be
+ * tested — poisoning this store would silently delete innocent messages.
+ */
+const learnFromAutoVerdict = async (verdict: Verdict, text: string): Promise<void> => {
+  if (!shouldAutoLearn(verdict, text)) return
+  const learnText = text.trim()
+  const source = autoLearnSource(verdict)
+  await signaturePort.learn(learnText, source, 'candidate')
+    .catch(() => { /* learning is best-effort — never block moderation */ })
+  await vectorPort?.learn(learnText, source)
+    .catch(() => { /* best-effort */ })
+  log.debug('auto_learned', { decidedBy: verdict.decidedBy, reason: verdict.reasonCode })
+}
+
 const enforceVoteSpam = async (vote: {
   chatId: number
   messageId: number
@@ -861,6 +881,7 @@ const extractJoiners = async (message: Message): Promise<User[]> => {
 const avatarCache = new Map<number, { base64: string | null; expiresAt: number }>()
 const AVATAR_CACHE_TTL_MS = 6 * 60 * 60 * 1000
 const AVATAR_CACHE_MAX = 2000
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024
 
 /**
  * Stories are a user-only MTProto surface: on a bot account
@@ -1210,7 +1231,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   // Budget calls 2-3: profile enrichment only for newish senders.
   const profile = newish
     ? await fetchUserProfile(gateway.tg, sender.id)
-    : { bio: null, avatars: null, unofficialClientRisk: null, personalChannelId: null }
+    : { bio: null, avatars: null, unofficialClientRisk: null, personalChannelId: null, latestAvatar: null }
 
   // Authoritative chat join time (channels.getParticipant). Only for newish
   // senders — "joined seconds ago then posted" is the pattern it catches, and
@@ -1265,7 +1286,14 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     if (cached && cached.expiresAt > Date.now()) {
       avatarBase64 = cached.base64
     } else {
-      avatarBase64 = await downloadAvatarBase64(gateway.tg, sender.id)
+      // Reuse the photo fetchUserProfile already retrieved. Calling
+      // downloadAvatarBase64 here would repeat photos.getUserPhotos for the
+      // same user inside one evaluation — the source of the flood waits in
+      // production. Fall back to the standalone fetch only if enrichment
+      // failed to produce a photo (e.g. getFullUser errored).
+      avatarBase64 = profile.latestAvatar
+        ? await rawPhotoToBase64(gateway.tg, profile.latestAvatar, AVATAR_MAX_BYTES)
+        : await downloadAvatarBase64(gateway.tg, sender.id)
       pruneExpired(avatarCache, AVATAR_CACHE_MAX)
       avatarCache.set(sender.id, { base64: avatarBase64, expiresAt: Date.now() + AVATAR_CACHE_TTL_MS })
     }
@@ -1400,6 +1428,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       promoInBio: verdict.signals.some((s) => s.name === 'promo_in_bio'),
       personalChannel: input.enrichment.personalChannelId !== null
     }))
+    void learnFromAutoVerdict(verdict, normalized.text)
     // Forwarded spam builds the long-term reputation of its origin.
     if (normalized.forward) {
       rememberForward(chat.id, message.id, normalized.forward)

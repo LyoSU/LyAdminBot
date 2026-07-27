@@ -13,6 +13,16 @@ export interface UserProfileEnrichment {
   unofficialClientRisk: boolean | null
   /** userFull.personal_channel_id — a channel linked on the profile (promo vector). */
   personalChannelId: number | null
+  /**
+   * The newest avatar, already fetched by the photos.getUserPhotos call below.
+   *
+   * Handing it back matters: the caller used to follow this function with
+   * `downloadAvatarBase64`, which issued a SECOND photos.getUserPhotos for the
+   * same user while evaluating one message. Production logs showed the
+   * predictable result — recurring `photos.getUserPhotos resulted in a flood
+   * wait`, which then stalled moderation for everyone.
+   */
+  latestAvatar: tl.RawPhoto | null
 }
 
 export const fetchUserProfile = async (
@@ -20,7 +30,9 @@ export const fetchUserProfile = async (
   userId: number,
   nowUnix = Math.floor(Date.now() / 1000)
 ): Promise<UserProfileEnrichment> => {
-  const result: UserProfileEnrichment = { bio: null, avatars: null, unofficialClientRisk: null, personalChannelId: null }
+  const result: UserProfileEnrichment = {
+    bio: null, avatars: null, unofficialClientRisk: null, personalChannelId: null, latestAvatar: null
+  }
 
   let inputUser: tl.RawInputUser | null = null
   try {
@@ -46,14 +58,16 @@ export const fetchUserProfile = async (
     const photos = await tg.call({
       _: 'photos.getUserPhotos', userId: inputUser, offset: 0, maxId: Long.ZERO, limit: 10
     })
-    const dates = photos.photos
-      .map((p) => (p._ === 'photo' ? p.date : null))
-      .filter((d): d is number => d !== null)
+    const real = photos.photos.filter((p): p is tl.RawPhoto => p._ === 'photo')
+    const dates = real.map((p) => p.date)
     const latest = dates.length > 0 ? Math.max(...dates) : null
     result.avatars = {
       count: photos._ === 'photos.photosSlice' ? photos.count : photos.photos.length,
       latestSetDaysAgo: latest !== null ? Math.max(0, (nowUnix - latest) / 86400) : null
     }
+    // photos.getUserPhotos returns newest-first; keep it so NSFW screening does
+    // not have to ask Telegram for the same list again.
+    result.latestAvatar = real[0] ?? null
   } catch { /* degrade silently */ }
 
   return result
@@ -76,7 +90,7 @@ export const downloadPhotoBase64 = async (
 }
 
 /** Wrap a raw TL photo into a downloadable Photo and return it as base64. */
-const rawPhotoToBase64 = async (
+export const rawPhotoToBase64 = async (
   tg: TelegramClient,
   raw: tl.RawPhoto,
   maxBytes: number
