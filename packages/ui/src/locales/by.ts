@@ -63,6 +63,7 @@ export const by: Locale = {
   actions: {
     captcha: '👋 праверка',
     delete: '🧹 спам выдалены',
+    kick: '🚪 выдалены з чата',
     mute: '🔇 мут',
     ban: '🔨 бан'
   },
@@ -163,7 +164,12 @@ export const by: Locale = {
       edit_injected_promo: 'рэклама ўстаўлена рэдагаваннем',
       moderation_flagged: 'NSFW у тэксце або фота',
       nsfw_avatar: 'NSFW на аватарцы',
-      nsfw_stories: 'NSFW у сторыс'
+      nsfw_stories: 'NSFW у сторыс',
+      promo_in_name: 'рэклама ў імені акаўнта',
+      invisible_in_name: 'нябачныя сімвалы ў імені',
+      signature_candidate_match: 'падобна на вядомы спам',
+      vector_similar_spam: 'семантычна блізка да спаму',
+      bot_mention: 'згадка бота'
     },
     messageTitle: 'Паведамленне:',
     decidedBy: {

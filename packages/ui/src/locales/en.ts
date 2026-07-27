@@ -63,6 +63,7 @@ export const en: Locale = {
   actions: {
     captcha: '👋 checking',
     delete: '🧹 spam removed',
+    kick: '🚪 removed from chat',
     mute: '🔇 muted',
     ban: '🔨 banned'
   },
@@ -163,7 +164,12 @@ export const en: Locale = {
       edit_injected_promo: 'promo inserted by an edit',
       moderation_flagged: 'NSFW text or photo',
       nsfw_avatar: 'NSFW profile photo',
-      nsfw_stories: 'NSFW story'
+      nsfw_stories: 'NSFW story',
+      promo_in_name: 'promo in the account name',
+      invisible_in_name: 'invisible characters in the name',
+      signature_candidate_match: 'resembles known spam',
+      vector_similar_spam: 'semantically close to spam',
+      bot_mention: 'mentions a bot'
     },
     messageTitle: 'The message:',
     decidedBy: {

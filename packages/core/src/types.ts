@@ -210,8 +210,9 @@ export type VerdictAction =
   | 'observe'   // abstain: not enough data, accumulate the session
   | 'captcha'   // soft gate for a suspicious newcomer
   | 'delete'    // delete the message
-  | 'mute'      // mute + delete
-  | 'ban'       // ban + purge messages
+  | 'kick'      // delete + remove from the chat, but they may rejoin
+  | 'mute'      // delete + restrict sending for a fixed window
+  | 'ban'       // delete + ban (timed for newcomers, permanent on hard grounds)
 
 export type DecidedBy =
   | 'custom_rule'
@@ -234,6 +235,11 @@ export interface Verdict {
   action: VerdictAction
   /** Whether to create a community vote event. */
   needsVote: boolean
+  /**
+   * Ban length in seconds when `action === 'ban'`; null means permanent.
+   * Ignored for every other action.
+   */
+  banDurationSeconds: number | null
   decidedBy: DecidedBy
   /** Rule/pattern identifier — feeds the feedback loop. */
   ruleId: string | null

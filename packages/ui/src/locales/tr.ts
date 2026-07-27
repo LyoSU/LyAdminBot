@@ -63,6 +63,7 @@ export const tr: Locale = {
   actions: {
     captcha: '👋 kontrol ediliyor',
     delete: '🧹 spam temizlendi',
+    kick: '🚪 sohbetten çıkarıldı',
     mute: '🔇 susturuldu',
     ban: '🔨 yasaklandı'
   },
@@ -163,7 +164,12 @@ export const tr: Locale = {
       edit_injected_promo: 'düzenlemeyle eklenen reklam',
       moderation_flagged: 'metin veya fotoğrafta NSFW',
       nsfw_avatar: 'NSFW profil fotoğrafı',
-      nsfw_stories: 'NSFW hikaye'
+      nsfw_stories: 'NSFW hikaye',
+      promo_in_name: 'hesap adında reklam',
+      invisible_in_name: 'adda görünmez karakterler',
+      signature_candidate_match: 'bilinen spama benziyor',
+      vector_similar_spam: 'anlamca spama yakın',
+      bot_mention: 'bot bahsi'
     },
     messageTitle: 'Mesaj:',
     decidedBy: {

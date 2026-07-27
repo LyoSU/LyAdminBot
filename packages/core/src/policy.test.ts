@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
-import { decideAction, PRESET_THRESHOLDS, type PolicyInput } from './policy.js'
+import type { StrictnessPreset, VerdictAction } from './types.js'
+import {
+  decideAction, isEnforcementAction, PRESET_THRESHOLDS, TIMED_BAN_SECONDS, type PolicyInput
+} from './policy.js'
 
 const makeInput = (overrides: Partial<PolicyInput> = {}): PolicyInput => ({
   pSpam: 0.5,
@@ -13,9 +16,33 @@ const makeInput = (overrides: Partial<PolicyInput> = {}): PolicyInput => ({
   ...overrides
 })
 
+/**
+ * Severity is declared over the full VerdictAction union, so adding an action
+ * without ranking it fails to compile instead of silently comparing
+ * `undefined` (which the old hand-written object literal did).
+ */
+const SEVERITY: Record<VerdictAction, number> = {
+  none: 0, observe: 1, captcha: 2, delete: 3, kick: 4, mute: 5, ban: 6
+}
+
+const PRESETS: StrictnessPreset[] = ['soft', 'standard', 'strict']
+
+/** Arbitrary policy input — everything except pSpam, which callers vary. */
+const inputArb = fc.record({
+  preset: fc.constantFrom<StrictnessPreset>(...PRESETS),
+  chatKind: fc.constantFrom<'group' | 'discussion'>('group', 'discussion'),
+  captchaEnabled: fc.boolean(),
+  votingEnabled: fc.boolean(),
+  userIsNewish: fc.boolean(),
+  userIsTrusted: fc.boolean(),
+  hasPermanentBanGrounds: fc.boolean()
+})
+
+const pSpamArb = fc.double({ min: 0, max: 1, noNaN: true })
+
 describe('decideAction — standard preset', () => {
   it('clears low-probability messages', () => {
-    expect(decideAction(makeInput({ pSpam: 0.1 }))).toEqual({ action: 'none', needsVote: false })
+    expect(decideAction(makeInput({ pSpam: 0.1 })).action).toBe('none')
   })
 
   it('observes the grey zone without voting noise', () => {
@@ -29,30 +56,69 @@ describe('decideAction — standard preset', () => {
   })
 
   it('never captchas in discussion groups (channel comments)', () => {
-    const d = decideAction(makeInput({ pSpam: 0.5, chatKind: 'discussion' }))
-    expect(d.action).not.toBe('captcha')
+    expect(decideAction(makeInput({ pSpam: 0.5, chatKind: 'discussion' })).action).not.toBe('captcha')
   })
 
   it('never captchas established users', () => {
-    const d = decideAction(makeInput({ pSpam: 0.5, userIsNewish: false }))
-    expect(d.action).toBe('observe')
+    expect(decideAction(makeInput({ pSpam: 0.5, userIsNewish: false })).action).toBe('observe')
   })
 
   it('deletes with a vote in the delete band', () => {
-    expect(decideAction(makeInput({ pSpam: 0.7 }))).toEqual({ action: 'delete', needsVote: true })
+    const d = decideAction(makeInput({ pSpam: 0.7 }))
+    expect(d.action).toBe('delete')
+    expect(d.needsVote).toBe(true)
   })
 
   it('deletes without vote when voting is disabled', () => {
-    expect(decideAction(makeInput({ pSpam: 0.7, votingEnabled: false }))).toEqual({ action: 'delete', needsVote: false })
+    const d = decideAction(makeInput({ pSpam: 0.7, votingEnabled: false }))
+    expect(d.action).toBe('delete')
+    expect(d.needsVote).toBe(false)
+  })
+
+  it('kicks a newcomer between the delete and mute bands', () => {
+    const d = decideAction(makeInput({ pSpam: 0.8 }))
+    expect(d.action).toBe('kick')
+    expect(d.needsVote).toBe(true)
+  })
+
+  it('does not kick an account with local standing — deletes instead', () => {
+    expect(decideAction(makeInput({ pSpam: 0.8, userIsNewish: false })).action).toBe('delete')
   })
 
   it('mutes in the mute band', () => {
-    expect(decideAction(makeInput({ pSpam: 0.88 })).action).toBe('mute')
+    expect(decideAction(makeInput({ pSpam: 0.9 })).action).toBe('mute')
   })
 
   it('bans only newish users; mutes established ones at the same pSpam', () => {
     expect(decideAction(makeInput({ pSpam: 0.97 })).action).toBe('ban')
     expect(decideAction(makeInput({ pSpam: 0.97, userIsNewish: false })).action).toBe('mute')
+  })
+})
+
+describe('decideAction — ban duration', () => {
+  it('bans on our own score are timed, so a false positive heals itself', () => {
+    const d = decideAction(makeInput({ pSpam: 0.97 }))
+    expect(d.action).toBe('ban')
+    expect(d.banDurationSeconds).toBe(TIMED_BAN_SECONDS)
+  })
+
+  it('bans on hard external grounds are permanent', () => {
+    const d = decideAction(makeInput({ pSpam: 0.97, hasPermanentBanGrounds: true }))
+    expect(d.action).toBe('ban')
+    expect(d.banDurationSeconds).toBeNull()
+  })
+
+  it('the timed ban outlasts a campaign but expires within months', () => {
+    const days = TIMED_BAN_SECONDS / 86_400
+    expect(days).toBeGreaterThanOrEqual(7)
+    expect(days).toBeLessThanOrEqual(90)
+  })
+
+  it('property: only a ban ever carries a duration', () => {
+    fc.assert(fc.property(pSpamArb, inputArb, (pSpam, rest) => {
+      const d = decideAction({ ...rest, pSpam })
+      return d.action === 'ban' || d.banDurationSeconds === null
+    }))
   })
 })
 
@@ -70,9 +136,32 @@ describe('decideAction — presets', () => {
   it('thresholds are strictly ordered for every preset', () => {
     for (const t of Object.values(PRESET_THRESHOLDS)) {
       expect(t.ban).toBeGreaterThan(t.mute)
-      expect(t.mute).toBeGreaterThan(t.delete)
+      expect(t.mute).toBeGreaterThan(t.kick)
+      expect(t.kick).toBeGreaterThan(t.delete)
       expect(t.delete).toBeGreaterThan(t.grey)
     }
+  })
+
+  it('every preset threshold is a probability', () => {
+    for (const t of Object.values(PRESET_THRESHOLDS)) {
+      for (const value of Object.values(t)) {
+        expect(value).toBeGreaterThan(0)
+        expect(value).toBeLessThanOrEqual(1)
+      }
+    }
+  })
+
+  it('property: strict is never gentler than standard, standard never gentler than soft', () => {
+    fc.assert(fc.property(pSpamArb, inputArb, (pSpam, rest) => {
+      const at = (preset: StrictnessPreset): number =>
+        SEVERITY[decideAction({ ...rest, pSpam, preset }).action]
+      return at('strict') >= at('standard') && at('standard') >= at('soft')
+    }))
+  })
+
+  it('an unknown preset falls back to standard rather than clearing the message', () => {
+    const rogue = decideAction(makeInput({ pSpam: 0.97, preset: 'nonsense' as StrictnessPreset }))
+    expect(rogue).toEqual(decideAction(makeInput({ pSpam: 0.97, preset: 'standard' })))
   })
 })
 
@@ -83,29 +172,105 @@ describe('decideAction — safety invariants', () => {
     expect(d.needsVote).toBe(true)
   })
 
-  it('property: action severity is monotonic in pSpam', () => {
-    const severity = { none: 0, observe: 1, captcha: 2, delete: 3, mute: 4, ban: 5 }
-    fc.assert(
-      fc.property(
-        fc.double({ min: 0, max: 1, noNaN: true }),
-        fc.double({ min: 0, max: 1, noNaN: true }),
-        (a, b) => {
-          const [lo, hi] = a <= b ? [a, b] : [b, a]
-          const dLo = decideAction(makeInput({ pSpam: lo }))
-          const dHi = decideAction(makeInput({ pSpam: hi }))
-          return severity[dHi.action] >= severity[dLo.action]
+  it('property: a trusted user is never punished beyond delete', () => {
+    fc.assert(fc.property(pSpamArb, inputArb, (pSpam, rest) => {
+      const d = decideAction({ ...rest, pSpam, userIsTrusted: true })
+      return SEVERITY[d.action] <= SEVERITY['delete']
+    }))
+  })
+
+  it('property: an account with local standing is never kicked or banned', () => {
+    fc.assert(fc.property(pSpamArb, inputArb, (pSpam, rest) => {
+      const d = decideAction({ ...rest, pSpam, userIsNewish: false })
+      return d.action !== 'ban' && d.action !== 'kick'
+    }))
+  })
+
+  it('property: voting is only ever requested for delete or kick', () => {
+    fc.assert(fc.property(pSpamArb, inputArb, (pSpam, rest) => {
+      const d = decideAction({ ...rest, pSpam })
+      return !d.needsVote || d.action === 'delete' || d.action === 'kick'
+    }))
+  })
+
+  it('property: voting disabled means no vote is ever requested', () => {
+    fc.assert(fc.property(pSpamArb, inputArb, (pSpam, rest) => {
+      return !decideAction({ ...rest, pSpam, votingEnabled: false }).needsVote
+    }))
+  })
+
+  it('property: confident verdicts do not ask the chat (except the trusted cap)', () => {
+    fc.assert(fc.property(pSpamArb, inputArb, (pSpam, rest) => {
+      const d = decideAction({ ...rest, pSpam, userIsTrusted: false })
+      const t = PRESET_THRESHOLDS[rest.preset]
+      return !d.needsVote || pSpam < t.mute
+    }))
+  })
+
+  it('property: action severity is monotonic in pSpam for any configuration', () => {
+    fc.assert(fc.property(pSpamArb, pSpamArb, inputArb, (a, b, rest) => {
+      const [lo, hi] = a <= b ? [a, b] : [b, a]
+      const sLo = SEVERITY[decideAction({ ...rest, pSpam: lo }).action]
+      const sHi = SEVERITY[decideAction({ ...rest, pSpam: hi }).action]
+      return sHi >= sLo
+    }))
+  })
+
+  it.each([
+    ['NaN', Number.NaN], ['-Infinity', -Infinity], ['Infinity', Infinity],
+    ['below range', -0.1], ['above range', 1.1], ['far above range', 5]
+  ])('degenerate pSpam (%s) fails safe to observe, never to enforcement', (_label, pSpam) => {
+    const d = decideAction(makeInput({ pSpam }))
+    expect(d.action).toBe('observe')
+    expect(d.needsVote).toBe(false)
+    expect(d.banDurationSeconds).toBeNull()
+  })
+
+  it('property: any non-finite or out-of-range pSpam observes', () => {
+    fc.assert(fc.property(fc.double(), inputArb, (pSpam, rest) => {
+      const d = decideAction({ ...rest, pSpam })
+      if (Number.isFinite(pSpam) && pSpam >= 0 && pSpam <= 1) return true
+      return d.action === 'observe'
+    }))
+  })
+
+  it('every action the policy can return is classified as enforcing or not', () => {
+    // ENFORCEMENT_ACTIONS is consulted by the soft-shape guard, the executor
+    // and the conversation-window bookkeeping. An action missing from it is
+    // treated as harmless everywhere — silently, and only in production.
+    const reachable = new Set<VerdictAction>()
+    for (const preset of PRESETS) {
+      for (const p of [0, 0.3, 0.5, 0.65, 0.8, 0.9, 0.99]) {
+        for (const newish of [true, false]) {
+          for (const trusted of [true, false]) {
+            reachable.add(decideAction(makeInput({
+              pSpam: p, preset, userIsNewish: newish, userIsTrusted: trusted
+            })).action)
+          }
         }
-      )
-    )
-  })
-
-  it('property: never throws on degenerate pSpam', () => {
-    for (const p of [0, 1, -0.1, 1.1, Number.NaN]) {
-      expect(() => decideAction(makeInput({ pSpam: p }))).not.toThrow()
+      }
     }
+    const nonEnforcing: VerdictAction[] = ['none', 'observe', 'captcha']
+    for (const action of reachable) {
+      const classified = isEnforcementAction(action) || nonEnforcing.includes(action)
+      expect(classified, `${action} is unclassified`).toBe(true)
+    }
+    // The ladder must actually be reachable, or this test proves nothing.
+    expect([...reachable].sort()).toEqual(
+      ['ban', 'captcha', 'delete', 'kick', 'mute', 'none', 'observe'])
   })
 
-  it('NaN pSpam fails safe to observe', () => {
-    expect(decideAction(makeInput({ pSpam: Number.NaN })).action).toBe('observe')
+  it('boundaries: a threshold value itself triggers its action', () => {
+    for (const preset of PRESETS) {
+      const t = PRESET_THRESHOLDS[preset]
+      const at = (pSpam: number): VerdictAction =>
+        decideAction(makeInput({ pSpam, preset })).action
+      expect(at(t.ban), `${preset} ban`).toBe('ban')
+      expect(at(t.mute), `${preset} mute`).toBe('mute')
+      expect(at(t.kick), `${preset} kick`).toBe('kick')
+      expect(at(t.delete), `${preset} delete`).toBe('delete')
+      // Just under the delete bar must not delete.
+      expect(SEVERITY[at(t.delete - 1e-9)]).toBeLessThan(SEVERITY['delete'])
+    }
   })
 })

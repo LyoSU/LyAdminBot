@@ -25,7 +25,10 @@ export interface ModerationActions {
   deleteMessage(chatId: number, messageId: number): Promise<void>
   /** Restrict sending for the given duration. */
   mute(chatId: number, userId: number, untilSeconds: number): Promise<void>
-  ban(chatId: number, userId: number): Promise<void>
+  /** Remove from the chat without blocking a rejoin (ban immediately undone). */
+  kick(chatId: number, userId: number): Promise<void>
+  /** Ban for `untilSeconds`, or permanently when null. */
+  ban(chatId: number, userId: number, untilSeconds: number | null): Promise<void>
 }
 
 export interface ExecutionResult {
@@ -78,12 +81,12 @@ export const applyVerdict = async (
 
   if (verdict.action === 'none' || verdict.action === 'observe') return result
 
-  for (const [guard, active] of Object.entries(guards)) {
-    if (active) {
-      result.skippedReason = guard
-      return result
-    }
-  }
+  // Checked explicitly rather than by iterating Object.entries(guards): with
+  // the loop, any non-boolean field later added to ExecutionGuards would have
+  // silently become a truthy guard that blocks all moderation.
+  if (guards.senderIsAdmin) { result.skippedReason = 'senderIsAdmin'; return result }
+  if (guards.senderIsSelf) { result.skippedReason = 'senderIsSelf'; return result }
+  if (guards.senderIsTrusted) { result.skippedReason = 'senderIsTrusted'; return result }
 
   const attempt = async (label: string, call: () => Promise<void>): Promise<boolean> => {
     try {
@@ -108,6 +111,11 @@ export const applyVerdict = async (
         actions.deleteMessage(target.chatId, target.messageId))
       return result
     }
+    case 'kick': {
+      await attempt('delete', () => actions.deleteMessage(target.chatId, target.messageId))
+      result.applied = await attempt('kick', () => actions.kick(target.chatId, target.userId))
+      return result
+    }
     case 'mute': {
       await attempt('delete', () => actions.deleteMessage(target.chatId, target.messageId))
       result.applied = await attempt('mute', () =>
@@ -116,7 +124,8 @@ export const applyVerdict = async (
     }
     case 'ban': {
       await attempt('delete', () => actions.deleteMessage(target.chatId, target.messageId))
-      result.applied = await attempt('ban', () => actions.ban(target.chatId, target.userId))
+      result.applied = await attempt('ban', () =>
+        actions.ban(target.chatId, target.userId, verdict.banDurationSeconds))
       return result
     }
   }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import type { Signal } from './types.js'
-import { scoreSignals, SIGNAL_WEIGHTS, BASE_RATE_BIAS } from './score.js'
+import { scoreSignals, hasDecisiveSignal, SIGNAL_GROUP_CAPS, SIGNAL_WEIGHTS, BASE_RATE_BIAS } from './score.js'
 
 describe('scoreSignals', () => {
   it('returns the base rate for an empty signal list', () => {
@@ -41,12 +41,132 @@ describe('scoreSignals', () => {
     expect(pSpam).toBeLessThan(0.85)
   })
 
+  // Tolerating an unknown name keeps a typo from crashing moderation. The
+  // danger is the opposite direction — a signal the pipeline really produces
+  // being silently worth nothing — and that is guarded by signal-registry.test.ts.
   it('unknown signal names contribute zero weight', () => {
     const base = scoreSignals([{ name: 'external_url' }]).pSpam
     const withUnknown = scoreSignals([{ name: 'external_url' }, { name: 'totally_unknown_signal' }]).pSpam
     expect(withUnknown).toBeCloseTo(base, 10)
   })
 
+  it('knowledge-port matches actually move the score', () => {
+    // These four were weightless until 2026-07-27: the bot paid for the
+    // lookups and then discarded the answers.
+    const base = scoreSignals([]).pSpam
+    for (const name of [
+      'moderation_flagged', 'signature_candidate_match', 'vector_similar_spam', 'bot_mention'
+    ]) {
+      expect(scoreSignals([{ name }]).pSpam, name).toBeGreaterThan(base)
+    }
+  })
+})
+
+describe('scoreSignals — NSFW calibration (2026-07-27)', () => {
+  // Standard preset acts at delete 0.60 / kick 0.75 / mute 0.88 / ban 0.95.
+  const KICK_BAR = 0.75
+  const MUTE_BAR = 0.88
+
+  const newcomerStack: Signal[] = [
+    { name: 'new_in_chat' }, { name: 'new_globally' }, { name: 'just_joined' },
+    { name: 'fresh_account' }, { name: 'avatar_recently_set' }
+  ]
+
+  it('an NSFW avatar alone is nowhere near an action', () => {
+    expect(scoreSignals([{ name: 'nsfw_avatar' }]).pSpam).toBeLessThan(0.35)
+  })
+
+  it('REGRESSION: avatar + every newcomer signal cannot reach kick, let alone ban', () => {
+    // The exact stack that produced permanent bans: a first-time poster who
+    // joined seconds ago, on a young account, with a flagged avatar. At the
+    // old weight of 2.5, and with newness uncapped, this reached 0.98 — a
+    // ban. It must now land in LLM territory, and since every one of these
+    // signals is soft-shape the pipeline cannot enforce on it at all.
+    const { pSpam } = scoreSignals([{ name: 'nsfw_avatar' }, ...newcomerStack])
+    expect(pSpam).toBeLessThan(KICK_BAR)
+    expect(hasDecisiveSignal([{ name: 'nsfw_avatar' }, ...newcomerStack])).toBe(false)
+  })
+
+  it('REGRESSION: being new is not itself an offence', () => {
+    // Five correlated restatements of "this account is new" used to sum to
+    // 3.8 — heavier than a Telegram scam flag — putting an ordinary first
+    // post at 0.83 before any content was considered.
+    const { pSpam, cappedGroups } = scoreSignals(newcomerStack)
+    expect(pSpam).toBeLessThan(0.6)
+    expect(cappedGroups).toContain('newness')
+  })
+
+  it('adding a porn avatar to a newcomer does not double the punishment', () => {
+    const plain = scoreSignals(newcomerStack).pSpam
+    const withAvatar = scoreSignals([{ name: 'nsfw_avatar' }, ...newcomerStack]).pSpam
+    expect(withAvatar).toBeGreaterThan(plain)
+    expect(withAvatar).toBeLessThan(MUTE_BAR)
+  })
+
+  it('profile media never outweighs actual message evidence', () => {
+    const profile = scoreSignals([{ name: 'nsfw_avatar' }, { name: 'nsfw_stories' }]).pSpam
+    const content = scoreSignals([{ name: 'hidden_url' }]).pSpam
+    expect(content).toBeGreaterThan(profile)
+  })
+
+  it('name promo is weighted above bio promo — it is far harder to do by accident', () => {
+    expect(SIGNAL_WEIGHTS['promo_in_name'] ?? 0).toBeGreaterThan(SIGNAL_WEIGHTS['promo_in_bio'] ?? 0)
+  })
+})
+
+describe('scoreSignals — group ceilings', () => {
+  it('restating the same fact stops paying after the ceiling', () => {
+    const { cappedGroups } = scoreSignals([
+      { name: 'external_ban' }, { name: 'external_repeat_offender' }, { name: 'fresh_external_ban' }
+    ])
+    expect(cappedGroups).toContain('external_ban_source')
+  })
+
+  it('one strong signal is never weakened by its own group', () => {
+    // The ceiling must clamp a stack, never a lone member.
+    for (const group of SIGNAL_GROUP_CAPS) {
+      for (const member of group.members) {
+        const weight = SIGNAL_WEIGHTS[member] ?? 0
+        expect(weight, `${member} exceeds its own group ceiling`).toBeLessThanOrEqual(group.cap)
+        expect(scoreSignals([{ name: member }]).cappedGroups).toEqual([])
+      }
+    }
+  })
+
+  it('groups do not overlap — a signal capped twice would be double-discounted', () => {
+    const seen = new Set<string>()
+    for (const group of SIGNAL_GROUP_CAPS) {
+      for (const member of group.members) {
+        expect(seen.has(member), `${member} is in two groups`).toBe(false)
+        seen.add(member)
+      }
+    }
+  })
+
+  it('every group member is a real, positively-weighted signal', () => {
+    for (const group of SIGNAL_GROUP_CAPS) {
+      for (const member of group.members) {
+        expect(SIGNAL_WEIGHTS[member], `${member} in group ${group.name}`).toBeDefined()
+        expect(SIGNAL_WEIGHTS[member] ?? 0).toBeGreaterThan(0)
+      }
+    }
+  })
+
+  it('trust signals are never capped (a ceiling could only make us harsher)', () => {
+    const trustNames = Object.keys(SIGNAL_WEIGHTS).filter((n) => (SIGNAL_WEIGHTS[n] ?? 0) < 0)
+    const grouped = new Set(SIGNAL_GROUP_CAPS.flatMap((g) => [...g.members]))
+    for (const name of trustNames) expect(grouped.has(name), name).toBe(false)
+  })
+
+  it('capping never turns a spam stack clean', () => {
+    const hard = scoreSignals([
+      { name: 'scam_flag' }, { name: 'external_ban' }, { name: 'private_invite_link' }
+    ])
+    expect(hard.pSpam).toBeGreaterThan(0.9)
+  })
+})
+
+describe('scoreSignals — algebra', () => {
   it('duplicate signals are counted once', () => {
     const once = scoreSignals([{ name: 'phone_number' }]).pSpam
     const twice = scoreSignals([{ name: 'phone_number' }, { name: 'phone_number' }]).pSpam

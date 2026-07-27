@@ -11,18 +11,8 @@
  * deterministic action — it only matters stacked with newness in the score.
  */
 import type { Signal } from '../types.js'
-import { classifyUrl } from './urls.js'
+import { classifyUrl, URL_TOKEN_REGEX, PROMO_URL_KINDS } from './urls.js'
 import { PHONE_REGEX, CASHTAG_REGEX } from './message.js'
-
-// URL-ish tokens in free text: scheme URLs, t.me/telegram links, or bare
-// host(/path) like "yuri.ly" / "telegra.ph/x". Case-insensitive, global.
-const URL_TOKEN_REGEX =
-  /(?:https?:\/\/\S+|(?:t|telegram)\.me\/\S+|[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)+(?:\/\S*)?)/gi
-
-/** Promo-bearing URL classes (a plain telegram profile/internal link is not). */
-const PROMO_URL_KINDS = new Set([
-  'private_invite', 'bot_deeplink', 'shortener', 'messenger_contact', 'external'
-])
 
 export const extractBioSignals = (bio: string | null | undefined): Signal[] => {
   if (!bio || bio.trim().length === 0) return []

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import fc from 'fast-check'
 import type { UserSnapshot } from '../types.js'
 import { extractUserSignals } from './user.js'
 
@@ -107,6 +108,50 @@ describe('extractUserSignals — suspicious', () => {
     expect(names(makeUser({ reputationStatus: 'restricted' }))).toContain('low_reputation')
   })
 
+  it('flags promo carried in the display name', () => {
+    expect(names(makeUser({ displayName: 'Заробіток t.me/+abcdef' }))).toContain('promo_in_name')
+    expect(names(makeUser({ displayName: 'Крипта bit.ly/xyz' }))).toContain('promo_in_name')
+    expect(names(makeUser({ displayName: 'Пиши @spamchannel' }))).toContain('promo_in_name')
+    expect(names(makeUser({ displayName: 'Магазин shop.example/sale' }))).toContain('promo_in_name')
+  })
+
+  it('does not mistake an ordinary name for promo', () => {
+    for (const displayName of [
+      'Someone', 'Іван Петренко', 'Anna 🌸', 'Dr. O\'Brien', 'вова', 'x_y',
+      'Марія | Київ', 'user.name', 'Ann-Marie', '田中太郎'
+    ]) {
+      expect(names(makeUser({ displayName })), displayName).not.toContain('promo_in_name')
+    }
+  })
+
+  it('duplicating your OWN handle into your name is not promo', () => {
+    expect(names(makeUser({ username: 'someone', displayName: 'Someone @someone' })))
+      .not.toContain('promo_in_name')
+    // …but advertising a DIFFERENT handle is.
+    expect(names(makeUser({ username: 'someone', displayName: 'Someone @otherchan' })))
+      .toContain('promo_in_name')
+  })
+
+  it('carries the offending fragment as evidence', () => {
+    const signal = extractUserSignals(makeUser({ displayName: 'Робота t.me/+jobs' }))
+      .find((s) => s.name === 'promo_in_name')
+    expect(signal?.evidence).toContain('t.me/+jobs')
+  })
+
+  it('flags invisible characters used to disguise a display name', () => {
+    expect(names(makeUser({ displayName: 'Ад​мін' }))).toContain('invisible_in_name')
+    expect(names(makeUser({ displayName: 'name‮gnp.exe' }))).toContain('invisible_in_name')
+    expect(names(makeUser({ displayName: 'Someone' }))).not.toContain('invisible_in_name')
+  })
+
+  it('does not flag emoji sequences or bidirectional names as invisible-char evasion', () => {
+    // ZWJ family emoji and the LTR/RTL *marks* are legitimate; only padding
+    // and the bidi overrides are evasion.
+    for (const displayName of ['👨‍👩‍👧', 'עברית‏שלום', 'ناصر‎']) {
+      expect(names(makeUser({ displayName })), displayName).not.toContain('invisible_in_name')
+    }
+  })
+
   it('flags a freshly set avatar only for locally-new users', () => {
     const fresh = makeUser({ avatars: { count: 1, latestSetDaysAgo: 2 }, localAgeDays: 1, messagesGlobal: 3, messagesInChat: 1 })
     expect(names(fresh)).toContain('avatar_recently_set')
@@ -126,6 +171,37 @@ describe('extractUserSignals — trust (negative)', () => {
     expect(trust(makeUser({ messagesGlobal: 10 }))).not.toContain('established_user')
   })
 
+  it('REGRESSION: standing does not require a reputation score nothing writes', () => {
+    // v2 never writes reputation.score, so it is always the default 50. The
+    // old `>= 60` condition therefore made this signal — and every clean rule
+    // and trust weight built on it — unreachable for every real user.
+    expect(trust(makeUser({ messagesGlobal: 200, reputationScore: 50 })))
+      .toContain('established_user')
+  })
+
+  it('a hard verdict denies standing however much the account posted', () => {
+    const veteran = { messagesGlobal: 5000, messagesInChat: 900 }
+    const condemned: Partial<UserSnapshot>[] = [
+      { flags: { scam: true, fake: false, restricted: false, verified: false, premium: false, bot: false } },
+      { flags: { scam: false, fake: true, restricted: false, verified: false, premium: false, bot: false } },
+      { externalBan: { banned: true, bannedAt: null, offenses: 1 } },
+      { reputationStatus: 'suspicious' },
+      { reputationStatus: 'restricted' },
+      { restrictionReasons: ['spam'] }
+    ]
+    for (const verdict of condemned) {
+      expect(trust(makeUser({ ...veteran, ...verdict })), JSON.stringify(verdict))
+        .not.toContain('established_user')
+    }
+    // The control: the same veteran without any verdict does earn it.
+    expect(trust(makeUser(veteran))).toContain('established_user')
+  })
+
+  it('an unofficial client does NOT deny standing (it is a heuristic, not a verdict)', () => {
+    expect(trust(makeUser({ messagesGlobal: 5000, unofficialClientRisk: true })))
+      .toContain('established_user')
+  })
+
   it('premium is NOT a trust signal (spammers buy premium)', () => {
     const premium = makeUser({ flags: { scam: false, fake: false, restricted: false, verified: false, premium: true, bot: false } })
     expect(extractUserSignals(premium).every((s) => s.name !== 'premium')).toBe(true)
@@ -137,5 +213,42 @@ describe('extractUserSignals — trust (negative)', () => {
       localAgeDays: null, externalBan: null, avatars: null
     })
     expect(() => extractUserSignals(bare)).not.toThrow()
+  })
+})
+
+describe('extractUserSignals — robustness', () => {
+  // Display names are attacker-controlled and arrive as arbitrary UTF-16,
+  // lone surrogates included. Extraction must degrade, never throw: a crash
+  // here takes down moderation for the whole chat.
+  it('property: survives any display name and username', () => {
+    fc.assert(fc.property(fc.string(), fc.option(fc.string(), { nil: null }), (displayName, username) => {
+      const signals = extractUserSignals(makeUser({ displayName, username }))
+      return Array.isArray(signals) && signals.every((s) => typeof s.name === 'string')
+    }))
+  })
+
+  it('property: never throws on arbitrary unicode, lone surrogates included', () => {
+    // `unit: 'binary'` generates raw UTF-16 code units, so unpaired surrogates
+    // reach the regexes — the shape that has bitten this codebase before.
+    fc.assert(fc.property(fc.string({ unit: 'binary' }), (displayName) => {
+      expect(() => extractUserSignals(makeUser({ displayName }))).not.toThrow()
+    }))
+  })
+
+  it('property: extraction is a pure function of the snapshot', () => {
+    fc.assert(fc.property(fc.string(), fc.integer({ min: 0, max: 10_000 }), (displayName, messagesGlobal) => {
+      const user = makeUser({ displayName, messagesGlobal })
+      const now = 1_780_000_000_000
+      expect(extractUserSignals(user, now)).toEqual(extractUserSignals(user, now))
+    }))
+  })
+
+  it('the global regexes are not left stateful between calls', () => {
+    // URL_TOKEN_REGEX and HANDLE_IN_NAME_REGEX are /g. If a caller ever used
+    // .test() on them, lastIndex would leak and every other call would miss.
+    const promo = makeUser({ displayName: 'Робота t.me/+jobs' })
+    for (let i = 0; i < 5; i += 1) {
+      expect(names(promo), `call ${i}`).toContain('promo_in_name')
+    }
   })
 })

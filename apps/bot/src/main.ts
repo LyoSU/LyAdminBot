@@ -5,7 +5,7 @@
  */
 import { BotKeyboard, Chat, User, html, type Message } from '@mtcute/node'
 import {
-  evaluateMessage, tallyVotes, extractBioSignals,
+  evaluateMessage, tallyVotes, extractBioSignals, isEnforcementAction,
   type EvaluationInput, type ForwardOrigin, type PipelinePorts,
   type UserSnapshot, type Verdict, type VoteBallot
 } from '@lyadmin/core'
@@ -796,7 +796,7 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
       chatId: chat.id, messageId: replied.id, targetUserId: target.id, learnText: fullText
     }, 'admin_report')
     const verdict: Verdict = {
-      pSpam: 0.99, action: 'mute', needsVote: false, decidedBy: 'deterministic',
+      pSpam: 0.99, action: 'mute', needsVote: false, banDurationSeconds: null, decidedBy: 'deterministic',
       ruleId: 'admin_report', signals: [], reasonCode: 'admin_report',
       reasonEvidence: textPreview || null, meta: {}
     }
@@ -860,6 +860,29 @@ const extractJoiners = async (message: Message): Promise<User[]> => {
  */
 const avatarCache = new Map<number, { base64: string | null; expiresAt: number }>()
 const AVATAR_CACHE_TTL_MS = 6 * 60 * 60 * 1000
+const AVATAR_CACHE_MAX = 2000
+
+/**
+ * Stories are a user-only MTProto surface: on a bot account
+ * `stories.getPeerStories` always fails. Probing it once per message of every
+ * newcomer bought nothing but latency, so the first refusal disables it.
+ */
+let storiesSurfaceAvailable = true
+
+/** Evict expired entries once a cache grows past its bound (both are unbounded otherwise). */
+const pruneExpired = (cache: Map<number, { expiresAt: number }>, max: number): void => {
+  if (cache.size <= max) return
+  const now = Date.now()
+  for (const [key, value] of cache) if (value.expiresAt <= now) cache.delete(key)
+  // Still oversized (everything is live): drop oldest-inserted entries, which
+  // Map iteration yields first.
+  if (cache.size > max) {
+    for (const key of cache.keys()) {
+      cache.delete(key)
+      if (cache.size <= max) break
+    }
+  }
+}
 
 /**
  * Early NSFW screen of joiners' avatars — catches porn/escort bots the moment
@@ -867,11 +890,17 @@ const AVATAR_CACHE_TTL_MS = 6 * 60 * 60 * 1000
  * LOGS (moderation is a signal, not a verdict here); the authoritative signal
  * is emitted on the first message. Caches the avatar bytes either way.
  */
+const JOIN_SCREEN_MAX = 10
+
 const screenJoinerAvatars = async (chat: Chat, joiners: User[]): Promise<void> => {
   if (!ports.moderation) return
-  for (const joiner of joiners) {
+  // A bulk add can carry dozens of users; screening all of them sequentially
+  // would stall the update loop and burn a moderation call each. The cap keeps
+  // the join path bounded — the authoritative check still runs per message.
+  for (const joiner of joiners.slice(0, JOIN_SCREEN_MAX)) {
     if (joiner.id === selfId) continue
     const base64 = await downloadAvatarBase64(gateway.tg, joiner.id)
+    pruneExpired(avatarCache, AVATAR_CACHE_MAX)
     avatarCache.set(joiner.id, { base64, expiresAt: Date.now() + AVATAR_CACHE_TTL_MS })
     if (!base64) continue
     try {
@@ -879,7 +908,8 @@ const screenJoinerAvatars = async (chat: Chat, joiners: User[]): Promise<void> =
       if (result?.flagged) {
         log.info('nsfw_avatar_join', {
           chatId: chat.id, chat: chat.title ?? undefined,
-          userId: joiner.id, categories: result.categories
+          userId: joiner.id, categories: result.categories,
+          sexualScore: result.scores['sexual']
         })
       }
     } catch { /* dead key / API error surfaces via the message-path meta log */ }
@@ -1232,10 +1262,24 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   let storyBase64: string[] = []
   if (newish && ports.moderation) {
     const cached = avatarCache.get(sender.id)
-    avatarBase64 = cached && cached.expiresAt > Date.now()
-      ? cached.base64
-      : await downloadAvatarBase64(gateway.tg, sender.id)
-    storyBase64 = await downloadStoriesBase64(gateway.tg, sender.id)
+    if (cached && cached.expiresAt > Date.now()) {
+      avatarBase64 = cached.base64
+    } else {
+      avatarBase64 = await downloadAvatarBase64(gateway.tg, sender.id)
+      pruneExpired(avatarCache, AVATAR_CACHE_MAX)
+      avatarCache.set(sender.id, { base64: avatarBase64, expiresAt: Date.now() + AVATAR_CACHE_TTL_MS })
+    }
+    if (storiesSurfaceAvailable) {
+      storyBase64 = await downloadStoriesBase64(gateway.tg, sender.id)
+      // downloadStoriesBase64 swallows the MTProto refusal and returns [], so
+      // an empty first result is our only evidence the surface is unavailable.
+      // Users legitimately have no stories, hence "probe once, then stop":
+      // worst case we skip a signal that on a bot account never fires anyway.
+      if (storyBase64.length === 0) {
+        storiesSurfaceAvailable = false
+        log.debug('stories_surface_disabled', { userId: sender.id })
+      }
+    }
   }
 
   const input: EvaluationInput = {
@@ -1318,7 +1362,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
 
   // The message joins the chat context only if it stayed in the chat —
   // deleted spam must not poison the window for the next evaluation.
-  const removed = result.applied && (verdict.action === 'delete' || verdict.action === 'mute' || verdict.action === 'ban')
+  const removed = result.applied && isEnforcementAction(verdict.action)
   if (!removed && normalized.text.trim().length > 0) {
     conversationWindow.record(chat.id, {
       authorId: normalized.channelComment ? null : sender.id,

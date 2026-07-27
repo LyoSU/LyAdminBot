@@ -22,15 +22,58 @@ import { extractBioSignals } from './signals/bio.js'
 import { applyDeterministicRules } from './rules.js'
 import { parseCustomRule, customRuleMatches } from './custom-rules.js'
 import { scoreSignals, hasDecisiveSignal } from './score.js'
-import { decideAction, type PolicyDecision } from './policy.js'
+import { decideAction, isEnforcementAction, type PolicyDecision } from './policy.js'
 import { shouldAbstain } from './text/abstain.js'
 
 const LLM_GREY_LOW = 0.35
 const LLM_GREY_HIGH = 0.75
 const SESSION_EVAL_MIN_MESSAGES = 5
 const VECTOR_DECIDE_SIMILARITY = 0.93
+/**
+ * Below this, a nearest-neighbour hit is noise and must not raise a signal.
+ * The port answers with whatever is closest, so without a floor every message
+ * carried `vector_similar_spam` — which (once the signal finally got a weight)
+ * would have added score to everything equally.
+ */
+const VECTOR_SIGNAL_SIMILARITY = 0.85
 const VELOCITY_PSPAM = 0.9
 const CUSTOM_DENY_PSPAM = 0.96
+
+/**
+ * Profile-media NSFW gate. The provider's aggregate `flagged` boolean is
+ * recall-tuned and spans violence/self-harm/graphic categories, so stylised
+ * art — an anime avatar with a weapon or a splash of red — tripped it and,
+ * stacked with ordinary newcomer signals, produced permanent bans on first
+ * messages (2026-07-27 report).
+ *
+ * For a profile picture only one question matters: is this pornography? So we
+ * read the sexual categories' own confidence and require the provider to be
+ * clearly sure, rather than trusting a flag tuned to catch everything.
+ */
+const NSFW_PROFILE_CATEGORIES = ['sexual', 'sexual/minors']
+const NSFW_PROFILE_MIN_SCORE = 0.8
+
+/** Sexual-category confidence above the profile threshold, if any. */
+const nsfwProfileHit = (result: { scores: Record<string, number> } | null): string | null => {
+  if (!result) return null
+  for (const category of NSFW_PROFILE_CATEGORIES) {
+    const score = result.scores[category]
+    if (typeof score === 'number' && score >= NSFW_PROFILE_MIN_SCORE) {
+      return `${category} ${score.toFixed(2)}`
+    }
+  }
+  return null
+}
+
+/**
+ * Grounds for a PERMANENT ban rather than a timed one: the account is
+ * known-bad by someone else's verdict (Telegram's own flags, an external ban
+ * database), not merely scored badly by us. Everything else expires, so a
+ * mistake on our side heals without an admin having to notice it.
+ */
+const PERMANENT_BAN_SIGNALS = new Set([
+  'scam_flag', 'fake_flag', 'external_ban', 'restricted_for_spam'
+])
 
 /** How new does a user have to be for ban-eligibility / captcha gating. */
 const isNewish = (input: EvaluationInput): boolean =>
@@ -61,12 +104,19 @@ const EXEMPT_GLOBAL_MIN = 50
  * port call. "Established regular" must not shield a CAS-banned account or one
  * with prior confirmed spam — that would be the exact hole the threat model
  * (a sold/compromised long-time account) warns about.
+ *
+ * `spamDetections` needs TWO hits, not one (2026-07-27). A single past
+ * detection may itself have been a false positive, and stripping the exempt
+ * on it made every FP permanently compound into the next evaluation. Two
+ * independent detections are a pattern; one is an accusation.
  */
+const HARD_VERDICT_MIN_DETECTIONS = 2
+
 const hasHardAccountVerdict = (u: UserSnapshot, policy: ChatPolicy): boolean =>
   u.flags.scam ||
   u.flags.fake ||
   (policy.externalBanEnabled && u.externalBan?.banned === true) ||
-  u.spamDetections > 0 ||
+  u.spamDetections >= HARD_VERDICT_MIN_DETECTIONS ||
   u.reputationStatus === 'restricted' ||
   u.reputationStatus === 'suspicious' ||
   u.unofficialClientRisk === true ||
@@ -111,13 +161,15 @@ export const evaluateMessage = async (
       captchaEnabled: input.policy.captchaEnabled,
       votingEnabled: input.policy.votingEnabled,
       userIsNewish: isNewish(input),
-      userIsTrusted: isTrusted(input)
+      userIsTrusted: isTrusted(input),
+      hasPermanentBanGrounds: signals.some((s) => PERMANENT_BAN_SIGNALS.has(s.name))
     })
     meta['portErrors'] = portErrors
     return {
       pSpam: draft.pSpam,
       action: policyDecision.action,
       needsVote: policyDecision.needsVote,
+      banDurationSeconds: policyDecision.banDurationSeconds,
       decidedBy: draft.decidedBy,
       ruleId: draft.ruleId,
       signals,
@@ -131,7 +183,7 @@ export const evaluateMessage = async (
     finalize(
       { pSpam: 0, decidedBy, ruleId: null, reasonCode, reasonEvidence: null },
       signals,
-      { action: 'none', needsVote: false }
+      { action: 'none', needsVote: false, banDurationSeconds: null }
     )
 
   // ── 1. gates ────────────────────────────────────────────────────────
@@ -240,7 +292,7 @@ export const evaluateMessage = async (
     return finalize(
       { pSpam: 0, decidedBy: 'abstain', ruleId: null, reasonCode: 'low_information', reasonEvidence: null },
       signals,
-      { action: 'observe', needsVote: false }
+      { action: 'observe', needsVote: false, banDurationSeconds: null }
     )
   }
 
@@ -318,10 +370,12 @@ export const evaluateMessage = async (
           signals
         )
       }
-      signals.push({
-        name: 'vector_similar_spam',
-        evidence: `similarity ${match.similarity.toFixed(2)} (${match.status})`
-      })
+      if (match.similarity >= VECTOR_SIGNAL_SIMILARITY) {
+        signals.push({
+          name: 'vector_similar_spam',
+          evidence: `similarity ${match.similarity.toFixed(2)} (${match.status})`
+        })
+      }
     }
   }
 
@@ -335,21 +389,24 @@ export const evaluateMessage = async (
     // Profile-media NSFW. Avatar/stories are only downloaded for newish
     // senders, so these signals are new-account signals by construction —
     // a porn avatar on a fresh account is the classic escort/promo bot.
+    // Unlike message content, profile media is judged on the sexual
+    // categories' own confidence (see NSFW_PROFILE_MIN_SCORE): an avatar is
+    // not evidence about the message, so it may only nudge, never convict.
     if (input.enrichment.avatarBase64) {
       const avatar = await safe('moderation_avatar', () =>
         ports.moderation!.check('', input.enrichment.avatarBase64))
-      if (avatar?.flagged) {
-        signals.push({ name: 'nsfw_avatar', evidence: avatar.categories.join(', ') })
-      }
+      const hit = nsfwProfileHit(avatar)
+      if (hit !== null) signals.push({ name: 'nsfw_avatar', evidence: hit })
     }
     if (input.enrichment.storyBase64.length > 0) {
-      const flaggedCategories = new Set<string>()
+      const hits = new Set<string>()
       for (const story of input.enrichment.storyBase64) {
         const result = await safe('moderation_story', () => ports.moderation!.check('', story))
-        if (result?.flagged) for (const c of result.categories) flaggedCategories.add(c)
+        const hit = nsfwProfileHit(result)
+        if (hit !== null) hits.add(hit)
       }
-      if (flaggedCategories.size > 0) {
-        signals.push({ name: 'nsfw_stories', evidence: [...flaggedCategories].join(', ') })
+      if (hits.size > 0) {
+        signals.push({ name: 'nsfw_stories', evidence: [...hits].join(', ') })
       }
     }
   }
@@ -413,9 +470,14 @@ export const evaluateMessage = async (
   // (unavailable, unconfigured, or — before this branch — it would have cleared
   // the message and returned above). Never delete/mute/ban on shape alone:
   // downgrade to observe. This is the structural fix for the 2026-06-21 FP.
-  const isEnforcement = (a: VerdictAction): boolean => a === 'delete' || a === 'mute' || a === 'ban'
-  if (!decisive && isEnforcement(verdict.action)) {
-    return { ...verdict, action: 'observe' as VerdictAction, needsVote: false, reasonCode: 'soft_shape_only' }
+  if (!decisive && isEnforcementAction(verdict.action)) {
+    return {
+      ...verdict,
+      action: 'observe' as VerdictAction,
+      needsVote: false,
+      banDurationSeconds: null,
+      reasonCode: 'soft_shape_only'
+    }
   }
 
   // Fail-safe: when the LLM was needed but unavailable (rate limit, outage),

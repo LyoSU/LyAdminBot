@@ -63,6 +63,7 @@ export const ru: Locale = {
   actions: {
     captcha: '👋 проверка',
     delete: '🧹 спам удалён',
+    kick: '🚪 удалён из чата',
     mute: '🔇 мут',
     ban: '🔨 бан'
   },
@@ -163,7 +164,12 @@ export const ru: Locale = {
       edit_injected_promo: 'реклама вставлена редактированием',
       moderation_flagged: 'NSFW в тексте или фото',
       nsfw_avatar: 'NSFW на аватарке',
-      nsfw_stories: 'NSFW в историях'
+      nsfw_stories: 'NSFW в историях',
+      promo_in_name: 'реклама в имени аккаунта',
+      invisible_in_name: 'невидимые символы в имени',
+      signature_candidate_match: 'похоже на известный спам',
+      vector_similar_spam: 'семантически близко к спаму',
+      bot_mention: 'упоминание бота'
     },
     messageTitle: 'Сообщение:',
     decidedBy: {

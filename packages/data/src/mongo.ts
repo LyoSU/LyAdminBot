@@ -469,6 +469,7 @@ export class MongoStore {
       reasonCode: params.verdict.reasonCode,
       signals: params.verdict.signals.map((s) => s.name),
       needsVote: params.verdict.needsVote,
+      banDurationSeconds: params.verdict.banDurationSeconds,
       meta: params.verdict.meta,
       latencyMs: params.latencyMs,
       createdAt: new Date()
@@ -489,6 +490,11 @@ export class MongoStore {
       pSpam: Number(doc['pSpam'] ?? 0),
       action: (doc['action'] ?? 'none') as Verdict['action'],
       needsVote: Boolean(doc['needsVote']),
+      // Rebuilt only for display/override; the ban itself was already applied
+      // when the decision was made, so a missing value is simply "unknown".
+      banDurationSeconds: typeof doc['banDurationSeconds'] === 'number'
+        ? (doc['banDurationSeconds'] as number)
+        : null,
       decidedBy: (doc['decidedBy'] ?? 'error') as Verdict['decidedBy'],
       ruleId: (doc['ruleId'] as string | null) ?? null,
       signals: signalNames.map((n) => ({ name: String(n) })),

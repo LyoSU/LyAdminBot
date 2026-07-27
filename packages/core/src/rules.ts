@@ -31,6 +31,15 @@ const HIGH_RISK_SIGNALS = new Set([
   'forward_hidden_user', 'hidden_url', 'many_url_buttons', 'invisible_in_word'
 ])
 
+/**
+ * Note on `established_user` (2026-07-27): it had been unreachable, because it
+ * required a reputation score that v2 never writes. Making it reachable meant
+ * it would suddenly start shielding accounts from the rules below — including
+ * scam-flagged and externally-banned ones. That is prevented at the source:
+ * `extractUserSignals` refuses to emit `established_user` for an account any
+ * hard verdict already condemns, so no extra guard is needed here.
+ */
+
 export const applyDeterministicRules = (signals: Signal[]): DeterministicVerdict | null => {
   const names = new Set(signals.map((s) => s.name))
   const has = (n: string): boolean => names.has(n)

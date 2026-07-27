@@ -63,6 +63,7 @@ export const uk: Locale = {
   actions: {
     captcha: '👋 перевірка',
     delete: '🧹 спам видалено',
+    kick: '🚪 вилучено з чату',
     mute: '🔇 мут',
     ban: '🔨 бан'
   },
@@ -163,7 +164,12 @@ export const uk: Locale = {
       edit_injected_promo: 'рекламу вставлено редагуванням',
       moderation_flagged: 'NSFW у тексті або фото',
       nsfw_avatar: 'NSFW на аватарці',
-      nsfw_stories: 'NSFW у сторіс'
+      nsfw_stories: 'NSFW у сторіс',
+      promo_in_name: 'реклама в імені акаунта',
+      invisible_in_name: 'невидимі символи в імені',
+      signature_candidate_match: 'схоже на відомий спам',
+      vector_similar_spam: 'семантично близьке до спаму',
+      bot_mention: 'згадка бота'
     },
     messageTitle: 'Повідомлення:',
     decidedBy: {

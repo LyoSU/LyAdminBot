@@ -20,6 +20,20 @@ export interface ClassifiedUrl {
   host: string
 }
 
+/**
+ * URL-ish tokens in free text: scheme URLs, t.me/telegram links, or bare
+ * host(/path) like "yuri.ly" / "telegra.ph/x". Case-insensitive and global,
+ * so callers must use `.match()` (or reset `lastIndex`) — never `.test()`,
+ * which would advance the shared regex state between calls.
+ */
+export const URL_TOKEN_REGEX =
+  /(?:https?:\/\/\S+|(?:t|telegram)\.me\/\S+|[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)+(?:\/\S*)?)/gi
+
+/** URL classes that carry promo intent (a plain telegram profile link does not). */
+export const PROMO_URL_KINDS = new Set<UrlKind>([
+  'private_invite', 'bot_deeplink', 'shortener', 'messenger_contact', 'external'
+])
+
 const TELEGRAM_HOSTS = new Set(['t.me', 'telegram.me', 'telegram.dog'])
 
 const SHORTENER_HOSTS = new Set([

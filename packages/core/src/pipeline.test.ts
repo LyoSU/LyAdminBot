@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   ChatPolicy, Enrichment, EvaluationInput, NormalizedChat, NormalizedMessage, UserSnapshot
 } from './types.js'
-import type { LlmTier, PipelinePorts } from './ports.js'
+import type { LlmTier, ModerationResult, PipelinePorts } from './ports.js'
 import { evaluateMessage } from './pipeline.js'
 
 // ── fixtures ──────────────────────────────────────────────────────────
@@ -57,6 +57,28 @@ const makeInput = (over: {
 })
 
 const newcomer = { messagesInChat: 1, messagesGlobal: 2, localAgeDays: 0, predictedAgeDays: 10 }
+
+/**
+ * A moderation answer. `flagged` defaults to true whenever any score is
+ * present, mirroring the provider: its aggregate flag is recall-tuned and
+ * fires on categories we deliberately ignore for profile media.
+ */
+const modResult = (scores: Record<string, number>, flagged = true): ModerationResult => ({
+  flagged,
+  categories: Object.entries(scores).filter(([, v]) => v >= 0.5).map(([k]) => k),
+  scores
+})
+const modClean: ModerationResult = { flagged: false, categories: [], scores: {} }
+
+/**
+ * Promo-shaped text that deliberately avoids deterministic-rule territory (no
+ * private invite, no scam flag), so the stage under test is the one that
+ * actually decides.
+ */
+const spamText = {
+  text: 'Потрібні люди на склад, оплата щодня, пишіть в особисті',
+  urls: [{ visible: 'https://rabota.example', target: 'https://rabota.example', hidden: false }]
+}
 
 // ── tests ─────────────────────────────────────────────────────────────
 
@@ -165,13 +187,6 @@ describe('evaluateMessage — abstain & session', () => {
 })
 
 describe('evaluateMessage — knowledge ports', () => {
-  // Deliberately avoids deterministic-rule territory (no private invite,
-  // no scam flag) so the knowledge ports actually get to decide.
-  const spamText = {
-    text: 'Потрібні люди на склад, оплата щодня, пишіть в особисті',
-    urls: [{ visible: 'https://rabota.example', target: 'https://rabota.example', hidden: false }]
-  }
-
   it('confirmed signature match decides immediately', async () => {
     const ports: PipelinePorts = {
       signatures: { match: async () => ({ status: 'confirmed', pSpam: 0.96, signatureId: 'sig1' }) }
@@ -219,40 +234,136 @@ describe('evaluateMessage — knowledge ports', () => {
 
   it('moderation flag is a signal, not a decision', async () => {
     const ports: PipelinePorts = {
-      moderation: { check: async () => ({ flagged: true, categories: ['sexual'] }) }
+      moderation: { check: async () => modResult({ sexual: 0.9 }) }
     }
     const v = await evaluateMessage(makeInput({ msg: { text: 'якийсь текст з натяками тут' } }), ports)
     expect(v.signals.some((s) => s.name === 'moderation_flagged')).toBe(true)
   })
 
-  it('flagged avatar raises nsfw_avatar (only when an avatar is provided)', async () => {
-    // Flags only image inputs (no text) — mirrors a clean post + porn avatar.
+  it('weak vector similarity is noise and raises nothing', async () => {
     const ports: PipelinePorts = {
-      moderation: {
-        check: async (text, image) =>
-          !text && image ? { flagged: true, categories: ['sexual'] } : { flagged: false, categories: [] }
-      }
+      vectors: { search: async () => ({ similarity: 0.4, status: 'candidate', vectorId: 'v3' }) }
     }
-    const withAvatar = await evaluateMessage(
-      makeInput({ user: newcomer, enrichment: { avatarBase64: 'ZmFrZQ==' } }), ports)
-    expect(withAvatar.signals.some((s) => s.name === 'nsfw_avatar')).toBe(true)
+    const v = await evaluateMessage(makeInput({ msg: { text: 'нейтральний текст про справи і життя' } }), ports)
+    expect(v.signals.some((s) => s.name === 'vector_similar_spam')).toBe(false)
+  })
+})
 
-    const withoutAvatar = await evaluateMessage(makeInput({ user: newcomer }), ports)
-    expect(withoutAvatar.signals.some((s) => s.name === 'nsfw_avatar')).toBe(false)
+/**
+ * Profile-media NSFW. The 2026-07-27 report: newcomers were permanently banned
+ * on their first message because of an anime avatar. Two independent causes,
+ * both covered here — the provider's recall-tuned `flagged` boolean spanning
+ * violence/self-harm, and the signal being treated as decisive evidence about
+ * a message nobody had read.
+ */
+describe('evaluateMessage — profile NSFW', () => {
+  const avatarPort = (scores: Record<string, number>): PipelinePorts => ({
+    moderation: {
+      // Only the image input is judged; the message text itself is clean.
+      check: async (text, image) => (!text && image ? modResult(scores) : modClean)
+    }
+  })
+  const withAvatar = { user: newcomer, enrichment: { avatarBase64: 'ZmFrZQ==' } }
+
+  it('a clearly pornographic avatar raises nsfw_avatar', async () => {
+    const v = await evaluateMessage(makeInput(withAvatar), avatarPort({ sexual: 0.96 }))
+    expect(v.signals.some((s) => s.name === 'nsfw_avatar')).toBe(true)
   })
 
-  it('any flagged story raises nsfw_stories once', async () => {
+  it('no avatar, no signal', async () => {
+    const v = await evaluateMessage(makeInput({ user: newcomer }), avatarPort({ sexual: 0.96 }))
+    expect(v.signals.some((s) => s.name === 'nsfw_avatar')).toBe(false)
+  })
+
+  it.each([
+    ['anime with a weapon', { violence: 0.93, sexual: 0.11 }],
+    ['stylised gore', { 'violence/graphic': 0.88, sexual: 0.04 }],
+    ['a bleak drawing', { 'self-harm': 0.79, sexual: 0.02 }],
+    ['merely suggestive art', { sexual: 0.55 }],
+    ['just under the bar', { sexual: 0.79 }]
+  ])('%s is flagged by the provider but is NOT nsfw_avatar', async (_label, scores) => {
+    const ports = avatarPort(scores)
+    const v = await evaluateMessage(makeInput(withAvatar), ports)
+    expect(v.signals.some((s) => s.name === 'nsfw_avatar')).toBe(false)
+  })
+
+  it('REGRESSION: an anime avatar never gets a first-time poster banned', async () => {
+    // The exact production shape: joined moments ago, young account, avatar
+    // the provider flags on violence. Previously scored 0.97 → permanent ban.
+    const v = await evaluateMessage(makeInput({
+      user: { ...newcomer, joinedAgoSeconds: 30, predictedAgeDays: 4 },
+      enrichment: { avatarBase64: 'ZmFrZQ==' }
+    }), avatarPort({ violence: 0.95, sexual: 0.08 }))
+
+    expect(v.action).not.toBe('ban')
+    expect(v.action).not.toBe('mute')
+    expect(v.action).not.toBe('kick')
+  })
+
+  it('REGRESSION: even a real porn avatar cannot enforce without reading the text', async () => {
+    // nsfw_avatar is soft-shape: it describes the sender, not the message. With
+    // no LLM available the verdict must fall back to observe, never enforcement.
+    const v = await evaluateMessage(makeInput({
+      user: { ...newcomer, joinedAgoSeconds: 30, predictedAgeDays: 4 },
+      enrichment: { avatarBase64: 'ZmFrZQ==' }
+    }), avatarPort({ sexual: 0.99 }))
+
+    expect(v.signals.some((s) => s.name === 'nsfw_avatar')).toBe(true)
+    expect(v.action).toBe('observe')
+    expect(v.reasonCode).toBe('soft_shape_only')
+  })
+
+  it('a porn avatar DOES escalate to the LLM, which may then convict on the text', async () => {
+    const calls: LlmTier[] = []
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'Приват, інтим послуги, пиши в лічку' },
+      user: { ...newcomer, joinedAgoSeconds: 30 },
+      enrichment: { avatarBase64: 'ZmFrZQ==' }
+    }), {
+      ...avatarPort({ sexual: 0.99 }),
+      llm: {
+        classify: async (_i, tier) => {
+          calls.push(tier)
+          return { pSpam: 0.97, reasonCode: 'escort_promo', evidence: null, cached: false }
+        }
+      }
+    })
+    expect(calls.length).toBeGreaterThan(0)
+    expect(v.decidedBy).toBe('llm')
+    expect(['kick', 'mute', 'ban']).toContain(v.action)
+  })
+
+  it('any pornographic story raises nsfw_stories exactly once', async () => {
     const ports: PipelinePorts = {
       moderation: {
         check: async (_text, image) =>
-          image === 'bad' ? { flagged: true, categories: ['sexual'] } : { flagged: false, categories: [] }
+          image === 'bad' ? modResult({ sexual: 0.95 }) : modClean
       }
     }
     const v = await evaluateMessage(
       makeInput({ user: newcomer, enrichment: { storyBase64: ['ok', 'bad', 'ok'] } }), ports)
     const stories = v.signals.filter((s) => s.name === 'nsfw_stories')
     expect(stories).toHaveLength(1)
-    expect(stories[0]?.evidence).toBe('sexual')
+    expect(stories[0]?.evidence).toContain('sexual')
+  })
+
+  it('violent stories are not NSFW stories', async () => {
+    const ports: PipelinePorts = {
+      moderation: { check: async () => modResult({ violence: 0.97 }) }
+    }
+    const v = await evaluateMessage(
+      makeInput({ user: newcomer, enrichment: { storyBase64: ['a', 'b'] } }), ports)
+    expect(v.signals.some((s) => s.name === 'nsfw_stories')).toBe(false)
+  })
+
+  it('a provider that returns no scores at all never raises a profile signal', async () => {
+    // Defensive: an adapter that forgets to pass scores through must fail
+    // closed (no signal), not fall back to the aggregate `flagged` boolean.
+    const ports: PipelinePorts = {
+      moderation: { check: async () => ({ flagged: true, categories: ['sexual'], scores: {} }) }
+    }
+    const v = await evaluateMessage(makeInput(withAvatar), ports)
+    expect(v.signals.some((s) => s.name === 'nsfw_avatar')).toBe(false)
   })
 })
 
@@ -427,6 +538,73 @@ describe('evaluateMessage — soft-shape-only guard (2026-06-21 FP)', () => {
   })
 })
 
+describe('evaluateMessage — enforcement ladder end to end', () => {
+  const scamNewcomer = {
+    user: {
+      ...newcomer,
+      flags: { scam: true, fake: false, restricted: false, verified: false, premium: false, bot: false }
+    }
+  }
+
+  it('a Telegram scam flag is grounds for a PERMANENT ban', async () => {
+    const v = await evaluateMessage(makeInput(scamNewcomer), {})
+    expect(v.action).toBe('ban')
+    expect(v.banDurationSeconds).toBeNull()
+  })
+
+  it('an externally-banned newcomer is also permanent', async () => {
+    const v = await evaluateMessage(makeInput({
+      user: { ...newcomer, externalBan: { banned: true, bannedAt: null, offenses: 3 } }
+    }), {})
+    expect(v.action).toBe('ban')
+    expect(v.banDurationSeconds).toBeNull()
+  })
+
+  it('a ban resting only on OUR score is timed, so a mistake expires', async () => {
+    // Velocity is our own judgement, not a third party's verdict.
+    const v = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
+      velocity: { check: async () => ({ exceeded: true, evidence: '12 identical messages' }) }
+    })
+    expect(v.decidedBy).toBe('velocity')
+    if (v.action === 'ban') expect(v.banDurationSeconds).toBeGreaterThan(0)
+  })
+
+  it('property: only a ban verdict ever carries a duration', async () => {
+    const cases: Parameters<typeof makeInput>[0][] = [
+      {}, { user: newcomer }, scamNewcomer, { msg: spamText, user: newcomer },
+      { user: { messagesInChat: 200, messagesGlobal: 5000 } }
+    ]
+    for (const input of cases) {
+      const v = await evaluateMessage(makeInput(input), {})
+      if (v.action !== 'ban') expect(v.banDurationSeconds, v.action).toBeNull()
+    }
+  })
+
+  it('kick is reachable for a newcomer whose score lands between delete and mute', async () => {
+    // Driven through the LLM so the score is pinned exactly, independent of
+    // future weight tuning.
+    const v = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
+      llm: { classify: async () => ({ pSpam: 0.8, reasonCode: 'promo', evidence: null, cached: false }) }
+    })
+    expect(v.action).toBe('kick')
+  })
+
+  it('the same score only deletes for someone with local standing', async () => {
+    // Same 0.8 verdict, but the sender has been around: kick and ban are off
+    // the table, so the ladder stops at delete.
+    const v = await evaluateMessage(
+      makeInput({
+        msg: spamText,
+        user: { messagesInChat: 9, messagesGlobal: 49, localAgeDays: 300 },
+        enrichment: { bio: 'Пиши https://promo.example' }
+      }), {
+        llm: { classify: async () => ({ pSpam: 0.8, reasonCode: 'promo', evidence: null, cached: false }) }
+      })
+    expect(v.decidedBy).toBe('llm')
+    expect(v.action).toBe('delete')
+  })
+})
+
 describe('evaluateMessage — established-regular exempt', () => {
   // A message that any newcomer would lose to a confirmed signature match.
   const wouldMatch = {
@@ -470,7 +648,7 @@ describe('evaluateMessage — established-regular exempt', () => {
     const guards: Partial<UserSnapshot>[] = [
       { externalBan: { banned: true, bannedAt: null, offenses: 2 } },
       { flags: { scam: true, fake: false, restricted: false, verified: false, premium: false, bot: false } },
-      { spamDetections: 1 },
+      { spamDetections: 2 },
       { reputationStatus: 'suspicious' },
       { restrictionReasons: ['spam'] }
     ]
@@ -481,6 +659,15 @@ describe('evaluateMessage — established-regular exempt', () => {
       expect(v.decidedBy).toBe('signature')
       expect(v.reasonCode).not.toBe('established_regular')
     }
+  })
+
+  it('ONE past detection does not cancel the exempt — false positives must not compound', async () => {
+    // A single prior detection may itself have been a mistake. Letting it strip
+    // a 900-message regular of the exempt made every FP feed the next one.
+    const v = await evaluateMessage(
+      makeInput({ msg: wouldMatch, user: { messagesInChat: 50, messagesGlobal: 900, spamDetections: 1 } }),
+      confirmedSignature)
+    expect(v.reasonCode).toBe('established_regular')
   })
 
   it('an external ban does NOT cancel exempt when the chat disabled external bans', async () => {

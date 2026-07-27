@@ -4,7 +4,7 @@ import { callbackData, captchaPrompt, compactNotification, langPanel, parseCallb
 import { uk } from './locales/uk.js'
 
 const makeVerdict = (overrides: Partial<Verdict> = {}): Verdict => ({
-  pSpam: 0.93, action: 'mute', needsVote: false, decidedBy: 'llm',
+  pSpam: 0.93, action: 'mute', needsVote: false, banDurationSeconds: null, decidedBy: 'llm',
   ruleId: null, signals: [{ name: 'external_url' }, { name: 'is_reply', negative: true }],
   reasonCode: 'job_scam', reasonEvidence: 'оплата щодня', meta: {},
   ...overrides

@@ -41,8 +41,17 @@ export interface VectorPort {
 }
 
 export interface ModerationResult {
+  /** Provider's own aggregate flag — recall-tuned, so a weak indicator. */
   flagged: boolean
   categories: string[]
+  /**
+   * Per-category confidence, 0..1. The aggregate `flagged` boolean fires on
+   * ANY category above the provider's own (deliberately low) threshold, which
+   * made profile-media screening fire on stylised art holding a weapon. Callers
+   * that need precision must read the score of the categories they care about
+   * instead of trusting `flagged`. Empty when the provider exposes no scores.
+   */
+  scores: Record<string, number>
 }
 
 export interface ModerationPort {

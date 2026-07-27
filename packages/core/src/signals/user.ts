@@ -7,6 +7,7 @@
  * weight below auto-action threshold so policy routes it through vote.
  */
 import type { Signal, UserSnapshot } from '../types.js'
+import { classifyUrl, URL_TOKEN_REGEX, PROMO_URL_KINDS } from './urls.js'
 
 const SLEEPER_GAP_DAYS = 365
 const SLEEPER_LOCAL_MAX_DAYS = 30
@@ -19,10 +20,61 @@ const FRESH_EXTERNAL_BAN_MAX_DAYS = 2
 const MANY_SHARED_CHATS_MIN = 5
 const JUST_JOINED_MAX_SECONDS = 120
 const ESTABLISHED_MIN_MESSAGES = 50
-const ESTABLISHED_MIN_SCORE = 60
 const AVATAR_FRESH_MAX_DAYS = 7
 
 const MS_PER_DAY = 86_400_000
+
+/**
+ * Invisible characters with no legitimate use in a display name. Deliberately
+ * narrow: ZWJ/ZWNJ are excluded (real emoji sequences and Persian/Arabic names
+ * need them) and so are the LTR/RTL *marks* (legitimate in bidirectional
+ * names). What remains is padding and the bidi OVERRIDES, which exist only to
+ * make a name render as something other than what it is.
+ *
+ * Escapes, not literals: invisible characters pasted into source are invisible
+ * to reviewers too, and a stray one would silently widen the class.
+ */
+const INVISIBLE_IN_NAME_REGEX =
+  /[\u2060\u200B\u00AD\uFEFF\u202D\u202E\u180E]/
+
+/** A foreign @handle embedded in a display name (not the user's own). */
+const HANDLE_IN_NAME_REGEX = /@([a-z0-9_]{5,32})\b/gi
+
+/**
+ * Promo carried by the identity itself — "Заробіток 💰 t.me/+abc" as a display
+ * name, or a username-shaped advert. Nobody picks a promo URL as their name by
+ * accident, so precision is high; it is nonetheless a statement about WHO the
+ * sender is, not about the message, so scoring keeps it soft-shape.
+ *
+ * A handle matching the user's OWN username is ignored: duplicating your
+ * handle into your display name is common and harmless.
+ */
+const findNamePromo = (user: UserSnapshot): string | null => {
+  const ownHandle = user.username?.toLowerCase() ?? null
+  for (const field of [user.displayName, user.username]) {
+    if (!field) continue
+
+    for (const token of field.match(URL_TOKEN_REGEX) ?? []) {
+      // t.me/<something> in a NAME is promo even though the same link inside a
+      // message is merely "telegram_internal" — a name is not a place to link.
+      if (/^(?:https?:\/\/)?(?:t|telegram)\.me\//i.test(token)) return token
+      if (!PROMO_URL_KINDS.has(classifyUrl(token).kind)) continue
+      // A BARE host is not enough here. Plenty of real names look like one to
+      // the URL tokenizer — "user.name" and "anna.co" hit live TLDs — and the
+      // cost of that false positive lands on an innocent member. Requiring a
+      // scheme, a path, or a known shortener keeps the precision that makes
+      // this signal worth having.
+      if (/^https?:\/\//i.test(token)) return token
+      if (/^[^/]+\/\S/.test(token)) return token
+      if (classifyUrl(token).kind === 'shortener') return token
+    }
+
+    for (const [, handle] of field.matchAll(HANDLE_IN_NAME_REGEX)) {
+      if (handle && handle.toLowerCase() !== ownHandle) return `@${handle}`
+    }
+  }
+  return null
+}
 
 export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal[] => {
   const signals: Signal[] = []
@@ -103,6 +155,18 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
     })
   }
 
+  // Promo carried in the identity itself. Free (the name arrives with every
+  // update) and high-precision, which is exactly the kind of trigger the
+  // pipeline was missing: until now the profile was only inspected via the
+  // bio, which costs an enrichment call and is often empty.
+  const namePromo = findNamePromo(user)
+  if (namePromo !== null) {
+    signals.push({ name: 'promo_in_name', evidence: `name: ${namePromo}`.slice(0, 80) })
+  }
+  if (INVISIBLE_IN_NAME_REGEX.test(user.displayName)) {
+    signals.push({ name: 'invisible_in_name', evidence: 'invisible chars in display name' })
+  }
+
   // A just-set avatar matters only on a locally-new account (spam farms
   // dress up accounts right before a campaign); established users change
   // avatars as part of normal life.
@@ -144,7 +208,27 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
 
   if (user.flags.verified) signals.push({ name: 'verified_account', negative: true })
   if (user.reputationStatus === 'trusted') signals.push({ name: 'trusted_reputation', negative: true })
-  if (user.messagesGlobal >= ESTABLISHED_MIN_MESSAGES && user.reputationScore >= ESTABLISHED_MIN_SCORE) {
+
+  // Standing is earned by volume. The old form also required
+  // `reputationScore >= 60`, but v2 never WRITES reputation.score (it defaults
+  // to 50 and only v1 documents carry anything else) — so this signal, and
+  // with it every clean rule and trust weight that depends on it, was
+  // unreachable in practice. That silently deleted the whole negative half of
+  // the model and biased the pipeline toward enforcement.
+  //
+  // Volume now suffices, but ONLY absent a hard verdict. This veto is the
+  // single place that decision is made: the deterministic rules and the score
+  // both treat `established_user` as a shield, so an account Telegram or an
+  // external database has already condemned must never earn it. That is the
+  // sold/compromised long-time account from the threat model.
+  const hasHardVerdict =
+    user.flags.scam ||
+    user.flags.fake ||
+    user.externalBan?.banned === true ||
+    user.reputationStatus === 'suspicious' ||
+    user.reputationStatus === 'restricted' ||
+    user.restrictionReasons.some((r) => /spam|scam/i.test(r))
+  if (user.messagesGlobal >= ESTABLISHED_MIN_MESSAGES && !hasHardVerdict) {
     signals.push({ name: 'established_user', negative: true })
   }
 

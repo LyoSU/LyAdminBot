@@ -3,7 +3,7 @@ import type { Verdict } from '@lyadmin/core'
 import { applyVerdict, withFloodWait, type ModerationActions } from './executor.js'
 
 const makeVerdict = (overrides: Partial<Verdict> = {}): Verdict => ({
-  pSpam: 0.9, action: 'delete', needsVote: false, decidedBy: 'llm',
+  pSpam: 0.9, action: 'delete', needsVote: false, banDurationSeconds: null, decidedBy: 'llm',
   ruleId: null, signals: [], reasonCode: 'job_scam', reasonEvidence: null, meta: {},
   ...overrides
 })
@@ -17,6 +17,7 @@ const makeActions = (): ModerationActions & { calls: string[] } => {
     calls,
     deleteMessage: vi.fn(async () => { calls.push('delete') }),
     mute: vi.fn(async () => { calls.push('mute') }),
+    kick: vi.fn(async () => { calls.push('kick') }),
     ban: vi.fn(async () => { calls.push('ban') })
   }
 }
@@ -44,10 +45,42 @@ describe('applyVerdict', () => {
     expect(actions.calls).toEqual(['delete', 'mute'])
   })
 
+  it('kick deletes and removes, leaving the door open', async () => {
+    const actions = makeActions()
+    const result = await applyVerdict(makeVerdict({ action: 'kick' }), target, noGuards, actions)
+    expect(result.applied).toBe(true)
+    expect(actions.calls).toEqual(['delete', 'kick'])
+    // A kick must never restrict: it removes, it does not silence.
+    expect(actions.mute).not.toHaveBeenCalled()
+    expect(actions.ban).not.toHaveBeenCalled()
+  })
+
   it('ban deletes and bans', async () => {
     const actions = makeActions()
     await applyVerdict(makeVerdict({ action: 'ban' }), target, noGuards, actions)
     expect(actions.calls).toEqual(['delete', 'ban'])
+  })
+
+  it('passes the ban duration straight through to the API call', async () => {
+    const actions = makeActions()
+    await applyVerdict(
+      makeVerdict({ action: 'ban', banDurationSeconds: 2_592_000 }), target, noGuards, actions)
+    expect(actions.ban).toHaveBeenCalledWith(target.chatId, target.userId, 2_592_000)
+  })
+
+  it('a null duration means a permanent ban, not a zero-length one', async () => {
+    const actions = makeActions()
+    await applyVerdict(
+      makeVerdict({ action: 'ban', banDurationSeconds: null }), target, noGuards, actions)
+    expect(actions.ban).toHaveBeenCalledWith(target.chatId, target.userId, null)
+  })
+
+  it('continues to kick even when the message is already gone', async () => {
+    const actions = makeActions()
+    actions.deleteMessage = vi.fn(async () => { throw new Error('MESSAGE_DELETE_FORBIDDEN') })
+    const result = await applyVerdict(makeVerdict({ action: 'kick' }), target, noGuards, actions)
+    expect(result.applied).toBe(true)
+    expect(actions.calls).toEqual(['kick'])
   })
 
   it('captcha restricts temporarily and asks the app to prompt', async () => {
@@ -71,6 +104,21 @@ describe('applyVerdict', () => {
     expect(result.skippedReason).toBe(guard)
     expect(actions.calls).toEqual([])
   })
+
+  // The guards used to be discovered by iterating Object.entries(guards), so
+  // this asserts every enforcing action is covered by every guard rather than
+  // just the one combination the original test happened to pick.
+  it.each(['captcha', 'delete', 'kick', 'mute', 'ban'] as const)(
+    'no guarded sender is ever %sed', async (action) => {
+      for (const guard of ['senderIsAdmin', 'senderIsSelf', 'senderIsTrusted']) {
+        const actions = makeActions()
+        const result = await applyVerdict(
+          makeVerdict({ action, pSpam: 0.99 }), target, { ...noGuards, [guard]: true }, actions)
+        expect(result.applied, `${action} / ${guard}`).toBe(false)
+        expect(result.captchaRequired).toBe(false)
+        expect(actions.calls, `${action} / ${guard}`).toEqual([])
+      }
+    })
 
   it('continues to mute/ban even when delete fails (already deleted)', async () => {
     const actions = makeActions()
