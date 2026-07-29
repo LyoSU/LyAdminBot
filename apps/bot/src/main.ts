@@ -438,8 +438,7 @@ const sendWelcomePreview = async (userId: number, sampleName: string, chatId: nu
   const body = buildWelcomeGreeting(pickRandom(w.texts), names, locale.welcome.defaultGreeting(names))
   const gif = pickRandom(w.gifs)
   if (gif) {
-    await gateway.tg.sendMedia(userId, gif, { caption: viewHtml(body) })
-      .catch((err) => { log.warn('welcome_preview_failed', { chatId, err: String(err) }) })
+    await replayMedia(userId, gif, { caption: body, tag: 'welcome_preview_failed', fields: { forChat: chatId } })
   } else {
     await gateway.tg.sendText(userId, viewHtml(body)).catch(() => { /* PM closed */ })
   }
@@ -854,6 +853,31 @@ const mediaFileId = (msg: Message): string | null => {
   return media && typeof media.fileId === 'string' ? media.fileId : null
 }
 
+/**
+ * Replay media we only know by file id (extras, welcome gifs), plus — when the
+ * media type cannot carry a caption (sticker, video note) — the caption as its
+ * own message, so admin-authored text is never silently dropped. Returns the
+ * ids that landed, for callers that auto-delete. Never throws.
+ */
+const replayMedia = async (
+  chatId: number,
+  fileId: string,
+  opts: { caption?: string; replyTo?: number; tag: string; fields?: Record<string, unknown> }
+): Promise<number[]> => {
+  const reply = opts.replyTo === undefined ? {} : { replyTo: opts.replyTo }
+  const warn = (kind: string, err: unknown): void =>
+    log.warn(opts.tag, { chatId, ...opts.fields, kind, err: String(err) })
+  const sent = await gateway.sendStoredMedia(chatId, fileId, {
+    ...(opts.caption === undefined ? {} : { caption: opts.caption }),
+    ...reply
+  }).catch((err) => { warn('media', err); return null })
+  if (!sent) return []
+  if (!sent.captionOmitted || opts.caption === undefined) return [sent.id]
+  const follow = await gateway.tg.sendText(chatId, viewHtml(opts.caption), reply)
+    .catch((err) => { warn('caption', err); return null })
+  return follow ? [sent.id, follow.id] : [sent.id]
+}
+
 const pickRandom = <T>(arr: T[]): T | null => (arr.length === 0 ? null : arr[Math.floor(Math.random() * arr.length)] ?? null)
 
 /** New members from a join service message (added, via link, or approved). */
@@ -951,12 +975,12 @@ const handleWelcomeGreeting = async (message: Message, chat: Chat, joiners: User
   // nothing. %name% is our placeholder, substituted after escaping.
   const body = buildWelcomeGreeting(template, names, locale.welcome.defaultGreeting(names))
   const gif = pickRandom(welcome.gifs)
-  const sent = gif
-    ? await gateway.tg.sendMedia(chat.id, gif, { replyTo: message.id, caption: viewHtml(body) })
-        .catch((err) => { log.warn('welcome_send_failed', { chatId: chat.id, kind: 'media', err: String(err) }); return null })
+  const sentIds = gif
+    ? await replayMedia(chat.id, gif, { caption: body, replyTo: message.id, tag: 'welcome_send_failed' })
     : await gateway.tg.sendText(chat.id, viewHtml(body), { replyTo: message.id })
-        .catch((err) => { log.warn('welcome_send_failed', { chatId: chat.id, kind: 'text', err: String(err) }); return null })
-  if (sent) scheduleDelete(chat.id, sent.id, welcome.timer * 1000, 'welcome')
+        .then((m) => [m.id])
+        .catch((err) => { log.warn('welcome_send_failed', { chatId: chat.id, kind: 'text', err: String(err) }); return [] })
+  for (const id of sentIds) scheduleDelete(chat.id, id, welcome.timer * 1000, 'welcome')
   log.info('welcome', { chatId: chat.id, chat: chat.title ?? undefined, joiners: joiners.map((j) => j.id) })
 }
 
@@ -1059,11 +1083,11 @@ const fireExtras = async (message: Message, chat: Chat, text: string): Promise<v
     // extra.text is admin-authored — escape it before the HTML parser, else a
     // stray `<`/`&` throws and (previously, silently) drops the whole trigger.
     if (extra.fileId) {
-      await gateway.tg.sendMedia(chat.id, extra.fileId, {
+      await replayMedia(chat.id, extra.fileId, {
+        ...(extra.text ? { caption: escapeName(extra.text) } : {}),
         replyTo: message.id,
-        ...(extra.text ? { caption: viewHtml(escapeName(extra.text)) } : {})
-      }).catch((err) => {
-        log.warn('extra_send_failed', { chatId: chat.id, name: extra.name, kind: 'media', err: String(err) })
+        tag: 'extra_send_failed',
+        fields: { name: extra.name }
       })
     } else if (extra.text) {
       await gateway.tg.replyText(message, viewHtml(escapeName(extra.text)))

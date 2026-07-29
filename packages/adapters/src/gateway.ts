@@ -10,9 +10,12 @@
  * Kept deliberately thin: no business logic — that lives in core and is
  * tested offline. Integration breakage here is caught by the test group.
  */
-import { TelegramClient, type Message } from '@mtcute/node'
+import { TelegramClient, html, type Message } from '@mtcute/node'
 import { Dispatcher, type CallbackQueryContext } from '@mtcute/dispatcher'
 import type { ModerationActions } from './executor.js'
+import {
+  botApiMediaKind, resendStoredMedia, sendMediaByFileId, type ResendResult
+} from './media-resend.js'
 
 export interface GatewayConfig {
   apiId: number
@@ -141,6 +144,36 @@ export class TelegramGateway {
         })
       }
     }
+  }
+
+  /**
+   * Send media we only know by file id (extras, welcome gifs). Falls back to
+   * the Bot API when the id predates MTProto file references — see
+   * media-resend.ts. `caption` is Bot API HTML with real newlines; the MTProto
+   * leg gets the `<br>` dialect its parser wants.
+   */
+  async sendStoredMedia(
+    chatId: number,
+    fileId: string,
+    opts: { caption?: string; replyTo?: number } = {}
+  ): Promise<ResendResult> {
+    const media = opts.caption === undefined
+      ? {}
+      : { caption: html(opts.caption.replace(/\n/g, '<br>')) }
+    return resendStoredMedia({
+      viaMtproto: () => this.tg.sendMedia(chatId, fileId, {
+        ...(opts.replyTo === undefined ? {} : { replyTo: opts.replyTo }),
+        ...media
+      }),
+      viaBotApi: () => sendMediaByFileId({
+        token: this.config.botToken,
+        chatId,
+        fileId,
+        kind: botApiMediaKind(fileId),
+        ...(opts.caption === undefined ? {} : { caption: opts.caption }),
+        ...(opts.replyTo === undefined ? {} : { replyTo: opts.replyTo })
+      })
+    })
   }
 
   /** Fetch the replied-to message (1 call, used by the enrichment budget). */
