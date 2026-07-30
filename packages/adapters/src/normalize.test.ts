@@ -127,12 +127,15 @@ describe('normalizeMessage — forwards & replies', () => {
     expect(normalizeMessage(msg).forward?.kind).toBe('channel')
   })
 
-  it('keeps reply info minimal when the replied message was not fetched', () => {
+  it('an unverified reply is not a reply at all (2026-07-30 review)', () => {
+    // A replyTo of nulls used to be emitted here, and the core reads any
+    // non-null replyTo as `is_reply` — a −1.0 trust discount granted for a
+    // claim nobody checked, which made "reply to anything" the cheapest
+    // evasion available. No fetched target, no trust.
     const msg = makeMessage({
       replyTo: { _: 'messageReplyHeader', replyToMsgId: 5 }
     })
-    const n = normalizeMessage(msg)
-    expect(n.replyTo).toEqual({ authorId: null, isSelf: false, ageSeconds: null, textPreview: null })
+    expect(normalizeMessage(msg).replyTo).toBeNull()
   })
 
   it('fills reply details from the fetched replied message', () => {
@@ -226,6 +229,79 @@ describe('normalizeMessage — media', () => {
     expect(n.text).toContain('Заробіток')
     expect(n.text).toContain('Пиши в особисті')
     expect(n.text).toContain('Отримай 500$')
+  })
+
+  // Human-parity, continued (2026-07-30 review): the invariant was honoured for
+  // todo checklists and quietly broken for every other media type that carries
+  // words. A promo poll or a contact card arrived as EMPTY text, so the abstain
+  // gate waved it through and no text layer ever saw it.
+  it('extracts the poll question and options', () => {
+    const msg = makeMessage({
+      message: '',
+      media: {
+        _: 'messageMediaPoll',
+        poll: {
+          _: 'poll', id: 1n as never, question: { _: 'textWithEntities', text: 'Хочеш заробіток?', entities: [] },
+          answers: [
+            { _: 'pollAnswer', text: { _: 'textWithEntities', text: 'Так, пиши @promo_bot', entities: [] }, option: new Uint8Array([1]) },
+            { _: 'pollAnswer', text: { _: 'textWithEntities', text: 'Ні', entities: [] }, option: new Uint8Array([2]) }
+          ]
+        },
+        results: { _: 'pollResults' }
+      } as unknown as tl.TypeMessageMedia
+    })
+    const n = normalizeMessage(msg)
+    expect(n.attachments[0]?.kind).toBe('poll')
+    expect(n.text).toContain('Хочеш заробіток?')
+    expect(n.text).toContain('Так, пиши @promo_bot')
+  })
+
+  it('extracts the name and phone number of a contact card', () => {
+    // A phone number reaching the chat with zero characters of message text.
+    const msg = makeMessage({
+      message: '',
+      media: {
+        _: 'messageMediaContact', phoneNumber: '380671234567',
+        firstName: 'Анна', lastName: '', vcard: '', userId: 0n as never
+      } as unknown as tl.TypeMessageMedia
+    })
+    const n = normalizeMessage(msg)
+    expect(n.attachments[0]?.kind).toBe('contact')
+    expect(n.text).toContain('380671234567')
+    expect(n.text).toContain('Анна')
+  })
+
+  it('extracts invoice title/description and venue title/address', () => {
+    const invoice = normalizeMessage(makeMessage({
+      message: '',
+      media: {
+        _: 'messageMediaInvoice', title: 'Курс з трейдингу',
+        description: 'Пиши в особисті', currency: 'USD', totalAmount: 100n as never, startParam: ''
+      } as unknown as tl.TypeMessageMedia
+    }))
+    expect(invoice.text).toContain('Курс з трейдингу')
+    expect(invoice.text).toContain('Пиши в особисті')
+
+    const venue = normalizeMessage(makeMessage({
+      message: '',
+      media: {
+        _: 'messageMediaVenue', geo: { _: 'geoPointEmpty' }, title: 'Казино Ліон',
+        address: 'вул. Промо 1', provider: 'foursquare', venueId: 'x', venueType: ''
+      } as unknown as tl.TypeMessageMedia
+    }))
+    expect(venue.attachments[0]?.kind).toBe('location')
+    expect(venue.text).toContain('Казино Ліон')
+  })
+
+  it('extracts a giveaway prize description', () => {
+    const msg = makeMessage({
+      message: '',
+      media: {
+        _: 'messageMediaGiveaway', channels: [555], quantity: 1, months: 1,
+        untilDate: 1_790_000_000, prizeDescription: 'iPhone за підписку'
+      } as unknown as tl.TypeMessageMedia
+    })
+    expect(normalizeMessage(msg).text).toContain('iPhone за підписку')
   })
 
   it('maps unknown media constructors to kind unknown (never drop silently)', () => {

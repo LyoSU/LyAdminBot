@@ -196,7 +196,13 @@ export const contentEvidence = (signals: Signal[]): ContentEvidence => {
   for (const name of new Set(signals.map((s) => s.name))) {
     if (SOFT_SHAPE_SIGNALS.has(name)) continue
     const weight = SIGNAL_WEIGHTS[name] ?? 0
-    if (weight <= 0) continue
+    // Sub-threshold nudges are excluded from the TOTAL as well, not just from
+    // `strongest` (2026-07-30 production FP): a political comment was kicked on
+    // moderation_flagged 1.5 + long_text 0.4 + edited_message 0.2 = 2.1, and the
+    // chat voted it ham. Counting crumbs toward the bar for removing a person
+    // is the same stacking fallacy the bar exists to stop — being long and
+    // having been edited is not evidence of anything.
+    if (weight < DECISIVE_MIN_WEIGHT) continue
     total += weight
     if (weight > strongest) strongest = weight
   }

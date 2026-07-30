@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import type { DecidedBy, Verdict } from './types.js'
 import {
-  shouldAutoLearn, autoLearnSource, AUTO_LEARN_DECIDED_BY, AUTO_LEARN_MIN_LENGTH
+  shouldAutoLearn, autoLearnSource, AUTO_LEARN_DECIDED_BY, AUTO_LEARN_MIN_LENGTH,
+  voteLearnStatus, isDistinctive, MIN_DISTINCTIVE_LENGTH, VOTE_CONFIRM_MIN_BALLOTS
 } from './learning.js'
 
 const makeVerdict = (overrides: Partial<Verdict> = {}): Verdict => ({
@@ -91,6 +92,45 @@ describe('shouldAutoLearn', () => {
         return pSpam >= 0.95 && text.trim().length >= AUTO_LEARN_MIN_LENGTH
       }
     ))
+  })
+})
+
+describe('voteLearnStatus (2026-07-30 review)', () => {
+  it('a single admin ballot teaches a candidate, not a verdict', () => {
+    // tallyVotes resolves instantly on an admin ballot — right for this
+    // message, wrong as grounds for a rule that fires in 52 chats for 90 days.
+    expect(voteLearnStatus({ spam: 1, ham: 0 })).toBe('candidate')
+  })
+
+  it('plural agreement may teach a deciding rule', () => {
+    expect(voteLearnStatus({ spam: VOTE_CONFIRM_MIN_BALLOTS, ham: 0 })).toBe('confirmed')
+  })
+
+  it('a contested vote never teaches a deciding rule', () => {
+    expect(voteLearnStatus({ spam: 2, ham: 2 })).toBe('candidate')
+    expect(voteLearnStatus({ spam: 3, ham: 4 })).toBe('candidate')
+  })
+
+  it('property: confirming always needs plural, uncontested agreement', () => {
+    fc.assert(fc.property(
+      fc.nat({ max: 20 }), fc.nat({ max: 20 }),
+      (spam, ham) => {
+        if (voteLearnStatus({ spam, ham }) !== 'confirmed') return true
+        return spam >= VOTE_CONFIRM_MIN_BALLOTS && spam > ham
+      }
+    ))
+  })
+})
+
+describe('isDistinctive', () => {
+  it('is the single bar shared by signatures, vectors and auto-learn', () => {
+    expect(MIN_DISTINCTIVE_LENGTH).toBe(AUTO_LEARN_MIN_LENGTH)
+    expect(isDistinctive('доброго ранку')).toBe(false)
+    expect(isDistinctive('x'.repeat(MIN_DISTINCTIVE_LENGTH))).toBe(true)
+  })
+
+  it('measures the trimmed text', () => {
+    expect(isDistinctive(`${' '.repeat(100)}коротко${' '.repeat(100)}`)).toBe(false)
   })
 })
 

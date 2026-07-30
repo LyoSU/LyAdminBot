@@ -118,6 +118,47 @@ describe('applyVerdict', () => {
     expect(actions.mute).not.toHaveBeenCalled()
   })
 
+  it('trust does not shield an account Telegram itself flagged (2026-07-30)', async () => {
+    // Trust is granted by one tap and never expires, so treating it as absolute
+    // meant a misclick bought permanent immunity — including for the
+    // sold/compromised long-time account in the threat model.
+    const actions = makeActions()
+    const result = await applyVerdict(
+      makeVerdict({ action: 'ban', signals: [{ name: 'scam_flag' }] }),
+      target, { ...noGuards, senderIsTrusted: true }, actions)
+    expect(result.applied).toBe(true)
+    expect(actions.calls).toEqual(['delete', 'ban'])
+  })
+
+  it.each(['external_ban', 'fake_flag', 'restricted_for_spam'])(
+    'trust yields to %s as well', async (name) => {
+      const actions = makeActions()
+      const result = await applyVerdict(
+        makeVerdict({ action: 'mute', signals: [{ name }] }),
+        target, { ...noGuards, senderIsTrusted: true }, actions)
+      expect(result.applied).toBe(true)
+    })
+
+  it('trust still shields against our OWN judgement', async () => {
+    // The whole point of the trusted list: a pipeline mistake on a regular.
+    const actions = makeActions()
+    const result = await applyVerdict(
+      makeVerdict({ action: 'delete', pSpam: 0.99, signals: [{ name: 'external_url' }, { name: 'sleeper_awakened' }] }),
+      target, { ...noGuards, senderIsTrusted: true }, actions)
+    expect(result.skippedReason).toBe('senderIsTrusted')
+    expect(actions.calls).toEqual([])
+  })
+
+  it('an admin is never actioned, hard verdict or not', async () => {
+    // Admins outrank every signal: acting on them is how a bot loses its rights.
+    const actions = makeActions()
+    const result = await applyVerdict(
+      makeVerdict({ action: 'ban', signals: [{ name: 'scam_flag' }] }),
+      target, { ...noGuards, senderIsAdmin: true }, actions)
+    expect(result.skippedReason).toBe('senderIsAdmin')
+    expect(actions.calls).toEqual([])
+  })
+
   it('requireCaptcha on a guarded sender still restricts nobody', async () => {
     const actions = makeActions()
     const result = await applyVerdict(

@@ -6,12 +6,12 @@
 import { BotKeyboard, Chat, User, html, type Message } from '@mtcute/node'
 import {
   evaluateMessage, tallyVotes, extractBioSignals, isEnforcementAction,
-  shouldAutoLearn, autoLearnSource,
+  shouldAutoLearn, autoLearnSource, voteLearnStatus,
   type EvaluationInput, type ForwardOrigin, type PipelinePorts,
   type UserSnapshot, type Verdict, type VoteBallot
 } from '@lyadmin/core'
 import {
-  TelegramGateway, applyVerdict, buildUserSnapshot, normalizeMessage,
+  TelegramGateway, applyVerdict, buildUserSnapshot, buildChannelSnapshot, normalizeMessage,
   fetchUserProfile, downloadPhotoBase64, downloadAvatarBase64, downloadStoriesBase64, rawPhotoToBase64,
   fetchExternalBan, needsExternalRecheck, resolveMentionKinds,
   type IncomingMessage
@@ -475,33 +475,52 @@ const shouldWarnMissingRights = (chatId: number, errors: string[]): boolean => {
  * The eligibility rule lives in @lyadmin/core (`shouldAutoLearn`) so it can be
  * tested — poisoning this store would silently delete innocent messages.
  */
-const learnFromAutoVerdict = async (verdict: Verdict, text: string): Promise<void> => {
+const learnFromAutoVerdict = async (verdict: Verdict, text: string, chatId: number): Promise<void> => {
   if (!shouldAutoLearn(verdict, text)) return
   const learnText = text.trim()
   const source = autoLearnSource(verdict)
-  await signaturePort.learn(learnText, source, 'candidate')
+  // Both stores get the SAME strength. They used to disagree: the signature was
+  // written as a candidate while the vector went in `confirmed` with no expiry,
+  // so the blunter of the two layers was the one that could convict alone.
+  await signaturePort.learn(learnText, source, 'candidate', chatId)
     .catch(() => { /* learning is best-effort — never block moderation */ })
-  await vectorPort?.learn(learnText, source)
+  await vectorPort?.learn(learnText, source, 'candidate')
     .catch(() => { /* best-effort */ })
   log.debug('auto_learned', { decidedBy: verdict.decidedBy, reason: verdict.reasonCode })
 }
 
+/**
+ * A vote resolved to spam: remove the message, mute the author, and teach the
+ * stores — but only as strongly as the human signal actually was.
+ *
+ * `tallyVotes` resolves instantly on a single admin ballot, which is right for
+ * acting on this message and wrong as grounds for a rule that fires in every
+ * chat for the next 90 days. So the ballots decide the learning strength
+ * (`voteLearnStatus`), and the stores promote a candidate themselves once a
+ * second, independent chat reports the same text.
+ */
 const enforceVoteSpam = async (vote: {
   chatId: number
   messageId: number
   targetUserId: number
   /** Full text to learn (not the truncated display preview). */
   learnText: string
+  tally: { spam: number; ham: number }
 }, learnSource: string): Promise<void> => {
   await gateway.moderationActions.deleteMessage(vote.chatId, vote.messageId)
     .catch(() => { /* already gone */ })
   await gateway.moderationActions.mute(vote.chatId, vote.targetUserId, MUTE_AFTER_VOTE_SECONDS)
     .catch(() => { /* may lack rights */ })
   if (vote.learnText.trim().length > 0) {
-    await signaturePort.learn(vote.learnText, learnSource, 'confirmed').catch(() => { /* best-effort */ })
+    const status = voteLearnStatus(vote.tally)
+    log.info('vote_learned', {
+      chatId: vote.chatId, status, spam: vote.tally.spam, ham: vote.tally.ham, source: learnSource
+    })
+    await signaturePort.learn(vote.learnText, learnSource, status, vote.chatId)
+      .catch(() => { /* best-effort */ })
     // Seed the vector layer too, so semantic matching learns alongside
     // signatures instead of staying frozen at the v1 snapshot.
-    await vectorPort?.learn(vote.learnText, learnSource).catch(() => { /* best-effort */ })
+    await vectorPort?.learn(vote.learnText, learnSource, status).catch(() => { /* best-effort */ })
   }
 }
 
@@ -956,7 +975,8 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
     if (!(await store.closeVote(chat.id, replied.id, 'spam'))) return
     log.info('vote_resolved', { chatId: chat.id, userId: target.id, messageId: replied.id, outcome: 'spam', by: 'admin_report' })
     await enforceVoteSpam({
-      chatId: chat.id, messageId: replied.id, targetUserId: target.id, learnText: fullText
+      chatId: chat.id, messageId: replied.id, targetUserId: target.id, learnText: fullText,
+      tally: { spam: tally.spam, ham: tally.ham }
     }, 'admin_report')
     const verdict: Verdict = {
       pSpam: 0.99, action: 'mute', needsVote: false, banDurationSeconds: null, decidedBy: 'deterministic',
@@ -1050,6 +1070,38 @@ const avatarCache = new Map<number, { base64: string | null; expiresAt: number }
 const AVATAR_CACHE_TTL_MS = 6 * 60 * 60 * 1000
 const AVATAR_CACHE_MAX = 2000
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024
+
+type UserProfile = Awaited<ReturnType<typeof fetchUserProfile>>
+
+const EMPTY_PROFILE: UserProfile = {
+  bio: null, avatars: null, unofficialClientRisk: null, personalChannelId: null, latestAvatar: null
+}
+
+/**
+ * Per-user profile cache (bio, personal channel, unofficial-client risk, avatar).
+ *
+ * The enrichment call used to be gated on the sender being *newish*, which made
+ * the entire profile layer — including `unofficial_client_risk`, the heaviest
+ * account signal in the model at 3.2 — unreachable after six messages
+ * (2026-07-30 review). Caching per user instead of rationing per message keeps
+ * the cost at one `getFullUser` per sender per few days while making the signals
+ * reachable for everyone the pipeline actually judges.
+ *
+ * A day is long relative to a spam campaign and short relative to a bio edit,
+ * and this is a moderation heuristic, not a source of truth.
+ */
+const PROFILE_CACHE_TTL_MS = 24 * 60 * 60 * 1000
+const PROFILE_CACHE_MAX = 5000
+const profileCache = new Map<number, { profile: UserProfile; expiresAt: number }>()
+
+const cachedUserProfile = async (userId: number): Promise<UserProfile> => {
+  const hit = profileCache.get(userId)
+  if (hit && hit.expiresAt > Date.now()) return hit.profile
+  const profile = await fetchUserProfile(gateway.tg, userId)
+  pruneExpired(profileCache, PROFILE_CACHE_MAX)
+  profileCache.set(userId, { profile, expiresAt: Date.now() + PROFILE_CACHE_TTL_MS })
+  return profile
+}
 
 /**
  * Stories are a user-only MTProto surface: on a bot account
@@ -1287,8 +1339,25 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     return
   }
 
-  const sender = message.sender
-  if (!(sender instanceof User)) return // anonymous admins / channel posts
+  const rawSender = message.sender
+  /**
+   * A message sent AS a channel (Telegram's "send as"), which any member who
+   * owns a channel may use. The intake accepted `User` senders only, so this —
+   * the one delivery method that advertises a channel by construction — was
+   * never scanned at all (2026-07-30 review).
+   *
+   * Two things are deliberately still skipped: the linked channel's own posts
+   * auto-forwarded into a discussion group (`isAutomaticForward` — moderating
+   * those would mean the bot deleting the channel it serves and trying to ban
+   * it from its own comment section), and anonymous admins, who are admins.
+   */
+  const userSender = rawSender instanceof User ? rawSender : null
+  const channelSender = !userSender && rawSender instanceof Chat
+    && !message.isAutomaticForward && !message.isChannelPost
+    ? rawSender
+    : null
+  const sender = userSender ?? channelSender
+  if (!sender) return
   if (sender.id === selfId) return
 
   const started = Date.now()
@@ -1297,78 +1366,83 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   const groupDoc = await store.getGroupDoc(chat.id).catch(() => null)
   const policy = groupDocToChatPolicy(groupDoc as never)
 
-  // Group service commands. /settings never renders a panel in the chat —
-  // PM deep link only; /start and /help reply with the one-line hint.
-  const commandText = (message.text ?? '').trim()
-  if (/^\/settings(@\w+)?$/.test(commandText) && selfUsername) {
-    const locale = await localeFor(sender.id, sender.language)
-    await sendView(message, settingsDeepLink(locale, selfUsername, chat.id))
-    return
-  }
-  if (/^\/(start|help)(@\w+)?$/.test(commandText)) {
-    const locale = await localeFor(sender.id, sender.language)
-    await sendView(message, startGroupHint(locale))
-    return
-  }
-  if (/^\/report(@\w+)?$/.test(commandText)) {
-    await handleReport(message, chat, sender)
-    return
-  }
-  if (/^\/banan(@\w+)?(\s|$)/.test(commandText)) {
-    await handleBanan(message, chat, sender, commandText.split(/\s+/)[1])
-    return
-  }
-  if (/^\/kick(@\w+)?$/.test(commandText)) {
-    await handleKick(message, chat, sender)
-    return
-  }
-  if (/^\/untrust(@\w+)?$/.test(commandText)) {
-    await handleUntrust(message, chat, sender)
-    return
-  }
-  if (/^\/check(@\w+)?$/.test(commandText)) {
-    await handleCheck(message, chat, sender)
-    return
-  }
-  if (/^\/del(@\w+)?$/.test(commandText)) {
-    await handleDelete(message, chat, sender)
-    return
-  }
-  if (/^\/mystats(@\w+)?$/.test(commandText) && selfUsername) {
-    const locale = await localeFor(sender.id, sender.language)
-    await sendView(message, {
-      text: locale.stats.openInPm,
-      buttons: [[{ text: locale.stats.openButton, url: `https://t.me/${selfUsername}?start=mystats_${chat.id}` }]]
-    })
-    return
-  }
-  if (/^\/top[-_]banan(@\w+)?$/.test(commandText)) {
-    await handleTop(message, chat, sender, 'banan')
-    return
-  }
-  if (/^\/top(@\w+)?$/.test(commandText)) {
-    await handleTop(message, chat, sender, 'messages')
-    return
-  }
-  if (/^\/ping(@\w+)?$/.test(commandText)) {
-    const sent = await gateway.tg.replyText(message, '🏓 pong').catch(() => null)
-    if (sent) {
-      scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'cmd_ping')
-      scheduleDelete(chat.id, message.id, NOTIFY_TTL_BANAN_MS, 'cmd_ping')
+  // Commands are a USER surface: a channel posting "/banan" is not an admin,
+  // and every handler below authorises by user id. Channel senders skip
+  // straight to the spam pipeline.
+  if (userSender) {
+    // Group service commands. /settings never renders a panel in the chat —
+    // PM deep link only; /start and /help reply with the one-line hint.
+    const commandText = (message.text ?? '').trim()
+    if (/^\/settings(@\w+)?$/.test(commandText) && selfUsername) {
+      const locale = await localeFor(userSender.id, userSender.language)
+      await sendView(message, settingsDeepLink(locale, selfUsername, chat.id))
+      return
     }
-    return
-  }
-  if (/^\/extras(@\w+)?$/.test(commandText)) {
-    await handleExtraList(message, chat, sender)
-    return
-  }
-  if (/^\/extra(@\w+)?(\s|$)/.test(commandText)) {
-    await handleExtraCommand(message, chat, sender, commandText.split(/\s+/)[1])
-    return
-  }
-  if (/^\/welcome(@\w+)?(\s|$)/.test(commandText)) {
-    await handleWelcomeCommand(message, chat, sender, commandText.replace(/^\/welcome(@\w+)?\s*/, ''))
-    return
+    if (/^\/(start|help)(@\w+)?$/.test(commandText)) {
+      const locale = await localeFor(userSender.id, userSender.language)
+      await sendView(message, startGroupHint(locale))
+      return
+    }
+    if (/^\/report(@\w+)?$/.test(commandText)) {
+      await handleReport(message, chat, userSender)
+      return
+    }
+    if (/^\/banan(@\w+)?(\s|$)/.test(commandText)) {
+      await handleBanan(message, chat, userSender, commandText.split(/\s+/)[1])
+      return
+    }
+    if (/^\/kick(@\w+)?$/.test(commandText)) {
+      await handleKick(message, chat, userSender)
+      return
+    }
+    if (/^\/untrust(@\w+)?$/.test(commandText)) {
+      await handleUntrust(message, chat, userSender)
+      return
+    }
+    if (/^\/check(@\w+)?$/.test(commandText)) {
+      await handleCheck(message, chat, userSender)
+      return
+    }
+    if (/^\/del(@\w+)?$/.test(commandText)) {
+      await handleDelete(message, chat, userSender)
+      return
+    }
+    if (/^\/mystats(@\w+)?$/.test(commandText) && selfUsername) {
+      const locale = await localeFor(userSender.id, userSender.language)
+      await sendView(message, {
+        text: locale.stats.openInPm,
+        buttons: [[{ text: locale.stats.openButton, url: `https://t.me/${selfUsername}?start=mystats_${chat.id}` }]]
+      })
+      return
+    }
+    if (/^\/top[-_]banan(@\w+)?$/.test(commandText)) {
+      await handleTop(message, chat, userSender, 'banan')
+      return
+    }
+    if (/^\/top(@\w+)?$/.test(commandText)) {
+      await handleTop(message, chat, userSender, 'messages')
+      return
+    }
+    if (/^\/ping(@\w+)?$/.test(commandText)) {
+      const sent = await gateway.tg.replyText(message, '🏓 pong').catch(() => null)
+      if (sent) {
+        scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'cmd_ping')
+        scheduleDelete(chat.id, message.id, NOTIFY_TTL_BANAN_MS, 'cmd_ping')
+      }
+      return
+    }
+    if (/^\/extras(@\w+)?$/.test(commandText)) {
+      await handleExtraList(message, chat, userSender)
+      return
+    }
+    if (/^\/extra(@\w+)?(\s|$)/.test(commandText)) {
+      await handleExtraCommand(message, chat, userSender, commandText.split(/\s+/)[1])
+      return
+    }
+    if (/^\/welcome(@\w+)?(\s|$)/.test(commandText)) {
+      await handleWelcomeCommand(message, chat, userSender, commandText.replace(/^\/welcome(@\w+)?\s*/, ''))
+      return
+    }
   }
 
   // Hashtag triggers ("extras") are a standalone chat utility — they fire
@@ -1396,10 +1470,30 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   const history = userDocToHistory(userDoc as never, memberCount)
 
   const newish = (history?.messagesGlobal ?? 0) <= 5 || memberCount <= 3
-  // Budget calls 2-3: profile enrichment only for newish senders.
-  const profile = newish
-    ? await fetchUserProfile(gateway.tg, sender.id)
-    : { bio: null, avatars: null, unofficialClientRisk: null, personalChannelId: null, latestAvatar: null }
+
+  /**
+   * Whether the sender will be waved through by the core's established-regular
+   * fast path anyway (same thresholds). Mirrored here only to decide whether
+   * paying for enrichment is worth it — the authoritative exempt still lives in
+   * the pipeline, where hard account verdicts can cancel it.
+   */
+  const exemptish = (memberCount >= 10 || (history?.messagesGlobal ?? 0) >= 50) &&
+    history?.firstSeenUnix != null &&
+    (Date.now() / 1000 - history.firstSeenUnix) >= 7 * 86_400
+
+  /**
+   * Profile enrichment: bio, personal channel, avatar and — most importantly —
+   * `unofficial_security_risk`, the heaviest single account signal we have.
+   *
+   * This used to be gated on `newish`, i.e. six messages of "ok" made the whole
+   * profile layer unreachable for that account forever (2026-07-30 review). It
+   * is now fetched for everyone the pipeline actually judges, and cached per
+   * user for days: one `getFullUser` per sender per few days, not per message.
+   * Channels have no such profile at all — asking would be an error, not a null.
+   */
+  const profile = userSender && !exemptish
+    ? await cachedUserProfile(userSender.id)
+    : EMPTY_PROFILE
 
   // Authoritative chat join time (channels.getParticipant). Only for newish
   // senders — "joined seconds ago then posted" is the pattern it catches, and
@@ -1434,10 +1528,17 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     }
   }
 
-  const user = buildUserSnapshot(sender, history === null ? null : { ...history, avatars: profile.avatars, externalBan }, undefined, {
-    unofficialClientRisk: profile.unofficialClientRisk,
-    joinedAgoSeconds
-  })
+  // A channel has no registration date, bio, avatar or client to be flagged
+  // for, so its snapshot carries none of them: the verdict rests on the
+  // message, which is the right basis for one anyway.
+  const user = userSender
+    ? buildUserSnapshot(
+        userSender,
+        history === null ? null : { ...history, avatars: profile.avatars, externalBan },
+        undefined,
+        { unofficialClientRisk: profile.unofficialClientRisk, joinedAgoSeconds }
+      )
+    : buildChannelSnapshot(channelSender!, history)
 
   // Photo for LLM vision — only when a newish user posts media.
   const photoBase64 = newish && message.media?.type === 'photo'
@@ -1449,7 +1550,9 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   // cached at join when fresh; stories are best-effort (user-only surface).
   let avatarBase64: string | null = null
   let storyBase64: string[] = []
-  if (newish && ports.moderation) {
+  // `userSender`: profile media is a user surface — a channel has none, and
+  // asking would be an error rather than a null.
+  if (newish && userSender && ports.moderation) {
     const cached = avatarCache.get(sender.id)
     if (cached && cached.expiresAt > Date.now()) {
       avatarBase64 = cached.base64
@@ -1601,7 +1704,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       promoInBio: verdict.signals.some((s) => s.name === 'promo_in_bio'),
       personalChannel: input.enrichment.personalChannelId !== null
     }))
-    void learnFromAutoVerdict(verdict, normalized.text)
+    void learnFromAutoVerdict(verdict, normalized.text, chat.id)
     // Forwarded spam builds the long-term reputation of its origin.
     if (normalized.forward) {
       rememberForward(chat.id, message.id, normalized.forward)
@@ -1897,7 +2000,8 @@ const wireCallbacks = (): void => {
         await enforceVoteSpam({
           chatId, messageId,
           targetUserId: Number(vote['targetUserId'] ?? 0),
-          learnText: String(vote['learnText'] ?? vote['textPreview'] ?? '')
+          learnText: String(vote['learnText'] ?? vote['textPreview'] ?? ''),
+          tally: { spam: tally.spam, ham: tally.ham }
         }, 'community_vote')
       } else {
         // Ham: lift whatever the pipeline applied. Admin ham ballot carries

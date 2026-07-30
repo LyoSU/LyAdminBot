@@ -24,6 +24,7 @@ import { parseCustomRule, customRuleMatches } from './custom-rules.js'
 import { scoreSignals, hasDecisiveSignal, mayRemoveSender, contentEvidence } from './score.js'
 import { decideAction, isEnforcementAction, removesSender, type PolicyDecision } from './policy.js'
 import { shouldAbstain } from './text/abstain.js'
+import { isDistinctive } from './learning.js'
 
 const LLM_GREY_LOW = 0.35
 const LLM_GREY_HIGH = 0.75
@@ -36,7 +37,15 @@ const VECTOR_DECIDE_SIMILARITY = 0.93
  * would have added score to everything equally.
  */
 const VECTOR_SIGNAL_SIMILARITY = 0.85
+/** One account repeating itself across chats: certain enough to act alone. */
 const VELOCITY_PSPAM = 0.9
+/**
+ * The same text from SEVERAL accounts. Still the strongest content evidence the
+ * cheap layers produce, but it is also what a viral line looks like — so it
+ * lands in the votable band (delete + ask the chat) instead of the silent
+ * 24h mute that 0.9 buys. Deliberately below every preset's mute threshold.
+ */
+const VELOCITY_WAVE_PSPAM = 0.7
 const CUSTOM_DENY_PSPAM = 0.96
 
 /**
@@ -61,6 +70,46 @@ const nsfwProfileHit = (result: { scores: Record<string, number> } | null): stri
     if (typeof score === 'number' && score >= NSFW_PROFILE_MIN_SCORE) {
       return `${category} ${score.toFixed(2)}`
     }
+  }
+  return null
+}
+
+/**
+ * Message-content moderation categories that bear on SPAM.
+ *
+ * The same recall-tuned `flagged` boolean that produced the avatar bans was
+ * still trusted wholesale for message text, and on 2026-07-30 it kicked someone
+ * mid-conversation for discussing a rocket strike: `violence` fired, the signal
+ * counted as content evidence, and the chat voted the verdict ham within ten
+ * minutes.
+ *
+ * Violence, hate and self-harm in a message are a matter for admins and their
+ * chat rules — they are not evidence that a message is an advertisement, which
+ * is the only question this pipeline is entitled to answer. What IS spam-shaped
+ * is unsolicited sexual content, the adult-promo class.
+ */
+const SPAM_MODERATION_CATEGORIES = ['sexual', 'sexual/minors']
+/**
+ * Lower than the profile bar (0.8): here the provider is judging text the
+ * sender actually wrote, not a stylised picture, and the signal only ever
+ * contributes weight — it cannot convict on its own.
+ */
+const SPAM_MODERATION_MIN_SCORE = 0.5
+
+/** Spam-relevant moderation categories the provider is reasonably sure about. */
+const spamModerationHit = (
+  result: { flagged: boolean; categories: string[]; scores: Record<string, number> } | null
+): string | null => {
+  if (!result) return null
+  const hits = SPAM_MODERATION_CATEGORIES
+    .filter((c) => (result.scores[c] ?? 0) >= SPAM_MODERATION_MIN_SCORE)
+    .map((c) => `${c} ${(result.scores[c] ?? 0).toFixed(2)}`)
+  if (hits.length > 0) return hits.join(', ')
+  // No scores at all (a provider that exposes only the boolean): fall back to
+  // its own category list, still restricted to the spam-relevant ones.
+  if (Object.keys(result.scores).length === 0 && result.flagged) {
+    const named = result.categories.filter((c) => SPAM_MODERATION_CATEGORIES.includes(c))
+    return named.length > 0 ? named.join(', ') : null
   }
   return null
 }
@@ -94,9 +143,18 @@ const isTrusted = (input: EvaluationInput): boolean =>
  * The OR is deliberate: a member with local standing here OR a long history
  * across our chats both count. Thresholds are conservative — the global bar
  * matches ESTABLISHED_MIN_MESSAGES (50) from signal extraction.
+ *
+ * Standing also has to have taken TIME (2026-07-30 review). The counters are
+ * incremented on every message in every chat the bot watches, with no rate or
+ * quality condition, so 50 messages of "ок" in a group the spammer controls
+ * bought a total bypass of the pipeline — before any port, in all 52 chats. A
+ * regular is someone who has been around, not someone who typed a lot this
+ * afternoon; `localAgeDays` is the cheapest honest proxy we have, and it is
+ * already computed for every sender.
  */
 const EXEMPT_INCHAT_MIN = 10
 const EXEMPT_GLOBAL_MIN = 50
+const EXEMPT_MIN_LOCAL_AGE_DAYS = 7
 
 /**
  * Hard account verdicts that cancel the exempt: facts that mark the account as
@@ -122,10 +180,14 @@ const hasHardAccountVerdict = (u: UserSnapshot, policy: ChatPolicy): boolean =>
   u.unofficialClientRisk === true ||
   u.restrictionReasons.some((r) => /spam|scam/i.test(r))
 
-const isEstablishedRegular = (input: EvaluationInput): boolean =>
-  (input.user.messagesInChat >= EXEMPT_INCHAT_MIN ||
-    input.user.messagesGlobal >= EXEMPT_GLOBAL_MIN) &&
-  !hasHardAccountVerdict(input.user, input.policy)
+const isEstablishedRegular = (input: EvaluationInput): boolean => {
+  const volume = input.user.messagesInChat >= EXEMPT_INCHAT_MIN ||
+    input.user.messagesGlobal >= EXEMPT_GLOBAL_MIN
+  // An unknown local age (no first-seen recorded) is not evidence of tenure.
+  const tenured = input.user.localAgeDays !== null &&
+    input.user.localAgeDays >= EXEMPT_MIN_LOCAL_AGE_DAYS
+  return volume && tenured && !hasHardAccountVerdict(input.user, input.policy)
+}
 
 interface VerdictDraft {
   pSpam: number
@@ -352,7 +414,7 @@ export const evaluateMessage = async (
     if (velocity?.exceeded) {
       return finalize(
         {
-          pSpam: VELOCITY_PSPAM,
+          pSpam: velocity.singleAuthor === true ? VELOCITY_PSPAM : VELOCITY_WAVE_PSPAM,
           decidedBy: 'velocity',
           ruleId: 'velocity_exceeded',
           reasonCode: 'velocity_exceeded',
@@ -366,7 +428,12 @@ export const evaluateMessage = async (
   if (ports.vectors) {
     const match = await safe('vectors', () => ports.vectors!.search(text))
     if (match) {
-      if (match.status === 'confirmed' && match.similarity >= VECTOR_DECIDE_SIMILARITY) {
+      // A nearest-neighbour hit may only DECIDE on a text long enough for the
+      // distance to mean something. Short strings cluster: two unrelated
+      // greetings routinely sit above 0.93 cosine, and this path enforces at
+      // 0.92 pSpam — above the mute threshold, with no vote (2026-07-30).
+      if (match.status === 'confirmed' && isDistinctive(text) &&
+          match.similarity >= VECTOR_DECIDE_SIMILARITY) {
         return finalize(
           {
             pSpam: 0.92,
@@ -390,8 +457,9 @@ export const evaluateMessage = async (
   if (ports.moderation) {
     const moderation = await safe('moderation', () =>
       ports.moderation!.check(text, input.enrichment.photoBase64))
-    if (moderation?.flagged) {
-      signals.push({ name: 'moderation_flagged', evidence: moderation.categories.join(', ') })
+    const contentHit = spamModerationHit(moderation)
+    if (contentHit !== null) {
+      signals.push({ name: 'moderation_flagged', evidence: contentHit })
     }
 
     // Profile-media NSFW. Avatar/stories are only downloaded for newish

@@ -39,11 +39,50 @@ export const AUTO_LEARN_DECIDED_BY = new Set<DecidedBy>([
 export const AUTO_LEARN_MIN_PSPAM = 0.95
 
 /**
- * Below this a text is not distinctive enough to be a signature. Enforcement
- * regularly lands on one-word messages and bare emoji; turning those into
- * match patterns would be indiscriminate.
+ * Below this a text is not distinctive enough to become a match rule of ANY
+ * kind — signature, vector, or auto-learn. Enforcement regularly lands on
+ * one-word messages and bare emoji; turning those into match patterns would be
+ * indiscriminate.
+ *
+ * Shared with the vector layer on purpose (2026-07-30 review): embedding
+ * similarity on short strings is dominated by length and topic, so two
+ * unrelated greetings routinely sit above 0.93 cosine. The signature layer
+ * learned this the hard way in v1 ("утра доброго" earned people auto-bans);
+ * the vector layer had no equivalent guard at all.
  */
-export const AUTO_LEARN_MIN_LENGTH = 40
+export const MIN_DISTINCTIVE_LENGTH = 40
+
+/** Historical alias — the auto-learn bar is the distinctiveness bar. */
+export const AUTO_LEARN_MIN_LENGTH = MIN_DISTINCTIVE_LENGTH
+
+/** A text long enough that a match against it means something. */
+export const isDistinctive = (text: string): boolean =>
+  text.trim().length >= MIN_DISTINCTIVE_LENGTH
+
+/**
+ * Net spam ballots required before a vote may write a *deciding* rule.
+ *
+ * `tallyVotes` resolves instantly on a single admin ballot — correct for
+ * acting on THIS message, wrong as a basis for a permanent cross-chat rule.
+ * One admin tapping "spam" used to write a confirmed signature (90d) and a
+ * confirmed vector (no expiry at all) that then auto-enforced in every chat
+ * the bot watches, with no way back except editing the database by hand.
+ * Acting locally needs one human; teaching all 52 chats needs agreement.
+ */
+export const VOTE_CONFIRM_MIN_BALLOTS = 2
+
+/**
+ * How strongly a spam-resolved vote may teach the stores. A `candidate` still
+ * raises a signal on the next occurrence (and the stores promote it themselves
+ * once a second, independent chat reports the same text) — it just may not
+ * convict on its own.
+ */
+export const voteLearnStatus = (
+  tally: { spam: number; ham: number }
+): 'candidate' | 'confirmed' =>
+  tally.spam >= VOTE_CONFIRM_MIN_BALLOTS && tally.spam > tally.ham
+    ? 'confirmed'
+    : 'candidate'
 
 export const shouldAutoLearn = (verdict: Verdict, text: string): boolean => {
   if (!AUTO_LEARN_DECIDED_BY.has(verdict.decidedBy)) return false

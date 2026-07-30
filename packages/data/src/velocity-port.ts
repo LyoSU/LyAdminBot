@@ -67,6 +67,14 @@ export class MemoryVelocityPort implements VelocityPort {
     if (!exceeded) return { exceeded: false }
     return {
       exceeded: true,
+      // `userIds` was tracked and then thrown away (2026-07-30 review). It is
+      // the difference between the two things this window sees: ONE account
+      // repeating itself across chats is a blast — nothing legitimate looks
+      // like that — while several accounts carrying the same line may be a
+      // multi-account campaign OR a text that simply went viral (a news line, a
+      // meme, an announcement people copy-paste). Both stay detected; only the
+      // first is certain enough to act on without asking anybody.
+      singleAuthor: entry.userIds.size === 1,
       evidence: `${entry.count} copies in ${entry.chatIds.size} chats from ${entry.userIds.size} accounts within window`
     }
   }

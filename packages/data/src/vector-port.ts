@@ -9,7 +9,7 @@
 import { QdrantClient } from '@qdrant/js-client-rest'
 import OpenAI from 'openai'
 import type { VectorMatch, VectorPort } from '@lyadmin/core'
-import { hasTextualContent } from '@lyadmin/core'
+import { hasTextualContent, isDistinctive } from '@lyadmin/core'
 import { sha256 } from './hashing.js'
 
 /** Deterministic point id from the text, so re-learning the same spam upserts
@@ -26,6 +26,11 @@ const MIN_REPORTABLE_SIMILARITY = 0.8
 const CONFIRMED_HIT_COUNT = 3
 const CONFIRMED_CONFIDENCE = 90
 
+/** Learned points stop deciding after this; a campaign that is still live
+ * gets re-learned and its expiry pushed out. v1 points carry no expiry field
+ * and are therefore unaffected. */
+const LEARNED_TTL_DAYS = 90
+
 export interface QdrantVectorPortConfig {
   qdrantUrl: string
   qdrantApiKey?: string | undefined
@@ -38,6 +43,8 @@ interface SpamPayload {
   hitCount?: number
   status?: string
   disabledAt?: string
+  /** Unix seconds; absent on v1 points, which never expire. */
+  expiresAtUnix?: number
 }
 
 export class QdrantVectorPort implements VectorPort {
@@ -74,14 +81,21 @@ export class QdrantVectorPort implements VectorPort {
       }
     })
 
+    const nowUnix = Math.floor(Date.now() / 1000)
     for (const point of results) {
       const payload = (point.payload ?? {}) as SpamPayload
       if (payload.disabledAt) continue
+      if (typeof payload.expiresAtUnix === 'number' && payload.expiresAtUnix < nowUnix) continue
       if (point.score < MIN_REPORTABLE_SIMILARITY) continue
+      // `confidence >= 90` used to count as confirmation. That field comes from
+      // v1's own LLM verdicts — including its false positives, which is what v2
+      // exists to stop — so an unvetted v1 point could silently mute people at
+      // 0.92 with no vote. Only an explicit status or repeated independent hits
+      // confirm now; everything else is a candidate, i.e. a signal the rest of
+      // the pipeline weighs (2026-07-30 review).
       const confirmed =
         payload.status === 'confirmed' ||
-        (payload.hitCount ?? 0) >= CONFIRMED_HIT_COUNT ||
-        (payload.confidence ?? 0) >= CONFIRMED_CONFIDENCE
+        (payload.hitCount ?? 0) >= CONFIRMED_HIT_COUNT
       return {
         similarity: point.score,
         status: confirmed ? 'confirmed' : 'candidate',
@@ -92,15 +106,27 @@ export class QdrantVectorPort implements VectorPort {
   }
 
   /**
-   * Self-learning ingest: embed a community-confirmed spam text and upsert it
-   * as a confirmed point, so the vector layer learns alongside signatures
-   * (previously Qdrant was read-only and frozen at its v1 state). Best-effort:
-   * a failed embed/upsert never throws into the moderation path.
+   * Self-learning ingest: embed a spam text and upsert it, so the vector layer
+   * learns alongside signatures instead of staying frozen at its v1 state.
+   * Best-effort: a failed embed/upsert never throws into the moderation path.
+   *
+   * Two guards that were missing (2026-07-30 review). Every learned point used
+   * to be written `confirmed` with no expiry — even from `learnFromAutoVerdict`,
+   * which writes signatures as mere candidates, and even for a two-word text.
+   * A semantic rule is far blunter than a hash: it must earn the same
+   * confirmation as a signature, be distinctive enough for cosine distance to
+   * mean anything, and age out if the campaign stops.
    */
-  async learn(text: string, source: string): Promise<void> {
+  async learn(
+    text: string,
+    source: string,
+    status: 'candidate' | 'confirmed' = 'candidate'
+  ): Promise<void> {
     if (!hasTextualContent(text)) return
+    if (!isDistinctive(text)) return
     const embedding = await this.embed(text)
     if (!embedding) return
+    const now = Date.now()
     try {
       await this.qdrant.upsert(SPAM_COLLECTION, {
         points: [{
@@ -108,11 +134,13 @@ export class QdrantVectorPort implements VectorPort {
           vector: embedding,
           payload: {
             classification: 'spam',
-            status: 'confirmed',
+            status,
             source,
-            hitCount: CONFIRMED_HIT_COUNT,
-            confidence: CONFIRMED_CONFIDENCE,
-            createdAt: new Date().toISOString()
+            ...(status === 'confirmed'
+              ? { hitCount: CONFIRMED_HIT_COUNT, confidence: CONFIRMED_CONFIDENCE }
+              : {}),
+            createdAt: new Date(now).toISOString(),
+            expiresAtUnix: Math.floor(now / 1000) + LEARNED_TTL_DAYS * 86_400
           }
         }]
       })

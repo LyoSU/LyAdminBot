@@ -142,12 +142,26 @@ describe('content evidence (2026-07-30 FP)', () => {
     }
   })
 
-  it('a bare external link is evidence about the message, but not enough to enforce on', () => {
+  it('a bare external link is not evidence to enforce on', () => {
     // The commonest ham content in a group chat. It may raise the score and
-    // pull in the LLM; it may not, by itself, delete anybody's message.
+    // pull in the LLM; it may not, by itself, delete anybody's message — and it
+    // may not help clear the bar for removing a person either.
     const signals = [...shapeStack, { name: 'external_url' }]
-    expect(contentEvidence(signals).total).toBe(0.8)
+    expect(contentEvidence(signals).total).toBe(0)
     expect(hasDecisiveSignal(signals)).toBe(false)
+  })
+
+  it('REGRESSION: nudges do not add up to grounds for removing a person', () => {
+    // Production, 2026-07-30 11:36: a political comment kicked on
+    // moderation_flagged 1.5 + long_text 0.4 + edited_message 0.2 = 2.1, voted
+    // ham by the chat. Being long and having been edited is not evidence.
+    const signals: Signal[] = [
+      { name: 'moderation_flagged' }, { name: 'long_text' }, { name: 'edited_message' },
+      { name: 'new_globally' }, { name: 'new_in_chat' }
+    ]
+    expect(hasDecisiveSignal(signals)).toBe(true)
+    expect(contentEvidence(signals).total).toBe(SIGNAL_WEIGHTS['moderation_flagged'])
+    expect(mayRemoveSender(signals)).toBe(false)
   })
 
   it('one real content signal licenses enforcement on the message', () => {
@@ -160,9 +174,12 @@ describe('content evidence (2026-07-30 FP)', () => {
     expect(hasDecisiveSignal([{ name: 'vector_similar_spam' }])).toBe(true)
     expect(mayRemoveSender([{ name: 'vector_similar_spam' }])).toBe(false)
 
-    // Two independent facts about the message do reach the bar.
-    expect(mayRemoveSender([{ name: 'phone_number' }, { name: 'external_url' }])).toBe(true)
+    // Two independent facts that are each evidence in their own right do.
+    expect(mayRemoveSender([{ name: 'phone_number' }, { name: 'vector_similar_spam' }])).toBe(true)
     expect(mayRemoveSender([{ name: 'many_url_buttons' }])).toBe(true)
+
+    // A link riding along with one of them adds nothing: it is a nudge.
+    expect(mayRemoveSender([{ name: 'phone_number' }, { name: 'external_url' }])).toBe(false)
   })
 
   it('trust signals never count as evidence for enforcing', () => {

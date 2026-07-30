@@ -46,6 +46,21 @@ describe('MemoryVelocityPort', () => {
     expect(third?.exceeded).toBe(true)
   })
 
+  it('reports ONE account blasting separately from several accounts carrying a text', async () => {
+    // The distinction the port used to compute and then discard. A blast is
+    // certain; a wave might be a campaign or might be a viral line, and the
+    // pipeline prices the two differently.
+    const blast = new MemoryVelocityPort()
+    await blast.check(makeInput(-1, 7, SPAM))
+    await blast.check(makeInput(-2, 7, SPAM))
+    expect((await blast.check(makeInput(-3, 7, SPAM)))?.singleAuthor).toBe(true)
+
+    const wave = new MemoryVelocityPort()
+    await wave.check(makeInput(-1, 10, SPAM))
+    await wave.check(makeInput(-2, 11, SPAM))
+    expect((await wave.check(makeInput(-3, 12, SPAM)))?.singleAuthor).toBe(false)
+  })
+
   it('the window expires', async () => {
     let now = 1_000_000
     const port = new MemoryVelocityPort({ windowMs: 1000 }, () => now)

@@ -78,24 +78,55 @@ const mapMedia = (msg: Message): { attachments: MessageAttachmentInfo[]; extraTe
       return { attachments: one(kind), extraText: [], previewUrl: null }
     }
     case 'messageMediaContact':
-      return { attachments: one('contact'), extraText: [], previewUrl: null }
+      // A contact card is how a phone number and a name reach the chat without
+      // a single character of message text — invisible to every text layer
+      // until it is extracted here (2026-07-30 review).
+      return {
+        attachments: one('contact'),
+        extraText: [raw.firstName, raw.lastName, raw.phoneNumber].filter((t) => t.length > 0),
+        previewUrl: null
+      }
     case 'messageMediaPoll':
-      return { attachments: one('poll'), extraText: [], previewUrl: null }
+      // The question and the options are the whole content of a poll; a promo
+      // poll ("Заробіток? / так / пиши @promo") used to arrive as empty text
+      // and get waved through by the abstain gate.
+      return {
+        attachments: one('poll'),
+        extraText: [
+          raw.poll.question.text,
+          ...raw.poll.answers.map((a) => a.text.text)
+        ].filter((t) => t.length > 0),
+        previewUrl: null
+      }
     case 'messageMediaGeo':
     case 'messageMediaGeoLive':
-    case 'messageMediaVenue':
       return { attachments: one('location'), extraText: [], previewUrl: null }
+    case 'messageMediaVenue':
+      return {
+        attachments: one('location'),
+        extraText: [raw.title, raw.address].filter((t) => t.length > 0),
+        previewUrl: null
+      }
     case 'messageMediaStory':
       return { attachments: one('story'), extraText: [], previewUrl: null }
     case 'messageMediaPaidMedia':
       return { attachments: one('paid_media'), extraText: [], previewUrl: null }
     case 'messageMediaGiveaway':
+      return {
+        attachments: one('giveaway'),
+        extraText: raw.prizeDescription ? [raw.prizeDescription] : [],
+        previewUrl: null
+      }
     case 'messageMediaGiveawayResults':
       return { attachments: one('giveaway'), extraText: [], previewUrl: null }
     case 'messageMediaVideoStream':
       return { attachments: one('video_stream'), extraText: [], previewUrl: null }
     case 'messageMediaInvoice':
-      return { attachments: one('invoice'), extraText: [], previewUrl: null }
+      return {
+        attachments: one('invoice'),
+        extraText: [raw.title, raw.description].filter((t) => t.length > 0),
+        previewUrl: null
+      }
     case 'messageMediaToDo': {
       // Checklist task titles are content a human reads — extract them.
       const todo = raw.todo
@@ -217,9 +248,13 @@ export const normalizeMessage = (msg: Message, ctx: NormalizeContext = {}): Norm
           textPreview: preview(replied.text ?? '')
         }
       }
-    } else {
-      replyTo = { authorId: null, isSelf: false, ageSeconds: null, textPreview: null }
     }
+    // No `replied` means the fetch failed or the target is gone. It used to
+    // produce a replyTo of nulls, which the core reads as `is_reply` — a −1.0
+    // trust discount handed out for an unverifiable claim, and the cheapest
+    // evasion in the system (reply to anything, pay nothing). It also masked
+    // channel comments as ordinary replies, so the chat stopped being a
+    // discussion. An unverified reply is now simply not a reply (2026-07-30).
   }
 
   // ── guest bot ──────────────────────────────────────────────────────

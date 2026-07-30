@@ -21,6 +21,14 @@ export interface SignaturePort {
 
 export interface VelocityResult {
   exceeded: boolean
+  /**
+   * Every copy came from ONE account. That is a blast, and nothing legitimate
+   * looks like it. Several accounts carrying the same text may equally be a
+   * multi-account campaign or a line that went viral, so the pipeline treats
+   * that case as strong evidence in need of a human, not as a certainty.
+   * Absent means "unknown" and is read conservatively (as a wave).
+   */
+  singleAuthor?: boolean
   evidence?: string
 }
 

@@ -2,7 +2,7 @@
  * UserSnapshot builder: merges what Telegram tells us about the sender
  * (free with the update) with what we remember about them (data layer).
  */
-import type { User } from '@mtcute/node'
+import type { Chat, User } from '@mtcute/node'
 import type { UserSnapshot } from '@lyadmin/core'
 import { predictAccountAgeDays } from './account-age.js'
 
@@ -65,4 +65,55 @@ export const buildUserSnapshot = (
   avatars: history?.avatars ?? null,
   nameChurn24h: history?.nameChurn24h ?? 0,
   usernameChurn24h: history?.usernameChurn24h ?? 0
+})
+
+/**
+ * Snapshot for a message sent *as a channel* — Telegram's "send as", which any
+ * member who owns a channel can use and which the pipeline used to skip
+ * entirely (the intake accepted `User` senders only). Channel-promo drops are
+ * one of the spam classes v2 exists to catch, so refusing to look at the one
+ * delivery method that advertises a channel by construction was a hole.
+ *
+ * Everything account-shaped is deliberately null/zero: a channel has no
+ * registration date to predict, no bio we read, no avatar we screen and no
+ * client to be flagged for. The verdict therefore rests on the message — which
+ * is the right basis for it anyway. Telegram's own scam/fake flags DO exist for
+ * channels and are the one account-level fact worth carrying over.
+ */
+export const buildChannelSnapshot = (
+  sender: Chat,
+  history: UserHistory | null,
+  nowUnix = Math.floor(Date.now() / 1000)
+): UserSnapshot => ({
+  id: sender.id,
+  username: sender.username,
+  displayName: sender.displayName,
+  languageCode: null,
+  flags: {
+    scam: sender.isScam,
+    fake: sender.isFake,
+    restricted: sender.isRestricted,
+    verified: sender.isVerified,
+    premium: false,
+    bot: false
+  },
+  restrictionReasons: [],
+  joinedAgoSeconds: null,
+  // Channel ids come from a different namespace than user ids: feeding one to
+  // the user-id → registration-date table would invent an age.
+  predictedAgeDays: null,
+  localAgeDays: history?.firstSeenUnix != null
+    ? Math.max(0, (nowUnix - history.firstSeenUnix) / 86400)
+    : null,
+  messagesInChat: history?.messagesInChat ?? 0,
+  messagesGlobal: history?.messagesGlobal ?? 0,
+  groupsActive: history?.groupsActive ?? 0,
+  spamDetections: history?.spamDetections ?? 0,
+  reputationScore: history?.reputationScore ?? 50,
+  reputationStatus: history?.reputationStatus ?? 'neutral',
+  externalBan: null,
+  unofficialClientRisk: null,
+  avatars: null,
+  nameChurn24h: 0,
+  usernameChurn24h: 0
 })

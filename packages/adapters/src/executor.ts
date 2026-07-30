@@ -39,6 +39,18 @@ export interface ExecutionResult {
   errors: string[]
 }
 
+/**
+ * Facts that mark an account as condemned by someone other than us: Telegram's
+ * own scam/fake flags, a spam-labelled restriction, or an external ban listing.
+ * These are the only grounds on which a chat-trusted member is still actioned.
+ */
+const HARD_ACCOUNT_VERDICT_SIGNALS = new Set([
+  'scam_flag', 'fake_flag', 'external_ban', 'restricted_for_spam'
+])
+
+const hasHardAccountVerdict = (verdict: Verdict): boolean =>
+  verdict.signals.some((s) => !s.negative && HARD_ACCOUNT_VERDICT_SIGNALS.has(s.name))
+
 const MUTE_DURATION_SECONDS = 24 * 60 * 60
 const CAPTCHA_WINDOW_SECONDS = 10 * 60
 /** FLOOD_WAITs up to this long are absorbed; longer ones propagate. */
@@ -86,7 +98,17 @@ export const applyVerdict = async (
   // silently become a truthy guard that blocks all moderation.
   if (guards.senderIsAdmin) { result.skippedReason = 'senderIsAdmin'; return result }
   if (guards.senderIsSelf) { result.skippedReason = 'senderIsSelf'; return result }
-  if (guards.senderIsTrusted) { result.skippedReason = 'senderIsTrusted'; return result }
+  // Trust is a shield against OUR judgement, not against someone else's
+  // verdict. It is granted by a single tap — an admin ham ballot or the
+  // override button — and never expires, so treating it as absolute meant one
+  // misclick bought an account permanent immunity in that chat, including
+  // against a Telegram scam flag or an external ban listing. That is exactly
+  // the sold/compromised long-time account from the threat model
+  // (2026-07-30 review).
+  if (guards.senderIsTrusted && !hasHardAccountVerdict(verdict)) {
+    result.skippedReason = 'senderIsTrusted'
+    return result
+  }
 
   const attempt = async (label: string, call: () => Promise<void>): Promise<boolean> => {
     try {

@@ -215,6 +215,31 @@ describe('evaluateMessage — knowledge ports', () => {
     expect(['delete', 'mute', 'ban']).toContain(v.action)
   })
 
+  it('one account blasting is acted on alone; several accounts get a vote', async () => {
+    // A blast has no innocent explanation. The same line from several accounts
+    // is either a multi-account campaign or something that went viral, and the
+    // pipeline must not silently mute the third person to repeat a news line
+    // (2026-07-30 review — `userIds` was computed and then ignored).
+    const blast = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
+      velocity: { check: async () => ({ exceeded: true, singleAuthor: true }) }
+    })
+    expect(blast.pSpam).toBeGreaterThan(0.88)
+    expect(blast.needsVote).toBe(false)
+
+    const wave = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
+      velocity: { check: async () => ({ exceeded: true, singleAuthor: false }) }
+    })
+    expect(wave.action).toBe('delete')
+    expect(wave.needsVote).toBe(true)
+  })
+
+  it('a port that cannot tell is read as a wave, never as a blast', async () => {
+    const v = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
+      velocity: { check: async () => ({ exceeded: true }) }
+    })
+    expect(v.needsVote).toBe(true)
+  })
+
   it('confirmed vector match above threshold decides', async () => {
     const ports: PipelinePorts = {
       vectors: { search: async () => ({ similarity: 0.95, status: 'confirmed', vectorId: 'v1' }) }
@@ -238,6 +263,42 @@ describe('evaluateMessage — knowledge ports', () => {
     }
     const v = await evaluateMessage(makeInput({ msg: { text: 'якийсь текст з натяками тут' } }), ports)
     expect(v.signals.some((s) => s.name === 'moderation_flagged')).toBe(true)
+  })
+
+  it('REGRESSION: discussing violence is not evidence of advertising', async () => {
+    // Production, 2026-07-30 11:36: a member was KICKED mid-conversation for a
+    // comment about a rocket strike. The provider's `violence` category fired,
+    // `moderation_flagged` counted as content evidence, and the chat voted the
+    // verdict ham. Whether a message breaks a chat's rules on violence is for
+    // its admins; this pipeline only answers whether it is an advertisement.
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'Правильно, якщо не була мішенню, то і фіг з нею, ракета залетіла в огород' },
+      user: newcomer
+    }), { moderation: { check: async () => modResult({ violence: 0.97, harassment: 0.6 }) } })
+    expect(v.signals.some((s) => s.name === 'moderation_flagged')).toBe(false)
+    expect(['kick', 'mute', 'ban']).not.toContain(v.action)
+  })
+
+  it('sexual content in a message still raises the signal', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'приватні відео 18+ пиши мені в особисті' }, user: newcomer
+    }), { moderation: { check: async () => modResult({ sexual: 0.88, violence: 0.1 }) } })
+    const signal = v.signals.find((s) => s.name === 'moderation_flagged')
+    expect(signal?.evidence).toContain('sexual')
+  })
+
+  it('a provider that exposes only its boolean is read narrowly', async () => {
+    // No per-category scores: fall back to the named categories, still limited
+    // to the spam-relevant ones.
+    const violent = await evaluateMessage(makeInput({ msg: { text: 'текст про війну і смерть тут' } }), {
+      moderation: { check: async () => ({ flagged: true, categories: ['violence'], scores: {} }) }
+    })
+    expect(violent.signals.some((s) => s.name === 'moderation_flagged')).toBe(false)
+
+    const sexual = await evaluateMessage(makeInput({ msg: { text: 'текст із натяками на 18+ тут' } }), {
+      moderation: { check: async () => ({ flagged: true, categories: ['sexual'], scores: {} }) }
+    })
+    expect(sexual.signals.some((s) => s.name === 'moderation_flagged')).toBe(true)
   })
 
   it('weak vector similarity is noise and raises nothing', async () => {
@@ -626,6 +687,23 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
     expect(v.requireCaptcha).toBe(false)
   })
 
+  it('REGRESSION: a news repost with an invite link is deleted, not kicked', async () => {
+    // Production, 2026-07-30 11:52: a sleeper account reposting a news item was
+    // KICKED at 0.77 on private_invite_link=1.8 + sleeper_awakened=1.2 +
+    // long_text=0.4. One real content signal plus a soft stack plus a crumb: the
+    // message may well deserve deleting, the person does not deserve removing.
+    const v = await evaluateMessage(makeInput({
+      msg: {
+        text: `🇵🇱 Польща не була мішенню російської ракети, – прем'єр країни Туск. ${'За його словами, наразі немає жодних підстав вважати, що ракета була спрямована по території. '.repeat(2)}`,
+        urls: [{ visible: 't.me/+abc', target: 'https://t.me/+abcdefghijklmno', hidden: false }]
+      },
+      user: { predictedAgeDays: 1500, localAgeDays: 3, messagesGlobal: 40, messagesInChat: 8 }
+    }), {})
+    expect(v.signals.map((s) => s.name)).toEqual(expect.arrayContaining(
+      ['private_invite_link', 'sleeper_awakened', 'long_text']))
+    expect(['kick', 'mute', 'ban']).not.toContain(v.action)
+  })
+
   it('an ordinary delete quizzes nobody — the gate belongs to the capped band', async () => {
     // Only a verdict that WANTED the sender gone trades the removal for a
     // question. A plain delete in the delete band is not an uncertain removal.
@@ -762,6 +840,30 @@ describe('evaluateMessage — established-regular exempt', () => {
       confirmedSignature)
     expect(v.action).toBe('none')
     expect(v.reasonCode).toBe('established_regular')
+  })
+
+  it('REGRESSION: volume alone cannot buy the exempt — standing takes time', async () => {
+    // The counters rise on every message in every chat the bot watches, with no
+    // rate or quality condition, so 50 messages of "ок" in a group the spammer
+    // controls used to buy a total bypass of the pipeline in all 52 chats
+    // (2026-07-30 review). A regular is someone who has been around.
+    const farmed = await evaluateMessage(
+      makeInput({ msg: wouldMatch, user: { messagesInChat: 60, messagesGlobal: 900, localAgeDays: 1 } }),
+      confirmedSignature)
+    expect(farmed.reasonCode).not.toBe('established_regular')
+    expect(farmed.decidedBy).toBe('signature')
+
+    // An unknown first-seen is not evidence of tenure either.
+    const unknown = await evaluateMessage(
+      makeInput({ msg: wouldMatch, user: { messagesInChat: 60, messagesGlobal: 900, localAgeDays: null } }),
+      confirmedSignature)
+    expect(unknown.reasonCode).not.toBe('established_regular')
+
+    // The same volume with real tenure is exempt, as before.
+    const tenured = await evaluateMessage(
+      makeInput({ msg: wouldMatch, user: { messagesInChat: 60, messagesGlobal: 900, localAgeDays: 30 } }),
+      confirmedSignature)
+    expect(tenured.reasonCode).toBe('established_regular')
   })
 
   it('below both thresholds runs the full pipeline (signature decides)', async () => {
