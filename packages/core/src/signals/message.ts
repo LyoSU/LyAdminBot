@@ -26,7 +26,18 @@ export const CASHTAG_REGEX = /\$[A-Z]{2,6}\b/
 // INSIDE words: word joiner, zero-width space, soft hyphen, BOM.
 // ZWJ/ZWNJ are deliberately excluded — legitimate in emoji sequences and
 // Persian/Arabic text.
-const INVISIBLE_IN_WORD_REGEX = /\p{L}[\u2060\u200B\u00AD\uFEFF]+\p{L}/u
+/**
+ * Zero-width characters wedged inside a word: deliberate obfuscation only.
+ *
+ * SOFT HYPHEN (U+00AD) and BOM (U+FEFF) used to be in this class and are not
+ * any more (2026-07-30). At weight 2.0 this signal on its own clears the bar
+ * for removing the sender, and both of those characters arrive by accident \u2014
+ * a soft hyphen from pasting hyphenated text out of a document or a justified
+ * web page, a BOM from a broken encoding pipeline. Nothing is lost: every
+ * \p{Cf} is stripped before hashing and embedding, so these cannot evade the
+ * signature or vector layers regardless of whether a signal fires here.
+ */
+const INVISIBLE_IN_WORD_REGEX = /\p{L}[\u2060\u200B]+\p{L}/u
 
 // A "word" that mixes Cyrillic and Latin letters — homoglyph evasion
 // ("Зaрaбoтoк" with Latin a/o). Per-word check avoids flagging bilingual

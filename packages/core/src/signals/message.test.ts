@@ -90,9 +90,26 @@ describe('extractMessageSignals — suspicious signals', () => {
 
   it('flags invisible characters injected inside words (job-scam obfuscation)', () => {
     // U+2060 WORD JOINER inside a word — an obfuscation seen in production
-    expect(names(makeMsg({ text: 'Доб⁠рого дня! Потрібні люди' }))).toContain('invisible_in_word')
+    expect(names(makeMsg({ text: 'Доб\u2060рого дня! Потрібні люди' }))).toContain('invisible_in_word')
     // ZWJ in emoji sequences must NOT trigger it
     expect(names(makeMsg({ text: 'сімʼя 👨‍👩‍👧' }))).not.toContain('invisible_in_word')
+  })
+
+  it('does NOT flag typographic artefacts of copied text', () => {
+    // At weight 2.0 this signal single-handedly clears the bar for removing the
+    // sender, with no stage having read the message. A SOFT HYPHEN (U+00AD)
+    // inside a word is what pasting hyphenated text out of a PDF, a document
+    // editor or a justified web page produces, and a BOM (U+FEFF) is what a
+    // broken encoding pipeline leaves behind — neither is evidence of intent.
+    //
+    // Nothing is lost by ignoring them: `stripInvisible` removes every \p{Cf}
+    // before hashing and embedding, so this class of character cannot evade the
+    // signature or vector layers in the first place. The signal's only job is to
+    // register deliberate obfuscation.
+    expect(names(makeMsg({ text: 'Потріб\u00ADні люди на роботу' }))).not.toContain('invisible_in_word')
+    expect(names(makeMsg({ text: 'Потріб\uFEFFні люди на роботу' }))).not.toContain('invisible_in_word')
+    // Zero-width space stays: it has no typographic use in chat text.
+    expect(names(makeMsg({ text: 'Потріб\u200Bні люди на роботу' }))).toContain('invisible_in_word')
   })
 
   it('flags mixed-script words (homoglyph evasion), not legit bilingual text', () => {

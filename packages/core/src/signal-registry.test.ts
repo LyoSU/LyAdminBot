@@ -103,8 +103,9 @@ describe('signal registry', () => {
 
   /** Message-evidence signals too light to license enforcement on their own. */
   const NUDGES = [
-    'bot_mention', 'edited_message', 'external_url', 'guest_bot_delivery',
-    'long_text', 'restricted_flag', 'story_share', 'unknown_media'
+    'bot_mention', 'custom_emoji_heavy', 'edited_message', 'external_url',
+    'guest_bot_delivery', 'long_text', 'restricted_flag', 'story_share',
+    'unknown_media'
   ]
 
   it('the list of sub-threshold nudges is exactly the one we intend', () => {

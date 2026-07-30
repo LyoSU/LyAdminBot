@@ -52,7 +52,13 @@ export const SIGNAL_WEIGHTS: Record<string, number> = {
   long_text: 0.4,
   invisible_in_word: 2.0,
   mixed_script_word: 1.5,
-  custom_emoji_heavy: 1.0,
+  // Deliberately a nudge (2026-07-30). Three custom emoji is ordinary Premium
+  // decoration, commonplace in gaming and meme chats; at 1.0 it was decisive on
+  // its own and supplied half the evidence needed to remove a person. Its real
+  // purpose is "the raw text may hide what is rendered", i.e. a reason to
+  // classify — and `shouldAbstain` already guarantees such messages are
+  // classified rather than abstained on.
+  custom_emoji_heavy: 0.8,
   paid_media: 1.5,
   giveaway_media: 1.0,
   story_share: 0.8,
