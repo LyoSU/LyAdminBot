@@ -513,11 +513,21 @@ export const evaluateMessage = async (
   // Removing the sender is therefore gated on the LLM having actually read the
   // message, unless the message evidence is substantial on its own.
   const scoreDecision = policyFor(scorePSpam, signals)
-  const unearnedRemoval = removesSender(scoreDecision.action) && !mayRemoveSender(signals)
+  const earnedIt = mayRemoveSender(signals)
+  const unearnedRemoval = removesSender(scoreDecision.action) && !earnedIt
+  /**
+   * Any enforcement on thin evidence, not just a removal (2026-07-30 12:34
+   * production): a TRUSTED member posting a job ad with a phone number scored
+   * 0.80, and because the trust rule caps trusted members at `delete`, the
+   * prospective action was not a removal — so the LLM gate stayed shut and the
+   * message was deleted on `phone_number` + newness stacking with no stage
+   * having read it. Milder than a kick, same defect.
+   */
+  const unearnedEnforcement = isEnforcementAction(scoreDecision.action) && !earnedIt
 
   const inGreyZone = scorePSpam >= LLM_GREY_LOW && scorePSpam <= LLM_GREY_HIGH
   const needsLlm = inGreyZone ||
-    (scorePSpam > LLM_GREY_HIGH && (!decisive || unearnedRemoval))
+    (scorePSpam > LLM_GREY_HIGH && (!decisive || unearnedEnforcement))
   let llmNeededButUnavailable = false
 
   if (needsLlm && ports.llm) {

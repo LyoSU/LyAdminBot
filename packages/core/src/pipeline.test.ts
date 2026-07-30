@@ -704,6 +704,37 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
     expect(['kick', 'mute', 'ban']).not.toContain(v.action)
   })
 
+  it('REGRESSION: thin evidence is not enforced unread in the DELETE band either', async () => {
+    // Production, 2026-07-30 12:34, a `soft`-preset chat: a job ad scored 0.80
+    // on phone_number 1.2 + newness stacking. Soft puts delete at 0.78 and kick
+    // at 0.86, so the prospective action was not a REMOVAL — the LLM gate stayed
+    // shut on a technicality and the message was deleted with nobody having read
+    // it. The gate follows "enforcement on thin evidence", not "removal".
+    const jobAd = {
+      msg: {
+        text: 'Запрошуємо в команду продавців-консультантів у магазини взуття та одягу. Графік роботи позмінний, повна зайнятість. Локація: вулиця Городоцька, торговий центр. Офіційне оформлення, стабільна оплата двічі на місяць, навчання за наш рахунок. Телефон +380671234567'
+      },
+      user: { predictedAgeDays: 1500, localAgeDays: 3, messagesGlobal: 2, messagesInChat: 1 },
+      policy: { preset: 'soft' as const }
+    }
+
+    const scoreOnly = await evaluateMessage(makeInput(jobAd), {})
+    expect(scoreOnly.pSpam).toBeGreaterThan(0.78)
+    expect(scoreOnly.pSpam).toBeLessThan(0.86)
+
+    const calls: LlmTier[] = []
+    const v = await evaluateMessage(makeInput(jobAd), {
+      llm: {
+        classify: async (_i, tier) => {
+          calls.push(tier)
+          return { pSpam: 0.1, reasonCode: 'legit_share', evidence: null, cached: false }
+        }
+      }
+    })
+    expect(calls).toEqual(['cheap'])
+    expect(v.action).toBe('none')
+  })
+
   it('an ordinary delete quizzes nobody — the gate belongs to the capped band', async () => {
     // Only a verdict that WANTED the sender gone trades the removal for a
     // question. A plain delete in the delete band is not an uncertain removal.

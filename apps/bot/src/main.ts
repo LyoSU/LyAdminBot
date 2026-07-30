@@ -1636,7 +1636,15 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     chat: chat.title ?? undefined,
     user: sender.displayName,
     username: sender.username ?? undefined,
-    text: normalized.text ? normalized.text.slice(0, 160) : undefined
+    text: normalized.text ? normalized.text.slice(0, 160) : undefined,
+    // Media-only spam logs no text at all, which leaves the line unreadable and
+    // the verdict unreproducible (2026-07-30 12:33 was exactly that: a photo
+    // job-scam at 0.99 with nothing but ids in the log).
+    media: normalized.attachments.length > 0
+      ? [...new Set(normalized.attachments.map((a) => a.kind))].join(',')
+      : undefined,
+    // A channel author is a different accountability story than a member.
+    as: channelSender ? 'channel' : undefined
   }
   if (verdict.action !== 'none' && verdict.action !== 'observe') {
     log.info('moderation', {
