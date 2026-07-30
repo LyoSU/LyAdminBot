@@ -35,6 +35,7 @@ import { loadConfig } from './config.js'
 import { registerBotCommands } from './commands.js'
 import { formatDuration, parseBananDuration } from './duration.js'
 import { formatSignals, log } from './logger.js'
+import { RightsMemory, RIGHTS_ERROR_REGEX } from './rights.js'
 
 const config = loadConfig()
 
@@ -447,7 +448,6 @@ const MUTE_AFTER_VOTE_SECONDS = 24 * 60 * 60
  */
 const MISSING_RIGHTS_WARN_MS = 60 * 60 * 1000
 const missingRightsWarned = new Map<number, number>()
-const RIGHTS_ERROR_REGEX = /ADMIN_REQUIRED|FORBIDDEN|not enough rights|RIGHT/i
 const shouldWarnMissingRights = (chatId: number, errors: string[]): boolean => {
   if (!errors.some((e) => RIGHTS_ERROR_REGEX.test(e))) return false
   const now = Date.now()
@@ -461,6 +461,12 @@ const shouldWarnMissingRights = (chatId: number, errors: string[]): boolean => {
   }
   return true
 }
+
+/**
+ * What Telegram has recently refused us here, per capability. See rights.ts —
+ * the reasoning is load-bearing enough to live with its tests.
+ */
+const rights = new RightsMemory()
 
 /**
  * A vote resolved to spam (instant admin ballot or community threshold):
@@ -1456,6 +1462,25 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
 
   if (!policy.enabled) return
 
+  // Telegram has refused us both message removal and sender actions here within
+  // the last quarter of an hour, so there is no verdict we could act on. Keep
+  // asking the admins for rights, but stop paying for enrichment and LLM calls
+  // to reach a conclusion nothing can be done with. The block expires by
+  // itself, so rights granted later resume moderation with no restart.
+  if (rights.cannotEnforce(chat.id)) {
+    log.debug('enforcement_blocked', { chatId: chat.id, chat: chat.title ?? undefined })
+    if (shouldWarnMissingRights(chat.id, ['CHAT_ADMIN_REQUIRED'])) {
+      const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
+      const sent = await gateway.tg.sendText(chat.id, viewHtml(locale.notification.missingRights))
+        .catch(() => null)
+      if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'missing_rights')
+      log.warn('missing_rights', {
+        chatId: chat.id, chat: chat.title ?? undefined, action: 'all', blocked: true
+      })
+    }
+    return
+  }
+
   // ── normalize (budget call 1: replied message, only for replies) ───
   const replied = await gateway.fetchRepliedMessage(message)
   const normalized = normalizeMessage(message, { isEdit, repliedMessage: replied })
@@ -1658,6 +1683,10 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       errors: result.errors.length > 0 ? result.errors : undefined,
       latencyMs: Date.now() - started
     })
+    // A refusal is the authoritative statement of what we may do here; remember
+    // it per capability so the next messages are not evaluated at full price
+    // for nothing.
+    rights.noteFailures(chat.id, result.errors)
     // Spam caught but we couldn't act → tell admins to grant rights (once/hr).
     if (!result.applied && shouldWarnMissingRights(chat.id, result.errors)) {
       const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
