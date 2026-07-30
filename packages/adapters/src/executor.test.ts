@@ -90,6 +90,43 @@ describe('applyVerdict', () => {
     expect(result.captchaRequired).toBe(true)
   })
 
+  it('a captcha whose restriction failed is not announced', async () => {
+    // Prompting here would ask the user to unlock a door that never closed.
+    const actions = makeActions()
+    actions.mute = vi.fn(async () => { throw new Error('CHAT_ADMIN_REQUIRED') })
+    const result = await applyVerdict(makeVerdict({ action: 'captcha' }), target, noGuards, actions)
+    expect(result.captchaRequired).toBe(false)
+    expect(result.applied).toBe(false)
+  })
+
+  it('delete + requireCaptcha removes the message and gates the sender', async () => {
+    // The uncertain-verdict shape: we act on the message, not on the person.
+    const actions = makeActions()
+    const result = await applyVerdict(
+      makeVerdict({ action: 'delete', requireCaptcha: true }), target, noGuards, actions)
+    expect(actions.calls).toEqual(['delete', 'mute'])
+    expect(result.applied).toBe(true)
+    expect(result.captchaRequired).toBe(true)
+    expect(actions.kick).not.toHaveBeenCalled()
+    expect(actions.ban).not.toHaveBeenCalled()
+  })
+
+  it('a plain delete never restricts anybody', async () => {
+    const actions = makeActions()
+    const result = await applyVerdict(makeVerdict({ action: 'delete' }), target, noGuards, actions)
+    expect(result.captchaRequired).toBe(false)
+    expect(actions.mute).not.toHaveBeenCalled()
+  })
+
+  it('requireCaptcha on a guarded sender still restricts nobody', async () => {
+    const actions = makeActions()
+    const result = await applyVerdict(
+      makeVerdict({ action: 'delete', requireCaptcha: true }), target,
+      { ...noGuards, senderIsAdmin: true }, actions)
+    expect(result.captchaRequired).toBe(false)
+    expect(actions.calls).toEqual([])
+  })
+
   it.each([
     ['senderIsAdmin'], ['senderIsSelf'], ['senderIsTrusted']
   ])('NEVER acts when %s (safety invariant)', async (guard) => {

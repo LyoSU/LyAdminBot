@@ -17,7 +17,9 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { SIGNAL_GROUP_CAPS, SIGNAL_WEIGHTS, SOFT_SHAPE_SIGNALS, hasDecisiveSignal } from './score.js'
+import {
+  SIGNAL_GROUP_CAPS, SIGNAL_WEIGHTS, SOFT_SHAPE_SIGNALS, hasDecisiveSignal, DECISIVE_MIN_WEIGHT
+} from './score.js'
 
 /** `{ name: 'newness', cap: … }` group descriptors are not signals. */
 const GROUP_NAMES = new Set(SIGNAL_GROUP_CAPS.map((g) => g.name))
@@ -99,12 +101,40 @@ describe('signal registry', () => {
     expect(hasDecisiveSignal(all)).toBe(false)
   })
 
-  it('any non-soft-shape positive signal is decisive on its own', () => {
-    const decisive = Object.keys(SIGNAL_WEIGHTS)
-      .filter((n) => (SIGNAL_WEIGHTS[n] ?? 0) > 0 && !SOFT_SHAPE_SIGNALS.has(n))
+  /** Message-evidence signals too light to license enforcement on their own. */
+  const NUDGES = [
+    'bot_mention', 'edited_message', 'external_url', 'guest_bot_delivery',
+    'long_text', 'restricted_flag', 'story_share', 'unknown_media'
+  ]
+
+  it('the list of sub-threshold nudges is exactly the one we intend', () => {
+    // Listed by hand so that adding a light signal is a decision rather than an
+    // accident: a new signal under DECISIVE_MIN_WEIGHT silently changes whether
+    // a soft-shape stack may enforce, which is how the 2026-07-30 kick happened
+    // (`edited_message`, weight 0.2, counted as proof about the message).
+    const belowBar = Object.keys(SIGNAL_WEIGHTS)
+      .filter((n) => {
+        const w = SIGNAL_WEIGHTS[n] ?? 0
+        return w > 0 && !SOFT_SHAPE_SIGNALS.has(n) && w < DECISIVE_MIN_WEIGHT
+      })
+      .sort()
+    expect(belowBar).toEqual([...NUDGES].sort())
+  })
+
+  it('every content signal at or above the bar is decisive on its own', () => {
+    const decisive = Object.keys(SIGNAL_WEIGHTS).filter((n) =>
+      (SIGNAL_WEIGHTS[n] ?? 0) >= DECISIVE_MIN_WEIGHT && !SOFT_SHAPE_SIGNALS.has(n))
     expect(decisive.length).toBeGreaterThan(0)
     for (const name of decisive) {
       expect(hasDecisiveSignal([{ name }]), `${name} should be decisive`).toBe(true)
+    }
+  })
+
+  it('no nudge can enforce, alone or piled on sender shape', () => {
+    const shape = [...SOFT_SHAPE_SIGNALS].map((name) => ({ name }))
+    for (const name of NUDGES) {
+      expect(hasDecisiveSignal([{ name }]), name).toBe(false)
+      expect(hasDecisiveSignal([...shape, { name }]), `${name} + shape`).toBe(false)
     }
   })
 

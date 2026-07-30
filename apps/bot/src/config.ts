@@ -15,6 +15,20 @@ export interface BotConfig {
   openrouterApiKey: string | null
   llmCheapModel: string
   llmStrongModel: string
+  /**
+   * Deliver the captcha as an ephemeral group message — visible to the suspect
+   * alone (Bot API 10.2). On by default; a kill switch rather than a feature
+   * flag, because the visible prompt remains the fallback either way and the
+   * ephemeral path talks to an API surface we cannot verify from the code.
+   */
+  ephemeralCaptcha: boolean
+}
+
+/** Env booleans: only an explicit "false"/"0" turns a defaulted-on flag off. */
+const enabled = (name: string, fallback: boolean): boolean => {
+  const raw = process.env[name]?.trim().toLowerCase()
+  if (raw === undefined || raw === '') return fallback
+  return !['false', '0', 'no', 'off'].includes(raw)
 }
 
 const required = (name: string): string => {
@@ -34,5 +48,6 @@ export const loadConfig = (): BotConfig => ({
   openaiApiKey: process.env['OPENAI_API_KEY'] ?? null,
   openrouterApiKey: process.env['OPENROUTER_API_KEY'] ?? null,
   llmCheapModel: process.env['LLM_CHEAP_MODEL'] ?? 'openai/gpt-5-mini',
-  llmStrongModel: process.env['LLM_STRONG_MODEL'] ?? 'anthropic/claude-sonnet-4.6'
+  llmStrongModel: process.env['LLM_STRONG_MODEL'] ?? 'anthropic/claude-sonnet-4.6',
+  ephemeralCaptcha: enabled('EPHEMERAL_CAPTCHA', true)
 })

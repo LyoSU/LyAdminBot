@@ -527,14 +527,141 @@ describe('evaluateMessage — soft-shape-only guard (2026-06-21 FP)', () => {
   })
 
   it('content evidence alongside soft shape still enforces on score (guard is narrow)', async () => {
+    // A phone number is a fact about the message, not about the sender, and it
+    // is weighted like one. Note what is NOT used here any more: a bare
+    // external link (weight 0.8) stopped counting as decisive on 2026-07-30 —
+    // it is the commonest ham content in a group chat, so on its own it now
+    // buys an LLM look, not an enforcement. See the content-confirmation suite.
     const v = await evaluateMessage(makeInput({
       ...softShapeOver,
-      msg: {
-        text: 'подивись обовʼязково тут',
-        urls: [{ visible: 'https://promo.example', target: 'https://promo.example', hidden: false }]
-      }
+      msg: { text: 'подивись обовʼязково тут, пиши +380671234567' }
     }), {})
     expect(['delete', 'mute', 'ban']).toContain(v.action)
+  })
+})
+
+describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
+  // Faithful reproduction of the production false positive. A sleeper account
+  // in a chat it had lurked in wrote an ordinary thank-you addressed to another
+  // member. The sender-shape stack scored 0.845 — above the standard kick
+  // threshold (0.75) and, fatally, above the LLM ceiling, which is the SAME
+  // number. `edited_message` (weight 0.2) was enough to pass for "evidence
+  // about the message", so the soft-shape guard stood down and the score
+  // kicked. The chat voted ham 1:0 within five seconds.
+  const conversational = {
+    msg: {
+      text: '@lyubchak , це розйоб. Дякую за цей скарб',
+      isEdit: true,
+      mentions: ['lyubchak']
+    },
+    user: { predictedAgeDays: 1500, localAgeDays: 3, messagesGlobal: 2, messagesInChat: 8 },
+    enrichment: { bio: 'Мій сайт: example.com', personalChannelId: 7777 }
+  }
+
+  it('the stack still scores into kick territory (regression anchor)', async () => {
+    const v = await evaluateMessage(makeInput(conversational), {})
+    expect(v.pSpam).toBeGreaterThan(0.75)
+    expect(v.signals.map((s) => s.name)).toEqual(expect.arrayContaining(
+      ['sleeper_awakened', 'edited_message']))
+  })
+
+  it('REGRESSION: nobody is kicked over a score no stage could justify', async () => {
+    const v = await evaluateMessage(makeInput(conversational), {})
+    expect(['kick', 'mute', 'ban']).not.toContain(v.action)
+  })
+
+  it('a 0.2-weight edit marker no longer passes for message evidence', async () => {
+    // With the crumb discounted, the whole stack is sender-shape again and the
+    // soft-shape guard — which this FP had walked straight past — catches it.
+    const v = await evaluateMessage(makeInput(conversational), {})
+    expect(v.action).toBe('observe')
+    expect(v.reasonCode).toBe('soft_shape_only')
+  })
+
+  it('the LLM is consulted above the grey ceiling when the score wants the sender gone', async () => {
+    const calls: LlmTier[] = []
+    const v = await evaluateMessage(makeInput(conversational), {
+      llm: {
+        classify: async (_i, tier) => {
+          calls.push(tier)
+          return { pSpam: 0.03, reasonCode: 'small_talk', evidence: null, cached: false }
+        }
+      }
+    })
+    expect(calls).toEqual(['cheap'])
+    expect(v.decidedBy).toBe('llm')
+    expect(v.action).toBe('none')
+  })
+
+  // One real but thin piece of message evidence: enough to act on the message
+  // (the soft-shape guard stands down), nowhere near enough to remove a person.
+  // A sub-threshold vector neighbour is the everyday version of this.
+  const thinEvidence = {
+    ...conversational,
+    msg: { text: conversational.msg.text, mentions: conversational.msg.mentions }
+  }
+  const weakVector: PipelinePorts = {
+    vectors: { search: async () => ({ vectorId: 'v1', similarity: 0.86, status: 'candidate' }) }
+  }
+
+  it('thin evidence caps the punishment at delete + community vote', async () => {
+    const v = await evaluateMessage(makeInput(thinEvidence), weakVector)
+    expect(v.pSpam).toBeGreaterThan(0.75)
+    expect(v.action).toBe('delete')
+    expect(v.needsVote).toBe(true)
+    expect(v.reasonCode).toBe('content_unconfirmed')
+    expect(v.meta['cappedFrom']).toBe('kick')
+    expect(v.meta['contentEvidence']).toBe(1)
+  })
+
+  it('the sender is asked to prove they are human instead of being removed', async () => {
+    const v = await evaluateMessage(makeInput(thinEvidence), weakVector)
+    expect(v.requireCaptcha).toBe(true)
+  })
+
+  it('no captcha is demanded where the chat turned it off', async () => {
+    const v = await evaluateMessage(
+      makeInput({ ...thinEvidence, policy: { captchaEnabled: false } }), weakVector)
+    expect(v.action).toBe('delete')
+    expect(v.requireCaptcha).toBe(false)
+  })
+
+  it('an ordinary delete quizzes nobody — the gate belongs to the capped band', async () => {
+    // Only a verdict that WANTED the sender gone trades the removal for a
+    // question. A plain delete in the delete band is not an uncertain removal.
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'подивись обовʼязково тут, пиши +380671234567' },
+      user: { predictedAgeDays: 1500, localAgeDays: 3, messagesGlobal: 2, messagesInChat: 8 }
+    }), {})
+    expect(v.action).toBe('delete')
+    expect(v.reasonCode).not.toBe('content_unconfirmed')
+    expect(v.requireCaptcha ?? false).toBe(false)
+  })
+
+  it('an LLM that errors out cannot re-open the sender-removal path', async () => {
+    const v = await evaluateMessage(makeInput(thinEvidence), {
+      ...weakVector,
+      llm: { classify: async () => { throw new Error('rate limited') } }
+    })
+    expect(v.action).toBe('delete')
+    expect(v.decidedBy).toBe('score')
+  })
+
+  it('real message evidence still removes the sender without an LLM', async () => {
+    // The cap is about thin evidence, not about the LLM being mandatory: three
+    // URL buttons and a phone number are the message convicting itself.
+    const v = await evaluateMessage(makeInput({
+      msg: {
+        text: 'Робота вдома, пиши +380671234567',
+        inlineButtons: [
+          { text: 'a', url: 'https://a.example' },
+          { text: 'b', url: 'https://b.example' },
+          { text: 'c', url: 'https://c.example' }
+        ]
+      },
+      user: newcomer
+    }), {})
+    expect(['kick', 'mute', 'ban']).toContain(v.action)
   })
 })
 

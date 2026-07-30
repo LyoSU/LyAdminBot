@@ -103,6 +103,7 @@ export const uk: Locale = {
     identity_churn_promo: 'часта зміна імені + реклама',
     hidden_url_new: 'приховане посилання від новачка',
     low_information: 'недостатньо інформації, спостерігаємо',
+    content_unconfirmed: 'підозрілий профіль, але зміст не підтверджено',
     admin_report: 'адмін репортнув як спам',
     community_vote: 'спільнота проголосувала: спам',
     forward_blacklist: 'переслано з відомого спам-джерела'

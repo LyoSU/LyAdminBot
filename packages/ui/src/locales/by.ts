@@ -103,6 +103,7 @@ export const by: Locale = {
     identity_churn_promo: 'частая змена імя + рэклама',
     hidden_url_new: 'схаваная спасылка ад навічка',
     low_information: 'недастаткова інфармацыі, назіраем',
+    content_unconfirmed: 'падазроны профіль, але змест не пацверджаны',
     admin_report: 'адмін зарэпорціў як спам',
     community_vote: 'супольнасць прагаласавала: спам',
     forward_blacklist: 'пераслана з вядомай спам-крыніцы'

@@ -150,14 +150,75 @@ export const SOFT_SHAPE_SIGNALS = new Set([
 ])
 
 /**
+ * Minimum weight for a single signal to count as evidence at all — one full
+ * unit of log-odds.
+ *
+ * Provenance (2026-07-30 FP): the predicate below used to accept *any*
+ * non-soft-shape signal, whatever its weight. So `edited_message` (0.2),
+ * `unknown_media` (0.3) or `bot_mention` (0.5) — nudges, added precisely
+ * because they are too weak to mean anything alone — silently switched off the
+ * soft-shape guard, and a stack of sender-shape signals could then enforce
+ * without any stage reading the message. A signal worth a fifth of a unit is
+ * not grounds to delete someone's message; it is grounds to look closer.
+ */
+export const DECISIVE_MIN_WEIGHT = 1.0
+
+/**
+ * Minimum TOTAL message evidence before an action may remove the *sender*
+ * (kick/mute/ban) rather than just the message.
+ *
+ * Deleting a message costs the chat one line; removing the person costs them
+ * the chat. The 2026-07-30 kick rested on 1.2 units of "this account looks
+ * odd" plus a crumb — no stage had established that anything was actually
+ * advertised. Two units means roughly two independent facts about the message
+ * itself (a phone number *and* a link), or one heavy one (three URL buttons).
+ */
+export const SENDER_REMOVAL_MIN_EVIDENCE = 2.0
+
+export interface ContentEvidence {
+  /** Heaviest single message-evidence signal. */
+  strongest: number
+  /** Summed weight of all message-evidence signals (deduplicated). */
+  total: number
+}
+
+/**
+ * How much of the score comes from WHAT was written rather than WHO wrote it.
+ *
+ * Message content/structure signals and hard account verdicts (scam/fake/ban/
+ * unofficial client/prior detections/low reputation) count; soft-shape
+ * sender description does not, and neither do trust signals — a ceiling on the
+ * evidence needed to punish must never be reachable by *negative* weight.
+ */
+export const contentEvidence = (signals: Signal[]): ContentEvidence => {
+  let strongest = 0
+  let total = 0
+  for (const name of new Set(signals.map((s) => s.name))) {
+    if (SOFT_SHAPE_SIGNALS.has(name)) continue
+    const weight = SIGNAL_WEIGHTS[name] ?? 0
+    if (weight <= 0) continue
+    total += weight
+    if (weight > strongest) strongest = weight
+  }
+  return { strongest, total }
+}
+
+/**
  * Whether the signals carry evidence that justifies enforcing *without reading
- * the message text*: any message content/structure signal, or a hard account
- * verdict (scam/fake/restricted/ban/unofficial-client/prior-detections/
- * low-reputation). A score driven purely by soft-shape signals is NOT decisive.
- * Negative (trust) signals never count.
+ * the message text*. A score driven purely by soft-shape signals — or by
+ * sub-threshold nudges — is NOT decisive.
  */
 export const hasDecisiveSignal = (signals: Signal[]): boolean =>
-  signals.some((s) => !s.negative && !SOFT_SHAPE_SIGNALS.has(s.name))
+  contentEvidence(signals).strongest >= DECISIVE_MIN_WEIGHT
+
+/**
+ * Whether the evidence is substantial enough to act on the *sender*. The
+ * pipeline uses this as a ceiling on score-derived verdicts: arithmetic over
+ * signals may always delete, but it may only kick/mute/ban when the message
+ * itself is what earned the score.
+ */
+export const mayRemoveSender = (signals: Signal[]): boolean =>
+  contentEvidence(signals).total >= SENDER_REMOVAL_MIN_EVIDENCE
 
 /**
  * Correlated signal groups, each with a ceiling on what the group as a whole

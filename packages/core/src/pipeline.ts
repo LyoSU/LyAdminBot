@@ -21,8 +21,8 @@ import { extractUserSignals } from './signals/user.js'
 import { extractBioSignals } from './signals/bio.js'
 import { applyDeterministicRules } from './rules.js'
 import { parseCustomRule, customRuleMatches } from './custom-rules.js'
-import { scoreSignals, hasDecisiveSignal } from './score.js'
-import { decideAction, isEnforcementAction, type PolicyDecision } from './policy.js'
+import { scoreSignals, hasDecisiveSignal, mayRemoveSender, contentEvidence } from './score.js'
+import { decideAction, isEnforcementAction, removesSender, type PolicyDecision } from './policy.js'
 import { shouldAbstain } from './text/abstain.js'
 
 const LLM_GREY_LOW = 0.35
@@ -153,17 +153,25 @@ export const evaluateMessage = async (
     }
   }
 
+  /**
+   * What the policy would do with this probability. Exposed separately from
+   * `finalize` because the LLM gate has to know the *prospective* action before
+   * deciding whether the message may be judged on arithmetic alone.
+   */
+  const policyFor = (pSpam: number, signals: Signal[]): PolicyDecision => decideAction({
+    pSpam,
+    preset: input.policy.preset,
+    chatKind: input.chat.kind,
+    captchaEnabled: input.policy.captchaEnabled,
+    votingEnabled: input.policy.votingEnabled,
+    userIsNewish: isNewish(input),
+    userIsTrusted: isTrusted(input),
+    ephemeralCaptcha: input.policy.ephemeralCaptcha === true,
+    hasPermanentBanGrounds: signals.some((s) => PERMANENT_BAN_SIGNALS.has(s.name))
+  })
+
   const finalize = (draft: VerdictDraft, signals: Signal[], decision?: PolicyDecision): Verdict => {
-    const policyDecision = decision ?? decideAction({
-      pSpam: draft.pSpam,
-      preset: input.policy.preset,
-      chatKind: input.chat.kind,
-      captchaEnabled: input.policy.captchaEnabled,
-      votingEnabled: input.policy.votingEnabled,
-      userIsNewish: isNewish(input),
-      userIsTrusted: isTrusted(input),
-      hasPermanentBanGrounds: signals.some((s) => PERMANENT_BAN_SIGNALS.has(s.name))
-    })
+    const policyDecision = decision ?? policyFor(draft.pSpam, signals)
     meta['portErrors'] = portErrors
     return {
       pSpam: draft.pSpam,
@@ -413,8 +421,14 @@ export const evaluateMessage = async (
 
   // ── 6. score + LLM escalation ───────────────────────────────────────
 
-  const { pSpam: scorePSpam, topContributors } = scoreSignals(signals)
+  const { pSpam: scorePSpam, topContributors, cappedGroups } = scoreSignals(signals)
   meta['scorePSpam'] = Number(scorePSpam.toFixed(4))
+  // Calibration telemetry: how much of the score was earned by the message
+  // itself, and which correlated groups hit their ceiling. Both are needed to
+  // reconstruct a verdict from a log line alone — the 2026-07-30 FP could not
+  // be diagnosed from the logs because only the top contributor was recorded.
+  meta['contentEvidence'] = contentEvidence(signals).total
+  if (cappedGroups.length > 0) meta['cappedGroups'] = cappedGroups.join(',')
 
   // A score resting only on account/profile *shape* (no message-content
   // evidence, no hard verdict) carries no proof the message itself is spam —
@@ -422,8 +436,20 @@ export const evaluateMessage = async (
   // blind: it goes to the LLM (which reads the text) even above the grey
   // ceiling, and if the LLM can't clear it we observe instead of deleting.
   const decisive = hasDecisiveSignal(signals)
+
+  // What arithmetic alone would do, and whether the evidence earns it. The
+  // grey ceiling (0.75) happens to sit exactly ON the standard kick threshold,
+  // so the band that removes people used to be the one band no content-reading
+  // stage ever saw (2026-07-30 FP: a conversational thank-you kicked at 0.77
+  // on `signals:sleeper_awakened`, voted ham by the chat in five seconds).
+  // Removing the sender is therefore gated on the LLM having actually read the
+  // message, unless the message evidence is substantial on its own.
+  const scoreDecision = policyFor(scorePSpam, signals)
+  const unearnedRemoval = removesSender(scoreDecision.action) && !mayRemoveSender(signals)
+
   const inGreyZone = scorePSpam >= LLM_GREY_LOW && scorePSpam <= LLM_GREY_HIGH
-  const needsLlm = inGreyZone || (scorePSpam > LLM_GREY_HIGH && !decisive)
+  const needsLlm = inGreyZone ||
+    (scorePSpam > LLM_GREY_HIGH && (!decisive || unearnedRemoval))
   let llmNeededButUnavailable = false
 
   if (needsLlm && ports.llm) {
@@ -463,7 +489,7 @@ export const evaluateMessage = async (
     reasonCode: topContributors[0] ? `signals:${topContributors[0].name}` : 'no_signals',
     reasonEvidence: null
   }
-  const verdict = finalize(draft, signals)
+  const verdict = finalize(draft, signals, scoreDecision)
 
   // Soft-shape-only guard: the verdict rests purely on account/profile shape,
   // the LLM is the only stage that could justify enforcing on it, and it didn't
@@ -477,6 +503,29 @@ export const evaluateMessage = async (
       needsVote: false,
       banDurationSeconds: null,
       reasonCode: 'soft_shape_only'
+    }
+  }
+
+  // Content-confirmation cap. Arithmetic wants the sender gone, the message
+  // evidence does not earn it, and the LLM — the only stage that reads the
+  // text — never answered (unconfigured, rate-limited, or down). Removing a
+  // person is not a fail-safe default: downgrade to the message-only action
+  // and let the chat weigh in. Reaching this line with `unearnedRemoval` set
+  // always means the escalation above found no LLM, since every
+  // sender-removing threshold sits inside or above the grey zone.
+  if (unearnedRemoval && removesSender(verdict.action)) {
+    meta['cappedFrom'] = verdict.action
+    return {
+      ...verdict,
+      action: 'delete' as VerdictAction,
+      needsVote: input.policy.votingEnabled,
+      banDurationSeconds: null,
+      // What replaces the removal: the message goes, and the sender is asked to
+      // prove they are human. A spam bot cannot; the person we were wrong about
+      // taps once. Pointless for a long-standing member, so it is gated on the
+      // same newness the removal itself required.
+      requireCaptcha: input.policy.captchaEnabled && isNewish(input),
+      reasonCode: 'content_unconfirmed'
     }
   }
 

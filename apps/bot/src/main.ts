@@ -34,7 +34,7 @@ import {
 import { loadConfig } from './config.js'
 import { registerBotCommands } from './commands.js'
 import { formatDuration, parseBananDuration } from './duration.js'
-import { log } from './logger.js'
+import { formatSignals, log } from './logger.js'
 
 const config = loadConfig()
 
@@ -185,23 +185,167 @@ const rememberForward = (chatId: number, messageId: number, forward: ForwardOrig
  * Server-side captcha state. Callback payloads are forgeable (any client can
  * send arbitrary data against a bot message), so the `cap` handler must only
  * lift restrictions for gates we actually issued — and only once.
+ *
+ * The gate also records HOW it was announced: a whispered prompt is addressed
+ * by its own ephemeral id over the Bot API, a visible one by message id over
+ * MTProto, and a gate may end up with both.
  */
 const CAPTCHA_TTL_MS = 10 * 60 * 1000
-const pendingCaptchas = new Map<string, number>() // chatId:userId → expiresMs
-const issueCaptcha = (chatId: number, userId: number): void => {
+
+/**
+ * How long a whispered prompt gets on its own before the visible one goes up
+ * as well.
+ *
+ * Ephemeral delivery cannot be verified end to end from this side: the send
+ * goes out over the Bot API while taps come back through our MTProto session,
+ * and layer 227 — what mtcute 0.30 speaks — has no ephemeral id anywhere on
+ * `updateBotCallbackQuery`. If the tap never reaches us, or the recipient's
+ * client never rendered the whisper, the user would sit restricted with nothing
+ * to press. So silence is treated as a delivery failure, not as a refusal.
+ */
+const CAPTCHA_WHISPER_GRACE_MS = 45 * 1000
+
+interface CaptchaGate {
+  expiresMs: number
+  /** Set once the whisper lands; addressed via deleteEphemeralMessage. */
+  ephemeralMessageId: number | null
+  /** Set once a visible prompt is posted; an ordinary message id. */
+  publicMessageId: number | null
+  fallbackTimer: ReturnType<typeof setTimeout> | null
+}
+
+const pendingCaptchas = new Map<string, CaptchaGate>()
+const captchaKey = (chatId: number, userId: number): string => `${chatId}:${userId}`
+
+/** Drop a gate and, crucially, its pending fallback timer. */
+const forgetCaptcha = (key: string): void => {
+  const gate = pendingCaptchas.get(key)
+  if (gate?.fallbackTimer) clearTimeout(gate.fallbackTimer)
+  pendingCaptchas.delete(key)
+}
+
+const issueCaptcha = (chatId: number, userId: number): CaptchaGate => {
   if (pendingCaptchas.size > 2000) {
-    for (const [key, expires] of pendingCaptchas) {
-      if (expires <= Date.now()) pendingCaptchas.delete(key)
+    for (const [key, gate] of pendingCaptchas) {
+      if (gate.expiresMs <= Date.now()) forgetCaptcha(key)
     }
   }
-  pendingCaptchas.set(`${chatId}:${userId}`, Date.now() + CAPTCHA_TTL_MS)
+  const gate: CaptchaGate = {
+    expiresMs: Date.now() + CAPTCHA_TTL_MS,
+    ephemeralMessageId: null,
+    publicMessageId: null,
+    fallbackTimer: null
+  }
+  pendingCaptchas.set(captchaKey(chatId, userId), gate)
+  return gate
 }
-const consumeCaptcha = (chatId: number, userId: number): boolean => {
-  const key = `${chatId}:${userId}`
-  const expires = pendingCaptchas.get(key)
-  if (expires === undefined) return false
-  pendingCaptchas.delete(key)
-  return expires > Date.now()
+
+/** The gate this tap belongs to, consumed; null if forged, stale or expired. */
+const consumeCaptcha = (chatId: number, userId: number): CaptchaGate | null => {
+  const key = captchaKey(chatId, userId)
+  const gate = pendingCaptchas.get(key)
+  if (gate === undefined) return null
+  forgetCaptcha(key)
+  return gate.expiresMs > Date.now() ? gate : null
+}
+
+/**
+ * Ask the sender to prove they are human: whisper first, visible prompt as the
+ * safety net.
+ *
+ * The whisper is what makes asking cheap enough to prefer over punishing —
+ * nobody else in the chat sees the accusation, so a wrong guess costs the
+ * member one tap instead of public suspicion.
+ *
+ * The grace timer stays even though taps arrive natively
+ * (`updateEphemeralBotCallbackQuery`, layer 228): a restriction the user cannot
+ * lift is the one failure mode that must not exist, and no client-side
+ * rendering guarantee comes with a successful send. Silence is therefore
+ * treated as non-delivery, not as refusal — the cost of being wrong about that
+ * is one extra visible prompt, which is what every captcha did until now.
+ */
+const deliverCaptcha = async (
+  chatId: number,
+  userId: number,
+  userLabel: string,
+  locale: Locale
+): Promise<void> => {
+  const gate = issueCaptcha(chatId, userId)
+  const view = captchaPrompt(locale, { chatId, userId, userLabel })
+
+  const postVisible = async (): Promise<void> => {
+    const sent = await gateway.tg.sendText(chatId, viewHtml(view.text), {
+      replyMarkup: toKeyboard(view.buttons)
+      // Prompt failure is survivable: the restriction expires on its own.
+    }).catch(() => null)
+    if (sent) gate.publicMessageId = sent.id
+  }
+
+  if (!config.ephemeralCaptcha) {
+    await postVisible()
+    return
+  }
+
+  try {
+    gate.ephemeralMessageId = await gateway.sendEphemeralPrompt(
+      chatId, userId, view.text,
+      view.buttons.map((row) => row.map((b) => ({ text: b.text, data: b.data ?? '' })))
+    )
+    log.info('captcha_whispered', { chatId, userId })
+
+    const timer = setTimeout(() => {
+      // Still the same open gate? A tap (or a re-issue) already replaced it.
+      if (pendingCaptchas.get(captchaKey(chatId, userId)) !== gate) return
+      log.warn('captcha_whisper_unanswered', { chatId, userId })
+      void postVisible()
+    }, CAPTCHA_WHISPER_GRACE_MS)
+    // A pending fallback must not keep the process alive on shutdown.
+    timer.unref?.()
+    gate.fallbackTimer = timer
+  } catch (err) {
+    log.warn('captcha_whisper_failed', { chatId, userId, err })
+    await postVisible()
+  }
+}
+
+/**
+ * One tap proved liveness. Shared by both tap paths — a visible prompt arrives
+ * as an ordinary callback query, a whispered one as an ephemeral callback query
+ * — because the gate bookkeeping, not the update type, is what decides here.
+ *
+ * `answer` is the caller's way to acknowledge its own query type; returning
+ * false means the tap was forged, stale, or already spent.
+ */
+const passCaptcha = async (
+  chatId: number,
+  userId: number,
+  locale: Locale,
+  answer: (text?: string) => Promise<void>
+): Promise<boolean> => {
+  // Forgeable payload: lift the gate only if WE issued it, and only once.
+  const gate = consumeCaptcha(chatId, userId)
+  if (!gate) {
+    await answer()
+    return false
+  }
+  await gateway.tg.restrictChatMember({ chatId, userId, restrictions: {} })
+    .catch(() => { /* window may have expired already */ })
+  log.info('captcha_passed', {
+    chatId, userId, via: gate.ephemeralMessageId !== null ? 'whisper' : 'visible'
+  })
+  await answer(locale.captcha.passed)
+
+  // Clean up whichever channels actually announced this gate — a gate whose
+  // whisper went unanswered has both.
+  if (gate.publicMessageId !== null) {
+    await gateway.tg.deleteMessagesById(chatId, [gate.publicMessageId])
+      .catch(() => { /* already gone */ })
+  }
+  if (gate.ephemeralMessageId !== null) {
+    await gateway.removeEphemeralPrompt(chatId, userId, gate.ephemeralMessageId)
+      .catch(() => { /* expires on its own anyway */ })
+  }
+  return true
 }
 
 /** Admin cache: chatId:userId → isAdmin, 10 min TTL. */
@@ -1345,7 +1489,10 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       topLanguage: (groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale ?? null
     },
     user,
-    policy,
+    // The chat's stored settings plus one capability of the running bot: the
+    // policy may offer a captcha under a channel post only if it can be
+    // whispered to the commenter rather than posted into the thread.
+    policy: { ...policy, ephemeralCaptcha: config.ephemeralCaptcha },
     enrichment: {
       bio: profile.bio,
       personalChannelId: profile.personalChannelId,
@@ -1394,6 +1541,8 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       action: verdict.action, applied: result.applied, skipped: result.skippedReason ?? undefined,
       pSpam: Math.round(verdict.pSpam * 100) / 100, decidedBy: verdict.decidedBy,
       ruleId: verdict.ruleId ?? undefined, reason: verdict.reasonCode,
+      signals: formatSignals(verdict.signals),
+      cappedFrom: verdict.meta['cappedFrom'] ?? undefined,
       needsVote: verdict.needsVote || undefined,
       errors: result.errors.length > 0 ? result.errors : undefined,
       latencyMs: Date.now() - started
@@ -1408,7 +1557,8 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   } else if (verdict.action === 'observe') {
     log.debug('observe', {
       chatId: chat.id, userId: sender.id, messageId: message.id, ...logContext,
-      pSpam: Math.round(verdict.pSpam * 100) / 100, reason: verdict.reasonCode
+      pSpam: Math.round(verdict.pSpam * 100) / 100, reason: verdict.reasonCode,
+      signals: formatSignals(verdict.signals)
     })
   }
 
@@ -1433,16 +1583,15 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     latencyMs: Date.now() - started
   }).catch(() => { /* telemetry must never break moderation */ })
 
-  if (result.captchaRequired && result.applied) {
-    issueCaptcha(chat.id, sender.id)
-    log.info('captcha_issued', { chatId: chat.id, userId: sender.id, ...logContext })
-    const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
-    const view = captchaPrompt(locale, {
-      chatId: chat.id, userId: sender.id, userLabel: sender.displayName
+  // `captchaRequired` already means the restriction took hold (the executor
+  // only claims a gate it managed to close), so no `result.applied` check: for
+  // a capped verdict that is about the deleted message, not about the gate.
+  if (result.captchaRequired) {
+    log.info('captcha_issued', {
+      chatId: chat.id, userId: sender.id, ...logContext, action: verdict.action
     })
-    await gateway.tg.sendText(chat.id, viewHtml(view.text), {
-      replyMarkup: toKeyboard(view.buttons)
-    }).catch(() => { /* prompt failure: the restriction simply expires on its own */ })
+    const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
+    await deliverCaptcha(chat.id, sender.id, sender.displayName, locale)
   }
 
   if (result.applied && verdict.action !== 'none' && verdict.action !== 'observe' && verdict.action !== 'captcha') {
@@ -1781,17 +1930,9 @@ const wireCallbacks = (): void => {
         await query.answer({ text: locale.captcha.notForYou })
         return
       }
-      // Forgeable payload: lift the gate only if WE issued it, and only once.
-      if (!consumeCaptcha(chatId, userId)) {
-        await query.answer({})
-        return
-      }
-      // One tap proves liveness: lift the gate restriction, drop the prompt.
-      await gateway.tg.restrictChatMember({ chatId, userId, restrictions: {} })
-        .catch(() => { /* window may have expired already */ })
-      log.info('captcha_passed', { chatId, userId })
-      await query.answer({ text: locale.captcha.passed })
-      await gateway.tg.deleteMessagesById(chatId, [query.messageId]).catch(() => { /* ok */ })
+      await passCaptcha(chatId, userId, locale, async (text) => {
+        await query.answer(text === undefined ? {} : { text })
+      })
       return
     }
 
@@ -1844,6 +1985,24 @@ const wireCallbacks = (): void => {
       // Remove the notification message itself — keep chats clean.
       await gateway.tg.deleteMessagesById(chatId, [query.messageId]).catch(() => { /* ok */ })
     }
+  })
+
+  // Taps on a whispered prompt arrive as their own update type, so they need
+  // their own subscription. The captcha is the only thing sent ephemerally, and
+  // anything else reaching here is not something we put on screen.
+  gateway.onEphemeralCallbackQuery(async (query) => {
+    const { kind, parts } = parseCallback(query.dataStr)
+    if (kind !== 'cap') return
+    const [chatIdRaw = '', userIdRaw = ''] = parts
+    const chatId = Number(chatIdRaw)
+    const userId = Number(userIdRaw)
+    // A whisper is delivered to one user, but the button data still travels
+    // through the client — so the identity check is not redundant.
+    if (query.user.id !== userId) return
+    const locale = await localeFor(query.user.id, query.user.language)
+    await passCaptcha(chatId, userId, locale, async (text) => {
+      await gateway.tg.answerCallbackQuery(query.id, text === undefined ? {} : { text })
+    })
   })
 }
 

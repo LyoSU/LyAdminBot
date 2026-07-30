@@ -8,7 +8,7 @@
     "@lyadmin/core": "workspace:*",
     "@lyadmin/data": "workspace:*",
     "@lyadmin/ui": "workspace:*",
-    "@mtcute/node": "^0.30.0"
+    "@mtcute/node": "^0.31.0"
   },
   "scripts": {
     "start": "tsx src/main.ts"

@@ -103,12 +103,22 @@ export const applyVerdict = async (
       const ok = await attempt('mute', () =>
         actions.mute(target.chatId, target.userId, CAPTCHA_WINDOW_SECONDS))
       result.applied = ok
-      result.captchaRequired = true
+      // Only a gate that actually closed is worth prompting about: a prompt
+      // over a failed restriction asks the user to unlock a door that is open.
+      result.captchaRequired = ok
       return result
     }
     case 'delete': {
       result.applied = await attempt('delete', () =>
         actions.deleteMessage(target.chatId, target.messageId))
+      // An uncertain verdict (see `requireCaptcha`): the message goes, and the
+      // sender is gated rather than removed. The gate is only claimed if the
+      // restriction actually took — otherwise the app layer would post a prompt
+      // for a user who was never restricted and has nothing to prove.
+      if (verdict.requireCaptcha === true) {
+        result.captchaRequired = await attempt('captcha_mute', () =>
+          actions.mute(target.chatId, target.userId, CAPTCHA_WINDOW_SECONDS))
+      }
       return result
     }
     case 'kick': {

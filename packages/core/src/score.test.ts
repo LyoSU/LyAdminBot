@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import type { Signal } from './types.js'
-import { scoreSignals, hasDecisiveSignal, SIGNAL_GROUP_CAPS, SIGNAL_WEIGHTS, BASE_RATE_BIAS } from './score.js'
+import {
+  scoreSignals, hasDecisiveSignal, mayRemoveSender, contentEvidence,
+  SIGNAL_GROUP_CAPS, SIGNAL_WEIGHTS, SOFT_SHAPE_SIGNALS, BASE_RATE_BIAS,
+  DECISIVE_MIN_WEIGHT, SENDER_REMOVAL_MIN_EVIDENCE
+} from './score.js'
 
 describe('scoreSignals', () => {
   it('returns the base rate for an empty signal list', () => {
@@ -111,6 +115,90 @@ describe('scoreSignals — NSFW calibration (2026-07-27)', () => {
 
   it('name promo is weighted above bio promo — it is far harder to do by accident', () => {
     expect(SIGNAL_WEIGHTS['promo_in_name'] ?? 0).toBeGreaterThan(SIGNAL_WEIGHTS['promo_in_bio'] ?? 0)
+  })
+})
+
+describe('content evidence (2026-07-30 FP)', () => {
+  // Production: a conversational thank-you from a sleeper account was KICKED at
+  // pSpam 0.77 on `signals:sleeper_awakened`, and the chat voted it ham within
+  // five seconds. `hasDecisiveSignal` was weight-blind, so a 0.2-weight crumb
+  // about the message counted as licence to enforce without reading it.
+  const shapeStack: Signal[] = [
+    { name: 'sleeper_awakened' }, { name: 'new_globally' },
+    { name: 'promo_in_bio' }, { name: 'personal_channel' }
+  ]
+
+  it('shape alone carries no content evidence at all', () => {
+    expect(contentEvidence(shapeStack)).toEqual({ strongest: 0, total: 0 })
+    expect(hasDecisiveSignal(shapeStack)).toBe(false)
+    expect(mayRemoveSender(shapeStack)).toBe(false)
+  })
+
+  it('REGRESSION: a trivially-weighted crumb is not licence to enforce blind', () => {
+    for (const crumb of ['edited_message', 'unknown_media', 'bot_mention', 'long_text']) {
+      const signals = [...shapeStack, { name: crumb }]
+      expect(hasDecisiveSignal(signals), crumb).toBe(false)
+      expect(mayRemoveSender(signals), crumb).toBe(false)
+    }
+  })
+
+  it('a bare external link is evidence about the message, but not enough to enforce on', () => {
+    // The commonest ham content in a group chat. It may raise the score and
+    // pull in the LLM; it may not, by itself, delete anybody's message.
+    const signals = [...shapeStack, { name: 'external_url' }]
+    expect(contentEvidence(signals).total).toBe(0.8)
+    expect(hasDecisiveSignal(signals)).toBe(false)
+  })
+
+  it('one real content signal licenses enforcement on the message', () => {
+    const signals = [...shapeStack, { name: 'moderation_flagged' }]
+    expect(hasDecisiveSignal(signals)).toBe(true)
+  })
+
+  it('removing the SENDER needs more evidence than removing the message', () => {
+    // A single mid-weight hit is grounds to delete, not to remove a person.
+    expect(hasDecisiveSignal([{ name: 'vector_similar_spam' }])).toBe(true)
+    expect(mayRemoveSender([{ name: 'vector_similar_spam' }])).toBe(false)
+
+    // Two independent facts about the message do reach the bar.
+    expect(mayRemoveSender([{ name: 'phone_number' }, { name: 'external_url' }])).toBe(true)
+    expect(mayRemoveSender([{ name: 'many_url_buttons' }])).toBe(true)
+  })
+
+  it('trust signals never count as evidence for enforcing', () => {
+    const signals: Signal[] = [
+      { name: 'moderation_flagged' },
+      { name: 'is_reply', negative: true },
+      { name: 'established_user', negative: true }
+    ]
+    expect(contentEvidence(signals).total).toBe(SIGNAL_WEIGHTS['moderation_flagged'])
+  })
+
+  it('the two bars are ordered — enforcing is always cheaper than removing', () => {
+    expect(DECISIVE_MIN_WEIGHT).toBeLessThan(SENDER_REMOVAL_MIN_EVIDENCE)
+  })
+
+  it('every soft-shape signal is a real signal, and none of them is content', () => {
+    for (const name of SOFT_SHAPE_SIGNALS) {
+      expect(SIGNAL_WEIGHTS[name], name).toBeDefined()
+      expect(contentEvidence([{ name }]).total, name).toBe(0)
+    }
+  })
+
+  it('property: content evidence is monotone and never negative', () => {
+    const names = Object.keys(SIGNAL_WEIGHTS)
+    fc.assert(
+      fc.property(
+        fc.array(fc.constantFrom(...names).map((name): Signal => ({ name })), { maxLength: 12 }),
+        fc.constantFrom(...names),
+        (signals, extra) => {
+          const before = contentEvidence(signals)
+          const after = contentEvidence([...signals, { name: extra }])
+          return before.total >= 0 && after.total >= before.total &&
+            after.strongest >= before.strongest
+        }
+      )
+    )
   })
 })
 

@@ -28,6 +28,7 @@
 | `OPENROUTER_API_KEY` | LLM-ескалація сірої зони |
 | `QDRANT_URL`, `QDRANT_API_KEY` | семантичний пошук спаму |
 | `LLM_CHEAP_MODEL`, `LLM_STRONG_MODEL` | override моделей (є дефолти) |
+| `EPHEMERAL_CAPTCHA` | капча як ephemeral-повідомлення (видиме лише підозрюваному). Увімкнено за замовчуванням; `EPHEMERAL_CAPTCHA=false` вертає лише публічний промпт |
 
 `SESSION_PATH=/data/session` уже зашитий в образ.
 

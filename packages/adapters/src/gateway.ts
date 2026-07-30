@@ -10,7 +10,10 @@
  * Kept deliberately thin: no business logic — that lives in core and is
  * tested offline. Integration breakage here is caught by the test group.
  */
-import { TelegramClient, html, type Message } from '@mtcute/node'
+import {
+  BotKeyboard, TelegramClient, html,
+  type EphemeralCallbackQuery, type Message
+} from '@mtcute/node'
 import { Dispatcher, type CallbackQueryContext } from '@mtcute/dispatcher'
 import type { ModerationActions } from './executor.js'
 import {
@@ -73,6 +76,50 @@ export class TelegramGateway {
   /** Expose callback-query routing without leaking the dispatcher. */
   onCallbackQuery(handler: (query: CallbackQueryContext) => Promise<void>): void {
     this.dispatcher.onCallbackQuery(handler)
+  }
+
+  /**
+   * Taps on buttons of an ephemeral message. A separate update type
+   * (`updateEphemeralBotCallbackQuery`), so it needs its own subscription — a
+   * handler registered with `onCallbackQuery` will never see these.
+   */
+  onEphemeralCallbackQuery(handler: (query: EphemeralCallbackQuery) => Promise<void>): void {
+    this.dispatcher.onEphemeralCallbackQuery(handler)
+  }
+
+  /**
+   * Post a message only `receiverId` can see, and get back the id needed to
+   * remove it again. Ephemeral messages are not part of chat history: nobody
+   * else sees the prompt and there is nothing to clean up afterwards, which is
+   * what makes asking a suspect "are you human?" cheap enough to prefer over
+   * punishing them.
+   *
+   * `text` is view text with real newlines; the HTML parser collapses those, so
+   * it gets the same `<br>` treatment as every other outgoing view.
+   */
+  async sendEphemeralPrompt(
+    chatId: number,
+    receiverId: number,
+    text: string,
+    buttons: { text: string; data: string }[][]
+  ): Promise<number> {
+    const sent = await this.tg.sendEphemeralMessage(
+      chatId,
+      receiverId,
+      html(text.replace(/\n/g, '<br>')),
+      buttons.length > 0
+        ? {
+            replyMarkup: BotKeyboard.inline(
+              buttons.map((row) => row.map((b) => BotKeyboard.callback(b.text, b.data))))
+          }
+        : {}
+    )
+    return sent.id
+  }
+
+  /** Remove an ephemeral message early; it expires on its own regardless. */
+  async removeEphemeralPrompt(chatId: number, receiverId: number, messageId: number): Promise<void> {
+    await this.tg.deleteEphemeralMessage({ chatId, receiverId, messageId })
   }
 
   /** Serialize handling per chat so actions never race within one chat. */

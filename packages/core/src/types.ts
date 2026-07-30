@@ -181,6 +181,12 @@ export interface ChatPolicy {
   enabled: boolean
   preset: StrictnessPreset
   captchaEnabled: boolean
+  /**
+   * Whether this deployment can whisper the captcha to one member (Bot API
+   * 10.2 ephemeral messages). A capability of the running bot, not a chat
+   * setting — the composition root fills it in; absent means "assume not".
+   */
+  ephemeralCaptcha?: boolean
   votingEnabled: boolean
   /** Honour external ban databases (lols/CAS); v1 `settings.banDatabase`. */
   externalBanEnabled: boolean
@@ -244,6 +250,14 @@ export interface Verdict {
   /** Rule/pattern identifier — feeds the feedback loop. */
   ruleId: string | null
   signals: Signal[]
+  /**
+   * Ask the sender to prove they are human, alongside whatever `action` says.
+   * Set when the pipeline had to act on an uncertain verdict: the message is
+   * removed, but the *person* gets a way to clear themselves instead of being
+   * removed too. `action: 'captcha'` is the standalone form; this is the
+   * modifier that rides along with `delete`.
+   */
+  requireCaptcha?: boolean
   /** Reason code localized by the ui layer; NEVER raw LLM text. */
   reasonCode: string
   /** Optional evidence quote (text fragment / link) for the "Why?" view. */

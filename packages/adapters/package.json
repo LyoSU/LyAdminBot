@@ -8,9 +8,9 @@
   },
   "dependencies": {
     "@lyadmin/core": "workspace:*",
-    "@mtcute/dispatcher": "^0.30.0",
-    "@mtcute/file-id": "^0.29.0",
-    "@mtcute/node": "^0.30.0"
+    "@mtcute/dispatcher": "^0.31.0",
+    "@mtcute/file-id": "^0.31.0",
+    "@mtcute/node": "^0.31.0"
   },
   "scripts": {
     "test": "vitest run"

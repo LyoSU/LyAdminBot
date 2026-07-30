@@ -6,8 +6,10 @@
  * Severity ladder: none < observe < captcha < delete < kick < mute < ban.
  *
  * Design rules:
- *  - Discussion groups (channel comments) never get captcha — a commenter
- *    who came from a channel post would just bounce; delete+vote instead.
+ *  - Discussion groups (channel comments) get a captcha only when it can be
+ *    whispered to the commenter alone. A prompt everyone in a comment thread
+ *    reads is clutter the commenter will probably bounce off; an ephemeral one
+ *    is invisible to the thread.
  *  - Kick (2026-07-27) fills the gap between "delete the message" and
  *    "restrict the person for a day". A drive-by account that dropped one
  *    promo is removed but may rejoin; the punishment expires the moment they
@@ -36,6 +38,14 @@ export interface PolicyInput {
   userIsNewish: boolean
   /** Chat-level trusted list or trusted reputation. */
   userIsTrusted: boolean
+  /**
+   * The captcha can be delivered as an ephemeral message — visible to the
+   * suspect alone (Bot API 10.2). This is what lifts the discussion-group
+   * exclusion below: the objection to captcha under a channel post was that it
+   * clutters a comment thread everybody reads. A prompt nobody else can see
+   * does not.
+   */
+  ephemeralCaptcha?: boolean
   /**
    * Evidence that this account is known-bad rather than merely suspicious:
    * a Telegram scam/fake flag, an external ban listing, or a spam-labelled
@@ -79,6 +89,18 @@ export const ENFORCEMENT_ACTIONS = ['delete', 'kick', 'mute', 'ban'] as const
 export const isEnforcementAction = (action: VerdictAction): boolean =>
   (ENFORCEMENT_ACTIONS as readonly VerdictAction[]).includes(action)
 
+/**
+ * Actions that act on the *person*, not just the message. The distinction is a
+ * policy fact, not a formatting detail: `delete` costs the chat one line and
+ * heals by itself, while these three take the chat away from the sender. The
+ * pipeline requires strictly more evidence before crossing this line
+ * (see `mayRemoveSender`).
+ */
+export const SENDER_REMOVING_ACTIONS = ['kick', 'mute', 'ban'] as const
+
+export const removesSender = (action: VerdictAction): boolean =>
+  (SENDER_REMOVING_ACTIONS as readonly VerdictAction[]).includes(action)
+
 export const PRESET_THRESHOLDS: Record<StrictnessPreset, PresetThresholds> = {
   soft: { ban: 0.98, mute: 0.94, kick: 0.86, delete: 0.78, grey: 0.55 },
   standard: { ban: 0.95, mute: 0.88, kick: 0.75, delete: 0.6, grey: 0.4 },
@@ -121,8 +143,8 @@ export const decideAction = (input: PolicyInput): PolicyDecision => {
   if (p >= t.kick && input.userIsNewish) return decide('kick', uncertain)
   if (p >= t.delete) return decide('delete', uncertain)
   if (p >= t.grey) {
-    const captchaAllowed =
-      input.captchaEnabled && input.userIsNewish && input.chatKind !== 'discussion'
+    const captchaAllowed = input.captchaEnabled && input.userIsNewish &&
+      (input.chatKind !== 'discussion' || input.ephemeralCaptcha === true)
     return decide(captchaAllowed ? 'captcha' : 'observe')
   }
 

@@ -103,6 +103,7 @@ export const en: Locale = {
     identity_churn_promo: 'frequent renames + promo content',
     hidden_url_new: 'deceptive link from a newcomer',
     low_information: 'not enough information, observing',
+    content_unconfirmed: 'suspicious profile, message content unconfirmed',
     admin_report: 'an admin reported this as spam',
     community_vote: 'the community voted: spam',
     forward_blacklist: 'forwarded from a known spam source'

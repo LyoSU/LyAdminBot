@@ -55,8 +55,22 @@ describe('decideAction — standard preset', () => {
     expect(decideAction(makeInput({ pSpam: 0.5 })).action).toBe('captcha')
   })
 
-  it('never captchas in discussion groups (channel comments)', () => {
+  it('never captchas a discussion group with a prompt everyone would read', () => {
     expect(decideAction(makeInput({ pSpam: 0.5, chatKind: 'discussion' })).action).not.toBe('captcha')
+  })
+
+  it('does captcha a discussion group once the prompt can be whispered', () => {
+    // Ephemeral delivery removes the whole objection: the comment thread never
+    // sees the challenge, so the commenter is asked instead of just watched.
+    const d = decideAction(makeInput({ pSpam: 0.5, chatKind: 'discussion', ephemeralCaptcha: true }))
+    expect(d.action).toBe('captcha')
+  })
+
+  it('whispering does not conjure a captcha where the chat disabled it', () => {
+    const d = decideAction(makeInput({
+      pSpam: 0.5, chatKind: 'discussion', ephemeralCaptcha: true, captchaEnabled: false
+    }))
+    expect(d.action).toBe('observe')
   })
 
   it('never captchas established users', () => {

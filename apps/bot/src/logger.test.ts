@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatLogLine } from './logger.js'
+import { formatLogLine, formatSignals } from './logger.js'
 
 describe('formatLogLine', () => {
   it('emits a single-line JSON object with ts, level and event', () => {
@@ -30,5 +30,31 @@ describe('formatLogLine', () => {
     const parsed = JSON.parse(formatLogLine('info', 'started', undefined, new Date('2026-06-12T00:00:00.000Z')))
     expect(parsed.event).toBe('started')
     expect(parsed.ts).toBe('2026-06-12T00:00:00.000Z')
+  })
+})
+
+describe('formatSignals', () => {
+  it('puts the heaviest driver first, with its weight', () => {
+    const out = formatSignals([
+      { name: 'new_globally' }, { name: 'sleeper_awakened' }, { name: 'edited_message' }
+    ])
+    expect(out).toBe('sleeper_awakened=1.2 new_globally=0.8 edited_message=0.2')
+  })
+
+  it('keeps trust signals visible — they explain a LOW score too', () => {
+    expect(formatSignals([{ name: 'short_message', negative: true }])).toBe('short_message=-0.8')
+  })
+
+  it('deduplicates and survives unknown names', () => {
+    expect(formatSignals([{ name: 'made_up' }, { name: 'made_up' }])).toBe('made_up')
+  })
+
+  it('is undefined for an empty list, so the field drops out of the line', () => {
+    expect(formatSignals([])).toBeUndefined()
+  })
+
+  it('truncates a runaway list but says how many it hid', () => {
+    const many = Array.from({ length: 20 }, (_, i) => ({ name: `sig_${i}` }))
+    expect(formatSignals([{ name: 'scam_flag' }, ...many])).toMatch(/^scam_flag=3 .* \+9$/)
   })
 })

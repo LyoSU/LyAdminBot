@@ -5,8 +5,37 @@
  * vote, override, banan, captcha pass and error gets a line so prod activity
  * is fully auditable from the container logs.
  */
+import { SIGNAL_WEIGHTS, type Signal } from '@lyadmin/core'
+
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 export type LogFields = Record<string, unknown>
+
+/** Beyond this the line stops being readable; the drivers are always first. */
+const MAX_LOGGED_SIGNALS = 12
+
+/**
+ * Signals as one greppable field: `sleeper_awakened=1.2 promo_in_bio=1.2 …`,
+ * heaviest first, weightless names bare.
+ *
+ * Why the weights are in the log: without them a line records WHICH signals
+ * fired but not what they did to the score, so a false positive cannot be
+ * reproduced from logs — exactly the wall hit when diagnosing the 2026-07-30
+ * kick, where `reason` named only the top contributor and the production
+ * database was the sole record of the rest.
+ */
+export const formatSignals = (signals: Signal[]): string | undefined => {
+  const seen = new Map<string, number>()
+  for (const { name } of signals) {
+    if (!seen.has(name)) seen.set(name, SIGNAL_WEIGHTS[name] ?? 0)
+  }
+  if (seen.size === 0) return undefined
+
+  const ranked = [...seen].sort(([, a], [, b]) => Math.abs(b) - Math.abs(a))
+  const shown = ranked.slice(0, MAX_LOGGED_SIGNALS)
+    .map(([name, weight]) => (weight === 0 ? name : `${name}=${weight}`))
+  const hidden = ranked.length - shown.length
+  return hidden > 0 ? `${shown.join(' ')} +${hidden}` : shown.join(' ')
+}
 
 /** Pure formatter (testable): merges ts/level/event with caller fields. */
 export const formatLogLine = (

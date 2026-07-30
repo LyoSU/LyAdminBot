@@ -103,6 +103,7 @@ export const tr: Locale = {
     identity_churn_promo: 'sık ad değişikliği + reklam içeriği',
     hidden_url_new: 'yeni gelen birinden aldatıcı bağlantı',
     low_information: 'yeterli bilgi yok, izleniyor',
+    content_unconfirmed: 'şüpheli profil, mesaj içeriği doğrulanmadı',
     admin_report: 'bir yönetici bunu spam olarak bildirdi',
     community_vote: 'topluluk oyladı: spam',
     forward_blacklist: 'bilinen bir spam kaynağından iletildi'
