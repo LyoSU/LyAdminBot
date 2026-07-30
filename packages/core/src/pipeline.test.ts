@@ -4,6 +4,7 @@ import type {
 } from './types.js'
 import type { LlmTier, ModerationResult, PipelinePorts } from './ports.js'
 import { evaluateMessage } from './pipeline.js'
+import { isEnforcementAction } from './policy.js'
 
 // ── fixtures ──────────────────────────────────────────────────────────
 
@@ -169,7 +170,8 @@ describe('evaluateMessage — abstain & session', () => {
         append: async () => ({
           combinedText: 'пиши мені\nв особисті\nзаробіток\nвід 500$\nна день усім хто напише',
           count: 5
-        })
+        }),
+        reset: async () => { /* noop */ }
       },
       llm: {
         classify: async (_input, tier) => {
@@ -182,7 +184,98 @@ describe('evaluateMessage — abstain & session', () => {
     const v = await evaluateMessage(input, ports)
     expect(v.decidedBy).toBe('session')
     expect(v.action).toBe('mute')
-    expect(calls).toEqual(['cheap'])
+    // The cheap tier may not exile someone on a concatenated blob — removing the
+    // sender requires the strong model to agree (see the test below).
+    expect(calls).toEqual(['cheap', 'strong'])
+  })
+
+  it('a judged window is spent, so the same blob is never re-rolled', async () => {
+    // Production, 2026-07-30: a two-word conversational message was banned at
+    // 0.98 with `decidedBy: session`, `flood`.
+    //
+    // Root cause: the window holds up to 10 messages and was re-classified on
+    // EVERY subsequent low-information message — and since it saturates at 10,
+    // that is an unbounded series of cheap-model rolls over largely the same
+    // text. Any single bad roll enforces. The abstain gate exists to stop
+    // verdict roulette on unclassifiable messages; this path reintroduced it
+    // one level up. A batch that has been judged must not be judged again.
+    const resets: [number, number][] = []
+    let classified = 0
+    const ports: PipelinePorts = {
+      session: {
+        append: async () => ({ combinedText: 'ок\nда\nлол\n+\nну таке', count: 5 }),
+        reset: async (chatId, userId) => { resets.push([chatId, userId]) }
+      },
+      llm: {
+        classify: async () => {
+          classified += 1
+          return { pSpam: 0.1, reasonCode: 'clean', evidence: null, cached: false }
+        }
+      }
+    }
+    const input = makeInput({ msg: { text: 'ну таке' }, user: newcomer })
+    const v = await evaluateMessage(input, ports)
+    expect(classified).toBe(1)
+    expect(v.decidedBy).toBe('session')
+    expect(resets).toEqual([[input.message.chatId, input.user.id]])
+  })
+
+  it('an unanswered window is NOT spent — evidence survives an LLM outage', async () => {
+    const resets: [number, number][] = []
+    const ports: PipelinePorts = {
+      session: {
+        append: async () => ({ combinedText: 'пиши в лс\nє тема\nзаробіток\n+\nдам знати', count: 5 }),
+        reset: async (chatId, userId) => { resets.push([chatId, userId]) }
+      },
+      llm: { classify: async () => { throw new Error('502') } }
+    }
+    const v = await evaluateMessage(makeInput({ msg: { text: 'дам знати' }, user: newcomer }), ports)
+    expect(v.decidedBy).toBe('abstain')
+    expect(v.action).toBe('observe')
+    expect(resets).toEqual([])
+  })
+
+  it('the cheap tier alone may not remove the sender on a blob', async () => {
+    // Same rule as the score path: the weakest input in the pipeline (lines
+    // with no individual meaning, concatenated) must not carry the strongest
+    // authority. If the strong model disagrees, its answer stands.
+    const calls: LlmTier[] = []
+    const ports: PipelinePorts = {
+      session: {
+        append: async () => ({ combinedText: 'ок\nда\nугу\n+\nну от', count: 5 }),
+        reset: async () => { /* noop */ }
+      },
+      llm: {
+        classify: async (_input, tier) => {
+          calls.push(tier)
+          return tier === 'cheap'
+            ? { pSpam: 0.98, reasonCode: 'flood', evidence: null, cached: false }
+            : { pSpam: 0.2, reasonCode: 'clean', evidence: null, cached: false }
+        }
+      }
+    }
+    const v = await evaluateMessage(makeInput({ msg: { text: 'ну от' }, user: newcomer }), ports)
+    expect(calls).toEqual(['cheap', 'strong'])
+    expect(v.pSpam).toBe(0.2)
+    expect(isEnforcementAction(v.action)).toBe(false)
+  })
+
+  it('records the judged window, so a session verdict is reviewable from a log line', async () => {
+    // The log prints the triggering message; the verdict was about the blob.
+    // Without this, a session FP cannot be reviewed at all — the 19:15 ban is
+    // undiagnosable from prod logs for exactly this reason.
+    const ports: PipelinePorts = {
+      session: {
+        append: async () => ({ combinedText: 'ок\nда\nугу\n+\nну от', count: 5 }),
+        reset: async () => { /* noop */ }
+      },
+      llm: {
+        classify: async () => ({ pSpam: 0.9, reasonCode: 'flood', evidence: null, cached: false })
+      }
+    }
+    const v = await evaluateMessage(makeInput({ msg: { text: 'ну от' }, user: newcomer }), ports)
+    expect(v.meta['judgedText']).toBe('ок\nда\nугу\n+\nну от')
+    expect(v.meta['judgedCount']).toBe(5)
   })
 })
 

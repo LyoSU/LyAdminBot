@@ -1679,6 +1679,11 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       ruleId: verdict.ruleId ?? undefined, reason: verdict.reasonCode,
       signals: formatSignals(verdict.signals),
       cappedFrom: verdict.meta['cappedFrom'] ?? undefined,
+      // A session verdict judged the sender's accumulated window, not the
+      // message above: without the window the line cannot be reviewed.
+      judged: typeof verdict.meta['judgedText'] === 'string'
+        ? (verdict.meta['judgedText'] as string).replace(/\n/g, ' ⏎ ').slice(0, 300)
+        : undefined,
       needsVote: verdict.needsVote || undefined,
       errors: result.errors.length > 0 ? result.errors : undefined,
       latencyMs: Date.now() - started

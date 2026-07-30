@@ -34,8 +34,8 @@ export const templateLiteralLength = (text: string): number =>
 
 /**
  * Greeting-length guard. The prod corpus is partly poisoned by velocity
- * waves of innocent-looking short texts ("утра доброго" earned people
- * auto-bans in v1). A signature this short must never decide on its own —
+ * waves of innocent-looking short texts — in v1 a two-word morning greeting
+ * earned people auto-bans. A signature this short must never decide on its own —
  * it stays a candidate-strength signal and the pipeline weighs the rest.
  */
 const MIN_DECIDE_LENGTH = 25

@@ -146,7 +146,14 @@ export const SOFT_SHAPE_SIGNALS = new Set([
   // Profile media (2026-07-27): an avatar describes the sender, not the
   // message. Treating it as decisive let the pipeline enforce without ever
   // reading the text — the exact failure the soft-shape guard exists to stop.
-  'nsfw_avatar', 'nsfw_stories'
+  'nsfw_avatar', 'nsfw_stories',
+  // Sender history (2026-07-30): these two are the *heaviest* shape signals in
+  // the table (1.5 + 1.2), and together they cleared the sender-removal bar on
+  // their own — so a member with a record could be muted with no stage having
+  // read the message, and a legitimate appeal for help was. Past behaviour is a
+  // strong prior and keeps its full weight in the score; it is not a fact about
+  // the text just posted.
+  'prior_spam_detections', 'low_reputation'
 ])
 
 /**

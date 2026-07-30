@@ -10,9 +10,9 @@ describe('RightsMemory', () => {
   })
 
   it('a chat that refuses only the ban is still worth moderating', () => {
-    // Production 2026-07-30 13:31: "Выплаты ВПО чат" refused the ban while the
-    // delete went through. Standing down there would throw away the part that
-    // works — and deleting the message is most of the value.
+    // Production 2026-07-30: a chat refused the ban while the delete went
+    // through. Standing down there would throw away the part that works — and
+    // deleting the message is most of the value.
     const t = { ms: 1_000 }
     const rights = at(t)
     rights.noteFailures(-100, ['ban: Telegram API error 400: CHAT_ADMIN_REQUIRED'])
@@ -23,7 +23,7 @@ describe('RightsMemory', () => {
   })
 
   it('a chat that refuses both is not worth paying an LLM for', () => {
-    // "Львів | Робота чат": neither the message nor the sender can be touched.
+    // Neither the message nor the sender can be touched here.
     const t = { ms: 1_000 }
     const rights = at(t)
     rights.noteFailures(-200, [

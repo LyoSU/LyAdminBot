@@ -344,8 +344,34 @@ export const evaluateMessage = async (
         ...input,
         message: { ...input.message, text: window.combinedText }
       }
-      const llmVerdict = await safe('llm_session', () => ports.llm!.classify(sessionInput, 'cheap'))
+      let llmVerdict = await safe('llm_session', () => ports.llm!.classify(sessionInput, 'cheap'))
+
+      // Concatenated one-liners are the weakest input in the pipeline: they have
+      // no structure, no single subject, and by construction no line that meant
+      // anything on its own. The cheap tier must not carry the pipeline's
+      // strongest authority over them — if arithmetic on its answer would remove
+      // the sender, the strong model decides instead (2026-07-30: a two-word
+      // conversational message banned at 0.98 on a cheap `flood` verdict).
+      if (llmVerdict && removesSender(policyFor(llmVerdict.pSpam, signals).action)) {
+        const strong = await safe('llm_session_strong', () => ports.llm!.classify(sessionInput, 'strong'))
+        if (strong) llmVerdict = strong
+      }
+
       if (llmVerdict) {
+        // A judged batch is spent. Without this the window — which saturates at
+        // its cap — was re-classified on every subsequent low-information
+        // message, i.e. an unbounded series of rolls over substantially the same
+        // text, any one of which enforces. The abstain gate exists precisely to
+        // stop verdict roulette on unclassifiable messages; re-judging its
+        // buffer reintroduced it one level up. Not reset when the LLM never
+        // answered: an outage must not discard accumulated evidence.
+        await ports.session!.reset(input.message.chatId, input.user.id)
+          .catch(() => { /* best-effort: worst case is one extra evaluation */ })
+
+        // The caller logs the triggering message; the verdict is about the blob.
+        // Without recording it, a session FP cannot be reviewed at all.
+        meta['judgedText'] = window.combinedText
+        meta['judgedCount'] = window.count
         return finalize(
           {
             pSpam: llmVerdict.pSpam,

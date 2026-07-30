@@ -89,7 +89,7 @@ describe('extractMessageSignals — suspicious signals', () => {
   })
 
   it('flags invisible characters injected inside words (job-scam obfuscation)', () => {
-    // U+2060 WORD JOINER inside "Доброго" — real prod pattern
+    // U+2060 WORD JOINER inside a word — an obfuscation seen in production
     expect(names(makeMsg({ text: 'Доб⁠рого дня! Потрібні люди' }))).toContain('invisible_in_word')
     // ZWJ in emoji sequences must NOT trigger it
     expect(names(makeMsg({ text: 'сімʼя 👨‍👩‍👧' }))).not.toContain('invisible_in_word')

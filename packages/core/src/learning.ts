@@ -47,8 +47,8 @@ export const AUTO_LEARN_MIN_PSPAM = 0.95
  * Shared with the vector layer on purpose (2026-07-30 review): embedding
  * similarity on short strings is dominated by length and topic, so two
  * unrelated greetings routinely sit above 0.93 cosine. The signature layer
- * learned this the hard way in v1 ("утра доброго" earned people auto-bans);
- * the vector layer had no equivalent guard at all.
+ * learned this the hard way in v1, where a two-word morning greeting earned
+ * people auto-bans; the vector layer had no equivalent guard at all.
  */
 export const MIN_DISTINCTIVE_LENGTH = 40
 

@@ -89,6 +89,12 @@ export interface SessionWindow {
 export interface SessionPort {
   /** Append an abstained message and return the accumulated window. */
   append(chatId: number, userId: number, text: string): Promise<SessionWindow>
+  /**
+   * Discard the window. Required, not optional: a port without it silently
+   * turns the session path into repeated re-judgements of the same accumulated
+   * text, which is the failure this interface change exists to prevent.
+   */
+  reset(chatId: number, userId: number): Promise<void>
 }
 
 /** Long-term reputation of a forward origin (v1 forwardblacklists). */

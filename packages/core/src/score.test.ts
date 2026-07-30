@@ -164,6 +164,34 @@ describe('content evidence (2026-07-30 FP)', () => {
     expect(mayRemoveSender(signals)).toBe(false)
   })
 
+  it('REGRESSION: the sender\'s past is not evidence about this message', () => {
+    // Production, 2026-07-30: a legitimate appeal for help (a missing relative,
+    // with a contact number) was muted at 0.89 by `score` — nothing read it.
+    // The evidence was prior_spam_detections 1.5 +
+    // low_reputation 1.2 + phone_number 1.2 = 3.9, comfortably over the bar.
+    //
+    // But two of those three are the sender's history, not this message: a
+    // record of past detections is a reason to LOOK harder, not a fact about
+    // what was just posted. The only message-level fact was a phone number —
+    // which such an appeal legitimately contains.
+    const signals: Signal[] = [
+      { name: 'prior_spam_detections' }, { name: 'low_reputation' },
+      { name: 'phone_number' }, { name: 'long_text' }
+    ]
+    expect(contentEvidence(signals).total).toBe(SIGNAL_WEIGHTS['phone_number'])
+    expect(hasDecisiveSignal(signals)).toBe(true)
+    expect(mayRemoveSender(signals)).toBe(false)
+  })
+
+  it('a known repeat spammer still may not be removed on reputation alone', () => {
+    // The heaviest possible history stack, and no fact about the message.
+    const signals: Signal[] = [
+      { name: 'prior_spam_detections' }, { name: 'low_reputation' }, ...shapeStack
+    ]
+    expect(contentEvidence(signals).total).toBe(0)
+    expect(hasDecisiveSignal(signals)).toBe(false)
+  })
+
   it('one real content signal licenses enforcement on the message', () => {
     const signals = [...shapeStack, { name: 'moderation_flagged' }]
     expect(hasDecisiveSignal(signals)).toBe(true)

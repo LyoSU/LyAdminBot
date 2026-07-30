@@ -54,7 +54,7 @@ export class MemorySessionPort implements SessionPort {
   }
 
   /** Clear after a decisive verdict so old lines don't haunt the user. */
-  reset(chatId: number, userId: number): void {
+  async reset(chatId: number, userId: number): Promise<void> {
     this.sessions.delete(`${chatId}:${userId}`)
   }
 
