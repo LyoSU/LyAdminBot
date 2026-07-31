@@ -680,13 +680,26 @@ export class MongoStore {
    * Admin override ("не спам"). The closed feedback loop: the label is
    * stored permanently AND the offending knowledge is deactivated so the
    * same FP cannot repeat tomorrow.
+   *
+   * The label now keeps the EVIDENCE that produced it (2026-07-31), not just a
+   * pointer to how the verdict was reached. It used to store `decidedBy`,
+   * `ruleId` and `reasonCode` only, while the signals and the score lived in
+   * `pipeline_decisions` — which expires after 14 days. So a permanent
+   * "this was a false positive" became unusable two weeks later: there was no
+   * way left to ask whether a weight change would have prevented it. Every
+   * calibration decision since has therefore rested on the single incident that
+   * prompted it, with nothing to check it against.
+   *
+   * Cost is a few dozen bytes on a document written only when an admin clicks a
+   * button, which matters because the cluster is size-constrained: this is the
+   * cheapest record in the system and the only one that carries ground truth.
    */
   async recordOverride(params: {
     chatId: number
     messageId: number
     userId: number
     adminId: number
-    verdict: Pick<Verdict, 'decidedBy' | 'ruleId' | 'reasonCode'>
+    verdict: Pick<Verdict, 'decidedBy' | 'ruleId' | 'reasonCode' | 'pSpam' | 'action' | 'signals' | 'meta'>
   }): Promise<void> {
     await this.feedback.insertOne({
       kind: 'override_not_spam',
@@ -697,6 +710,14 @@ export class MongoStore {
       decidedBy: params.verdict.decidedBy,
       ruleId: params.verdict.ruleId,
       reasonCode: params.verdict.reasonCode,
+      // The feature vector: enough to recompute the score and both enforcement
+      // guards offline, from the catalogue as it stands whenever we next ask.
+      pSpam: params.verdict.pSpam,
+      action: params.verdict.action,
+      signals: params.verdict.signals.map((s) => s.name),
+      // `scorePSpam` / `contentEvidence` / `cappedGroups` are what make the
+      // arithmetic reproducible when the verdict came from a port or the LLM.
+      meta: params.verdict.meta,
       createdAt: new Date()
     })
 

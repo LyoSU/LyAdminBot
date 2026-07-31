@@ -2140,7 +2140,13 @@ const wireCallbacks = (): void => {
         messageId: Number(messageIdRaw),
         userId: Number(userIdRaw),
         adminId: query.user.id,
-        verdict: verdict ?? { decidedBy: 'error', ruleId: null, reasonCode: 'unknown' }
+        // A label with no recallable verdict keeps no evidence — the decision
+        // record expired or the bot restarted. Recorded anyway (an admin did say
+        // "not spam"), but it cannot take part in calibration replay.
+        verdict: verdict ?? {
+          decidedBy: 'error', ruleId: null, reasonCode: 'unknown',
+          pSpam: 0, action: 'none', signals: [], meta: {}
+        }
       }).catch(() => { /* keep going — unban matters more */ })
       // Lift restrictions (empty restrictions object = unrestrict).
       await gateway.tg.restrictChatMember({
