@@ -7,6 +7,7 @@
  */
 import type { NormalizedMessage, Signal } from '../types.js'
 import { isEmojiOnly } from '../text/normalize.js'
+import { mixesConfusableScripts } from '../text/script.js'
 import { classifyUrl } from './urls.js'
 
 const LONG_TEXT_THRESHOLD = 200
@@ -39,15 +40,16 @@ export const CASHTAG_REGEX = /\$[A-Z]{2,6}\b/
  */
 const INVISIBLE_IN_WORD_REGEX = /\p{L}[\u2060\u200B]+\p{L}/u
 
-// A "word" that mixes Cyrillic and Latin letters — homoglyph evasion
-// ("Зaрaбoтoк" with Latin a/o). Per-word check avoids flagging bilingual
-// sentences. Minimum length 4 to skip abbreviations.
 const looksUrlLike = (s: string): boolean => /^(https?:\/\/|www\.|t\.me\/)/i.test(s.trim())
 
+// A "word" borrowing letters from a look-alike alphabet — homoglyph evasion
+// ("Зaрaбoтoк" with Latin a/o). Which alphabets count as look-alike is
+// `mixesConfusableScripts`. Per-word so bilingual sentences are not flagged;
+// minimum length 4 to skip abbreviations.
 const hasMixedScriptWord = (text: string): boolean => {
   for (const word of text.split(/[\s\p{P}]+/u)) {
     if (word.length < 4) continue
-    if (/[Ѐ-ӿ]/.test(word) && /[a-zA-Z]/.test(word)) return true
+    if (mixesConfusableScripts(word)) return true
   }
   return false
 }

@@ -61,6 +61,39 @@ const scriptOf = (ch: string): ScriptName | null => {
 }
 
 /**
+ * Alphabets drawn alike, so that a letter of one can stand in for a letter of
+ * another. These three are the whole basis of every homoglyph table (UTS#39
+ * singles out the same trio), and `CONFUSABLE_CLASSES` in the signature layer
+ * folds exactly them.
+ *
+ * A fixed set, deliberately, rather than "the word uses more than one script":
+ * Japanese and Korean mix scripts inside a word and put no spaces between
+ * words, so counting scripts would charge every message written in them for
+ * evasion — and those are precisely the messages the rest of the pipeline is
+ * least able to read.
+ */
+const CONFUSABLE_SCRIPTS: readonly ScriptName[] = ['latin', 'cyrillic', 'greek']
+
+/**
+ * Whether one word borrows letters from two look-alike alphabets. Character
+ * classes cannot express this: the check used to be `[Ѐ-ӿ]` against `[a-zA-Z]`,
+ * which saw only Latin donors (production 2026-07-31: an advert substituting
+ * Greek omicron, kappa and rho raised nothing at all) and missed every donor
+ * outside those two ranges besides — Cyrillic Supplement, fullwidth and
+ * extended Latin all sit past their ends.
+ */
+export const mixesConfusableScripts = (word: string): boolean => {
+  const seen = new Set<ScriptName>()
+  for (const ch of word) {
+    const script = scriptOf(ch)
+    if (script === null || !CONFUSABLE_SCRIPTS.includes(script)) continue
+    seen.add(script)
+    if (seen.size > 1) return true
+  }
+  return false
+}
+
+/**
  * Prose only: handles and URLs are addressing and machinery, never a statement
  * about the language a message is written in. Both are Latin by construction
  * (Telegram usernames are ASCII), so counting them let six letters of a handle

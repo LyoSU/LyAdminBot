@@ -118,6 +118,24 @@ describe('extractMessageSignals — suspicious signals', () => {
     expect(names(makeMsg({ text: 'дивись відео на YouTube українською' }))).not.toContain('mixed_script_word')
   })
 
+  it('flags a GREEK homoglyph inside a Cyrillic word', () => {
+    // Production 2026-07-31 10:11: an advert whose every substitution came from
+    // Greek (omicron, kappa, rho) raised nothing, while a second advert from the
+    // same campaign an hour later happened to include one Latin letter and was
+    // flagged. The evasion is identical; only the donor alphabet differed.
+    expect(names(makeMsg({ text: 'Ищем οтветственнοго менеджера' }))).toContain('mixed_script_word')
+    expect(names(makeMsg({ text: 'обработκа тρафика' }))).toContain('mixed_script_word')
+  })
+
+  it('does NOT flag scripts that are written together by design', () => {
+    // The trap in generalising to "more than one script per word": Japanese and
+    // Korean mix scripts inside a word and put no spaces between words, so
+    // counting scripts would charge 1.5 to every message written in them —
+    // exactly the messages the pipeline is least equipped to read.
+    expect(names(makeMsg({ text: '日本語のテキストです' }))).not.toContain('mixed_script_word')
+    expect(names(makeMsg({ text: '한국어 텍스트 漢字 포함' }))).not.toContain('mixed_script_word')
+  })
+
   it('flags custom-emoji-heavy messages with alt evidence', () => {
     const msg = makeMsg({
       text: 'звичайний текст',
