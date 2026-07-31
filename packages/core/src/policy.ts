@@ -39,6 +39,14 @@ export interface PolicyInput {
   /** Chat-level trusted list or trusted reputation. */
   userIsTrusted: boolean
   /**
+   * The account is already known bad — a Telegram scam/fake flag, a ban
+   * database, a spam restriction, prior confirmed detections. This is what
+   * cancels the standing shield below, on the same grounds it already cancels
+   * `established_user` and the established-regular exempt: what looks like
+   * standing was built out of the spam we are judging.
+   */
+  userHasHardVerdict: boolean
+  /**
    * The captcha can be delivered as an ephemeral message — visible to the
    * suspect alone (Bot API 10.2). This is what lifts the discussion-group
    * exclusion below: the objection to captcha under a channel post was that it
@@ -130,7 +138,15 @@ export const decideAction = (input: PolicyInput): PolicyDecision => {
     return decide('delete', input.votingEnabled)
   }
 
-  if (p >= t.ban && input.userIsNewish) {
+  // Standing spares an account the two irreversible actions — but standing an
+  // account earned by spamming is not standing. Production 2026-07-31: a known
+  // repeat offender was muted at pSpam 1.00 twice in half an hour because
+  // `userIsNewish` had decayed to false, so the longer it had been spamming the
+  // milder its treatment got. Note this only chooses between mute and ban for a
+  // message already judged removable; it lowers no threshold.
+  const shielded = !input.userIsNewish && !input.userHasHardVerdict
+
+  if (p >= t.ban && !shielded) {
     return {
       action: 'ban',
       needsVote: false,

@@ -242,6 +242,7 @@ export const evaluateMessage = async (
     votingEnabled: input.policy.votingEnabled,
     userIsNewish: isNewish(input),
     userIsTrusted: isTrusted(input),
+    userHasHardVerdict: hasHardAccountVerdict(input.user, input.policy),
     ephemeralCaptcha: input.policy.ephemeralCaptcha === true,
     hasPermanentBanGrounds: signals.some((s) => PERMANENT_BAN_SIGNALS.has(s.name))
   })

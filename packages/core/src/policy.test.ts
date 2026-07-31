@@ -13,6 +13,7 @@ const makeInput = (overrides: Partial<PolicyInput> = {}): PolicyInput => ({
   votingEnabled: true,
   userIsNewish: true,
   userIsTrusted: false,
+  userHasHardVerdict: false,
   ...overrides
 })
 
@@ -35,6 +36,7 @@ const inputArb = fc.record({
   votingEnabled: fc.boolean(),
   userIsNewish: fc.boolean(),
   userIsTrusted: fc.boolean(),
+  userHasHardVerdict: fc.boolean(),
   hasPermanentBanGrounds: fc.boolean()
 })
 
@@ -193,11 +195,35 @@ describe('decideAction — safety invariants', () => {
     }))
   })
 
-  it('property: an account with local standing is never kicked or banned', () => {
+  it('property: CLEAN local standing is never kicked or banned', () => {
     fc.assert(fc.property(pSpamArb, inputArb, (pSpam, rest) => {
-      const d = decideAction({ ...rest, pSpam, userIsNewish: false })
+      const d = decideAction({
+        ...rest, pSpam, userIsNewish: false, userHasHardVerdict: false
+      })
       return d.action !== 'ban' && d.action !== 'kick'
     }))
+  })
+
+  it('standing built out of spam does not shield the account from a ban', () => {
+    // Production 2026-07-31: a known repeat offender was muted at pSpam 1.00,
+    // twice inside half an hour, because `userIsNewish` had decayed to false —
+    // the longer an account had been spamming, the milder its treatment. The
+    // shield is for standing; a hard verdict is the absence of standing, which
+    // is already why it cancels `established_user` and the regular exempt.
+    const spammer = makeInput({ pSpam: 0.99, userIsNewish: false, userHasHardVerdict: true })
+    expect(decideAction(spammer).action).toBe('ban')
+    const clean = makeInput({ pSpam: 0.99, userIsNewish: false })
+    expect(decideAction(clean).action).toBe('mute')
+  })
+
+  it('a hard verdict does not lower the bar, it only removes the shield', () => {
+    // Below the ban threshold the verdict is unchanged: this is the mute/ban
+    // choice for a message already judged removable, not a cheaper route to a
+    // ban. A trusted user still outranks it.
+    expect(decideAction(makeInput({ pSpam: 0.9, userHasHardVerdict: true })).action).toBe('mute')
+    expect(
+      decideAction(makeInput({ pSpam: 0.99, userHasHardVerdict: true, userIsTrusted: true })).action
+    ).toBe('delete')
   })
 
   it('property: voting is only ever requested for delete or kick', () => {
