@@ -43,6 +43,7 @@ const MIN_DECIDE_LENGTH = 25
 interface SignatureDoc extends Document {
   status?: 'candidate' | 'confirmed'
   exactHash?: string
+  normalizedHash?: string
   disabledAt?: Date
 }
 
@@ -55,10 +56,11 @@ export class MongoSignaturePort implements SignaturePort {
 
     const query: Document[] = [{ exactHash: hashes.exactHash }]
     if (hashes.normalizedHash) query.push({ normalizedHash: hashes.normalizedHash })
+    if (hashes.foldedHash) query.push({ foldedHash: hashes.foldedHash })
 
     const doc = await this.store.spamSignatures.findOne(
       { $or: query, disabledAt: { $exists: false } },
-      { projection: { status: 1, exactHash: 1 }, sort: { status: -1 } } // 'confirmed' > 'candidate'
+      { projection: { status: 1, exactHash: 1, normalizedHash: 1 }, sort: { status: -1 } } // 'confirmed' > 'candidate'
     ) as SignatureDoc | null
     if (!doc) return null
 
@@ -66,10 +68,16 @@ export class MongoSignaturePort implements SignaturePort {
     // normalized hash is a TEMPLATE, and a template's information content is
     // what survives after the placeholders — so that is what gets measured.
     const viaExactHash = doc.exactHash === hashes.exactHash
+    const viaNormalizedHash = hashes.normalizedHash !== null &&
+      doc.normalizedHash === hashes.normalizedHash
+    // Reached only after confusables were folded together. The fold is lossy on
+    // purpose — that is how it survives a homoglyph rotation — so it may raise a
+    // signal and must never decide on its own, whatever the stored status says.
+    const viaFoldOnly = !viaExactHash && !viaNormalizedHash
     const specificEnough = viaExactHash
       ? text.trim().length >= MIN_DECIDE_LENGTH
       : templateLiteralLength(text) >= MIN_DECIDE_LENGTH
-    const decisive = doc.status === 'confirmed' && specificEnough
+    const decisive = doc.status === 'confirmed' && specificEnough && !viaFoldOnly
     return {
       status: decisive ? 'confirmed' : 'candidate',
       pSpam: CONFIRMED_PSPAM,
@@ -114,7 +122,11 @@ export class MongoSignaturePort implements SignaturePort {
           source,
           firstSeenAt: now
         },
-        $set: { lastSeenAt: now },
+        // `$set`, not `$setOnInsert`: the field is derived from the same text
+        // that produced `exactHash`, so rewriting it is idempotent — and that is
+        // what backfills the signatures (v1's included) stored before this layer
+        // existed, on their next sighting.
+        $set: { lastSeenAt: now, foldedHash: hashes.foldedHash },
         $inc: { confirmations: 1 },
         ...(chatId === undefined ? {} : { $addToSet: { chats: chatId } })
       },

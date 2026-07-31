@@ -14,6 +14,8 @@
  */
 import { randomBytes, createHash } from 'node:crypto'
 import type { EvaluationInput, LlmPort, LlmTier, LlmVerdict } from '@lyadmin/core'
+import { isDistinctive } from '@lyadmin/core'
+import { foldConfusables, normalizeLight } from './hashing.js'
 import type { MongoStore } from './mongo.js'
 
 const REASON_CODES = [
@@ -101,10 +103,19 @@ export class OpenRouterLlmPort implements LlmPort {
     const model = tier === 'strong' ? this.config.strongModel : this.config.cheapModel
     const hasPhoto = input.enrichment.photoBase64 !== null
 
+    // Homoglyph rotation defeated this cache outright: seven visually identical
+    // adverts differing by one substituted letter each were seven separate paid
+    // calls (2026-07-31). Folding confusables collapses them into one key.
+    // Applied only to text distinctive enough that the fold cannot merge two
+    // genuinely different messages — a short string loses proportionally more.
+    const keyText = isDistinctive(input.message.text)
+      ? foldConfusables(normalizeLight(input.message.text))
+      : input.message.text
+
     // Cache text-only verdicts (photo bytes are not part of the key).
     const cacheKey = hasPhoto
       ? null
-      : sha(`${model}:${contextDigest(input)}:${input.message.text}`)
+      : sha(`${model}:${contextDigest(input)}:${keyText}`)
     if (cacheKey && this.store) {
       const hit = await this.store.llmCache.findOne({ key: cacheKey }).catch(() => null)
       if (hit) {

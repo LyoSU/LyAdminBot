@@ -108,6 +108,12 @@ export class MongoStore {
     // 10 min for the flood window, 30 min for the abstain session.
     await this.ensureTtlIndex(this.velocityEvents, { firstSeenAt: 1 }, 600)
     await this.ensureTtlIndex(this.sessionWindows, { startedAt: 1 }, 1800)
+    // `spamsignatures` is a v1 collection and v1 owns the exactHash/normalizedHash
+    // indexes. The folded layer added in 2026-07-31 needs its own, or the `$or`
+    // in `MongoSignaturePort.match` loses index coverage for that branch and
+    // scans the collection on every message. Sparse: documents written before
+    // the field existed only gain it when they are next seen.
+    await this.spamSignatures.createIndex({ foldedHash: 1 }, { sparse: true })
   }
 
   // ── reads used per message ───────────────────────────────────────────

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { computeSignatureHashes, normalizeHeavy, normalizeLight, sha256 } from './hashing.js'
+import {
+  computeSignatureHashes, foldConfusables, normalizeHeavy, normalizeLight, sha256
+} from './hashing.js'
 
 describe('byte-compatibility with v1 spam-signatures hashing', () => {
   it('sha256 is truncated to 32 hex chars like v1', () => {
@@ -33,5 +35,60 @@ describe('byte-compatibility with v1 spam-signatures hashing', () => {
     const b = computeSignatureHashes('Заробіток 9000$ в день пиши @user2')!
     expect(a.normalizedHash).toBe(b.normalizedHash)
     expect(a.exactHash).not.toBe(b.exactHash)
+  })
+})
+
+describe('foldConfusables', () => {
+  // The rotation seen in production 2026-07-31: one advert reposted seven times,
+  // each with a different Latin/Greek stand-in for a Cyrillic letter. Nothing
+  // matched any of them, so the model was paid to read the same text seven times.
+  const rotations = [
+    'Ищу онлайн менеджера. От 50$ в день. Пиши в лс',
+    'Ищу онлайη меhеджερа. От 50$ b деhь. Пиши b лс'
+  ]
+
+  it('collapses a homoglyph rotation to one string', () => {
+    const folded = new Set(rotations.map((t) => foldConfusables(normalizeLight(t))))
+    expect(folded.size).toBe(1)
+  })
+
+  it('is idempotent — folding a folded string changes nothing', () => {
+    for (const text of rotations) {
+      const once = foldConfusables(text)
+      expect(foldConfusables(once)).toBe(once)
+    }
+  })
+
+  it('leaves digits alone, so prices are not rewritten', () => {
+    expect(foldConfusables('2500')).toBe('2500')
+    expect(foldConfusables('від 40 000 грн')).toContain('40 000')
+  })
+
+  it('keeps distinct messages distinct', () => {
+    const a = foldConfusables(normalizeLight('Доброго дня, підкажіть де можна відновити довідку'))
+    const b = foldConfusables(normalizeLight('Шукаємо комплектувальника на склад, зарплата висока'))
+    expect(a).not.toBe(b)
+  })
+
+  it('never grows the string — one codepoint folds to one', () => {
+    for (const text of [...rotations, 'звичайний український текст без підмін']) {
+      expect([...foldConfusables(text)].length).toBe([...text].length)
+    }
+  })
+})
+
+describe('computeSignatureHashes — folded layer', () => {
+  it('gives homoglyph rotations the same foldedHash but different exactHash', () => {
+    const a = computeSignatureHashes('Ищу онлайн менеджера. От 50$ в день. Пиши в лс')
+    const b = computeSignatureHashes('Ищу онлайη меhеджερа. От 50$ b деhь. Пиши b лс')
+    expect(a?.exactHash).not.toBe(b?.exactHash)
+    expect(a?.foldedHash).not.toBe(null)
+    expect(a?.foldedHash).toBe(b?.foldedHash)
+  })
+
+  it('withholds a foldedHash from text too short to match on', () => {
+    // Same reasoning as the normalized layer: a folded greeting would match
+    // every other folded greeting.
+    expect(computeSignatureHashes('ок')?.foldedHash).toBe(null)
   })
 })

@@ -7,20 +7,57 @@ import type { MongoStore } from './mongo.js'
 const storeWith = (doc: Record<string, unknown> | null): MongoStore =>
   ({ spamSignatures: { findOne: async () => doc } }) as unknown as MongoStore
 
-const CONFIRMED = { _id: 'abc', status: 'confirmed' }
+/**
+ * A stored signature as `learn` would have written it, carrying the hash the
+ * lookup is expected to find it by. Which hash matched decides how much the hit
+ * is worth, so a stub that carries none of them cannot stand in for a real
+ * document — it looks exactly like a fold-only match.
+ */
+const confirmedVia = (
+  layer: 'exact' | 'normalized' | 'folded',
+  text: string
+): Record<string, unknown> => {
+  const hashes = computeSignatureHashes(text)!
+  return {
+    _id: 'abc',
+    status: 'confirmed',
+    ...(layer === 'exact' ? { exactHash: hashes.exactHash } : {}),
+    ...(layer === 'normalized' ? { normalizedHash: hashes.normalizedHash } : {}),
+    ...(layer === 'folded' ? { foldedHash: hashes.foldedHash } : {})
+  }
+}
 
 describe('MongoSignaturePort.match', () => {
   it('a confirmed match on a long text decides', async () => {
-    const port = new MongoSignaturePort(storeWith(CONFIRMED))
-    const match = await port.match('Заработок от 500$ в день, пиши в личку прямо сейчас!!!')
-    expect(match?.status).toBe('confirmed')
+    const text = 'Заработок от 500$ в день, пиши в личку прямо сейчас!!!'
+    const port = new MongoSignaturePort(storeWith(confirmedVia('normalized', text)))
+    expect((await port.match(text))?.status).toBe('confirmed')
   })
 
   it('a confirmed match on a short greeting-length text is downgraded to a signal', async () => {
-    const port = new MongoSignaturePort(storeWith(CONFIRMED))
     // Real poisoned-corpus case: v1 auto-banned for this exact text.
+    const port = new MongoSignaturePort(storeWith(confirmedVia('normalized', 'утра доброго')))
     const match = await port.match('утра доброго')
     expect(match?.status).toBe('candidate')
+  })
+
+  it('finds a homoglyph rotation of a text it has seen', async () => {
+    // Production 2026-07-31: the same advert reposted seven times, each with a
+    // different Latin/Greek stand-in, matched by nothing at all.
+    const learned = 'Ищу онлайн менеджера. От 50$ в день. Пиши в лс'
+    const rotated = 'Ищу онлайη меhеджερа. От 50$ b деhь. Пиши b лс'
+    const port = new MongoSignaturePort(storeWith(confirmedVia('folded', learned)))
+    expect(await port.match(rotated)).not.toBeNull()
+  })
+
+  it('a fold-only match may signal but never decide', async () => {
+    // The fold is lossy — that is how it survives the rotation — so it must not
+    // carry the authority of a hash computed over the text itself, whatever
+    // status the stored document claims.
+    const learned = 'Ищу онлайн менеджера. От 50$ в день. Пиши в лс'
+    const rotated = 'Ищу онлайη меhеджερа. От 50$ b деhь. Пиши b лс'
+    const port = new MongoSignaturePort(storeWith(confirmedVia('folded', learned)))
+    expect((await port.match(rotated))?.status).toBe('candidate')
   })
 
   it('returns null when nothing matches', async () => {
@@ -33,22 +70,20 @@ describe('MongoSignaturePort.match', () => {
     // placeholders, so this 60-character message becomes the template
     // "заходь @_ _URL_ _NUM_" — which an innocent "заходь @vasya youtu.be/x"
     // matches just as well. Measuring the RAW length let it convict at 0.96.
-    const port = new MongoSignaturePort(storeWith(CONFIRMED))
-    const match = await port.match('Заходь @promo_bot https://t.me/+aaaaaaaaaaaaaaa 500$ 1000$')
-    expect(match?.status).toBe('candidate')
+    const text = 'Заходь @promo_bot https://t.me/+aaaaaaaaaaaaaaa 500$ 1000$'
+    const port = new MongoSignaturePort(storeWith(confirmedVia('normalized', text)))
+    expect((await port.match(text))?.status).toBe('candidate')
   })
 
   it('an EXACT-hash match is judged on the raw text, not the template', async () => {
     // The exact hash is the text itself — no templating, no false breadth — so
     // the placeholder rule must not water it down.
     const text = 'Заходь @promo_bot https://t.me/+aaaaaaaaaaaaaaa 500$ 1000$'
-    const port = new MongoSignaturePort(storeWith({ ...CONFIRMED, exactHash: exactHashOf(text) }))
+    const port = new MongoSignaturePort(storeWith(confirmedVia('exact', text)))
     expect((await port.match(text))?.status).toBe('confirmed')
   })
 })
 
-/** The real exact hash, so the stub doc can pose as one written by `learn`. */
-const exactHashOf = (text: string): string => computeSignatureHashes(text)!.exactHash
 
 describe('templateLiteralLength', () => {
   it('counts only what survives the placeholders', () => {
