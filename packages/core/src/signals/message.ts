@@ -13,6 +13,18 @@ import { classifyUrl, sameDestination } from './urls.js'
 
 const LONG_TEXT_THRESHOLD = 200
 const SHORT_TEXT_THRESHOLD = 50
+
+/**
+ * Longest emoji-only text still read as a reaction rather than as content.
+ *
+ * Counted in codepoints, not UTF-16 units, because one emoji can be many: a ZWJ
+ * family is 7 codepoints (11 units) and a flag is 2, so a bar meaning "a few
+ * emoji" has to be generous enough for three of the largest. 32 sits well above
+ * three family emoji (21) and well below the production mural (88).
+ */
+const EMOJI_ONLY_MAX_CODEPOINTS = 32
+
+const codepointLength = (text: string): number => [...text].length
 const MANY_URL_BUTTONS_MIN = 3
 const CUSTOM_EMOJI_HEAVY_MIN = 3
 const RECENT_REPLY_MAX_AGE_SECONDS = 3600
@@ -150,7 +162,33 @@ export const extractMessageSignals = (msg: NormalizedMessage): Signal[] => {
     signals.push({ name: 'media_only' })
   }
 
-  if (text && isEmojiOnly(text)) {
+  /**
+   * An emoji-only message is a reaction — a nod, a laugh, applause — and earns
+   * the same discount as a sticker. Two conditions on that, both learned from
+   * one production message on 2026-07-31 (88 codepoints of coloured squares
+   * arranged to spell words, discounted 1.5 for being "a reaction"):
+   *
+   *  - No CUSTOM emoji. What sits in `text` for a custom emoji is a fallback
+   *    character chosen by whoever built the pack; the reader sees an arbitrary
+   *    image instead. So the codepoints saying "this is a laugh" are authored by
+   *    the sender and mean nothing about what was actually displayed — the same
+   *    deception `hidden_url` exists to catch, where the visible form and the
+   *    real one are set independently. Worse, `custom_emoji_heavy` had already
+   *    raised 0.8 about exactly these entities, and this handed back 1.5.
+   *
+   *  - Short enough to be a reaction. Past a certain length emoji stop being a
+   *    response and become a medium: a wall of blocks spelling words is content,
+   *    and it is the one shape of content NO text stage can read — the signature
+   *    layer strips emoji before hashing, the embedding collapses emoji-only
+   *    text, the moderation port sees no words. Trust was discounting precisely
+   *    the messages we are blindest to.
+   *
+   * Neither condition accuses anyone: an emoji mural is not by itself spam, so
+   * both withhold a discount rather than adding suspicion.
+   */
+  const plainEmojiReaction = msg.customEmoji.length === 0 &&
+    codepointLength(text) <= EMOJI_ONLY_MAX_CODEPOINTS
+  if (text && isEmojiOnly(text) && plainEmojiReaction) {
     signals.push({ name: 'emoji_only' })
   }
 

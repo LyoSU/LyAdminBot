@@ -248,6 +248,53 @@ describe('extractMessageSignals — trust signals (negative)', () => {
     expect(trust(makeMsg({ text: '😂😂😂' }))).toContain('emoji_only')
   })
 
+  it('custom emoji earn no reaction trust — we cannot see what they display', () => {
+    // Production 2026-07-31 13:14. The `text` read as coloured squares, but the
+    // squares were fallback characters for CUSTOM emoji: the sender picks the
+    // fallback, the reader sees arbitrary images. The pipeline had already
+    // raised `custom_emoji_heavy` (0.8) about these very entities and then
+    // handed back 1.5 for the same message being "a reaction".
+    const customMural = makeMsg({
+      text: '🔴🟠🔴🟠🔴🟠',
+      customEmoji: [
+        { id: '1', alt: '🔴' }, { id: '2', alt: '🟠' }, { id: '3', alt: '🔴' },
+        { id: '4', alt: '🟠' }, { id: '5', alt: '🔴' }, { id: '6', alt: '🟠' }
+      ]
+    })
+    expect(trust(customMural)).not.toContain('emoji_only')
+    // Withholding a discount is the whole change: nothing here accuses anyone.
+    expect(suspicious(customMural)).not.toContain('emoji_only')
+  })
+
+  it('even a single custom emoji withholds the discount', () => {
+    // No threshold: if any of them is custom, the message we read is not the
+    // message that was shown.
+    expect(trust(makeMsg({ text: '😂🔴', customEmoji: [{ id: '1', alt: '🔴' }] })))
+      .not.toContain('emoji_only')
+  })
+
+  it('a wall of plain emoji is NOT the reaction the trust was written for', () => {
+    // The second condition, independent of the first: at this length the emoji
+    // are content rather than a response, and no text stage can read them —
+    // the signature layer strips emoji, the embedding collapses emoji-only
+    // text, moderation sees no words to judge.
+    const mural = '🔴🟠🔴🟠🔴🟠🔴🟠🔴🔴  🔴🔴  🟠🟠🟠🟠🔴🔴🟠🟠🟠  🔴🔴🟠🟠\n\n' +
+      '🟠🟠🟠🟠🟠🔴🔴  🔴🔴🟠🔴🟠🔴🟠🔴🟠\n\n🟠🟠🟠🔴🔴🟠🔴🔴🔴🟠 🔴🔴🔴🟠🔴🟠🔴🟠'
+    expect(trust(makeMsg({ text: mural }))).not.toContain('emoji_only')
+    expect(suspicious(makeMsg({ text: mural }))).not.toContain('emoji_only')
+  })
+
+  it('multi-codepoint emoji still read as reactions', () => {
+    // The bar is counted in codepoints because one emoji can be several: a ZWJ
+    // family is 7, so a bar set for "three emoji" has to allow 21.
+    expect(trust(makeMsg({ text: '👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦' }))).toContain('emoji_only')
+    expect(trust(makeMsg({ text: '❤️‍🔥❤️‍🔥' }))).toContain('emoji_only')
+    // Flags are deliberately absent from this list: `stripEmoji` does not cover
+    // regional indicators, so flag-only text has never been emoji-only and does
+    // not become so here. A pre-existing gap in the emoji ranges, and the only
+    // cost is a withheld discount.
+  })
+
   it('short message with no suspicious signals is trust', () => {
     expect(trust(makeMsg({ text: 'дякую за відповідь' }))).toContain('short_message')
     expect(trust(makeMsg({ text: 'дякую bit.ly/x', urls: [{ visible: 'bit.ly/x', target: 'bit.ly/x', hidden: false }] }))).not.toContain('short_message')
