@@ -37,6 +37,25 @@ describe('shouldAbstain — the "bare @username" class of messages', () => {
   })
 })
 
+describe('shouldAbstain — length is measured in content, not codepoints', () => {
+  test('a logographic sentence is classified, not waved through as too short', () => {
+    // REGRESSION (2026-07-31): ten characters of Han plus a handle measured 10
+    // against a bar of 20, so a complete advert was never classified at all.
+    // In production this class was only ever caught when the account already
+    // sat in an external ban database — the deterministic rule that reads
+    // those runs before this gate.
+    expect(shouldAbstain(msg({ text: '会洗mi的来 日入上w @mlstii', mentions: ['mlstii'] }))).toBe(false)
+    expect(shouldAbstain(msg({ text: '酒店投放摄像头一台8q @vbtge', mentions: ['vbtge'] }))).toBe(false)
+  })
+
+  test('a short logographic courtesy still abstains', () => {
+    // The gate must keep measuring content. Weighting characters up is not a
+    // licence to classify every message in the script.
+    expect(shouldAbstain(msg({ text: '谢谢' }))).toBe(true)
+    expect(shouldAbstain(msg({ text: 'ありがとう' }))).toBe(true)
+  })
+})
+
 describe('shouldAbstain — rich content always gets classified', () => {
   test('does not abstain when a URL is present, even with short text', () => {
     expect(

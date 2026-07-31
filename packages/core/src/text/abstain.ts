@@ -10,6 +10,7 @@
 
 import type { NormalizedMessage } from '../types.js'
 import { stripEmoji, stripInvisible } from './normalize.js'
+import { informativeLength } from './script.js'
 
 export type AbstainInput = Pick<
   NormalizedMessage,
@@ -17,8 +18,13 @@ export type AbstainInput = Pick<
 >
 
 /**
- * Minimum informative characters (after stripping mentions, emoji,
- * invisibles, and whitespace) for a text-only message to be classified.
+ * Minimum content (after stripping mentions, emoji, invisibles and whitespace)
+ * for a text-only message to be classified.
+ *
+ * Measured by `informativeLength`, not by codepoint count. Counting codepoints
+ * assumes one of them is worth one letter, which is false for logographic
+ * scripts: a complete advert of ten Han characters measured shorter than a
+ * two-word greeting and was waved through as too little to judge (2026-07-31).
  */
 const MIN_INFORMATIVE_CHARS = 20
 
@@ -43,5 +49,5 @@ export const shouldAbstain = (input: AbstainInput): boolean => {
   // Mentions are addressing, not content — a bare "@user" tells us nothing.
   const withoutMentions = input.text.replace(/@\w+/g, ' ')
   const informative = stripInvisible(stripEmoji(withoutMentions)).replace(/\s+/g, '')
-  return informative.length < MIN_INFORMATIVE_CHARS
+  return informativeLength(informative) < MIN_INFORMATIVE_CHARS
 }

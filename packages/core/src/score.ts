@@ -52,6 +52,11 @@ export const SIGNAL_WEIGHTS: Record<string, number> = {
   long_text: 0.4,
   invisible_in_word: 2.0,
   mixed_script_word: 1.5,
+  // Written in a script this chat does not use. Deliberately a nudge: being
+  // foreign is not being spam, and the signal's whole job is routing — it says
+  // that every heuristic stage here is calibrated on another language and its
+  // silence proves nothing, so the LLM must read the message (2026-07-31).
+  foreign_script: 0.6,
   // Deliberately a nudge (2026-07-30). Three custom emoji is ordinary Premium
   // decoration, commonplace in gaming and meme chats; at 1.0 it was decisive on
   // its own and supplied half the evidence needed to remove a person. Its real
@@ -159,7 +164,16 @@ export const SOFT_SHAPE_SIGNALS = new Set([
   // read the message, and a legitimate appeal for help was. Past behaviour is a
   // strong prior and keeps its full weight in the score; it is not a fact about
   // the text just posted.
-  'prior_spam_detections', 'low_reputation'
+  'prior_spam_detections', 'low_reputation',
+  // Third-party ban databases (2026-07-31). `external_ban_new` already bans on
+  // these outright, but only for an account with no local history — its comment
+  // states the reason plainly: the known FP class of these databases is the
+  // rehabilitated account, so one with history deserves the full pipeline. The
+  // scoring path then undid that guard, because a 2.5-weight listing was
+  // counted as message evidence and reached `delete` with nothing having read
+  // the text. Production: an ordinary question about paperwork deleted three
+  // times inside ten minutes, voted ham 3:0 by the chat each time.
+  'external_ban', 'external_repeat_offender', 'fresh_external_ban'
 ])
 
 /**

@@ -192,6 +192,26 @@ describe('content evidence (2026-07-30 FP)', () => {
     expect(hasDecisiveSignal(signals)).toBe(false)
   })
 
+  it('REGRESSION: a third party\'s ban list says nothing about this message', () => {
+    // Production, 2026-07-31: `external_ban` 2.5 + `sleeper_awakened` 1.2 scored
+    // 0.82 and deleted an ordinary question about paperwork — three times in ten
+    // minutes, voted ham 3:0 by the chat each time.
+    //
+    // A listing is someone else's verdict on the ACCOUNT, and the rehabilitated
+    // account is the acknowledged FP class of these databases — which is exactly
+    // why `external_ban_new` requires the account to have no local history. The
+    // scoring path undid that guard by treating the listing as message evidence.
+    const signals: Signal[] = [
+      { name: 'external_ban' }, { name: 'external_repeat_offender' },
+      { name: 'fresh_external_ban' }, { name: 'sleeper_awakened' }
+    ]
+    expect(contentEvidence(signals).total).toBe(0)
+    expect(hasDecisiveSignal(signals)).toBe(false)
+    // The score still says "very likely spam" — the listing keeps its full
+    // weight. What it may no longer do is enforce without anything reading it.
+    expect(scoreSignals(signals).pSpam).toBeGreaterThan(0.9)
+  })
+
   it('one real content signal licenses enforcement on the message', () => {
     const signals = [...shapeStack, { name: 'moderation_flagged' }]
     expect(hasDecisiveSignal(signals)).toBe(true)

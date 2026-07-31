@@ -1045,3 +1045,104 @@ describe('evaluateMessage — established-regular exempt', () => {
     expect(v.action).not.toBe('none')
   })
 })
+
+describe('evaluateMessage — a script the chat does not use', () => {
+  const cjk = {
+    // Ten logographic characters plus a handle: a complete sentence whose
+    // codepoint count is that of a two-word greeting.
+    text: '会洗mi的来 日入上w @mlstii',
+    mentions: ['mlstii']
+  }
+
+  it('is classified rather than abstained on', async () => {
+    const v = await evaluateMessage(makeInput({ msg: cjk, user: newcomer }), {})
+    expect(v.decidedBy).not.toBe('abstain')
+    expect(v.reasonCode).not.toBe('low_information')
+  })
+
+  it('reaches the LLM even though arithmetic puts it nowhere near the grey zone', async () => {
+    // REGRESSION (2026-07-31): two independent barriers stood between this
+    // message and any stage able to read it. The gate called it too short, and
+    // once that was fixed the score landed at 0.27 — below LLM_GREY_LOW — so
+    // the only multilingual reader in the pipeline was never asked. In
+    // production the class was caught solely when the account already sat in an
+    // external ban database.
+    const tiers: LlmTier[] = []
+    const v = await evaluateMessage(makeInput({ msg: cjk, user: newcomer }), {
+      llm: {
+        classify: async (_i, tier) => {
+          tiers.push(tier)
+          return { pSpam: 0.97, reasonCode: 'other_spam', evidence: null, cached: false }
+        }
+      }
+    })
+    expect(tiers).toEqual(['cheap'])
+    expect(v.decidedBy).toBe('llm')
+    expect(isEnforcementAction(v.action)).toBe(true)
+  })
+
+  it('does not fire in a chat that writes that script', async () => {
+    let llmCalled = false
+    const window = [
+      { authorId: 7, authorKind: 'user' as const, textPreview: '酒店的房间很好我明天过来看看' },
+      { authorId: 8, authorKind: 'user' as const, textPreview: '好的没问题谢谢你明天见面' }
+    ]
+    const v = await evaluateMessage(
+      makeInput({ msg: cjk, user: newcomer, enrichment: { conversationWindow: window } }),
+      { llm: { classify: async () => { llmCalled = true; return null } } })
+    expect(v.signals.map((s) => s.name)).not.toContain('foreign_script')
+    // Back to an ordinary short message in its own chat: newcomer signals only,
+    // well under every threshold, and no reason to spend an LLM call.
+    expect(v.action).toBe('none')
+    expect(llmCalled).toBe(false)
+  })
+
+  it('being foreign is never itself grounds to act', async () => {
+    // The signal is a routing device. With no LLM configured it must leave the
+    // verdict where it would have been, not nudge it into enforcement.
+    const v = await evaluateMessage(makeInput({ msg: cjk, user: newcomer }), {})
+    expect(isEnforcementAction(v.action)).toBe(false)
+  })
+})
+
+describe('evaluateMessage — an external listing is not evidence about the message', () => {
+  const banned = {
+    externalBan: { banned: true, bannedAt: null, offenses: 1 },
+    // Local history, so `external_ban_new` deliberately does not apply: its own
+    // comment names the rehabilitated account as this database's FP class.
+    messagesInChat: 6, messagesGlobal: 30, localAgeDays: 200, predictedAgeDays: 1500
+  }
+  const ordinaryQuestion = {
+    text: 'Доброго дня, підкажіть будь ласка, чи можна відновити довідку якщо оригінал віддали'
+  }
+
+  it('does not enforce on the listing alone when nothing read the text', async () => {
+    // REGRESSION (2026-07-31): scored 0.82 on `external_ban` + `sleeper_awakened`
+    // and deleted an ordinary question three times inside ten minutes; the chat
+    // voted ham 3:0 on every one of them.
+    const v = await evaluateMessage(makeInput({ msg: ordinaryQuestion, user: banned }), {})
+    expect(isEnforcementAction(v.action)).toBe(false)
+  })
+
+  it('lets the LLM clear it, and the listing does not override the reading', async () => {
+    const v = await evaluateMessage(makeInput({ msg: ordinaryQuestion, user: banned }), {
+      llm: {
+        classify: async () => ({ pSpam: 0.05, reasonCode: 'ham', evidence: null, cached: false })
+      }
+    })
+    expect(v.decidedBy).toBe('llm')
+    expect(v.action).toBe('none')
+  })
+
+  it('still bans an externally-banned account with no local history', async () => {
+    // The workhorse rule must be untouched: nearly every applied ban in
+    // production comes through it.
+    const v = await evaluateMessage(makeInput({
+      msg: ordinaryQuestion,
+      user: { ...newcomer, externalBan: { banned: true, bannedAt: null, offenses: 1 } }
+    }), {})
+    expect(v.decidedBy).toBe('deterministic')
+    expect(v.ruleId).toBe('external_ban_new')
+    expect(v.action).toBe('ban')
+  })
+})

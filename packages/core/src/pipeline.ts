@@ -24,6 +24,7 @@ import { parseCustomRule, customRuleMatches } from './custom-rules.js'
 import { scoreSignals, hasDecisiveSignal, mayRemoveSender, contentEvidence } from './score.js'
 import { decideAction, isEnforcementAction, removesSender, type PolicyDecision } from './policy.js'
 import { shouldAbstain } from './text/abstain.js'
+import { isForeignScript } from './text/script.js'
 import { isDistinctive } from './learning.js'
 
 const LLM_GREY_LOW = 0.35
@@ -310,6 +311,13 @@ export const evaluateMessage = async (
   if (input.enrichment.personalChannelId !== null) {
     signals.push({ name: 'personal_channel' })
   }
+  // Written in a script the chat does not use. Every stage below this line is
+  // calibrated on the chat's own language, so against an alien script they are
+  // all blind at once and none of their silences means anything.
+  const foreignScript = isForeignScript(text, input.chat, input.enrichment.conversationWindow)
+  if (foreignScript !== null) {
+    signals.push({ name: 'foreign_script', evidence: foreignScript })
+  }
 
   // ── 3. deterministic rules ──────────────────────────────────────────
 
@@ -332,7 +340,10 @@ export const evaluateMessage = async (
 
   // ── 4. abstain gate + session window ────────────────────────────────
 
-  if (shouldAbstain(input.message)) {
+  // A message in an unfamiliar script is never "too little to judge": whatever
+  // it says it says in full, and unlike a bare "@user" it is trivially readable
+  // — by the LLM, if by nothing else here.
+  if (foreignScript === null && shouldAbstain(input.message)) {
     const window = ports.session
       ? await safe('session', () => ports.session!.append(input.message.chatId, input.user.id, text))
       : null
@@ -553,7 +564,13 @@ export const evaluateMessage = async (
 
   const inGreyZone = scorePSpam >= LLM_GREY_LOW && scorePSpam <= LLM_GREY_HIGH
   const needsLlm = inGreyZone ||
-    (scorePSpam > LLM_GREY_HIGH && (!decisive || unearnedEnforcement))
+    (scorePSpam > LLM_GREY_HIGH && (!decisive || unearnedEnforcement)) ||
+    // A low score on an alien script is not a finding, it is an absence of
+    // findings: signatures, vectors, custom rules and moderation were all
+    // reading a language they were not built for. Asking the one stage that
+    // can read it is the difference between clearing a message and never
+    // having looked at it (2026-07-31).
+    foreignScript !== null
   let llmNeededButUnavailable = false
 
   if (needsLlm && ports.llm) {
