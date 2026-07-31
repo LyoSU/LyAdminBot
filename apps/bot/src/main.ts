@@ -1751,22 +1751,41 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     await deliverCaptcha(chat.id, sender.id, sender.displayName, locale)
   }
 
-  if (result.applied && verdict.action !== 'none' && verdict.action !== 'observe' && verdict.action !== 'captcha') {
+  const enforced = verdict.action !== 'none' && verdict.action !== 'observe' && verdict.action !== 'captcha'
+
+  /**
+   * Knowledge outlives the attempt. Whether the bot holds a right in this chat
+   * is a fact about permissions; whether a verdict is sound is a fact about the
+   * verdict, and `shouldAutoLearn` already judges that one (a model or velocity
+   * or an admin's own rule, pSpam ≥ 0.95, text distinctive enough to match on).
+   *
+   * These writes used to sit behind `result.applied`, which meant the chats
+   * where the bot is weakest taught it nothing at all — and because signatures,
+   * vectors and forward reputation are shared across every chat, one missing
+   * right degraded detection everywhere. Production 2026-07-31: one advert
+   * reposted seven times in a chat where the ban could not be executed cost
+   * seven separate model calls and left nothing behind.
+   */
+  if (enforced) {
+    void learnFromAutoVerdict(verdict, normalized.text, chat.id)
+    // Forwarded spam builds the long-term reputation of its origin.
+    if (normalized.forward && verdict.pSpam >= 0.9) {
+      await forwardPort.reportSpam(normalized.forward, chat.id, normalized.text || null)
+        .catch(() => { /* reputation is best-effort */ })
+    }
+  }
+
+  if (result.applied && enforced) {
     void sessionPort.reset(chat.id, sender.id).catch(() => { /* best-effort */ })
     rememberVerdict(chat.id, message.id, verdict)
     rememberFacts(chat.id, message.id, factsFromSnapshot(user, {
       promoInBio: verdict.signals.some((s) => s.name === 'promo_in_bio'),
       personalChannel: input.enrichment.personalChannelId !== null
     }))
-    void learnFromAutoVerdict(verdict, normalized.text, chat.id)
-    // Forwarded spam builds the long-term reputation of its origin.
-    if (normalized.forward) {
-      rememberForward(chat.id, message.id, normalized.forward)
-      if (verdict.pSpam >= 0.9) {
-        await forwardPort.reportSpam(normalized.forward, chat.id, normalized.text || null)
-          .catch(() => { /* reputation is best-effort */ })
-      }
-    }
+    // Kept with the applied branch: this cache exists so a later override can
+    // undo the report above, and an override is only offered on a message we
+    // actually acted on.
+    if (normalized.forward) rememberForward(chat.id, message.id, normalized.forward)
     const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
 
     // Grey-zone verdicts ask the community: the vote prompt (with the quoted
