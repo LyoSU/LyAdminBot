@@ -1681,6 +1681,16 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       action: verdict.action, applied: result.applied, skipped: result.skippedReason ?? undefined,
       pSpam: Math.round(verdict.pSpam * 100) / 100, decidedBy: verdict.decidedBy,
       ruleId: verdict.ruleId ?? undefined, reason: verdict.reasonCode,
+      // Permanent or timed, and for how long. Only meaningful for a ban, and
+      // omitted otherwise. Added 2026-07-31 with the change that made a
+      // third-party ban listing expire: the difference between a 30-day ban and
+      // one that never lifts was invisible in the very log line that records it,
+      // so the change could not be confirmed from production output.
+      banFor: verdict.action === 'ban'
+        ? (verdict.banDurationSeconds === null
+            ? 'permanent'
+            : `${Math.round(verdict.banDurationSeconds / 86400)}d`)
+        : undefined,
       signals: formatSignals(verdict.signals),
       cappedFrom: verdict.meta['cappedFrom'] ?? undefined,
       // Everything below was already computed for exactly this purpose and then

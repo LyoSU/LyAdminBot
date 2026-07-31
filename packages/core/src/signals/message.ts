@@ -9,7 +9,7 @@
 import type { NormalizedMessage, Signal } from '../types.js'
 import { isEmojiOnly } from '../text/normalize.js'
 import { mixesConfusableScripts } from '../text/script.js'
-import { classifyUrl } from './urls.js'
+import { classifyUrl, sameDestination } from './urls.js'
 
 const LONG_TEXT_THRESHOLD = 200
 const SHORT_TEXT_THRESHOLD = 50
@@ -74,9 +74,10 @@ export const extractMessageSignals = (msg: NormalizedMessage): Signal[] => {
 
   const urlKinds = new Set<string>()
   for (const url of msg.urls) {
-    // Deceptive text_link: visible text itself looks like a URL but the
-    // real target differs — classic filter-evasion.
-    if (url.hidden && looksUrlLike(url.visible) && url.visible.trim() !== url.target.trim()) {
+    // Deceptive text_link: the visible text is itself a URL, but clicking takes
+    // you somewhere else — classic filter-evasion. "Somewhere else" is a
+    // destination, not a spelling: see `sameDestination`.
+    if (url.hidden && looksUrlLike(url.visible) && !sameDestination(url.visible, url.target)) {
       signals.push({ name: 'hidden_url', evidence: `"${url.visible}" → ${url.target}` })
     }
     urlKinds.add(classifyUrl(url.target).kind)

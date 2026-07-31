@@ -54,6 +54,34 @@ const parse = (raw: string): URL | null => {
   }
 }
 
+/**
+ * Whether two URLs land the reader in the same place.
+ *
+ * Exists because "the visible text is not byte-identical to the target" is not
+ * the question `hidden_url` means to ask. That signal asserts DECEPTION — the
+ * text advertises one destination and the click goes to another — and it carries
+ * weight 2.0 plus a deterministic kick, with no stage reading the message. So on
+ * 2026-07-31 a trailing slash was enough: production kicked a post whose link
+ * markup differed from its visible URL by one character.
+ *
+ * Host and path decide, because that is what "where you land" means. Scheme,
+ * `www.`, letter case and a trailing slash are spelling. The query is ignored
+ * too: a tracking parameter added to the same page is not a different page, and
+ * the one query that does change a destination — a bot's `?start=` payload — has
+ * its own signal already.
+ */
+export const sameDestination = (a: string, b: string): boolean => {
+  const at = parse(a.trim())
+  const bt = parse(b.trim())
+  // Unparseable on either side: fall back to comparing what we were given, so a
+  // visible string that is not really a URL cannot silently count as a match.
+  if (!at || !bt) return a.trim() === b.trim()
+
+  const key = (u: URL): string =>
+    `${u.hostname.toLowerCase().replace(/^www\./, '')}${u.pathname.replace(/\/+$/, '')}`
+  return key(at) === key(bt)
+}
+
 export const classifyUrl = (raw: string): ClassifiedUrl => {
   const url = parse(raw.trim())
   if (!url) return { kind: 'external', host: '' }

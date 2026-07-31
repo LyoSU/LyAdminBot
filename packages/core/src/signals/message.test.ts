@@ -59,6 +59,42 @@ describe('extractMessageSignals — suspicious signals', () => {
     expect(names(msg)).toContain('hidden_url')
   })
 
+  it('does not flag a link that merely differs in how the URL is written', () => {
+    // `hidden_url` asserts DECEPTION: the visible text advertises one
+    // destination and the click goes to another. Weight 2.0, and
+    // `hidden_url_new` kicks on it deterministically with no stage reading the
+    // message — so what counts as "another destination" has to be the
+    // destination, not the spelling of it.
+    //
+    // Production 2026-07-31 12:06: a post about reconstruction, with a photo,
+    // kicked on `hidden_url` + `url_shortener`. Every one of these variants
+    // fired, and none is deception — a trailing slash, a scheme, a capital in
+    // the host and a tracking parameter all leave you on the same page.
+    const benign = [
+      { visible: 'https://foo.com', target: 'https://foo.com/' },
+      { visible: 'www.foo.com', target: 'http://www.foo.com' },
+      { visible: 'https://Foo.com', target: 'https://foo.com' },
+      { visible: 'https://foo.com', target: 'https://foo.com?utm_source=tg' },
+      { visible: 'https://foo.com/a', target: 'https://www.foo.com/a#top' }
+    ]
+    for (const url of benign) {
+      const msg = makeMsg({ text: 'читайте більше', urls: [{ ...url, hidden: true }] })
+      expect(names(msg), `${url.visible} → ${url.target}`).not.toContain('hidden_url')
+    }
+  })
+
+  it('still flags a link that goes somewhere else', () => {
+    const deceptive = [
+      { visible: 'https://savelife.in.ua', target: 'https://bit.ly/xY9' },
+      { visible: 'https://foo.com/help', target: 'https://foo.com/pay' },
+      { visible: 't.me/goodchannel', target: 't.me/badchannel' }
+    ]
+    for (const url of deceptive) {
+      const msg = makeMsg({ text: 'читайте більше', urls: [{ ...url, hidden: true }] })
+      expect(names(msg), `${url.visible} → ${url.target}`).toContain('hidden_url')
+    }
+  })
+
   it('does not flag a text_link whose visible text is plain words', () => {
     const msg = makeMsg({
       text: 'читай тут',
