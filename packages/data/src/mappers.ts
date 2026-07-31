@@ -2,7 +2,9 @@
  * Pure mappers: production Mongo documents (v1 mongoose shapes) → domain
  * types. Kept pure so byte-compatibility is testable without a database.
  */
-import type { ChatPolicy, StrictnessPreset } from '@lyadmin/core'
+import type {
+  ChatPolicy, ExternalBanFacts, ExternalBanSource, StrictnessPreset
+} from '@lyadmin/core'
 
 /** Loose shape of the v1 `groups` document (only the fields we read). */
 export interface GroupDoc {
@@ -120,7 +122,7 @@ export interface UserHistoryView {
   spamDetections: number
   reputationScore: number
   reputationStatus: 'trusted' | 'neutral' | 'suspicious' | 'restricted'
-  externalBan: { banned: boolean; bannedAt: Date | null; offenses: number } | null
+  externalBan: ExternalBanFacts | null
   nameChurn24h: number
   usernameChurn24h: number
   avatars: { count: number; latestSetDaysAgo: number | null } | null
@@ -153,14 +155,20 @@ const toDate = (v: Date | string | null | undefined): Date | null => {
  */
 export const mergeExternalBan = (
   externalBan: ExternalBanSubdoc | null | undefined
-): { banned: boolean; bannedAt: Date | null; offenses: number } | null => {
+): ExternalBanFacts | null => {
   const lols = externalBan?.lols
   const cas = externalBan?.cas
   const banned = Boolean(lols?.banned) || Boolean(cas?.banned)
+  // Only the sources that say "banned". A source with an offense history but no
+  // active listing has cleared the account, and counting it as an accuser would
+  // make a rehabilitated account permanently guilty.
+  const sources: ExternalBanSource[] = []
+  if (lols?.banned) sources.push('lols')
+  if (cas?.banned) sources.push('cas')
   const offenses = Math.max(lols?.offenses ?? 0, cas?.offenses ?? 0)
   const dates = [toDate(lols?.bannedAt), toDate(cas?.bannedAt)].filter((d): d is Date => d !== null)
   const bannedAt = dates.length > 0 ? new Date(Math.max(...dates.map((d) => d.getTime()))) : null
-  return banned || offenses > 0 ? { banned, bannedAt, offenses } : null
+  return banned || offenses > 0 ? { banned, bannedAt, offenses, sources } : null
 }
 
 export const userDocToHistory = (

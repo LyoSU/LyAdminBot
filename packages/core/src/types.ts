@@ -44,6 +44,26 @@ export interface SenderFlags {
   bot: boolean
 }
 
+/** Which third-party database listed an account. */
+export type ExternalBanSource = 'lols' | 'cas'
+
+export interface ExternalBanFacts {
+  banned: boolean
+  bannedAt: Date | null
+  offenses: number
+  /**
+   * The sources that actually say "banned", not the ones merely consulted.
+   *
+   * Kept because `external_ban_new` is the most consequential deterministic
+   * action there is — a 30-day ban on a third party's word, with no evidence
+   * from the message required or examined — and until 2026-07-31 neither the
+   * log nor the signal recorded who had made the accusation. The two databases
+   * do not have the same false-positive profile, so "should we believe this
+   * listing" was unanswerable exactly where the answer mattered.
+   */
+  sources: ExternalBanSource[]
+}
+
 export interface UserSnapshot {
   id: number
   username: string | null
@@ -67,7 +87,7 @@ export interface UserSnapshot {
    * the source added the ban (recency factor); `offenses` is the CAS repeat
    * count (lols contributes 1).
    */
-  externalBan: { banned: boolean; bannedAt: Date | null; offenses: number } | null
+  externalBan: ExternalBanFacts | null
   /**
    * Telegram server flagged this user as a security risk for using an
    * unofficial client (userFull.unofficial_security_risk). Strongest

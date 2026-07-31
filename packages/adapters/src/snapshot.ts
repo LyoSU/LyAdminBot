@@ -3,7 +3,7 @@
  * (free with the update) with what we remember about them (data layer).
  */
 import type { Chat, User } from '@mtcute/node'
-import type { UserSnapshot } from '@lyadmin/core'
+import type { ExternalBanFacts, UserSnapshot } from '@lyadmin/core'
 import { predictAccountAgeDays } from './account-age.js'
 
 /** Persisted history the data layer provides (all fields best-effort). */
@@ -15,7 +15,7 @@ export interface UserHistory {
   spamDetections: number
   reputationScore: number
   reputationStatus: UserSnapshot['reputationStatus']
-  externalBan: { banned: boolean; bannedAt: Date | null; offenses: number } | null
+  externalBan: ExternalBanFacts | null
   nameChurn24h: number
   usernameChurn24h: number
   avatars: { count: number; latestSetDaysAgo: number | null } | null

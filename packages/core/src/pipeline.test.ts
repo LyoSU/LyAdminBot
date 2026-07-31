@@ -897,7 +897,7 @@ describe('evaluateMessage — enforcement ladder end to end', () => {
     // itself and offers an appeal. A crowd-sourced list is a different tier of
     // authority, and conflating the two is what produced the outcome above.
     const v = await evaluateMessage(makeInput({
-      user: { ...newcomer, externalBan: { banned: true, bannedAt: null, offenses: 3 } }
+      user: { ...newcomer, externalBan: { banned: true, bannedAt: null, offenses: 3, sources: ['lols'] } }
     }), {})
     expect(v.action).toBe('ban')
     expect(v.ruleId).toBe('external_ban_new')
@@ -911,7 +911,7 @@ describe('evaluateMessage — enforcement ladder end to end', () => {
       user: {
         ...newcomer,
         flags: { scam: true, fake: false, restricted: false, verified: false, premium: false, bot: false },
-        externalBan: { banned: true, bannedAt: null, offenses: 3 }
+        externalBan: { banned: true, bannedAt: null, offenses: 3, sources: ['lols'] }
       }
     }), {})
     expect(v.action).toBe('ban')
@@ -1028,7 +1028,7 @@ describe('evaluateMessage — established-regular exempt', () => {
 
   it('a hard account verdict cancels the exempt — the pipeline still decides', async () => {
     const guards: Partial<UserSnapshot>[] = [
-      { externalBan: { banned: true, bannedAt: null, offenses: 2 } },
+      { externalBan: { banned: true, bannedAt: null, offenses: 2, sources: ['lols'] } },
       { flags: { scam: true, fake: false, restricted: false, verified: false, premium: false, bot: false } },
       { spamDetections: 2 },
       { reputationStatus: 'suspicious' },
@@ -1056,7 +1056,7 @@ describe('evaluateMessage — established-regular exempt', () => {
     const v = await evaluateMessage(
       makeInput({
         msg: wouldMatch,
-        user: { messagesInChat: 50, externalBan: { banned: true, bannedAt: null, offenses: 2 } },
+        user: { messagesInChat: 50, externalBan: { banned: true, bannedAt: null, offenses: 2, sources: ['lols'] } },
         policy: { externalBanEnabled: false }
       }),
       confirmedSignature)
@@ -1135,8 +1135,8 @@ describe('evaluateMessage — a script the chat does not use', () => {
 })
 
 describe('evaluateMessage — an external listing is not evidence about the message', () => {
-  const banned = {
-    externalBan: { banned: true, bannedAt: null, offenses: 1 },
+  const banned: Partial<UserSnapshot> = {
+    externalBan: { banned: true, bannedAt: null, offenses: 1, sources: ['lols'] },
     // Local history, so `external_ban_new` deliberately does not apply: its own
     // comment names the rehabilitated account as this database's FP class.
     messagesInChat: 6, messagesGlobal: 30, localAgeDays: 200, predictedAgeDays: 1500
@@ -1168,7 +1168,7 @@ describe('evaluateMessage — an external listing is not evidence about the mess
     // production comes through it.
     const v = await evaluateMessage(makeInput({
       msg: ordinaryQuestion,
-      user: { ...newcomer, externalBan: { banned: true, bannedAt: null, offenses: 1 } }
+      user: { ...newcomer, externalBan: { banned: true, bannedAt: null, offenses: 1, sources: ['lols'] } }
     }), {})
     expect(v.decidedBy).toBe('deterministic')
     expect(v.ruleId).toBe('external_ban_new')

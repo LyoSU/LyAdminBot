@@ -1491,17 +1491,38 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     return
   }
 
+  /**
+   * Where the time before the pipeline goes.
+   *
+   * `portMs` covers the pipeline's own stages and nothing else, so everything
+   * here — the replied message, Mongo, `getFullUser`, `getChatMember`, the
+   * lols/CAS HTTP call, the chat description — was invisible. A deterministic
+   * verdict runs no ports at all, and one of those took 4.4 seconds on
+   * 2026-07-31 with a log line that could only say `latencyMs`. Same fix as
+   * `portMs`, one layer up: name each call and what it cost.
+   */
+  const enrichMs: string[] = []
+  const timed = async <T>(name: string, run: () => Promise<T>): Promise<T> => {
+    const at = Date.now()
+    try {
+      return await run()
+    } finally {
+      enrichMs.push(`${name}=${Date.now() - at}`)
+    }
+  }
+
   // ── normalize (budget call 1: replied message, only for replies) ───
-  const replied = await gateway.fetchRepliedMessage(message)
+  const replied = await timed('reply', () => gateway.fetchRepliedMessage(message))
   const normalized = normalizeMessage(message, { isEdit, repliedMessage: replied })
 
   // ── user snapshot ───────────────────────────────────────────────────
-  await store.touchUser(sender.id).catch(() => { /* counters are best-effort */ })
-  const userDoc = await store.getUserDoc(sender.id).catch(() => null)
-  // Increments the per-chat counters and returns the pre-increment count —
-  // exactly what the "new in chat" signal must see.
-  const memberCount = await store.touchMember(chat.id, sender.id, normalized.text.length)
-    .catch(() => 0)
+  const memberCount = await timed('mongo', async () => {
+    await store.touchUser(sender.id).catch(() => { /* counters are best-effort */ })
+    // Increments the per-chat counters and returns the pre-increment standing —
+    // exactly what the "new in chat" signal must see.
+    return store.touchMember(chat.id, sender.id, normalized.text.length).catch(() => 0)
+  })
+  const userDoc = await timed('userdoc', () => store.getUserDoc(sender.id).catch(() => null))
   const history = userDocToHistory(userDoc as never, memberCount)
 
   const newish = (history?.messagesGlobal ?? 0) <= 5 || memberCount <= 3
@@ -1527,7 +1548,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
    * Channels have no such profile at all — asking would be an error, not a null.
    */
   const profile = userSender && !exemptish
-    ? await cachedUserProfile(userSender.id)
+    ? await timed('profile', () => cachedUserProfile(userSender.id))
     : EMPTY_PROFILE
 
   // Authoritative chat join time (channels.getParticipant). Only for newish
@@ -1535,9 +1556,10 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   // it costs one admin-only call. Degrades to null on anything unexpected.
   let joinedAgoSeconds: number | null = null
   if (newish) {
-    const joinedDate = await gateway.tg.getChatMember({ chatId: chat.id, userId: sender.id })
-      .then((m) => m?.joinedDate ?? null)
-      .catch(() => null)
+    const joinedDate = await timed('joined', () =>
+      gateway.tg.getChatMember({ chatId: chat.id, userId: sender.id })
+        .then((m) => m?.joinedDate ?? null)
+        .catch(() => null))
     if (joinedDate) joinedAgoSeconds = Math.max(0, (Date.now() - joinedDate.getTime()) / 1000)
   }
 
@@ -1552,7 +1574,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     } } | null)?.externalBan
     const now = Date.now()
     if (needsExternalRecheck(cached?.lols?.checkedAt, now) || needsExternalRecheck(cached?.cas?.checkedAt, now)) {
-      const fresh = await fetchExternalBan(sender.id)
+      const fresh = await timed('extban', () => fetchExternalBan(sender.id))
       if (fresh) {
         store.saveExternalBan(sender.id, fresh).catch(() => { /* cache is best-effort */ })
         externalBan = mergeExternalBan({
@@ -1628,7 +1650,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       // What the chat says it is for. Amortised to roughly one MTProto call per
       // chat per six hours, and null whenever the chat has none — no stage may
       // treat its absence as meaning anything.
-      description: await chatDescriptions.get(chat.id)
+      description: await timed('chatdesc', () => chatDescriptions.get(chat.id))
     },
     user,
     // The chat's stored settings plus one capability of the running bot: the
@@ -1715,6 +1737,20 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       capped: verdict.meta['cappedGroups'] ?? undefined,
       llmTier: verdict.meta['llmTier'] ?? undefined,
       portMs: verdict.meta['portMs'] ?? undefined,
+      // Everything the pipeline's own timings cannot see. A deterministic
+      // verdict runs no ports, so without this a 4.4-second ban (2026-07-31)
+      // had no explanation anywhere in its log line.
+      enrichMs: enrichMs.length > 0 ? enrichMs.join(',') : undefined,
+      // Who accused, and when. `external_ban_new` bans for 30 days on this
+      // alone, without any stage reading the message, so the log line for the
+      // action least able to justify itself has to carry its grounds.
+      externalBan: user.externalBan?.banned
+        ? `${user.externalBan.sources.join('+') || 'external'}${
+            user.externalBan.bannedAt
+              ? ` ${Math.round((Date.now() - user.externalBan.bannedAt.getTime()) / 86_400_000)}d`
+              : ''
+          }${user.externalBan.offenses > 1 ? ` ×${user.externalBan.offenses}` : ''}`
+        : undefined,
       // A session verdict judged the sender's accumulated window, not the
       // message above: without the window the line cannot be reviewed.
       judged: typeof verdict.meta['judgedText'] === 'string'

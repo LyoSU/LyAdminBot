@@ -98,7 +98,7 @@ describe('userDocToHistory', () => {
     }, 25, NOW)!
     expect(history.messagesGlobal).toBe(300)
     expect(history.messagesInChat).toBe(25)
-    expect(history.externalBan).toEqual({ banned: true, bannedAt: new Date('2026-06-19T09:15:14Z'), offenses: 1 })
+    expect(history.externalBan).toEqual({ banned: true, bannedAt: new Date('2026-06-19T09:15:14Z'), offenses: 1, sources: ['lols'] })
     expect(Math.round((NOW / 1000 - history.firstSeenUnix!) / 86400)).toBe(100)
   })
 
@@ -135,11 +135,48 @@ describe('userDocToHistory', () => {
     expect(history.messagesGlobal).toBe(0)
   })
 
+  /**
+   * `external_ban_new` is the most consequential deterministic action we have:
+   * a 30-day ban on the word of a third party, with no evidence from the message
+   * required or examined. Between 2026-07-31 20:02 and 22:31 one account was
+   * banned in three chats for three unremarkable Ukrainian remarks, and neither
+   * the log nor the signal could say which database had accused it. The two
+   * sources are not interchangeable — one is conservative, the other automated
+   * and aggressive — so "is this listing trustworthy" was unanswerable exactly
+   * where it mattered most.
+   */
+  it('records which database did the accusing', () => {
+    const history = userDocToHistory({
+      telegram_id: 1,
+      externalBan: { lols: { banned: true, offenses: 1 }, cas: { banned: false } }
+    }, 0, NOW)!
+    expect(history.externalBan?.sources).toEqual(['lols'])
+  })
+
+  it('names both when both listed the account', () => {
+    const history = userDocToHistory({
+      telegram_id: 1,
+      externalBan: { lols: { banned: true }, cas: { banned: true, offenses: 2 } }
+    }, 0, NOW)!
+    expect(history.externalBan?.sources).toEqual(['lols', 'cas'])
+  })
+
+  it('a source that has an offense count but no ban is not an accuser', () => {
+    // CAS keeps a history for accounts it has since cleared; counting that as
+    // an accusation would make a rehabilitated account permanently guilty.
+    const history = userDocToHistory({
+      telegram_id: 1,
+      externalBan: { cas: { banned: false, offenses: 3 } }
+    }, 0, NOW)!
+    expect(history.externalBan?.banned).toBe(false)
+    expect(history.externalBan?.sources).toEqual([])
+  })
+
   it('cas-only ban maps to banned, carrying its offenses count', () => {
     const history = userDocToHistory(
       { telegram_id: 1, externalBan: { cas: { banned: true, offenses: 3 } } }, 0, NOW
     )!
-    expect(history.externalBan).toEqual({ banned: true, bannedAt: null, offenses: 3 })
+    expect(history.externalBan).toEqual({ banned: true, bannedAt: null, offenses: 3, sources: ['cas'] })
   })
 
   it('merges both sources: OR on banned, max offenses, most-recent bannedAt', () => {
@@ -151,7 +188,7 @@ describe('userDocToHistory', () => {
       0, NOW
     )!
     expect(history.externalBan).toEqual({
-      banned: true, bannedAt: new Date('2026-06-19T09:00:00Z'), offenses: 4
+      banned: true, bannedAt: new Date('2026-06-19T09:00:00Z'), offenses: 4, sources: ['lols', 'cas']
     })
   })
 

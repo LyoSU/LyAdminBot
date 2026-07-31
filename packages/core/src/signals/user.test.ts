@@ -45,19 +45,44 @@ describe('extractUserSignals — suspicious', () => {
   })
 
   it('flags external ban databases', () => {
-    expect(names(makeUser({ externalBan: { banned: true, bannedAt: null, offenses: 1 } }))).toContain('external_ban')
-    expect(names(makeUser({ externalBan: { banned: false, bannedAt: null, offenses: 0 } }))).not.toContain('external_ban')
+    expect(names(makeUser({ externalBan: { banned: true, bannedAt: null, offenses: 1, sources: ['lols'] } }))).toContain('external_ban')
+    expect(names(makeUser({ externalBan: { banned: false, bannedAt: null, offenses: 0, sources: [] } }))).not.toContain('external_ban')
+  })
+
+  it('says who did the accusing and how old the listing is', () => {
+    // The signal that alone carries a 30-day ban used to arrive bare. When an
+    // account was banned in three chats for three unremarkable remarks
+    // (2026-07-31), nothing recorded which database had listed it — and the two
+    // are not interchangeable.
+    const now = Date.parse('2026-06-19T12:00:00Z')
+    const listed = makeUser({
+      externalBan: {
+        banned: true, bannedAt: new Date('2026-06-16T12:00:00Z'), offenses: 1, sources: ['cas']
+      }
+    })
+    const signal = extractUserSignals(listed, now).find((s) => s.name === 'external_ban')
+    expect(signal?.evidence).toContain('cas')
+    expect(signal?.evidence).toContain('3d')
+  })
+
+  it('an accusation with no date says so rather than inventing one', () => {
+    const listed = makeUser({
+      externalBan: { banned: true, bannedAt: null, offenses: 1, sources: ['lols'] }
+    })
+    const signal = extractUserSignals(listed, Date.now()).find((s) => s.name === 'external_ban')
+    expect(signal?.evidence).toContain('lols')
+    expect(signal?.evidence).not.toMatch(/NaN|Invalid|undefined/)
   })
 
   it('flags a repeat offender (CAS offenses >= 2), not a single listing', () => {
-    expect(names(makeUser({ externalBan: { banned: true, bannedAt: null, offenses: 3 } }))).toContain('external_repeat_offender')
-    expect(names(makeUser({ externalBan: { banned: true, bannedAt: null, offenses: 1 } }))).not.toContain('external_repeat_offender')
+    expect(names(makeUser({ externalBan: { banned: true, bannedAt: null, offenses: 3, sources: ['lols'] } }))).toContain('external_repeat_offender')
+    expect(names(makeUser({ externalBan: { banned: true, bannedAt: null, offenses: 1, sources: ['lols'] } }))).not.toContain('external_repeat_offender')
   })
 
   it('flags a freshly-added external ban (<48h), not an old one', () => {
     const now = Date.parse('2026-06-19T12:00:00Z')
-    const fresh = makeUser({ externalBan: { banned: true, bannedAt: new Date('2026-06-19T09:00:00Z'), offenses: 1 } })
-    const old = makeUser({ externalBan: { banned: true, bannedAt: new Date('2026-06-01T00:00:00Z'), offenses: 1 } })
+    const fresh = makeUser({ externalBan: { banned: true, bannedAt: new Date('2026-06-19T09:00:00Z'), offenses: 1, sources: ['lols'] } })
+    const old = makeUser({ externalBan: { banned: true, bannedAt: new Date('2026-06-01T00:00:00Z'), offenses: 1, sources: ['lols'] } })
     expect(extractUserSignals(fresh, now).map((s) => s.name)).toContain('fresh_external_ban')
     expect(extractUserSignals(old, now).map((s) => s.name)).not.toContain('fresh_external_ban')
   })
@@ -185,7 +210,7 @@ describe('extractUserSignals — trust (negative)', () => {
     const condemned: Partial<UserSnapshot>[] = [
       { flags: { scam: true, fake: false, restricted: false, verified: false, premium: false, bot: false } },
       { flags: { scam: false, fake: true, restricted: false, verified: false, premium: false, bot: false } },
-      { externalBan: { banned: true, bannedAt: null, offenses: 1 } },
+      { externalBan: { banned: true, bannedAt: null, offenses: 1, sources: ['lols'] } },
       { reputationStatus: 'suspicious' },
       { reputationStatus: 'restricted' },
       { restrictionReasons: ['spam'] }

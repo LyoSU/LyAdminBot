@@ -102,7 +102,15 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
   // ── external ban databases ─────────────────────────────────────────
 
   if (user.externalBan?.banned) {
-    signals.push({ name: 'external_ban' })
+    // Name the accuser and date the accusation. This signal alone carries a
+    // 30-day ban through `external_ban_new`, without any stage having read the
+    // message, so arriving bare made the one action least able to justify
+    // itself also the one hardest to review (2026-07-31).
+    const who = user.externalBan.sources.join('+') || 'external'
+    const age = user.externalBan.bannedAt !== null
+      ? `, ${Math.round((now - user.externalBan.bannedAt.getTime()) / MS_PER_DAY)}d ago`
+      : ', date unknown'
+    signals.push({ name: 'external_ban', evidence: `listed by ${who}${age}` })
 
     // Repeat offender: CAS counts prior offences across its network. A second
     // listing is a much stronger signal than a single one (replaces the dead
