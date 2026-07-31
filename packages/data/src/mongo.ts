@@ -6,7 +6,7 @@
  *   llm_cache          — LLM verdict cache, TTL 7d
  */
 import { MongoClient, ObjectId, type Collection, type Db, type Document } from 'mongodb'
-import type { Verdict } from '@lyadmin/core'
+import type { Verdict, Signal } from '@lyadmin/core'
 import { normalizeExtra, type NormalizedExtra } from './extras.js'
 import {
   addWelcomeItem, removeAt, type AddReason,
@@ -503,7 +503,13 @@ export class MongoStore {
         : null,
       decidedBy: (doc['decidedBy'] ?? 'error') as Verdict['decidedBy'],
       ruleId: (doc['ruleId'] as string | null) ?? null,
-      signals: signalNames.map((n) => ({ name: String(n) })),
+      // A stored decision keeps signal NAMES only, and it may name a signal the
+      // catalogue has since renamed or dropped — so this is the one place a
+      // `SignalName` is asserted rather than known. Everything downstream is
+      // built to survive that: `weightOf` scores an unknown name as 0,
+      // `isTrustSignal` calls it accusing, and `renderWhy` shows the raw name.
+      // This value is display-and-override only; it is never re-scored.
+      signals: signalNames.map((n) => ({ name: String(n) as Signal['name'] })),
       reasonCode: String(doc['reasonCode'] ?? 'unknown'),
       reasonEvidence: (doc['textPreview'] as string | null) ?? null,
       meta: (doc['meta'] as Record<string, string | number | boolean>) ?? {}

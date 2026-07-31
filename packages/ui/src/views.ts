@@ -8,6 +8,7 @@
  *  - settings panel only in PM; group /settings replies with a deep link
  */
 import type { Verdict } from '@lyadmin/core'
+import { isSuspicionSignal } from '@lyadmin/core'
 import type { Locale } from './locale.js'
 import { uk } from './locales/uk.js'
 import { en } from './locales/en.js'
@@ -192,9 +193,21 @@ export const whyView = (locale: Locale, verdict: Verdict, options: WhyOptions = 
   const reason = locale.reasons[verdict.reasonCode] ?? locale.reasonFallback
   lines.push(esc(locale.why.reasonLine(reason)))
 
-  const suspicious = verdict.signals.filter((s) => !s.negative).map((s) => s.name)
+  // Trust signals are never listed: nobody needs telling that their message was
+  // a reply. Which signals those are comes from the catalogue, not from a flag
+  // on the object — a verdict rebuilt from a stored decision carries names only.
+  const suspicious = verdict.signals.map((s) => s.name).filter(isSuspicionSignal)
   const humanized = suspicious
-    .map((name) => locale.why.signalLabels[name])
+    // Unlabelled signals are still dropped, and that is still right: an internal
+    // identifier must never reach a member reading why their message went.
+    //
+    // What changed on 2026-07-31 is that the gap can no longer be a LIVE signal.
+    // `signalLabels` is typed over the catalogue, so shipping a signal without
+    // translating it does not compile — the day a signal moved verdicts while
+    // being invisible here is closed by the type, not by this line. What remains
+    // is a name a stored decision still carries after the signal was renamed,
+    // and dropping that is the honest answer.
+    .map((name) => locale.why.signalLabels[name] as string | undefined)
     .filter((label): label is string => Boolean(label))
     .slice(0, 6)
   if (humanized.length > 0) {

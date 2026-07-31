@@ -6,6 +6,7 @@
  * everything the pipeline needs arrives in these structures. This is what
  * makes the core replayable offline against production logs.
  */
+import type { SignalName } from './signals/registry.js'
 
 // ───────────────────────── input ─────────────────────────
 
@@ -198,14 +199,18 @@ export interface ChatPolicy {
 // ───────────────────────── signals ─────────────────────────
 
 /**
- * A signal is a fact, not a verdict. `name` is a stable identifier
- * (the key for calibration and FP telemetry), `evidence` is a
- * human-readable explanation for the expanded "Why?" view.
+ * A signal is a fact, not a verdict. `name` identifies it in the catalogue
+ * (`signals/registry.ts`), which is also where its weight and its role live;
+ * `evidence` is the human-readable detail for the expanded "Why?" view.
+ *
+ * Whether a signal accuses or exonerates is NOT stored here. It used to be, as
+ * `negative: true` at each raise site, which made it a second source of truth
+ * for something the catalogue already knows — and one that a verdict rebuilt
+ * from a stored decision could not carry at all, since only the names are
+ * persisted. Ask `isTrustSignal(name)` instead.
  */
 export interface Signal {
-  name: string
-  /** Trust signals carry negative: true. */
-  negative?: boolean
+  name: SignalName
   evidence?: string
 }
 

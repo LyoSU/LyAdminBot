@@ -6,7 +6,7 @@
  *  - reason CODES are localized here; raw LLM text never reaches users
  *  - no country flags anywhere (language names are plain text)
  */
-import type { VerdictAction } from '@lyadmin/core'
+import type { VerdictAction, SuspicionSignalName } from '@lyadmin/core'
 
 export interface Locale {
   /** Language name in its own language, NO flag emoji. */
@@ -83,8 +83,18 @@ export interface Locale {
     reasonLine: (reason: string) => string
     /** Header above the bulleted, humanized signal list. */
     noticedTitle: string
-    /** Machine signal name → plain phrase. Unmapped signals are hidden. */
-    signalLabels: Record<string, string>
+    /**
+     * Every accusing signal, in plain words.
+     *
+     * Complete by type, not by diligence: `SuspicionSignalName` is derived from
+     * the signal catalogue, so adding a signal without translating it does not
+     * compile — in any of the five locales. It used to be `Record<string,
+     * string>`, and on 2026-07-31 a shipped signal with no label was dropped
+     * from every "Why?" card in every language without a word of warning.
+     *
+     * Trust signals are deliberately absent: they are never shown to anyone.
+     */
+    signalLabels: Record<SuspicionSignalName, string>
     /** Header above the quoted offending message. */
     messageTitle: string
     /** Technical footer (admins only): how the verdict was reached. */

@@ -13,6 +13,9 @@
  *    replay-measured precision.
  */
 import type { Signal } from './types.js'
+import {
+  PROMO_SIGNALS, HIGH_RISK_SIGNALS, isTrustSignal, type SignalName
+} from './signals/registry.js'
 
 export interface DeterministicVerdict {
   kind: 'spam' | 'clean'
@@ -20,16 +23,6 @@ export interface DeterministicVerdict {
   /** Calibrated probability this rule asserts. */
   pSpam: number
 }
-
-const PROMO_SIGNALS = new Set([
-  'private_invite_link', 'bot_deeplink', 'url_shortener', 'many_url_buttons',
-  'hidden_url', 'messenger_contact_link', 'phone_number', 'cashtag',
-  'external_url', 'paid_media', 'giveaway_media'
-])
-
-const HIGH_RISK_SIGNALS = new Set([
-  'forward_hidden_user', 'hidden_url', 'many_url_buttons', 'invisible_in_word'
-])
 
 /**
  * Note on `established_user` (2026-07-27): it had been unreachable, because it
@@ -42,11 +35,11 @@ const HIGH_RISK_SIGNALS = new Set([
 
 export const applyDeterministicRules = (signals: Signal[]): DeterministicVerdict | null => {
   const names = new Set(signals.map((s) => s.name))
-  const has = (n: string): boolean => names.has(n)
+  const has = (n: SignalName): boolean => names.has(n)
 
   const hasPromo = [...names].some((n) => PROMO_SIGNALS.has(n))
   const hasHighRisk = [...names].some((n) => HIGH_RISK_SIGNALS.has(n))
-  const hasAnySuspicious = signals.some((s) => !s.negative)
+  const hasAnySuspicious = signals.some((s) => !isTrustSignal(s.name))
   const isNewish = has('new_globally') || has('new_in_chat')
   const isEstablished = has('established_user') || has('trusted_reputation')
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import type { UserSnapshot } from '../types.js'
+import { isTrustSignal } from './registry.js'
 import { extractUserSignals } from './user.js'
 
 const makeUser = (overrides: Partial<UserSnapshot> = {}): UserSnapshot => ({
@@ -29,7 +30,7 @@ const makeUser = (overrides: Partial<UserSnapshot> = {}): UserSnapshot => ({
 
 const names = (u: UserSnapshot): string[] => extractUserSignals(u).map((s) => s.name)
 const trust = (u: UserSnapshot): string[] =>
-  extractUserSignals(u).filter((s) => s.negative).map((s) => s.name)
+  extractUserSignals(u).filter((s) => isTrustSignal(s.name)).map((s) => s.name)
 
 describe('extractUserSignals — suspicious', () => {
   it('flags Telegram scam/fake flags', () => {
@@ -202,9 +203,18 @@ describe('extractUserSignals — trust (negative)', () => {
       .toContain('established_user')
   })
 
-  it('premium is NOT a trust signal (spammers buy premium)', () => {
-    const premium = makeUser({ flags: { scam: false, fake: false, restricted: false, verified: false, premium: true, bot: false } })
-    expect(extractUserSignals(premium).every((s) => s.name !== 'premium')).toBe(true)
+  it('premium buys no trust (spammers buy premium)', () => {
+    // The old form asserted no signal is *named* `premium`, which the catalogue
+    // now settles at compile time — there is no such name to raise. What still
+    // needs testing is the decision itself: a premium badge and nothing else
+    // must not earn the account any leniency.
+    // messagesGlobal below the established bar, so the badge is the only thing
+    // that could possibly earn leniency here.
+    const premium = makeUser({
+      messagesGlobal: 3,
+      flags: { scam: false, fake: false, restricted: false, verified: false, premium: true, bot: false }
+    })
+    expect(extractUserSignals(premium).filter((s) => isTrustSignal(s.name))).toEqual([])
   })
 
   it('never crashes on a snapshot full of nulls', () => {

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { Signal } from './types.js'
 import { applyDeterministicRules } from './rules.js'
+import type { SignalName } from './signals/registry.js'
 
-const s = (...names: string[]): Signal[] => names.map((name) => ({ name }))
-const t = (...names: string[]): Signal[] => names.map((name) => ({ name, negative: true }))
+const s = (...names: SignalName[]): Signal[] => names.map((name) => ({ name }))
+/** Trust signals: the catalogue knows they exonerate, so nothing is tagged here. */
+const t = (...names: SignalName[]): Signal[] => names.map((name) => ({ name }))
 
 describe('applyDeterministicRules — spam rules', () => {
   it('scam-flagged newcomer is deterministic spam', () => {

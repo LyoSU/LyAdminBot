@@ -5,7 +5,7 @@
  * vote, override, banan, captcha pass and error gets a line so prod activity
  * is fully auditable from the container logs.
  */
-import { SIGNAL_WEIGHTS, type Signal } from '@lyadmin/core'
+import { weightOf, type Signal } from '@lyadmin/core'
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 export type LogFields = Record<string, unknown>
@@ -26,7 +26,7 @@ const MAX_LOGGED_SIGNALS = 12
 export const formatSignals = (signals: Signal[]): string | undefined => {
   const seen = new Map<string, number>()
   for (const { name } of signals) {
-    if (!seen.has(name)) seen.set(name, SIGNAL_WEIGHTS[name] ?? 0)
+    if (!seen.has(name)) seen.set(name, weightOf(name))
   }
   if (seen.size === 0) return undefined
 

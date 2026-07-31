@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Verdict } from '@lyadmin/core'
+import type { SignalName } from '@lyadmin/core'
 import { applyVerdict, withFloodWait, type ModerationActions } from './executor.js'
 
 const makeVerdict = (overrides: Partial<Verdict> = {}): Verdict => ({
@@ -130,7 +131,7 @@ describe('applyVerdict', () => {
     expect(actions.calls).toEqual(['delete', 'ban'])
   })
 
-  it.each(['external_ban', 'fake_flag', 'restricted_for_spam'])(
+  it.each(['external_ban', 'fake_flag', 'restricted_for_spam'] satisfies SignalName[])(
     'trust yields to %s as well', async (name) => {
       const actions = makeActions()
       const result = await applyVerdict(

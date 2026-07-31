@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { SignalName } from '@lyadmin/core'
 import { formatLogLine, formatSignals } from './logger.js'
 
 describe('formatLogLine', () => {
@@ -42,11 +43,11 @@ describe('formatSignals', () => {
   })
 
   it('keeps trust signals visible — they explain a LOW score too', () => {
-    expect(formatSignals([{ name: 'short_message', negative: true }])).toBe('short_message=-0.8')
+    expect(formatSignals([{ name: 'short_message' }])).toBe('short_message=-0.8')
   })
 
   it('deduplicates and survives unknown names', () => {
-    expect(formatSignals([{ name: 'made_up' }, { name: 'made_up' }])).toBe('made_up')
+    expect(formatSignals([{ name: 'made_up' as SignalName }, { name: 'made_up' as SignalName }])).toBe('made_up')
   })
 
   it('is undefined for an empty list, so the field drops out of the line', () => {
@@ -54,7 +55,7 @@ describe('formatSignals', () => {
   })
 
   it('truncates a runaway list but says how many it hid', () => {
-    const many = Array.from({ length: 20 }, (_, i) => ({ name: `sig_${i}` }))
+    const many = Array.from({ length: 20 }, (_, i) => ({ name: `sig_${i}` as SignalName }))
     expect(formatSignals([{ name: 'scam_flag' }, ...many])).toMatch(/^scam_flag=3 .* \+9$/)
   })
 })

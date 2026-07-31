@@ -22,6 +22,7 @@ import { extractBioSignals } from './signals/bio.js'
 import { applyDeterministicRules } from './rules.js'
 import { parseCustomRule, customRuleMatches } from './custom-rules.js'
 import { scoreSignals, hasDecisiveSignal, mayRemoveSender, contentEvidence } from './score.js'
+import { THIRD_PARTY_VERDICT_SIGNALS, isTrustSignal } from './signals/registry.js'
 import { decideAction, isEnforcementAction, removesSender, type PolicyDecision } from './policy.js'
 import { shouldAbstain } from './text/abstain.js'
 import { isForeignScript } from './text/script.js'
@@ -114,16 +115,6 @@ const spamModerationHit = (
   }
   return null
 }
-
-/**
- * Grounds for a PERMANENT ban rather than a timed one: the account is
- * known-bad by someone else's verdict (Telegram's own flags, an external ban
- * database), not merely scored badly by us. Everything else expires, so a
- * mistake on our side heals without an admin having to notice it.
- */
-const PERMANENT_BAN_SIGNALS = new Set([
-  'scam_flag', 'fake_flag', 'external_ban', 'restricted_for_spam'
-])
 
 /** How new does a user have to be for ban-eligibility / captcha gating. */
 const isNewish = (input: EvaluationInput): boolean =>
@@ -244,7 +235,11 @@ export const evaluateMessage = async (
     userIsTrusted: isTrusted(input),
     userHasHardVerdict: hasHardAccountVerdict(input.user, input.policy),
     ephemeralCaptcha: input.policy.ephemeralCaptcha === true,
-    hasPermanentBanGrounds: signals.some((s) => PERMANENT_BAN_SIGNALS.has(s.name))
+    // Grounds for a PERMANENT ban rather than a timed one: the account is
+    // known-bad by someone else's verdict, not merely scored badly by us.
+    // Everything else expires, so a mistake on our side heals without an
+    // admin having to notice it.
+    hasPermanentBanGrounds: signals.some((s) => THIRD_PARTY_VERDICT_SIGNALS.has(s.name))
   })
 
   const finalize = (draft: VerdictDraft, signals: Signal[], decision?: PolicyDecision): Verdict => {
@@ -315,7 +310,7 @@ export const evaluateMessage = async (
   // Chat-level trusted list is equivalent to trusted reputation.
   if (input.policy.trustedUserIds.includes(input.user.id) &&
       !signals.some((s) => s.name === 'trusted_reputation')) {
-    signals.push({ name: 'trusted_reputation', negative: true })
+    signals.push({ name: 'trusted_reputation' })
   }
   // Enrichment: a bot mention resolved among the mentions is promo-relevant.
   if (input.enrichment.resolvedMentions.some((m) => m.kind === 'bot')) {
@@ -347,7 +342,7 @@ export const evaluateMessage = async (
         decidedBy: 'deterministic',
         ruleId: deterministic.ruleId,
         reasonCode: deterministic.ruleId,
-        reasonEvidence: signals.find((s) => !s.negative)?.evidence ?? null
+        reasonEvidence: signals.find((s) => !isTrustSignal(s.name))?.evidence ?? null
       },
       signals
     )

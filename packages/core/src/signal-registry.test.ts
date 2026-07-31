@@ -1,28 +1,35 @@
 /**
- * Cross-checks the signal vocabulary against itself.
+ * Invariants over the signal catalogue.
  *
- * Why this file exists: `scoreSignals` reads `SIGNAL_WEIGHTS[name] ?? 0`. That
- * fallback keeps a stray name from crashing the pipeline, but it also means a
- * signal nobody remembered to weight scores ZERO in complete silence. On
- * 2026-07-27 four of them were in that state — `moderation_flagged`,
- * `signature_candidate_match`, `vector_similar_spam`, `bot_mention` — so the
- * bot paid for Qdrant, OpenAI and signature lookups whose answers were then
- * discarded, while `hasDecisiveSignal` still counted them and suppressed the
- * LLM escalation that would have caught the message.
+ * This file used to scrape the source directory with regexes, because the
+ * vocabulary had no single declaration: it checked that every `{ name: 'x' }`
+ * in production code had a weight, and that every weight had a producer. The
+ * first half is now the type system's job — `Signal.name` is `SignalName`, so an
+ * unweighted signal cannot be written down. What no type can decide is left, and
+ * it is the part that actually encodes policy:
  *
- * These are static checks over the source: no unit test would notice, because
- * every individual module was behaving exactly as written.
+ *  - Does every catalogued signal still have somewhere that raises it? A weight
+ *    nothing can produce is dead calibration surface, and it reads as coverage
+ *    the pipeline does not have.
+ *  - Do the roles agree with the weights, and with each other?
+ *  - Are the two guards — enforce at all, remove the person — still reachable in
+ *    the ways the incidents behind them require?
+ *
+ * The scrape survives for the producer check alone, and only that check depends
+ * on it.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
-  SIGNAL_GROUP_CAPS, SIGNAL_WEIGHTS, SOFT_SHAPE_SIGNALS, hasDecisiveSignal, DECISIVE_MIN_WEIGHT
+  hasDecisiveSignal, mayRemoveSender, DECISIVE_MIN_WEIGHT, SENDER_REMOVAL_MIN_EVIDENCE
 } from './score.js'
-
-/** `{ name: 'newness', cap: … }` group descriptors are not signals. */
-const GROUP_NAMES = new Set(SIGNAL_GROUP_CAPS.map((g) => g.name))
+import {
+  SIGNALS, SIGNAL_NAMES, SIGNAL_GROUPS, SIGNAL_GROUP_CAPS, SIGNAL_WEIGHTS,
+  SOFT_SHAPE_SIGNALS, PROMO_SIGNALS, HIGH_RISK_SIGNALS, THIRD_PARTY_VERDICT_SIGNALS,
+  isTrustSignal, weightOf, type SignalName
+} from './signals/registry.js'
 
 const SRC_DIR = dirname(fileURLToPath(import.meta.url))
 
@@ -36,65 +43,103 @@ const sourceFiles = (dir: string): string[] => {
   return out
 }
 
-const SOURCES = sourceFiles(SRC_DIR).map((path) => ({ path, text: readFileSync(path, 'utf8') }))
-
-/** Every `{ name: 'x' }` a production module can push into the signal list. */
-const producedSignals = (): Map<string, string> => {
-  const found = new Map<string, string>()
-  for (const { path, text } of SOURCES) {
-    for (const [, name] of text.matchAll(/name: '([a-z_0-9]+)'/g)) {
-      if (name && !GROUP_NAMES.has(name) && !found.has(name)) found.set(name, path)
-    }
-  }
-  return found
-}
-
-/** Signals a production module marks as trust signals. */
-const negativeSignals = (): Set<string> => {
+/** Names a production module can actually push into a signal list. */
+const producedSignals = (): Set<string> => {
   const found = new Set<string>()
-  for (const { text } of SOURCES) {
-    for (const [, name] of text.matchAll(/name: '([a-z_0-9]+)', negative: true/g)) {
+  for (const path of sourceFiles(SRC_DIR)) {
+    // The catalogue itself declares every name; it produces none of them.
+    if (path.endsWith(join('signals', 'registry.ts'))) continue
+    for (const [, name] of readFileSync(path, 'utf8').matchAll(/name: '([a-z_0-9]+)'/g)) {
       if (name) found.add(name)
     }
   }
   return found
 }
 
-describe('signal registry', () => {
-  it('every produced signal carries a weight', () => {
-    const orphans = [...producedSignals()]
-      .filter(([name]) => !(name in SIGNAL_WEIGHTS))
-      .map(([name, path]) => `${name} (${path.replace(SRC_DIR, '')})`)
-
-    expect(orphans, 'signals produced by the pipeline but silently scored 0').toEqual([])
-  })
-
-  it('every weight has a producer', () => {
+describe('signal catalogue', () => {
+  it('every catalogued signal has something that raises it', () => {
     const produced = producedSignals()
-    const dead = Object.keys(SIGNAL_WEIGHTS).filter((name) => !produced.has(name))
+    const dead = SIGNAL_NAMES.filter((name) => !produced.has(name))
 
     expect(dead, 'weights nothing can ever raise — dead calibration surface').toEqual([])
   })
 
-  it('trust signals and negative weights agree', () => {
-    const negatives = negativeSignals()
-    const negativeWeights = Object.keys(SIGNAL_WEIGHTS).filter((n) => (SIGNAL_WEIGHTS[n] ?? 0) < 0)
-
-    // A signal with a negative weight that is NOT pushed with `negative: true`
-    // is the dangerous direction: `hasDecisiveSignal` would treat this trust
-    // signal as evidence of spam and let the pipeline enforce on it.
-    expect(negativeWeights.filter((n) => !negatives.has(n)),
-      'negative weight but not marked `negative: true`').toEqual([])
-    expect([...negatives].filter((n) => (SIGNAL_WEIGHTS[n] ?? 0) >= 0),
-      'marked `negative: true` but does not lower the score').toEqual([])
+  it('no signal weighs zero', () => {
+    // A zero-weight signal is a stage we ran, and possibly paid for, whose
+    // answer is then discarded — while the guards below still count it. That is
+    // the 2026-07-27 failure, and it was worse than not having the signal.
+    expect(SIGNAL_NAMES.filter((n) => SIGNAL_WEIGHTS[n] === 0)).toEqual([])
   })
 
-  it('soft-shape signals all exist and none is a trust signal', () => {
-    for (const name of SOFT_SHAPE_SIGNALS) {
-      expect(SIGNAL_WEIGHTS[name], `${name} is soft-shape but unweighted`).toBeDefined()
-      expect(SIGNAL_WEIGHTS[name] ?? 0, `${name} is soft-shape but negative`).toBeGreaterThan(0)
+  it('kind and sign of the weight agree', () => {
+    for (const name of SIGNAL_NAMES) {
+      const { weight, kind } = SIGNALS[name]
+      if (kind === 'trust') expect(weight, `${name} exonerates`).toBeLessThan(0)
+      else expect(weight, `${name} accuses`).toBeGreaterThan(0)
     }
   })
+
+  it('an unknown name weighs nothing and is treated as accusing', () => {
+    // Reachable in production: a verdict rebuilt from a stored decision can name
+    // a signal the catalogue has since dropped. It must not score, must not
+    // crash, and must not be mistaken for a reason to trust the sender.
+    expect(weightOf('signal_from_a_previous_release')).toBe(0)
+    expect(isTrustSignal('signal_from_a_previous_release')).toBe(false)
+  })
+
+  // ── roles ───────────────────────────────────────────────────────────
+
+  it('promo and high-risk roles belong to message evidence, never to sender shape', () => {
+    // Both feed the deterministic promo rules, which assert something was
+    // ADVERTISED. A signal describing who sent it can never carry that claim —
+    // that conflation is what the soft-shape guard exists to prevent.
+    for (const name of [...PROMO_SIGNALS, ...HIGH_RISK_SIGNALS]) {
+      expect(SIGNALS[name].kind, `${name} is promo/high-risk`).toBe('evidence')
+    }
+  })
+
+  it('third-party verdicts are the only permanent-ban grounds, and none is a trust signal', () => {
+    expect(THIRD_PARTY_VERDICT_SIGNALS.size).toBeGreaterThan(0)
+    for (const name of THIRD_PARTY_VERDICT_SIGNALS) {
+      expect(isTrustSignal(name), `${name} would ban on a trust signal`).toBe(false)
+    }
+  })
+
+  it('every group has members and no signal is capped twice', () => {
+    const seen = new Set<SignalName>()
+    for (const group of SIGNAL_GROUP_CAPS) {
+      expect(group.members.size, `group ${group.name} is empty`).toBeGreaterThan(0)
+      for (const member of group.members) {
+        expect(seen.has(member), `${member} is in two groups`).toBe(false)
+        seen.add(member)
+      }
+    }
+    expect(SIGNAL_GROUP_CAPS.map((g) => g.name).sort())
+      .toEqual(Object.keys(SIGNAL_GROUPS).sort())
+  })
+
+  it('a ceiling clamps a stack, never a lone member', () => {
+    // A cap below its own heaviest member would silently discount a single
+    // signal — the opposite of what the group mechanism is for.
+    for (const group of SIGNAL_GROUP_CAPS) {
+      for (const member of group.members) {
+        expect(SIGNAL_WEIGHTS[member], `${member} exceeds group ${group.name}`)
+          .toBeLessThanOrEqual(group.cap)
+      }
+    }
+  })
+
+  it('groups only ever contain accusing signals', () => {
+    // Capping a trust signal could only make the pipeline harsher, which is the
+    // wrong direction to fail in.
+    for (const group of SIGNAL_GROUP_CAPS) {
+      for (const member of group.members) {
+        expect(isTrustSignal(member), `${member} is capped trust`).toBe(false)
+      }
+    }
+  })
+
+  // ── the two guards ──────────────────────────────────────────────────
 
   it('soft-shape signals alone are never decisive', () => {
     const all = [...SOFT_SHAPE_SIGNALS].map((name) => ({ name }))
@@ -102,7 +147,7 @@ describe('signal registry', () => {
   })
 
   /** Message-evidence signals too light to license enforcement on their own. */
-  const NUDGES = [
+  const NUDGES: SignalName[] = [
     'bot_mention', 'custom_emoji_heavy', 'edited_message', 'external_url',
     'foreign_script', 'guest_bot_delivery', 'long_text', 'restricted_flag',
     'story_share', 'unknown_media'
@@ -113,18 +158,15 @@ describe('signal registry', () => {
     // accident: a new signal under DECISIVE_MIN_WEIGHT silently changes whether
     // a soft-shape stack may enforce, which is how the 2026-07-30 kick happened
     // (`edited_message`, weight 0.2, counted as proof about the message).
-    const belowBar = Object.keys(SIGNAL_WEIGHTS)
-      .filter((n) => {
-        const w = SIGNAL_WEIGHTS[n] ?? 0
-        return w > 0 && !SOFT_SHAPE_SIGNALS.has(n) && w < DECISIVE_MIN_WEIGHT
-      })
+    const belowBar = SIGNAL_NAMES
+      .filter((n) => SIGNALS[n].kind === 'evidence' && SIGNAL_WEIGHTS[n] < DECISIVE_MIN_WEIGHT)
       .sort()
     expect(belowBar).toEqual([...NUDGES].sort())
   })
 
-  it('every content signal at or above the bar is decisive on its own', () => {
-    const decisive = Object.keys(SIGNAL_WEIGHTS).filter((n) =>
-      (SIGNAL_WEIGHTS[n] ?? 0) >= DECISIVE_MIN_WEIGHT && !SOFT_SHAPE_SIGNALS.has(n))
+  it('every message-evidence signal at or above the bar is decisive on its own', () => {
+    const decisive = SIGNAL_NAMES.filter((n) =>
+      SIGNALS[n].kind === 'evidence' && SIGNAL_WEIGHTS[n] >= DECISIVE_MIN_WEIGHT)
     expect(decisive.length).toBeGreaterThan(0)
     for (const name of decisive) {
       expect(hasDecisiveSignal([{ name }]), `${name} should be decisive`).toBe(true)
@@ -140,8 +182,38 @@ describe('signal registry', () => {
   })
 
   it('trust signals never count as decisive evidence', () => {
-    for (const name of negativeSignals()) {
-      expect(hasDecisiveSignal([{ name, negative: true }]), `${name}`).toBe(false)
+    for (const name of SIGNAL_NAMES.filter(isTrustSignal)) {
+      expect(hasDecisiveSignal([{ name }]), name).toBe(false)
     }
+  })
+
+  /**
+   * Signals heavy enough to remove the *person* on their own. Four are somebody
+   * else's verdict on the account; three are structural evasion that has no
+   * innocent reading. Pinned by hand because "this one signal is enough to take
+   * the chat away from you" is the heaviest claim in the catalogue, and the
+   * 2026-07-30 kick happened by a weight crossing a bar nobody was watching.
+   */
+  const REMOVES_SENDER_ALONE: SignalName[] = [
+    'scam_flag', 'fake_flag', 'unofficial_client_risk', 'edit_injected_promo',
+    'many_url_buttons', 'hidden_url', 'invisible_in_word'
+  ]
+
+  it('the signals that alone justify removing the sender are exactly the intended ones', () => {
+    const alone = SIGNAL_NAMES
+      .filter((n) => mayRemoveSender([{ name: n }]))
+      .sort()
+    expect(alone).toEqual([...REMOVES_SENDER_ALONE].sort())
+  })
+
+  it('no sender-shape signal can remove the sender, however heavy', () => {
+    // `external_ban` weighs 2.5 — above the bar on paper. It must still fail,
+    // because shape is not evidence about the message: on 2026-07-31 the scoring
+    // path treated a ban-database listing as proof and deleted an ordinary
+    // question three times in ten minutes.
+    for (const name of SOFT_SHAPE_SIGNALS) {
+      expect(mayRemoveSender([{ name }]), `${name} removed the sender alone`).toBe(false)
+    }
+    expect(SIGNAL_WEIGHTS['external_ban']).toBeGreaterThan(SENDER_REMOVAL_MIN_EVIDENCE)
   })
 })

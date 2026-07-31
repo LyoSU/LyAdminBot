@@ -3,9 +3,11 @@ import fc from 'fast-check'
 import type { Signal } from './types.js'
 import {
   scoreSignals, hasDecisiveSignal, mayRemoveSender, contentEvidence,
-  SIGNAL_GROUP_CAPS, SIGNAL_WEIGHTS, SOFT_SHAPE_SIGNALS, BASE_RATE_BIAS,
-  DECISIVE_MIN_WEIGHT, SENDER_REMOVAL_MIN_EVIDENCE
+  BASE_RATE_BIAS, DECISIVE_MIN_WEIGHT, SENDER_REMOVAL_MIN_EVIDENCE
 } from './score.js'
+import {
+  SIGNAL_GROUP_CAPS, SIGNAL_WEIGHTS, SIGNAL_NAMES, SOFT_SHAPE_SIGNALS, type SignalName
+} from './signals/registry.js'
 
 describe('scoreSignals', () => {
   it('returns the base rate for an empty signal list', () => {
@@ -26,9 +28,9 @@ describe('scoreSignals', () => {
 
   it('trust signals push pSpam below the base rate', () => {
     const signals: Signal[] = [
-      { name: 'trusted_reputation', negative: true },
-      { name: 'established_user', negative: true },
-      { name: 'is_reply', negative: true }
+      { name: 'trusted_reputation' },
+      { name: 'established_user' },
+      { name: 'is_reply' }
     ]
     expect(scoreSignals(signals).pSpam).toBeLessThan(0.02)
   })
@@ -50,7 +52,7 @@ describe('scoreSignals', () => {
   // being silently worth nothing — and that is guarded by signal-registry.test.ts.
   it('unknown signal names contribute zero weight', () => {
     const base = scoreSignals([{ name: 'external_url' }]).pSpam
-    const withUnknown = scoreSignals([{ name: 'external_url' }, { name: 'totally_unknown_signal' }]).pSpam
+    const withUnknown = scoreSignals([{ name: 'external_url' }, { name: 'totally_unknown_signal' as SignalName }]).pSpam
     expect(withUnknown).toBeCloseTo(base, 10)
   })
 
@@ -60,7 +62,7 @@ describe('scoreSignals', () => {
     const base = scoreSignals([]).pSpam
     for (const name of [
       'moderation_flagged', 'signature_candidate_match', 'vector_similar_spam', 'bot_mention'
-    ]) {
+    ] satisfies SignalName[]) {
       expect(scoreSignals([{ name }]).pSpam, name).toBeGreaterThan(base)
     }
   })
@@ -135,8 +137,8 @@ describe('content evidence (2026-07-30 FP)', () => {
   })
 
   it('REGRESSION: a trivially-weighted crumb is not licence to enforce blind', () => {
-    for (const crumb of ['edited_message', 'unknown_media', 'bot_mention', 'long_text']) {
-      const signals = [...shapeStack, { name: crumb }]
+    for (const crumb of ['edited_message', 'unknown_media', 'bot_mention', 'long_text'] satisfies SignalName[]) {
+      const signals: Signal[] = [...shapeStack, { name: crumb }]
       expect(hasDecisiveSignal(signals), crumb).toBe(false)
       expect(mayRemoveSender(signals), crumb).toBe(false)
     }
@@ -146,7 +148,7 @@ describe('content evidence (2026-07-30 FP)', () => {
     // The commonest ham content in a group chat. It may raise the score and
     // pull in the LLM; it may not, by itself, delete anybody's message — and it
     // may not help clear the bar for removing a person either.
-    const signals = [...shapeStack, { name: 'external_url' }]
+    const signals: Signal[] = [...shapeStack, { name: 'external_url' }]
     expect(contentEvidence(signals).total).toBe(0)
     expect(hasDecisiveSignal(signals)).toBe(false)
   })
@@ -213,7 +215,7 @@ describe('content evidence (2026-07-30 FP)', () => {
   })
 
   it('one real content signal licenses enforcement on the message', () => {
-    const signals = [...shapeStack, { name: 'moderation_flagged' }]
+    const signals: Signal[] = [...shapeStack, { name: 'moderation_flagged' }]
     expect(hasDecisiveSignal(signals)).toBe(true)
   })
 
@@ -233,8 +235,8 @@ describe('content evidence (2026-07-30 FP)', () => {
   it('trust signals never count as evidence for enforcing', () => {
     const signals: Signal[] = [
       { name: 'moderation_flagged' },
-      { name: 'is_reply', negative: true },
-      { name: 'established_user', negative: true }
+      { name: 'is_reply' },
+      { name: 'established_user' }
     ]
     expect(contentEvidence(signals).total).toBe(SIGNAL_WEIGHTS['moderation_flagged'])
   })
@@ -251,7 +253,7 @@ describe('content evidence (2026-07-30 FP)', () => {
   })
 
   it('property: content evidence is monotone and never negative', () => {
-    const names = Object.keys(SIGNAL_WEIGHTS)
+    const names = SIGNAL_NAMES
     fc.assert(
       fc.property(
         fc.array(fc.constantFrom(...names).map((name): Signal => ({ name })), { maxLength: 12 }),
@@ -287,7 +289,7 @@ describe('scoreSignals — group ceilings', () => {
   })
 
   it('groups do not overlap — a signal capped twice would be double-discounted', () => {
-    const seen = new Set<string>()
+    const seen = new Set<SignalName>()
     for (const group of SIGNAL_GROUP_CAPS) {
       for (const member of group.members) {
         expect(seen.has(member), `${member} is in two groups`).toBe(false)
@@ -306,7 +308,7 @@ describe('scoreSignals — group ceilings', () => {
   })
 
   it('trust signals are never capped (a ceiling could only make us harsher)', () => {
-    const trustNames = Object.keys(SIGNAL_WEIGHTS).filter((n) => (SIGNAL_WEIGHTS[n] ?? 0) < 0)
+    const trustNames = SIGNAL_NAMES.filter((n) => SIGNAL_WEIGHTS[n] < 0)
     const grouped = new Set(SIGNAL_GROUP_CAPS.flatMap((g) => [...g.members]))
     for (const name of trustNames) expect(grouped.has(name), name).toBe(false)
   })
@@ -330,12 +332,12 @@ describe('scoreSignals — algebra', () => {
     const { topContributors } = scoreSignals([
       { name: 'long_text' },
       { name: 'scam_flag' },
-      { name: 'is_reply', negative: true }
+      { name: 'is_reply' }
     ])
     expect(topContributors[0]?.name).toBe('scam_flag')
   })
 
-  const knownNames = Object.keys(SIGNAL_WEIGHTS)
+  const knownNames = SIGNAL_NAMES
   const signalArb = fc.array(
     fc.constantFrom(...knownNames).map((name): Signal => ({ name })),
     { maxLength: 15 }
@@ -351,7 +353,7 @@ describe('scoreSignals — algebra', () => {
   })
 
   it('property: adding a positive-weight signal never lowers pSpam', () => {
-    const positives = knownNames.filter((n) => (SIGNAL_WEIGHTS[n] ?? 0) > 0)
+    const positives = knownNames.filter((n) => SIGNAL_WEIGHTS[n] > 0)
     fc.assert(
       fc.property(signalArb, fc.constantFrom(...positives), (signals, extra) => {
         const before = scoreSignals(signals).pSpam
@@ -362,11 +364,11 @@ describe('scoreSignals — algebra', () => {
   })
 
   it('property: adding a trust signal never raises pSpam', () => {
-    const negatives = knownNames.filter((n) => (SIGNAL_WEIGHTS[n] ?? 0) < 0)
+    const negatives = knownNames.filter((n) => SIGNAL_WEIGHTS[n] < 0)
     fc.assert(
       fc.property(signalArb, fc.constantFrom(...negatives), (signals, extra) => {
         const before = scoreSignals(signals).pSpam
-        const after = scoreSignals([...signals, { name: extra, negative: true }]).pSpam
+        const after = scoreSignals([...signals, { name: extra }]).pSpam
         return after <= before + 1e-12
       })
     )

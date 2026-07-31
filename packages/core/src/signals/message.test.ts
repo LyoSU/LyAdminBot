@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NormalizedMessage } from '../types.js'
+import { isTrustSignal } from './registry.js'
 import { extractMessageSignals } from './message.js'
 
 const makeMsg = (overrides: Partial<NormalizedMessage> = {}): NormalizedMessage => ({
@@ -26,7 +27,7 @@ const names = (msg: NormalizedMessage): string[] =>
   extractMessageSignals(msg).map((s) => s.name)
 
 const suspicious = (msg: NormalizedMessage): string[] =>
-  extractMessageSignals(msg).filter((s) => !s.negative).map((s) => s.name)
+  extractMessageSignals(msg).filter((s) => !isTrustSignal(s.name)).map((s) => s.name)
 
 describe('extractMessageSignals — suspicious signals', () => {
   it('flags forwards from hidden users', () => {
@@ -177,7 +178,7 @@ describe('extractMessageSignals — suspicious signals', () => {
 
 describe('extractMessageSignals — trust signals (negative)', () => {
   const trust = (msg: NormalizedMessage): string[] =>
-    extractMessageSignals(msg).filter((s) => s.negative).map((s) => s.name)
+    extractMessageSignals(msg).filter((s) => isTrustSignal(s.name)).map((s) => s.name)
 
   it('treats replies to others as trust, replies to self as nothing', () => {
     const reply = makeMsg({

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { Verdict } from '@lyadmin/core'
+import type { Verdict, SignalName } from '@lyadmin/core'
 import { callbackData, captchaPrompt, compactNotification, langPanel, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, userProfileCard, userProfileLines, votePrompt, whyCard, whyDeepLink, whyView, welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor, LOCALES, type UserFacts } from './views.js'
 import { uk } from './locales/uk.js'
 
 const makeVerdict = (overrides: Partial<Verdict> = {}): Verdict => ({
   pSpam: 0.93, action: 'mute', needsVote: false, banDurationSeconds: null, decidedBy: 'llm',
-  ruleId: null, signals: [{ name: 'external_url' }, { name: 'is_reply', negative: true }],
+  ruleId: null, signals: [{ name: 'external_url' }, { name: 'is_reply' }],
   reasonCode: 'job_scam', reasonEvidence: 'оплата щодня', meta: {},
   ...overrides
 })
@@ -130,7 +130,7 @@ describe('whyView', () => {
 
   it('drops unmapped signals from the human list rather than leaking the code', () => {
     const text = whyView(uk, makeVerdict({
-      signals: [{ name: 'external_url' }, { name: 'totally_unknown_signal' }]
+      signals: [{ name: 'external_url' }, { name: 'totally_unknown_signal' as SignalName }]
     }))
     expect(text).toContain('зовнішнє посилання')
     expect(text).not.toContain('totally_unknown_signal')

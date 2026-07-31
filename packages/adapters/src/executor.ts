@@ -8,6 +8,7 @@
  * chat-trusted users. The pipeline also guards these — defense in depth.
  */
 import type { Verdict } from '@lyadmin/core'
+import { THIRD_PARTY_VERDICT_SIGNALS } from '@lyadmin/core'
 
 export interface ExecutionTarget {
   chatId: number
@@ -40,16 +41,14 @@ export interface ExecutionResult {
 }
 
 /**
- * Facts that mark an account as condemned by someone other than us: Telegram's
- * own scam/fake flags, a spam-labelled restriction, or an external ban listing.
- * These are the only grounds on which a chat-trusted member is still actioned.
+ * Condemned by someone other than us — the only grounds on which a chat-trusted
+ * member is still actioned. The list itself lives in the signal catalogue
+ * (`thirdPartyVerdict`); this file used to keep a private copy of the same four
+ * names under a different name, in a different package, linked to the original
+ * by nothing at all.
  */
-const HARD_ACCOUNT_VERDICT_SIGNALS = new Set([
-  'scam_flag', 'fake_flag', 'external_ban', 'restricted_for_spam'
-])
-
 const hasHardAccountVerdict = (verdict: Verdict): boolean =>
-  verdict.signals.some((s) => !s.negative && HARD_ACCOUNT_VERDICT_SIGNALS.has(s.name))
+  verdict.signals.some((s) => THIRD_PARTY_VERDICT_SIGNALS.has(s.name))
 
 const MUTE_DURATION_SECONDS = 24 * 60 * 60
 const CAPTCHA_WINDOW_SECONDS = 10 * 60

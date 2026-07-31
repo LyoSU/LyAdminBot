@@ -3,7 +3,8 @@
  * no IO, no user history (user-level signals live in user.ts).
  *
  * A signal is a fact, not a verdict: scoring decides weights, policy decides
- * actions. Trust signals carry negative: true.
+ * actions. Whether a signal accuses or exonerates is declared once, in the
+ * catalogue (`registry.ts`), not repeated at each raise site.
  */
 import type { NormalizedMessage, Signal } from '../types.js'
 import { isEmojiOnly } from '../text/normalize.js'
@@ -136,30 +137,30 @@ export const extractMessageSignals = (msg: NormalizedMessage): Signal[] => {
   // ── trust signals ──────────────────────────────────────────────────
 
   if (msg.replyTo && !msg.replyTo.isSelf) {
-    signals.push({ name: 'is_reply', negative: true })
+    signals.push({ name: 'is_reply' })
     const age = msg.replyTo.ageSeconds
     if (age !== null && age >= 0 && age < RECENT_REPLY_MAX_AGE_SECONDS) {
-      signals.push({ name: 'recent_reply', negative: true })
+      signals.push({ name: 'recent_reply' })
     }
   }
 
   const stickerOrGif = attachmentKinds.has('sticker') || attachmentKinds.has('animation')
   if (stickerOrGif && !text) {
-    signals.push({ name: 'media_only', negative: true })
+    signals.push({ name: 'media_only' })
   }
 
   if (text && isEmojiOnly(text)) {
-    signals.push({ name: 'emoji_only', negative: true })
+    signals.push({ name: 'emoji_only' })
   }
 
   // Message consisting solely of t.me/telegram.me links — internal pointer,
   // not external promo.
   if (text && /^[\s\n]*((https?:\/\/)?(t\.me|telegram\.me)\/\S+[\s\n]*)+$/i.test(text)) {
-    signals.push({ name: 'internal_link_only', negative: true })
+    signals.push({ name: 'internal_link_only' })
   }
 
   if (text && text.length < SHORT_TEXT_THRESHOLD && !hasSuspicious) {
-    signals.push({ name: 'short_message', negative: true })
+    signals.push({ name: 'short_message' })
   }
 
   return signals

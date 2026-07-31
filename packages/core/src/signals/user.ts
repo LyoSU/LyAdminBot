@@ -206,8 +206,8 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
   // ── trust signals ──────────────────────────────────────────────────
   // Premium is deliberately NOT here: spammers buy premium for visibility.
 
-  if (user.flags.verified) signals.push({ name: 'verified_account', negative: true })
-  if (user.reputationStatus === 'trusted') signals.push({ name: 'trusted_reputation', negative: true })
+  if (user.flags.verified) signals.push({ name: 'verified_account' })
+  if (user.reputationStatus === 'trusted') signals.push({ name: 'trusted_reputation' })
 
   // Standing is earned by volume. The old form also required
   // `reputationScore >= 60`, but v2 never WRITES reputation.score (it defaults
@@ -229,7 +229,7 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
     user.reputationStatus === 'restricted' ||
     user.restrictionReasons.some((r) => /spam|scam/i.test(r))
   if (user.messagesGlobal >= ESTABLISHED_MIN_MESSAGES && !hasHardVerdict) {
-    signals.push({ name: 'established_user', negative: true })
+    signals.push({ name: 'established_user' })
   }
 
   return signals
