@@ -379,6 +379,13 @@ const untrusted = (raw: string, limit: number): string => {
   return `«${flat}»`
 }
 
+/**
+ * How much of a link destination reaches the prompt. Generous enough for a real
+ * URL carrying tracking parameters, short enough that five of them cannot
+ * dominate the message they are supposed to annotate.
+ */
+const URL_LIMIT = 200
+
 const formatAgo = (seconds: number): string => {
   if (seconds < 90) return `${Math.round(seconds)}s ago`
   if (seconds < 90 * 60) return `${Math.round(seconds / 60)}m ago`
@@ -482,12 +489,19 @@ export const buildUserContent = (
     facts.push(`forwarded from ${msg.forward.kind.replace('_', ' ')}${msg.forward.title ? ` ${untrusted(msg.forward.title, 60)}` : ''}`)
   }
   if (msg.urls.length > 0) {
+    // A link destination is user-authored like everything else here, and was the
+    // one kind of value the 2026-07-30 pass left bare. A `text_link` target is a
+    // free-form MTProto string chosen by the sender: nothing guarantees it holds
+    // only a URL, and nothing bounded its length — five of them at 5 kB each are
+    // 25 kB of prompt, paid per call.
     const rendered = msg.urls.slice(0, 5).map((u) =>
-      u.hidden ? `${u.target} (hidden behind link text ${untrusted(u.visible, 40)})` : u.target)
+      u.hidden
+        ? `${untrusted(u.target, URL_LIMIT)} (hidden behind link text ${untrusted(u.visible, 40)})`
+        : untrusted(u.target, URL_LIMIT))
     facts.push(`links: ${rendered.join(' ')}`)
   }
   if (msg.inlineButtons.length > 0) {
-    facts.push(`inline buttons: ${msg.inlineButtons.slice(0, 5).map((b) => `${untrusted(b.text, 40)}${b.url ? ` → ${b.url}` : ''}`).join(', ')}`)
+    facts.push(`inline buttons: ${msg.inlineButtons.slice(0, 5).map((b) => `${untrusted(b.text, 40)}${b.url ? ` → ${untrusted(b.url, URL_LIMIT)}` : ''}`).join(', ')}`)
   }
   if (msg.customEmoji.length > 0) {
     facts.push(`custom emoji render as: ${untrusted(msg.customEmoji.map((e) => e.alt).join(''), 120)}`)

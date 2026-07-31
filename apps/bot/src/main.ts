@@ -6,7 +6,7 @@
 import { BotKeyboard, Chat, User, html, type Message } from '@mtcute/node'
 import {
   evaluateMessage, tallyVotes, extractBioSignals, isEnforcementAction,
-  shouldAutoLearn, autoLearnSource, voteLearnStatus,
+  shouldAutoLearn, autoLearnSource, voteLearnStatus, conversationLineFor,
   type EvaluationInput, type ForwardOrigin, type PipelinePorts,
   type UserSnapshot, type Verdict, type VoteBallot
 } from '@lyadmin/core'
@@ -1764,12 +1764,9 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   // The message joins the chat context only if it stayed in the chat —
   // deleted spam must not poison the window for the next evaluation.
   const removed = result.applied && isEnforcementAction(verdict.action)
-  if (!removed && normalized.text.trim().length > 0) {
-    conversationWindow.record(chat.id, {
-      authorId: normalized.channelComment ? null : sender.id,
-      authorKind: normalized.channelComment ? 'channel_post' : 'user',
-      textPreview: normalized.text
-    })
+  if (!removed) {
+    const line = conversationLineFor(normalized, { id: sender.id, isChannel: channelSender !== null })
+    if (line) conversationWindow.record(chat.id, line)
   }
 
   // ── record + notify ─────────────────────────────────────────────────
