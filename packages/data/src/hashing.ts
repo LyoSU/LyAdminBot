@@ -55,30 +55,43 @@ export const normalizeHeavy = (text: string): string => {
  * left out because their shape fits several letters (`1`→i/l/і, `6`→б/b), and a
  * fold that guesses wrong merges unrelated words instead of catching evasion.
  *
- * Two deliberate omissions remain:
- *  - Cyrillic `и` and Latin `n`/`u`. Merging them would collide `п` with `и`,
- *    which are different letters in ordinary words rather than lookalikes.
- *  - Letters with no cross-script twin in use at all — adding a class for them
- *    would buy nothing and only widen the collision surface.
+ * `и` folds to `u`, which an earlier version refused: "merging them would collide
+ * `п` with `и`". That reason was about `n` and over-reached to `u` as well —
+ * `п` folds to `n` and `и` to `u`, so the two stay apart, and the collision the
+ * objection warned about cannot occur. It matters because Latin `u` for `и` is
+ * one of the commonest substitutions there is.
+ *
+ * Still omitted: letters with no cross-script twin in actual use. A class for
+ * them would buy nothing and only widen the collision surface.
+ *
+ * A LIMIT worth stating plainly. This table is data for a problem that is
+ * genuinely table-shaped, but it is a hand-built subset of UTS#39, so it is
+ * complete only up to the last attack somebody looked at. Two measurements from
+ * 2026-07-31 rule out the shortcuts: `NFKD` decomposes none of the letters used
+ * in these attacks (`ɯ ʍ ʙ ᴇ ҡ σ δ ∂` all decompose to themselves), and folding
+ * before EMBEDDING is worse than useless, since the fold mangles ordinary
+ * Cyrillic into mixed script and the embedding of that is noise. The complete
+ * answer is the Unicode confusables data itself, vendored or depended upon —
+ * a decision this file cannot make.
  */
 const CONFUSABLE_CLASSES: readonly (readonly [string, string])[] = [
   ['a', 'аαａàáâãäåąă'],
-  ['b', 'вβƅｂ'],
+  ['b', 'вβƅｂʙ'],
   ['c', 'сϲςçćｃ'],
   ['d', 'ԁｄ'],
-  ['e', 'еεєёəëèéêęｅ'],
+  ['e', 'еεєёəëèéêęｅᴇ'],
   ['g', 'ցｇ'],
   ['h', 'нηħｈ'],
   ['i', 'іїıιíìîïｉ'],
   ['j', 'јｊ'],
-  ['k', 'кκｋ'],
-  ['m', 'мμｍ'],
+  ['k', 'кκｋҡ'],
+  ['m', 'мμｍʍ'],
   ['n', 'пπｎ'],
-  ['o', 'оοөøóòôõöｏ0'],
+  ['o', 'оοөøóòôõöｏ0σ'],
   ['p', 'рρｐ'],
   ['s', 'ѕşśｓ'],
   ['t', 'тτţｔ'],
-  ['u', 'υｕ'],
+  ['u', 'υｕи'],
   ['v', 'νѵｖ'],
   ['w', 'ѡωｗ'],
   ['x', 'хχ×ｘ'],
@@ -87,6 +100,9 @@ const CONFUSABLE_CLASSES: readonly (readonly [string, string])[] = [
   // Cyrillic representatives: these letters have no Latin lookalike, so a
   // Latin-only target alphabet could not express them at all.
   ['л', 'λ'],
+  ['ш', 'ɯ'],
+  ['б', 'δ'],
+  ['д', '∂'],
   ['ф', 'φ'],
   // Digit-for-letter, one unambiguous shape each.
   ['ч', '4'],

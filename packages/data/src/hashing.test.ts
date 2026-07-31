@@ -117,3 +117,44 @@ describe('computeSignatureHashes — folded layer', () => {
     expect(computeSignatureHashes('ок')?.foldedHash).toBe(null)
   })
 })
+
+describe('foldConfusables — glyph-soup obfuscation', () => {
+  /**
+   * Production 2026-07-31 12:34. Every letter that could be swapped, was —
+   * IPA extensions, small capitals, a mathematical operator, Greek. Nothing
+   * matched it: no signature, no vector neighbour, and the cheap model spent
+   * 11.6 seconds tokenising it. The fold reached none of `ɯ ʍ ʙ ᴇ ҡ σ δ ∂`.
+   */
+  const obfuscated = 'Πρuглαɯαᴇʍ ʙ ҡσʍαн∂у! 18–35 лᴇτ Оτ 2500$ ∂σπσлнuτᴇльнαя δσнуснαя сuстᴇʍα'
+  const plain = 'Приглашаем в команду! 18–35 лет От 2500$ дополнительная бонусная система'
+
+  it('decodes the attack back onto its plain-letter twin', () => {
+    expect(foldConfusables(normalizeLight(obfuscated)))
+      .toBe(foldConfusables(normalizeLight(plain)))
+  })
+
+  it('gives the two the same signature hash', () => {
+    expect(computeSignatureHashes(obfuscated)?.foldedHash)
+      .toBe(computeSignatureHashes(plain)?.foldedHash)
+  })
+
+  it('и folds to u without colliding with п', () => {
+    // The reason `и` had been excluded was that merging it with `n` would
+    // collide with `п`. Folding it to `u` instead keeps them apart, which is
+    // what makes the commonest substitution of all reachable.
+    expect(foldConfusables('и')).toBe(foldConfusables('u'))
+    expect(foldConfusables('и')).not.toBe(foldConfusables('п'))
+    expect(foldConfusables('пиши')).not.toBe(foldConfusables('пипи'))
+  })
+
+  it('ordinary text of the two languages stays distinguishable', () => {
+    const texts = [
+      'Доброго дня, підкажіть будь ласка де відновити довідку',
+      'Доброго дня, підкажіть будь ласка де отримати довідку',
+      'Здравствуйте, подскажите пожалуйста где восстановить справку',
+      'Шукаємо комплектувальника на склад у Львові, зарплата висока',
+      'Приглашаем в команду! 18–35 лет От 2500$ дополнительная бонусная система'
+    ]
+    expect(new Set(texts.map((t) => foldConfusables(normalizeLight(t)))).size).toBe(texts.length)
+  })
+})
