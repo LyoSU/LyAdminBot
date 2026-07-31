@@ -93,3 +93,34 @@ describe('chatScriptProfile', () => {
     expect(profile.has('latin')).toBe(true)
   })
 })
+
+describe('chatScriptProfile — the chat description as a language sample', () => {
+  it('learns the script the chat describes itself in', () => {
+    // The description is admin-authored and usually far longer than the title,
+    // so it clears the sample bar the title rarely does. It joins the union like
+    // every other source, meaning it can only ever ADD tolerance — a description
+    // in an unexpected script cannot take a script away from a chat.
+    const profile = chatScriptProfile({
+      topLanguage: null,
+      title: 'Group',
+      description: '本群讨论摄影与旅行，欢迎大家分享作品和经验，请勿发布广告内容。'
+    }, [])
+    expect(profile.has('han')).toBe(true)
+    expect(profile.has('cyrillic')).toBe(true)
+  })
+
+  it('a passing mention in the description teaches nothing', () => {
+    const profile = chatScriptProfile({
+      topLanguage: null,
+      title: 'Чат',
+      description: 'Спільнота українців. Слоган: 加油'
+    }, [])
+    expect(profile.has('han')).toBe(false)
+  })
+
+  it('works without a description, as before', () => {
+    const profile = chatScriptProfile({ topLanguage: 'uk', title: 'Чат', description: null }, [])
+    expect(profile.has('cyrillic')).toBe(true)
+    expect(profile.has('han')).toBe(false)
+  })
+})

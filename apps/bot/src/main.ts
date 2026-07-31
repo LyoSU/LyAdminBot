@@ -14,6 +14,7 @@ import {
   TelegramGateway, applyVerdict, buildUserSnapshot, buildChannelSnapshot, normalizeMessage,
   fetchUserProfile, downloadPhotoBase64, downloadAvatarBase64, downloadStoriesBase64, rawPhotoToBase64,
   fetchExternalBan, needsExternalRecheck, resolveMentionKinds, shouldScanChannelSender,
+  createChatDescriptionCache, fetchChatDescription,
   type IncomingMessage
 } from '@lyadmin/adapters'
 import {
@@ -104,6 +105,11 @@ const gateway = new TelegramGateway({
   botToken: config.botToken,
   session: config.session
 })
+
+// What each chat says it is for. Cached because a description is edited perhaps
+// never while messages arrive constantly; see chat-profile.ts for why the
+// classifier needs it at all.
+const chatDescriptions = createChatDescriptionCache((chatId) => fetchChatDescription(gateway.tg, chatId))
 
 const ports = buildPorts()
 
@@ -1618,7 +1624,11 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       title: chat.title ?? '',
       // Best available proxy for the chat's main language until a stats layer
       // exists: the group's configured UI locale (uk/ru/en/by/tr).
-      topLanguage: (groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale ?? null
+      topLanguage: (groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale ?? null,
+      // What the chat says it is for. Amortised to roughly one MTProto call per
+      // chat per six hours, and null whenever the chat has none — no stage may
+      // treat its absence as meaning anything.
+      description: await chatDescriptions.get(chat.id)
     },
     user,
     // The chat's stored settings plus one capability of the running bot: the

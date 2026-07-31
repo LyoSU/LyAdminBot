@@ -31,7 +31,7 @@ const makeUser = (overrides: Partial<UserSnapshot> = {}): UserSnapshot => ({
   ...overrides
 })
 
-const chat: NormalizedChat = { id: -100123, kind: 'group', title: 'Test', topLanguage: 'uk' }
+const chat: NormalizedChat = { id: -100123, kind: 'group', title: 'Test', topLanguage: 'uk', description: null }
 
 const makePolicy = (overrides: Partial<ChatPolicy> = {}): ChatPolicy => ({
   enabled: true, preset: 'standard', captchaEnabled: true, votingEnabled: true,

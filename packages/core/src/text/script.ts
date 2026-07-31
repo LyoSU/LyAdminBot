@@ -176,6 +176,12 @@ const weightedTotal = (counts: Map<ScriptName, number>): number => {
 export interface ChatScriptSource {
   topLanguage: string | null
   title: string
+  /**
+   * The chat's own description. A far better language sample than the title:
+   * admin-authored, and long enough to clear `SAMPLE_MIN_CONTENT`, which a
+   * two-word title almost never does.
+   */
+  description?: string | null
 }
 
 /**
@@ -211,6 +217,7 @@ export const chatScriptProfile = (
 
   learnFrom(window.map((l) => l.textPreview ?? '').join(' '))
   learnFrom(chat.title)
+  learnFrom(chat.description ?? '')
 
   return profile
 }

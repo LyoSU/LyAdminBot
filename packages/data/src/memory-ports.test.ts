@@ -10,7 +10,7 @@ const makeInput = (chatId: number, userId: number, text: string): EvaluationInpu
     forward: null, replyTo: null, channelComment: null, editDelta: null,
     customEmoji: [], guestBot: null
   },
-  chat: { id: chatId, kind: 'group', title: 't', topLanguage: null },
+  chat: { id: chatId, kind: 'group', title: 't', topLanguage: null , description: null},
   user: {
     id: userId, username: null, displayName: 'U', languageCode: null,
     flags: { scam: false, fake: false, restricted: false, verified: false, premium: false, bot: false },

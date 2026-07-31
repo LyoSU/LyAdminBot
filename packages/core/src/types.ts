@@ -18,6 +18,20 @@ export interface NormalizedChat {
   title: string
   /** Dominant chat language (top-1, ≥10 samples), null until known. */
   topLanguage: string | null
+  /**
+   * The chat's own description, as its admins wrote it — what the chat is FOR.
+   *
+   * The title alone turned out to be too little (production 2026-07-31): in a
+   * chat whose purpose is job advertisements, "job scam" is simultaneously the
+   * dominant spam class and the dominant legitimate class, and a specific local
+   * job ad was classified as a scam at 0.96. Whether being an advertisement is
+   * itself unusual depends on what the chat is for, and nothing in the pipeline
+   * knew that.
+   *
+   * Admin-authored, therefore UNTRUSTED wherever it is rendered. Null when the
+   * chat has none or the lookup failed.
+   */
+  description: string | null
 }
 
 /** Telegram-level sender flags. Free with every MTProto update. */
