@@ -205,14 +205,27 @@ export const evaluateMessage = async (
   const meta: Record<string, string | number | boolean> = {}
   let portErrors = 0
 
+  /**
+   * Which paid stages actually ran, and how long each took. A single pipeline
+   * total answers neither question: an eleven-second verdict could have been
+   * the strong model, a stalled vector search or an avatar download, and the
+   * log line said only `latencyMs: 11395` (2026-07-31). Nor could you tell
+   * from a log line whether the vector and moderation ports had been consulted
+   * at all, which is what decides whether their silence means anything.
+   */
+  const portMs: string[] = []
+
   /** Run a port call; failures degrade to null and are counted. */
   const safe = async <T>(label: string, call: () => Promise<T | null>): Promise<T | null> => {
+    const startedAt = Date.now()
     try {
       return await call()
     } catch {
       portErrors += 1
       meta[`portError_${label}`] = true
       return null
+    } finally {
+      portMs.push(`${label}=${Date.now() - startedAt}`)
     }
   }
 
@@ -236,6 +249,7 @@ export const evaluateMessage = async (
   const finalize = (draft: VerdictDraft, signals: Signal[], decision?: PolicyDecision): Verdict => {
     const policyDecision = decision ?? policyFor(draft.pSpam, signals)
     meta['portErrors'] = portErrors
+    if (portMs.length > 0) meta['portMs'] = portMs.join(',')
     return {
       pSpam: draft.pSpam,
       action: policyDecision.action,

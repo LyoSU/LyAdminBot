@@ -1679,6 +1679,18 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       ruleId: verdict.ruleId ?? undefined, reason: verdict.reasonCode,
       signals: formatSignals(verdict.signals),
       cappedFrom: verdict.meta['cappedFrom'] ?? undefined,
+      // Everything below was already computed for exactly this purpose and then
+      // never printed, so a verdict still could not be reconstructed from its
+      // log line (2026-07-31). `scorePSpam` is what arithmetic said before any
+      // model spoke — the gap between it and `pSpam` is the LLM's contribution.
+      // `contentEvidence` is the quantity that licenses enforcing without
+      // reading the message, so a surprising action is diagnosed by this number
+      // and no other. `capped` names the correlated ceilings that bit.
+      scorePSpam: verdict.meta['scorePSpam'] ?? undefined,
+      contentEvidence: verdict.meta['contentEvidence'] ?? undefined,
+      capped: verdict.meta['cappedGroups'] ?? undefined,
+      llmTier: verdict.meta['llmTier'] ?? undefined,
+      portMs: verdict.meta['portMs'] ?? undefined,
       // A session verdict judged the sender's accumulated window, not the
       // message above: without the window the line cannot be reviewed.
       judged: typeof verdict.meta['judgedText'] === 'string'
