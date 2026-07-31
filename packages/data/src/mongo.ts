@@ -428,8 +428,20 @@ export class MongoStore {
    * these the moment it was switched off, so v2 must maintain them or
    * every user would look like a newcomer forever.
    *
-   * Returns the message count BEFORE this message — that is what the
-   * "new in chat" signal must see.
+   * Returns the STANDING before this message — the count of prior messages
+   * minus the ones the pipeline judged to be spam. That is what "new in chat"
+   * must see, and the subtraction is the whole point (2026-07-31): this method
+   * necessarily runs before the verdict, because the count is an input to it, so
+   * a message's credit is paid before we know what the message was. Production
+   * showed the consequence — one advert reposted nine times into one chat, its
+   * newness signals dropping out one by one as the counter grew, the score
+   * sinking 0.91 → 0.75 while the evidence against it accumulated. Ten such
+   * messages also clear `EXEMPT_INCHAT_MIN` and buy a bypass of the pipeline.
+   *
+   * `stats.messagesCount` itself keeps counting every message. It is a v1 field
+   * and it answers a different, honest question — how much traffic this member
+   * produced — which the /stats view reports. Standing is a reading of it, not
+   * a redefinition.
    */
   async touchMember(chatId: number, telegramId: number, textLength: number): Promise<number> {
     const group = await this.groups.findOneAndUpdate(
@@ -450,9 +462,52 @@ export class MongoStore {
         },
         $inc: { 'stats.messagesCount': 1, 'stats.textTotal': Math.max(0, textLength) }
       },
-      { upsert: true, returnDocument: 'before', projection: { 'stats.messagesCount': 1 } }
+      {
+        upsert: true,
+        returnDocument: 'before',
+        projection: { 'stats.messagesCount': 1, 'stats.spamMessages': 1 }
+      }
     )
-    return (before as { stats?: { messagesCount?: number } } | null)?.stats?.messagesCount ?? 0
+    const stats = (before as { stats?: { messagesCount?: number; spamMessages?: number } } | null)?.stats
+    return Math.max(0, (stats?.messagesCount ?? 0) - (stats?.spamMessages ?? 0))
+  }
+
+  /**
+   * Move one message in or out of the bucket that does not count toward
+   * standing: `delta` is +1 when the pipeline judged a message to be spam, −1
+   * when an admin took that judgement back.
+   *
+   * Both scopes are debited. The per-chat counter catches a sender who works one
+   * group; the global one catches a cross-chat blaster, who posts once per chat
+   * and would otherwise never register locally while their global standing —
+   * which alone can reach `ESTABLISHED_MIN_MESSAGES` and earn the
+   * `established_user` trust weight — grows with every hit.
+   *
+   * The decrement matters as much as the increment. A false positive would
+   * otherwise cost its victim standing permanently, and standing is exactly what
+   * makes the NEXT false positive against them less likely. It is guarded in the
+   * filter rather than by reading first, because two writers touch these fields.
+   *
+   * No upsert, deliberately: both documents were just written by `touchUser` and
+   * `touchMember` for this very message. A missing one means the counters were
+   * never established, and inventing a document holding nothing but a spam count
+   * would state that the sender's every message was spam.
+   */
+  async adjustSpamMessages(chatId: number, telegramId: number, delta: 1 | -1): Promise<void> {
+    const floor = delta < 0 ? { $gt: 0 } : null
+    const group = await this.groups.findOne({ group_id: chatId }, { projection: { _id: 1 } })
+    await Promise.all([
+      this.users.updateOne(
+        { telegram_id: telegramId, ...(floor ? { 'globalStats.spamMessages': floor } : {}) },
+        { $inc: { 'globalStats.spamMessages': delta } }
+      ),
+      group
+        ? this.groupMembers.updateOne(
+          { group: group['_id'], telegram_id: telegramId, ...(floor ? { 'stats.spamMessages': floor } : {}) },
+          { $inc: { 'stats.spamMessages': delta } }
+        )
+        : Promise.resolve()
+    ])
   }
 
   async recordDecision(params: {

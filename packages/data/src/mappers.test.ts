@@ -102,6 +102,39 @@ describe('userDocToHistory', () => {
     expect(Math.round((NOW / 1000 - history.firstSeenUnix!) / 86400)).toBe(100)
   })
 
+  /**
+   * Standing is what buys a sender the benefit of the doubt: below
+   * `NEW_GLOBALLY_MAX` they carry `new_globally`, at 50 they earn the
+   * `established_user` trust weight, and past the exempt bar the pipeline stops
+   * running at all. The counter feeding all three is incremented for every
+   * message, so until 2026-07-31 spamming was a way to buy standing — observed
+   * in production as three senders whose newness signals dropped out of the
+   * signal list mid-campaign while the evidence against them grew.
+   */
+  it('standing counts messages, not spam', () => {
+    const history = userDocToHistory(
+      { telegram_id: 1, globalStats: { totalMessages: 62, spamMessages: 55 } }, 0, NOW
+    )!
+    expect(history.messagesGlobal).toBe(7)
+  })
+
+  it('a document with no spam counter behaves exactly as before', () => {
+    // Every user document written before this field existed, i.e. all of them.
+    const history = userDocToHistory(
+      { telegram_id: 1, globalStats: { totalMessages: 300 } }, 0, NOW
+    )!
+    expect(history.messagesGlobal).toBe(300)
+  })
+
+  it('standing never goes negative', () => {
+    // The two counters are incremented by separate writes, and the spam one is
+    // also decremented by admin overrides, so they can disagree.
+    const history = userDocToHistory(
+      { telegram_id: 1, globalStats: { totalMessages: 2, spamMessages: 9 } }, 0, NOW
+    )!
+    expect(history.messagesGlobal).toBe(0)
+  })
+
   it('cas-only ban maps to banned, carrying its offenses count', () => {
     const history = userDocToHistory(
       { telegram_id: 1, externalBan: { cas: { banned: true, offenses: 3 } } }, 0, NOW

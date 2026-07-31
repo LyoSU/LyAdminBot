@@ -71,6 +71,13 @@ export interface UserDoc {
     groupsActive?: number
     firstSeen?: Date | string
     spamDetections?: number
+    /**
+     * Messages this account sent that the pipeline judged to be spam. Written
+     * by `MongoStore.adjustSpamMessages` and subtracted from `totalMessages` to
+     * get standing — see `userDocToHistory`. Absent on every document written
+     * before 2026-07-31, which reads as zero.
+     */
+    spamMessages?: number
   }
   reputation?: {
     score?: number
@@ -166,7 +173,11 @@ export const userDocToHistory = (
   return {
     firstSeenUnix: stats.firstSeen ? Math.floor(new Date(stats.firstSeen).getTime() / 1000) : null,
     messagesInChat,
-    messagesGlobal: stats.totalMessages ?? 0,
+    // Standing, not traffic: messages the pipeline judged to be spam buy no
+    // benefit of the doubt. `totalMessages` is incremented before the verdict
+    // exists (the count is an input to it), so the subtraction has to happen
+    // here — see `MongoStore.adjustSpamMessages`.
+    messagesGlobal: Math.max(0, (stats.totalMessages ?? 0) - (stats.spamMessages ?? 0)),
     groupsActive: stats.groupsActive ?? 0,
     spamDetections: stats.spamDetections ?? 0,
     reputationScore: doc.reputation?.score ?? 50,

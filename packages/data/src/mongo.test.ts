@@ -42,6 +42,136 @@ const verdict: Pick<Verdict, 'decidedBy' | 'ruleId' | 'reasonCode' | 'pSpam' | '
   meta: { scorePSpam: 0.82, contentEvidence: '0/0', cappedGroups: 'newness' }
 }
 
+/**
+ * Standing must be earned by participating, not by posting.
+ *
+ * `touchMember` runs BEFORE the pipeline, because the number of prior messages
+ * is an input to the verdict — so by the time a message is judged, its credit
+ * has already been paid. Production 2026-07-31 showed what that buys an
+ * attacker: one advert reposted nine times into one chat, `new_in_chat` and
+ * `new_globally` dropping out of the signal list as the count grew, and the
+ * score sinking from 0.91 to 0.75 while the evidence against it accumulated.
+ *
+ * The raw counter is left alone — it is a v1 field and it answers the
+ * user-facing "how active is this person" question honestly. Standing is the
+ * raw count minus the messages we judged to be spam.
+ */
+describe('touchMember — what counts as standing', () => {
+  const memberStore = (stats: Record<string, number> | undefined) => {
+    const writes: Record<string, unknown>[] = []
+    const store = {
+      groups: { findOneAndUpdate: async () => ({ _id: 'group-oid' }) },
+      groupMembers: {
+        findOneAndUpdate: async (_filter: unknown, update: Record<string, unknown>) => {
+          writes.push(update)
+          return stats ? { stats } : null
+        }
+      }
+    } as unknown as MongoStore
+    return { store: Object.assign(store, { touchMember: MongoStore.prototype.touchMember }), writes }
+  }
+
+  it('credits only the messages that were not judged spam', async () => {
+    const { store } = memberStore({ messagesCount: 14, spamMessages: 9 })
+    expect(await store.touchMember(-100, 42, 30)).toBe(5)
+  })
+
+  it('a member with no spam counter is unaffected', async () => {
+    const { store } = memberStore({ messagesCount: 14 })
+    expect(await store.touchMember(-100, 42, 30)).toBe(14)
+  })
+
+  it('never returns a negative count', async () => {
+    const { store } = memberStore({ messagesCount: 2, spamMessages: 7 })
+    expect(await store.touchMember(-100, 42, 30)).toBe(0)
+  })
+
+  it('keeps incrementing the raw activity counter', async () => {
+    // Changing what `stats.messagesCount` means would distort the /stats view
+    // and every v1 document alongside it. The subtraction happens on read.
+    const { store, writes } = memberStore({ messagesCount: 14, spamMessages: 9 })
+    await store.touchMember(-100, 42, 30)
+    expect(writes[0]?.['$inc']).toMatchObject({ 'stats.messagesCount': 1 })
+    expect(writes[0]?.['$inc']).not.toHaveProperty('stats.spamMessages')
+  })
+
+  it('a first-ever message counts as zero prior standing', async () => {
+    const { store } = memberStore(undefined)
+    expect(await store.touchMember(-100, 42, 30)).toBe(0)
+  })
+})
+
+describe('adjustSpamMessages', () => {
+  const captureUpdates = () => {
+    const updates: { collection: string; filter: Record<string, unknown>; update: Record<string, unknown> }[] = []
+    const collection = (name: string) => ({
+      updateOne: async (filter: Record<string, unknown>, update: Record<string, unknown>) => {
+        updates.push({ collection: name, filter, update })
+        return {}
+      }
+    })
+    const store = {
+      users: collection('users'),
+      groupMembers: collection('groupMembers'),
+      groups: { findOne: async () => ({ _id: 'group-oid' }) }
+    } as unknown as MongoStore
+    return {
+      store: Object.assign(store, { adjustSpamMessages: MongoStore.prototype.adjustSpamMessages }),
+      updates
+    }
+  }
+
+  it('debits standing in both scopes — the chat and the network', async () => {
+    // A cross-chat blaster posts once per chat, so a purely per-chat counter
+    // would never notice: their global standing is what grows.
+    const { store, updates } = captureUpdates()
+    await store.adjustSpamMessages(-100, 42, 1)
+
+    expect(updates.find((u) => u.collection === 'users')?.update).toEqual({
+      $inc: { 'globalStats.spamMessages': 1 }
+    })
+    expect(updates.find((u) => u.collection === 'groupMembers')?.update).toEqual({
+      $inc: { 'stats.spamMessages': 1 }
+    })
+  })
+
+  it('gives the credit back when an admin says it was not spam', async () => {
+    // Otherwise a false positive costs its victim standing permanently, and
+    // standing is what makes the next false positive less likely.
+    const { store, updates } = captureUpdates()
+    await store.adjustSpamMessages(-100, 42, -1)
+
+    expect(updates.find((u) => u.collection === 'users')?.update).toEqual({
+      $inc: { 'globalStats.spamMessages': -1 }
+    })
+  })
+
+  it('a decrement cannot drive the counter below zero', async () => {
+    // Two independent writers, so the guard belongs in the filter rather than
+    // in a read-then-write.
+    const { store, updates } = captureUpdates()
+    await store.adjustSpamMessages(-100, 42, -1)
+
+    expect(updates.find((u) => u.collection === 'users')?.filter)
+      .toMatchObject({ 'globalStats.spamMessages': { $gt: 0 } })
+    expect(updates.find((u) => u.collection === 'groupMembers')?.filter)
+      .toMatchObject({ 'stats.spamMessages': { $gt: 0 } })
+  })
+
+  it('an increment is unguarded — the field may not exist yet', async () => {
+    const { store, updates } = captureUpdates()
+    await store.adjustSpamMessages(-100, 42, 1)
+
+    expect(updates.find((u) => u.collection === 'users')?.filter).toEqual({ telegram_id: 42 })
+  })
+
+  it('never creates a document — both were written by the touch calls', async () => {
+    const { store, updates } = captureUpdates()
+    await store.adjustSpamMessages(-100, 42, 1)
+    for (const u of updates) expect(u).not.toHaveProperty('options.upsert')
+  })
+})
+
 describe('recordOverride', () => {
   it('keeps the evidence, not just a pointer to how the verdict was reached', async () => {
     const { store, captured } = captureStore()

@@ -1743,6 +1743,24 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     })
   }
 
+  // Standing was credited before the pipeline ran, because the count of prior
+  // messages is an input to the verdict. A message we then judged to be spam
+  // must not leave that credit behind: the newness signals, the trust weight and
+  // the established-regular bypass all read those counters, so posting spam was
+  // a way to buy the benefit of the doubt for the next one. Production
+  // 2026-07-31: three senders, one advert reposted up to nine times into a
+  // single chat, `new_globally` and `new_in_chat` dropping out of the signal
+  // list as they went, the score falling 0.91 → 0.75 as the evidence grew.
+  //
+  // Unlike the conversation window below, this does NOT wait on
+  // `result.applied`. Whether Telegram let us delete anything is a fact about
+  // our rights in that chat, not about the sender — and a chat where enforcement
+  // fails is precisely where the free standing piles up fastest.
+  if (isEnforcementAction(verdict.action)) {
+    await store.adjustSpamMessages(chat.id, sender.id, 1)
+      .catch(() => { /* counters are best-effort */ })
+  }
+
   // The message joins the chat context only if it stayed in the chat —
   // deleted spam must not poison the window for the next evaluation.
   const removed = result.applied && isEnforcementAction(verdict.action)
@@ -2177,6 +2195,12 @@ const wireCallbacks = (): void => {
       // The admin vouched — auto-trust this user in this chat from now on.
       await store.addTrustedUser(chatId, Number(userIdRaw))
         .catch(() => { /* trust write is best-effort */ })
+      // Give the message its standing back. Enforcing debited it; the debit
+      // withholds the benefit of the doubt, so leaving it in place after an
+      // admin says "not spam" would let one false positive make the next one
+      // against the same person more likely.
+      await store.adjustSpamMessages(chatId, Number(userIdRaw), -1)
+        .catch(() => { /* counters are best-effort */ })
       // A forwarded FP also earns its origin a clean point (v1 2:1 math).
       const forward = recentForwards.get(`${chatIdRaw}:${messageIdRaw}`)
       if (forward) {
