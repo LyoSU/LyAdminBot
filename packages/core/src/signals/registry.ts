@@ -70,11 +70,27 @@ export interface SignalSpec {
   /** Structural evasion, near-zero FP by shape rather than by content. */
   highRisk?: true
   /**
-   * The account is condemned by someone other than us: Telegram's own flags, a
-   * spam-labelled restriction, an external ban listing. Two independent
-   * decisions ride on this — a PERMANENT rather than timed ban, and whether a
-   * chat-trusted member is actioned at all — and each used to keep its own copy
-   * of the list, in different packages, linked by nothing.
+   * TELEGRAM's own verdict on the account: a scam/fake flag, or a restriction
+   * whose stated reason names spam. The platform adjudicated the account itself
+   * and offers the owner an appeal — which is what makes this, and only this,
+   * grounds for a ban that never expires.
+   */
+  platformVerdict?: true
+  /**
+   * A THIRD-PARTY community ban database (CAS/lols). Enough to override chat
+   * trust — a listed account deserves the full pipeline even here — but
+   * deliberately NOT grounds for a permanent ban (2026-07-31).
+   *
+   * These two used to be one flag, and the effect was that the single rule which
+   * enforces on zero content evidence (`external_ban_new`) was also the only one
+   * whose mistakes could never expire. Production: an account was permanently
+   * banned over a message about an audiobook, `contentEvidence` 0. The rule
+   * itself is deliberate; its permanence was not, and it contradicts the reason
+   * the rule states for existing — that the known false-positive class of these
+   * databases is the rehabilitated account. That is an error time corrects, and
+   * a permanent ban is exactly the response that prevents it from being
+   * corrected. `TIMED_BAN_SECONDS` exists for this: a real spam bot does not
+   * wait 30 days to come back.
    */
   thirdPartyVerdict?: true
 }
@@ -110,11 +126,11 @@ export const SIGNAL_GROUPS: Record<SignalGroupName, { cap: number }> = {
 export const SIGNALS = {
   // ───────────────────── Telegram-level account flags ─────────────────────
 
-  scam_flag: { weight: 3.0, kind: 'evidence', thirdPartyVerdict: true },
-  fake_flag: { weight: 3.0, kind: 'evidence', thirdPartyVerdict: true },
+  scam_flag: { weight: 3.0, kind: 'evidence', platformVerdict: true },
+  fake_flag: { weight: 3.0, kind: 'evidence', platformVerdict: true },
   restricted_flag: { weight: 0.8, kind: 'evidence' },
   /** Telegram-labelled spam/scam restriction — stronger than the bare flag. */
-  restricted_for_spam: { weight: 1.5, kind: 'evidence', thirdPartyVerdict: true },
+  restricted_for_spam: { weight: 1.5, kind: 'evidence', platformVerdict: true },
   /**
    * Server-side detection of a dangerous unofficial client
    * (`userFull.unofficial_security_risk`). Deliberately the heaviest single
@@ -345,10 +361,20 @@ export const PROMO_SIGNALS = namesWhere((s) => s.promo === true)
 export const HIGH_RISK_SIGNALS = namesWhere((s) => s.highRisk === true)
 
 /**
- * Condemned by a third party. Grounds for a permanent rather than timed ban,
- * and the only grounds on which a chat-trusted member is still actioned.
+ * Grounds for a ban that never expires: the PLATFORM judged the account. Every
+ * other ban is timed, so a mistake of ours heals without an admin noticing.
  */
-export const THIRD_PARTY_VERDICT_SIGNALS = namesWhere((s) => s.thirdPartyVerdict === true)
+export const PERMANENT_BAN_SIGNALS = namesWhere((s) => s.platformVerdict === true)
+
+/**
+ * Condemned by somebody other than us, at either tier — the only grounds on
+ * which a chat-trusted member is still actioned. A listed account deserves the
+ * pipeline even here; what it does not deserve is a permanent ban, which is why
+ * this set and `PERMANENT_BAN_SIGNALS` are no longer the same set.
+ */
+export const OVERRIDES_CHAT_TRUST_SIGNALS = namesWhere(
+  (s) => s.platformVerdict === true || s.thirdPartyVerdict === true
+)
 
 /** Correlated groups with their members, in declaration order. */
 export const SIGNAL_GROUP_CAPS: { name: SignalGroupName; cap: number; members: ReadonlySet<SignalName> }[] =

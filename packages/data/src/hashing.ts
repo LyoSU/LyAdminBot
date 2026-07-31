@@ -38,11 +38,28 @@ export const normalizeHeavy = (text: string): string => {
  * 2026-07-31: one advert reposted seven times with a different substitution
  * each time, matched by nothing, re-read by the model every time.
  *
- * Two deliberate omissions:
- *  - Digits. Folding 0→o would rewrite every price in every message, and the
- *    numeric evasions are far rarer than the letter swaps this is aimed at.
+ * The representative does NOT have to be Latin (2026-07-31). It used to be,
+ * silently, and the cost was that a pair with no Latin lookalike could not be
+ * expressed at all: `л`/`λ` and `ф`/`φ` were invisible to the fold, and a
+ * production rotation escaped through `Λ` five minutes after its predecessor was
+ * matched.
+ *
+ * Digits fold too, which the first version refused on the grounds that "0→o
+ * rewrites every price". That objection does not survive contact with what the
+ * fold is for: the distortion is applied to both sides of every comparison, so
+ * rewriting is free, and since distinct digits fold to distinct letters two
+ * different numbers can never become equal. What collapses is exactly
+ * digit-for-letter evasion (`4ат`), which is what we keep seeing.
+ *
+ * Included are only the digits with ONE obvious letter. `1`, `5` and `6` are
+ * left out because their shape fits several letters (`1`→i/l/і, `6`→б/b), and a
+ * fold that guesses wrong merges unrelated words instead of catching evasion.
+ *
+ * Two deliberate omissions remain:
  *  - Cyrillic `и` and Latin `n`/`u`. Merging them would collide `п` with `и`,
  *    which are different letters in ordinary words rather than lookalikes.
+ *  - Letters with no cross-script twin in use at all — adding a class for them
+ *    would buy nothing and only widen the collision surface.
  */
 const CONFUSABLE_CLASSES: readonly (readonly [string, string])[] = [
   ['a', 'аαａàáâãäåąă'],
@@ -57,7 +74,7 @@ const CONFUSABLE_CLASSES: readonly (readonly [string, string])[] = [
   ['k', 'кκｋ'],
   ['m', 'мμｍ'],
   ['n', 'пπｎ'],
-  ['o', 'оοөøóòôõöｏ'],
+  ['o', 'оοөøóòôõöｏ0'],
   ['p', 'рρｐ'],
   ['s', 'ѕşśｓ'],
   ['t', 'тτţｔ'],
@@ -66,7 +83,14 @@ const CONFUSABLE_CLASSES: readonly (readonly [string, string])[] = [
   ['w', 'ѡωｗ'],
   ['x', 'хχ×ｘ'],
   ['y', 'уγүýÿｙ'],
-  ['z', 'ᴢｚ']
+  ['z', 'ᴢｚ'],
+  // Cyrillic representatives: these letters have no Latin lookalike, so a
+  // Latin-only target alphabet could not express them at all.
+  ['л', 'λ'],
+  ['ф', 'φ'],
+  // Digit-for-letter, one unambiguous shape each.
+  ['ч', '4'],
+  ['з', '3']
 ]
 
 const CONFUSABLES = new Map<string, string>()

@@ -8,7 +8,7 @@
  * chat-trusted users. The pipeline also guards these — defense in depth.
  */
 import type { Verdict } from '@lyadmin/core'
-import { THIRD_PARTY_VERDICT_SIGNALS } from '@lyadmin/core'
+import { OVERRIDES_CHAT_TRUST_SIGNALS } from '@lyadmin/core'
 
 export interface ExecutionTarget {
   chatId: number
@@ -42,13 +42,14 @@ export interface ExecutionResult {
 
 /**
  * Condemned by someone other than us — the only grounds on which a chat-trusted
- * member is still actioned. The list itself lives in the signal catalogue
- * (`thirdPartyVerdict`); this file used to keep a private copy of the same four
+ * member is still actioned — at either tier of authority, unlike the permanent-ban
+ * grounds, which only Telegram's own verdict earns. The list lives in the signal
+ * catalogue; this file used to keep a private copy of the same four
  * names under a different name, in a different package, linked to the original
  * by nothing at all.
  */
 const hasHardAccountVerdict = (verdict: Verdict): boolean =>
-  verdict.signals.some((s) => THIRD_PARTY_VERDICT_SIGNALS.has(s.name))
+  verdict.signals.some((s) => OVERRIDES_CHAT_TRUST_SIGNALS.has(s.name))
 
 const MUTE_DURATION_SECONDS = 24 * 60 * 60
 const CAPTCHA_WINDOW_SECONDS = 10 * 60

@@ -22,7 +22,7 @@ import { extractBioSignals } from './signals/bio.js'
 import { applyDeterministicRules } from './rules.js'
 import { parseCustomRule, customRuleMatches } from './custom-rules.js'
 import { scoreSignals, hasDecisiveSignal, mayRemoveSender, contentEvidence } from './score.js'
-import { THIRD_PARTY_VERDICT_SIGNALS, isTrustSignal } from './signals/registry.js'
+import { PERMANENT_BAN_SIGNALS, isTrustSignal } from './signals/registry.js'
 import { decideAction, isEnforcementAction, removesSender, type PolicyDecision } from './policy.js'
 import { shouldAbstain } from './text/abstain.js'
 import { isForeignScript } from './text/script.js'
@@ -239,7 +239,7 @@ export const evaluateMessage = async (
     // known-bad by someone else's verdict, not merely scored badly by us.
     // Everything else expires, so a mistake on our side heals without an
     // admin having to notice it.
-    hasPermanentBanGrounds: signals.some((s) => THIRD_PARTY_VERDICT_SIGNALS.has(s.name))
+    hasPermanentBanGrounds: signals.some((s) => PERMANENT_BAN_SIGNALS.has(s.name))
   })
 
   const finalize = (draft: VerdictDraft, signals: Signal[], decision?: PolicyDecision): Verdict => {

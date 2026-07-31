@@ -59,9 +59,34 @@ describe('foldConfusables', () => {
     }
   })
 
-  it('leaves digits alone, so prices are not rewritten', () => {
-    expect(foldConfusables('2500')).toBe('2500')
-    expect(foldConfusables('від 40 000 грн')).toContain('40 000')
+  /**
+   * The same sender, the same chat, five minutes apart (production 2026-07-31
+   * 11:06 → 11:12). The first sighting matched a signature; the rotation did
+   * not, and the model was paid to read it again. Two gaps did it:
+   *
+   *  - a DIGIT standing in for a letter (`4` for `ч`), which the fold skipped
+   *    on the grounds that folding digits "rewrites every price";
+   *  - `λ` for `л`, which no class could express, because every class folded to
+   *    a LATIN representative and these two letters have no Latin lookalike.
+   */
+  const digitAndLambdaRotation = [
+    'Hужен менеджeр в чат, оплата от $50 — детали b ЛC.',
+    'Нужен мeнеджеp в 4ат, оплαта от $50 — дεтали в ΛϹ.'
+  ]
+
+  it('collapses a rotation that used a digit and a lambda', () => {
+    const folded = new Set(digitAndLambdaRotation.map((t) => foldConfusables(normalizeLight(t))))
+    expect(folded.size).toBe(1)
+  })
+
+  it('folding digits cannot merge two different numbers', () => {
+    // This is why the old objection ("it rewrites every price") did not hold:
+    // distortion is harmless when both sides get it, and since distinct digits
+    // fold to distinct letters, two different numbers stay different. Only
+    // digit-for-letter evasion collapses, which is the entire point.
+    expect(foldConfusables('2500')).not.toBe(foldConfusables('2600'))
+    expect(foldConfusables('від 40 000 грн')).not.toBe(foldConfusables('від 50 000 грн'))
+    expect(foldConfusables('4')).toBe(foldConfusables('ч'))
   })
 
   it('keeps distinct messages distinct', () => {

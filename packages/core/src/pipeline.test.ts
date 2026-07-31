@@ -881,9 +881,38 @@ describe('evaluateMessage — enforcement ladder end to end', () => {
     expect(v.banDurationSeconds).toBeNull()
   })
 
-  it('an externally-banned newcomer is also permanent', async () => {
+  it('an externally-banned newcomer is banned, but the ban EXPIRES', async () => {
+    // Reversed on 2026-07-31, and it had been asserted the other way round.
+    //
+    // `external_ban_new` is the one rule that bans with zero content evidence:
+    // `contentEvidence` was 0 in production when it permanently banned an
+    // account for a message about an audiobook. That is a deliberate policy —
+    // an account a ban database lists, new to us, is removed before it acts —
+    // but it cannot be a PERMANENT one, for the reason the rule's own comment
+    // gives: the known false-positive class of these databases is the
+    // rehabilitated account. That error is one that time fixes, and a permanent
+    // ban is precisely the response that denies it the chance.
+    //
+    // Telegram's own flags stay permanent: the platform adjudicated the account
+    // itself and offers an appeal. A crowd-sourced list is a different tier of
+    // authority, and conflating the two is what produced the outcome above.
     const v = await evaluateMessage(makeInput({
       user: { ...newcomer, externalBan: { banned: true, bannedAt: null, offenses: 3 } }
+    }), {})
+    expect(v.action).toBe('ban')
+    expect(v.ruleId).toBe('external_ban_new')
+    expect(v.banDurationSeconds).toBeGreaterThan(0)
+  })
+
+  it('a scam flag alongside an external listing is still permanent', async () => {
+    // The platform verdict is what grants permanence; a third-party listing
+    // neither grants nor removes it.
+    const v = await evaluateMessage(makeInput({
+      user: {
+        ...newcomer,
+        flags: { scam: true, fake: false, restricted: false, verified: false, premium: false, bot: false },
+        externalBan: { banned: true, bannedAt: null, offenses: 3 }
+      }
     }), {})
     expect(v.action).toBe('ban')
     expect(v.banDurationSeconds).toBeNull()

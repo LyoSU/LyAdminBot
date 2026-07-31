@@ -27,8 +27,8 @@ import {
 } from './score.js'
 import {
   SIGNALS, SIGNAL_NAMES, SIGNAL_GROUPS, SIGNAL_GROUP_CAPS, SIGNAL_WEIGHTS,
-  SOFT_SHAPE_SIGNALS, PROMO_SIGNALS, HIGH_RISK_SIGNALS, THIRD_PARTY_VERDICT_SIGNALS,
-  isTrustSignal, weightOf, type SignalName
+  SOFT_SHAPE_SIGNALS, PROMO_SIGNALS, HIGH_RISK_SIGNALS, PERMANENT_BAN_SIGNALS,
+  OVERRIDES_CHAT_TRUST_SIGNALS, isTrustSignal, weightOf, type SignalName
 } from './signals/registry.js'
 
 const SRC_DIR = dirname(fileURLToPath(import.meta.url))
@@ -98,10 +98,21 @@ describe('signal catalogue', () => {
     }
   })
 
-  it('third-party verdicts are the only permanent-ban grounds, and none is a trust signal', () => {
-    expect(THIRD_PARTY_VERDICT_SIGNALS.size).toBeGreaterThan(0)
-    for (const name of THIRD_PARTY_VERDICT_SIGNALS) {
-      expect(isTrustSignal(name), `${name} would ban on a trust signal`).toBe(false)
+  it('only the platform can ground a ban that never expires', () => {
+    // A community ban database overrides chat trust but must not make a ban
+    // permanent: `external_ban_new` is the one rule that enforces with zero
+    // content evidence, and the databases' own documented failure mode is the
+    // rehabilitated account — an error only time can correct.
+    expect([...PERMANENT_BAN_SIGNALS].sort())
+      .toEqual(['fake_flag', 'restricted_for_spam', 'scam_flag'])
+    expect(PERMANENT_BAN_SIGNALS.has('external_ban')).toBe(false)
+    expect(OVERRIDES_CHAT_TRUST_SIGNALS.has('external_ban')).toBe(true)
+  })
+
+  it('everything that can override chat trust accuses rather than exonerates', () => {
+    expect(OVERRIDES_CHAT_TRUST_SIGNALS.size).toBeGreaterThan(PERMANENT_BAN_SIGNALS.size)
+    for (const name of OVERRIDES_CHAT_TRUST_SIGNALS) {
+      expect(isTrustSignal(name), `${name} would action a member on a trust signal`).toBe(false)
     }
   })
 
