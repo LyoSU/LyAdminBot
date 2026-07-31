@@ -20,6 +20,35 @@ export interface NormalizeContext {
   previous?: NormalizedMessage | null
 }
 
+/** What is knowable about a message sent AS a chat (Telegram's "send as"). */
+export interface ChannelSenderFacts {
+  senderId: number
+  chatId: number
+  isAutomaticForward: boolean
+  isChannelPost: boolean
+}
+
+/**
+ * Whether a message sent as a chat is ours to judge.
+ *
+ * Telegram attaches no marker saying WHICH kind of channel sender this is, so
+ * the three kinds are told apart by shape — the same rule the Bot API documents
+ * for `sender_chat`:
+ *
+ *  - `senderId === chatId` — the chat posting as itself, which only an
+ *    anonymous administrator can do. Judging it means deleting an admin's own
+ *    post and aiming a ban at the chat we are moderating. Production
+ *    2026-07-31 reached a ban verdict on exactly that and was saved only by
+ *    not holding the right to carry it out.
+ *  - `isAutomaticForward` — the linked channel's post mirrored into its
+ *    discussion group; same argument, that channel is the one we serve.
+ *  - anything else — a member posting as a channel they own. That is the one
+ *    delivery method which advertises a channel by construction and a live
+ *    spam vector, so it stays judged like any other sender.
+ */
+export const shouldScanChannelSender = (facts: ChannelSenderFacts): boolean =>
+  facts.senderId !== facts.chatId && !facts.isAutomaticForward && !facts.isChannelPost
+
 const PREVIEW_LIMIT = 120
 
 // Plain-text URL scan: spammers send links without entities so clients

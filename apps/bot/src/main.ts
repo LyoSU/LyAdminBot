@@ -13,7 +13,7 @@ import {
 import {
   TelegramGateway, applyVerdict, buildUserSnapshot, buildChannelSnapshot, normalizeMessage,
   fetchUserProfile, downloadPhotoBase64, downloadAvatarBase64, downloadStoriesBase64, rawPhotoToBase64,
-  fetchExternalBan, needsExternalRecheck, resolveMentionKinds,
+  fetchExternalBan, needsExternalRecheck, resolveMentionKinds, shouldScanChannelSender,
   type IncomingMessage
 } from '@lyadmin/adapters'
 import {
@@ -1352,14 +1352,18 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
    * the one delivery method that advertises a channel by construction — was
    * never scanned at all (2026-07-30 review).
    *
-   * Two things are deliberately still skipped: the linked channel's own posts
-   * auto-forwarded into a discussion group (`isAutomaticForward` — moderating
-   * those would mean the bot deleting the channel it serves and trying to ban
-   * it from its own comment section), and anonymous admins, who are admins.
+   * Which senders are skipped, and why, is `shouldScanChannelSender` — the
+   * anonymous-admin case used to be claimed here and not actually implemented,
+   * because it has no marker of its own and is only visible as `senderId ===
+   * chatId` (production 2026-07-31 reached a ban verdict on a chat's own post).
    */
   const userSender = rawSender instanceof User ? rawSender : null
-  const channelSender = !userSender && rawSender instanceof Chat
-    && !message.isAutomaticForward && !message.isChannelPost
+  const channelSender = !userSender && rawSender instanceof Chat && shouldScanChannelSender({
+    senderId: rawSender.id,
+    chatId: chat.id,
+    isAutomaticForward: message.isAutomaticForward,
+    isChannelPost: message.isChannelPost
+  })
     ? rawSender
     : null
   const sender = userSender ?? channelSender

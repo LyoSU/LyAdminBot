@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { Long, Message, PeersIndex } from '@mtcute/node'
 import type { tl } from '@mtcute/node'
-import { normalizeMessage } from './normalize.js'
+import type { ChannelSenderFacts } from './normalize.js'
+import { normalizeMessage, shouldScanChannelSender } from './normalize.js'
 
 const long = (n: number): Long => Long.fromNumber(n)
 
@@ -356,5 +357,34 @@ describe('normalizeMessage — guest bots & edits', () => {
       { isEdit: true, previous: before }
     )
     expect(after.editDelta?.injectedInvisibles).toBe(1)
+  })
+})
+
+// ── channel senders ───────────────────────────────────────────────────
+
+describe('shouldScanChannelSender', () => {
+  const facts = (over: Partial<ChannelSenderFacts> = {}): ChannelSenderFacts => ({
+    senderId: -1000, chatId: -2000, isAutomaticForward: false, isChannelPost: false, ...over
+  })
+
+  it('scans a member posting as a channel they own', () => {
+    // The one delivery method that advertises a channel by construction, and a
+    // live spam vector — it must stay judged like any other sender.
+    expect(shouldScanChannelSender(facts())).toBe(true)
+  })
+
+  it('never judges the chat posting as itself', () => {
+    // Production 2026-07-31: a chat's own announcement reached a ban verdict.
+    // Only an anonymous administrator can send as the chat, so the target of
+    // that ban would have been the chat itself.
+    expect(shouldScanChannelSender(facts({ senderId: -2000, chatId: -2000 }))).toBe(false)
+  })
+
+  it('never judges the linked channel mirrored into its discussion group', () => {
+    expect(shouldScanChannelSender(facts({ isAutomaticForward: true }))).toBe(false)
+  })
+
+  it('never judges a post inside a broadcast channel', () => {
+    expect(shouldScanChannelSender(facts({ isChannelPost: true }))).toBe(false)
   })
 })
