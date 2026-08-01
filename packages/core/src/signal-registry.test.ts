@@ -27,7 +27,7 @@ import {
 } from './score.js'
 import {
   SIGNALS, SIGNAL_NAMES, SIGNAL_GROUPS, SIGNAL_GROUP_CAPS, SIGNAL_WEIGHTS,
-  SOFT_SHAPE_SIGNALS, PROMO_SIGNALS, HIGH_RISK_SIGNALS, PERMANENT_BAN_SIGNALS,
+  SOFT_SHAPE_SIGNALS, PRIOR_MATCH_SIGNALS, PROMO_SIGNALS, HIGH_RISK_SIGNALS, PERMANENT_BAN_SIGNALS,
   OVERRIDES_CHAT_TRUST_SIGNALS, isTrustSignal, weightOf, type SignalName
 } from './signals/registry.js'
 
@@ -176,8 +176,12 @@ describe('signal catalogue', () => {
   })
 
   it('every message-evidence signal at or above the bar is decisive on its own', () => {
+    // Except a match against an unconfirmed rule of our own writing: heavy
+    // enough to clear the bar, but it recalls a verdict rather than observing
+    // this message. See `SignalSpec.priorMatch` (2026-08-01).
     const decisive = SIGNAL_NAMES.filter((n) =>
-      SIGNALS[n].kind === 'evidence' && SIGNAL_WEIGHTS[n] >= DECISIVE_MIN_WEIGHT)
+      SIGNALS[n].kind === 'evidence' && !PRIOR_MATCH_SIGNALS.has(n) &&
+      SIGNAL_WEIGHTS[n] >= DECISIVE_MIN_WEIGHT)
     expect(decisive.length).toBeGreaterThan(0)
     for (const name of decisive) {
       expect(hasDecisiveSignal([{ name }]), `${name} should be decisive`).toBe(true)

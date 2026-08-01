@@ -8,7 +8,9 @@
  * than on a message.
  */
 import type { Signal } from './types.js'
-import { SIGNAL_GROUP_CAPS, SOFT_SHAPE_SIGNALS, weightOf } from './signals/registry.js'
+import {
+  PRIOR_MATCH_SIGNALS, SIGNAL_GROUP_CAPS, SOFT_SHAPE_SIGNALS, weightOf
+} from './signals/registry.js'
 
 /** z-offset so that a signal-less message scores ≈ 0.10 (ham prior). */
 export const BASE_RATE_BIAS = -2.2
@@ -55,12 +57,17 @@ export interface ContentEvidence {
  * never be reachable by *negative* weight. Which signals fall on which side is
  * the `kind` field in `signals/registry.ts`, and it is one field per signal
  * rather than a second list to keep in sync.
+ *
+ * Nor do matches against unconfirmed rules we wrote ourselves (`priorMatch`).
+ * Those restate an earlier verdict instead of observing this message, and
+ * letting a guess corroborate itself is how the pipeline came to enforce on a
+ * text nothing had read that time — see the flag's own note.
  */
 export const contentEvidence = (signals: Signal[]): ContentEvidence => {
   let strongest = 0
   let total = 0
   for (const name of new Set(signals.map((s) => s.name))) {
-    if (SOFT_SHAPE_SIGNALS.has(name)) continue
+    if (SOFT_SHAPE_SIGNALS.has(name) || PRIOR_MATCH_SIGNALS.has(name)) continue
     const weight = weightOf(name)
     // Sub-threshold nudges are excluded from the TOTAL as well, not just from
     // `strongest` (2026-07-30 production FP): a political comment was kicked on

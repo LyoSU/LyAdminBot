@@ -214,6 +214,40 @@ describe('content evidence (2026-07-30 FP)', () => {
     expect(scoreSignals(signals).pSpam).toBeGreaterThan(0.9)
   })
 
+  it('REGRESSION: our own unconfirmed verdict is not a second reading of the message', () => {
+    // Production, 2026-08-01 06:21. A job ad was read by the LLM at 05:37 and
+    // judged spam at 0.99, so auto-learn wrote a candidate signature and a
+    // candidate vector for it. On the next sighting those two echoes were the
+    // ENTIRE case: 1.2 + 1.0 = 2.2 units of "content evidence", clearing both
+    // bars, so the score rose above the grey ceiling and the LLM gate stayed
+    // shut. The pipeline enforced on a message no stage had read that time —
+    // on nothing but its own recollection of having judged one like it.
+    //
+    // A match against a self-learned store is not an observation about this
+    // message; it is a pointer back to an earlier verdict. Counting it as
+    // evidence lets an unconfirmed guess become its own corroboration, and
+    // `learning.ts` is explicit that a candidate may not convict on its own.
+    const echo: Signal[] = [{ name: 'signature_candidate_match' }]
+    expect(contentEvidence(echo)).toEqual({ strongest: 0, total: 0 })
+    expect(hasDecisiveSignal(echo)).toBe(false)
+    // The score keeps its full weight — what it may no longer do is stand in
+    // for somebody having read the text.
+    expect(scoreSignals(echo).pSpam).toBeGreaterThan(scoreSignals([]).pSpam)
+
+    // The vector neighbour is NOT in the same class and keeps its rung: that
+    // store is fed by confirmed community votes too, so a hit in it is not
+    // purely a memory of our own guess.
+    expect(hasDecisiveSignal([{ name: 'vector_similar_spam' }])).toBe(true)
+  })
+
+  it('an echo cannot top up real evidence to the sender-removal bar', () => {
+    // Exactly the 2026-08-01 sum: 1.2 + 1.0 read as two independent facts and
+    // cleared the bar for removing a person. One of them was a memory.
+    expect(mayRemoveSender([
+      { name: 'signature_candidate_match' }, { name: 'vector_similar_spam' }
+    ])).toBe(false)
+  })
+
   it('one real content signal licenses enforcement on the message', () => {
     const signals: Signal[] = [...shapeStack, { name: 'moderation_flagged' }]
     expect(hasDecisiveSignal(signals)).toBe(true)
@@ -221,11 +255,11 @@ describe('content evidence (2026-07-30 FP)', () => {
 
   it('removing the SENDER needs more evidence than removing the message', () => {
     // A single mid-weight hit is grounds to delete, not to remove a person.
-    expect(hasDecisiveSignal([{ name: 'vector_similar_spam' }])).toBe(true)
-    expect(mayRemoveSender([{ name: 'vector_similar_spam' }])).toBe(false)
+    expect(hasDecisiveSignal([{ name: 'moderation_flagged' }])).toBe(true)
+    expect(mayRemoveSender([{ name: 'moderation_flagged' }])).toBe(false)
 
     // Two independent facts that are each evidence in their own right do.
-    expect(mayRemoveSender([{ name: 'phone_number' }, { name: 'vector_similar_spam' }])).toBe(true)
+    expect(mayRemoveSender([{ name: 'phone_number' }, { name: 'moderation_flagged' }])).toBe(true)
     expect(mayRemoveSender([{ name: 'many_url_buttons' }])).toBe(true)
 
     // A link riding along with one of them adds nothing: it is a nudge.

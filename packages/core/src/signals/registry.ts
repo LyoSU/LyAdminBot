@@ -93,6 +93,29 @@ export interface SignalSpec {
    * wait 30 days to come back.
    */
   thirdPartyVerdict?: true
+  /**
+   * A match against a rule the pipeline wrote from its OWN verdict and that no
+   * human has confirmed. It restates an earlier conclusion about a similar
+   * text; it is not a second observation of this one.
+   *
+   * It may raise the score — recognising a repeat is the whole point of
+   * learning — but it may not count toward the bars that license enforcing
+   * with no content-reading stage involved, because then an unconfirmed guess
+   * corroborates itself. `learning.ts` states the same rule from the writing
+   * side: a candidate "may not convict on its own".
+   *
+   * Production 2026-08-01: a job ad the LLM judged `job_scam` at 0.99 came back
+   * 44 minutes later. Its own candidate signature (1.2) plus a vector
+   * neighbour (1.0) made 2.2 units of "content evidence" — clearing both bars,
+   * so the score passed the grey ceiling and the LLM was never asked. The
+   * pipeline acted on a text nothing had read that time, and the echo it acted
+   * on was weaker than the reading it displaced.
+   *
+   * Distinct from the vector neighbour, which stays evidence: that store is
+   * fed by confirmed community votes as well as by us, so a hit in it is not
+   * purely a memory of our own guess.
+   */
+  priorMatch?: true
 }
 
 /**
@@ -213,7 +236,7 @@ export const SIGNALS = {
   /** Content-level NSFW in the message or its photo. */
   moderation_flagged: { weight: 1.5, kind: 'evidence' },
   /** Self-learned signature matched, but not human-confirmed yet. */
-  signature_candidate_match: { weight: 1.2, kind: 'evidence' },
+  signature_candidate_match: { weight: 1.2, kind: 'evidence', priorMatch: true },
   /** Semantically near known spam (raised only above VECTOR_SIGNAL_SIMILARITY). */
   vector_similar_spam: { weight: 1.0, kind: 'evidence' },
   /** The message mentions a bot — promo-relevant, weak on its own. */
@@ -336,6 +359,13 @@ export const weightOf = (name: string): number =>
  * a stack of these is not proof about what was written.
  */
 export const SOFT_SHAPE_SIGNALS = namesWhere((s) => s.kind === 'shape')
+
+/**
+ * Matches against rules we wrote ourselves and nobody confirmed — see
+ * `SignalSpec.priorMatch`. They carry weight, but they never license enforcing
+ * on a message no stage has read.
+ */
+export const PRIOR_MATCH_SIGNALS = namesWhere((s) => s.priorMatch === true)
 
 /** True for a signal that lowers the score — derived, never re-declared. */
 export const isTrustSignal = (name: string): boolean =>

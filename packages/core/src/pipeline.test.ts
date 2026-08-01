@@ -299,6 +299,48 @@ describe('evaluateMessage — knowledge ports', () => {
     expect(v.signals.some((s) => s.name === 'signature_candidate_match')).toBe(true)
   })
 
+  /**
+   * Production, 2026-08-01. The same job ad was classified by the LLM at 05:37
+   * (`job_scam`, 0.99) and auto-learn wrote a candidate signature for it. At
+   * 06:21 that candidate, plus a candidate vector, was the whole case: the LLM
+   * was never called, and the pipeline acted on an unread message.
+   *
+   * The stage that produced the original verdict must not be silenced by an
+   * unconfirmed echo of it — least of all when the echo is quantised to 2.2
+   * units and the original said 0.99. Repeats are cheap to re-ask: the port
+   * caches by text, so the second sighting is served from the first answer.
+   */
+  it('unconfirmed matches never close the LLM gate on their own', async () => {
+    let asked = 0
+    const ports: PipelinePorts = {
+      signatures: { match: async () => ({ status: 'candidate', pSpam: 0.99, signatureId: 'sig3' }) },
+      vectors: { search: async () => ({ similarity: 0.9, status: 'candidate', vectorId: 'v3' }) },
+      llm: {
+        classify: async () => {
+          asked += 1
+          return { pSpam: 0.99, reasonCode: 'job_scam', evidence: null, cached: true }
+        }
+      }
+    }
+    const v = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), ports)
+    expect(asked).toBe(1)
+    expect(v.decidedBy).toBe('llm_cached')
+    expect(v.pSpam).toBe(0.99)
+  })
+
+  it('with no LLM to ask, an echo alone may not enforce', async () => {
+    // The candidate signature is the only match, and there is no LLM. Acting
+    // would mean removing a message on the strength of a guess nobody
+    // confirmed and nobody re-read.
+    const ports: PipelinePorts = {
+      signatures: { match: async () => ({ status: 'candidate', pSpam: 0.99, signatureId: 'sig3' }) }
+    }
+    const v = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), ports)
+    expect(v.pSpam).toBeGreaterThan(0.75)
+    expect(isEnforcementAction(v.action)).toBe(false)
+    expect(v.reasonCode).toBe('soft_shape_only')
+  })
+
   it('velocity exceeded decides delete+vote territory or stronger', async () => {
     const ports: PipelinePorts = {
       velocity: { check: async () => ({ exceeded: true, evidence: '6 copies in 4 chats' }) }
