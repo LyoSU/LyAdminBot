@@ -29,9 +29,26 @@ const MANY_URL_BUTTONS_MIN = 3
 const CUSTOM_EMOJI_HEAVY_MIN = 3
 const RECENT_REPLY_MAX_AGE_SECONDS = 3600
 
-// Phone numbers: international or local format with enough digits to be a
-// real dial target. Spaces/dashes/parens between digit groups are allowed.
-export const PHONE_REGEX = /(?:\+|\b)\d[\d ().-]{8,}\d\b/
+/**
+ * A number long enough to dial, in whichever shape the writer groups it:
+ * international or local, with spaces, dashes, dots or parens between groups.
+ *
+ * The bound counts DIGITS, not characters of the run. It used to be
+ * `\d[\d ().-]{8,}\d` — a length bound on a class that includes the separators,
+ * so any ten characters drawn from digits, spaces, dots, dashes and parens
+ * matched however few digits they actually held. Ordinary chat produces those
+ * constantly: grouped thousands, salary ranges, numbered lists, dotted dates.
+ * That is not a free extra signal — `phone_number` weighs above the bar for
+ * enforcing without reading the text, and being a `promo` signal it also
+ * withdraws the shortcut that spares established regulars the pipeline, so a
+ * member quoting a price drew the handling built for adverts (2026-08-01).
+ *
+ * Nine digits is the floor: below it lie the grouped thousands and the dotted
+ * dates, above it every national format we care about. At most two separator
+ * characters may sit between two digits, which admits `+38 (067) 123-45-67`
+ * (`" ("` and `") "`) while a range's `" - "` breaks the run in two.
+ */
+export const PHONE_REGEX = /(?:\+|\b)\d(?:[ ().-]{0,2}\d){8,}\b/
 
 // Cashtags: $BTC, $ETH — crypto-promo marker.
 export const CASHTAG_REGEX = /\$[A-Z]{2,6}\b/

@@ -120,6 +120,39 @@ describe('extractMessageSignals — suspicious signals', () => {
     expect(names(makeMsg({ text: 'ціна 100 грн' }))).not.toContain('phone_number')
   })
 
+  it('reads a phone number in every shape people actually write one', () => {
+    // Separators between digit groups vary by habit and by country; what makes
+    // a run of characters a phone number is that it holds enough DIGITS to dial.
+    for (const text of [
+      'тел 0671234567', 'тел 067 123 45 67', 'тел 067-123-45-67',
+      'тел +38 (067) 123-45-67', 'тел 8(067)1234567', 'call +1 202 555 0134'
+    ]) {
+      expect(names(makeMsg({ text })), text).toContain('phone_number')
+    }
+  })
+
+  it('REGRESSION: a run of digits and separators is not automatically a number to dial', () => {
+    // The bound used to be on the LENGTH of the run rather than on how many
+    // digits it held, so any ten characters drawn from digits, spaces, dots,
+    // dashes and parentheses matched. Ordinary chat is full of those: grouped
+    // thousands, salary ranges, numbered lists, dotted dates.
+    //
+    // It is not a harmless extra signal. `phone_number` weighs 1.2 — over the
+    // bar that licenses enforcing with no stage having read the text — and it
+    // is a `promo` signal, so it also switches off the clean shortcut that
+    // spares established regulars the whole pipeline. A member quoting a price
+    // was being handed the treatment built for adverts (2026-08-01).
+    for (const text of [
+      'ціна 10 000 000 грн',            // grouped thousands
+      'зарплата 12 000 - 15 000 грн',   // a range, two groups of five digits
+      'по пунктах: 1. 2. 3. 4. 5. 6',   // a numbered list
+      'зустріч 10.30.2026 у Львові',    // a dotted date
+      'бюджет 250 000 (без ПДВ)'
+    ]) {
+      expect(names(makeMsg({ text })), text).not.toContain('phone_number')
+    }
+  })
+
   it('flags long promotional text', () => {
     expect(names(makeMsg({ text: 'а'.repeat(250) }))).toContain('long_text')
     expect(names(makeMsg({ text: 'коротко' }))).not.toContain('long_text')
