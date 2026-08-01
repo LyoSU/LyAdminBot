@@ -189,6 +189,113 @@ describe('evaluateMessage — abstain & session', () => {
     expect(calls).toEqual(['cheap', 'strong'])
   })
 
+  it('REGRESSION: a short message nothing found anything in still gets read eventually', async () => {
+    // Production, 2026-08-01 15:26, reported by an admin: a five-word
+    // solicitation from a newcomer was never judged by anything. It carried no
+    // link, no phone, no mention and no media, so no stage had anything to say
+    // about it — and the score, which is what decides whether the LLM is worth
+    // asking, therefore sat at 0.27, below the grey floor. `short_message`
+    // (-0.8) is most of that gap: being brief was read as reassuring.
+    //
+    // It fell between the two safety nets. Under 20 informative characters the
+    // abstain gate would have buffered it for the session window; over the grey
+    // floor the LLM would have read it. At 26 characters and 0.27 it was
+    // classifiable by the gate's own reckoning and classified by nobody.
+    //
+    // A low score with no findings behind it is an absence of evidence, not
+    // evidence of absence — the same reasoning that sends an unfamiliar script
+    // to the LLM. It goes to the session buffer, which costs one call per five
+    // messages instead of one per message.
+    const appended: string[] = []
+    let classified = 0
+    const ports: PipelinePorts = {
+      session: {
+        append: async (_c, _u, t) => {
+          appended.push(t)
+          return { combinedText: appended.join('\n'), count: appended.length }
+        },
+        reset: async () => { /* noop */ }
+      },
+      llm: {
+        classify: async () => {
+          classified += 1
+          return { pSpam: 0.98, reasonCode: 'job_scam', evidence: null, cached: false }
+        }
+      }
+    }
+    // Past their first message (that one is judged on the spot — see the test
+    // below) but nowhere near established: still newish, still unreadable.
+    const solicitation = {
+      msg: { text: 'Потрібні ГРОШІ ??? Пиши допоможу !!' },
+      user: { messagesInChat: 4, messagesGlobal: 6, localAgeDays: 2, predictedAgeDays: 10 }
+    }
+
+    // Nothing is found, so nothing is done — but the message is remembered.
+    const first = await evaluateMessage(makeInput(solicitation), ports)
+    expect(classified).toBe(0)
+    expect(isEnforcementAction(first.action)).toBe(false)
+    expect(appended).toHaveLength(1)
+
+    let last = first
+    for (let i = 0; i < 4; i += 1) last = await evaluateMessage(makeInput(solicitation), ports)
+    expect(classified).toBeGreaterThan(0)
+    expect(last.decidedBy).toBe('session')
+    expect(last.pSpam).toBe(0.98)
+  })
+
+  it('REGRESSION: the drive-by never sends a second message, so one is the pile', async () => {
+    // The buffer waits for five before it is worth a classification, which is
+    // right for somebody chatting in one-liners and useless against the shape
+    // the 2026-08-01 15:26 report actually had: join, post once, gone. Waiting
+    // for a fifth message from an account that will never send a second one is
+    // waiting forever.
+    //
+    // A first message in a chat is both the likeliest to be a drive-by and the
+    // cheapest moment to check — the population is bounded by the join rate.
+    // The abstain gate keeps the five: a bare "@someone" as a first message is
+    // exactly the noise that gate exists to stop asking about.
+    let calls = 0
+    const ports: PipelinePorts = {
+      session: {
+        append: async (_c, _u, t) => ({ combinedText: t, count: 1 }),
+        reset: async () => { /* noop */ }
+      },
+      llm: {
+        classify: async () => {
+          calls += 1
+          return { pSpam: 0.97, reasonCode: 'job_scam', evidence: null, cached: false }
+        }
+      }
+    }
+    const firstEver = { messagesInChat: 1, messagesGlobal: 2, localAgeDays: 0, predictedAgeDays: 5 }
+    const v = await evaluateMessage(
+      makeInput({ msg: { text: 'Потрібні ГРОШІ ??? Пиши допоможу !!' }, user: firstEver }), ports)
+    expect(v.decidedBy).toBe('session')
+    expect(v.pSpam).toBe(0.97)
+    expect(isEnforcementAction(v.action)).toBe(true)
+
+    // The abstain gate is untouched: a bare mention still waits for the pile.
+    calls = 0
+    const bare = await evaluateMessage(
+      makeInput({ msg: { text: '@someadmin' }, user: firstEver }), ports)
+    expect(calls).toBe(0)
+    expect(bare.decidedBy).toBe('abstain')
+  })
+
+  it('a chat regular repeating himself is not fed to the session buffer', async () => {
+    // The buffer is for senders with no standing. Somebody who has been talking
+    // in the chat for a while and says something short is just talking.
+    let appended = 0
+    const v = await evaluateMessage(makeInput({ msg: { text: 'та ну, не може бути такого' } }), {
+      session: {
+        append: async () => { appended += 1; return { combinedText: '', count: 1 } },
+        reset: async () => { /* noop */ }
+      }
+    })
+    expect(appended).toBe(0)
+    expect(v.action).toBe('none')
+  })
+
   it('a judged window is spent, so the same blob is never re-rolled', async () => {
     // Production, 2026-07-30: a two-word conversational message was banned at
     // 0.98 with `decidedBy: session`, `flood`.

@@ -350,15 +350,23 @@ export const evaluateMessage = async (
 
   // ── 4. abstain gate + session window ────────────────────────────────
 
-  // A message in an unfamiliar script is never "too little to judge": whatever
-  // it says it says in full, and unlike a bare "@user" it is trivially readable
-  // — by the LLM, if by nothing else here.
-  if (foreignScript === null && shouldAbstain(input.message)) {
-    const window = ports.session
-      ? await safe('session', () => ports.session!.append(input.message.chatId, input.user.id, text))
-      : null
-
-    if (window && window.count >= SESSION_EVAL_MIN_MESSAGES && ports.llm) {
+  /**
+   * Add this message to the sender's window and, once enough have piled up,
+   * judge the pile. Returns a verdict only when the pile was actually judged.
+   *
+   * Two situations reach this, and they are the same situation: nobody could
+   * say anything about the message. The abstain gate catches the ones too
+   * short to carry meaning; the tail of the pipeline catches the ones that
+   * carried meaning nothing recognised. Either way the answer is to remember
+   * it and read five of them together, which costs one call per five messages
+   * rather than one per message.
+   */
+  const judgeAccumulated = async (minMessages: number): Promise<Verdict | null> => {
+    if (!ports.session) return null
+    const window = await safe('session', () =>
+      ports.session!.append(input.message.chatId, input.user.id, text))
+    if (!window || window.count < minMessages || !ports.llm) return null
+    {
       // The accumulated window may read as spam even when each line alone
       // is unclassifiable ("пиши мені" / "в особисті" / "заробіток" …).
       const sessionInput: EvaluationInput = {
@@ -405,6 +413,18 @@ export const evaluateMessage = async (
         )
       }
     }
+    return null
+  }
+
+  // A message in an unfamiliar script is never "too little to judge": whatever
+  // it says it says in full, and unlike a bare "@user" it is trivially readable
+  // — by the LLM, if by nothing else here.
+  if (foreignScript === null && shouldAbstain(input.message)) {
+    // The full pile, always. A bare "@someone" as a first message is precisely
+    // the noise this gate exists to stop asking the model about, so the
+    // shortcut below must not reach in here.
+    const judged = await judgeAccumulated(SESSION_EVAL_MIN_MESSAGES)
+    if (judged) return judged
 
     return finalize(
       { pSpam: 0, decidedBy: 'abstain', ruleId: null, reasonCode: 'low_information', reasonEvidence: null },
@@ -664,6 +684,37 @@ export const evaluateMessage = async (
   // a grey-zone message must never silently pass as clean.
   if (llmNeededButUnavailable && verdict.action === 'none') {
     return { ...verdict, action: 'observe' as VerdictAction, reasonCode: 'llm_unavailable_grey_zone' }
+  }
+
+  // Nothing was found, and the sender has not earned the benefit of that doubt.
+  //
+  // Reaching here with `none` and no message evidence means every stage looked
+  // and none of them recognised anything — which is not the same as the message
+  // being fine. Whether the LLM gets asked is decided by the score, and the
+  // score can only rise on things the other stages recognise, so a text they
+  // are all blind to is a text nobody ever reads. It is the argument the
+  // foreign-script clause above already makes, in the ordinary case.
+  //
+  // Production 2026-08-01 15:26, reported by an admin: a five-word solicitation
+  // from a newcomer — no link, no phone, no mention, no media — scored 0.27
+  // against a grey floor of 0.35, most of the gap being the -0.8 the scorer
+  // grants for brevity. Too long for the abstain gate to buffer it (26
+  // informative characters against a bar of 20), too quiet for the gate that
+  // opens the LLM. Classifiable by our own reckoning, and classified by nobody.
+  //
+  // The buffer is the answer rather than an immediate call: it bounds this to
+  // one classification per five messages, and a newcomer's small talk reads as
+  // small talk in a blob just as it does alone. Established regulars never
+  // arrive here — the fast path returned long before.
+  // Waiting for five is waiting forever against the shape this actually has:
+  // join, post once, gone. A sender's first words in a chat are both the
+  // likeliest to be a drive-by and the cheapest moment to check, the population
+  // being bounded by how many people join — so for those the pile is one.
+  if (verdict.action === 'none' && isNewish(input) &&
+      contentEvidence(signals).strongest === 0) {
+    const judged = await judgeAccumulated(
+      input.user.messagesInChat <= 1 ? 1 : SESSION_EVAL_MIN_MESSAGES)
+    if (judged) return judged
   }
   return verdict
 }
