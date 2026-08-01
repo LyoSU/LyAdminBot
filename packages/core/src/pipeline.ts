@@ -608,7 +608,11 @@ export const evaluateMessage = async (
       // 0.92 pSpam — above the mute threshold, with no vote (2026-07-30).
       if (match.status === 'confirmed' && isDistinctive(text) &&
           match.similarity >= VECTOR_DECIDE_SIMILARITY) {
-        return finalize(
+        signals.push({
+          name: 'vector_similar_spam',
+          evidence: `similarity ${match.similarity.toFixed(2)} (${match.status})`
+        })
+        const verdict = finalize(
           {
             pSpam: 0.92,
             decidedBy: 'vector',
@@ -618,6 +622,18 @@ export const evaluateMessage = async (
           },
           signals
         )
+        // The last stage that still crossed the sender-removal line without
+        // answering to it. `vector_similar_spam` is marked a `resemblance`
+        // precisely because a nearest neighbour says the text LOOKS LIKE
+        // something rather than that the sender did something — decisive about
+        // the message, no part of the case for removing the person. This branch
+        // then muted for twenty-four hours on the same fact, so the pipeline
+        // held two positions on one piece of evidence and which one applied
+        // depended only on whether the score happened to clear 0.93.
+        if (removesSender(verdict.action) && !mayRemoveSender(signals)) {
+          return capUnearnedRemoval(verdict)
+        }
+        return verdict
       }
       if (match.similarity >= VECTOR_SIGNAL_SIMILARITY) {
         signals.push({

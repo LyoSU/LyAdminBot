@@ -127,6 +127,7 @@ export const uk: Locale = {
       promo_in_bio: 'реклама або контакт у біо',
       personal_channel: 'канал прив’язаний до профілю',
       promo_in_linked_channel: 'канал з профілю рекламує сам себе',
+      promo_in_message_link: 'посилання веде на рекламний канал',
       restricted_for_spam: 'Telegram обмежив за спам',
       just_joined: 'щойно зайшов і одразу пише',
       scam_flag: 'Telegram позначив акаунт як шахрайський',

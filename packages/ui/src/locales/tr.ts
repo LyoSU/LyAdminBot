@@ -127,6 +127,7 @@ export const tr: Locale = {
       promo_in_bio: 'biyografide reklam veya iletişim bilgisi',
       personal_channel: 'profilde bağlı bir kanal',
       promo_in_linked_channel: 'profildeki kanalın kendisi bir reklam',
+      promo_in_message_link: 'bağlantı bir reklam kanalına gidiyor',
       restricted_for_spam: 'Telegram spam nedeniyle kısıtladı',
       just_joined: 'katılır katılmaz hemen yazdı',
       scam_flag: 'Telegram hesabı dolandırıcı olarak işaretledi',

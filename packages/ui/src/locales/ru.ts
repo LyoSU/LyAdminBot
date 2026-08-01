@@ -127,6 +127,7 @@ export const ru: Locale = {
       promo_in_bio: 'реклама или контакт в био',
       personal_channel: 'канал привязан к профилю',
       promo_in_linked_channel: 'канал из профиля рекламирует сам себя',
+      promo_in_message_link: 'ссылка ведёт на рекламный канал',
       restricted_for_spam: 'Telegram ограничил за спам',
       just_joined: 'только зашёл и сразу пишет',
       scam_flag: 'Telegram пометил аккаунт как мошеннический',

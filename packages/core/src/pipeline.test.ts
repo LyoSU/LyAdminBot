@@ -5,6 +5,7 @@ import type {
 import type { LlmTier, ModerationResult, PipelinePorts, SessionPort } from './ports.js'
 import { evaluateMessage } from './pipeline.js'
 import { isEnforcementAction, removesSender } from './policy.js'
+import { contentEvidence } from './score.js'
 
 // ── fixtures ──────────────────────────────────────────────────────────
 
@@ -725,6 +726,36 @@ describe('evaluateMessage — knowledge ports', () => {
     }
     const v = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), ports)
     expect(v.decidedBy).toBe('vector')
+  })
+
+  it('a resemblance takes the message, never the person', async () => {
+    // This branch was the last one still crossing the sender-removal line
+    // without answering to it. `vector_similar_spam` is marked a `resemblance`
+    // exactly because a nearest neighbour says the text LOOKS LIKE something,
+    // not that the sender did something — yet at 0.92 this path muted for
+    // twenty-four hours on that same fact. The pipeline held two positions on
+    // one piece of evidence, and which applied depended only on whether the
+    // similarity happened to clear 0.93.
+    const v = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
+      vectors: { search: async () => ({ similarity: 0.97, status: 'confirmed', vectorId: 'v1' }) }
+    })
+    expect(v.decidedBy).toBe('vector')
+    expect(v.action).toBe('delete')
+    expect(removesSender(v.action)).toBe(false)
+    expect(v.signals.some((s) => s.name === 'vector_similar_spam')).toBe(true)
+  })
+
+  it('the neighbour itself never counts toward removing anybody', async () => {
+    // Worth pinning separately, because the arithmetic is easy to misread. The
+    // vector stage runs before moderation, so nothing downstream can rescue
+    // this verdict — and `vector_similar_spam` is excluded from the summed
+    // evidence outright. Whatever removal happens here has to be earned by
+    // signals that were already on the table when the neighbour was found.
+    const v = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
+      vectors: { search: async () => ({ similarity: 0.97, status: 'confirmed', vectorId: 'v1' }) }
+    })
+    expect(contentEvidence(v.signals).total).toBe(0)
+    expect(contentEvidence(v.signals).strongest).toBeGreaterThan(0)
   })
 
   it('weak vector similarity only contributes a signal', async () => {

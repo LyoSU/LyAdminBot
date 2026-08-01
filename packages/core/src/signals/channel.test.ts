@@ -42,6 +42,40 @@ describe('extractLinkedChannelSignals', () => {
     ])).toHaveLength(1)
   })
 
+  it('what the message links to is a different claim from what the profile does', () => {
+    // The distinction this module exists for. A promotional bio says the ACCOUNT
+    // is a promo vehicle; a promotional destination for a link in THIS sentence
+    // is what the sentence is doing, and only the second may be evidence.
+    expect(names([channel({ source: 'message_link', description: 'Прайс — t.me/+abcdefghij' })]))
+      .toEqual(['promo_in_message_link'])
+    expect(SIGNALS['promo_in_message_link'].kind).toBe('evidence')
+    expect(SIGNALS['promo_in_linked_channel'].kind).toBe('shape')
+  })
+
+  it('a message link and a profile link are counted apart', () => {
+    // Neither may absorb the other's cap: they are two findings about two
+    // different things that happen to be resolved by the same lookup.
+    expect(names([
+      channel({ description: 't.me/+aaaaaaaaaa' }),
+      channel({ source: 'message_link', description: 'wa.me/79991234567' }),
+      channel({ source: 'message_link', description: 'ще один прайс bit.ly/xyz' })
+    ])).toEqual(['promo_in_linked_channel', 'promo_in_message_link'])
+  })
+
+  it('an ordinary destination is the reason NOT to act, and says nothing', () => {
+    // The half that motivated resolving links at all: a private invite used to
+    // be judged by its shape, so a community behind it looked like a storefront.
+    expect(names([channel({ source: 'message_link', title: 'Сусіди', description: 'Чат будинку' })]))
+      .toEqual([])
+  })
+
+  it('a message link may take the message down but never the sender alone', () => {
+    // The destination is read from a public web page, which is a page anybody
+    // can put anything on.
+    expect(hasDecisiveSignal([{ name: 'promo_in_message_link' }])).toBe(true)
+    expect(mayRemoveSender([{ name: 'promo_in_message_link' }])).toBe(false)
+  })
+
   it('what the profile advertises can never convict the message', () => {
     // The doctrine this pipeline keeps relearning: profile evidence says the
     // ACCOUNT is a promo vehicle. It is a reason to read the message, and never

@@ -283,6 +283,21 @@ export const SIGNALS = {
    */
   velocity_wave: { weight: 1.2, kind: 'evidence' },
 
+  /**
+   * A link in THIS message leads to a channel that is itself an advert.
+   *
+   * Evidence, unlike its profile-side twin `promo_in_linked_channel`, and the
+   * distinction is not a technicality: what an account keeps in its bio is a
+   * fact about the account, while what the sender chose to put in this sentence
+   * is what the sentence is doing.
+   *
+   * Below the sender-removal bar all the same. The destination is read from
+   * Telegram's public web preview, which is a page anybody can put anything on
+   * — good enough to take the message down and ask, not good enough to be the
+   * sole reason somebody loses the chat.
+   */
+  promo_in_message_link: { weight: 1.5, kind: 'evidence' },
+
   // ───────────────────── profile / identity (shape) ─────────────────────
 
   /**

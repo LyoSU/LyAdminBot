@@ -7,14 +7,15 @@ import { BotKeyboard, Chat, User, html, type Message } from '@mtcute/node'
 import {
   evaluateMessage, tallyVotes, extractBioSignals, isEnforcementAction, countsAsDetection,
   shouldAutoLearn, autoLearnSource, voteLearnStatus, conversationLineFor, nsfwProfileHit,
-  type EvaluationInput, type ForwardOrigin, type PipelinePorts,
+  classifyUrl,
+  type ChannelPreview, type EvaluationInput, type ForwardOrigin, type PipelinePorts,
   type UserSnapshot, type Verdict, type VoteBallot
 } from '@lyadmin/core'
 import {
   TelegramGateway, applyVerdict, buildUserSnapshot, buildChannelSnapshot, normalizeMessage,
   fetchUserProfile, downloadPhotoBase64, downloadAvatarBase64, downloadStoriesBase64, rawPhotoToBase64,
   fetchExternalBan, needsExternalRecheck, resolveMentionKinds, shouldScanChannelSender,
-  createChatDescriptionCache, fetchChatDescription,
+  createChatDescriptionCache, fetchChatDescription, createTmePreviewResolver,
   type IncomingMessage
 } from '@lyadmin/adapters'
 import {
@@ -110,6 +111,16 @@ const gateway = new TelegramGateway({
 // never while messages arrive constantly; see chat-profile.ts for why the
 // classifier needs it at all.
 const chatDescriptions = createChatDescriptionCache((chatId) => fetchChatDescription(gateway.tg, chatId))
+
+/**
+ * Where a t.me link leads, from Telegram's own public preview page.
+ *
+ * The only route a bot account has to the contents of a private invite —
+ * `messages.checkChatInvite` is a user-only method — and it costs no MTProto
+ * call, so it also spares the `contacts.resolveUsername` that earned a
+ * 46-minute FLOOD_WAIT in production. See tme-preview.ts.
+ */
+const resolveTmePreview = createTmePreviewResolver()
 
 const ports = buildPorts()
 
@@ -669,8 +680,14 @@ const renderMyStats = async (locale: Locale, userId: number, chatId: number | nu
     if (member.bananCount > 0) lines.push(locale.stats.bananCaught(member.bananCount))
   }
   lines.push(locale.stats.global(userDoc?.globalStats?.totalMessages ?? 0))
-  const status = userDoc?.reputation?.status ?? 'neutral'
-  lines.push(locale.stats.reputation(userDoc?.reputation?.score ?? 50, locale.stats.repStatus[status]))
+  // Shown only where a score actually exists. `reputation.*` is a v1 field that
+  // v2 writes nothing to, so `?? 50` was printing an invented number to every
+  // account this bot has judged on its own — a figure a user could read as a
+  // rating we keep, and reasonably ask us to explain.
+  const reputation = userDoc?.reputation
+  if (typeof reputation?.score === 'number') {
+    lines.push(locale.stats.reputation(reputation.score, locale.stats.repStatus[reputation.status ?? 'neutral']))
+  }
   return lines.join('\n')
 }
 
@@ -1724,6 +1741,35 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     }
   }
 
+  // Where the links in THIS message go, read from Telegram's public web
+  // preview. Deliberately NOT gated on newness, unlike the profile media above:
+  // the lookup exculpates as often as it accuses, and the case that prompted it
+  // was a member with standing pasting an invite into a conversation that had
+  // asked for one. Gating it on newness would have withheld it from exactly
+  // that person. Bounded instead by what it costs: two links, resolved in
+  // parallel, answers cached by URL for six hours.
+  const messageChannels = await timed('tmelinks', async () => {
+    const targets = normalized.urls
+      .map((u) => u.target)
+      .filter((t) => {
+        const kind = classifyUrl(t).kind
+        return kind === 'private_invite' || kind === 'telegram_internal'
+      })
+      .slice(0, 2)
+    if (targets.length === 0) return []
+    const previews = await Promise.all(targets.map((t) => resolveTmePreview(t)))
+    return previews.flatMap((p): ChannelPreview[] => p === null ? [] : [{
+      source: 'message_link' as const,
+      title: p.title,
+      description: p.description,
+      subscribers: null,
+      // The page's picture is a URL on Telegram's CDN, not bytes we hold, and
+      // fetching it would be a second request per link for a signal the profile
+      // path already covers. Text only.
+      avatarBase64: null
+    }])
+  })
+
   const input: EvaluationInput = {
     message: normalized,
     chat: {
@@ -1750,15 +1796,18 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       // What the profile points at, as far as we can see it. Shape, never
       // message evidence: it says the account is a promo vehicle, not that this
       // sentence is an advert.
-      linkedChannels: profile.linkedChannel
-        ? [{
-            source: 'personal_channel' as const,
-            title: profile.linkedChannel.title,
-            description: profile.linkedChannel.description,
-            subscribers: profile.linkedChannel.subscribers,
-            avatarBase64: linkedChannelAvatar
-          }]
-        : [],
+      linkedChannels: [
+        ...(profile.linkedChannel
+          ? [{
+              source: 'personal_channel' as const,
+              title: profile.linkedChannel.title,
+              description: profile.linkedChannel.description,
+              subscribers: profile.linkedChannel.subscribers,
+              avatarBase64: linkedChannelAvatar
+            }]
+          : []),
+        ...messageChannels
+      ],
       resolvedMentions: resolveMentionKinds(normalized.mentions),
       // Preceding chat lines — the current message is recorded after the
       // verdict so spam never pollutes its own context window.

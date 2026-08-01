@@ -460,13 +460,18 @@ export const buildUserContent = (
   // said plainly to be about the ACCOUNT: a channel is a fact about who is
   // talking, and this pipeline's recurring failure is profile evidence leaking
   // into a verdict about a sentence.
-  for (const channel of input.enrichment.linkedChannels.slice(0, 2)) {
+  for (const channel of input.enrichment.linkedChannels.slice(0, 3)) {
     const size = channel.subscribers !== null ? `, ${channel.subscribers} subscribers` : ''
     const about = channel.description ? ` — ${untrusted(channel.description, 200)}` : ''
-    parts.push(
-      `SENDER'S OWN CHANNEL (untrusted, about the ACCOUNT and not about the ` +
-      `message): ${untrusted(channel.title, 80)}${size}${about}`
-    )
+    // Where a link in THIS message goes is a different claim from what the
+    // profile advertises, and the two are labelled apart so the model is not
+    // invited to blur them. The destination cuts both ways: a storefront behind
+    // the link is what the message is doing, and an ordinary community behind
+    // it is the reason not to act on the link's shape alone.
+    const heading = channel.source === 'message_link'
+      ? `WHERE A LINK IN THIS MESSAGE LEADS (untrusted, about the MESSAGE)`
+      : `SENDER'S OWN CHANNEL (untrusted, about the ACCOUNT and not about the message)`
+    parts.push(`${heading}: ${untrusted(channel.title, 80)}${size}${about}`)
   }
 
   if (input.enrichment.conversationWindow.length > 0) {

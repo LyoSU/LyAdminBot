@@ -196,8 +196,16 @@ export interface NormalizedMessage {
  * particular sentence an advert.
  */
 export interface ChannelPreview {
-  /** How we came to look: the structured profile field, or a link in the bio. */
-  source: 'personal_channel' | 'bio_link'
+  /**
+   * How we came to look, and — the part that decides everything downstream —
+   * whether what we found is a fact about the ACCOUNT or about the MESSAGE.
+   *
+   * The first two are the account: a profile that advertises is a reason to
+   * read the message closely and never by itself a reason to act on it. The
+   * third is the message: where a link in THIS text leads is what the text is
+   * doing, so it may be evidence.
+   */
+  source: 'personal_channel' | 'bio_link' | 'message_link'
   title: string
   /** The channel's own description, when it has one. */
   description: string | null

@@ -127,6 +127,7 @@ export const en: Locale = {
       promo_in_bio: 'promo or a contact in the bio',
       personal_channel: 'a channel linked on the profile',
       promo_in_linked_channel: 'the linked channel is itself an advert',
+      promo_in_message_link: 'the link leads to an advert channel',
       restricted_for_spam: 'Telegram restricted them for spam',
       just_joined: 'joined and posted right away',
       scam_flag: 'Telegram flagged the account as a scam',
