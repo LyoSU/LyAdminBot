@@ -9,7 +9,7 @@
  */
 import type { Signal } from './types.js'
 import {
-  PRIOR_MATCH_SIGNALS, SIGNAL_GROUP_CAPS, SOFT_SHAPE_SIGNALS, weightOf
+  PRIOR_MATCH_SIGNALS, RESEMBLANCE_SIGNALS, SIGNAL_GROUP_CAPS, SOFT_SHAPE_SIGNALS, weightOf
 } from './signals/registry.js'
 
 /** z-offset so that a signal-less message scores ≈ 0.10 (ham prior). */
@@ -41,10 +41,23 @@ export const DECISIVE_MIN_WEIGHT = 1.0
  */
 export const SENDER_REMOVAL_MIN_EVIDENCE = 2.0
 
+/**
+ * The two numbers answer two different questions, and a signal may count toward
+ * one without counting toward the other.
+ */
 export interface ContentEvidence {
-  /** Heaviest single message-evidence signal. */
+  /**
+   * Heaviest single message-evidence signal — what licenses acting on the
+   * MESSAGE. A resemblance counts here: looking like known spam is ample reason
+   * to take a message down.
+   */
   strongest: number
-  /** Summed weight of all message-evidence signals (deduplicated). */
+  /**
+   * Summed FIRSTHAND message evidence — what licenses acting on the SENDER.
+   * Resemblances are left out (see `SignalSpec.resemblance`): the bar wants
+   * independent facts about the message, and a similarity is one claim of ours
+   * about the text, not a second observation of it.
+   */
   total: number
 }
 
@@ -62,6 +75,11 @@ export interface ContentEvidence {
  * Those restate an earlier verdict instead of observing this message, and
  * letting a guess corroborate itself is how the pipeline came to enforce on a
  * text nothing had read that time — see the flag's own note.
+ *
+ * Resemblances (`resemblance`) are counted for `strongest` and withheld from
+ * `total`: they are grounds to act on the message but not part of the case for
+ * removing the person. The two fields exist precisely so that one signal can
+ * license the lesser action and not the greater one.
  */
 export const contentEvidence = (signals: Signal[]): ContentEvidence => {
   let strongest = 0
@@ -76,8 +94,14 @@ export const contentEvidence = (signals: Signal[]): ContentEvidence => {
     // is the same stacking fallacy the bar exists to stop — being long and
     // having been edited is not evidence of anything.
     if (weight < DECISIVE_MIN_WEIGHT) continue
-    total += weight
     if (weight > strongest) strongest = weight
+    // A resemblance stops here: decisive about the message, no part of the case
+    // for removing the person. Production 2026-08-01 — an appeal for help
+    // carrying a phone number was banned for thirty days on 1.2 + 1.0, a sum
+    // that met the bar exactly and so kept the text away from the only stage
+    // that could have read it.
+    if (RESEMBLANCE_SIGNALS.has(name)) continue
+    total += weight
   }
   return { strongest, total }
 }

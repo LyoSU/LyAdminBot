@@ -27,7 +27,8 @@ import {
 } from './score.js'
 import {
   SIGNALS, SIGNAL_NAMES, SIGNAL_GROUPS, SIGNAL_GROUP_CAPS, SIGNAL_WEIGHTS,
-  SOFT_SHAPE_SIGNALS, PRIOR_MATCH_SIGNALS, PROMO_SIGNALS, HIGH_RISK_SIGNALS, PERMANENT_BAN_SIGNALS,
+  SOFT_SHAPE_SIGNALS, PRIOR_MATCH_SIGNALS, RESEMBLANCE_SIGNALS,
+  PROMO_SIGNALS, HIGH_RISK_SIGNALS, PERMANENT_BAN_SIGNALS,
   OVERRIDES_CHAT_TRUST_SIGNALS, isTrustSignal, weightOf, type SignalName
 } from './signals/registry.js'
 
@@ -194,6 +195,26 @@ describe('signal catalogue', () => {
       expect(hasDecisiveSignal([{ name }]), name).toBe(false)
       expect(hasDecisiveSignal([...shape, { name }]), `${name} + shape`).toBe(false)
     }
+  })
+
+  it('a resemblance clears the lower bar and can never clear the higher one', () => {
+    // The whole point of the flag is that it sits BETWEEN the other two roles:
+    // unlike a soft-shape signal it may condemn the message, unlike a priorMatch
+    // it keeps that power — and unlike either of them it must never help remove
+    // a person, however heavy it grows. The two flags are mutually exclusive:
+    // a signal is either not evidence about the message at all, or it is
+    // evidence that stops short of the sender.
+    expect(RESEMBLANCE_SIGNALS.size).toBeGreaterThan(0)
+    for (const name of RESEMBLANCE_SIGNALS) {
+      expect(SIGNALS[name].kind, `${name} is a resemblance`).toBe('evidence')
+      expect(PRIOR_MATCH_SIGNALS.has(name), `${name} is both flags at once`).toBe(false)
+      expect(hasDecisiveSignal([{ name }]), `${name} lost the lower bar`).toBe(true)
+      expect(mayRemoveSender([{ name }]), `${name} removed the sender alone`).toBe(false)
+    }
+    // Nor by piling them up, nor by topping up one real observation.
+    const all = [...RESEMBLANCE_SIGNALS].map((name) => ({ name }))
+    expect(mayRemoveSender(all)).toBe(false)
+    expect(mayRemoveSender([...all, { name: 'phone_number' as SignalName }])).toBe(false)
   })
 
   it('trust signals never count as decisive evidence', () => {

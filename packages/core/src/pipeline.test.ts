@@ -4,7 +4,7 @@ import type {
 } from './types.js'
 import type { LlmTier, ModerationResult, PipelinePorts } from './ports.js'
 import { evaluateMessage } from './pipeline.js'
-import { isEnforcementAction } from './policy.js'
+import { isEnforcementAction, removesSender } from './policy.js'
 
 // ── fixtures ──────────────────────────────────────────────────────────
 
@@ -807,7 +807,13 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
     expect(v.needsVote).toBe(true)
     expect(v.reasonCode).toBe('content_unconfirmed')
     expect(v.meta['cappedFrom']).toBe('kick')
-    expect(v.meta['contentEvidence']).toBe(1)
+    // Zero, though a 1.0 signal was raised: the logged figure is the evidence
+    // that would license removing the SENDER, and a resemblance is not part of
+    // it (2026-08-01). The signal list beside it in the log still shows the
+    // neighbour and its weight; this number answers whether the removal was
+    // earned, and here it was not — which is why the verdict is capped.
+    expect(v.meta['contentEvidence']).toBe(0)
+    expect(v.signals.map((s) => s.name)).toContain('vector_similar_spam')
   })
 
   it('the sender is asked to prove they are human instead of being removed', async () => {
@@ -868,6 +874,43 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
     })
     expect(calls).toEqual(['cheap'])
     expect(v.action).toBe('none')
+  })
+
+  it('REGRESSION: a resemblance plus one fact is not two facts', async () => {
+    // Production, 2026-08-01 13:22: an appeal for help carrying a phone number
+    // was BANNED for thirty days by the scoring path, `decidedBy: score`, with
+    // no `llm_cheap` in the port timings — nothing read it. phone_number 1.2 +
+    // vector_similar_spam 1.0 met the sender-removal bar exactly, which is what
+    // `unearnedEnforcement` tests, so the LLM gate never opened. The same sum
+    // muted a job ad in a jobs chat two hours earlier.
+    const appeal = {
+      msg: {
+        text: 'Люди, прошу максимальної уваги! Звертаюсь із проханням про допомогу — ' +
+          'якщо маєте можливість, допоможіть фінансово або поширте оголошення далі. ' +
+          'Телефон для зв\'язку +380671234567'
+      },
+      user: newcomer
+    }
+    const nearNeighbour: PipelinePorts = {
+      vectors: { search: async () => ({ vectorId: 'v9', similarity: 0.88, status: 'candidate' }) }
+    }
+
+    const calls: LlmTier[] = []
+    const asked = await evaluateMessage(makeInput(appeal), {
+      ...nearNeighbour,
+      llm: {
+        classify: async (_i, tier) => {
+          calls.push(tier)
+          return { pSpam: 0.05, reasonCode: 'legit_share', evidence: null, cached: false }
+        }
+      }
+    })
+    expect(calls).toEqual(['cheap'])
+    expect(asked.action).toBe('none')
+
+    // With no LLM to ask: the message may still go, the person may not.
+    const blind = await evaluateMessage(makeInput(appeal), nearNeighbour)
+    expect(removesSender(blind.action)).toBe(false)
   })
 
   it('an ordinary delete quizzes nobody — the gate belongs to the capped band', async () => {

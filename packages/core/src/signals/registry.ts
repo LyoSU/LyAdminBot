@@ -113,9 +113,29 @@ export interface SignalSpec {
    *
    * Distinct from the vector neighbour, which stays evidence: that store is
    * fed by confirmed community votes as well as by us, so a hit in it is not
-   * purely a memory of our own guess.
+   * purely a memory of our own guess. See `resemblance` for the lesser
+   * restriction that one carries.
    */
   priorMatch?: true
+  /**
+   * The signal says the message LOOKS LIKE something rather than that it
+   * CONTAINS something.
+   *
+   * A resemblance is real evidence — enough to take the message down and every
+   * reason to look closer — so unlike `priorMatch` it stays decisive on the
+   * lower bar. What it may not do is help clear the higher one: removing the
+   * person needs independent facts about the message, and however many things
+   * a text resembles, that is one kind of claim, made by us, about similarity.
+   *
+   * Production 2026-08-01 13:22: an appeal for help carrying a phone number was
+   * banned for thirty days by the scoring path. `phone_number` (1.2) plus a
+   * neighbour (1.0) came to exactly the 2.0 bar, so the enforcement counted as
+   * earned and the gate that would have sent the text to the one stage able to
+   * read it never opened. The same sum muted a job ad in a jobs chat two hours
+   * earlier. The neighbour fires from 0.85 cosine, on a neighbour that may
+   * itself be unconfirmed — a threshold chosen to raise a flag, not to convict.
+   */
+  resemblance?: true
 }
 
 /**
@@ -238,7 +258,7 @@ export const SIGNALS = {
   /** Self-learned signature matched, but not human-confirmed yet. */
   signature_candidate_match: { weight: 1.2, kind: 'evidence', priorMatch: true },
   /** Semantically near known spam (raised only above VECTOR_SIGNAL_SIMILARITY). */
-  vector_similar_spam: { weight: 1.0, kind: 'evidence' },
+  vector_similar_spam: { weight: 1.0, kind: 'evidence', resemblance: true },
   /** The message mentions a bot — promo-relevant, weak on its own. */
   bot_mention: { weight: 0.5, kind: 'evidence' },
 
@@ -366,6 +386,13 @@ export const SOFT_SHAPE_SIGNALS = namesWhere((s) => s.kind === 'shape')
  * on a message no stage has read.
  */
 export const PRIOR_MATCH_SIGNALS = namesWhere((s) => s.priorMatch === true)
+
+/**
+ * Signals asserting that the message looks like something, not that it contains
+ * something — see `SignalSpec.resemblance`. They may condemn the message; they
+ * never help make up the evidence for removing the person who sent it.
+ */
+export const RESEMBLANCE_SIGNALS = namesWhere((s) => s.resemblance === true)
 
 /** True for a signal that lowers the score — derived, never re-declared. */
 export const isTrustSignal = (name: string): boolean =>

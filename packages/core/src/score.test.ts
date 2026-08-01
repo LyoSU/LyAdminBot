@@ -234,9 +234,10 @@ describe('content evidence (2026-07-30 FP)', () => {
     // for somebody having read the text.
     expect(scoreSignals(echo).pSpam).toBeGreaterThan(scoreSignals([]).pSpam)
 
-    // The vector neighbour is NOT in the same class and keeps its rung: that
-    // store is fed by confirmed community votes too, so a hit in it is not
-    // purely a memory of our own guess.
+    // The vector neighbour is NOT in the same class and keeps its rung on the
+    // lower bar: that store is fed by confirmed community votes too, so a hit in
+    // it is not purely a memory of our own guess. What it may not do is help
+    // remove a person — see the resemblance test below.
     expect(hasDecisiveSignal([{ name: 'vector_similar_spam' }])).toBe(true)
   })
 
@@ -246,6 +247,33 @@ describe('content evidence (2026-07-30 FP)', () => {
     expect(mayRemoveSender([
       { name: 'signature_candidate_match' }, { name: 'vector_similar_spam' }
     ])).toBe(false)
+  })
+
+  it('REGRESSION: a resemblance may convict the message but never the person', () => {
+    // Production, 2026-08-01 13:22. An appeal for help carrying a phone number
+    // drew a 30-day ban decided by arithmetic alone, with no stage having read
+    // it: phone_number 1.2 + vector_similar_spam 1.0 came to exactly the 2.0
+    // bar, so the enforcement counted as earned and the LLM gate stayed shut.
+    // Twice more the same hour, on a job ad and on a fundraising post.
+    //
+    // A neighbour is not a second fact about the message. It fires at 0.85
+    // cosine, the neighbour may itself be unconfirmed, and what it asserts is
+    // that the text RESEMBLES something — not that it CONTAINS something. Good
+    // grounds to take the message down and to look closer; not grounds to take
+    // the chat away from whoever posted it.
+    const appeal: Signal[] = [{ name: 'phone_number' }, { name: 'vector_similar_spam' }]
+    expect(hasDecisiveSignal(appeal)).toBe(true)
+    expect(mayRemoveSender(appeal)).toBe(false)
+    expect(contentEvidence(appeal).total).toBe(SIGNAL_WEIGHTS['phone_number'])
+
+    // Two neighbours are still one kind of claim, however many of them agree.
+    expect(mayRemoveSender([
+      { name: 'vector_similar_spam' }, { name: 'signature_candidate_match' },
+      { name: 'moderation_flagged' }
+    ])).toBe(false)
+
+    // And two real observations remove the sender exactly as before.
+    expect(mayRemoveSender([{ name: 'phone_number' }, { name: 'moderation_flagged' }])).toBe(true)
   })
 
   it('one real content signal licenses enforcement on the message', () => {
