@@ -333,6 +333,42 @@ describe('evaluateMessage — abstain & session', () => {
     expect(last.decidedBy).toBe('session')
   })
 
+  it('REGRESSION: a message with no text puts nothing in the buffer', async () => {
+    // Photos, stickers and voice notes carry no text. Buffering them appended
+    // empty strings, and five of those filled the window — so the pipeline
+    // asked the model to classify "\n\n\n\n" and enforced on the answer. That
+    // is verdict roulette on nothing, the exact failure the abstain gate exists
+    // to prevent, reintroduced one level down (2026-08-01, same day as the
+    // buffer itself).
+    const buffer: string[] = []
+    let judged: string | null = null
+    const ports: PipelinePorts = {
+      session: {
+        append: async (_c, _u, t) => {
+          buffer.push(t)
+          return { combinedText: buffer.join('\n'), count: buffer.length }
+        },
+        reset: async () => { buffer.length = 0 }
+      },
+      llm: {
+        classify: async (i) => {
+          judged = i.message.text
+          return { pSpam: 0.9, reasonCode: 'other_spam', evidence: null, cached: false }
+        }
+      }
+    }
+    const photo = {
+      msg: { text: '', attachments: [{ kind: 'photo' as const, fileUniqueId: 'x' }] },
+      user: { predictedAgeDays: 900, localAgeDays: 30, messagesInChat: 5, messagesGlobal: 20 }
+    }
+
+    let last = await evaluateMessage(makeInput(photo), ports)
+    for (let i = 0; i < 5; i += 1) last = await evaluateMessage(makeInput(photo), ports)
+    expect(buffer).toEqual([])
+    expect(judged).toBeNull()
+    expect(isEnforcementAction(last.action)).toBe(false)
+  })
+
   it('standing decides who is buffered, and talking is how it is earned', async () => {
     // Who the buffer is for is the same question as who the exempt is for, so
     // it gets the same answer rather than a second one. An established regular

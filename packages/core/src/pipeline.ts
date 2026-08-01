@@ -402,10 +402,18 @@ export const evaluateMessage = async (
    * rather than one per message.
    */
   const judgeAccumulated = async (minMessages: number): Promise<Verdict | null> => {
-    if (!ports.session) return null
+    // A message with no text has nothing to accumulate. Without this, photos,
+    // stickers and voice notes appended empty strings until five of them filled
+    // the window, and the model was then asked to classify "\n\n\n\n" and acted
+    // on the answer — verdict roulette on nothing, which is what the abstain
+    // gate exists to prevent, reintroduced one level down (2026-08-01).
+    if (!ports.session || text.trim().length === 0) return null
     const window = await safe('session', () =>
       ports.session!.append(input.message.chatId, input.user.id, text))
     if (!window || window.count < minMessages || !ports.llm) return null
+    // Defence in depth: a window can still be blank if a port implementation
+    // stored something we would not have sent.
+    if (window.combinedText.trim().length === 0) return null
     {
       // The accumulated window may read as spam even when each line alone
       // is unclassifiable ("пиши мені" / "в особисті" / "заробіток" …).
