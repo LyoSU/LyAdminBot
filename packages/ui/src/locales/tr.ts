@@ -172,6 +172,8 @@ export const tr: Locale = {
       invisible_in_name: 'adda görünmez karakterler',
       signature_candidate_match: 'bilinen spama benziyor',
       vector_similar_spam: 'anlamca spama yakın',
+      velocity_repeats: 'aynı metin tekrar tekrar gönderildi',
+      velocity_wave: 'aynı metin birkaç hesaptan',
       bot_mention: 'bot bahsi'
     },
     messageTitle: 'Mesaj:',

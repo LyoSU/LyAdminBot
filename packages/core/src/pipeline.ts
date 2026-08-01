@@ -563,9 +563,24 @@ export const evaluateMessage = async (
   if (ports.velocity) {
     const velocity = await safe('velocity', () => ports.velocity!.check(input))
     if (velocity?.exceeded) {
-      return finalize(
+      // What was observed, recorded as a signal rather than only as a score.
+      // Repetition IS firsthand message evidence — we watched the copies arrive
+      // — so it belongs in `contentEvidence`, and putting it there is what lets
+      // the sender-removal bar below be the same bar every other stage answers
+      // to instead of a special case.
+      // Spelled out twice rather than computed: a registry test greps the
+      // sources for `name: '...'` to prove no catalogued weight is unreachable,
+      // and a variable is invisible to it.
+      const solo = velocity.singleAuthor === true
+      const evidence = velocity.evidence
+      if (solo) {
+        signals.push(evidence ? { name: 'velocity_repeats', evidence } : { name: 'velocity_repeats' })
+      } else {
+        signals.push(evidence ? { name: 'velocity_wave', evidence } : { name: 'velocity_wave' })
+      }
+      const verdict = finalize(
         {
-          pSpam: velocity.singleAuthor === true ? VELOCITY_PSPAM : VELOCITY_WAVE_PSPAM,
+          pSpam: solo ? VELOCITY_PSPAM : VELOCITY_WAVE_PSPAM,
           decidedBy: 'velocity',
           ruleId: 'velocity_exceeded',
           reasonCode: 'velocity_exceeded',
@@ -573,6 +588,14 @@ export const evaluateMessage = async (
         },
         signals
       )
+      // 0.9 is a mute, and until 2026-08-01 the production port never reported
+      // `singleAuthor`, so this branch had never run. Switching it on without
+      // the bar would add a fresh way to remove somebody on a text no stage
+      // read — the defect `private_invite_new` was held to hours earlier.
+      if (removesSender(verdict.action) && !mayRemoveSender(signals)) {
+        return capUnearnedRemoval(verdict)
+      }
+      return verdict
     }
   }
 

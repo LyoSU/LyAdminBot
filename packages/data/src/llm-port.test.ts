@@ -48,6 +48,24 @@ const asText = (c: ReturnType<typeof buildUserContent>): string =>
 
 // ── tests ─────────────────────────────────────────────────────────────
 
+describe('buildUserContent — reputation', () => {
+  it('says nothing when there is nothing to say', () => {
+    // `reputation.*` comes from the v1 store and v2 writes nothing to it, so for
+    // every account this pipeline judged itself the field holds its default.
+    // Rendered, `reputation neutral` does not read to a model as "no data" — it
+    // reads as a clean bill of health this system never issued.
+    const text = asText(buildUserContent(makeInput({ user: { reputationStatus: 'neutral' } }), 'c'))
+    expect(text).not.toContain('reputation')
+  })
+
+  it('says it when the store actually holds a judgement', () => {
+    for (const status of ['trusted', 'suspicious', 'restricted'] as const) {
+      const text = asText(buildUserContent(makeInput({ user: { reputationStatus: status } }), 'c'))
+      expect(text, status).toContain(`reputation ${status}`)
+    }
+  })
+})
+
 describe('buildUserContent — author labels', () => {
   it('labels the sender [SENDER] and other members [user A]/[user B] stably', () => {
     const text = asText(buildUserContent(makeInput({

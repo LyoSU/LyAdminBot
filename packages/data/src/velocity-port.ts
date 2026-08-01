@@ -5,6 +5,7 @@
  */
 import type { EvaluationInput, VelocityPort, VelocityResult } from '@lyadmin/core'
 import { normalizeHeavy, sha256 } from './hashing.js'
+import { VELOCITY_WINDOW_MS } from './persistent-ports.js'
 
 interface WindowEntry {
   chatIds: Set<number>
@@ -14,18 +15,22 @@ interface WindowEntry {
 }
 
 export interface VelocityOptions {
+  /** Only the in-memory port honours this; the Mongo one uses a TTL index. */
   windowMs?: number
   /** Same text in this many chats inside the window → exceeded. */
   chatThreshold?: number
   /** Same text this many times total inside the window → exceeded. */
   countThreshold?: number
+  /** Same text this many times from ONE account → exceeded. See below. */
+  soloThreshold?: number
   maxTrackedTexts?: number
 }
 
 const DEFAULTS: Required<VelocityOptions> = {
-  windowMs: 10 * 60 * 1000,
+  windowMs: VELOCITY_WINDOW_MS,
   chatThreshold: 3,
   countThreshold: 5,
+  soloThreshold: 3,
   maxTrackedTexts: 10_000
 }
 
@@ -61,20 +66,23 @@ export class MemoryVelocityPort implements VelocityPort {
     entry.userIds.add(input.user.id)
     entry.count += 1
 
+    // `userIds` was tracked and then thrown away (2026-07-30 review). It is the
+    // difference between the two things this window sees: ONE account repeating
+    // itself is the sender's own behaviour, observed directly — while several
+    // accounts carrying the same line may be a multi-account campaign OR a text
+    // that simply went viral (a news line, a meme, an announcement people
+    // copy-paste). Both stay detected; only the first is certain enough to act
+    // on without asking anybody, and only the first gets the lower bar.
+    const singleAuthor = entry.userIds.size === 1
     const exceeded =
       entry.chatIds.size >= this.options.chatThreshold ||
-      entry.count >= this.options.countThreshold
+      entry.count >= (singleAuthor
+        ? Math.min(this.options.soloThreshold, this.options.countThreshold)
+        : this.options.countThreshold)
     if (!exceeded) return { exceeded: false }
     return {
       exceeded: true,
-      // `userIds` was tracked and then thrown away (2026-07-30 review). It is
-      // the difference between the two things this window sees: ONE account
-      // repeating itself across chats is a blast — nothing legitimate looks
-      // like that — while several accounts carrying the same line may be a
-      // multi-account campaign OR a text that simply went viral (a news line, a
-      // meme, an announcement people copy-paste). Both stay detected; only the
-      // first is certain enough to act on without asking anybody.
-      singleAuthor: entry.userIds.size === 1,
+      singleAuthor,
       evidence: `${entry.count} copies in ${entry.chatIds.size} chats from ${entry.userIds.size} accounts within window`
     }
   }

@@ -8,6 +8,7 @@
 import { MongoClient, ObjectId, type Collection, type Db, type Document } from 'mongodb'
 import type { Verdict, Signal } from '@lyadmin/core'
 import { normalizeExtra, type NormalizedExtra } from './extras.js'
+import { VELOCITY_WINDOW_MS, SESSION_WINDOW_MS } from './persistent-ports.js'
 import {
   addWelcomeItem, removeAt, type AddReason,
   MAX_WELCOME_TEXTS, MAX_WELCOME_GIFS, MAX_WELCOME_TEXT_LEN
@@ -104,10 +105,12 @@ export class MongoStore {
     // Scheduled deletions: single deleteAt index doubles as the due-query
     // index and a 1h TTL backstop (3600s after deleteAt) if a sweep is missed.
     await this.ensureTtlIndex(this.scheduledDeletions, { deleteAt: 1 }, 3600)
-    // Velocity/session windows expire to bound growth and define the window:
-    // 10 min for the flood window, 30 min for the abstain session.
-    await this.ensureTtlIndex(this.velocityEvents, { firstSeenAt: 1 }, 600)
-    await this.ensureTtlIndex(this.sessionWindows, { startedAt: 1 }, 1800)
+    // These TTLs ARE the windows — the aggregate is the surviving document, and
+    // no query bounds it. Read from the port constants so the number cannot
+    // drift from the thresholds that were calibrated against it; the ports used
+    // to carry a `windowMs` of their own that this method silently overruled.
+    await this.ensureTtlIndex(this.velocityEvents, { firstSeenAt: 1 }, VELOCITY_WINDOW_MS / 1000)
+    await this.ensureTtlIndex(this.sessionWindows, { startedAt: 1 }, SESSION_WINDOW_MS / 1000)
     // `spamsignatures` is a v1 collection and v1 owns the exactHash/normalizedHash
     // indexes. The folded layer added in 2026-07-31 needs its own, or the `$or`
     // in `MongoSignaturePort.match` loses index coverage for that branch and
@@ -776,10 +779,20 @@ export class MongoStore {
     messageId: number
     userId: number
     adminId: number
+    /**
+     * Who overturned the verdict. Both are corrections worth calibrating
+     * against, and they are recorded side by side so replay can weigh them
+     * differently — but only one of them may reach into the shared signature
+     * table (see below). Defaults to `admin` for callers written before a
+     * community vote could get here.
+     */
+    source?: 'admin' | 'community_vote'
     verdict: Pick<Verdict, 'decidedBy' | 'ruleId' | 'reasonCode' | 'pSpam' | 'action' | 'signals' | 'meta'>
   }): Promise<void> {
+    const source = params.source ?? 'admin'
     await this.feedback.insertOne({
       kind: 'override_not_spam',
+      source,
       chatId: params.chatId,
       messageId: params.messageId,
       userId: params.userId,
@@ -798,8 +811,14 @@ export class MongoStore {
       createdAt: new Date()
     })
 
-    // Deactivate the matched signature so it never fires again.
-    if (params.verdict.decidedBy === 'signature' && params.verdict.ruleId) {
+    // Deactivate the matched signature so it never fires again — an admin
+    // decision only. A signature fires in every chat for the next ninety days,
+    // so retiring one is a network-wide act, and a chat's own ballot is not
+    // authority over the network: a crew posting spam in a group they control
+    // could otherwise vote their own text clean and take the rule down
+    // everywhere. Community ham is recorded above and calibrated offline, which
+    // is the honest weight for it.
+    if (source === 'admin' && params.verdict.decidedBy === 'signature' && params.verdict.ruleId) {
       await this.spamSignatures.updateOne(
         { _id: asObjectIdMaybe(params.verdict.ruleId) ?? params.verdict.ruleId as never },
         { $set: { status: 'candidate', disabledAt: new Date(), disabledBy: 'admin_override' } }

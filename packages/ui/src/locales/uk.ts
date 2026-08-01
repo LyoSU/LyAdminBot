@@ -172,6 +172,8 @@ export const uk: Locale = {
       invisible_in_name: 'невидимі символи в імені',
       signature_candidate_match: 'схоже на відомий спам',
       vector_similar_spam: 'семантично близьке до спаму',
+      velocity_repeats: 'той самий текст повторюється',
+      velocity_wave: 'той самий текст із кількох акаунтів',
       bot_mention: 'згадка бота'
     },
     messageTitle: 'Повідомлення:',

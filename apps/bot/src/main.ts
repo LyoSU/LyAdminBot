@@ -548,6 +548,69 @@ const enforceVoteSpam = async (vote: {
   }
 }
 
+/**
+ * Undo everything a verdict cost somebody, and write down that we were wrong.
+ *
+ * Both ways of saying "not spam" run this. They used to diverge: the admin
+ * button gave the standing back, filed the feedback record replay calibrates
+ * against and cleared the forward origin, while a chat voting ham only lifted
+ * the mute. So a community ham verdict — the one form of correction that
+ * arrives without anybody having to be an admin — cost its victim their
+ * standing permanently and taught the corpus nothing. Whether a correction is
+ * recorded should not depend on which button carried it.
+ *
+ * Trust is deliberately NOT here: vouching for somebody in a chat is an
+ * authority the community vote only has when an admin voted in it, and its
+ * caller decides that.
+ */
+const restoreFalsePositive = async (params: {
+  chatId: number
+  messageId: number
+  userId: number
+  /** Who said so — an admin's id, or the voter who closed a community vote. */
+  byUserId: number
+  source: 'admin' | 'community_vote'
+}): Promise<void> => {
+  const verdict = await recallVerdict(params.chatId, params.messageId)
+  await store.recordOverride({
+    chatId: params.chatId,
+    messageId: params.messageId,
+    userId: params.userId,
+    adminId: params.byUserId,
+    source: params.source,
+    // A label with no recallable verdict keeps no evidence — the decision
+    // record expired or the bot restarted. Recorded anyway (somebody did say
+    // "not spam"), but it cannot take part in calibration replay.
+    verdict: verdict ?? {
+      decidedBy: 'error', ruleId: null, reasonCode: 'unknown',
+      pSpam: 0, action: 'none', signals: [], meta: {}
+    }
+  }).catch(() => { /* keep going — lifting the punishment matters more */ })
+  // Lift restrictions (empty restrictions object = unrestrict).
+  await gateway.tg.restrictChatMember({ chatId: params.chatId, userId: params.userId, restrictions: {} })
+    .catch(() => { /* may not have been muted */ })
+  await gateway.tg.unbanChatMember({ chatId: params.chatId, participantId: params.userId })
+    .catch(() => { /* may not have been banned */ })
+  // Give the standing back. Enforcing debited it, and the debit withholds the
+  // benefit of the doubt — leaving it in place after a correction would let one
+  // false positive make the next one against the same person more likely.
+  //
+  // The detection goes back unconditionally, not only when the original verdict
+  // had earned one. A deliberate asymmetry: this is the strongest
+  // counter-evidence the system ever receives, the counter has a floor at zero,
+  // and two detections strip an account of every benefit of the doubt at once.
+  await store.adjustSpamMessages(params.chatId, params.userId, -1, true)
+    .catch(() => { /* counters are best-effort */ })
+  // A forwarded FP also earns its origin a clean point (v1 2:1 math).
+  const key = `${params.chatId}:${params.messageId}`
+  const forward = recentForwards.get(key)
+  if (forward) {
+    await forwardPort.reportClean(forward).catch(() => { /* best-effort */ })
+    recentForwards.delete(key)
+  }
+  recentVerdicts.delete(key)
+}
+
 /** Settings panel always renders from a fresh group document. */
 const renderSettingsPanel = async (locale: Locale, chatId: number): Promise<ViewMessage> => {
   const groupDoc = await store.getGroupDoc(chatId).catch(() => null)
@@ -2196,13 +2259,14 @@ const wireCallbacks = (): void => {
           tally: { spam: tally.spam, ham: tally.ham }
         }, 'community_vote')
       } else {
-        // Ham: lift whatever the pipeline applied. Admin ham ballot carries
-        // override authority → the user also becomes trusted in this chat.
+        // Ham: the same restitution an admin's override performs, because it is
+        // the same finding. Admin ham ballot additionally carries override
+        // authority → the user also becomes trusted in this chat.
         const targetUserId = Number(vote['targetUserId'] ?? 0)
-        await gateway.tg.restrictChatMember({ chatId, userId: targetUserId, restrictions: {} })
-          .catch(() => { /* was not muted */ })
-        await gateway.tg.unbanChatMember({ chatId, participantId: targetUserId })
-          .catch(() => { /* was not banned */ })
+        await restoreFalsePositive({
+          chatId, messageId, userId: targetUserId,
+          byUserId: query.user.id, source: 'community_vote'
+        })
         const ballots = (vote['ballots'] ?? []) as VoteBallot[]
         if (ballots.some((b) => b.isAdmin && b.choice === 'ham')) {
           await store.addTrustedUser(chatId, targetUserId).catch(() => { /* best-effort */ })
@@ -2250,47 +2314,16 @@ const wireCallbacks = (): void => {
         return
       }
       const verdict = await recallVerdict(chatId, Number(messageIdRaw))
-      await store.recordOverride({
+      await restoreFalsePositive({
         chatId,
         messageId: Number(messageIdRaw),
         userId: Number(userIdRaw),
-        adminId: query.user.id,
-        // A label with no recallable verdict keeps no evidence — the decision
-        // record expired or the bot restarted. Recorded anyway (an admin did say
-        // "not spam"), but it cannot take part in calibration replay.
-        verdict: verdict ?? {
-          decidedBy: 'error', ruleId: null, reasonCode: 'unknown',
-          pSpam: 0, action: 'none', signals: [], meta: {}
-        }
-      }).catch(() => { /* keep going — unban matters more */ })
-      // Lift restrictions (empty restrictions object = unrestrict).
-      await gateway.tg.restrictChatMember({
-        chatId, userId: Number(userIdRaw), restrictions: {}
-      }).catch(() => { /* may not have been muted */ })
-      await gateway.tg.unbanChatMember({ chatId, participantId: Number(userIdRaw) })
-        .catch(() => { /* may not have been banned */ })
+        byUserId: query.user.id,
+        source: 'admin'
+      })
       // The admin vouched — auto-trust this user in this chat from now on.
       await store.addTrustedUser(chatId, Number(userIdRaw))
         .catch(() => { /* trust write is best-effort */ })
-      // Give the message its standing back. Enforcing debited it; the debit
-      // withholds the benefit of the doubt, so leaving it in place after an
-      // admin says "not spam" would let one false positive make the next one
-      // against the same person more likely.
-      // The detection is given back unconditionally, not only when the original
-      // verdict had earned one. It is a deliberate asymmetry: an admin saying
-      // "not spam" is the strongest counter-evidence this system ever receives,
-      // the counter has a floor at zero, and two detections strip an account of
-      // every benefit of the doubt at once. Erring toward clearing it is the
-      // side to err on.
-      await store.adjustSpamMessages(chatId, Number(userIdRaw), -1, true)
-        .catch(() => { /* counters are best-effort */ })
-      // A forwarded FP also earns its origin a clean point (v1 2:1 math).
-      const forward = recentForwards.get(`${chatIdRaw}:${messageIdRaw}`)
-      if (forward) {
-        await forwardPort.reportClean(forward).catch(() => { /* best-effort */ })
-        recentForwards.delete(`${chatIdRaw}:${messageIdRaw}`)
-      }
-      recentVerdicts.delete(`${chatIdRaw}:${messageIdRaw}`)
       log.info('override', {
         chatId, userId: Number(userIdRaw), messageId: Number(messageIdRaw), by: query.user.id,
         wasDecidedBy: verdict?.decidedBy, wasReason: verdict?.reasonCode

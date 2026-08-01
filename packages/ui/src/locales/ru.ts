@@ -172,6 +172,8 @@ export const ru: Locale = {
       invisible_in_name: 'невидимые символы в имени',
       signature_candidate_match: 'похоже на известный спам',
       vector_similar_spam: 'семантически близко к спаму',
+      velocity_repeats: 'тот же текст повторяется',
+      velocity_wave: 'тот же текст с нескольких аккаунтов',
       bot_mention: 'упоминание бота'
     },
     messageTitle: 'Сообщение:',

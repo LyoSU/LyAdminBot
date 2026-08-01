@@ -682,16 +682,28 @@ describe('evaluateMessage — knowledge ports', () => {
     expect(['delete', 'mute', 'ban']).toContain(v.action)
   })
 
-  it('one account blasting is acted on alone; several accounts get a vote', async () => {
+  it('one account blasting scores higher; several accounts get a vote', async () => {
     // A blast has no innocent explanation. The same line from several accounts
     // is either a multi-account campaign or something that went viral, and the
     // pipeline must not silently mute the third person to repeat a news line
     // (2026-07-30 review — `userIds` was computed and then ignored).
+    //
+    // The blast still does not silently remove anybody. That expectation was
+    // written on 2026-07-30 against a window of ten minutes, and it was never
+    // once exercised in production: the Mongo port — the only one the bot runs
+    // — never reported `singleAuthor` at all, so every velocity hit for a year
+    // took the wave branch. Switching the branch on came with a window widened
+    // to six hours to match the cadence spam actually arrives at, and over six
+    // hours "no innocent explanation" stops being true. So the score is the
+    // high one, the message goes, the sender is asked for a captcha a bot
+    // cannot pass — and the removal itself waits for evidence that reads the
+    // text, exactly as every other stage's does.
     const blast = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
       velocity: { check: async () => ({ exceeded: true, singleAuthor: true }) }
     })
     expect(blast.pSpam).toBeGreaterThan(0.88)
-    expect(blast.needsVote).toBe(false)
+    expect(blast.action).toBe('delete')
+    expect(blast.requireCaptcha).toBe(true)
 
     const wave = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
       velocity: { check: async () => ({ exceeded: true, singleAuthor: false }) }

@@ -444,7 +444,13 @@ export const buildUserContent = (
 
   const age = user.predictedAgeDays !== null ? `~${Math.round(user.predictedAgeDays)}d old account` : 'account age unknown'
   const joined = user.joinedAgoSeconds !== null ? `, joined this chat ${formatAgo(user.joinedAgoSeconds)}` : ''
-  parts.push(`SENDER: ${age}${joined}, ${user.messagesInChat} msgs in this chat, ${user.messagesGlobal} msgs globally, reputation ${user.reputationStatus}`)
+  // Reputation is only ever mentioned when it says something. The field comes
+  // from the v1 store and v2 writes nothing to it, so for every account this
+  // pipeline has judged itself it holds the default — and `reputation neutral`
+  // in a prompt does not read as "we have no data", it reads as a clean bill of
+  // health this system never issued. Absence is said by silence.
+  const reputation = user.reputationStatus === 'neutral' ? '' : `, reputation ${user.reputationStatus}`
+  parts.push(`SENDER: ${age}${joined}, ${user.messagesInChat} msgs in this chat, ${user.messagesGlobal} msgs globally${reputation}`)
   parts.push(`SENDER NAME (untrusted): ${untrusted(user.displayName, 60)}${user.username ? ` @${user.username}` : ''}`)
   if (input.enrichment.bio) parts.push(`SENDER BIO (untrusted): ${untrusted(input.enrichment.bio, 200)}`)
   for (const text of input.enrichment.businessTexts.slice(0, 2)) {

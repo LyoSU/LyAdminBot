@@ -172,6 +172,8 @@ export const by: Locale = {
       invisible_in_name: 'нябачныя сімвалы ў імені',
       signature_candidate_match: 'падобна на вядомы спам',
       vector_similar_spam: 'семантычна блізка да спаму',
+      velocity_repeats: 'той самы тэкст паўтараецца',
+      velocity_wave: 'той самы тэкст з некалькіх акаўнтаў',
       bot_mention: 'згадка бота'
     },
     messageTitle: 'Паведамленне:',

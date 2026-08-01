@@ -53,6 +53,52 @@ describe('PersistentVelocityPort', () => {
     expect((await port.check(makeInput(text, 1, 10)))?.exceeded).toBe(true)
   })
 
+  it('tells one account repeating itself apart from a crowd', async () => {
+    // Computed by the backend since this port existed and thrown away by it
+    // until 2026-08-01, so `singleAuthor` was permanently absent and the
+    // pipeline — which reads absence conservatively, as a wave — never once ran
+    // the one-account branch. The in-memory port had been fixed; the Mongo one,
+    // the only one the bot actually runs, had not.
+    const solo = new PersistentVelocityPort(new FakeVelocityBackend())
+    const text = 'join my private channel for signals today'
+    await solo.check(makeInput(text, 1, 10))
+    await solo.check(makeInput(text, 1, 10))
+    expect((await solo.check(makeInput(text, 1, 10)))?.singleAuthor).toBe(true)
+
+    // Three accounts in three chats — over the spread bar, so the verdict
+    // exists and can be asked who produced it.
+    const crowd = new PersistentVelocityPort(new FakeVelocityBackend())
+    await crowd.check(makeInput(text, 1, 10))
+    await crowd.check(makeInput(text, 2, 11))
+    expect((await crowd.check(makeInput(text, 3, 12)))?.singleAuthor).toBe(false)
+  })
+
+  it('one account needs fewer copies than a crowd does', async () => {
+    // Three copies from one account is a pattern nobody produces by accident.
+    // The same three spread over three people is what a line going round a chat
+    // looks like, so that keeps the higher bar.
+    const solo = new PersistentVelocityPort(new FakeVelocityBackend())
+    const text = 'earn from home no experience needed write me'
+    expect((await solo.check(makeInput(text, 1, 10)))?.exceeded).toBe(false)
+    expect((await solo.check(makeInput(text, 1, 10)))?.exceeded).toBe(false)
+    expect((await solo.check(makeInput(text, 1, 10)))?.exceeded).toBe(true)
+
+    const crowd = new PersistentVelocityPort(new FakeVelocityBackend())
+    await crowd.check(makeInput(text, 1, 10))
+    await crowd.check(makeInput(text, 1, 11))
+    expect((await crowd.check(makeInput(text, 1, 12)))?.exceeded).toBe(false)
+  })
+
+  it('the solo bar may only lower the threshold, never raise it', async () => {
+    // Read as a replacement rather than a floor, a caller could tighten
+    // `countThreshold` and have it silently ignored for the very case the
+    // window sees best.
+    const port = new PersistentVelocityPort(new FakeVelocityBackend(), { countThreshold: 2 })
+    const text = 'a template long enough to survive normalisation'
+    expect((await port.check(makeInput(text, 1, 10)))?.exceeded).toBe(false)
+    expect((await port.check(makeInput(text, 1, 10)))?.exceeded).toBe(true)
+  })
+
   it('ignores empty / too-short text', async () => {
     const port = new PersistentVelocityPort(new FakeVelocityBackend())
     expect(await port.check(makeInput('', 1, 10))).toBeNull()

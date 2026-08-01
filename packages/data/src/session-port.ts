@@ -5,14 +5,17 @@
  */
 import type { SessionPort, SessionWindow } from '@lyadmin/core'
 
+import { SESSION_WINDOW_MS } from './persistent-ports.js'
+
 export interface SessionOptions {
+  /** Only the in-memory port honours this; the Mongo one uses a TTL index. */
   windowMs?: number
   maxMessages?: number
   maxTrackedSessions?: number
 }
 
 const DEFAULTS: Required<SessionOptions> = {
-  windowMs: 30 * 60 * 1000,
+  windowMs: SESSION_WINDOW_MS,
   maxMessages: 10,
   maxTrackedSessions: 5000
 }

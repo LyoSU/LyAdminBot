@@ -238,4 +238,42 @@ describe('recordOverride', () => {
 
     expect(captured.doc).toMatchObject({ kind: 'override_not_spam', signals: [] })
   })
+
+  it('says who overturned it, because the two do not carry the same authority', async () => {
+    const { store, captured } = captureStore()
+    await store.recordOverride({ chatId: -100, messageId: 7, userId: 42, adminId: 1, verdict })
+    expect(captured.doc?.['source'], 'callers written before votes could get here')
+      .toBe('admin')
+
+    await store.recordOverride({
+      chatId: -100, messageId: 7, userId: 42, adminId: 1, source: 'community_vote', verdict
+    })
+    expect(captured.doc?.['source']).toBe('community_vote')
+  })
+
+  it('only an admin may retire a signature — a chat is not authority over the network', async () => {
+    // A signature fires in every chat for ninety days. If a ballot could retire
+    // one, a crew posting spam in a group they control could vote their own text
+    // clean and take the rule down everywhere.
+    const retired: unknown[] = []
+    const make = () => {
+      const store = {
+        feedback: { insertOne: async () => ({}) },
+        spamSignatures: { updateOne: async (f: unknown) => { retired.push(f); return {} } }
+      } as unknown as MongoStore
+      return Object.assign(store, { recordOverride: MongoStore.prototype.recordOverride })
+    }
+    const bySignature = { ...verdict, decidedBy: 'signature' as const, ruleId: 'abc' }
+
+    await make().recordOverride({
+      chatId: -100, messageId: 7, userId: 42, adminId: 1,
+      source: 'community_vote', verdict: bySignature
+    })
+    expect(retired).toHaveLength(0)
+
+    await make().recordOverride({
+      chatId: -100, messageId: 7, userId: 42, adminId: 1, source: 'admin', verdict: bySignature
+    })
+    expect(retired).toHaveLength(1)
+  })
 })

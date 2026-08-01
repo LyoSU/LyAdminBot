@@ -262,6 +262,27 @@ export const SIGNALS = {
   /** The message mentions a bot — promo-relevant, weak on its own. */
   bot_mention: { weight: 0.5, kind: 'evidence' },
 
+  /**
+   * The same account posted this same text several times inside the window.
+   *
+   * Firsthand and about the sender's own conduct — we watched the copies
+   * arrive, which is a stronger claim than any match against a stored text.
+   * Deliberately just under the sender-removal bar all the same: three copies
+   * is a strong reason to take the message down and ask for a captcha, and the
+   * catalogue reserves "this alone costs you the chat" for somebody else's
+   * verdict on the account and for structural evasion with no innocent reading.
+   * Repetition composes — with a signature match or a moderation hit it clears
+   * the bar on its own arithmetic, which is the intended route.
+   */
+  velocity_repeats: { weight: 1.5, kind: 'evidence' },
+  /**
+   * Several accounts posted the same text. Decisive about THIS message and
+   * deliberately short of the bar for removing the person who sent it: the same
+   * shape is produced by a coordinated campaign and by a line going round a
+   * chat, and only the first is the sender's doing.
+   */
+  velocity_wave: { weight: 1.2, kind: 'evidence' },
+
   // ───────────────────── profile / identity (shape) ─────────────────────
 
   /**

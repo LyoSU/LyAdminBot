@@ -172,6 +172,8 @@ export const en: Locale = {
       invisible_in_name: 'invisible characters in the name',
       signature_candidate_match: 'resembles known spam',
       vector_similar_spam: 'semantically close to spam',
+      velocity_repeats: 'same text posted repeatedly',
+      velocity_wave: 'same text from several accounts',
       bot_mention: 'mentions a bot'
     },
     messageTitle: 'The message:',
