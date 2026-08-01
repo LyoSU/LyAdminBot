@@ -128,8 +128,17 @@ describe('extractUserSignals — suspicious', () => {
     expect(names(makeUser({ messagesGlobal: 2, messagesInChat: 1 }))).toContain('new_globally')
   })
 
-  it('flags prior spam detections and low reputation', () => {
+  it('one prior detection is an accusation, two are a pattern', () => {
+    // Nothing pinned this before 2026-08-01 because nothing wrote the counter,
+    // so the signal fired at one detection and never on anything v2 had caught.
+    // Firing at one means a false positive makes the next evaluation of the
+    // same person harsher — the FP compounds. The bar matches the one the
+    // established-regular exempt uses.
+    expect(names(makeUser({ spamDetections: 1 }))).not.toContain('prior_spam_detections')
     expect(names(makeUser({ spamDetections: 2 }))).toContain('prior_spam_detections')
+  })
+
+  it('flags low reputation', () => {
     expect(names(makeUser({ reputationStatus: 'suspicious' }))).toContain('low_reputation')
     expect(names(makeUser({ reputationStatus: 'restricted' }))).toContain('low_reputation')
   })

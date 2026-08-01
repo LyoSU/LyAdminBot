@@ -76,8 +76,17 @@ const CUSTOM_DENY_PSPAM = 0.96
 const NSFW_PROFILE_CATEGORIES = ['sexual', 'sexual/minors']
 const NSFW_PROFILE_MIN_SCORE = 0.8
 
-/** Sexual-category confidence above the profile threshold, if any. */
-const nsfwProfileHit = (result: { scores: Record<string, number> } | null): string | null => {
+/**
+ * Sexual-category confidence above the profile threshold, if any.
+ *
+ * Exported so the join-time avatar screen asks the same question. It was
+ * logging on the raw `flagged` boolean, and on 2026-08-01 announced an
+ * `nsfw_avatar_join` for a picture whose sexual score was 0.003 — `violence`
+ * had fired. Harmless in that it only logs, except that a log an admin cannot
+ * believe is worse than no log, and this is a chat network where photographs of
+ * a war are ordinary.
+ */
+export const nsfwProfileHit = (result: { scores: Record<string, number> } | null): string | null => {
   if (!result) return null
   for (const category of NSFW_PROFILE_CATEGORIES) {
     const score = result.scores[category]

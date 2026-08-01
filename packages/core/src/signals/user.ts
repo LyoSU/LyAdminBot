@@ -18,6 +18,8 @@ const NEW_GLOBALLY_MAX = 5
 const EXTERNAL_REPEAT_OFFENSES_MIN = 2
 const FRESH_EXTERNAL_BAN_MAX_DAYS = 2
 const MANY_SHARED_CHATS_MIN = 5
+/** Kept equal to the pipeline's `HARD_VERDICT_MIN_DETECTIONS` on purpose. */
+const PRIOR_DETECTIONS_MIN = 2
 const JUST_JOINED_MAX_SECONDS = 120
 const ESTABLISHED_MIN_MESSAGES = 50
 const AVATAR_FRESH_MAX_DAYS = 7
@@ -204,7 +206,15 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
   if (user.groupsActive >= MANY_SHARED_CHATS_MIN && user.messagesGlobal <= NEW_GLOBALLY_MAX) {
     signals.push({ name: 'many_shared_chats', evidence: `${user.groupsActive} shared chats` })
   }
-  if (user.spamDetections > 0) {
+  // Two, not one, and for the reason the exempt already gives: a single past
+  // detection may itself have been a false positive, and a signal that fires on
+  // it makes every subsequent evaluation of that person harsher — the FP
+  // compounds into the next one. Two independent detections are a pattern.
+  //
+  // The bar was raised on 2026-08-01, when v2 started writing this counter at
+  // all. Until then only accounts v1 had caught could reach it, so a weight of
+  // 1.5 firing at one detection had never once been exercised on live data.
+  if (user.spamDetections >= PRIOR_DETECTIONS_MIN) {
     signals.push({ name: 'prior_spam_detections', evidence: `${user.spamDetections} prior detections` })
   }
   if (user.reputationStatus === 'suspicious' || user.reputationStatus === 'restricted') {

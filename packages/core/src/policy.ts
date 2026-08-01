@@ -109,6 +109,36 @@ export const SENDER_REMOVING_ACTIONS = ['kick', 'mute', 'ban'] as const
 export const removesSender = (action: VerdictAction): boolean =>
   (SENDER_REMOVING_ACTIONS as readonly VerdictAction[]).includes(action)
 
+/**
+ * Whether a verdict is firm enough to be remembered AGAINST THE ACCOUNT rather
+ * than only against the message.
+ *
+ * `spamDetections` is the counter three separate mechanisms read: the
+ * `prior_spam_detections` signal, the established-regular bypass, and the
+ * shield that keeps a non-newish account at `mute` instead of `ban`. Two hits
+ * strip all three (`HARD_VERDICT_MIN_DETECTIONS`), so the bar to earn one hit
+ * has to be higher than the bar to delete a message.
+ *
+ * Excluded, and why each exclusion is the whole point:
+ *  - a verdict the pipeline itself hedged on. `content_unconfirmed` is the
+ *    capped removal — arithmetic wanted the sender gone and the message
+ *    evidence did not earn it. Counting that as a hard fact about the account
+ *    would let two unconfirmed suspicions add up to a certainty.
+ *  - a verdict still out for a vote. The chat has not answered yet; recording
+ *    it now would mean the question was rhetorical.
+ *
+ * Everything else that removed the message counts, including a plain `delete`:
+ * the pipeline was sure enough to act without asking.
+ */
+export const countsAsDetection = (verdict: {
+  action: VerdictAction
+  needsVote: boolean
+  reasonCode: string
+}): boolean =>
+  isEnforcementAction(verdict.action) &&
+  !verdict.needsVote &&
+  verdict.reasonCode !== 'content_unconfirmed'
+
 export const PRESET_THRESHOLDS: Record<StrictnessPreset, PresetThresholds> = {
   soft: { ban: 0.98, mute: 0.94, kick: 0.86, delete: 0.78, grey: 0.55 },
   standard: { ban: 0.95, mute: 0.88, kick: 0.75, delete: 0.6, grey: 0.4 },

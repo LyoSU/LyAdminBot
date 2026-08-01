@@ -170,6 +170,44 @@ describe('adjustSpamMessages', () => {
     await store.adjustSpamMessages(-100, 42, 1)
     for (const u of updates) expect(u).not.toHaveProperty('options.upsert')
   })
+
+  it('leaves the detection counter alone unless the verdict earned one', async () => {
+    // Deleting a message and concluding something about the account are two
+    // different claims, and two detections strip an account of the exempt, the
+    // ban shield and a clean signal list at once.
+    const { store, updates } = captureUpdates()
+    await store.adjustSpamMessages(-100, 42, 1)
+    expect(JSON.stringify(updates)).not.toContain('spamDetections')
+  })
+
+  it('records the detection globally — it is about the account, not the chat', async () => {
+    // Nothing in v2 wrote this field until 2026-08-01, so three mechanisms that
+    // read it could only ever see what v1 had left behind.
+    const { store, updates } = captureUpdates()
+    await store.adjustSpamMessages(-100, 42, 1, true)
+
+    const users = updates.filter((u) => u.collection === 'users')
+    expect(users.map((u) => u.update)).toEqual([
+      { $inc: { 'globalStats.spamMessages': 1 } },
+      { $inc: { 'globalStats.spamDetections': 1 } }
+    ])
+    expect(JSON.stringify(updates.filter((u) => u.collection === 'groupMembers')))
+      .not.toContain('spamDetections')
+  })
+
+  it('the two counters cannot veto each other on the way down', async () => {
+    // The floor lives in the filter, so a shared filter would let an
+    // already-zero counter block the other one's decrement.
+    const { store, updates } = captureUpdates()
+    await store.adjustSpamMessages(-100, 42, -1, true)
+
+    const users = updates.filter((u) => u.collection === 'users')
+    expect(users).toHaveLength(2)
+    expect(users[0]?.filter).toMatchObject({ 'globalStats.spamMessages': { $gt: 0 } })
+    expect(users[0]?.filter).not.toHaveProperty('globalStats.spamDetections')
+    expect(users[1]?.filter).toMatchObject({ 'globalStats.spamDetections': { $gt: 0 } })
+    expect(users[1]?.filter).not.toHaveProperty('globalStats.spamMessages')
+  })
 })
 
 describe('recordOverride', () => {

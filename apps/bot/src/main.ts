@@ -5,8 +5,8 @@
  */
 import { BotKeyboard, Chat, User, html, type Message } from '@mtcute/node'
 import {
-  evaluateMessage, tallyVotes, extractBioSignals, isEnforcementAction,
-  shouldAutoLearn, autoLearnSource, voteLearnStatus, conversationLineFor,
+  evaluateMessage, tallyVotes, extractBioSignals, isEnforcementAction, countsAsDetection,
+  shouldAutoLearn, autoLearnSource, voteLearnStatus, conversationLineFor, nsfwProfileHit,
   type EvaluationInput, type ForwardOrigin, type PipelinePorts,
   type UserSnapshot, type Verdict, type VoteBallot
 } from '@lyadmin/core'
@@ -448,18 +448,36 @@ const reportAllowed = (userId: number): boolean => {
 const MUTE_AFTER_VOTE_SECONDS = 24 * 60 * 60
 
 /**
+ * What Telegram has recently refused us here, per capability. See rights.ts —
+ * the reasoning is load-bearing enough to live with its tests.
+ */
+const rights = new RightsMemory()
+
+/**
  * When the bot catches spam but can't act (not an admin / missing rights), it
- * posts one warning per chat per hour so admins know to grant rights — without
- * spamming the chat on every blocked message.
+ * posts a warning in the chat so admins know to grant rights.
+ *
+ * The interval doubles with every consecutive refusal, from an hour to a day.
+ * A flat hourly notice reads as useful the first time and as nagging the tenth:
+ * production 2026-08-01 had chats refusing every action for hours, which at the
+ * old cadence is two dozen public messages a day into a group where the bot can
+ * do nothing — and each one tells whoever is posting the spam that it can't be
+ * touched here. The first notice, which is the one that might actually get the
+ * bot promoted, is unchanged.
  */
 const MISSING_RIGHTS_WARN_MS = 60 * 60 * 1000
+const MISSING_RIGHTS_WARN_MAX_MS = 24 * 60 * 60 * 1000
 const missingRightsWarned = new Map<number, number>()
 const shouldWarnMissingRights = (chatId: number, errors: string[]): boolean => {
   if (!errors.some((e) => RIGHTS_ERROR_REGEX.test(e))) return false
   const now = Date.now()
   const until = missingRightsWarned.get(chatId)
   if (until && until > now) return false
-  missingRightsWarned.set(chatId, now + MISSING_RIGHTS_WARN_MS)
+  const quiet = Math.min(
+    MISSING_RIGHTS_WARN_MS * 2 ** Math.max(0, rights.strikes(chatId) - 1),
+    MISSING_RIGHTS_WARN_MAX_MS
+  )
+  missingRightsWarned.set(chatId, now + quiet)
   if (missingRightsWarned.size > 2000) {
     for (const [key, expires] of missingRightsWarned) {
       if (expires <= now) missingRightsWarned.delete(key)
@@ -467,12 +485,6 @@ const shouldWarnMissingRights = (chatId: number, errors: string[]): boolean => {
   }
   return true
 }
-
-/**
- * What Telegram has recently refused us here, per capability. See rights.ts —
- * the reasoning is load-bearing enough to live with its tests.
- */
-const rights = new RightsMemory()
 
 /**
  * A vote resolved to spam (instant admin ballot or community threshold):
@@ -1159,11 +1171,14 @@ const screenJoinerAvatars = async (chat: Chat, joiners: User[]): Promise<void> =
     if (!base64) continue
     try {
       const result = await ports.moderation.check('', base64)
-      if (result?.flagged) {
+      // The same question the message path asks, for the same reason: the
+      // provider's `flagged` boolean spans violence and self-harm, and an
+      // `nsfw_avatar_join` raised over a war photograph is a log line that
+      // teaches admins to ignore the log.
+      const hit = nsfwProfileHit(result)
+      if (hit) {
         log.info('nsfw_avatar_join', {
-          chatId: chat.id, chat: chat.title ?? undefined,
-          userId: joiner.id, categories: result.categories,
-          sexualScore: result.scores['sexual']
+          chatId: chat.id, chat: chat.title ?? undefined, userId: joiner.id, hit
         })
       }
     } catch { /* dead key / API error surfaces via the message-path meta log */ }
@@ -1784,7 +1799,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     // A refusal is the authoritative statement of what we may do here; remember
     // it per capability so the next messages are not evaluated at full price
     // for nothing.
-    rights.noteFailures(chat.id, result.errors)
+    rights.noteOutcome(chat.id, result.errors)
     // Spam caught but we couldn't act → tell admins to grant rights (once/hr).
     if (!result.applied && shouldWarnMissingRights(chat.id, result.errors)) {
       const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
@@ -1813,8 +1828,16 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   // `result.applied`. Whether Telegram let us delete anything is a fact about
   // our rights in that chat, not about the sender — and a chat where enforcement
   // fails is precisely where the free standing piles up fastest.
+  //
+  // The second counter is about the ACCOUNT, not the message, and only firm
+  // verdicts feed it — see `countsAsDetection`. Nothing in v2 wrote it until
+  // 2026-08-01, which quietly disabled three mechanisms that read it: the
+  // `prior_spam_detections` signal, the established-regular bypass, and the
+  // shield that keeps an account with local standing at `mute` instead of
+  // `ban`. The visible symptom was an advert reposted six times in a hundred
+  // minutes, muted every time, never banned.
   if (isEnforcementAction(verdict.action)) {
-    await store.adjustSpamMessages(chat.id, sender.id, 1)
+    await store.adjustSpamMessages(chat.id, sender.id, 1, countsAsDetection(verdict))
       .catch(() => { /* counters are best-effort */ })
   }
 
@@ -2253,7 +2276,13 @@ const wireCallbacks = (): void => {
       // withholds the benefit of the doubt, so leaving it in place after an
       // admin says "not spam" would let one false positive make the next one
       // against the same person more likely.
-      await store.adjustSpamMessages(chatId, Number(userIdRaw), -1)
+      // The detection is given back unconditionally, not only when the original
+      // verdict had earned one. It is a deliberate asymmetry: an admin saying
+      // "not spam" is the strongest counter-evidence this system ever receives,
+      // the counter has a floor at zero, and two detections strip an account of
+      // every benefit of the doubt at once. Erring toward clearing it is the
+      // side to err on.
+      await store.adjustSpamMessages(chatId, Number(userIdRaw), -1, true)
         .catch(() => { /* counters are best-effort */ })
       // A forwarded FP also earns its origin a clean point (v1 2:1 math).
       const forward = recentForwards.get(`${chatIdRaw}:${messageIdRaw}`)

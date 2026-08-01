@@ -492,8 +492,21 @@ export class MongoStore {
    * `touchMember` for this very message. A missing one means the counters were
    * never established, and inventing a document holding nothing but a spam count
    * would state that the sender's every message was spam.
+   *
+   * `detection` moves a second, stricter counter alongside the first.
+   * `globalStats.spamDetections` is what tells the pipeline that an account has
+   * a history rather than a bad message — and until 2026-08-01 nothing in v2
+   * wrote it, so four mechanisms read a field that could only ever hold what v1
+   * had left behind. The visible symptom was an account caught six times in a
+   * hundred minutes being shielded from a ban every single time, because the
+   * shield is lifted by exactly this counter.
+   *
+   * It is global only. A detection is a statement about the account, and the
+   * per-chat document already carries the per-chat story.
    */
-  async adjustSpamMessages(chatId: number, telegramId: number, delta: 1 | -1): Promise<void> {
+  async adjustSpamMessages(
+    chatId: number, telegramId: number, delta: 1 | -1, detection = false
+  ): Promise<void> {
     const floor = delta < 0 ? { $gt: 0 } : null
     const group = await this.groups.findOne({ group_id: chatId }, { projection: { _id: 1 } })
     await Promise.all([
@@ -501,6 +514,15 @@ export class MongoStore {
         { telegram_id: telegramId, ...(floor ? { 'globalStats.spamMessages': floor } : {}) },
         { $inc: { 'globalStats.spamMessages': delta } }
       ),
+      // Its own update, not another `$inc` on the one above: the decrement's
+      // floor lives in the filter, so sharing a filter would let an
+      // already-zero counter veto the other one's decrement.
+      detection
+        ? this.users.updateOne(
+          { telegram_id: telegramId, ...(floor ? { 'globalStats.spamDetections': floor } : {}) },
+          { $inc: { 'globalStats.spamDetections': delta } }
+        )
+        : Promise.resolve(),
       group
         ? this.groupMembers.updateOne(
           { group: group['_id'], telegram_id: telegramId, ...(floor ? { 'stats.spamMessages': floor } : {}) },

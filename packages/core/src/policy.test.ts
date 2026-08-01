@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import type { StrictnessPreset, VerdictAction } from './types.js'
 import {
-  decideAction, isEnforcementAction, PRESET_THRESHOLDS, TIMED_BAN_SECONDS, type PolicyInput
+  decideAction, isEnforcementAction, countsAsDetection, ENFORCEMENT_ACTIONS,
+  PRESET_THRESHOLDS, TIMED_BAN_SECONDS, type PolicyInput
 } from './policy.js'
 
 const makeInput = (overrides: Partial<PolicyInput> = {}): PolicyInput => ({
@@ -312,5 +313,47 @@ describe('decideAction — safety invariants', () => {
       // Just under the delete bar must not delete.
       expect(SEVERITY[at(t.delete - 1e-9)]).toBeLessThan(SEVERITY['delete'])
     }
+  })
+})
+
+describe('countsAsDetection', () => {
+  const verdict = (o: Partial<Parameters<typeof countsAsDetection>[0]> = {}) =>
+    ({ action: 'ban' as VerdictAction, needsVote: false, reasonCode: 'job_scam', ...o })
+
+  it('a firm removal is a fact about the account', () => {
+    for (const action of ENFORCEMENT_ACTIONS) {
+      expect(countsAsDetection(verdict({ action })), action).toBe(true)
+    }
+  })
+
+  it('watching somebody is not catching them', () => {
+    for (const action of ['none', 'observe', 'captcha'] as VerdictAction[]) {
+      expect(countsAsDetection(verdict({ action })), action).toBe(false)
+    }
+  })
+
+  it('a verdict the pipeline hedged on cannot harden into one it did not', () => {
+    // `content_unconfirmed` IS the hedge: arithmetic wanted the sender gone and
+    // the message evidence did not earn it. Two of those must not add up to the
+    // certainty that strips the exempt and the ban shield.
+    expect(countsAsDetection(verdict({ reasonCode: 'content_unconfirmed' }))).toBe(false)
+  })
+
+  it('a question still out for a vote is not an answer', () => {
+    expect(countsAsDetection(verdict({ needsVote: true }))).toBe(false)
+  })
+
+  it('is strictly stricter than the message counter it travels with', () => {
+    // The message counter debits standing on every enforcement; this one may
+    // only ever be a subset, or the stricter bar is decorative.
+    fc.assert(fc.property(
+      fc.constantFrom<VerdictAction>('none', 'observe', 'captcha', 'delete', 'kick', 'mute', 'ban'),
+      fc.boolean(),
+      fc.constantFrom('job_scam', 'content_unconfirmed', 'soft_shape_only', 'known_spam_signature'),
+      (action, needsVote, reasonCode) => {
+        const v = { action, needsVote, reasonCode }
+        if (countsAsDetection(v)) expect(isEnforcementAction(action)).toBe(true)
+      }
+    ))
   })
 })
