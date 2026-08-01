@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   ChatPolicy, Enrichment, EvaluationInput, NormalizedChat, NormalizedMessage, UserSnapshot
 } from './types.js'
-import type { LlmTier, ModerationResult, PipelinePorts } from './ports.js'
+import type { LlmTier, ModerationResult, PipelinePorts, SessionPort } from './ports.js'
 import { evaluateMessage } from './pipeline.js'
 import { isEnforcementAction, removesSender } from './policy.js'
 
@@ -282,18 +282,91 @@ describe('evaluateMessage — abstain & session', () => {
     expect(bare.decidedBy).toBe('abstain')
   })
 
-  it('a chat regular repeating himself is not fed to the session buffer', async () => {
-    // The buffer is for senders with no standing. Somebody who has been talking
-    // in the chat for a while and says something short is just talking.
-    let appended = 0
-    const v = await evaluateMessage(makeInput({ msg: { text: 'та ну, не може бути такого' } }), {
+  it('REGRESSION: a lurker replying to a complaint is still somebody nothing has read', async () => {
+    // The reply-bait class: sit in a chat for weeks, wait for somebody to say
+    // something is broken, answer with a product name in plain text — no @, no
+    // link, no phone. There is nothing for any stage to recognise, and the
+    // message arrives as a reply, which is worth -1.8 in trust (`is_reply` plus
+    // `recent_reply`). That discount is not incidental to the tactic, it IS the
+    // tactic: the accusing signals on such an account come to about +1.8, so
+    // replying cancels them exactly and the score lands near 0.10 against a
+    // reading floor of 0.35.
+    //
+    // Newness was the wrong condition to gate the buffer on. Anyone reaching
+    // this far already failed the established-regular fast path, which is the
+    // pipeline's own definition of standing; a sender under it who says
+    // something nothing recognises is exactly who the buffer is for, whether
+    // they arrived today or lurked for three weeks.
+    let judged = 0
+    const buffer: string[] = []
+    const ports: PipelinePorts = {
       session: {
-        append: async () => { appended += 1; return { combinedText: '', count: 1 } },
-        reset: async () => { /* noop */ }
+        append: async (_c, _u, t) => {
+          buffer.push(t)
+          return { combinedText: buffer.join('\n'), count: buffer.length }
+        },
+        reset: async () => { buffer.length = 0 }
+      },
+      llm: {
+        classify: async () => {
+          judged += 1
+          return { pSpam: 0.95, reasonCode: 'other_spam', evidence: null, cached: false }
+        }
       }
-    })
-    expect(appended).toBe(0)
-    expect(v.action).toBe('none')
+    }
+    const lurker = {
+      msg: {
+        text: 'У мене теж таке було, допомогло. Спробуй той віпіен, просто набери назву в пошуку.',
+        replyTo: { authorId: 55, isSelf: false, ageSeconds: 60, textPreview: 'у мене нічого не вантажить' }
+      },
+      // Three weeks in the chat and nine messages: past every newness test,
+      // still short of the established-regular bar (10 in chat / 50 global).
+      user: { predictedAgeDays: 900, localAgeDays: 21, messagesInChat: 9, messagesGlobal: 30 }
+    }
+
+    let last = await evaluateMessage(makeInput(lurker), ports)
+    expect(buffer).toHaveLength(1)
+    for (let i = 0; i < 4; i += 1) last = await evaluateMessage(makeInput(lurker), ports)
+    expect(judged).toBeGreaterThan(0)
+    expect(last.decidedBy).toBe('session')
+  })
+
+  it('standing decides who is buffered, and talking is how it is earned', async () => {
+    // Who the buffer is for is the same question as who the exempt is for, so
+    // it gets the same answer rather than a second one. An established regular
+    // never arrives: the fast path returns before any port runs.
+    //
+    // Tenure alone is not standing. Somebody a year in the chat who has said
+    // eight things has not earned the exempt, and is buffered like anybody else
+    // — which is right for the threat this covers, since an aged, quiet account
+    // is precisely the sleeper shape. It is also self-limiting: reading costs a
+    // classification and never punishes, and once they have said enough to
+    // graduate they stop being buffered at all.
+    const countingSession = (): { port: SessionPort; count: () => number } => {
+      let appended = 0
+      return {
+        count: () => appended,
+        port: {
+          append: async () => { appended += 1; return { combinedText: '', count: 1 } },
+          reset: async () => { /* noop */ }
+        }
+      }
+    }
+    const chat = { text: 'та ну, не може бути такого' }
+
+    const regular = countingSession()
+    const asRegular = await evaluateMessage(
+      makeInput({ msg: chat, user: { messagesInChat: 40, messagesGlobal: 200, localAgeDays: 400 } }),
+      { session: regular.port })
+    expect(asRegular.reasonCode).toBe('established_regular')
+    expect(regular.count()).toBe(0)
+
+    const quiet = countingSession()
+    const asQuiet = await evaluateMessage(
+      makeInput({ msg: chat, user: { messagesInChat: 8, messagesGlobal: 40, localAgeDays: 400 } }),
+      { session: quiet.port })
+    expect(asQuiet.action).toBe('none')
+    expect(quiet.count()).toBe(1)
   })
 
   it('a judged window is spent, so the same blob is never re-rolled', async () => {

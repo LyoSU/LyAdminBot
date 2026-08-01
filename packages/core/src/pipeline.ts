@@ -726,16 +726,24 @@ export const evaluateMessage = async (
   // informative characters against a bar of 20), too quiet for the gate that
   // opens the LLM. Classifiable by our own reckoning, and classified by nobody.
   //
-  // The buffer is the answer rather than an immediate call: it bounds this to
-  // one classification per five messages, and a newcomer's small talk reads as
-  // small talk in a blob just as it does alone. Established regulars never
-  // arrive here — the fast path returned long before.
-  // Waiting for five is waiting forever against the shape this actually has:
-  // join, post once, gone. A sender's first words in a chat are both the
-  // likeliest to be a drive-by and the cheapest moment to check, the population
-  // being bounded by how many people join — so for those the pile is one.
-  if (verdict.action === 'none' && isNewish(input) &&
-      contentEvidence(signals).strongest === 0) {
+  // The buffer rather than an immediate call: it bounds this to one
+  // classification per five messages, and small talk reads as small talk in a
+  // blob just as it does alone.
+  //
+  // There is deliberately no newness test here. Standing is what the question
+  // turns on, and this pipeline already has a definition of it — anybody who
+  // reaches this line failed `isEstablishedRegular` at the top. Gating on
+  // newness instead measured something narrower and let the reply-bait class
+  // through: sit in a chat for weeks, wait for somebody to say something is
+  // broken, answer with a product name in plain text. No @, no link, nothing to
+  // recognise — and the reply itself is worth -1.8 in trust, which is not
+  // incidental to the tactic but the whole of it, cancelling the accusing
+  // signals almost exactly and landing the score near 0.10.
+  //
+  // For a sender's FIRST words in a chat the pile is one: waiting for five is
+  // waiting forever against join-post-once-gone, and that population is bounded
+  // by the join rate.
+  if (verdict.action === 'none' && contentEvidence(signals).strongest === 0) {
     const judged = await judgeAccumulated(
       input.user.messagesInChat <= 1 ? 1 : SESSION_EVAL_MIN_MESSAGES)
     if (judged) return judged
