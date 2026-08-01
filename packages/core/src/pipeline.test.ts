@@ -333,6 +333,120 @@ describe('evaluateMessage — abstain & session', () => {
     expect(last.decidedBy).toBe('session')
   })
 
+  it('REGRESSION: the exempt is cancelled by a message that would remove anyone', async () => {
+    // The established-regular fast path returned at step 1b, before signals were
+    // extracted at step 2 — so message evidence could not cancel it, whatever it
+    // was. And the account-level guard that CAN cancel it needs two prior spam
+    // detections, which cannot accumulate while the account is exempt. A closed
+    // loop: a sold or compromised long-time account had a permanent full bypass
+    // in every chat.
+    //
+    // The bar is the one already in use for removing a person. The exempt exists
+    // so a regular's link is not deleted on a signature or vector MATCH; it was
+    // never meant to wave through evidence that would license removing anybody.
+    const evasive = {
+      msg: {
+        text: 'подивись тут',
+        urls: [{ visible: 'ok.com', target: 'https://evil.example/x', hidden: true }],
+        inlineButtons: [
+          { text: 'a', url: 'https://a.example' },
+          { text: 'b', url: 'https://b.example' },
+          { text: 'c', url: 'https://c.example' }
+        ]
+      },
+      user: { messagesInChat: 400, messagesGlobal: 900, localAgeDays: 900 }
+    }
+    const v = await evaluateMessage(makeInput(evasive), {})
+    expect(v.reasonCode).not.toBe('established_regular')
+    expect(v.signals.map((s) => s.name)).toEqual(expect.arrayContaining(['many_url_buttons']))
+
+    // An ordinary message from the same regular still skips the whole ladder.
+    const ordinary = await evaluateMessage(makeInput({
+      msg: { text: 'та отож, я теж так думаю' },
+      user: evasive.user
+    }), {})
+    expect(ordinary.reasonCode).toBe('established_regular')
+  })
+
+  it('REGRESSION: a removal nothing corroborates gets the strong model first', async () => {
+    // The cheap model was escalated only inside the grey zone — so the verdicts
+    // that REMOVE somebody, which by definition sit above it, were the ones the
+    // strong model never saw. Meanwhile the session path has done exactly this
+    // since 2026-07-30, for the same reason, twenty lines away.
+    //
+    // The trigger is a removal with nothing corroborating it: `contentEvidence`
+    // at zero means every other stage looked at the text and found nothing, so
+    // the cheap model's word is the entire case for taking the chat away from
+    // somebody.
+    const calls: LlmTier[] = []
+    const ports = (pSpam: number): PipelinePorts => ({
+      llm: {
+        classify: async (_i, tier) => {
+          calls.push(tier)
+          return { pSpam, reasonCode: 'job_scam', evidence: null, cached: false }
+        }
+      }
+    })
+    // Long enough not to earn the brevity discount, so the score reaches the
+    // grey zone on its own and the cheap model is consulted the ordinary way.
+    const bare = {
+      msg: { text: 'Гарного дня всім, підкажіть будь ласка, як тут заведено ставити запитання?' },
+      user: newcomer
+    }
+
+    const removed = await evaluateMessage(makeInput(bare), ports(0.97))
+    expect(calls).toEqual(['cheap', 'strong'])
+    expect(removesSender(removed.action)).toBe(true)
+
+    // Corroborated, so the cheap tier carries it alone: the phone number is a
+    // second stage saying something about the same message, which is exactly
+    // what the escalation exists to substitute for when it is missing.
+    calls.length = 0
+    const corroborated = await evaluateMessage(makeInput({
+      msg: { text: 'Робота вдома, гарний дохід щотижня, телефонуйте +380671234567' },
+      user: newcomer
+    }), ports(0.97))
+    expect(calls).toEqual(['cheap'])
+    expect(removesSender(corroborated.action)).toBe(true)
+  })
+
+  it('the first few messages in a chat are each worth reading on their own', async () => {
+    // A pile of five is useless against join-post-once-gone, and the window is
+    // thirty minutes of one process — a lurker dropping one line an hour never
+    // fills it. The risk is concentrated in the opening messages, and that
+    // population is bounded, so those are read one at a time. Three is the same
+    // bar `isNewish` already uses for "no standing here yet".
+    let judged = 0
+    const ports: PipelinePorts = {
+      session: {
+        append: async (_c, _u, t) => ({ combinedText: t, count: 1 }),
+        reset: async () => { /* noop */ }
+      },
+      llm: {
+        classify: async () => {
+          judged += 1
+          return { pSpam: 0.2, reasonCode: 'small_talk', evidence: null, cached: false }
+        }
+      }
+    }
+    const quiet = { msg: { text: 'Спробуй той сервіс, просто набери назву в пошуку' } }
+
+    for (const messagesInChat of [1, 2, 3]) {
+      judged = 0
+      await evaluateMessage(makeInput({
+        ...quiet, user: { messagesInChat, messagesGlobal: messagesInChat + 1, localAgeDays: 0 }
+      }), ports)
+      expect(judged, `message ${messagesInChat}`).toBe(1)
+    }
+
+    // Past the opening, the pile is five again.
+    judged = 0
+    await evaluateMessage(makeInput({
+      ...quiet, user: { messagesInChat: 4, messagesGlobal: 9, localAgeDays: 2 }
+    }), ports)
+    expect(judged).toBe(0)
+  })
+
   it('REGRESSION: a message with no text puts nothing in the buffer', async () => {
     // Photos, stickers and voice notes carry no text. Buffering them appended
     // empty strings, and five of those filled the window — so the pipeline
@@ -801,7 +915,10 @@ describe('evaluateMessage — LLM escalation', () => {
       }
     }
     const v = await evaluateMessage(greyZoneInput(), ports)
-    expect(calls).toEqual(['cheap'])
+    // Cheap first, then strong: 0.92 removes the sender and nothing in the
+    // message corroborates it, which is the one case the cheap tier may not
+    // carry alone (2026-08-01). The verdict itself is unchanged.
+    expect(calls).toEqual(['cheap', 'strong'])
     expect(v.decidedBy).toBe('llm')
     expect(v.reasonCode).toBe('crypto_promo')
     expect(['mute', 'ban']).toContain(v.action)
@@ -1501,7 +1618,10 @@ describe('evaluateMessage — a script the chat does not use', () => {
         }
       }
     })
-    expect(tiers).toEqual(['cheap'])
+    // Both tiers: 0.97 removes the sender and no other stage found anything —
+    // least of all here, where every one of them was reading a script it was
+    // not built for. If there is a case for a second opinion, it is this one.
+    expect(tiers).toEqual(['cheap', 'strong'])
     expect(v.decidedBy).toBe('llm')
     expect(isEnforcementAction(v.action)).toBe(true)
   })

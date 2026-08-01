@@ -32,6 +32,17 @@ import { isDistinctive } from './learning.js'
 const LLM_GREY_LOW = 0.35
 const LLM_GREY_HIGH = 0.75
 const SESSION_EVAL_MIN_MESSAGES = 5
+/**
+ * Up to this many messages into a chat, a sender's unreadable message is worth
+ * a classification ON ITS OWN rather than waiting for a pile.
+ *
+ * A pile of five is useless against join-post-once-gone, and the window is
+ * thirty minutes of a single process — a lurker dropping one line an hour never
+ * fills it. The risk is concentrated in the opening messages and that
+ * population is bounded by the join rate, so those are read one at a time.
+ * Three is the bar `isNewish` already uses for "no standing here yet".
+ */
+const SESSION_SOLO_MAX_INCHAT = 3
 const VECTOR_DECIDE_SIMILARITY = 0.93
 /**
  * Below this, a nearest-neighbour hit is noise and must not raise a signal.
@@ -313,10 +324,26 @@ export const evaluateMessage = async (
     )
   }
 
+  // Extracting signals is pure and free — only the ports cost anything — so the
+  // message half is read before the exempt below rather than after it.
+  const messageSignals = extractMessageSignals(input.message)
+
   // ── 1b. established-regular fast path ───────────────────────────────
   // Runs AFTER custom rules (an admin DENY/ALLOW always wins) but BEFORE any
   // heuristic or paid port: an established member skips the whole ladder.
-  if (isEstablishedRegular(input)) {
+  //
+  // Except for a message that would license removing anybody. The exempt used
+  // to return before signals existed, so nothing in the message could cancel it
+  // — and the account-level guard that can needs two prior spam detections,
+  // which cannot accumulate while the account is exempt. That closed the loop:
+  // a sold or compromised long-time account had a permanent full bypass in
+  // every chat we watch.
+  //
+  // The bar is the one already in use for taking the chat away from somebody,
+  // asked of the message alone. It leaves the exempt's purpose intact — a
+  // regular's link must not be deleted on a signature or vector MATCH — while
+  // declining to wave through structural evasion that has no innocent reading.
+  if (isEstablishedRegular(input) && !mayRemoveSender(messageSignals)) {
     meta['established_regular'] = true
     meta['messagesInChat'] = input.user.messagesInChat
     meta['messagesGlobal'] = input.user.messagesGlobal
@@ -326,7 +353,7 @@ export const evaluateMessage = async (
   // ── 2. signals ──────────────────────────────────────────────────────
 
   const signals: Signal[] = [
-    ...extractMessageSignals(input.message),
+    ...messageSignals,
     ...extractUserSignals(input.user),
     ...extractBioSignals(input.enrichment.bio, input.enrichment.businessTexts),
     ...extractLinkedChannelSignals(input.enrichment.linkedChannels)
@@ -669,7 +696,26 @@ export const evaluateMessage = async (
       await safe('llm_cheap', () => ports.llm!.classify(input, 'cheap'))
     meta['llmTier'] = 'cheap'
 
-    if (llmVerdict && llmVerdict.pSpam >= LLM_GREY_LOW && llmVerdict.pSpam <= LLM_GREY_HIGH) {
+    /**
+     * A removal with nothing behind it but the cheap model's word.
+     *
+     * `contentEvidence` at zero means every other stage read the text and found
+     * nothing, so no second opinion exists — and this is the one path where the
+     * evidence bar does not apply, because the LLM returns straight to the
+     * caller. Escalating is what the session path has done since 2026-07-30 for
+     * exactly this reason, twenty lines above; the ordinary path escalated only
+     * INSIDE the grey zone, which by construction excluded every verdict that
+     * removes somebody.
+     *
+     * Cheap where it does not matter: only removals, and only unsupported ones.
+     */
+    const unsupportedRemoval = (v: LlmVerdict): boolean =>
+      removesSender(policyFor(v.pSpam, signals).action) &&
+      contentEvidence(signals).strongest === 0
+
+    if (llmVerdict &&
+        ((llmVerdict.pSpam >= LLM_GREY_LOW && llmVerdict.pSpam <= LLM_GREY_HIGH) ||
+          unsupportedRemoval(llmVerdict))) {
       const strong = await safe('llm_strong', () => ports.llm!.classify(input, 'strong'))
       if (strong) {
         llmVerdict = strong
@@ -768,7 +814,7 @@ export const evaluateMessage = async (
   // by the join rate.
   if (verdict.action === 'none' && contentEvidence(signals).strongest === 0) {
     const judged = await judgeAccumulated(
-      input.user.messagesInChat <= 1 ? 1 : SESSION_EVAL_MIN_MESSAGES)
+      input.user.messagesInChat <= SESSION_SOLO_MAX_INCHAT ? 1 : SESSION_EVAL_MIN_MESSAGES)
     if (judged) return judged
   }
   return verdict
