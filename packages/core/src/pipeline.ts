@@ -260,6 +260,28 @@ export const evaluateMessage = async (
     }
   }
 
+  /**
+   * Trade a removal the message evidence does not support for the message-only
+   * action, and ask the chat instead.
+   *
+   * Removing a person is not a fail-safe default. The message still goes, the
+   * sender is asked to prove they are human — a bot cannot, the person we were
+   * wrong about taps once — and the chat gets a vote. Pointless for a
+   * long-standing member, so the captcha is gated on the same newness the
+   * removal itself required.
+   */
+  const capUnearnedRemoval = (verdict: Verdict): Verdict => {
+    meta['cappedFrom'] = verdict.action
+    return {
+      ...verdict,
+      action: 'delete' as VerdictAction,
+      needsVote: input.policy.votingEnabled,
+      banDurationSeconds: null,
+      requireCaptcha: input.policy.captchaEnabled && isNewish(input),
+      reasonCode: 'content_unconfirmed'
+    }
+  }
+
   const none = (decidedBy: DecidedBy, reasonCode: string, signals: Signal[] = []): Verdict =>
     finalize(
       { pSpam: 0, decidedBy, ruleId: null, reasonCode, reasonEvidence: null },
@@ -336,7 +358,7 @@ export const evaluateMessage = async (
     if (deterministic.kind === 'clean') {
       return none('deterministic', deterministic.ruleId, signals)
     }
-    return finalize(
+    const verdict = finalize(
       {
         pSpam: deterministic.pSpam,
         decidedBy: 'deterministic',
@@ -346,6 +368,22 @@ export const evaluateMessage = async (
       },
       signals
     )
+    // Being deterministic is a statement about confidence in the RULE, not a
+    // licence the scoring path lacks. A rule that points at the message is held
+    // to the same evidence bar as arithmetic over the same signals — otherwise
+    // the pipeline holds two positions on one set of facts and which applies
+    // depends only on which stage spoke first.
+    //
+    // Production 2026-08-01 15:47: a member answering somebody pasted a private
+    // invite and "you can ask here". `private_invite_new` muted them at 0.93 on
+    // `private_invite_link` alone — 1.8 against a bar of 2.0 — while a
+    // regression test pins the identical signals to `delete` when the score
+    // decides. Rules about the ACCOUNT keep their reach; see `aboutAccount`.
+    if (!deterministic.aboutAccount &&
+        removesSender(verdict.action) && !mayRemoveSender(signals)) {
+      return capUnearnedRemoval(verdict)
+    }
+    return verdict
   }
 
   // ── 4. abstain gate + session window ────────────────────────────────
@@ -664,21 +702,7 @@ export const evaluateMessage = async (
   // and let the chat weigh in. Reaching this line with `unearnedRemoval` set
   // always means the escalation above found no LLM, since every
   // sender-removing threshold sits inside or above the grey zone.
-  if (unearnedRemoval && removesSender(verdict.action)) {
-    meta['cappedFrom'] = verdict.action
-    return {
-      ...verdict,
-      action: 'delete' as VerdictAction,
-      needsVote: input.policy.votingEnabled,
-      banDurationSeconds: null,
-      // What replaces the removal: the message goes, and the sender is asked to
-      // prove they are human. A spam bot cannot; the person we were wrong about
-      // taps once. Pointless for a long-standing member, so it is gated on the
-      // same newness the removal itself required.
-      requireCaptcha: input.policy.captchaEnabled && isNewish(input),
-      reasonCode: 'content_unconfirmed'
-    }
-  }
+  if (unearnedRemoval && removesSender(verdict.action)) return capUnearnedRemoval(verdict)
 
   // Fail-safe: when the LLM was needed but unavailable (rate limit, outage),
   // a grey-zone message must never silently pass as clean.

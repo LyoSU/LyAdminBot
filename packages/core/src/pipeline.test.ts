@@ -1020,6 +1020,50 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
     expect(removesSender(blind.action)).toBe(false)
   })
 
+  it('REGRESSION: a deterministic rule may not remove a sender the evidence cannot', async () => {
+    // Production, 2026-08-01 15:47: a member answering somebody — a reply, with
+    // `is_reply` on it — pasted a private invite and "you can ask here". Muted
+    // by `private_invite_new` at 0.93.
+    //
+    // The scoring path is not allowed to do that. `private_invite_link` weighs
+    // 1.8 against a sender-removal bar of 2.0, and a 2026-07-30 regression above
+    // pins exactly this combination to `delete`. The deterministic branch
+    // returns before either guard runs, so the pipeline held two incompatible
+    // positions on the same evidence and which one applied depended only on
+    // which stage spoke first.
+    //
+    // Rules resting on somebody else's verdict about the ACCOUNT — a Telegram
+    // scam flag, a ban-database listing — are a different claim and keep their
+    // reach. This one rests on one thing in the message.
+    const invite = {
+      msg: {
+        text: 'Можеш спитати тут',
+        urls: [{ visible: 't.me/+abcdefghij', target: 'https://t.me/+abcdefghijklmno', hidden: false }],
+        replyTo: { authorId: 99, isSelf: false, ageSeconds: 30, textPreview: 'а де можна спитати?' }
+      },
+      user: { predictedAgeDays: 1500, localAgeDays: 2, messagesGlobal: 3, messagesInChat: 2 }
+    }
+    const v = await evaluateMessage(makeInput(invite), {})
+    expect(v.ruleId).toBe('private_invite_new')
+    expect(removesSender(v.action)).toBe(false)
+    expect(v.needsVote).toBe(true)
+    expect(v.reasonCode).toBe('content_unconfirmed')
+  })
+
+  it('an account verdict keeps its reach — the cap is about message evidence', async () => {
+    // A ban-database listing says nothing about the message and is not supposed
+    // to: capping it on message evidence would silently disable the rule.
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'Привіт усім, як справи?' },
+      user: {
+        predictedAgeDays: 5, localAgeDays: 0, messagesGlobal: 1, messagesInChat: 1,
+        externalBan: { banned: true, bannedAt: new Date(), offenses: 1, sources: ['lols' as const] }
+      }
+    }), {})
+    expect(v.ruleId).toBe('external_ban_new')
+    expect(removesSender(v.action)).toBe(true)
+  })
+
   it('an ordinary delete quizzes nobody — the gate belongs to the capped band', async () => {
     // Only a verdict that WANTED the sender gone trades the removal for a
     // question. A plain delete in the delete band is not an uncertain removal.

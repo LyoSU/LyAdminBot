@@ -22,6 +22,19 @@ export interface DeterministicVerdict {
   ruleId: string
   /** Calibrated probability this rule asserts. */
   pSpam: number
+  /**
+   * The rule rests on somebody else's verdict about the ACCOUNT — Telegram's
+   * own scam/fake flag, its unofficial-client warning, a community ban database
+   * — rather than on anything in the message.
+   *
+   * It is what exempts a rule from the sender-removal bar. That bar asks
+   * whether the MESSAGE earned the removal, which is the wrong question to put
+   * to a listing: the answer is always no, and capping these would quietly
+   * disable them. Every other rule here points at something in the message and
+   * is held to the same evidence bar as the scoring path — see the note in
+   * `pipeline.ts` and the 2026-08-01 mute.
+   */
+  aboutAccount?: true
 }
 
 /**
@@ -49,7 +62,7 @@ export const applyDeterministicRules = (signals: Signal[]): DeterministicVerdict
   // Established accounts are excluded: scam flags survive appeals for a
   // while and a long-time local member deserves the full pipeline.
   if ((has('scam_flag') || has('fake_flag')) && isNewish && !isEstablished) {
-    return { kind: 'spam', ruleId: 'scam_flag_new', pSpam: 0.97 }
+    return { kind: 'spam', ruleId: 'scam_flag_new', pSpam: 0.97, aboutAccount: true }
   }
 
   // Telegram's own dangerous-unofficial-client flag (userFull
@@ -57,14 +70,14 @@ export const applyDeterministicRules = (signals: Signal[]): DeterministicVerdict
   // scam/fake, so unlike scam_flag_new it does not require newness — only
   // an established/trusted local member is spared the deterministic call.
   if (has('unofficial_client_risk') && !isEstablished) {
-    return { kind: 'spam', ruleId: 'unofficial_client_new', pSpam: 0.97 }
+    return { kind: 'spam', ruleId: 'unofficial_client_new', pSpam: 0.97, aboutAccount: true }
   }
 
   // External ban databases (CAS/lols) + no meaningful local history.
   // Local-history requirement guards against rehabilitated accounts —
   // the known FP class of these databases.
   if (has('external_ban') && has('new_globally') && !isEstablished) {
-    return { kind: 'spam', ruleId: 'external_ban_new', pSpam: 0.96 }
+    return { kind: 'spam', ruleId: 'external_ban_new', pSpam: 0.96, aboutAccount: true }
   }
 
   // Edit-to-inject: message edited to insert URL/mention/invisibles.
