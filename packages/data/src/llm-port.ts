@@ -323,6 +323,12 @@ export const buildSystemPrompt = (canary: string, briefing: string | null): stri
     'SOME OTHER channel; it never describes a member replying to the post their',
     'chat is attached to.',
     '',
+    'What the SENDER\'s bio, business profile or own channel advertises describes',
+    'the ACCOUNT, not the message under review. A promotional profile is a reason',
+    'to read the message closely — it is never by itself a reason to call the',
+    'message spam. Somebody who runs a shop may also ask an ordinary question.',
+    'Judge the fenced text; let the profile inform how carefully you read it.',
+    '',
     'CHAT PURPOSE tells you whether being an advertisement is itself out of place',
     'here. A post that matches what the chat says it exists for is not spam merely',
     'for being promotional — judge such a post on the offer itself: who is hiring,',
@@ -441,6 +447,21 @@ export const buildUserContent = (
   parts.push(`SENDER: ${age}${joined}, ${user.messagesInChat} msgs in this chat, ${user.messagesGlobal} msgs globally, reputation ${user.reputationStatus}`)
   parts.push(`SENDER NAME (untrusted): ${untrusted(user.displayName, 60)}${user.username ? ` @${user.username}` : ''}`)
   if (input.enrichment.bio) parts.push(`SENDER BIO (untrusted): ${untrusted(input.enrichment.bio, 200)}`)
+  for (const text of input.enrichment.businessTexts.slice(0, 2)) {
+    parts.push(`SENDER BUSINESS PROFILE (untrusted): ${untrusted(text, 200)}`)
+  }
+  // What the sender's profile points at. Rendered only when there is one, and
+  // said plainly to be about the ACCOUNT: a channel is a fact about who is
+  // talking, and this pipeline's recurring failure is profile evidence leaking
+  // into a verdict about a sentence.
+  for (const channel of input.enrichment.linkedChannels.slice(0, 2)) {
+    const size = channel.subscribers !== null ? `, ${channel.subscribers} subscribers` : ''
+    const about = channel.description ? ` — ${untrusted(channel.description, 200)}` : ''
+    parts.push(
+      `SENDER'S OWN CHANNEL (untrusted, about the ACCOUNT and not about the ` +
+      `message): ${untrusted(channel.title, 80)}${size}${about}`
+    )
+  }
 
   if (input.enrichment.conversationWindow.length > 0) {
     parts.push('')

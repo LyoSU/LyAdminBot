@@ -6,13 +6,50 @@
  */
 import { Long, Photo, type TelegramClient, type tl } from '@mtcute/node'
 
+/**
+ * The channel a profile points at, as far as we can see it without joining.
+ *
+ * `photo` rather than base64 for the same reason as `latestAvatar`: the caller
+ * decides whether the download is worth it, and nothing here issues a second
+ * request for something this call already returned.
+ */
+export interface LinkedChannelInfo {
+  id: number
+  title: string
+  username: string | null
+  description: string | null
+  subscribers: number | null
+  photo: tl.RawPhoto | null
+}
+
 export interface UserProfileEnrichment {
   bio: string | null
+  /**
+   * Free text the account wrote about itself besides the bio.
+   *
+   * Only the Business INTRO qualifies. The greeting and away messages look
+   * promising and are not readable: `businessGreetingMessage` carries a
+   * `shortcut_id` pointing at a saved reply in the owner's own account, not the
+   * text. Premium-only either way, so this is usually empty — high precision,
+   * low recall.
+   */
+  businessTexts: string[]
   avatars: { count: number; latestSetDaysAgo: number | null } | null
   /** userFull.unofficial_security_risk — dangerous unofficial client. */
   unofficialClientRisk: boolean | null
   /** userFull.personal_channel_id — a channel linked on the profile (promo vector). */
   personalChannelId: number | null
+  /**
+   * What that channel turned out to be.
+   *
+   * Costs no username resolution: `users.getFullUser` already returns the
+   * channel in its `chats` array, access hash included. That matters — a bot
+   * may call `contacts.resolveUsername`, but its daily quota is small and a
+   * FLOOD_WAIT there stalls the shared connection, i.e. moderation everywhere
+   * (the same failure the `latestAvatar` note above records for
+   * photos.getUserPhotos). The description costs one extra call.
+   */
+  linkedChannel: LinkedChannelInfo | null
   /**
    * The newest avatar, already fetched by the photos.getUserPhotos call below.
    *
@@ -31,7 +68,8 @@ export const fetchUserProfile = async (
   nowUnix = Math.floor(Date.now() / 1000)
 ): Promise<UserProfileEnrichment> => {
   const result: UserProfileEnrichment = {
-    bio: null, avatars: null, unofficialClientRisk: null, personalChannelId: null, latestAvatar: null
+    bio: null, businessTexts: [], avatars: null, unofficialClientRisk: null,
+    personalChannelId: null, linkedChannel: null, latestAvatar: null
   }
 
   let inputUser: tl.RawInputUser | null = null
@@ -45,12 +83,49 @@ export const fetchUserProfile = async (
   }
   if (!inputUser) return result
 
-  // Call 1: users.getFullUser — bio + unofficial-client risk flag
+  // Call 1: users.getFullUser — bio, unofficial-client risk, and whatever the
+  // profile points at. The response carries the linked channel in `chats`, so
+  // reading it costs nothing beyond a call we already make.
   try {
     const full = await tg.call({ _: 'users.getFullUser', id: inputUser })
     result.bio = full.fullUser.about ?? null
     result.unofficialClientRisk = full.fullUser.unofficialSecurityRisk ?? false
     result.personalChannelId = full.fullUser.personalChannelId ?? null
+
+    const intro = full.fullUser.businessIntro
+    if (intro) {
+      result.businessTexts = [intro.title, intro.description].filter((t): t is string => !!t)
+    }
+
+    if (result.personalChannelId !== null) {
+      const channel = full.chats.find(
+        (c): c is tl.RawChannel => c._ === 'channel' && c.id === result.personalChannelId)
+      if (channel) {
+        result.linkedChannel = {
+          id: channel.id,
+          title: channel.title,
+          username: channel.username ?? null,
+          // Filled by the call below; the title alone is already worth having.
+          description: null,
+          subscribers: null,
+          photo: null
+        }
+        // Call 1b: the channel's own description and size. One extra request,
+        // and only for the minority of senders that link a channel at all.
+        try {
+          const chFull = await tg.call({
+            _: 'channels.getFullChannel',
+            channel: { _: 'inputChannel', channelId: channel.id, accessHash: channel.accessHash ?? Long.ZERO }
+          })
+          if (chFull.fullChat._ === 'channelFull') {
+            result.linkedChannel.description = chFull.fullChat.about || null
+            result.linkedChannel.subscribers = chFull.fullChat.participantsCount ?? null
+            const photo = chFull.fullChat.chatPhoto
+            result.linkedChannel.photo = photo?._ === 'photo' ? photo : null
+          }
+        } catch { /* description is a bonus — the title alone still reads */ }
+      }
+    }
   } catch { /* budget item failed — keep going */ }
 
   // Call 2: avatar history with dates (photos.getUserPhotos)

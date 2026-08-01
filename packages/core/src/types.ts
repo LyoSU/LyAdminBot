@@ -186,10 +186,42 @@ export interface NormalizedMessage {
 }
 
 /** Enrichment result — everything optional: the call budget may run out. */
+/**
+ * What a channel the sender points at turns out to be.
+ *
+ * The account links somewhere — from the profile's personal-channel field, or
+ * from a `t.me/…` in the bio — and this is what is on the other end. It is
+ * still information about the SENDER, never about the message: a channel whose
+ * description is a price list makes the account a promo vehicle, not this
+ * particular sentence an advert.
+ */
+export interface ChannelPreview {
+  /** How we came to look: the structured profile field, or a link in the bio. */
+  source: 'personal_channel' | 'bio_link'
+  title: string
+  /** The channel's own description, when it has one. */
+  description: string | null
+  subscribers: number | null
+  /** The channel's picture as base64, when downloaded, for NSFW screening. */
+  avatarBase64: string | null
+}
+
 export interface Enrichment {
   bio: string | null
+  /**
+   * Free text the account wrote about itself that is not the bio: the Telegram
+   * Business intro, greeting and away messages.
+   *
+   * Premium-only, so usually empty — high precision, low recall. But a greeting
+   * auto-sent to everyone who writes in is the same kind of unmoderated
+   * self-description as the bio and reads the same way, so it is scored the
+   * same way.
+   */
+  businessTexts: string[]
   /** userFull.personal_channel_id — a channel the user linked to their profile. */
   personalChannelId: number | null
+  /** Whatever the account points at, resolved. See `ChannelPreview`. */
+  linkedChannels: ChannelPreview[]
   resolvedMentions: ResolvedMention[]
   conversationWindow: ConversationLine[]
   /** Message photo, when present and downloaded (for LLM vision). */

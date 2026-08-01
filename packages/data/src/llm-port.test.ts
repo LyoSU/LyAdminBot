@@ -35,8 +35,9 @@ const policy: ChatPolicy = {
   reactionModeration: false, externalBanEnabled: true, customRules: [], trustedUserIds: []
 }
 const enrich = (o: Partial<Enrichment> = {}): Enrichment => ({
-  bio: null, personalChannelId: null, resolvedMentions: [], conversationWindow: [],
-  photoBase64: null, avatarBase64: null, storyBase64: [], ...o
+  bio: null, businessTexts: [], personalChannelId: null, linkedChannels: [],
+  resolvedMentions: [], conversationWindow: [], photoBase64: null, avatarBase64: null,
+  storyBase64: [], ...o
 })
 const makeInput = (o: { msg?: Partial<NormalizedMessage>; user?: Partial<UserSnapshot>; enrichment?: Partial<Enrichment>; chat?: Partial<NormalizedChat> } = {}): EvaluationInput => ({
   message: makeMsg(o.msg), chat: makeChat(o.chat), user: makeUser(o.user), policy, enrichment: enrich(o.enrichment)

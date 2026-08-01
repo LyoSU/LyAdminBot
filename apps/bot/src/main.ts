@@ -1086,7 +1086,8 @@ const AVATAR_MAX_BYTES = 2 * 1024 * 1024
 type UserProfile = Awaited<ReturnType<typeof fetchUserProfile>>
 
 const EMPTY_PROFILE: UserProfile = {
-  bio: null, avatars: null, unofficialClientRisk: null, personalChannelId: null, latestAvatar: null
+  bio: null, businessTexts: [], avatars: null, unofficialClientRisk: null,
+  personalChannelId: null, linkedChannel: null, latestAvatar: null
 }
 
 /**
@@ -1607,6 +1608,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   // cached at join when fresh; stories are best-effort (user-only surface).
   let avatarBase64: string | null = null
   let storyBase64: string[] = []
+  let linkedChannelAvatar: string | null = null
   // `userSender`: profile media is a user surface — a channel has none, and
   // asking would be an error rather than a null.
   if (newish && userSender && ports.moderation) {
@@ -1624,6 +1626,12 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
         : await downloadAvatarBase64(gateway.tg, sender.id)
       pruneExpired(avatarCache, AVATAR_CACHE_MAX)
       avatarCache.set(sender.id, { base64: avatarBase64, expiresAt: Date.now() + AVATAR_CACHE_TTL_MS })
+    }
+    // The picture of the channel the profile points at, on the same gate and
+    // from bytes `fetchUserProfile` already has.
+    if (profile.linkedChannel?.photo) {
+      linkedChannelAvatar = await rawPhotoToBase64(
+        gateway.tg, profile.linkedChannel.photo, AVATAR_MAX_BYTES)
     }
     if (storiesSurfaceAvailable) {
       storyBase64 = await downloadStoriesBase64(gateway.tg, sender.id)
@@ -1659,7 +1667,20 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     policy: { ...policy, ephemeralCaptcha: config.ephemeralCaptcha },
     enrichment: {
       bio: profile.bio,
+      businessTexts: profile.businessTexts,
       personalChannelId: profile.personalChannelId,
+      // What the profile points at, as far as we can see it. Shape, never
+      // message evidence: it says the account is a promo vehicle, not that this
+      // sentence is an advert.
+      linkedChannels: profile.linkedChannel
+        ? [{
+            source: 'personal_channel' as const,
+            title: profile.linkedChannel.title,
+            description: profile.linkedChannel.description,
+            subscribers: profile.linkedChannel.subscribers,
+            avatarBase64: linkedChannelAvatar
+          }]
+        : [],
       resolvedMentions: resolveMentionKinds(normalized.mentions),
       // Preceding chat lines — the current message is recorded after the
       // verdict so spam never pollutes its own context window.

@@ -278,6 +278,17 @@ export const SIGNALS = {
   promo_in_name: { weight: 1.8, kind: 'shape', group: 'profile_promo' },
   /** Linked personal channel — weak alone (legit users have them too). */
   personal_channel: { weight: 0.5, kind: 'shape', group: 'profile_promo' },
+  /**
+   * The channel the profile points at turned out to be an advert itself — its
+   * title or its own description reads the way a promo bio reads.
+   *
+   * Heavier than `promo_in_bio` (1.2) because it is a step less ambiguous: a
+   * link in a bio may be a second account or a friend's, while a channel whose
+   * blurb is a price list has stated its purpose. Still shape, and still
+   * capped with the rest of `profile_promo` — one profile advertised in several
+   * places is one profile.
+   */
+  promo_in_linked_channel: { weight: 1.5, kind: 'shape', group: 'profile_promo' },
   /** Invisible/zero-width characters in the display name — no legitimate use. */
   invisible_in_name: { weight: 1.2, kind: 'shape' },
   identity_churn_24h: { weight: 1.5, kind: 'shape' },
@@ -290,6 +301,9 @@ export const SIGNALS = {
    */
   nsfw_avatar: { weight: 1.0, kind: 'shape', group: 'profile_nsfw' },
   nsfw_stories: { weight: 0.9, kind: 'shape', group: 'profile_nsfw' },
+  /** Explicit imagery on the channel the profile points at — same group, for
+   *  the same reason: it is one person's imagery, seen in one more place. */
+  nsfw_linked_channel: { weight: 1.0, kind: 'shape', group: 'profile_nsfw' },
 
   // ───────────────────── history / age (shape) ─────────────────────
 

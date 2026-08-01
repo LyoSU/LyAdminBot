@@ -1,10 +1,11 @@
 /**
- * Bio (userFull.about) signal extraction. Pure function over the bio string.
+ * Signals from what an account says about ITSELF — the bio (userFull.about) and
+ * the Telegram Business texts beside it. Pure functions over strings.
  *
- * Spammers hide contact/promo in the bio because the bio is never moderated,
- * only messages are. So a brand-new account with a neutral message but a promo
- * link/contact in the bio is a classic pattern. This is the cheap, deterministic
- * counterpart to feeding the bio to the LLM.
+ * Spammers hide contact/promo there because none of it is ever moderated, only
+ * messages are. So a brand-new account with a neutral message but a promo
+ * link/contact in the profile is a classic pattern. This is the cheap,
+ * deterministic counterpart to feeding the profile to the LLM.
  *
  * Calibration note: bio analysis has a confirmed v1 FP class (innocent bios with
  * a website link). So `promo_in_bio` is a LOW-weight scoring signal, never a
@@ -14,17 +15,39 @@ import type { Signal } from '../types.js'
 import { classifyUrl, URL_TOKEN_REGEX, PROMO_URL_KINDS } from './urls.js'
 import { PHONE_REGEX, CASHTAG_REGEX } from './message.js'
 
-export const extractBioSignals = (bio: string | null | undefined): Signal[] => {
-  if (!bio || bio.trim().length === 0) return []
+/** What in a self-description reads as advertising, or null if nothing does. */
+const promoIn = (text: string): string | null => {
+  const promoUrl = (text.match(URL_TOKEN_REGEX) ?? [])
+    .find((t) => PROMO_URL_KINDS.has(classifyUrl(t).kind))
+  if (promoUrl) return promoUrl
+  if (PHONE_REGEX.test(text)) return 'phone number'
+  if (CASHTAG_REGEX.test(text)) return 'cashtag'
+  return null
+}
 
-  const tokens = bio.match(URL_TOKEN_REGEX) ?? []
-  const promoUrl = tokens.find((t) => PROMO_URL_KINDS.has(classifyUrl(t).kind))
-  const hasPhone = PHONE_REGEX.test(bio)
-  const hasCashtag = CASHTAG_REGEX.test(bio)
+/**
+ * @param bio userFull.about
+ * @param businessTexts Business intro / greeting / away messages. Premium-only,
+ *   so usually empty — but the same kind of text, read the same way. A greeting
+ *   is auto-sent to everyone who writes in, which makes it an advert with
+ *   delivery.
+ */
+export const extractBioSignals = (
+  bio: string | null | undefined,
+  businessTexts: readonly string[] = []
+): Signal[] => {
+  const fields: { source: string; text: string }[] = [
+    ...(bio && bio.trim().length > 0 ? [{ source: 'bio', text: bio }] : []),
+    ...businessTexts
+      .filter((text) => text.trim().length > 0)
+      .map((text) => ({ source: 'business', text }))
+  ]
 
-  if (promoUrl || hasPhone || hasCashtag) {
-    const evidence = promoUrl ?? (hasPhone ? 'phone number' : 'cashtag')
-    return [{ name: 'promo_in_bio', evidence: `bio: ${evidence}`.slice(0, 80) }]
+  for (const { source, text } of fields) {
+    const found = promoIn(text)
+    // One profile advertised in three fields is still one profile: the first
+    // hit names the signal and the rest would only double-count it.
+    if (found) return [{ name: 'promo_in_bio', evidence: `${source}: ${found}`.slice(0, 80) }]
   }
   return []
 }

@@ -40,7 +40,9 @@ const makePolicy = (overrides: Partial<ChatPolicy> = {}): ChatPolicy => ({
 })
 
 const emptyEnrichment: Enrichment = {
-  bio: null, personalChannelId: null, resolvedMentions: [], conversationWindow: [],
+  bio: null,
+  businessTexts: [],
+  linkedChannels: [], personalChannelId: null, resolvedMentions: [], conversationWindow: [],
   photoBase64: null, avatarBase64: null, storyBase64: []
 }
 
@@ -1135,6 +1137,55 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
     }), {})
     expect(v.ruleId).toBe('external_ban_new')
     expect(removesSender(v.action)).toBe(true)
+  })
+
+  it('what the profile advertises gets the message read, and decides nothing itself', async () => {
+    // The escort-bot shape: a neutral, on-topic remark from an account whose
+    // picture is explicit and whose linked channel is a price list. Everything
+    // known here is about the ACCOUNT, so `contentEvidence` stays at zero and
+    // the arithmetic may not act — the profile's whole job is to make sure the
+    // one stage that reads text is asked.
+    const escort = {
+      msg: { text: 'Так, я теж це читала сьогодні вранці, дуже сумна новина' },
+      user: newcomer,
+      enrichment: {
+        linkedChannels: [{
+          source: 'personal_channel' as const,
+          title: 'Приват 18+',
+          description: 'Прайс і умови — t.me/+abcdefghij',
+          subscribers: 340,
+          avatarBase64: 'AAAA'
+        }]
+      }
+    }
+    const explicit: PipelinePorts = {
+      moderation: {
+        check: async (text) => text === ''
+          ? modResult({ sexual: 0.93 })
+          : modClean
+      }
+    }
+
+    const blind = await evaluateMessage(makeInput(escort), explicit)
+    expect(blind.signals.map((s) => s.name)).toEqual(expect.arrayContaining(
+      ['promo_in_linked_channel', 'nsfw_linked_channel']))
+    expect(blind.meta['contentEvidence']).toBe(0)
+    expect(isEnforcementAction(blind.action)).toBe(false)
+    expect(blind.reasonCode).toBe('soft_shape_only')
+
+    // With a reader, the profile is context and the model still judges the text.
+    let sawChannel: string | null = null
+    const read = await evaluateMessage(makeInput(escort), {
+      ...explicit,
+      llm: {
+        classify: async (i) => {
+          sawChannel = i.enrichment.linkedChannels[0]?.title ?? null
+          return { pSpam: 0.02, reasonCode: 'small_talk', evidence: null, cached: false }
+        }
+      }
+    })
+    expect(sawChannel).toBe('Приват 18+')
+    expect(read.action).toBe('none')
   })
 
   it('an ordinary delete quizzes nobody — the gate belongs to the capped band', async () => {

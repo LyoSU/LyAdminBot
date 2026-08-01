@@ -19,6 +19,7 @@ import type { LlmVerdict, PipelinePorts } from './ports.js'
 import { extractMessageSignals } from './signals/message.js'
 import { extractUserSignals } from './signals/user.js'
 import { extractBioSignals } from './signals/bio.js'
+import { extractLinkedChannelSignals } from './signals/channel.js'
 import { applyDeterministicRules } from './rules.js'
 import { parseCustomRule, customRuleMatches } from './custom-rules.js'
 import { scoreSignals, hasDecisiveSignal, mayRemoveSender, contentEvidence } from './score.js'
@@ -327,7 +328,8 @@ export const evaluateMessage = async (
   const signals: Signal[] = [
     ...extractMessageSignals(input.message),
     ...extractUserSignals(input.user),
-    ...extractBioSignals(input.enrichment.bio)
+    ...extractBioSignals(input.enrichment.bio, input.enrichment.businessTexts),
+    ...extractLinkedChannelSignals(input.enrichment.linkedChannels)
   ]
   // Chat-level trusted list is equivalent to trusted reputation.
   if (input.policy.trustedUserIds.includes(input.user.id) &&
@@ -588,6 +590,19 @@ export const evaluateMessage = async (
       }
       if (hits.size > 0) {
         signals.push({ name: 'nsfw_stories', evidence: [...hits].join(', ') })
+      }
+    }
+    // The picture on the channel the profile points at. Same treatment as the
+    // avatar and for the same reason: it says what the account is for, not what
+    // this message is, so it may nudge and never convict.
+    for (const channel of input.enrichment.linkedChannels) {
+      if (!channel.avatarBase64) continue
+      const result = await safe('moderation_channel', () =>
+        ports.moderation!.check('', channel.avatarBase64))
+      const hit = nsfwProfileHit(result)
+      if (hit !== null) {
+        signals.push({ name: 'nsfw_linked_channel', evidence: `«${channel.title}»: ${hit}` })
+        break
       }
     }
   }
