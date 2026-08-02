@@ -5,7 +5,7 @@ import type {
 import type { LlmTier, ModerationResult, PipelinePorts, SessionPort } from './ports.js'
 import { evaluateMessage } from './pipeline.js'
 import { isEnforcementAction, removesSender } from './policy.js'
-import { contentEvidence } from './score.js'
+import { contentEvidence, mayRemoveSender } from './score.js'
 
 // ── fixtures ──────────────────────────────────────────────────────────
 
@@ -747,6 +747,23 @@ describe('evaluateMessage — knowledge ports', () => {
     expect(read).toBe(1)
   })
 
+  it('REGRESSION: a resemblance does not speak over a reader either', async () => {
+    // The same defect as above, in the stage next door — a nearest neighbour
+    // recognises a shape and never reads the words. Production 2026-08-02, one
+    // campaign in one chat inside twelve minutes: six copies removed by the
+    // classifier, the signature store and the ban feed, then a seventh variant
+    // matched a neighbour and came back as delete + a question the chat
+    // resolved in nine seconds.
+    const llm: PipelinePorts['llm'] = {
+      classify: async () => ({ pSpam: 1, reasonCode: 'job_scam', evidence: null, cached: false })
+    }
+    const v = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
+      llm, vectors: { search: async () => ({ similarity: 0.95, status: 'confirmed', vectorId: 'v1' }) }
+    })
+    expect(v.action).toBe('ban')
+    expect(v.needsVote).toBe(false)
+  })
+
   it('a port that cannot tell is read as a wave, never as a blast', async () => {
     const v = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
       velocity: { check: async () => ({ exceeded: true }) }
@@ -754,11 +771,16 @@ describe('evaluateMessage — knowledge ports', () => {
     expect(v.needsVote).toBe(true)
   })
 
-  it('confirmed vector match above threshold decides', async () => {
+  it('a confirmed neighbour decides once the removal is already earned', async () => {
+    // The stage still decides — but only when its verdict is the real one. With
+    // the sender-removal bar already cleared by evidence that read the text,
+    // there is nothing for a later stage to add and the short-circuit is free.
     const ports: PipelinePorts = {
       vectors: { search: async () => ({ similarity: 0.95, status: 'confirmed', vectorId: 'v1' }) }
     }
-    const v = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), ports)
+    const earned = { ...spamText, text: 'Потріб​ні люди на склад, оплата щодня, пишіть в особисті' }
+    const v = await evaluateMessage(makeInput({ msg: earned, user: newcomer }), ports)
+    expect(mayRemoveSender(v.signals)).toBe(true)
     expect(v.decidedBy).toBe('vector')
   })
 
@@ -773,7 +795,13 @@ describe('evaluateMessage — knowledge ports', () => {
     const v = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
       vectors: { search: async () => ({ similarity: 0.97, status: 'confirmed', vectorId: 'v1' }) }
     })
-    expect(v.decidedBy).toBe('vector')
+    //
+    // The stage no longer labels this verdict its own (2026-08-02): when the
+    // bar bites, the resemblance is handed on as a signal and whatever can read
+    // the text decides. With nothing here that can, the score path lands in the
+    // same place by weighing the same fact — which is the point. The claim worth
+    // pinning was never `decidedBy`, it is that a likeness does not take a
+    // person away.
     expect(v.action).toBe('delete')
     expect(removesSender(v.action)).toBe(false)
     expect(v.signals.some((s) => s.name === 'vector_similar_spam')).toBe(true)
