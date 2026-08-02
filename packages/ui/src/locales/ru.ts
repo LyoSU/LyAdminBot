@@ -130,6 +130,7 @@ export const ru: Locale = {
       promo_in_message_link: 'ссылка ведёт на рекламный канал',
       restricted_for_spam: 'Telegram ограничил за спам',
       just_joined: 'только зашёл и сразу пишет',
+      joined_during_surge: 'присоединился во время наплыва новых участников',
       scam_flag: 'Telegram пометил аккаунт как мошеннический',
       fake_flag: 'Telegram пометил аккаунт как фейковый',
       restricted_flag: 'аккаунт ограничен Telegram',
@@ -286,6 +287,7 @@ export const ru: Locale = {
     duplicate: 'ℹ️ Это уже добавлено.',
     tooLong: '⚠️ Текст слишком длинный (макс. 1000 символов).',
     saveFailed: '⚠️ Не удалось сохранить.',
+    surgeAlert: (count, riskCount) => `⚠️ Быстрые вступления · ${count} участников · ${riskCount} маркеров риска`,
     defaultGreeting: (name) => `👋 Добро пожаловать, ${name}!`,
     editor: {
       title: (state, nTexts, nGifs) =>

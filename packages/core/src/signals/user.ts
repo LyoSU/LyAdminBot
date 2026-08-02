@@ -199,6 +199,7 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
   if (user.joinedAgoSeconds !== null && user.joinedAgoSeconds <= JUST_JOINED_MAX_SECONDS) {
     signals.push({ name: 'just_joined', evidence: `joined ${Math.round(user.joinedAgoSeconds)}s ago` })
   }
+  if (user.joinedDuringSurge === true) signals.push({ name: 'joined_during_surge' })
 
   // Spreader pattern: present in many chats we watch yet barely posting —
   // a freshly-joined account fanning out before a campaign. Guarded by

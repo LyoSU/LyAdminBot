@@ -202,6 +202,7 @@ export interface Locale {
     duplicate: string
     tooLong: string
     saveFailed: string
+    surgeAlert: (count: number, riskCount: number) => string
     /** Default greeting if an admin enables welcome without setting text. */
     defaultGreeting: (name: string) => string
     /** PM welcome editor (opened from /settings). */

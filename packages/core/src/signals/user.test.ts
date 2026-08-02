@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import type { UserSnapshot } from '../types.js'
+import { contentEvidence, mayRemoveSender } from '../score.js'
 import { isTrustSignal } from './registry.js'
 import { extractUserSignals } from './user.js'
 
@@ -103,6 +104,13 @@ describe('extractUserSignals — suspicious', () => {
     expect(names(makeUser({ joinedAgoSeconds: 15 }))).toContain('just_joined')
     expect(names(makeUser({ joinedAgoSeconds: 3600 }))).not.toContain('just_joined')
     expect(names(makeUser({ joinedAgoSeconds: null }))).not.toContain('just_joined')
+  })
+
+  it('treats joining during a surge as account shape, never message evidence', () => {
+    const signals = extractUserSignals(makeUser({ joinedDuringSurge: true }))
+    expect(signals).toContainEqual({ name: 'joined_during_surge' })
+    expect(contentEvidence(signals)).toEqual({ strongest: 0, total: 0 })
+    expect(mayRemoveSender(signals)).toBe(false)
   })
 
   it('flags sleeper-awakened accounts (old account, fresh local activity)', () => {

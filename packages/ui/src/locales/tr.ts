@@ -130,6 +130,7 @@ export const tr: Locale = {
       promo_in_message_link: 'bağlantı bir reklam kanalına gidiyor',
       restricted_for_spam: 'Telegram spam nedeniyle kısıtladı',
       just_joined: 'katılır katılmaz hemen yazdı',
+      joined_during_surge: 'yeni üye akını sırasında katıldı',
       scam_flag: 'Telegram hesabı dolandırıcı olarak işaretledi',
       fake_flag: 'Telegram hesabı sahte olarak işaretledi',
       restricted_flag: 'hesap Telegram tarafından kısıtlanmış',
@@ -286,6 +287,7 @@ export const tr: Locale = {
     duplicate: 'ℹ️ Zaten eklendi.',
     tooLong: '⚠️ Metin çok uzun (en fazla 1000 karakter).',
     saveFailed: '⚠️ Kaydedilemedi.',
+    surgeAlert: (count, riskCount) => `⚠️ Hızlı katılım · ${count} üye · ${riskCount} risk işareti`,
     defaultGreeting: (name) => `👋 Hoş geldin, ${name}!`,
     editor: {
       title: (state, nTexts, nGifs) =>

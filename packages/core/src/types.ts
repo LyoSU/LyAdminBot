@@ -110,6 +110,8 @@ export interface UserSnapshot {
    * "joined and immediately posted".
    */
   joinedAgoSeconds: number | null
+  /** True while this member's recorded join belongs to a detected chat surge. */
+  joinedDuringSurge?: boolean
 }
 
 /** A mention from the message after resolution (adapters/enrich). */

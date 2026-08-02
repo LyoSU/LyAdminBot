@@ -26,6 +26,7 @@ export interface UserProfileFacts {
   unofficialClientRisk: boolean | null
   /** Seconds since the user joined this chat (channels.getParticipant.date). */
   joinedAgoSeconds?: number | null
+  joinedDuringSurge?: boolean
 }
 
 export const buildUserSnapshot = (
@@ -50,6 +51,7 @@ export const buildUserSnapshot = (
   // codes (e.g. 'spam') — empty for unrestricted users or when absent.
   restrictionReasons: sender.restrictionReason?.map((r) => r.reason) ?? [],
   joinedAgoSeconds: profile?.joinedAgoSeconds ?? null,
+  joinedDuringSurge: profile?.joinedDuringSurge ?? false,
   predictedAgeDays: predictAccountAgeDays(sender.id, nowUnix),
   localAgeDays: history?.firstSeenUnix != null
     ? Math.max(0, (nowUnix - history.firstSeenUnix) / 86400)
@@ -99,6 +101,7 @@ export const buildChannelSnapshot = (
   },
   restrictionReasons: [],
   joinedAgoSeconds: null,
+  joinedDuringSurge: false,
   // Channel ids come from a different namespace than user ids: feeding one to
   // the user-id → registration-date table would invent an age.
   predictedAgeDays: null,

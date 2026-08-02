@@ -130,6 +130,7 @@ export const uk: Locale = {
       promo_in_message_link: 'посилання веде на рекламний канал',
       restricted_for_spam: 'Telegram обмежив за спам',
       just_joined: 'щойно зайшов і одразу пише',
+      joined_during_surge: 'приєднався під час напливу нових учасників',
       scam_flag: 'Telegram позначив акаунт як шахрайський',
       fake_flag: 'Telegram позначив акаунт як фейковий',
       restricted_flag: 'акаунт обмежений Telegram',
@@ -286,6 +287,7 @@ export const uk: Locale = {
     duplicate: 'ℹ️ Це вже додано.',
     tooLong: '⚠️ Текст задовгий (макс. 1000 символів).',
     saveFailed: '⚠️ Не вдалося зберегти.',
+    surgeAlert: (count, riskCount) => `⚠️ Швидкі вступи · ${count} учасників · ${riskCount} маркерів ризику`,
     defaultGreeting: (name) => `👋 Вітаємо, ${name}!`,
     editor: {
       title: (state, nTexts, nGifs) =>

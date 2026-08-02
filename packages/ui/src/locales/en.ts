@@ -130,6 +130,7 @@ export const en: Locale = {
       promo_in_message_link: 'the link leads to an advert channel',
       restricted_for_spam: 'Telegram restricted them for spam',
       just_joined: 'joined and posted right away',
+      joined_during_surge: 'joined during an influx of new members',
       scam_flag: 'Telegram flagged the account as a scam',
       fake_flag: 'Telegram flagged the account as fake',
       restricted_flag: 'the account is restricted by Telegram',
@@ -286,6 +287,7 @@ export const en: Locale = {
     duplicate: 'ℹ️ Already added.',
     tooLong: '⚠️ Text too long (max 1000 characters).',
     saveFailed: '⚠️ Could not save.',
+    surgeAlert: (count, riskCount) => `⚠️ Rapid joins · ${count} members · ${riskCount} risk markers`,
     defaultGreeting: (name) => `👋 Welcome, ${name}!`,
     editor: {
       title: (state, nTexts, nGifs) =>

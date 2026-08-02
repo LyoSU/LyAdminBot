@@ -38,6 +38,7 @@ import { registerBotCommands } from './commands.js'
 import { formatDuration, parseBananDuration } from './duration.js'
 import { formatSignals, log } from './logger.js'
 import { RightsMemory, RIGHTS_ERROR_REGEX } from './rights.js'
+import { JOIN_WINDOW_MS, JoinRateTracker } from './join-rate.js'
 
 const config = loadConfig()
 
@@ -123,6 +124,7 @@ const chatDescriptions = createChatDescriptionCache((chatId) => fetchChatDescrip
 const resolveTmePreview = createTmePreviewResolver()
 
 const ports = buildPorts()
+const joinRate = new JoinRateTracker()
 
 /** Verdicts kept for the [Why?] button (memory, bounded). */
 const recentVerdicts = new Map<string, Verdict>()
@@ -1238,13 +1240,37 @@ const pruneExpired = (cache: Map<number, { expiresAt: number }>, max: number): v
  */
 const JOIN_SCREEN_MAX = 10
 
+const maybeSendJoinSurgeAlert = async (chat: Chat): Promise<void> => {
+  const alert = joinRate.takeSurgeAlert(chat.id)
+  if (!alert) return
+  const groupDoc = await store.getGroupDoc(chat.id).catch(() => null)
+  const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
+  const buttons = selfUsername
+    ? settingsDeepLink(locale, selfUsername, chat.id).buttons
+    : []
+  const sent = await gateway.tg.sendText(
+    chat.id,
+    viewHtml(locale.welcome.surgeAlert(alert.total, alert.riskCount)),
+    { ...(buttons.length > 0 ? { replyMarkup: toKeyboard(buttons) } : {}) }
+  ).catch(() => null)
+  if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_COMPACT_MS, 'join_surge')
+}
+
 const screenJoinerAvatars = async (chat: Chat, joiners: User[]): Promise<void> => {
-  if (!ports.moderation) return
   // A bulk add can carry dozens of users; screening all of them sequentially
   // would stall the update loop and burn a moderation call each. The cap keeps
   // the join path bounded — the authoritative check still runs per message.
-  for (const joiner of joiners.slice(0, JOIN_SCREEN_MAX)) {
-    if (joiner.id === selfId) continue
+  const candidates = joiners.filter((joiner) => joiner.id !== selfId)
+  const granted = Math.min(JOIN_SCREEN_MAX, joinRate.claimScreening(chat.id, candidates.length))
+  for (const joiner of candidates.slice(0, granted)) {
+    const history = await store.getUserDoc(joiner.id)
+      .then((doc) => userDocToHistory(doc as never, 0))
+      .catch(() => null)
+    if (history?.externalBan?.banned) {
+      joinRate.noteRisk(chat.id, joiner.id)
+      await maybeSendJoinSurgeAlert(chat)
+    }
+    if (!ports.moderation) continue
     const base64 = await downloadAvatarBase64(gateway.tg, joiner.id)
     pruneExpired(avatarCache, AVATAR_CACHE_MAX)
     avatarCache.set(joiner.id, { base64, expiresAt: Date.now() + AVATAR_CACHE_TTL_MS })
@@ -1260,6 +1286,8 @@ const screenJoinerAvatars = async (chat: Chat, joiners: User[]): Promise<void> =
         log.info('nsfw_avatar_join', {
           chatId: chat.id, chat: chat.title ?? undefined, userId: joiner.id, hit
         })
+        joinRate.noteRisk(chat.id, joiner.id)
+        await maybeSendJoinSurgeAlert(chat)
       }
     } catch { /* dead key / API error surfaces via the message-path meta log */ }
   }
@@ -1270,6 +1298,7 @@ const handleWelcomeGreeting = async (message: Message, chat: Chat, joiners: User
   if (joiners.length === 0) return
   const welcome = await store.getWelcome(chat.id).catch(() => null)
   if (!welcome || !welcome.enable) return
+  if (!joinRate.claimWelcome(chat.id)) return
   const groupDoc = await store.getGroupDoc(chat.id).catch(() => null)
   const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
   const names = joiners.map((j) => `<b>${escapeName(j.displayName)}</b>`).join(', ')
@@ -1440,6 +1469,11 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   if (message.action) {
     const joiners = await extractJoiners(message)
     if (joiners.length > 0) {
+      const rate = joinRate.note(chat.id, joiners.length, joiners.map((joiner) => joiner.id))
+      if (rate.started) {
+        log.info('join_surge', { chatId: chat.id, count: rate.total, windowMs: JOIN_WINDOW_MS })
+        void maybeSendJoinSurgeAlert(chat).catch(() => { /* best-effort */ })
+      }
       await handleWelcomeGreeting(message, chat, joiners)
       // Fire-and-forget: avatar download must never delay update handling.
       void screenJoinerAvatars(chat, joiners).catch(() => { /* best-effort */ })
@@ -1689,7 +1723,11 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
         userSender,
         history === null ? null : { ...history, avatars: profile.avatars, externalBan },
         undefined,
-        { unofficialClientRisk: profile.unofficialClientRisk, joinedAgoSeconds }
+        {
+          unofficialClientRisk: profile.unofficialClientRisk,
+          joinedAgoSeconds,
+          joinedDuringSurge: joinRate.joinedDuringSurge(chat.id, userSender.id)
+        }
       )
     : buildChannelSnapshot(channelSender!, history)
 

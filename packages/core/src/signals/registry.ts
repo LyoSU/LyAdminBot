@@ -355,6 +355,8 @@ export const SIGNALS = {
   avatar_recently_set: { weight: 0.6, kind: 'shape', group: 'newness' },
   /** Joined the chat <2min before posting. */
   just_joined: { weight: 1.0, kind: 'shape', group: 'newness' },
+  /** Joined inside a high-rate episode; routing context, never message proof. */
+  joined_during_surge: { weight: 0.5, kind: 'shape', group: 'newness' },
   /**
    * Present in many chats we watch while barely posting — spreader pattern.
    * Modest weight; replay should confirm before trusting it further.

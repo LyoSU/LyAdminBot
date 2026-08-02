@@ -130,6 +130,7 @@ export const by: Locale = {
       promo_in_message_link: 'спасылка вядзе на рэкламны канал',
       restricted_for_spam: 'Telegram абмежаваў за спам',
       just_joined: 'толькі зайшоў і адразу піша',
+      joined_during_surge: 'далучыўся падчас наплыву новых удзельнікаў',
       scam_flag: 'Telegram пазначыў акаўнт як махлярскі',
       fake_flag: 'Telegram пазначыў акаўнт як фэйкавы',
       restricted_flag: 'акаўнт абмежаваны Telegram',
@@ -286,6 +287,7 @@ export const by: Locale = {
     duplicate: 'ℹ️ Гэта ўжо дададзена.',
     tooLong: '⚠️ Тэкст занадта доўгі (макс. 1000 сімвалаў).',
     saveFailed: '⚠️ Не ўдалося захаваць.',
+    surgeAlert: (count, riskCount) => `⚠️ Хуткія далучэнні · ${count} удзельнікаў · ${riskCount} маркераў рызыкі`,
     defaultGreeting: (name) => `👋 Вітаем, ${name}!`,
     editor: {
       title: (state, nTexts, nGifs) =>
