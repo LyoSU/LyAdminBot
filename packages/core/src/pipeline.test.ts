@@ -713,6 +713,40 @@ describe('evaluateMessage — knowledge ports', () => {
     expect(wave.needsVote).toBe(true)
   })
 
+  it('REGRESSION: repetition may strengthen a verdict, never weaken it', async () => {
+    // Production 2026-08-02, one sender, one text, one chat. The classifier read
+    // the text at 04:35 and returned a ban at 1.00; at 04:50 the same text came
+    // back from its cache in 7 ms. From 04:55 on, velocity tripped first and
+    // every further copy was answered with delete + a question for the chat —
+    // seven times, and the chat answered "spam" on six of them.
+    //
+    // The third copy of a text already judged is more damning than the first,
+    // and the pipeline graded it lower. Velocity counts copies and never reads
+    // one, so its own verdict is capped for want of evidence it structurally
+    // cannot have; short-circuiting on that hedge spends the saving to buy a
+    // weaker answer than the stage below already holds.
+    const llm: PipelinePorts['llm'] = {
+      classify: async () => ({ pSpam: 1, reasonCode: 'crypto_scam', evidence: null, cached: true })
+    }
+    const first = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), { llm })
+    const repeated = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
+      llm, velocity: { check: async () => ({ exceeded: true, singleAuthor: true }) }
+    })
+    expect(first.action).toBe('ban')
+    expect(repeated.action).toBe('ban')
+    expect(repeated.needsVote, 'nobody should be asked twice about a settled text').toBe(false)
+  })
+
+  it('a blast still hands the message to whatever can read it', async () => {
+    // The other half: falling through must reach the readers, not skip them.
+    let read = 0
+    await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
+      velocity: { check: async () => ({ exceeded: true, singleAuthor: true }) },
+      moderation: { check: async () => { read += 1; return modClean } }
+    })
+    expect(read).toBe(1)
+  })
+
   it('a port that cannot tell is read as a wave, never as a blast', async () => {
     const v = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
       velocity: { check: async () => ({ exceeded: true }) }

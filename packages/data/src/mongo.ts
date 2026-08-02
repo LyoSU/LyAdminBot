@@ -622,6 +622,20 @@ export class MongoStore {
 
   // ── community votes (survive restarts; TTL 7d like modevents) ─────────
 
+  /**
+   * Ceiling for the text a resolved vote will teach — Telegram's own maximum
+   * for a message, so it can never shorten one that really arrived.
+   *
+   * This is not a display budget. `learnText` is hashed verbatim when the vote
+   * resolves, so a cap that trims a real message files the lesson under a hash
+   * no copy of that message will ever produce. It sat at 1000 until 2026-08-02,
+   * when a long text in one chat was voted spam six times while every further
+   * copy still raised nothing but the candidate the auto-learner had written —
+   * the auto-learner keeps the text whole, so the two writers of one store were
+   * hashing different strings and neither could ever promote the other's entry.
+   */
+  private static readonly MAX_LEARN_TEXT = 4096
+
   /** Open a vote. Returns false when one already exists for this message. */
   async openVote(params: {
     chatId: number
@@ -640,7 +654,7 @@ export class MongoStore {
         targetUserId: params.targetUserId,
         targetLabel: params.targetLabel.slice(0, 64),
         textPreview: params.textPreview.slice(0, 200),
-        learnText: (params.learnText ?? params.textPreview).slice(0, 1000),
+        learnText: (params.learnText ?? params.textPreview).slice(0, MongoStore.MAX_LEARN_TEXT),
         openedBy: params.openedBy,
         promptMessageId: null,
         ballots: [],

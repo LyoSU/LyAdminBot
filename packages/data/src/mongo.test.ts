@@ -277,3 +277,38 @@ describe('recordOverride', () => {
     expect(retired).toHaveLength(1)
   })
 })
+
+describe('openVote — the text a resolved vote will teach', () => {
+  const capture = (): { store: MongoStore; docs: Record<string, unknown>[] } => {
+    const docs: Record<string, unknown>[] = []
+    const store = {
+      votes: { insertOne: async (d: Record<string, unknown>) => { docs.push(d); return {} } }
+    } as unknown as MongoStore
+    return { store: Object.assign(store, { openVote: MongoStore.prototype.openVote }), docs }
+  }
+
+  it('keeps the text whole enough to hash back to the message that produced it', async () => {
+    // 2026-08-02: the field was capped at 1000 characters. A signature is a hash
+    // of exactly the text it is handed, so for anything longer the lesson a
+    // confirmed vote wrote was filed under a hash no copy of that message can
+    // ever produce — while the auto-learned entry, which keeps the text whole,
+    // stayed a candidate forever. One text in one chat was voted spam six times
+    // and the seventh copy still raised nothing but a candidate signal.
+    const { store, docs } = capture()
+    const text = 'ц'.repeat(4096) // Telegram's own ceiling for a text message
+    await store.openVote({
+      chatId: -100, messageId: 1, targetUserId: 2, targetLabel: 'x',
+      textPreview: text, openedBy: 3
+    })
+    expect(docs[0]?.['learnText']).toBe(text)
+  })
+
+  it('the display preview stays short — it is a different field for a reason', async () => {
+    const { store, docs } = capture()
+    await store.openVote({
+      chatId: -100, messageId: 1, targetUserId: 2, targetLabel: 'x',
+      textPreview: 'я'.repeat(500), openedBy: 3
+    })
+    expect(String(docs[0]?.['textPreview'])).toHaveLength(200)
+  })
+})

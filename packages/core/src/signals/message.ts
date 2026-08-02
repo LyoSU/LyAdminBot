@@ -70,6 +70,34 @@ export const CASHTAG_REGEX = /\$[A-Z]{2,6}\b/
  */
 const INVISIBLE_IN_WORD_REGEX = /\p{L}[\u2060\u200B]+\p{L}/u
 
+/**
+ * The same obfuscation, caught by density instead of by a list of code points.
+ *
+ * The pair above is named explicitly because those two have no innocent use
+ * between letters. 2026-08-02: a message arrived separated by two others, and
+ * nothing fired \u2014 adding them would only move the goal to the next of the ~160
+ * characters in `\p{Cf}`. Membership cannot be the test for the wider class:
+ * U+200C is required orthography in Persian, Hindi and Kurdish, and a bidi
+ * isolate is how an RTL sentence quotes an LTR name.
+ *
+ * Frequency can be. Legitimate use marks a few boundaries in a sentence;
+ * obfuscation goes between every letter, because anything less leaves runs of
+ * the original text intact for the layers below to match on. The thresholds sit
+ * far from both: real orthography lands near a twentieth of the letter gaps,
+ * and the production case filled all of them.
+ */
+const IN_WORD_FORMAT_REGEX = /\p{L}\p{Cf}+(?=\p{L})/gu
+const SEPARATION_MIN_RUNS = 8
+const SEPARATION_MIN_SHARE = 0.5
+
+/** How much of the text is letters wedged apart by format characters. */
+const separationShare = (text: string): { runs: number; share: number } => {
+  const runs = [...text.matchAll(IN_WORD_FORMAT_REGEX)].length
+  if (runs === 0) return { runs, share: 0 }
+  const gaps = [...text.replace(/\p{Cf}/gu, '').matchAll(/\p{L}(?=\p{L})/gu)].length
+  return { runs, share: gaps === 0 ? 0 : runs / gaps }
+}
+
 const looksUrlLike = (s: string): boolean => /^(https?:\/\/|www\.|t\.me\/)/i.test(s.trim())
 
 // A "word" borrowing letters from a look-alike alphabet — homoglyph evasion
@@ -122,8 +150,17 @@ export const extractMessageSignals = (msg: NormalizedMessage): Signal[] => {
   if (PHONE_REGEX.test(text)) signals.push({ name: 'phone_number' })
   if (CASHTAG_REGEX.test(text)) signals.push({ name: 'cashtag' })
   if (text.length > LONG_TEXT_THRESHOLD) signals.push({ name: 'long_text' })
+  const separation = separationShare(text)
   if (INVISIBLE_IN_WORD_REGEX.test(text)) {
     signals.push({ name: 'invisible_in_word', evidence: 'invisible chars injected inside words' })
+  } else if (separation.runs >= SEPARATION_MIN_RUNS && separation.share >= SEPARATION_MIN_SHARE) {
+    // Named with its numbers: at weight 2.0 this signal alone clears the bar for
+    // removing the sender, so a false positive has to be arguable with.
+    signals.push({
+      name: 'invisible_in_word',
+      evidence: `letters separated by invisible characters (${separation.runs} of ` +
+        `${Math.round(separation.runs / separation.share)} gaps)`
+    })
   }
   if (hasMixedScriptWord(text)) signals.push({ name: 'mixed_script_word' })
 

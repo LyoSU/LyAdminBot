@@ -592,10 +592,17 @@ export const evaluateMessage = async (
       // `singleAuthor`, so this branch had never run. Switching it on without
       // the bar would add a fresh way to remove somebody on a text no stage
       // read — the defect `private_invite_new` was held to hours earlier.
-      if (removesSender(verdict.action) && !mayRemoveSender(signals)) {
-        return capUnearnedRemoval(verdict)
-      }
-      return verdict
+      //
+      // But a capped verdict is a HEDGE — delete plus a question for the chat —
+      // and returning one here spends the short-circuit to buy an answer weaker
+      // than the stages below already hold. 2026-08-02: one text, one sender,
+      // one chat; the classifier banned it at 1.00 and cached the answer (7 ms
+      // to re-read), and from the third copy on velocity replied first, so the
+      // chat was asked to vote on a settled text seven times. Repetition is a
+      // reason to look harder, never a reason to conclude less — so when the
+      // count is the whole case, hand the message to something that can read
+      // it and let `velocity_repeats` weigh in wherever it lands.
+      if (!removesSender(verdict.action) || mayRemoveSender(signals)) return verdict
     }
   }
 

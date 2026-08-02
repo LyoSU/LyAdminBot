@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import fc from 'fast-check'
 import type { NormalizedMessage } from '../types.js'
 import { isTrustSignal } from './registry.js'
 import { extractMessageSignals } from './message.js'
@@ -180,6 +181,48 @@ describe('extractMessageSignals — suspicious signals', () => {
     expect(names(makeMsg({ text: 'Потріб\uFEFFні люди на роботу' }))).not.toContain('invisible_in_word')
     // Zero-width space stays: it has no typographic use in chat text.
     expect(names(makeMsg({ text: 'Потріб\u200Bні люди на роботу' }))).toContain('invisible_in_word')
+  })
+
+  it('REGRESSION: catches separation by density, not by a list of code points', () => {
+    // Production 2026-08-02: a message arrived with U+2069 and U+200C between
+    // every single letter. Neither is in the pair above, so nothing fired — and
+    // adding them would only move the goalpost to the next of the ~160 format
+    // characters. What no innocent text does is separate letter from letter
+    // WHOLESALE, whichever character it uses to do it.
+    const soup = (sep: string, text: string): string => [...text].join(sep)
+    expect(names(makeMsg({ text: soup('⁩‌', 'Щиро вірю що це побачать') })))
+      .toContain('invisible_in_word')
+    expect(names(makeMsg({ text: soup('‌', 'Потрібні люди на склад') })))
+      .toContain('invisible_in_word')
+  })
+
+  it('does NOT flag scripts where a zero-width character is spelling', () => {
+    // The reason the density rule counts instead of listing: U+200C is required
+    // orthography in Persian, Hindi and Kurdish, and a bidi isolate is how an
+    // RTL sentence quotes an LTR name. Both put a handful of format characters
+    // in a sentence; neither puts one between every letter.
+    expect(names(makeMsg({ text: 'می‌روم و می‌خواهم که این کار را می‌کنم امروز' })))
+      .not.toContain('invisible_in_word')
+    expect(names(makeMsg({ text: 'نام او ⁦John Smith⁩ است و او اینجا کار می‌کند' })))
+      .not.toContain('invisible_in_word')
+  })
+
+  it('the density threshold holds from both sides on arbitrary words', () => {
+    // Pins the rule against text nobody wrote by hand. The signal weighs 2.0 —
+    // enough on its own to remove the sender — so "sprinkled" must stay silent
+    // for any wording, and "every gap" must fire for any wording.
+    const FORMAT = ['‌', '⁩', '​', '­', '⁦']
+    const words = fc.array(fc.stringMatching(/^\p{Ll}{3,10}$/u), { minLength: 4, maxLength: 12 })
+
+    fc.assert(fc.property(words, fc.constantFrom(...FORMAT), (ws, sep) => {
+      const flagged = (t: string): boolean => names(makeMsg({ text: t })).includes('invisible_in_word')
+      // Every gap inside every word: obfuscation, whichever character it used.
+      expect(flagged(ws.map((w) => [...w].join(sep)).join(' '))).toBe(true)
+      // One per word is the shape of real orthography, and must stay silent —
+      // except for the two code points that are named outright above.
+      const sprinkled = ws.map((w) => w.slice(0, 1) + sep + w.slice(1)).join(' ')
+      expect(flagged(sprinkled)).toBe(sep === '​' || sep === '⁠')
+    }), { numRuns: 60 })
   })
 
   it('flags mixed-script words (homoglyph evasion), not legit bilingual text', () => {
