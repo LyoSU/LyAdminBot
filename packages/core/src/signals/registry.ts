@@ -162,7 +162,13 @@ export const SIGNAL_GROUPS: Record<SignalGroupName, { cap: number }> = {
   profile_nsfw: { cap: 1.2 },
   /** All three derive from the same listing in the same databases. */
   external_ban_source: { cap: 3.5 },
-  /** A single promo link usually trips several URL classes at once. */
+  /**
+   * A single promo link usually trips several URL classes at once — and, since
+   * 2026-08-01, also gets its destination read. Where a link goes is a second
+   * *observation*, but it is not a second link: `promo_in_message_link` belongs
+   * in here with the shape classes it comments on, or one URL scores 1.8 + 1.5
+   * and clears the sender-removal bar by itself.
+   */
   promo_urls: { cap: 3.0 }
 }
 
@@ -296,7 +302,7 @@ export const SIGNALS = {
    * — good enough to take the message down and ask, not good enough to be the
    * sole reason somebody loses the chat.
    */
-  promo_in_message_link: { weight: 1.5, kind: 'evidence' },
+  promo_in_message_link: { weight: 1.5, kind: 'evidence', group: 'promo_urls' },
 
   // ───────────────────── profile / identity (shape) ─────────────────────
 

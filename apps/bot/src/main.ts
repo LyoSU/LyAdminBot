@@ -14,9 +14,9 @@ import {
 import {
   TelegramGateway, applyVerdict, buildUserSnapshot, buildChannelSnapshot, normalizeMessage,
   fetchUserProfile, downloadPhotoBase64, downloadAvatarBase64, downloadStoriesBase64, rawPhotoToBase64,
-  fetchExternalBan, needsExternalRecheck, resolveMentionKinds, shouldScanChannelSender,
+  fetchExternalBan, sourcesToQuery, resolveMentionKinds, shouldScanChannelSender,
   createChatDescriptionCache, fetchChatDescription, createTmePreviewResolver,
-  type IncomingMessage
+  type ExternalBanCacheView, type IncomingMessage
 } from '@lyadmin/adapters'
 import {
   MongoStore, MongoSignaturePort, MongoForwardPort, QdrantVectorPort,
@@ -1699,12 +1699,13 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   // result and use it for THIS message so a first post is caught.
   let externalBan = history?.externalBan ?? null
   if (policy.externalBanEnabled) {
-    const cached = (userDoc as { externalBan?: {
-      lols?: { checkedAt?: Date }; cas?: { checkedAt?: Date }
-    } } | null)?.externalBan
-    const now = Date.now()
-    if (needsExternalRecheck(cached?.lols?.checkedAt, now) || needsExternalRecheck(cached?.cas?.checkedAt, now)) {
-      const fresh = await timed('extban', () => fetchExternalBan(sender.id))
+    const cached = (userDoc as { externalBan?: ExternalBanCacheView } | null)?.externalBan
+    // Per source: a fresh lols answer must not be thrown away because CAS is
+    // stale, and a source that just failed must not be asked again on the very
+    // next message. Both used to happen — see EXTERNAL_BAN_RETRY_MS.
+    const sources = sourcesToQuery(cached, Date.now())
+    if (sources.lols || sources.cas) {
+      const fresh = await timed('extban', () => fetchExternalBan(sender.id, { sources }))
       if (fresh) {
         store.saveExternalBan(sender.id, fresh).catch(() => { /* cache is best-effort */ })
         externalBan = mergeExternalBan({

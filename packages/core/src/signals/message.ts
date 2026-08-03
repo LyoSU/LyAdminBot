@@ -104,12 +104,12 @@ const looksUrlLike = (s: string): boolean => /^(https?:\/\/|www\.|t\.me\/)/i.tes
 // ("Зaрaбoтoк" with Latin a/o). Which alphabets count as look-alike is
 // `mixesConfusableScripts`. Per-word so bilingual sentences are not flagged;
 // minimum length 4 to skip abbreviations.
-const hasMixedScriptWord = (text: string): boolean => {
+const firstMixedScriptWord = (text: string): string | null => {
   for (const word of text.split(/[\s\p{P}]+/u)) {
     if (word.length < 4) continue
-    if (mixesConfusableScripts(word)) return true
+    if (mixesConfusableScripts(word)) return word
   }
-  return false
+  return null
 }
 
 export const extractMessageSignals = (msg: NormalizedMessage): Signal[] => {
@@ -162,7 +162,16 @@ export const extractMessageSignals = (msg: NormalizedMessage): Signal[] => {
         `${Math.round(separation.runs / separation.share)} gaps)`
     })
   }
-  if (hasMixedScriptWord(text)) signals.push({ name: 'mixed_script_word' })
+  // Name the word. At 1.5 and `kind: 'evidence'` this signal alone licenses
+  // deleting the message and counts toward removing the person, and it was the
+  // only heavy signal that logged no evidence at all — so a production line
+  // showing it could not be judged either way. 2026-08-03: it carried a
+  // Cyrillic-script message from 0.43 to 0.82 and nothing recorded which of the
+  // words it objected to.
+  const mixedWord = firstMixedScriptWord(text)
+  if (mixedWord !== null) {
+    signals.push({ name: 'mixed_script_word', evidence: `«${mixedWord.slice(0, 40)}»` })
+  }
 
   if (msg.customEmoji.length >= CUSTOM_EMOJI_HEAVY_MIN) {
     // The alt sequence is what a human "reads" through the emoji — spammers

@@ -6,7 +6,8 @@ import {
   BASE_RATE_BIAS, DECISIVE_MIN_WEIGHT, SENDER_REMOVAL_MIN_EVIDENCE
 } from './score.js'
 import {
-  SIGNAL_GROUP_CAPS, SIGNAL_WEIGHTS, SIGNAL_NAMES, SOFT_SHAPE_SIGNALS, type SignalName
+  SIGNAL_GROUP_CAPS, SIGNAL_GROUPS, SIGNAL_WEIGHTS, SIGNAL_NAMES, SOFT_SHAPE_SIGNALS,
+  type SignalName
 } from './signals/registry.js'
 
 describe('scoreSignals', () => {
@@ -438,5 +439,58 @@ describe('scoreSignals — algebra', () => {
 
   it('exposes a sane base-rate bias for replay calibration', () => {
     expect(BASE_RATE_BIAS).toBeLessThan(0)
+  })
+})
+
+describe('contentEvidence and the correlation ceilings', () => {
+  it('one link tripping several URL classes counts once, up to the group cap', () => {
+    // `SENDER_REMOVAL_MIN_EVIDENCE` means roughly two independent facts about
+    // the message. The catalogue already declares that the URL classes are not
+    // independent; this bar used to sum them anyway.
+    const oneLink: Signal[] = [
+      { name: 'private_invite_link' },
+      { name: 'url_shortener' },
+      { name: 'messenger_contact_link' }
+    ]
+    const cap = SIGNAL_GROUPS['promo_urls'].cap
+    const uncapped = SIGNAL_WEIGHTS['private_invite_link'] +
+      SIGNAL_WEIGHTS['url_shortener'] + SIGNAL_WEIGHTS['messenger_contact_link']
+    expect(uncapped).toBeGreaterThan(cap)
+    expect(contentEvidence(oneLink).total).toBe(cap)
+  })
+
+  it('reading where a link goes is an observation, not a second link', () => {
+    // 2026-08-01 added the destination read; until 2026-08-03 it sat outside the
+    // URL group, so a single t.me invite scored 1.8 + 1.5 and cleared the
+    // sender-removal bar on its own.
+    const oneLink: Signal[] = [
+      { name: 'private_invite_link' },
+      { name: 'promo_in_message_link' }
+    ]
+    expect(contentEvidence(oneLink).total).toBe(SIGNAL_GROUPS['promo_urls'].cap)
+    expect(contentEvidence(oneLink).total).toBeLessThan(
+      SIGNAL_WEIGHTS['private_invite_link'] + SIGNAL_WEIGHTS['promo_in_message_link']
+    )
+  })
+
+  it('two genuinely independent facts still add up in full', () => {
+    const two: Signal[] = [{ name: 'private_invite_link' }, { name: 'phone_number' }]
+    expect(contentEvidence(two).total).toBe(
+      SIGNAL_WEIGHTS['private_invite_link'] + SIGNAL_WEIGHTS['phone_number']
+    )
+  })
+
+  it('a group never caps the strongest single signal below its own weight', () => {
+    // `strongest` licenses acting on the MESSAGE and must stay a per-signal fact:
+    // a ceiling on a sum has no business lowering it.
+    for (const group of SIGNAL_GROUP_CAPS) {
+      for (const name of group.members) {
+        const weight = SIGNAL_WEIGHTS[name]
+        // Soft shape and prior matches are excluded from evidence entirely, so
+        // they have no `strongest` to preserve.
+        if (weight < DECISIVE_MIN_WEIGHT || SOFT_SHAPE_SIGNALS.has(name)) continue
+        expect(contentEvidence([{ name }]).strongest, name).toBe(weight)
+      }
+    }
   })
 })

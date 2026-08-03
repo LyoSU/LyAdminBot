@@ -84,6 +84,14 @@ export interface ContentEvidence {
 export const contentEvidence = (signals: Signal[]): ContentEvidence => {
   let strongest = 0
   let total = 0
+  // The correlation ceilings apply here too, and for a stronger reason than in
+  // the score. `SENDER_REMOVAL_MIN_EVIDENCE` is *defined* as roughly two
+  // independent facts about the message; `SIGNAL_GROUP_CAPS` is where the
+  // catalogue declares which signals are not independent. Summing group members
+  // freely was a bar that stated a premise and then declined to read the one
+  // declaration that could contradict it — the same divergence, in the same
+  // shape, as the two writers of one hashed store found on 2026-08-02.
+  const groupTotals = new Map<string, number>()
   for (const name of new Set(signals.map((s) => s.name))) {
     if (SOFT_SHAPE_SIGNALS.has(name) || PRIOR_MATCH_SIGNALS.has(name)) continue
     const weight = weightOf(name)
@@ -101,7 +109,13 @@ export const contentEvidence = (signals: Signal[]): ContentEvidence => {
     // that met the bar exactly and so kept the text away from the only stage
     // that could have read it.
     if (RESEMBLANCE_SIGNALS.has(name)) continue
-    total += weight
+    const group = SIGNAL_GROUP_CAPS.find((g) => g.members.has(name))
+    if (group) groupTotals.set(group.name, (groupTotals.get(group.name) ?? 0) + weight)
+    else total += weight
+  }
+  for (const group of SIGNAL_GROUP_CAPS) {
+    const grouped = groupTotals.get(group.name)
+    if (grouped !== undefined) total += Math.min(grouped, group.cap)
   }
   return { strongest, total }
 }

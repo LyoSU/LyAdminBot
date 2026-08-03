@@ -333,13 +333,31 @@ export class MongoStore {
    */
   async saveExternalBan(
     telegramId: number,
-    lookup: { lols: object | null; cas: object | null }
+    lookup: {
+      lols: object | null
+      cas: object | null
+      attempted?: { lols: boolean; cas: boolean }
+    },
+    now: Date = new Date()
   ): Promise<void> {
     const set: Record<string, unknown> = {}
-    if (lookup.lols) set['externalBan.lols'] = lookup.lols
-    if (lookup.cas) set['externalBan.cas'] = lookup.cas
-    if (Object.keys(set).length === 0) return
-    await this.users.updateOne({ telegram_id: telegramId }, { $set: set }, { upsert: true })
+    const unset: Record<string, unknown> = {}
+    for (const source of ['lols', 'cas'] as const) {
+      if (lookup[source]) {
+        set[`externalBan.${source}`] = lookup[source]
+        unset[`externalBan.failedAt.${source}`] = ''
+      } else if (lookup.attempted?.[source]) {
+        // Asked, and got nothing back. Recording the attempt is the whole reason
+        // the next message does not ask again: `EXTERNAL_BAN_RETRY_MS`. Silence
+        // used to leave no trace, so the retry had no floor.
+        set[`externalBan.failedAt.${source}`] = now
+      }
+    }
+    const update: Record<string, unknown> = {}
+    if (Object.keys(set).length > 0) update['$set'] = set
+    if (Object.keys(unset).length > 0) update['$unset'] = unset
+    if (Object.keys(update).length === 0) return
+    await this.users.updateOne({ telegram_id: telegramId }, update, { upsert: true })
   }
 
   /**

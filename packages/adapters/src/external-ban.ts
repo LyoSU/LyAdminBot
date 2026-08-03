@@ -28,6 +28,29 @@ export interface ExternalBanRecord {
 export const EXTERNAL_BAN_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
 /**
+ * How long a source that FAILED is left alone before being asked again.
+ *
+ * A failed lookup used to write nothing at all, and the recheck condition asked
+ * whether *either* side was stale. Together that meant one source failing
+ * re-queried BOTH sides on every subsequent message from that account, with
+ * nothing to stop it: the successful side's answer was cached and then never
+ * read, because the failing side kept forcing a refresh.
+ *
+ * Production 2026-08-03: one account's messages triggered seven lookups in
+ * ninety minutes, several of which hit the 2 s abort below, and its verdict for
+ * three identical texts came from three different stages depending on which
+ * lookup happened to win the race. The over-querying is also its own cause —
+ * these APIs rate-limit, so hammering them produces the failures that make us
+ * hammer them.
+ *
+ * A failure has to be remembered or the retry is unbounded; it must NOT be
+ * remembered for as long as an answer, or an outage would blind the pipeline for
+ * a week. Ten minutes costs one attempt per message-burst and still catches a
+ * live spam run on a later message.
+ */
+export const EXTERNAL_BAN_RETRY_MS = 10 * 60 * 1000
+
+/**
  * Telegram service / placeholder sender ids that must never be sent to a
  * third-party lookup: 777000 (Telegram service), 1087968824
  * (GroupAnonymousBot), 136817688 (Channel_Bot).
@@ -98,10 +121,46 @@ export const needsExternalRecheck = (
 export const isQueryableUserId = (id: number): boolean =>
   Number.isFinite(id) && id > 0 && !SYSTEM_SENDER_IDS.has(id)
 
+export type ExternalBanSourceName = 'lols' | 'cas'
+
+/** Which sources to ask / were asked. */
+export type ExternalBanSources = Record<ExternalBanSourceName, boolean>
+
+/** The persisted cache shape this module reasons about, read-only. */
+export interface ExternalBanCacheView {
+  lols?: { checkedAt?: Date | string | number | null } | null
+  cas?: { checkedAt?: Date | string | number | null } | null
+  /** When each source last failed to answer — see EXTERNAL_BAN_RETRY_MS. */
+  failedAt?: { lols?: Date | string | number | null; cas?: Date | string | number | null } | null
+}
+
+/**
+ * Which sources are worth asking right now — decided per source, never jointly.
+ *
+ * A fresh answer is never re-asked just because its sibling is stale, and a
+ * source that just failed is not asked again until the retry window lapses.
+ */
+export const sourcesToQuery = (
+  cached: ExternalBanCacheView | null | undefined,
+  nowMs: number,
+  opts: { ttlMs?: number; retryMs?: number } = {}
+): ExternalBanSources => {
+  const ask = (name: ExternalBanSourceName): boolean =>
+    needsExternalRecheck(cached?.[name]?.checkedAt ?? null, nowMs, opts.ttlMs) &&
+    needsExternalRecheck(cached?.failedAt?.[name] ?? null, nowMs, opts.retryMs ?? EXTERNAL_BAN_RETRY_MS)
+  return { lols: ask('lols'), cas: ask('cas') }
+}
+
 /** Per-source lookup result; either side is null when that source failed. */
 export interface ExternalBanLookup {
   lols: ExternalBanRecord | null
   cas: ExternalBanRecord | null
+  /**
+   * Which sources were actually asked. Without it a `null` side cannot be told
+   * from a side that was skipped as already fresh, and the two must be persisted
+   * differently: one is a failure to back off from, the other is nothing.
+   */
+  attempted: ExternalBanSources
 }
 
 type FetchLike = (url: string) => Promise<{ json: () => Promise<unknown> }>
@@ -130,14 +189,19 @@ const queryOne = async (
  */
 export const fetchExternalBan = async (
   userId: number,
-  opts: { fetchImpl?: FetchLike; now?: Date } = {}
+  opts: { fetchImpl?: FetchLike; now?: Date; sources?: Partial<ExternalBanSources> } = {}
 ): Promise<ExternalBanLookup | null> => {
   if (!isQueryableUserId(userId)) return null
+  const attempted: ExternalBanSources = {
+    lols: opts.sources?.lols ?? true,
+    cas: opts.sources?.cas ?? true
+  }
+  if (!attempted.lols && !attempted.cas) return { lols: null, cas: null, attempted }
   const fetchImpl = opts.fetchImpl ?? ((url: string) => fetch(url, { signal: AbortSignal.timeout(2000) }))
   const now = opts.now ?? new Date()
   const [lols, cas] = await Promise.all([
-    queryOne(LOLS_URL(userId), fetchImpl, parseLolsResponse, now),
-    queryOne(CAS_URL(userId), fetchImpl, parseCasResponse, now)
+    attempted.lols ? queryOne(LOLS_URL(userId), fetchImpl, parseLolsResponse, now) : null,
+    attempted.cas ? queryOne(CAS_URL(userId), fetchImpl, parseCasResponse, now) : null
   ])
-  return { lols, cas }
+  return { lols, cas, attempted }
 }

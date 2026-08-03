@@ -5,6 +5,8 @@ import {
   needsExternalRecheck,
   isQueryableUserId,
   fetchExternalBan,
+  sourcesToQuery,
+  EXTERNAL_BAN_RETRY_MS,
   EXTERNAL_BAN_TTL_MS
 } from './external-ban.js'
 
@@ -152,5 +154,69 @@ describe('fetchExternalBan', () => {
     const fetchImpl = (async () => { called = true; return { json: async () => ({}) } }) as never
     expect(await fetchExternalBan(1087968824, { fetchImpl, now: NOW })).toBeNull()
     expect(called).toBe(false)
+  })
+})
+
+describe('sourcesToQuery', () => {
+  const now = Date.UTC(2026, 7, 3, 12, 0, 0)
+  const fresh = new Date(now - 60_000)
+  const stale = new Date(now - EXTERNAL_BAN_TTL_MS - 1)
+
+  it('asks both when nothing is cached', () => {
+    expect(sourcesToQuery(null, now)).toEqual({ lols: true, cas: true })
+  })
+
+  it('asks neither while both answers are inside the TTL', () => {
+    expect(sourcesToQuery({ lols: { checkedAt: fresh }, cas: { checkedAt: fresh } }, now))
+      .toEqual({ lols: false, cas: false })
+  })
+
+  it('REGRESSION: one stale source does not re-ask the fresh one', () => {
+    // The condition used to be `either side is stale`, so a source that never
+    // answered kept both sides being queried on every single message.
+    expect(sourcesToQuery({ lols: { checkedAt: fresh }, cas: { checkedAt: stale } }, now))
+      .toEqual({ lols: false, cas: true })
+  })
+
+  it('REGRESSION: a source that just failed is left alone until the retry window lapses', () => {
+    const cache = { lols: { checkedAt: null }, cas: { checkedAt: fresh } }
+    expect(sourcesToQuery({ ...cache, failedAt: { lols: new Date(now - 1_000) } }, now))
+      .toEqual({ lols: false, cas: false })
+    expect(sourcesToQuery({ ...cache, failedAt: { lols: new Date(now - EXTERNAL_BAN_RETRY_MS - 1) } }, now))
+      .toEqual({ lols: true, cas: false })
+  })
+
+  it('an unreadable failure marker is treated as no marker, never as forever', () => {
+    expect(sourcesToQuery({ failedAt: { lols: 'nonsense', cas: null } }, now))
+      .toEqual({ lols: true, cas: true })
+  })
+})
+
+describe('fetchExternalBan source selection', () => {
+  const NOW2 = new Date('2026-08-03T12:00:00Z')
+
+  it('contacts only the requested source and reports what it asked', async () => {
+    const seen: string[] = []
+    const fetchImpl = (async (url: string) => {
+      seen.push(url)
+      return { json: async () => ({ ok: true, banned: false }) }
+    }) as never
+    const result = await fetchExternalBan(42, {
+      fetchImpl, now: NOW2, sources: { lols: true, cas: false }
+    })
+    expect(seen).toHaveLength(1)
+    expect(seen[0]).toContain('api.lols.bot')
+    expect(result?.attempted).toEqual({ lols: true, cas: false })
+    expect(result?.cas).toBeNull()
+  })
+
+  it('asking for nothing costs no request', async () => {
+    let called = false
+    const fetchImpl = (async () => { called = true; return { json: async () => ({}) } }) as never
+    const result = await fetchExternalBan(42, {
+      fetchImpl, now: NOW2, sources: { lols: false, cas: false }
+    })
+    expect(called).toBe(false)
+    expect(result).toEqual({ lols: null, cas: null, attempted: { lols: false, cas: false } })
   })
 })

@@ -312,3 +312,58 @@ describe('openVote — the text a resolved vote will teach', () => {
     expect(String(docs[0]?.['textPreview'])).toHaveLength(200)
   })
 })
+
+describe('saveExternalBan', () => {
+  const captureStore = () => {
+    const updates: Record<string, unknown>[] = []
+    const store = {
+      users: {
+        updateOne: async (_f: unknown, update: Record<string, unknown>) => {
+          updates.push(update)
+          return {}
+        }
+      }
+    } as unknown as MongoStore
+    return {
+      store: Object.assign(store, { saveExternalBan: MongoStore.prototype.saveExternalBan }),
+      updates
+    }
+  }
+  const NOW = new Date('2026-08-03T12:00:00Z')
+
+  it('writes each answer it has and clears that source failure marker', async () => {
+    const { store, updates } = captureStore()
+    await store.saveExternalBan(42, { lols: { banned: false }, cas: null }, NOW)
+    expect(updates).toEqual([{
+      $set: { 'externalBan.lols': { banned: false } },
+      $unset: { 'externalBan.failedAt.lols': '' }
+    }])
+  })
+
+  it('REGRESSION: a source that was asked and said nothing leaves a mark', async () => {
+    // Silence used to write nothing, so the retry had no floor: every later
+    // message from the same account re-queried both databases (2026-08-03).
+    const { store, updates } = captureStore()
+    await store.saveExternalBan(42, {
+      lols: null, cas: { banned: true }, attempted: { lols: true, cas: true }
+    }, NOW)
+    expect(updates).toEqual([{
+      $set: { 'externalBan.failedAt.lols': NOW, 'externalBan.cas': { banned: true } },
+      $unset: { 'externalBan.failedAt.cas': '' }
+    }])
+  })
+
+  it('a source that was never asked is not recorded as having failed', async () => {
+    const { store, updates } = captureStore()
+    await store.saveExternalBan(42, {
+      lols: null, cas: { banned: false }, attempted: { lols: false, cas: true }
+    }, NOW)
+    expect(updates[0]?.['$set']).toEqual({ 'externalBan.cas': { banned: false } })
+  })
+
+  it('writes nothing at all when there is nothing to say', async () => {
+    const { store, updates } = captureStore()
+    await store.saveExternalBan(42, { lols: null, cas: null })
+    expect(updates).toEqual([])
+  })
+})

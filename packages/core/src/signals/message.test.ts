@@ -240,6 +240,22 @@ describe('extractMessageSignals — suspicious signals', () => {
     expect(names(makeMsg({ text: 'обработκа тρафика' }))).toContain('mixed_script_word')
   })
 
+  it('names the word it objected to', () => {
+    // At 1.5 and `kind: 'evidence'` this signal alone licenses deleting the
+    // message, and it logged nothing — so a production line could not be judged
+    // either way. 2026-08-03: it carried a Cyrillic-script message from 0.43 to
+    // 0.82 with no record of which word it meant.
+    const signal = extractMessageSignals(makeMsg({ text: 'Зaрaбoтoк для всіх' }))
+      .find((s) => s.name === 'mixed_script_word')
+    expect(signal?.evidence).toBe('«Зaрaбoтoк»')
+  })
+
+  it('keeps the evidence line short whatever arrives', () => {
+    const signal = extractMessageSignals(makeMsg({ text: `Зaрaбoтoк${'о'.repeat(400)}` }))
+      .find((s) => s.name === 'mixed_script_word')
+    expect(signal?.evidence?.length).toBeLessThanOrEqual(44)
+  })
+
   it('does NOT flag scripts that are written together by design', () => {
     // The trap in generalising to "more than one script per word": Japanese and
     // Korean mix scripts inside a word and put no spaces between words, so
