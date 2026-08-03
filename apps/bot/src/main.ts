@@ -1923,6 +1923,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       contentEvidence: verdict.meta['contentEvidence'] ?? undefined,
       capped: verdict.meta['cappedGroups'] ?? undefined,
       llmTier: verdict.meta['llmTier'] ?? undefined,
+    llmKey: verdict.meta['llmKey'] ?? undefined,
       portMs: verdict.meta['portMs'] ?? undefined,
       // Everything the pipeline's own timings cannot see. A deterministic
       // verdict runs no ports, so without this a 4.4-second ban (2026-07-31)

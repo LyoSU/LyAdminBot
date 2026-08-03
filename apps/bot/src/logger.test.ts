@@ -59,3 +59,50 @@ describe('formatSignals', () => {
     expect(formatSignals([{ name: 'scam_flag' }, ...many])).toMatch(/^scam_flag=3 .* \+9$/)
   })
 })
+
+describe('formatSignals — evidence', () => {
+  it('REGRESSION: a heavy signal says what it saw', () => {
+    // `mixed_script_word` was given an evidence string on 2026-08-03 so a
+    // production line could be judged FP or TP, and the line did not change:
+    // this formatter dropped evidence entirely.
+    const out = formatSignals([
+      { name: 'mixed_script_word', evidence: '«Зaрaбoтoк»' },
+      { name: 'new_globally' }
+    ])
+    expect(out).toBe('mixed_script_word=1.5(«Зaрaбoтoк») new_globally=0.8')
+  })
+
+  it('a sub-threshold nudge stays bare however much it has to say', () => {
+    // The bar is the same one the pipeline uses to call a signal decisive: what
+    // can convict alone must explain itself; a nudge has nothing to answer for.
+    const out = formatSignals([{ name: 'edited_message', evidence: 'text changed' }])
+    expect(out).toBe('edited_message=0.2')
+  })
+
+  it('never breaks the one-object-per-line contract, whatever the text', () => {
+    const out = formatSignals([
+      { name: 'hidden_url', evidence: `a\nb\tc   d${'x'.repeat(300)}` }
+    ])
+    expect(out).not.toContain('\n')
+    expect(out).not.toContain('\t')
+    expect(out?.length).toBeLessThan(80)
+  })
+
+  it('spends its evidence budget on the heaviest signals and no further', () => {
+    const withEvidence = (name: string) => ({ name: name as never, evidence: `saw ${name}` })
+    const out = formatSignals([
+      withEvidence('hidden_url'),          // 2.0
+      withEvidence('private_invite_link'), // 1.8
+      withEvidence('mixed_script_word'),   // 1.5
+      withEvidence('phone_number')         // 1.2 — over budget
+    ])
+    expect(out).toContain('hidden_url=2(saw hidden_url)')
+    expect(out).toContain('mixed_script_word=1.5(saw mixed_script_word)')
+    expect(out).toContain('phone_number=1.2')
+    expect(out).not.toContain('saw phone_number')
+  })
+
+  it('an empty evidence string adds nothing but empty parentheses', () => {
+    expect(formatSignals([{ name: 'hidden_url', evidence: '   ' }])).toBe('hidden_url=2')
+  })
+})

@@ -779,6 +779,9 @@ export const evaluateMessage = async (
     }
 
     if (llmVerdict) {
+      // Recorded whether or not it was a hit: a hit alone proves nothing, and it
+      // is the two keys of a MISS that need comparing.
+      if (llmVerdict.cacheKey !== undefined) meta['llmKey'] = llmVerdict.cacheKey
       return finalize(
         {
           pSpam: llmVerdict.pSpam,

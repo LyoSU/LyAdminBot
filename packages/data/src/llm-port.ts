@@ -177,7 +177,8 @@ export class OpenRouterLlmPort implements LlmPort {
           pSpam: hit['pSpam'] as number,
           reasonCode: hit['reasonCode'] as string,
           evidence: (hit['evidence'] as string | null) ?? null,
-          cached: true
+          cached: true,
+          cacheKey: cacheKey.slice(0, 8)
         }
       }
     }
@@ -219,7 +220,9 @@ export class OpenRouterLlmPort implements LlmPort {
       ).catch(() => { /* cache write failure is not an error */ })
     }
 
-    return { pSpam, reasonCode, evidence, cached: false }
+    return cacheKey === null
+      ? { pSpam, reasonCode, evidence, cached: false }
+      : { pSpam, reasonCode, evidence, cached: false, cacheKey: cacheKey.slice(0, 8) }
   }
 
   private async callModel(

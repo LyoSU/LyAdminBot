@@ -74,6 +74,18 @@ export interface LlmVerdict {
   reasonCode: string
   evidence: string | null
   cached: boolean
+  /**
+   * Short prefix of the cache key this answer was filed under, for the log.
+   *
+   * A miss is otherwise undiagnosable: the key is a hash of the model, the
+   * prompt fingerprint, a structural context digest and the folded text, and
+   * not one of those inputs is recorded anywhere. Production 2026-08-03 — one
+   * account sent an identical text five times in fourteen seconds and paid for
+   * three separate calls plus two session calls; the key is computed from things
+   * that may legitimately differ between the copies, and nothing in the log says
+   * which one did. Two adjacent lines with two prefixes answer it at a glance.
+   */
+  cacheKey?: string
 }
 
 export interface LlmPort {
