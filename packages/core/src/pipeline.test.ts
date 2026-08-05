@@ -21,7 +21,7 @@ const makeMsg = (overrides: Partial<NormalizedMessage> = {}): NormalizedMessage 
 const makeUser = (overrides: Partial<UserSnapshot> = {}): UserSnapshot => ({
   id: 42, username: 'someone', displayName: 'Someone', languageCode: 'uk',
   flags: { scam: false, fake: false, restricted: false, verified: false, premium: false, bot: false },
-  predictedAgeDays: 800, localAgeDays: 400,
+  predictedAgeDays: 800, predictedAgeBoundsDays: null, localAgeDays: 400,
   // Below the established-regular exempt thresholds (10 in-chat / 50 global) on
   // purpose: the default user must still run the full pipeline so port tests
   // exercise the ports. Established users are tested explicitly below.

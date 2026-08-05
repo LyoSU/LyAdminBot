@@ -12,6 +12,7 @@ const makeUser = (overrides: Partial<UserSnapshot> = {}): UserSnapshot => ({
   languageCode: 'uk',
   flags: { scam: false, fake: false, restricted: false, verified: false, premium: false, bot: false },
   predictedAgeDays: 800,
+  predictedAgeBoundsDays: null,
   localAgeDays: 400,
   messagesInChat: 25,
   messagesGlobal: 120,
@@ -123,6 +124,25 @@ describe('extractUserSignals — suspicious', () => {
   it('flags fresh accounts by predicted age', () => {
     expect(names(makeUser({ predictedAgeDays: 5 }))).toContain('fresh_account')
     expect(names(makeUser({ predictedAgeDays: null }))).not.toContain('fresh_account')
+  })
+
+  it('holds fresh_account when the age interval cannot confirm freshness', () => {
+    // point estimate says fresh, but the account may plausibly be 45 days old
+    expect(names(makeUser({ predictedAgeDays: 20, predictedAgeBoundsDays: { lo: 5, hi: 45 } })))
+      .not.toContain('fresh_account')
+    // certainly fresh: even the pessimistic bound is under the threshold
+    expect(names(makeUser({ predictedAgeDays: 10, predictedAgeBoundsDays: { lo: 2, hi: 20 } })))
+      .toContain('fresh_account')
+  })
+
+  it('holds sleeper_awakened when the account may actually be young', () => {
+    const base = { localAgeDays: 3, messagesGlobal: 2, messagesInChat: 1 }
+    // point estimate looks like a sleeper, but the optimistic bound is too young
+    expect(names(makeUser({ ...base, predictedAgeDays: 700, predictedAgeBoundsDays: { lo: 300, hi: 1100 } })))
+      .not.toContain('sleeper_awakened')
+    // certainly old: even the youngest plausible age leaves a year-wide gap
+    expect(names(makeUser({ ...base, predictedAgeDays: 1500, predictedAgeBoundsDays: { lo: 800, hi: 2200 } })))
+      .toContain('sleeper_awakened')
   })
 
   it('flags identity churn within 24h', () => {

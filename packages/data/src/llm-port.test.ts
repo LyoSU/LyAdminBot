@@ -21,7 +21,7 @@ const makeMsg = (o: Partial<NormalizedMessage> = {}): NormalizedMessage => ({
 const makeUser = (o: Partial<UserSnapshot> = {}): UserSnapshot => ({
   id: 42, username: 'sender', displayName: 'Sender', languageCode: 'uk',
   flags: { scam: false, fake: false, restricted: false, verified: false, premium: false, bot: false },
-  predictedAgeDays: 800, localAgeDays: 400, messagesInChat: 3, messagesGlobal: 5,
+  predictedAgeDays: 800, predictedAgeBoundsDays: null, localAgeDays: 400, messagesInChat: 3, messagesGlobal: 5,
   groupsActive: 1, spamDetections: 0, reputationScore: 60, reputationStatus: 'neutral',
   externalBan: null, unofficialClientRisk: null, avatars: null,
   nameChurn24h: 0, usernameChurn24h: 0, restrictionReasons: [], joinedAgoSeconds: null, ...o

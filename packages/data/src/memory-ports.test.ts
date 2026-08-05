@@ -14,7 +14,7 @@ const makeInput = (chatId: number, userId: number, text: string): EvaluationInpu
   user: {
     id: userId, username: null, displayName: 'U', languageCode: null,
     flags: { scam: false, fake: false, restricted: false, verified: false, premium: false, bot: false },
-    predictedAgeDays: null, localAgeDays: null, messagesInChat: 0, messagesGlobal: 0,
+    predictedAgeDays: null, predictedAgeBoundsDays: null, localAgeDays: null, messagesInChat: 0, messagesGlobal: 0,
     groupsActive: 0, spamDetections: 0, reputationScore: 50, reputationStatus: 'neutral',
     externalBan: null, unofficialClientRisk: null, avatars: null, nameChurn24h: 0, usernameChurn24h: 0,
     restrictionReasons: [], joinedAgoSeconds: null

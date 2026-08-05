@@ -72,6 +72,13 @@ export interface UserSnapshot {
   flags: SenderFlags
   /** Account age estimated from the ID range, in days. Null — unknown. */
   predictedAgeDays: number | null
+  /**
+   * Uncertainty interval around predictedAgeDays. `lo` — youngest plausible
+   * age, `hi` — oldest plausible. Conservative gating: fresh requires hi
+   * under the threshold, sleeper requires lo over it. Null — unknown (then
+   * the point estimate stands in for both bounds).
+   */
+  predictedAgeBoundsDays: { lo: number; hi: number } | null
   /** Local history: how many days ago we first saw this account. */
   localAgeDays: number | null
   /** Messages in THIS chat (including the current one). */

@@ -55,7 +55,7 @@ const defaultPolicy: ChatPolicy = {
 const unknownUser = (userId: number): UserSnapshot => ({
   id: userId, username: null, displayName: 'replayed', languageCode: null,
   flags: { scam: false, fake: false, restricted: false, verified: false, premium: false, bot: false },
-  predictedAgeDays: null, localAgeDays: null,
+  predictedAgeDays: null, predictedAgeBoundsDays: null, localAgeDays: null,
   // v1 acted mostly on newcomers; replay assumes the conservative case.
   messagesInChat: 1, messagesGlobal: 1, groupsActive: 1,
   spamDetections: 0, reputationScore: 50, reputationStatus: 'neutral',

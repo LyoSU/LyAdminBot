@@ -4,7 +4,7 @@
  */
 import type { Chat, User } from '@mtcute/node'
 import type { ExternalBanFacts, UserSnapshot } from '@lyadmin/core'
-import { predictAccountAgeDays } from './account-age.js'
+import { predictAccountAgeBoundsDays, predictAccountAgeDays } from './account-age.js'
 
 /** Persisted history the data layer provides (all fields best-effort). */
 export interface UserHistory {
@@ -53,6 +53,7 @@ export const buildUserSnapshot = (
   joinedAgoSeconds: profile?.joinedAgoSeconds ?? null,
   joinedDuringSurge: profile?.joinedDuringSurge ?? false,
   predictedAgeDays: predictAccountAgeDays(sender.id, nowUnix),
+  predictedAgeBoundsDays: predictAccountAgeBoundsDays(sender.id, nowUnix),
   localAgeDays: history?.firstSeenUnix != null
     ? Math.max(0, (nowUnix - history.firstSeenUnix) / 86400)
     : null,
@@ -105,6 +106,7 @@ export const buildChannelSnapshot = (
   // Channel ids come from a different namespace than user ids: feeding one to
   // the user-id → registration-date table would invent an age.
   predictedAgeDays: null,
+  predictedAgeBoundsDays: null,
   localAgeDays: history?.firstSeenUnix != null
     ? Math.max(0, (nowUnix - history.firstSeenUnix) / 86400)
     : null,

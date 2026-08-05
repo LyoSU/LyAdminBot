@@ -140,10 +140,18 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
     (user.localAgeDays !== null && user.localAgeDays <= SLEEPER_LOCAL_MAX_DAYS) ||
     user.messagesGlobal <= NEW_GLOBALLY_MAX
 
+  // The age prediction carries an uncertainty interval; both age signals
+  // gate on the bound that avoids the false positive, not the point
+  // estimate (2026-08 audit: the tail of the id→age curve was off by up to
+  // 137 days, exactly where these thresholds live).
+  const predictedAgeLo = user.predictedAgeBoundsDays?.lo ?? user.predictedAgeDays
+  const predictedAgeHi = user.predictedAgeBoundsDays?.hi ?? user.predictedAgeDays
+
   if (
+    predictedAgeLo !== null &&
     user.predictedAgeDays !== null &&
     user.localAgeDays !== null &&
-    user.predictedAgeDays - user.localAgeDays > SLEEPER_GAP_DAYS &&
+    predictedAgeLo - user.localAgeDays > SLEEPER_GAP_DAYS &&
     user.localAgeDays <= SLEEPER_LOCAL_MAX_DAYS
   ) {
     signals.push({
@@ -152,7 +160,7 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
     })
   }
 
-  if (user.predictedAgeDays !== null && user.predictedAgeDays < FRESH_ACCOUNT_MAX_DAYS) {
+  if (predictedAgeHi !== null && user.predictedAgeDays !== null && predictedAgeHi < FRESH_ACCOUNT_MAX_DAYS) {
     signals.push({ name: 'fresh_account', evidence: `~${Math.round(user.predictedAgeDays)}d old` })
   }
 
