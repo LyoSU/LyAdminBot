@@ -651,6 +651,46 @@ describe('OpenRouterLlmPort — cache key (2026-07-30 review)', () => {
     const keys = await keysUsedFor([makeInput({ msg: sameText }), makeInput({ msg: sameText })])
     expect(keys[0]).toBe(keys[1])
   })
+
+  it('a cache hit is not evidence the API is reachable', async () => {
+    // `onLiveAnswer` is what the outage detector counts. Served from this cache,
+    // a verdict says nothing about the network — and reporting one as health
+    // would announce recovery in the middle of an outage, indefinitely, since a
+    // repeating campaign keeps hitting the same key.
+    const live: number[] = []
+    const cached = { pSpam: 0.9, reasonCode: 'job_scam', evidence: null }
+    const store = {
+      llmCache: {
+        findOne: vi.fn(async () => cached),
+        updateOne: vi.fn(async () => ({ acknowledged: true }))
+      }
+    }
+    const port = new OpenRouterLlmPort({
+      apiKey: 'k',
+      model: 'm',
+      // Would throw if the port went to the network at all.
+      fetchImpl: (() => { throw new Error('no live call expected') }) as never,
+      onLiveAnswer: () => live.push(1)
+    }, store as never)
+
+    const verdict = await port.classify(makeInput({ msg: sameText }))
+    expect(verdict?.cached).toBe(true)
+    expect(live).toHaveLength(0)
+  })
+
+  it('an answer off the wire is', async () => {
+    const live: number[] = []
+    const port = new OpenRouterLlmPort({
+      apiKey: 'k', model: 'm',
+      // A complete answer: a missing required field is discarded as no answer,
+      // which is exactly what must NOT count as a live one.
+      fetchImpl: modelReplies([{ is_spam: false, confidence: 90, reason_code: 'other_clean', evidence: null }]),
+      onLiveAnswer: () => live.push(1)
+    })
+    const verdict = await port.classify(makeInput({ msg: sameText }))
+    expect(verdict?.cached).toBe(false)
+    expect(live).toHaveLength(1)
+  })
 })
 
 describe('buildSystemPrompt', () => {

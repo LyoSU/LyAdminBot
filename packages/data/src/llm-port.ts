@@ -138,6 +138,18 @@ export interface OpenRouterConfig {
    */
   onFailure?: (failure: LlmFailure) => void
   /**
+   * Told when a call reached the API and came back with a usable verdict.
+   *
+   * The counterpart of `onFailure`, and the reason it belongs to the port rather
+   * than to whoever reads the verdict: only here is a LIVE answer distinguishable
+   * from a cache hit, and a cache hit is no evidence the API is reachable — a
+   * caller inferring health from `decidedBy` would report recovery in the middle
+   * of an outage, served by this very cache. Carries nothing: the answer itself
+   * is already reported through the return value, and the only fact this adds is
+   * that the network agreed to talk.
+   */
+  onLiveAnswer?: () => void
+  /**
    * Refuse endpoints that do not enforce the response schema
    * (`provider.require_parameters`).
    *
@@ -441,6 +453,10 @@ export class OpenRouterLlmPort implements LlmPort {
         { upsert: true }
       ).catch(() => { /* cache write failure is not an error */ })
     }
+
+    // Past every way this call could have produced nothing: the API answered and
+    // the answer holds up. The only place that fact is knowable first-hand.
+    this.config.onLiveAnswer?.()
 
     return cacheKey === null
       ? { pSpam, reasonCode, evidence, cached: false, model }

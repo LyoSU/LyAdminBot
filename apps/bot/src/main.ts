@@ -38,6 +38,7 @@ import { registerBotCommands } from './commands.js'
 import { formatDuration, parseBananDuration } from './duration.js'
 import { formatSignals, log } from './logger.js'
 import { RightsMemory, RIGHTS_ERROR_REGEX } from './rights.js'
+import { LlmHealth } from './llm-health.js'
 import { JOIN_WINDOW_MS, JoinRateTracker } from './join-rate.js'
 
 const config = loadConfig()
@@ -53,6 +54,10 @@ const conversationWindow = new MemoryConversationWindow()
 // Transient per-admin input state for the PM welcome/extras editor. Memory-only
 // on purpose — a half-finished "add" is not worth persisting across restarts.
 const pendingInput = new PendingInput()
+// Whether the classifier is reachable, which the per-message failure warning
+// cannot say. Deliberately not persisted: an outage that ended while we were
+// down is not an outage, and the first live call re-establishes the truth.
+const llmHealth = new LlmHealth()
 // Module-level handle so the vote path can self-learn into Qdrant, not just
 // search it. Null when embeddings/Qdrant are not configured.
 const vectorPort = config.qdrantUrl && config.openaiApiKey
@@ -92,6 +97,22 @@ const buildPorts = (): PipelinePorts => {
           ...(status !== null ? { status } : {}),
           ...(detail !== undefined ? { detail } : {})
         })
+        // Per-message warnings diagnose a message; they never say the classifier
+        // itself is gone. See llm-health.ts for why consecutive and why once.
+        const report = llmHealth.noteFailure()
+        if (report?.kind === 'down') {
+          log.error('llm_outage', {
+            model, reason, consecutive: report.consecutive,
+            ...(status !== null ? { status } : {}),
+            ...(report.repeated ? { stillDown: true } : {})
+          })
+        }
+      },
+      onLiveAnswer: () => {
+        const report = llmHealth.noteAnswer()
+        if (report?.kind === 'recovered') {
+          log.info('llm_recovered', { model: config.llmModel, missed: report.missed })
+        }
       }
     }, store)
   }
