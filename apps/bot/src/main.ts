@@ -477,39 +477,46 @@ const MUTE_AFTER_VOTE_SECONDS = 24 * 60 * 60
  * What Telegram has recently refused us here, per capability. See rights.ts —
  * the reasoning is load-bearing enough to live with its tests.
  */
-const rights = new RightsMemory()
+const rights = new RightsMemory(Date.now, (chatId, record) => {
+  // Fire-and-forget by contract: the hot path answers "may I enforce here"
+  // synchronously, and a lost write costs one evaluation — the very thing this
+  // saves — not correctness.
+  void store.saveRightsBlock(chatId, record).catch(() => { /* retried by the next refusal */ })
+})
 
 /**
  * When the bot catches spam but can't act (not an admin / missing rights), it
  * posts a warning in the chat so admins know to grant rights.
  *
- * The interval doubles with every consecutive refusal, from an hour to a day.
- * A flat hourly notice reads as useful the first time and as nagging the tenth:
- * production 2026-08-01 had chats refusing every action for hours, which at the
- * old cadence is two dozen public messages a day into a group where the bot can
- * do nothing — and each one tells whoever is posting the spam that it can't be
- * touched here. The first notice, which is the one that might actually get the
- * bot promoted, is unchanged.
+ * The quiet period doubles with every consecutive refusal, from an hour to a
+ * day, and lives in `RightsMemory` with everything else — it used to be a Map
+ * here, so each restart reset it to the first hour and the same chats were asked
+ * again (three times on 2026-08-07). A flat hourly notice reads as useful the
+ * first time and as nagging the tenth: production 2026-08-01 had chats refusing
+ * every action for hours, which at the old cadence is two dozen public messages
+ * a day into a group where the bot can do nothing — and each one tells whoever
+ * is posting the spam that it cannot be touched here.
  */
-const MISSING_RIGHTS_WARN_MS = 60 * 60 * 1000
-const MISSING_RIGHTS_WARN_MAX_MS = 24 * 60 * 60 * 1000
-const missingRightsWarned = new Map<number, number>()
-const shouldWarnMissingRights = (chatId: number, errors: string[]): boolean => {
-  if (!errors.some((e) => RIGHTS_ERROR_REGEX.test(e))) return false
-  const now = Date.now()
-  const until = missingRightsWarned.get(chatId)
-  if (until && until > now) return false
-  const quiet = Math.min(
-    MISSING_RIGHTS_WARN_MS * 2 ** Math.max(0, rights.strikes(chatId) - 1),
-    MISSING_RIGHTS_WARN_MAX_MS
-  )
-  missingRightsWarned.set(chatId, now + quiet)
-  if (missingRightsWarned.size > 2000) {
-    for (const [key, expires] of missingRightsWarned) {
-      if (expires <= now) missingRightsWarned.delete(key)
-    }
-  }
-  return true
+const shouldWarnMissingRights = (chatId: number, errors: string[]): boolean =>
+  errors.some((e) => RIGHTS_ERROR_REGEX.test(e)) && rights.shouldWarn(chatId)
+
+/**
+ * The cheap half of the rights question: are we an admin in this chat at all?
+ *
+ * Allowed to LIFT a block and never to create one, which is what makes reading
+ * it safe (see `RightsMemory.noteProbe`). Only `status` is consulted, not the
+ * individual admin rights: a promoted bot missing one specific right will be
+ * told so by the very next attempt, and that attempt is the evidence this whole
+ * mechanism is built on. Reading the rights bitmask here would add a second,
+ * more brittle way to be wrong about the same question.
+ */
+const probeRights = async (chatId: number): Promise<boolean> => {
+  const granted = await gateway.tg.getChatMember({ chatId, userId: selfId })
+    .then((m) => m !== null && (m.status === 'admin' || m.status === 'creator'))
+    .catch(() => false)
+  rights.noteProbe(chatId, granted)
+  if (granted) log.info('rights_restored', { chatId })
+  return granted
 }
 
 /**
@@ -1615,12 +1622,17 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
 
   if (!policy.enabled) return
 
-  // Telegram has refused us both message removal and sender actions here within
-  // the last quarter of an hour, so there is no verdict we could act on. Keep
-  // asking the admins for rights, but stop paying for enrichment and LLM calls
-  // to reach a conclusion nothing can be done with. The block expires by
-  // itself, so rights granted later resume moderation with no restart.
-  if (rights.cannotEnforce(chat.id)) {
+  // Telegram has refused us both message removal and sender actions here, so
+  // there is no verdict we could act on. Keep asking the admins for rights, but
+  // stop paying for enrichment and LLM calls to reach a conclusion nothing can
+  // be done with.
+  //
+  // What lifts the block is one cheap membership lookup, rate-limited to at
+  // worst a quarter of an hour, so rights granted later resume moderation
+  // without a restart — and, since 2026-08-07, a restart no longer resumes it
+  // for free either: the refusal is a persisted fact, not an expiry the process
+  // forgets when it dies.
+  if (rights.cannotEnforce(chat.id) && !(rights.mayProbe(chat.id) && await probeRights(chat.id))) {
     log.debug('enforcement_blocked', { chatId: chat.id, chat: chat.title ?? undefined })
     if (shouldWarnMissingRights(chat.id, ['CHAT_ADMIN_REQUIRED'])) {
       const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
@@ -2465,6 +2477,16 @@ const wireCallbacks = (): void => {
 
 const main = async (): Promise<void> => {
   await store.connect(config.mongoUri)
+
+  // Adopt what Telegram refused us before the restart. Before this the record
+  // died with the process, so every chat where the bot is not an admin paid a
+  // full evaluation again to rediscover it — three times over on 2026-08-07.
+  // Awaited, not fired off: a message arriving in the first second must see the
+  // same state as one arriving in the tenth.
+  const restored = await store.loadRightsBlocks().catch(() => [])
+  rights.restore(restored)
+  if (restored.length > 0) log.info('rights_restored_at_boot', { chats: restored.length })
+
   gateway.onMessage(handleMessage)
   gateway.onError((err) => log.error('handler_error', { err: err instanceof Error ? err : String(err) }))
   wireCallbacks()

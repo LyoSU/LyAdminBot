@@ -20,6 +20,20 @@ import {
 const DECISIONS_TTL_DAYS = 14
 const LLM_CACHE_TTL_DAYS = 7
 
+/**
+ * One chat's standing refusal, as stored. Structurally the bot's own
+ * `RightsRecord` — declared here rather than imported because the store cannot
+ * depend on the app, and kept a plain data shape so it stays that way.
+ */
+export interface RightsBlockRecord {
+  chatId: number
+  deleteRefused: boolean
+  senderRefused: boolean
+  strikes: number
+  probeAt: number
+  warnedUntil: number
+}
+
 export class MongoStore {
   private client: MongoClient | null = null
   private db: Db | null = null
@@ -61,6 +75,14 @@ export class MongoStore {
   // Persistent moderation state (survives restarts; TTL-expired).
   get velocityEvents(): Collection<Document> { return this.collection('velocity_events') }
   get sessionWindows(): Collection<Document> { return this.collection('session_windows') }
+  /**
+   * What Telegram refuses us, per chat. Deliberately NOT TTL-expired: unlike
+   * every other collection here it holds a fact rather than an observation, and
+   * "the bot is not an admin in this chat" stops being true only when a person
+   * makes it stop. One small document per chat that ever refused us, removed the
+   * moment anything succeeds there.
+   */
+  get rightsBlocks(): Collection<Document> { return this.collection('pipeline_rights') }
 
   /**
    * Create a TTL index, tolerating an already-present index on the same key
@@ -359,6 +381,50 @@ export class MongoStore {
     if (Object.keys(unset).length > 0) update['$unset'] = unset
     if (Object.keys(update).length === 0) return
     await this.users.updateOne({ telegram_id: telegramId }, update, { upsert: true })
+  }
+
+  /**
+   * Every chat that has refused us something, for adoption at startup.
+   *
+   * One query at boot rather than a lookup per chat, because the caller answers
+   * "may I enforce here" synchronously on the hot path. The set is bounded by
+   * the number of chats where the bot is not an admin — dozens, not thousands.
+   */
+  async loadRightsBlocks(): Promise<RightsBlockRecord[]> {
+    // A record also exists purely to hold a nag quota, for chats that refused a
+    // manual command without an execution ever reaching the pipeline. Once that
+    // quota lapses such a record says nothing at all, and on a size-capped
+    // cluster "says nothing" must not accumulate one document per group. Cleared
+    // here rather than on a timer: boot is the one moment we read them all
+    // anyway, so it costs a single extra query.
+    const spent = {
+      deleteRefused: { $ne: true },
+      senderRefused: { $ne: true },
+      warnedUntil: { $lt: Date.now() }
+    }
+    await this.rightsBlocks.deleteMany(spent).catch(() => { /* tidiness is not correctness */ })
+    const docs = await this.rightsBlocks.find({}).toArray()
+    return docs.map((d) => ({
+      chatId: Number(d['chatId']),
+      deleteRefused: d['deleteRefused'] === true,
+      senderRefused: d['senderRefused'] === true,
+      strikes: Number(d['strikes'] ?? 0),
+      probeAt: Number(d['probeAt'] ?? 0),
+      warnedUntil: Number(d['warnedUntil'] ?? 0)
+    })).filter((r) => Number.isFinite(r.chatId))
+  }
+
+  /** Write one chat's refusal record, or remove it when the chat came good. */
+  async saveRightsBlock(chatId: number, record: RightsBlockRecord | null): Promise<void> {
+    if (record === null) {
+      await this.rightsBlocks.deleteOne({ chatId })
+      return
+    }
+    await this.rightsBlocks.updateOne(
+      { chatId },
+      { $set: { ...record, chatId, updatedAt: new Date() } },
+      { upsert: true }
+    )
   }
 
   /**
