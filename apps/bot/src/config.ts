@@ -14,6 +14,7 @@ export interface BotConfig {
   openaiApiKey: string | null
   openrouterApiKey: string | null
   llmModel: string
+  llmRequireSchema: boolean
   /**
    * Deliver the captcha as an ephemeral group message — visible to the suspect
    * alone (Bot API 10.2). On by default; a kill switch rather than a feature
@@ -51,5 +52,11 @@ export const loadConfig = (): BotConfig => ({
   // whichever is set wins, cheap first, and the pair no longer means anything.
   llmModel: process.env['LLM_MODEL'] ?? process.env['LLM_CHEAP_MODEL'] ??
     process.env['LLM_STRONG_MODEL'] ?? 'gpt-5.6-luna',
+  // Route only to endpoints that actually enforce the verdict schema. Default
+  // ON because an unenforced schema is the silent-degradation shape this whole
+  // area was just fixed for; `LLM_REQUIRE_SCHEMA=false` is the escape hatch if
+  // the chosen model has no such endpoint, since the alternative is no
+  // classifier at all.
+  llmRequireSchema: enabled('LLM_REQUIRE_SCHEMA', true),
   ephemeralCaptcha: enabled('EPHEMERAL_CAPTCHA', true)
 })

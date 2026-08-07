@@ -78,13 +78,18 @@ const buildPorts = (): PipelinePorts => {
     ports.llm = new OpenRouterLlmPort({
       apiKey: config.openrouterApiKey,
       model: config.llmModel,
+      requireSchema: config.llmRequireSchema,
       briefingProvider: campaignBriefing,
       // A classifier that answers nothing is not a neutral event: the pipeline
       // then decides on whatever weaker stage spoke, and for the strong tier
       // that means the cheap model's word carries the verdict. Named per model
       // so a tier failing every time is visible without correlating log lines.
-      onFailure: ({ model, reason, status }) => {
-        log.warn('llm_unanswered', { model, reason, ...(status !== null ? { status } : {}) })
+      onFailure: ({ model, reason, status, detail, chatId, messageId }) => {
+        log.warn('llm_unanswered', {
+          chatId, messageId, model, reason,
+          ...(status !== null ? { status } : {}),
+          ...(detail !== undefined ? { detail } : {})
+        })
       }
     }, store)
   }

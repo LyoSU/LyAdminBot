@@ -28,6 +28,7 @@
 | `OPENROUTER_API_KEY` | LLM-ескалація сірої зони |
 | `QDRANT_URL`, `QDRANT_API_KEY` | семантичний пошук спаму |
 | `LLM_MODEL` | override класифікатора (є дефолт). Старі `LLM_CHEAP_MODEL` / `LLM_STRONG_MODEL` читаються як fallback — поділу на тіри більше немає |
+| `LLM_REQUIRE_SCHEMA` | маршрутизувати лише на ендпоінти, що дотримують схему вердикту (`provider.require_parameters`). Увімкнено за замовчуванням; `false` — якщо в моделі такого ендпоінта немає, інакше класифікатор стане недоступним |
 | `EPHEMERAL_CAPTCHA` | капча як ephemeral-повідомлення (видиме лише підозрюваному). Увімкнено за замовчуванням; `EPHEMERAL_CAPTCHA=false` вертає лише публічний промпт |
 
 `SESSION_PATH=/data/session` уже зашитий в образ.

@@ -3,8 +3,8 @@ import type {
   ChatPolicy, Enrichment, EvaluationInput, NormalizedChat, NormalizedMessage, UserSnapshot
 } from '@lyadmin/core'
 import {
-  OpenRouterLlmPort, buildSystemPrompt, buildUserContent, cacheKeyFor, contextDigest,
-  promptFingerprint
+  OpenRouterLlmPort, VERDICT_SCHEMA, buildSystemPrompt, buildUserContent, cacheKeyFor,
+  contextDigest, promptFingerprint
 } from './llm-port.js'
 import { createHash } from 'node:crypto'
 
@@ -376,23 +376,91 @@ describe('OpenRouterLlmPort.classify (2026-07-30 review)', () => {
     expect(v?.reasonCode).toBe('job_scam')
   })
 
-  it('REGRESSION: a missing canary discards the answer instead of punishing the sender', async () => {
-    // It used to return pSpam 0.9 + `prompt_injection` — a silent 24h mute, no
-    // vote — for what is usually a cheap model dropping a field.
+  it('a schema violation discards the answer instead of punishing the sender', async () => {
+    // Was: "a missing canary discards the answer". The canary is gone — it never
+    // defended against injection (the token sits in the same prompt the attacker
+    // writes into) and it cost whole verdicts when the model dropped the field.
+    // What replaces it is the schema, checked on arrival: `reason_code` is absent
+    // here, so there is no verdict.
+    //
+    // Before either check existed this returned pSpam 0.9 + `prompt_injection` —
+    // a silent 24h mute, no vote — for what is nearly always a dropped field.
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
       choices: [{ message: { content: JSON.stringify({ is_spam: true, confidence: 99 }) } }]
     }))) as unknown as typeof fetch
     expect(await portWith(fetchImpl).classify(makeInput())).toBeNull()
   })
 
-  it('REGRESSION: an answer with no confidence does not land on the kick threshold', async () => {
-    // A default of 50 mapped to exactly 0.75 — the standard kick bar — so a
-    // dropped field kicked people. An answer that omits its own confidence is
-    // not a confident answer.
+  it('reports WHICH field was missing, not just that something was', async () => {
+    // The failure this whole area exists to prevent is a stage that stops
+    // answering and looks like a stage that agrees. `detail` is what separates
+    // "this endpoint ignores response_format" from "the model omits one field".
+    const failures: { reason: string; detail?: string }[] = []
+    const port = new OpenRouterLlmPort({
+      apiKey: 'k',
+      model: 'm',
+      onFailure: (f) => failures.push({ reason: f.reason, ...(f.detail ? { detail: f.detail } : {}) }),
+      fetchImpl: modelReplies([{ is_spam: true, reason_code: 'other_spam' }])
+    })
+    expect(await port.classify(makeInput())).toBeNull()
+    expect(failures).toEqual([{ reason: 'schema', detail: 'missing confidence' }])
+  })
+
+  it('REGRESSION: a missing confidence is no verdict, not a weaker one', async () => {
+    // It used to be assumed as 20 → pSpam 0.60 → delete+vote (itself a fix for an
+    // assumed 50, which landed on exactly the kick threshold and so kicked people
+    // over a dropped field). That degradation made sense when the shape was only
+    // REQUESTED; under constrained decoding a missing field means the schema was
+    // not enforced, and then no field from the same decoder is trustworthy.
     const v = await portWith(modelReplies([{ is_spam: true, reason_code: 'other_spam' }]))
       .classify(makeInput())
-    expect(v?.pSpam).toBeLessThan(0.75)
-    expect(v?.pSpam).toBeGreaterThan(0.5)
+    expect(v).toBeNull()
+  })
+
+  it('a null evidence is a valid verdict — the schema says so', async () => {
+    // `evidence` is the one required field allowed to arrive empty: strict mode
+    // has no optional fields, so "may be absent" is spelled "may be null", and
+    // treating that null as a violation would discard most clean verdicts.
+    const v = await portWith(modelReplies([
+      { is_spam: false, confidence: 80, reason_code: 'legit_conversation', evidence: null }
+    ])).classify(makeInput())
+    expect(v?.pSpam).toBeCloseTo(0.1, 5)
+    expect(v?.evidence).toBeNull()
+  })
+
+  it('asks for the verdict schema, and only routes where it is enforced when told to', async () => {
+    const bodies: Record<string, unknown>[] = []
+    const spy = vi.fn(async (_url: string, init?: { body?: string }) => {
+      bodies.push(JSON.parse(init?.body ?? '{}') as Record<string, unknown>)
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({
+          is_spam: false, confidence: 90, reason_code: 'other_clean', evidence: null
+        }) } }]
+      }))
+    }) as unknown as typeof fetch
+
+    await new OpenRouterLlmPort({ apiKey: 'k', model: 'm', fetchImpl: spy }).classify(makeInput())
+    expect(bodies[0]?.['response_format']).toEqual({
+      type: 'json_schema', json_schema: VERDICT_SCHEMA
+    })
+    // Absent by default: requiring it takes the classifier offline outright where
+    // no endpoint qualifies, so it is a deployment decision.
+    expect(bodies[0]?.['provider']).toBeUndefined()
+
+    await new OpenRouterLlmPort({
+      apiKey: 'k', model: 'm', requireSchema: true, fetchImpl: spy
+    }).classify(makeInput())
+    expect(bodies[1]?.['provider']).toEqual({ require_parameters: true })
+  })
+
+  it('the schema is strict in the way strict mode actually requires', async () => {
+    // Both of these are load-bearing, not stylistic: an implementation with a
+    // native strict mode rejects a schema without them, and the documented
+    // failure mode is a provider quietly downgrading to "strong hint".
+    expect(VERDICT_SCHEMA.strict).toBe(true)
+    expect(VERDICT_SCHEMA.schema.additionalProperties).toBe(false)
+    expect([...VERDICT_SCHEMA.schema.required].sort())
+      .toEqual(Object.keys(VERDICT_SCHEMA.schema.properties).sort())
   })
 
   it('an unknown reason code degrades to the generic one', async () => {
