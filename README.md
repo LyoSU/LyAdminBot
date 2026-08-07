@@ -29,7 +29,12 @@ cd tools/replay && pnpm replay -- --days 14   # needs MONGODB_URI
 Required: `API_ID`, `API_HASH`, `BOT_TOKEN`, `MONGODB_URI`.
 Optional (stage degrades gracefully when absent): `QDRANT_URL`, `QDRANT_API_KEY`,
 `OPENAI_API_KEY` (embeddings + moderation), `OPENROUTER_API_KEY`,
-`LLM_CHEAP_MODEL`, `LLM_STRONG_MODEL`, `SESSION_PATH`.
+`LLM_MODEL`, `SESSION_PATH`.
+
+`LLM_CHEAP_MODEL` / `LLM_STRONG_MODEL` are still read as fallbacks for
+`LLM_MODEL`, so an existing deployment keeps working, but there is only one
+classifier now — the two-tier escalation was removed after the strong tier was
+found never to have answered in production (2026-08-07).
 
 ## Cutover protocol (do not skip)
 

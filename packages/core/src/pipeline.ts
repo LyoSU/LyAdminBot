@@ -457,18 +457,7 @@ export const evaluateMessage = async (
         ...input,
         message: { ...input.message, text: window.combinedText }
       }
-      let llmVerdict = await safe('llm_session', () => ports.llm!.classify(sessionInput, 'cheap'))
-
-      // Concatenated one-liners are the weakest input in the pipeline: they have
-      // no structure, no single subject, and by construction no line that meant
-      // anything on its own. The cheap tier must not carry the pipeline's
-      // strongest authority over them — if arithmetic on its answer would remove
-      // the sender, the strong model decides instead (2026-07-30: a two-word
-      // conversational message banned at 0.98 on a cheap `flood` verdict).
-      if (llmVerdict && removesSender(policyFor(llmVerdict.pSpam, signals).action)) {
-        const strong = await safe('llm_session_strong', () => ports.llm!.classify(sessionInput, 'strong'))
-        if (strong) llmVerdict = strong
-      }
+      const llmVerdict = await safe('llm_session', () => ports.llm!.classify(sessionInput))
 
       if (llmVerdict) {
         // A judged batch is spent. Without this the window — which saturates at
@@ -485,6 +474,24 @@ export const evaluateMessage = async (
         // Without recording it, a session FP cannot be reviewed at all.
         meta['judgedText'] = window.combinedText
         meta['judgedCount'] = window.count
+        /**
+         * NOTE — the safeguard that used to sit here is gone with the tier split.
+         *
+         * Concatenated one-liners are the weakest input in the pipeline: no
+         * structure, no single subject, and by construction no line that meant
+         * anything on its own. Removing somebody over that required the stronger
+         * model to agree (2026-07-30: a two-word conversational message banned at
+         * 0.98 on a cheap `flood` verdict). With one classifier there is nobody to
+         * ask, and this verdict returns straight to the caller — so unlike every
+         * other stage it passes no evidence bar.
+         *
+         * Deliberately NOT replaced with `capUnearnedRemoval`: that bar wants
+         * ~2.0 units of firsthand MESSAGE evidence, which plain-text solicitation
+         * never carries (no URL, no phone, no obfuscation), so capping here would
+         * end sender removal for text-only scam altogether — a policy change, not
+         * a translation of this guard. What the band should be is a calibration
+         * decision; see `docs/calibration.md`.
+         */
         return finalize(
           {
             pSpam: llmVerdict.pSpam,
@@ -747,41 +754,25 @@ export const evaluateMessage = async (
   let llmNeededButUnavailable = false
 
   if (needsLlm && ports.llm) {
-    let llmVerdict: LlmVerdict | null =
-      await safe('llm_cheap', () => ports.llm!.classify(input, 'cheap'))
-    meta['llmTier'] = 'cheap'
-
-    /**
-     * A removal with nothing behind it but the cheap model's word.
-     *
-     * `contentEvidence` at zero means every other stage read the text and found
-     * nothing, so no second opinion exists — and this is the one path where the
-     * evidence bar does not apply, because the LLM returns straight to the
-     * caller. Escalating is what the session path has done since 2026-07-30 for
-     * exactly this reason, twenty lines above; the ordinary path escalated only
-     * INSIDE the grey zone, which by construction excluded every verdict that
-     * removes somebody.
-     *
-     * Cheap where it does not matter: only removals, and only unsupported ones.
-     */
-    const unsupportedRemoval = (v: LlmVerdict): boolean =>
-      removesSender(policyFor(v.pSpam, signals).action) &&
-      contentEvidence(signals).strongest === 0
-
-    if (llmVerdict &&
-        ((llmVerdict.pSpam >= LLM_GREY_LOW && llmVerdict.pSpam <= LLM_GREY_HIGH) ||
-          unsupportedRemoval(llmVerdict))) {
-      const strong = await safe('llm_strong', () => ports.llm!.classify(input, 'strong'))
-      if (strong) {
-        llmVerdict = strong
-        meta['llmTier'] = 'strong'
-      }
-    }
+    const llmVerdict: LlmVerdict | null = await safe('llm', () => ports.llm!.classify(input))
 
     if (llmVerdict) {
       // Recorded whether or not it was a hit: a hit alone proves nothing, and it
       // is the two keys of a MISS that need comparing.
       if (llmVerdict.cacheKey !== undefined) meta['llmKey'] = llmVerdict.cacheKey
+      /**
+       * NOTE — as in the session path, this returns without passing any evidence
+       * bar, and the escalation that used to stand in for one is gone.
+       *
+       * `contentEvidence.strongest` at zero means every other stage read the text
+       * and found nothing to point at, so the classifier's word is the entire case
+       * for taking the chat away from somebody. That case used to be re-put to a
+       * stronger model. Production 2026-08-06/07 is what it costs unguarded: four
+       * removals on `contentEvidence: 0`, one of them (12:06:37, scorePSpam 0.0356
+       * on an `established_user`) a plain false positive.
+       *
+       * `capUnearnedRemoval` is the wrong instrument here — see the session path.
+       */
       return finalize(
         {
           pSpam: llmVerdict.pSpam,

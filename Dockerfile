@@ -7,7 +7,7 @@
 # Coolify: base directory = repo root, Dockerfile build pack.
 # Required env: API_ID, API_HASH, BOT_TOKEN, MONGODB_URI
 # Optional env: OPENAI_API_KEY, OPENROUTER_API_KEY, QDRANT_URL, QDRANT_API_KEY,
-#               LLM_CHEAP_MODEL, LLM_STRONG_MODEL
+#               LLM_MODEL (LLM_CHEAP_MODEL / LLM_STRONG_MODEL read as fallback)
 # Persistent volume: /data (mtcute session — MUST survive redeploys,
 # otherwise the bot re-authorizes on every deploy).
 

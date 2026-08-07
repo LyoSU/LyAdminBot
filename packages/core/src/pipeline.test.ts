@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   ChatPolicy, Enrichment, EvaluationInput, NormalizedChat, NormalizedMessage, UserSnapshot
 } from './types.js'
-import type { LlmTier, ModerationResult, PipelinePorts, SessionPort } from './ports.js'
+import type { ModerationResult, PipelinePorts, SessionPort } from './ports.js'
 import { evaluateMessage } from './pipeline.js'
 import { isEnforcementAction, removesSender } from './policy.js'
 import { contentEvidence, mayRemoveSender } from './score.js'
@@ -167,7 +167,7 @@ describe('evaluateMessage — abstain & session', () => {
   })
 
   it('session escalation: 5th low-info message evaluates the combined window', async () => {
-    const calls: LlmTier[] = []
+    let calls = 0
     const ports: PipelinePorts = {
       session: {
         append: async () => ({
@@ -177,8 +177,8 @@ describe('evaluateMessage — abstain & session', () => {
         reset: async () => { /* noop */ }
       },
       llm: {
-        classify: async (_input, tier) => {
-          calls.push(tier)
+        classify: async () => {
+          calls += 1
           return { pSpam: 0.9, reasonCode: 'job_scam', evidence: null, cached: false }
         }
       }
@@ -187,9 +187,9 @@ describe('evaluateMessage — abstain & session', () => {
     const v = await evaluateMessage(input, ports)
     expect(v.decidedBy).toBe('session')
     expect(v.action).toBe('mute')
-    // The cheap tier may not exile someone on a concatenated blob — removing the
-    // sender requires the strong model to agree (see the test below).
-    expect(calls).toEqual(['cheap', 'strong'])
+    // One classifier, one call: the escalation that used to follow every session
+    // removal is gone with the tier split.
+    expect(calls).toBe(1)
   })
 
   it('REGRESSION: a short message nothing found anything in still gets read eventually', async () => {
@@ -369,45 +369,38 @@ describe('evaluateMessage — abstain & session', () => {
     expect(ordinary.reasonCode).toBe('established_regular')
   })
 
-  it('REGRESSION: a removal nothing corroborates gets the strong model first', async () => {
-    // The cheap model was escalated only inside the grey zone — so the verdicts
-    // that REMOVE somebody, which by definition sit above it, were the ones the
-    // strong model never saw. Meanwhile the session path has done exactly this
-    // since 2026-07-30, for the same reason, twenty lines away.
-    //
-    // The trigger is a removal with nothing corroborating it: `contentEvidence`
-    // at zero means every other stage looked at the text and found nothing, so
-    // the cheap model's word is the entire case for taking the chat away from
-    // somebody.
-    const calls: LlmTier[] = []
+  it('the classifier is asked exactly once, corroborated or not', async () => {
+    // Was: "a removal nothing corroborates gets the strong model first". That
+    // escalation is gone — across ~25 of them in the 2026-08-05/07 logs the strong
+    // tier never returned a usable answer, so it was a safeguard only in the
+    // source. Pinned here because the shape it left behind is load-bearing: an LLM
+    // verdict reaches the caller having passed no evidence bar, whether or not any
+    // other stage found something in the message. See the note at the call site.
+    let calls = 0
     const ports = (pSpam: number): PipelinePorts => ({
       llm: {
-        classify: async (_i, tier) => {
-          calls.push(tier)
+        classify: async () => {
+          calls += 1
           return { pSpam, reasonCode: 'job_scam', evidence: null, cached: false }
         }
       }
     })
     // Long enough not to earn the brevity discount, so the score reaches the
-    // grey zone on its own and the cheap model is consulted the ordinary way.
-    const bare = {
+    // grey zone on its own and the classifier is consulted the ordinary way.
+    const uncorroborated = await evaluateMessage(makeInput({
       msg: { text: 'Гарного дня всім, підкажіть будь ласка, як тут заведено ставити запитання?' },
       user: newcomer
-    }
+    }), ports(0.97))
+    expect(calls).toBe(1)
+    expect(contentEvidence(uncorroborated.signals).strongest).toBe(0)
+    expect(removesSender(uncorroborated.action)).toBe(true)
 
-    const removed = await evaluateMessage(makeInput(bare), ports(0.97))
-    expect(calls).toEqual(['cheap', 'strong'])
-    expect(removesSender(removed.action)).toBe(true)
-
-    // Corroborated, so the cheap tier carries it alone: the phone number is a
-    // second stage saying something about the same message, which is exactly
-    // what the escalation exists to substitute for when it is missing.
-    calls.length = 0
+    calls = 0
     const corroborated = await evaluateMessage(makeInput({
       msg: { text: 'Робота вдома, гарний дохід щотижня, телефонуйте +380671234567' },
       user: newcomer
     }), ports(0.97))
-    expect(calls).toEqual(['cheap'])
+    expect(calls).toBe(1)
     expect(removesSender(corroborated.action)).toBe(true)
   })
 
@@ -568,29 +561,34 @@ describe('evaluateMessage — abstain & session', () => {
     expect(resets).toEqual([])
   })
 
-  it('the cheap tier alone may not remove the sender on a blob', async () => {
-    // Same rule as the score path: the weakest input in the pipeline (lines
-    // with no individual meaning, concatenated) must not carry the strongest
-    // authority. If the strong model disagrees, its answer stands.
-    const calls: LlmTier[] = []
+  it('DOCUMENTS THE GAP: one classifier removes the sender on a blob unaided', async () => {
+    // This test asserted the opposite until the tier split came out: the cheap
+    // model alone could not exile somebody over concatenated one-liners, because
+    // the strong model got a veto. Nothing replaced that veto, so the current
+    // behaviour is the one production already had — the strong tier never answered
+    // — and it is recorded here rather than left implied.
+    //
+    // Production 2026-08-07 08:41: "Hey kisi ke pass adult sticker hai ...?" — a
+    // question — banned for 30 days at pSpam 0.98, on scorePSpam 0.1192 and
+    // contentEvidence 0. Flip this expectation when the band is calibrated.
+    let calls = 0
     const ports: PipelinePorts = {
       session: {
         append: async () => ({ combinedText: 'ок\nда\nугу\n+\nну от', count: 5 }),
         reset: async () => { /* noop */ }
       },
       llm: {
-        classify: async (_input, tier) => {
-          calls.push(tier)
-          return tier === 'cheap'
-            ? { pSpam: 0.98, reasonCode: 'flood', evidence: null, cached: false }
-            : { pSpam: 0.2, reasonCode: 'clean', evidence: null, cached: false }
+        classify: async () => {
+          calls += 1
+          return { pSpam: 0.98, reasonCode: 'flood', evidence: null, cached: false }
         }
       }
     }
     const v = await evaluateMessage(makeInput({ msg: { text: 'ну от' }, user: newcomer }), ports)
-    expect(calls).toEqual(['cheap', 'strong'])
-    expect(v.pSpam).toBe(0.2)
-    expect(isEnforcementAction(v.action)).toBe(false)
+    expect(calls).toBe(1)
+    expect(v.pSpam).toBe(0.98)
+    expect(contentEvidence(v.signals).total).toBe(0)
+    expect(removesSender(v.action)).toBe(true)
   })
 
   it('records the judged window, so a session verdict is reviewable from a log line', async () => {
@@ -947,7 +945,7 @@ describe('evaluateMessage — profile NSFW', () => {
   })
 
   it('a porn avatar DOES escalate to the LLM, which may then convict on the text', async () => {
-    const calls: LlmTier[] = []
+    let calls = 0
     const v = await evaluateMessage(makeInput({
       msg: { text: 'Приват, інтим послуги, пиши в лічку' },
       user: { ...newcomer, joinedAgoSeconds: 30 },
@@ -955,13 +953,13 @@ describe('evaluateMessage — profile NSFW', () => {
     }), {
       ...avatarPort({ sexual: 0.99 }),
       llm: {
-        classify: async (_i, tier) => {
-          calls.push(tier)
+        classify: async () => {
+          calls += 1
           return { pSpam: 0.97, reasonCode: 'escort_promo', evidence: null, cached: false }
         }
       }
     })
-    expect(calls.length).toBeGreaterThan(0)
+    expect(calls).toBeGreaterThan(0)
     expect(v.decidedBy).toBe('llm')
     expect(['kick', 'mute', 'ban']).toContain(v.action)
   })
@@ -1009,40 +1007,39 @@ describe('evaluateMessage — LLM escalation', () => {
     user: newcomer
   })
 
-  it('grey-zone score escalates to the cheap LLM tier', async () => {
-    const calls: LlmTier[] = []
+  it('grey-zone score escalates to the LLM', async () => {
+    let calls = 0
     const ports: PipelinePorts = {
       llm: {
-        classify: async (_i, tier) => {
-          calls.push(tier)
+        classify: async () => {
+          calls += 1
           return { pSpam: 0.92, reasonCode: 'crypto_promo', evidence: 'заробляти на криптовалюті', cached: false }
         }
       }
     }
     const v = await evaluateMessage(greyZoneInput(), ports)
-    // Cheap first, then strong: 0.92 removes the sender and nothing in the
-    // message corroborates it, which is the one case the cheap tier may not
-    // carry alone (2026-08-01). The verdict itself is unchanged.
-    expect(calls).toEqual(['cheap', 'strong'])
+    expect(calls).toBe(1)
     expect(v.decidedBy).toBe('llm')
     expect(v.reasonCode).toBe('crypto_promo')
     expect(['mute', 'ban']).toContain(v.action)
   })
 
-  it('uncertain cheap verdict escalates to the strong tier', async () => {
-    const calls: LlmTier[] = []
+  it('an "unsure" verdict is not enforcement: 0.5 lands in the grey band', async () => {
+    // Used to be "uncertain cheap verdict escalates to the strong tier". With one
+    // classifier there is no second opinion, so what protects the sender is the
+    // policy ladder: 0.5 is below the delete threshold in every preset.
+    let calls = 0
     const ports: PipelinePorts = {
       llm: {
-        classify: async (_i, tier) => {
-          calls.push(tier)
-          if (tier === 'cheap') return { pSpam: 0.5, reasonCode: 'unsure', evidence: null, cached: false }
-          return { pSpam: 0.1, reasonCode: 'legit_question', evidence: null, cached: false }
+        classify: async () => {
+          calls += 1
+          return { pSpam: 0.5, reasonCode: 'unsure', evidence: null, cached: false }
         }
       }
     }
     const v = await evaluateMessage(greyZoneInput(), ports)
-    expect(calls).toEqual(['cheap', 'strong'])
-    expect(v.action).toBe('none')
+    expect(calls).toBe(1)
+    expect(isEnforcementAction(v.action)).toBe(false)
   })
 
   it('LLM unavailable in grey zone → never clean (fail-safe: observe or delete+vote)', async () => {
@@ -1141,17 +1138,17 @@ describe('evaluateMessage — soft-shape-only guard (2026-06-21 FP)', () => {
   })
 
   it('escalates to the LLM even above the grey ceiling, and the LLM clears it', async () => {
-    const calls: LlmTier[] = []
+    let calls = 0
     const ports: PipelinePorts = {
       llm: {
-        classify: async (_i, tier) => {
-          calls.push(tier)
+        classify: async () => {
+          calls += 1
           return { pSpam: 0.05, reasonCode: 'legit_question', evidence: null, cached: false }
         }
       }
     }
     const v = await evaluateMessage(makeInput(softShapeOver), ports)
-    expect(calls).toEqual(['cheap'])
+    expect(calls).toBe(1)
     expect(v.decidedBy).toBe('llm')
     expect(v.action).toBe('none')
   })
@@ -1215,16 +1212,16 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
   })
 
   it('the LLM is consulted above the grey ceiling when the score wants the sender gone', async () => {
-    const calls: LlmTier[] = []
+    let calls = 0
     const v = await evaluateMessage(makeInput(conversational), {
       llm: {
-        classify: async (_i, tier) => {
-          calls.push(tier)
+        classify: async () => {
+          calls += 1
           return { pSpam: 0.03, reasonCode: 'small_talk', evidence: null, cached: false }
         }
       }
     })
-    expect(calls).toEqual(['cheap'])
+    expect(calls).toBe(1)
     expect(v.decidedBy).toBe('llm')
     expect(v.action).toBe('none')
   })
@@ -1303,23 +1300,23 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
     expect(scoreOnly.pSpam).toBeGreaterThan(0.78)
     expect(scoreOnly.pSpam).toBeLessThan(0.86)
 
-    const calls: LlmTier[] = []
+    let calls = 0
     const v = await evaluateMessage(makeInput(jobAd), {
       llm: {
-        classify: async (_i, tier) => {
-          calls.push(tier)
+        classify: async () => {
+          calls += 1
           return { pSpam: 0.1, reasonCode: 'legit_share', evidence: null, cached: false }
         }
       }
     })
-    expect(calls).toEqual(['cheap'])
+    expect(calls).toBe(1)
     expect(v.action).toBe('none')
   })
 
   it('REGRESSION: a resemblance plus one fact is not two facts', async () => {
     // Production, 2026-08-01 13:22: an appeal for help carrying a phone number
     // was BANNED for thirty days by the scoring path, `decidedBy: score`, with
-    // no `llm_cheap` in the port timings — nothing read it. phone_number 1.2 +
+    // no `llm` in the port timings — nothing read it. phone_number 1.2 +
     // vector_similar_spam 1.0 met the sender-removal bar exactly, which is what
     // `unearnedEnforcement` tests, so the LLM gate never opened. The same sum
     // muted a job ad in a jobs chat two hours earlier.
@@ -1335,17 +1332,17 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
       vectors: { search: async () => ({ vectorId: 'v9', similarity: 0.88, status: 'candidate' }) }
     }
 
-    const calls: LlmTier[] = []
+    let calls = 0
     const asked = await evaluateMessage(makeInput(appeal), {
       ...nearNeighbour,
       llm: {
-        classify: async (_i, tier) => {
-          calls.push(tier)
+        classify: async () => {
+          calls += 1
           return { pSpam: 0.05, reasonCode: 'legit_share', evidence: null, cached: false }
         }
       }
     })
-    expect(calls).toEqual(['cheap'])
+    expect(calls).toBe(1)
     expect(asked.action).toBe('none')
 
     // With no LLM to ask: the message may still go, the person may not.
@@ -1714,19 +1711,19 @@ describe('evaluateMessage — a script the chat does not use', () => {
     // the only multilingual reader in the pipeline was never asked. In
     // production the class was caught solely when the account already sat in an
     // external ban database.
-    const tiers: LlmTier[] = []
+    let calls = 0
     const v = await evaluateMessage(makeInput({ msg: cjk, user: newcomer }), {
       llm: {
-        classify: async (_i, tier) => {
-          tiers.push(tier)
+        classify: async () => {
+          calls += 1
           return { pSpam: 0.97, reasonCode: 'other_spam', evidence: null, cached: false }
         }
       }
     })
-    // Both tiers: 0.97 removes the sender and no other stage found anything —
-    // least of all here, where every one of them was reading a script it was
-    // not built for. If there is a case for a second opinion, it is this one.
-    expect(tiers).toEqual(['cheap', 'strong'])
+    // One call. This is the case with the strongest claim on a second opinion —
+    // 0.97 removes the sender and every other stage was reading a script it was
+    // not built for — and there is no longer one to ask.
+    expect(calls).toBe(1)
     expect(v.decidedBy).toBe('llm')
     expect(isEnforcementAction(v.action)).toBe(true)
   })

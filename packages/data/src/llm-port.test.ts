@@ -365,13 +365,13 @@ const modelReplies = (answers: Record<string, unknown>[]): typeof fetch => {
 
 const portWith = (fetchImpl: typeof fetch): OpenRouterLlmPort =>
   new OpenRouterLlmPort({
-    apiKey: 'k', cheapModel: 'cheap', strongModel: 'strong', fetchImpl
+    apiKey: 'k', model: 'cheap', fetchImpl
   })
 
 describe('OpenRouterLlmPort.classify (2026-07-30 review)', () => {
   it('maps a confident spam answer onto the upper band', async () => {
     const v = await portWith(modelReplies([{ is_spam: true, confidence: 90, reason_code: 'job_scam' }]))
-      .classify(makeInput(), 'cheap')
+      .classify(makeInput())
     expect(v?.pSpam).toBeCloseTo(0.95, 5)
     expect(v?.reasonCode).toBe('job_scam')
   })
@@ -382,7 +382,7 @@ describe('OpenRouterLlmPort.classify (2026-07-30 review)', () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
       choices: [{ message: { content: JSON.stringify({ is_spam: true, confidence: 99 }) } }]
     }))) as unknown as typeof fetch
-    expect(await portWith(fetchImpl).classify(makeInput(), 'cheap')).toBeNull()
+    expect(await portWith(fetchImpl).classify(makeInput())).toBeNull()
   })
 
   it('REGRESSION: an answer with no confidence does not land on the kick threshold', async () => {
@@ -390,20 +390,20 @@ describe('OpenRouterLlmPort.classify (2026-07-30 review)', () => {
     // dropped field kicked people. An answer that omits its own confidence is
     // not a confident answer.
     const v = await portWith(modelReplies([{ is_spam: true, reason_code: 'other_spam' }]))
-      .classify(makeInput(), 'cheap')
+      .classify(makeInput())
     expect(v?.pSpam).toBeLessThan(0.75)
     expect(v?.pSpam).toBeGreaterThan(0.5)
   })
 
   it('an unknown reason code degrades to the generic one', async () => {
     const v = await portWith(modelReplies([{ is_spam: true, confidence: 80, reason_code: 'made_up' }]))
-      .classify(makeInput(), 'cheap')
+      .classify(makeInput())
     expect(v?.reasonCode).toBe('other_spam')
   })
 
   it('a transport failure is no verdict, not a clean verdict', async () => {
     const fetchImpl = vi.fn(async () => { throw new Error('offline') }) as unknown as typeof fetch
-    expect(await portWith(fetchImpl).classify(makeInput(), 'cheap')).toBeNull()
+    expect(await portWith(fetchImpl).classify(makeInput())).toBeNull()
   })
 })
 
@@ -421,10 +421,10 @@ describe('OpenRouterLlmPort — cache key (2026-07-30 review)', () => {
       }
     }
     const port = new OpenRouterLlmPort(
-      { apiKey: 'k', cheapModel: 'c', strongModel: 's', fetchImpl: modelReplies([{ is_spam: false, confidence: 90 }]) },
+      { apiKey: 'k', model: 'c', fetchImpl: modelReplies([{ is_spam: false, confidence: 90 }]) },
       store as never
     )
-    for (const input of inputs) await port.classify(input, 'cheap')
+    for (const input of inputs) await port.classify(input)
     return keys
   }
 

@@ -77,9 +77,15 @@ const buildPorts = (): PipelinePorts => {
   if (config.openrouterApiKey) {
     ports.llm = new OpenRouterLlmPort({
       apiKey: config.openrouterApiKey,
-      cheapModel: config.llmCheapModel,
-      strongModel: config.llmStrongModel,
-      briefingProvider: campaignBriefing
+      model: config.llmModel,
+      briefingProvider: campaignBriefing,
+      // A classifier that answers nothing is not a neutral event: the pipeline
+      // then decides on whatever weaker stage spoke, and for the strong tier
+      // that means the cheap model's word carries the verdict. Named per model
+      // so a tier failing every time is visible without correlating log lines.
+      onFailure: ({ model, reason, status }) => {
+        log.warn('llm_unanswered', { model, reason, ...(status !== null ? { status } : {}) })
+      }
     }, store)
   }
   return ports
@@ -1922,8 +1928,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       scorePSpam: verdict.meta['scorePSpam'] ?? undefined,
       contentEvidence: verdict.meta['contentEvidence'] ?? undefined,
       capped: verdict.meta['cappedGroups'] ?? undefined,
-      llmTier: verdict.meta['llmTier'] ?? undefined,
-    llmKey: verdict.meta['llmKey'] ?? undefined,
+      llmKey: verdict.meta['llmKey'] ?? undefined,
       portMs: verdict.meta['portMs'] ?? undefined,
       // Everything the pipeline's own timings cannot see. A deterministic
       // verdict runs no ports, so without this a 4.4-second ban (2026-07-31)

@@ -13,7 +13,7 @@
  * so the model always knows what is circulating THIS week.
  */
 import { randomBytes, createHash } from 'node:crypto'
-import type { EvaluationInput, LlmPort, LlmTier, LlmVerdict } from '@lyadmin/core'
+import type { EvaluationInput, LlmPort, LlmVerdict } from '@lyadmin/core'
 import { isDistinctive } from '@lyadmin/core'
 import { foldConfusables, normalizeLight } from './hashing.js'
 import type { MongoStore } from './mongo.js'
@@ -25,14 +25,53 @@ const REASON_CODES = [
   'legit_question', 'legit_conversation', 'legit_share', 'other_clean', 'unsure'
 ] as const
 
+/**
+ * Why a call produced no verdict. Every one of these degrades to `null`, and
+ * that is correct — a malformed answer is no answer. What was missing is any
+ * way to tell them apart afterwards.
+ *
+ * How this was found, and why the classifier is now a single model: across ~25
+ * escalations in the 2026-08-05/07 logs the strong tier returned a usable answer
+ * zero times — `llmTier` stayed `cheap` in every line — so the safeguard meant to
+ * keep one model's word from removing people had been off for as long as anyone
+ * had looked. The log said only `llm_strong=43`, indistinguishable from
+ * `llm_strong=2457` followed by agreement. `safe()` in the pipeline counts
+ * *thrown* errors, and none of these throw.
+ *
+ *  - `http`      the API refused the request (bad model slug, unsupported
+ *                parameter, quota). Fails in tens of milliseconds.
+ *  - `empty`     2xx with no message content — a reasoning model that spent its
+ *                whole budget before emitting any.
+ *  - `unparsable` content that is not the JSON object we asked for.
+ *  - `canary`    valid JSON, wrong canary: the prompt's format lost control.
+ *  - `transport` fetch threw or the timeout aborted.
+ */
+export type LlmFailureReason = 'http' | 'empty' | 'unparsable' | 'canary' | 'transport'
+
+export interface LlmFailure {
+  model: string
+  reason: LlmFailureReason
+  /** HTTP status when the reason is `http`, else null. */
+  status: number | null
+}
+
 export interface OpenRouterConfig {
   apiKey: string
-  cheapModel: string
-  strongModel: string
+  /**
+   * The one classifier. There used to be a `cheapModel`/`strongModel` pair with
+   * an escalation between them; see `LlmPort` for why it is gone.
+   */
+  model: string
   /** Optional daily campaign briefing for the system prompt. */
   briefingProvider?: () => Promise<string | null>
   baseUrl?: string
   timeoutMs?: number
+  /**
+   * Told about every call that produced no verdict. Optional because the port
+   * must keep working without it, but a deployment that omits it is blind to
+   * the failure above — wire it to the log.
+   */
+  onFailure?: (failure: LlmFailure) => void
   /** Injection point for tests (mirrors media-resend's `fetchImpl`). */
   fetchImpl?: typeof fetch
 }
@@ -158,7 +197,6 @@ export const cacheKeyFor = (model: string, input: EvaluationInput): string | nul
 export class OpenRouterLlmPort implements LlmPort {
   private readonly baseUrl: string
   private readonly timeoutMs: number
-
   constructor(
     private readonly config: OpenRouterConfig,
     private readonly store: MongoStore | null = null
@@ -167,8 +205,8 @@ export class OpenRouterLlmPort implements LlmPort {
     this.timeoutMs = config.timeoutMs ?? 30_000
   }
 
-  async classify(input: EvaluationInput, tier: LlmTier): Promise<LlmVerdict | null> {
-    const model = tier === 'strong' ? this.config.strongModel : this.config.cheapModel
+  async classify(input: EvaluationInput): Promise<LlmVerdict | null> {
+    const model = this.config.model
     const cacheKey = cacheKeyFor(model, input)
     if (cacheKey && this.store) {
       const hit = await this.store.llmCache.findOne({ key: cacheKey }).catch(() => null)
@@ -185,12 +223,13 @@ export class OpenRouterLlmPort implements LlmPort {
 
     const canary = randomBytes(8).toString('hex')
     const answer = await this.callModel(model, canary, input)
-    if (!answer) return null
+    if (!answer) return null // callModel already reported why
 
     // Canary check: proof the system prompt's FORMAT stayed in control. Note
     // what it does not prove — an injection that dutifully copies the token
     // passes — so it is a sanity check on the answer, not a security boundary.
     if (answer.canary !== canary) {
+      this.config.onFailure?.({ model, reason: 'canary', status: null })
       // This used to return pSpam 0.9 + `prompt_injection`, i.e. a silent 24h
       // mute (0.9 is above the mute threshold, so no vote) for what is far more
       // often a cheap model dropping a field than an attack. A malformed answer
@@ -259,14 +298,30 @@ export class OpenRouterLlmPort implements LlmPort {
         })
       })
       clearTimeout(timer)
-      if (!response.ok) return null
+      if (!response.ok) {
+        this.config.onFailure?.({ model, reason: 'http', status: response.status })
+        return null
+      }
       const body = await response.json() as {
         choices?: { message?: { content?: string } }[]
       }
       const content = body.choices?.[0]?.message?.content
-      if (!content) return null
-      return JSON.parse(content) as ModelAnswer
+      if (!content) {
+        this.config.onFailure?.({ model, reason: 'empty', status: response.status })
+        return null
+      }
+      try {
+        return JSON.parse(content) as ModelAnswer
+      } catch {
+        // Distinguished from `transport` on purpose: this one means the model
+        // answered and we could not read it, which is a prompt/format problem,
+        // not a network one. Lumping them together is what made the strong
+        // tier's silence unattributable.
+        this.config.onFailure?.({ model, reason: 'unparsable', status: response.status })
+        return null
+      }
     } catch {
+      this.config.onFailure?.({ model, reason: 'transport', status: null })
       return null
     }
   }

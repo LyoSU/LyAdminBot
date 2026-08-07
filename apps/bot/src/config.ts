@@ -13,8 +13,7 @@ export interface BotConfig {
   qdrantApiKey: string | null
   openaiApiKey: string | null
   openrouterApiKey: string | null
-  llmCheapModel: string
-  llmStrongModel: string
+  llmModel: string
   /**
    * Deliver the captcha as an ephemeral group message — visible to the suspect
    * alone (Bot API 10.2). On by default; a kill switch rather than a feature
@@ -47,7 +46,10 @@ export const loadConfig = (): BotConfig => ({
   qdrantApiKey: process.env['QDRANT_API_KEY'] ?? null,
   openaiApiKey: process.env['OPENAI_API_KEY'] ?? null,
   openrouterApiKey: process.env['OPENROUTER_API_KEY'] ?? null,
-  llmCheapModel: process.env['LLM_CHEAP_MODEL'] ?? 'openai/gpt-5-mini',
-  llmStrongModel: process.env['LLM_STRONG_MODEL'] ?? 'anthropic/claude-sonnet-4.6',
+  // One classifier. `LLM_CHEAP_MODEL` / `LLM_STRONG_MODEL` are still read so a
+  // deployment carrying either does not silently fall back to the default —
+  // whichever is set wins, cheap first, and the pair no longer means anything.
+  llmModel: process.env['LLM_MODEL'] ?? process.env['LLM_CHEAP_MODEL'] ??
+    process.env['LLM_STRONG_MODEL'] ?? 'gpt-5.6-luna',
   ephemeralCaptcha: enabled('EPHEMERAL_CAPTCHA', true)
 })

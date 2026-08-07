@@ -66,8 +66,6 @@ export interface ModerationPort {
   check(text: string, photoBase64: string | null): Promise<ModerationResult | null>
 }
 
-export type LlmTier = 'cheap' | 'strong'
-
 export interface LlmVerdict {
   pSpam: number
   /** Stable reason code (NOT free-form model text). */
@@ -88,8 +86,25 @@ export interface LlmVerdict {
   cacheKey?: string
 }
 
+/**
+ * One classifier, one call per message.
+ *
+ * There used to be two tiers, `cheap` and `strong`, with every cheap verdict
+ * that would remove somebody re-asked of the stronger model. Production
+ * 2026-08-05/07 retired the idea: across ~25 escalations the strong tier
+ * returned a usable answer zero times, and `llmTier` stayed `cheap` in every
+ * log line — a safeguard that had been off for as long as anyone had looked,
+ * while reading as present in the code. A single model made the second call a
+ * cache hit on the answer it was meant to check, which would have been worse:
+ * the escalation would have reported itself as having concurred.
+ *
+ * What the tier split was reaching for — a removal should not rest on one
+ * model's unsupported word — is a question about EVIDENCE, not about which
+ * model answered. `mayRemoveSender` / `capUnearnedRemoval` are where that
+ * belongs, and they apply to every other stage already.
+ */
 export interface LlmPort {
-  classify(input: EvaluationInput, tier: LlmTier): Promise<LlmVerdict | null>
+  classify(input: EvaluationInput): Promise<LlmVerdict | null>
 }
 
 export interface SessionWindow {
