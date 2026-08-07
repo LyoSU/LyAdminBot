@@ -29,7 +29,12 @@ cd tools/replay && pnpm replay -- --days 14   # needs MONGODB_URI
 Required: `API_ID`, `API_HASH`, `BOT_TOKEN`, `MONGODB_URI`.
 Optional (stage degrades gracefully when absent): `QDRANT_URL`, `QDRANT_API_KEY`,
 `OPENAI_API_KEY` (embeddings + moderation), `OPENROUTER_API_KEY`,
-`LLM_MODEL`, `LLM_REQUIRE_SCHEMA`, `SESSION_PATH`.
+`LLM_MODEL`, `LLM_REQUIRE_SCHEMA`, `LLM_TEMPERATURE`, `SESSION_PATH`.
+
+`LLM_MODEL` is an OpenRouter slug — `vendor/model`, not a bare name. Leave
+`LLM_TEMPERATURE` unset for a reasoning model: `LLM_REQUIRE_SCHEMA` makes every
+parameter sent a routing requirement, so a temperature the model does not accept
+404s every call (2026-08-07). See DEPLOY.md for the `reason: "http"` playbook.
 
 `LLM_CHEAP_MODEL` / `LLM_STRONG_MODEL` are still read as fallbacks for
 `LLM_MODEL`, so an existing deployment keeps working, but there is only one

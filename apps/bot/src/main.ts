@@ -79,11 +79,13 @@ const buildPorts = (): PipelinePorts => {
       apiKey: config.openrouterApiKey,
       model: config.llmModel,
       requireSchema: config.llmRequireSchema,
+      ...(config.llmTemperature !== null ? { temperature: config.llmTemperature } : {}),
       briefingProvider: campaignBriefing,
       // A classifier that answers nothing is not a neutral event: the pipeline
-      // then decides on whatever weaker stage spoke, and for the strong tier
-      // that means the cheap model's word carries the verdict. Named per model
-      // so a tier failing every time is visible without correlating log lines.
+      // then decides on whatever weaker stage spoke, and a grey-zone message
+      // nothing else flagged ends at `observe`, which writes no other line. So
+      // this warning is both the diagnosis and the only evidence the call
+      // happened — 2026-08-07 it was the whole record of a total outage.
       onFailure: ({ model, reason, status, detail, chatId, messageId }) => {
         log.warn('llm_unanswered', {
           chatId, messageId, model, reason,

@@ -4,7 +4,7 @@ import type {
 } from '@lyadmin/core'
 import {
   OpenRouterLlmPort, VERDICT_SCHEMA, buildSystemPrompt, buildUserContent, cacheKeyFor,
-  contextDigest, promptFingerprint
+  contextDigest, promptFingerprint, type LlmFailure
 } from './llm-port.js'
 import { createHash } from 'node:crypto'
 
@@ -451,6 +451,54 @@ describe('OpenRouterLlmPort.classify (2026-07-30 review)', () => {
       apiKey: 'k', model: 'm', requireSchema: true, fetchImpl: spy
     }).classify(makeInput())
     expect(bodies[1]?.['provider']).toEqual({ require_parameters: true })
+  })
+
+  it('REGRESSION: no temperature unless configured — it is a routing requirement', async () => {
+    // 2026-08-07: a hard-coded temperature plus `require_parameters: true` asked
+    // for an endpoint supporting both temperature and the response schema. For a
+    // reasoning model that set is empty, so EVERY call 404'd and the classifier
+    // was fully dark. Verified live against the shipped model both ways.
+    const bodies: Record<string, unknown>[] = []
+    const spy = vi.fn(async (_url: string, init?: { body?: string }) => {
+      bodies.push(JSON.parse(init?.body ?? '{}') as Record<string, unknown>)
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({
+          is_spam: false, confidence: 90, reason_code: 'other_clean', evidence: null
+        }) } }]
+      }))
+    }) as unknown as typeof fetch
+
+    await new OpenRouterLlmPort({
+      apiKey: 'k', model: 'm', requireSchema: true, fetchImpl: spy
+    }).classify(makeInput())
+    expect(bodies[0]).not.toHaveProperty('temperature')
+
+    // Still available for a sampling model, where v1's lesson (1.0 made verdicts
+    // flap between retries) still applies.
+    await new OpenRouterLlmPort({
+      apiKey: 'k', model: 'm', temperature: 0.1, fetchImpl: spy
+    }).classify(makeInput())
+    expect(bodies[1]?.['temperature']).toBe(0.1)
+  })
+
+  it('an http refusal reports the API\'s own reason, not just the status', async () => {
+    // A bare `status: 404` reads as "wrong model slug". The body is what says
+    // whether the slug or a parameter was refused, and the difference is a config
+    // flip versus a redeploy.
+    const failures: LlmFailure[] = []
+    const fetchImpl = vi.fn(async () => new Response(
+      JSON.stringify({ error: { message: 'No endpoints found that can handle the requested parameters.', code: 404 } }),
+      { status: 404 }
+    )) as unknown as typeof fetch
+
+    const v = await new OpenRouterLlmPort({
+      apiKey: 'k', model: 'm', fetchImpl, onFailure: (f) => failures.push(f)
+    }).classify(makeInput())
+
+    expect(v).toBeNull()
+    expect(failures[0]?.reason).toBe('http')
+    expect(failures[0]?.status).toBe(404)
+    expect(failures[0]?.detail).toContain('requested parameters')
   })
 
   it('the schema is strict in the way strict mode actually requires', async () => {

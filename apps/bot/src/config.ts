@@ -15,6 +15,8 @@ export interface BotConfig {
   openrouterApiKey: string | null
   llmModel: string
   llmRequireSchema: boolean
+  /** null = do not send the parameter at all. See `OpenRouterConfig.temperature`. */
+  llmTemperature: number | null
   /**
    * Deliver the captcha as an ephemeral group message — visible to the suspect
    * alone (Bot API 10.2). On by default; a kill switch rather than a feature
@@ -29,6 +31,18 @@ const enabled = (name: string, fallback: boolean): boolean => {
   const raw = process.env[name]?.trim().toLowerCase()
   if (raw === undefined || raw === '') return fallback
   return !['false', '0', 'no', 'off'].includes(raw)
+}
+
+/**
+ * Optional numeric env. Garbage reads as absent rather than as `NaN`: a typo in
+ * a tuning knob must not travel into a request body and become a 400 on every
+ * call. Absent is always a working configuration.
+ */
+const numberOrNull = (name: string): number | null => {
+  const raw = process.env[name]?.trim()
+  if (raw === undefined || raw === '') return null
+  const value = Number(raw)
+  return Number.isFinite(value) ? value : null
 }
 
 const required = (name: string): string => {
@@ -50,13 +64,20 @@ export const loadConfig = (): BotConfig => ({
   // One classifier. `LLM_CHEAP_MODEL` / `LLM_STRONG_MODEL` are still read so a
   // deployment carrying either does not silently fall back to the default —
   // whichever is set wins, cheap first, and the pair no longer means anything.
+  // OpenRouter slugs are `vendor/model` — a bare name is not a model there, it
+  // is a 404 with the same status as a rejected parameter.
   llmModel: process.env['LLM_MODEL'] ?? process.env['LLM_CHEAP_MODEL'] ??
-    process.env['LLM_STRONG_MODEL'] ?? 'gpt-5.6-luna',
+    process.env['LLM_STRONG_MODEL'] ?? 'openai/gpt-5.6-luna',
   // Route only to endpoints that actually enforce the verdict schema. Default
   // ON because an unenforced schema is the silent-degradation shape this whole
   // area was just fixed for; `LLM_REQUIRE_SCHEMA=false` is the escape hatch if
   // the chosen model has no such endpoint, since the alternative is no
   // classifier at all.
   llmRequireSchema: enabled('LLM_REQUIRE_SCHEMA', true),
+  // Unset unless asked for, because `require_parameters` turns every parameter
+  // sent into an endpoint requirement and the default model is a reasoning model
+  // that does not take this one — see `OpenRouterConfig.temperature`. Set it only
+  // for a sampling model that lists `temperature` in OpenRouter's GET /models.
+  llmTemperature: numberOrNull('LLM_TEMPERATURE'),
   ephemeralCaptcha: enabled('EPHEMERAL_CAPTCHA', true)
 })

@@ -1,6 +1,8 @@
 /**
  * LlmPort over OpenRouter. Hard rules learned from v1:
- *  - temperature 0.1 (v1 ran at 1.0 — verdicts flapped between retries)
+ *  - send only parameters the routed model actually accepts (see `temperature`
+ *    in the config: v1's fixed 0.1 took the classifier fully offline once
+ *    `requireSchema` arrived, because reasoning models do not accept it)
  *  - photos go as base64 data URLs, NEVER file links (v1 leaked the bot
  *    token through getFileLink URLs sent to providers)
  *  - the answer's SHAPE is enforced by the decoder, not requested in prose
@@ -100,9 +102,11 @@ export interface LlmFailure {
   /** HTTP status when the reason is `http`, else null. */
   status: number | null
   /**
-   * Which field or parse step failed, for `schema`. A bare reason says the shape
-   * was wrong; this says how, which is the difference between "this endpoint
-   * ignores response_format" and "the model omits `evidence` on clean verdicts".
+   * How it failed, when there is more to say than the reason. For `schema`, the
+   * field or parse step — the difference between "this endpoint ignores
+   * response_format" and "the model omits `evidence` on clean verdicts". For
+   * `http`, the API's own error text, which is what distinguishes a rejected
+   * parameter from a wrong model slug behind the same 404.
    */
   detail?: string
   /**
@@ -146,6 +150,32 @@ export interface OpenRouterConfig {
    * outright if no routed endpoint qualifies. Hence one switch, not a redeploy.
    */
   requireSchema?: boolean
+  /**
+   * Sampling temperature, sent ONLY when set. Unset is the default and is not an
+   * omission.
+   *
+   * v1 hard-coded 0.1 because at 1.0 its verdicts flapped between retries, and
+   * that rule is still right for a model that samples. But reasoning models do
+   * not take the parameter at all, and `require_parameters: true` reads every
+   * field of the request as a routing requirement — so a request carrying
+   * `temperature` asks OpenRouter for an endpoint that supports temperature AND
+   * the response schema, which for such a model is the empty set:
+   *
+   *   404 No endpoints found that can handle the requested parameters
+   *
+   * That is not a degraded path, it is every call failing, and it ran in
+   * production 2026-08-07 12:5x–14:0x with the only trace an `llm_unanswered`
+   * warning per message. Verified live the same day, same model, same key: with
+   * `temperature` + `require_parameters` → 404; drop either one → 200. Which also
+   * says what the switch is for — `requireSchema: false` restores service without
+   * a deploy, because without it OpenRouter silently drops what the endpoint
+   * cannot use.
+   *
+   * So: leave unset for reasoning models (the shipped default is one), and set it
+   * for a sampling model, having checked that the model lists `temperature` under
+   * `supported_parameters` in GET /models.
+   */
+  temperature?: number
   /** Injection point for tests (mirrors media-resend's `fetchImpl`). */
   fetchImpl?: typeof fetch
 }
@@ -437,7 +467,11 @@ export class OpenRouterLlmPort implements LlmPort {
         },
         body: JSON.stringify({
           model,
-          temperature: 0.1,
+          // Every extra field here is another endpoint requirement under
+          // `require_parameters`. Add nothing that is not needed.
+          ...(this.config.temperature !== undefined
+            ? { temperature: this.config.temperature }
+            : {}),
           response_format: { type: 'json_schema', json_schema: VERDICT_SCHEMA },
           ...(this.config.requireSchema === true
             ? { provider: { require_parameters: true } }
@@ -450,7 +484,19 @@ export class OpenRouterLlmPort implements LlmPort {
       })
       clearTimeout(timer)
       if (!response.ok) {
-        this.config.onFailure?.({ model, reason: 'http', status: response.status, ...ids })
+        // The status alone cost hours on 2026-08-07: `404` reads as "wrong model
+        // slug", and the slug was right — the body said "no endpoints ... for the
+        // requested parameters", which names the actual cause. It is the API's own
+        // diagnosis; not reading it is the same mistake as the strong tier's
+        // unattributable silence. Truncated because it is provider text, and it
+        // reaches the log only — never a user.
+        const detail = await response.text().then(
+          (t) => t.trim().slice(0, 300) || undefined,
+          () => undefined
+        )
+        this.config.onFailure?.({
+          model, reason: 'http', status: response.status, ...(detail ? { detail } : {}), ...ids
+        })
         return null
       }
       const body = await response.json() as {
