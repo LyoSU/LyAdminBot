@@ -364,7 +364,10 @@ export class OpenRouterLlmPort implements LlmPort {
           reasonCode: hit['reasonCode'] as string,
           evidence: (hit['evidence'] as string | null) ?? null,
           cached: true,
-          cacheKey: cacheKey.slice(0, 8)
+          cacheKey: cacheKey.slice(0, 8),
+          // The key is derived from the model, so a hit was necessarily produced
+          // by this same model — no need to store it alongside the entry.
+          model
         }
       }
     }
@@ -440,8 +443,8 @@ export class OpenRouterLlmPort implements LlmPort {
     }
 
     return cacheKey === null
-      ? { pSpam, reasonCode, evidence, cached: false }
-      : { pSpam, reasonCode, evidence, cached: false, cacheKey: cacheKey.slice(0, 8) }
+      ? { pSpam, reasonCode, evidence, cached: false, model }
+      : { pSpam, reasonCode, evidence, cached: false, cacheKey: cacheKey.slice(0, 8), model }
   }
 
   private async callModel(

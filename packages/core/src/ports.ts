@@ -84,6 +84,19 @@ export interface LlmVerdict {
    * which one did. Two adjacent lines with two prefixes answer it at a glance.
    */
   cacheKey?: string
+  /**
+   * Which model answered — the slug, as routed.
+   *
+   * Recorded because the model is the one input to a verdict that changes
+   * WITHOUT a deploy: it comes from `LLM_MODEL` in the environment, so a switch
+   * left no trace anywhere in the data. 2026-08-07, asked whether a newly
+   * pointed-to model was better, the honest answer was that the question could
+   * not be asked of 226k stored verdicts at all — every one of them is silent
+   * about who judged it. Answering it took replaying reversed calls through the
+   * live API, which is both slower and confounded by prompt changes shipped in
+   * between. One field turns that into a `$group`.
+   */
+  model?: string
 }
 
 /**

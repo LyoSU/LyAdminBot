@@ -580,7 +580,11 @@ describe('evaluateMessage — abstain & session', () => {
       llm: {
         classify: async () => {
           calls += 1
-          return { pSpam: 0.98, reasonCode: 'flood', evidence: null, cached: false }
+          // `job_scam` rather than `flood`: the gap below is about the missing
+          // evidence bar and still stands, but `flood` acquired a ceiling of its
+          // own on 2026-08-07 (`IMITABLE_REASON_CODES`) and would no longer
+          // demonstrate it. That much of the gap is closed; this much is not.
+          return { pSpam: 0.98, reasonCode: 'job_scam', evidence: null, cached: false }
         }
       }
     }
@@ -672,43 +676,50 @@ describe('evaluateMessage — knowledge ports', () => {
     expect(v.reasonCode).toBe('soft_shape_only')
   })
 
-  it('velocity exceeded decides delete+vote territory or stronger', async () => {
+  it('velocity reports what it counted and decides nothing', async () => {
+    // Retired as a decider 2026-08-07 on its own record: 10 of the 52 known
+    // false positives in fourteen days of production, which is 16% of its 61
+    // verdicts — the worst precision in the pipeline, for 1.4% of the
+    // enforcement. It counts copies and never reads one, and cross-posting is
+    // something members do.
     const ports: PipelinePorts = {
       velocity: { check: async () => ({ exceeded: true, evidence: '6 copies in 4 chats' }) }
     }
     const v = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), ports)
-    expect(v.decidedBy).toBe('velocity')
-    expect(['delete', 'mute', 'ban']).toContain(v.action)
+    expect(v.decidedBy).not.toBe('velocity')
+    expect(v.signals.map((s) => s.name)).toContain('velocity_wave')
   })
 
-  it('one account blasting scores higher; several accounts get a vote', async () => {
-    // A blast has no innocent explanation. The same line from several accounts
-    // is either a multi-account campaign or something that went viral, and the
-    // pipeline must not silently mute the third person to repeat a news line
-    // (2026-07-30 review — `userIds` was computed and then ignored).
-    //
-    // The blast still does not silently remove anybody. That expectation was
-    // written on 2026-07-30 against a window of ten minutes, and it was never
-    // once exercised in production: the Mongo port — the only one the bot runs
-    // — never reported `singleAuthor` at all, so every velocity hit for a year
-    // took the wave branch. Switching the branch on came with a window widened
-    // to six hours to match the cadence spam actually arrives at, and over six
-    // hours "no innocent explanation" stops being true. So the score is the
-    // high one, the message goes, the sender is asked for a captcha a bot
-    // cannot pass — and the removal itself waits for evidence that reads the
-    // text, exactly as every other stage's does.
+  it('both branches raise their own signal and neither concludes', async () => {
+    // One account repeating itself and several accounts repeating each other are
+    // different facts and stay different signals — `velocity_repeats` is
+    // firsthand content evidence, `velocity_wave` is what a viral line also
+    // looks like. What neither of them is any more is a verdict.
     const blast = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
       velocity: { check: async () => ({ exceeded: true, singleAuthor: true }) }
     })
-    expect(blast.pSpam).toBeGreaterThan(0.88)
-    expect(blast.action).toBe('delete')
-    expect(blast.requireCaptcha).toBe(true)
+    expect(blast.signals.map((s) => s.name)).toContain('velocity_repeats')
+    expect(blast.decidedBy).not.toBe('velocity')
 
     const wave = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
       velocity: { check: async () => ({ exceeded: true, singleAuthor: false }) }
     })
-    expect(wave.action).toBe('delete')
-    expect(wave.needsVote).toBe(true)
+    expect(wave.signals.map((s) => s.name)).toContain('velocity_wave')
+    expect(wave.decidedBy).not.toBe('velocity')
+  })
+
+  it('repetition still weighs — as evidence the readers get to see', async () => {
+    // The observation must not be lost with the verdict. `velocity_repeats` is
+    // content evidence (copies we watched arrive), so it has to move the score
+    // and, with it, what the sender-removal bar allows.
+    const quiet = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {})
+    const repeated = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
+      velocity: { check: async () => ({ exceeded: true, singleAuthor: true }) }
+    })
+    expect(repeated.meta['scorePSpam'] as number)
+      .toBeGreaterThan(quiet.meta['scorePSpam'] as number)
+    expect(contentEvidence(repeated.signals).total)
+      .toBeGreaterThan(contentEvidence(quiet.signals).total)
   })
 
   it('REGRESSION: repetition may strengthen a verdict, never weaken it', async () => {
@@ -763,10 +774,14 @@ describe('evaluateMessage — knowledge ports', () => {
   })
 
   it('a port that cannot tell is read as a wave, never as a blast', async () => {
+    // `singleAuthor` absent means the port does not know, and the weaker of the
+    // two signals is the honest reading of not knowing.
     const v = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
       velocity: { check: async () => ({ exceeded: true }) }
     })
-    expect(v.needsVote).toBe(true)
+    const names = v.signals.map((s) => s.name)
+    expect(names).toContain('velocity_wave')
+    expect(names).not.toContain('velocity_repeats')
   })
 
   it('a confirmed neighbour decides once the removal is already earned', async () => {
@@ -1056,6 +1071,104 @@ describe('evaluateMessage — LLM escalation', () => {
     }
     const v = await evaluateMessage(greyZoneInput(), ports)
     expect(v.decidedBy).toBe('llm_cached')
+  })
+
+  it('which model answered is recorded on the verdict', async () => {
+    // The model comes from the environment, so it changes with no deploy and
+    // left no trace: 226k stored verdicts, not one of which says who judged it
+    // (2026-08-07, asked whether a newly routed model was better).
+    const ports: PipelinePorts = {
+      llm: {
+        classify: async () => ({
+          pSpam: 0.95, reasonCode: 'job_scam', evidence: null, cached: false, model: 'vendor/some-model'
+        })
+      }
+    }
+    const v = await evaluateMessage(greyZoneInput(), ports)
+    expect(v.meta['llmModel']).toBe('vendor/some-model')
+  })
+
+  it('a port that does not report its model still produces a verdict', async () => {
+    const ports: PipelinePorts = {
+      llm: { classify: async () => ({ pSpam: 0.95, reasonCode: 'job_scam', evidence: null, cached: false }) }
+    }
+    const v = await evaluateMessage(greyZoneInput(), ports)
+    expect(v.meta['llmModel']).toBeUndefined()
+    expect(v.decidedBy).toBe('llm')
+  })
+})
+
+describe('evaluateMessage — an act members also perform (2026-08-07 audit)', () => {
+  const promoInput = (): EvaluationInput => makeInput({
+    msg: { text: 'Народ, я тут групу створила, заходьте хтось, треба людей' },
+    user: newcomer
+  })
+
+  const llmSaying = (reasonCode: string): PipelinePorts => ({
+    llm: { classify: async () => ({ pSpam: 0.98, reasonCode, evidence: null, cached: false }) }
+  })
+
+  it('channel_promo alone deletes and asks the chat, never removes the sender', async () => {
+    // Production 2026-08-07 16:44:38: a 30-day ban at 0.98 with
+    // `contentEvidence: 0`, for a member asking people to join a group they had
+    // just made. 12 of the 52 known false positives in the fortnight before it
+    // carried this one code.
+    const v = await evaluateMessage(promoInput(), llmSaying('channel_promo'))
+    expect(removesSender(v.action)).toBe(false)
+    expect(v.action).toBe('delete')
+    expect(v.needsVote).toBe(true)
+    expect(v.banDurationSeconds).toBeNull()
+  })
+
+  it('the reason code survives the ceiling', async () => {
+    // `capUnearnedRemoval` rewrites the code to `content_unconfirmed`, which is
+    // how three of six reversals in the replay lost the name of the stage that
+    // produced them. The punishment was too much; the reason still stands.
+    const v = await evaluateMessage(promoInput(), llmSaying('channel_promo'))
+    expect(v.reasonCode).toBe('channel_promo')
+    expect(v.meta['cappedImitable']).toBe('channel_promo')
+    expect(v.meta['cappedFrom']).toBe('ban')
+  })
+
+  it('no captcha: the question cannot separate anybody here', async () => {
+    // A captcha asks whether the sender is human, and these codes name acts
+    // humans perform — so the answer is known before it is asked.
+    const v = await evaluateMessage(promoInput(), llmSaying('channel_promo'))
+    expect(v.requireCaptcha).toBeFalsy()
+  })
+
+  it('flood over ordinary chat does not mute either', async () => {
+    // Production 2026-08-07 16:42:50: muted for `flood` over five lines of
+    // conversation, carrying `established_user` and `is_reply`.
+    const v = await evaluateMessage(promoInput(), llmSaying('flood'))
+    expect(removesSender(v.action)).toBe(false)
+  })
+
+  it('a job scam is NOT held back — the act itself is the finding', async () => {
+    const v = await evaluateMessage(promoInput(), llmSaying('job_scam'))
+    expect(removesSender(v.action)).toBe(true)
+    expect(v.meta['cappedImitable']).toBeUndefined()
+  })
+
+  it('corroborating message evidence lifts the ceiling', async () => {
+    // The ceiling exists because intent is unobservable on these acts. Firsthand
+    // evidence about the message is what turns the guess into a finding, so once
+    // `mayRemoveSender` holds (2.0 units) the verdict stands as the classifier
+    // gave it. Deliberately assembled from a phone number and copies we watched
+    // arrive, not from a private invite link — that one has a deterministic rule
+    // of its own and would never reach the classifier.
+    const corroborated = makeInput({
+      msg: { text: 'Народ, заходьте в групу, пишіть на 067-000-00-00, є що обговорити' },
+      user: newcomer
+    })
+    const v = await evaluateMessage(corroborated, {
+      ...llmSaying('channel_promo'),
+      velocity: { check: async () => ({ exceeded: true, singleAuthor: true }) }
+    })
+    expect(contentEvidence(v.signals).total).toBeGreaterThanOrEqual(2)
+    expect(mayRemoveSender(v.signals)).toBe(true)
+    expect(removesSender(v.action)).toBe(true)
+    expect(v.meta['cappedImitable']).toBeUndefined()
   })
 })
 
@@ -1534,11 +1647,11 @@ describe('evaluateMessage — enforcement ladder end to end', () => {
   })
 
   it('a ban resting only on OUR score is timed, so a mistake expires', async () => {
-    // Velocity is our own judgement, not a third party's verdict.
+    // Our own arithmetic, with no third party's verdict behind it.
     const v = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
       velocity: { check: async () => ({ exceeded: true, evidence: '12 identical messages' }) }
     })
-    expect(v.decidedBy).toBe('velocity')
+    expect(v.decidedBy).toBe('score')
     if (v.action === 'ban') expect(v.banDurationSeconds).toBeGreaterThan(0)
   })
 

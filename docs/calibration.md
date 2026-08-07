@@ -20,11 +20,26 @@ runtime refit is intentionally *not* implemented because:
 
 ## The data already collected
 
-- **`pipeline_decisions`** (TTL 90d) — every verdict: `pSpam`, `action`,
-  `decidedBy`, `ruleId`, `signals` (names), `reasonCode`.
+- **`pipeline_decisions`** (TTL **14d** — lowered from 90d when the cluster hit
+  its size cap) — every verdict: `pSpam`, `action`, `decidedBy`, `ruleId`,
+  `signals` (names), `reasonCode`, and since 2026-08-07 `meta.llmModel`.
+  The window is short, so a permanent label in `pipeline_feedback` loses its
+  evidence two weeks on: measure while the rows are still there.
 - **`pipeline_feedback`** (permanent) — `override_not_spam` rows: each is an
   admin-confirmed **false positive** (someone hit the override). `/untrust`
-  and ham votes feed the same signal.
+  and ham votes feed the same signal. One row per message since 2026-08-07 —
+  before that a double tap wrote the same correction twice, so any count taken
+  over older data should be deduplicated by `(chatId, messageId)`.
+
+### What the tools can and cannot answer
+
+`tools/replay` evaluates stored events with **no ports at all**
+(`evaluateMessage(toInput(event), {})`), which makes it the right instrument for
+a weight diff and the wrong one for a question about the classifier: offline, the
+LLM never speaks. To ask whether a *model* is better, replay the reversed calls
+through the live port instead, and always alongside a control set of uncontested
+removals — otherwise "fewer false positives" is indistinguishable from a model
+that simply stopped calling anything spam.
 
 ## Procedure (run monthly, or when FPs accumulate)
 
@@ -59,6 +74,34 @@ runtime refit is intentionally *not* implemented because:
    FP class appears, revert and reconsider.
 
 5. **Ship** the weight diff like any code change.
+
+## Open calibration questions (2026-08-07 audit)
+
+Measured over 226,213 verdicts in 14 days, 4,458 of them enforcement, with 52
+distinct confirmed false positives (1.2%). Two demotions shipped the same day
+(`velocity` retired as a decider, `IMITABLE_REASON_CODES` capped); these are
+what the data raised and did **not** settle:
+
+- **The session window costs 52 LLM calls per action.** 4,260 calls produced 81
+  enforcement actions (1.9%) — 52% of all fresh classifier calls for 1.8% of the
+  enforcement. It is not wrong: it is the only stage that catches text-only
+  solicitation, which by construction carries no `contentEvidence` (production
+  16:01:16 scored 0.14 and the window banned it at 1.00). Whether that price is
+  right is a budget decision, and `SESSION_SOLO_MAX_INCHAT` is the dial.
+- **A session verdict outranks the trust signals.** It hands the model's `pSpam`
+  straight to `policyFor`, so `established_user` (-1.5) and `is_reply` (-1) are
+  telemetry, not input (production 16:42:50: an established member muted over
+  five lines of conversation). The imitable ceiling caught that one; the general
+  case — a session verdict on somebody the signals vouch for — is untouched.
+- **Toxicity has nowhere to go.** The reason codes are all spam codes, so abuse
+  arrives as `other_spam` at 0.99 and bans on 0 content evidence (production
+  2026-08-07 15:11:42). The model is not wrong so much as unequipped: give it a
+  code for "hostile, not spam" and the ladder can decide whether that is even
+  our business.
+- **`external_ban_new` is 9 of the 52.** Second-largest FP source after the
+  demoted stages, and nothing in the message earns it — the listing is about the
+  account. Candidate for the same treatment: believe the listing, cap what it
+  may do alone.
 
 ## What is NOT in scope
 

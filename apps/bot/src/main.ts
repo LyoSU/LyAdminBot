@@ -1935,7 +1935,16 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       scorePSpam: verdict.meta['scorePSpam'] ?? undefined,
       contentEvidence: verdict.meta['contentEvidence'] ?? undefined,
       capped: verdict.meta['cappedGroups'] ?? undefined,
+      // Which reason hit the imitable-act ceiling. `cappedFrom` alone says a
+      // ceiling bit but not which one, and there are now two that produce the
+      // same downgrade for opposite reasons — one because the pipeline stopped
+      // believing its reason, this one because it believes it and still will not
+      // remove somebody over an act members also perform.
+      cappedImitable: verdict.meta['cappedImitable'] ?? undefined,
       llmKey: verdict.meta['llmKey'] ?? undefined,
+      // The model is an environment variable, so it changes between restarts
+      // with nothing in the data to say so (2026-08-07).
+      llmModel: verdict.meta['llmModel'] ?? undefined,
       portMs: verdict.meta['portMs'] ?? undefined,
       // Everything the pipeline's own timings cannot see. A deterministic
       // verdict runs no ports, so without this a 4.4-second ban (2026-07-31)

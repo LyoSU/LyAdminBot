@@ -830,26 +830,44 @@ export class MongoStore {
     verdict: Pick<Verdict, 'decidedBy' | 'ruleId' | 'reasonCode' | 'pSpam' | 'action' | 'signals' | 'meta'>
   }): Promise<void> {
     const source = params.source ?? 'admin'
-    await this.feedback.insertOne({
-      kind: 'override_not_spam',
-      source,
-      chatId: params.chatId,
-      messageId: params.messageId,
-      userId: params.userId,
-      adminId: params.adminId,
-      decidedBy: params.verdict.decidedBy,
-      ruleId: params.verdict.ruleId,
-      reasonCode: params.verdict.reasonCode,
-      // The feature vector: enough to recompute the score and both enforcement
-      // guards offline, from the catalogue as it stands whenever we next ask.
-      pSpam: params.verdict.pSpam,
-      action: params.verdict.action,
-      signals: params.verdict.signals.map((s) => s.name),
-      // `scorePSpam` / `contentEvidence` / `cappedGroups` are what make the
-      // arithmetic reproducible when the verdict came from a port or the LLM.
-      meta: params.verdict.meta,
-      createdAt: new Date()
-    })
+    /**
+     * One message, one label — an upsert, not an insert.
+     *
+     * A double tap on the button used to write the correction twice: 2026-08-07
+     * the store held 61 documents for 52 distinct messages, one pair seven
+     * seconds apart from the same admin. That is not a cosmetic duplicate. This
+     * collection IS the ground-truth set: every false-positive rate in the audit
+     * is a count over it, and calibration reads it as one row per mistake. A
+     * message reversed twice was silently worth double, which biases weights
+     * toward whichever verdict an admin happened to tap twice.
+     *
+     * Keyed on the message rather than on (message, admin): the unit of truth is
+     * "this message was not spam", and two admins agreeing is not two mistakes.
+     * `$setOnInsert` keeps `createdAt` at the FIRST correction — the honest
+     * timestamp for when we learned we were wrong.
+     */
+    await this.feedback.updateOne({ chatId: params.chatId, messageId: params.messageId }, {
+      $setOnInsert: { createdAt: new Date() },
+      $set: {
+        kind: 'override_not_spam',
+        source,
+        chatId: params.chatId,
+        messageId: params.messageId,
+        userId: params.userId,
+        adminId: params.adminId,
+        decidedBy: params.verdict.decidedBy,
+        ruleId: params.verdict.ruleId,
+        reasonCode: params.verdict.reasonCode,
+        // The feature vector: enough to recompute the score and both enforcement
+        // guards offline, from the catalogue as it stands whenever we next ask.
+        pSpam: params.verdict.pSpam,
+        action: params.verdict.action,
+        signals: params.verdict.signals.map((s) => s.name),
+        // `scorePSpam` / `contentEvidence` / `cappedGroups` are what make the
+        // arithmetic reproducible when the verdict came from a port or the LLM.
+        meta: params.verdict.meta
+      }
+    }, { upsert: true })
 
     // Deactivate the matched signature so it never fires again — an admin
     // decision only. A signature fires in every chat for the next ninety days,

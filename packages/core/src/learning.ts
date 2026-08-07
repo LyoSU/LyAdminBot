@@ -28,10 +28,17 @@ import type { DecidedBy, Verdict } from './types.js'
  * filler to look human. Learning from that path would fill the store with
  * everyday sentences and then match them against real people.
  */
+/*
+ * `velocity` was here on the reasoning that the same text blasted across chats
+ * is spam by construction. It is gone with the decider itself (2026-08-07): a
+ * cross-post is what a member sharing a link looks like too, and this list only
+ * ever sees `decidedBy`, so it cannot tell the two apart. Nothing replaces the
+ * entry — repetition now reaches the classifier as a signal, and if the
+ * classifier condemns the text it teaches through `llm` on its own merits.
+ */
 export const AUTO_LEARN_DECIDED_BY = new Set<DecidedBy>([
   'llm',        // the model actually read the text
   'llm_cached', // same verdict, served from cache
-  'velocity',   // the same text blasted across chats is spam by construction
   'custom_rule' // an admin wrote the pattern themselves
 ])
 

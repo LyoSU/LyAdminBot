@@ -24,7 +24,9 @@ import { applyDeterministicRules } from './rules.js'
 import { parseCustomRule, customRuleMatches } from './custom-rules.js'
 import { scoreSignals, hasDecisiveSignal, mayRemoveSender, contentEvidence } from './score.js'
 import { PERMANENT_BAN_SIGNALS, isTrustSignal } from './signals/registry.js'
-import { decideAction, isEnforcementAction, removesSender, type PolicyDecision } from './policy.js'
+import {
+  decideAction, isEnforcementAction, removesSender, IMITABLE_REASON_CODES, type PolicyDecision
+} from './policy.js'
 import { shouldAbstain } from './text/abstain.js'
 import { isForeignScript } from './text/script.js'
 import { isDistinctive } from './learning.js'
@@ -51,15 +53,6 @@ const VECTOR_DECIDE_SIMILARITY = 0.93
  * would have added score to everything equally.
  */
 const VECTOR_SIGNAL_SIMILARITY = 0.85
-/** One account repeating itself across chats: certain enough to act alone. */
-const VELOCITY_PSPAM = 0.9
-/**
- * The same text from SEVERAL accounts. Still the strongest content evidence the
- * cheap layers produce, but it is also what a viral line looks like — so it
- * lands in the votable band (delete + ask the chat) instead of the silent
- * 24h mute that 0.9 buys. Deliberately below every preset's mute threshold.
- */
-const VELOCITY_WAVE_PSPAM = 0.7
 const CUSTOM_DENY_PSPAM = 0.96
 
 /**
@@ -303,6 +296,39 @@ export const evaluateMessage = async (
     }
   }
 
+  /**
+   * Hold a verdict to `delete` when its reason names an act ordinary members
+   * also perform and the message evidence does not independently earn a
+   * removal. See `IMITABLE_REASON_CODES` for why these codes and no others.
+   *
+   * Three things this deliberately does NOT do:
+   *
+   *  - it does not touch the reason code. `capUnearnedRemoval` rewrites it to
+   *    `content_unconfirmed`, which is right there (the pipeline really did
+   *    stop believing its own reason) and wrong here (the reason stands; only
+   *    the punishment was too much). It also has a measurement cost that this
+   *    audit paid: of six reversals still called spam on replay, three read
+   *    `content_unconfirmed` and no longer said which stage produced them.
+   *    A ceiling that erases the label makes the next audit blind to itself.
+   *  - it does not ask for a captcha. That question separates a human from a
+   *    script, and by construction these codes name something humans do — so
+   *    the answer is known in advance and filters nobody.
+   *  - it does not fire when `mayRemoveSender` holds. Corroborating message
+   *    evidence is exactly what turns a guess about intent into a finding.
+   */
+  const capImitableAct = (verdict: Verdict): Verdict => {
+    if (!IMITABLE_REASON_CODES.has(verdict.reasonCode)) return verdict
+    if (!removesSender(verdict.action) || mayRemoveSender(verdict.signals)) return verdict
+    meta['cappedFrom'] = verdict.action
+    meta['cappedImitable'] = verdict.reasonCode
+    return {
+      ...verdict,
+      action: 'delete' as VerdictAction,
+      needsVote: input.policy.votingEnabled,
+      banDurationSeconds: null
+    }
+  }
+
   const none = (decidedBy: DecidedBy, reasonCode: string, signals: Signal[] = []): Verdict =>
     finalize(
       { pSpam: 0, decidedBy, ruleId: null, reasonCode, reasonEvidence: null },
@@ -474,6 +500,7 @@ export const evaluateMessage = async (
         // Without recording it, a session FP cannot be reviewed at all.
         meta['judgedText'] = window.combinedText
         meta['judgedCount'] = window.count
+        if (llmVerdict.model !== undefined) meta['llmModel'] = llmVerdict.model
         /**
          * NOTE — the safeguard that used to sit here is gone with the tier split.
          *
@@ -492,7 +519,7 @@ export const evaluateMessage = async (
          * a translation of this guard. What the band should be is a calibration
          * decision; see `docs/calibration.md`.
          */
-        return finalize(
+        return capImitableAct(finalize(
           {
             pSpam: llmVerdict.pSpam,
             decidedBy: 'session',
@@ -501,7 +528,7 @@ export const evaluateMessage = async (
             reasonEvidence: llmVerdict.evidence
           },
           signals
-        )
+        ))
       }
     }
     return null
@@ -585,31 +612,27 @@ export const evaluateMessage = async (
       } else {
         signals.push(evidence ? { name: 'velocity_wave', evidence } : { name: 'velocity_wave' })
       }
-      const verdict = finalize(
-        {
-          pSpam: solo ? VELOCITY_PSPAM : VELOCITY_WAVE_PSPAM,
-          decidedBy: 'velocity',
-          ruleId: 'velocity_exceeded',
-          reasonCode: 'velocity_exceeded',
-          reasonEvidence: velocity.evidence ?? null
-        },
-        signals
-      )
-      // 0.9 is a mute, and until 2026-08-01 the production port never reported
-      // `singleAuthor`, so this branch had never run. Switching it on without
-      // the bar would add a fresh way to remove somebody on a text no stage
-      // read — the defect `private_invite_new` was held to hours earlier.
-      //
-      // But a capped verdict is a HEDGE — delete plus a question for the chat —
-      // and returning one here spends the short-circuit to buy an answer weaker
-      // than the stages below already hold. 2026-08-02: one text, one sender,
-      // one chat; the classifier banned it at 1.00 and cached the answer (7 ms
-      // to re-read), and from the third copy on velocity replied first, so the
-      // chat was asked to vote on a settled text seven times. Repetition is a
-      // reason to look harder, never a reason to conclude less — so when the
-      // count is the whole case, hand the message to something that can read
-      // it and let `velocity_repeats` weigh in wherever it lands.
-      if (!removesSender(verdict.action) || mayRemoveSender(signals)) return verdict
+      /**
+       * This stage no longer concludes anything — 2026-08-07, and the audit that
+       * retired it is the plainest number in the set: 10 of 52 known false
+       * positives came from `velocity`, which is 16% of its 61 verdicts against
+       * 0.42% for the deterministic rules. Worst precision in the pipeline for
+       * 1.4% of the enforcement.
+       *
+       * The mechanism, from the reversals themselves: it punished REPETITION,
+       * and cross-posting one message to several chats is something ordinary
+       * members do — a news link and a university PDF among them, both replayed
+       * as `legit_share`. Repetition raises suspicion; it does not identify
+       * spam, because the innocent version looks identical from here.
+       *
+       * Which is the same conclusion the short-circuit was already inching
+       * toward before it went (2026-08-02: a settled, already-classified text
+       * put to a chat vote seven times because velocity kept answering first).
+       * Repetition is a reason to look harder, never a reason to conclude less.
+       * So the observation stays — `velocity_repeats` is firsthand content
+       * evidence and weighs as such — and the stages that can READ the message
+       * decide what it means.
+       */
     }
   }
 
@@ -760,6 +783,9 @@ export const evaluateMessage = async (
       // Recorded whether or not it was a hit: a hit alone proves nothing, and it
       // is the two keys of a MISS that need comparing.
       if (llmVerdict.cacheKey !== undefined) meta['llmKey'] = llmVerdict.cacheKey
+      // Which model judged it. The one verdict input that changes without a
+      // deploy, and until now the one nothing recorded — see `LlmVerdict.model`.
+      if (llmVerdict.model !== undefined) meta['llmModel'] = llmVerdict.model
       /**
        * NOTE — as in the session path, this returns without passing any evidence
        * bar, and the escalation that used to stand in for one is gone.
@@ -773,7 +799,7 @@ export const evaluateMessage = async (
        *
        * `capUnearnedRemoval` is the wrong instrument here — see the session path.
        */
-      return finalize(
+      return capImitableAct(finalize(
         {
           pSpam: llmVerdict.pSpam,
           decidedBy: llmVerdict.cached ? 'llm_cached' : 'llm',
@@ -782,7 +808,7 @@ export const evaluateMessage = async (
           reasonEvidence: llmVerdict.evidence
         },
         signals
-      )
+      ))
     }
     llmNeededButUnavailable = true
   }

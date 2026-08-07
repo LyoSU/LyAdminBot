@@ -16,14 +16,40 @@ import { describe, expect, it } from 'vitest'
 import type { Verdict } from '@lyadmin/core'
 import { MongoStore } from './mongo.js'
 
-interface Captured { doc: Record<string, unknown> | null }
+interface Captured {
+  doc: Record<string, unknown> | null
+  /** Distinct documents the collection ends up holding, keyed by the filter. */
+  rows: Map<string, Record<string, unknown>>
+  filters: Record<string, unknown>[]
+}
 
-/** A store whose feedback insert is captured instead of performed. */
+/**
+ * A store whose feedback write is captured instead of performed.
+ *
+ * The double applies `$setOnInsert` / `$set` the way an upsert does rather than
+ * just recording the call, because one of the things under test is that a second
+ * correction of the same message produces one document and not two.
+ */
 const captureStore = (): { store: MongoStore; captured: Captured } => {
-  const captured: Captured = { doc: null }
+  const captured: Captured = { doc: null, rows: new Map(), filters: [] }
   const store = {
     feedback: {
-      insertOne: async (doc: Record<string, unknown>) => { captured.doc = doc; return {} }
+      updateOne: async (
+        filter: Record<string, unknown>,
+        update: Record<string, Record<string, unknown>>,
+        options?: { upsert?: boolean }
+      ) => {
+        captured.filters.push(filter)
+        const key = JSON.stringify(filter)
+        const existing = captured.rows.get(key)
+        const doc = {
+          ...(existing ?? (options?.upsert === true ? update['$setOnInsert'] ?? {} : {})),
+          ...(update['$set'] ?? {})
+        }
+        captured.rows.set(key, doc)
+        captured.doc = doc
+        return {}
+      }
     },
     // recordOverride also deactivates a matched signature; not under test here.
     spamSignatures: { updateOne: async () => ({}) }
@@ -251,6 +277,32 @@ describe('recordOverride', () => {
     expect(captured.doc?.['source']).toBe('community_vote')
   })
 
+  it('REGRESSION: one message, one label — a second tap is not a second mistake', async () => {
+    // 2026-08-07: the store held 61 documents for 52 distinct messages, one pair
+    // seven seconds apart from the same admin. This collection is the ground
+    // truth every false-positive rate is counted over, so a duplicated
+    // correction weighs twice in calibration.
+    const { store, captured } = captureStore()
+    await store.recordOverride({ chatId: -100, messageId: 7, userId: 42, adminId: 1, verdict })
+    const first = captured.doc?.['createdAt']
+    await store.recordOverride({ chatId: -100, messageId: 7, userId: 42, adminId: 1, verdict })
+
+    expect(captured.rows.size).toBe(1)
+    // The honest timestamp is when we first learned we were wrong.
+    expect(captured.doc?.['createdAt']).toBe(first)
+    // Keyed on the message: two admins agreeing is not two mistakes either.
+    for (const filter of captured.filters) {
+      expect(filter).toEqual({ chatId: -100, messageId: 7 })
+    }
+  })
+
+  it('a different message is still its own label', async () => {
+    const { store, captured } = captureStore()
+    await store.recordOverride({ chatId: -100, messageId: 7, userId: 42, adminId: 1, verdict })
+    await store.recordOverride({ chatId: -100, messageId: 8, userId: 42, adminId: 1, verdict })
+    expect(captured.rows.size).toBe(2)
+  })
+
   it('only an admin may retire a signature — a chat is not authority over the network', async () => {
     // A signature fires in every chat for ninety days. If a ballot could retire
     // one, a crew posting spam in a group they control could vote their own text
@@ -258,7 +310,7 @@ describe('recordOverride', () => {
     const retired: unknown[] = []
     const make = () => {
       const store = {
-        feedback: { insertOne: async () => ({}) },
+        feedback: { updateOne: async () => ({}) },
         spamSignatures: { updateOne: async (f: unknown) => { retired.push(f); return {} } }
       } as unknown as MongoStore
       return Object.assign(store, { recordOverride: MongoStore.prototype.recordOverride })

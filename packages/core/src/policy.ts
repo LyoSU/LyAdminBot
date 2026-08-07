@@ -110,6 +110,38 @@ export const removesSender = (action: VerdictAction): boolean =>
   (SENDER_REMOVING_ACTIONS as readonly VerdictAction[]).includes(action)
 
 /**
+ * Reason codes that name an act ordinary members also perform.
+ *
+ * Every other spam code names something a member does not do: nobody recruits
+ * for a fake job, phishes, or posts an escort ad by accident. Recommending a
+ * channel, or promoting a thing they made, is different — the ACT is identical
+ * whoever performs it, and only intent separates the two. Intent is what a
+ * classifier cannot observe, so on these codes it is guessing, and the audit
+ * says exactly that: 2026-08-07, 14 days of production, 12 of 52 known false
+ * positives were `channel_promo` — 13% of its 90 verdicts, against 0.34% for
+ * `job_scam` over 590. One code, a quarter of all our mistakes.
+ *
+ * `ad_network` joins it on the same mechanism rather than on its own record
+ * (14 verdicts, no complaint): a replay of the reversed calls through the
+ * 2026-08-07 model returned `ad_network` at 0.99 for a member advertising
+ * something of their own that an admin had cleared. The code inherits the
+ * class, so it inherits the ceiling before it inherits the false positives.
+ *
+ * `flood` belongs here for the same reason and was nearly missed: 2026-08-07
+ * 16:42:50, a member with `established_user` (-1.5) and `is_reply` (-1) was
+ * muted for `flood` over five lines of ordinary chat. Talking quickly is the
+ * most imitable act there is. Note this is NOT the repetition the velocity
+ * signals report — those are copies we watched arrive, firsthand and weighed;
+ * this is a classifier's opinion about conversational style.
+ *
+ * The consequence is a ceiling, not an exemption: the message still goes and
+ * the chat is still asked. See `capImitableAct` in the pipeline.
+ */
+export const IMITABLE_REASON_CODES: ReadonlySet<string> = new Set([
+  'channel_promo', 'ad_network', 'flood'
+])
+
+/**
  * Whether a verdict is firm enough to be remembered AGAINST THE ACCOUNT rather
  * than only against the message.
  *
