@@ -858,7 +858,8 @@ const rememberBananLabel = (chatId: number, userId: number, label: string): void
  * /banan — manual moderation with personality, v1 semantics:
  *   reply + `/banan 5m|2h|3d` → mute for that long (admins only)
  *   reply + `/banan` on an already-restricted user → lift the mute
- *   `/banan` with no reply → self-banan (anyone, the classic joke)
+ *   `/banan` with no reply, by an admin → they show the banana, nobody is muted
+ *   `/banan` with no reply, by anyone else → self-banan (the classic joke)
  */
 const handleBanan = async (message: Message, chat: Chat, caller: User, arg: string | undefined): Promise<void> => {
   const locale = await localeFor(caller.id, caller.language)
@@ -872,8 +873,21 @@ const handleBanan = async (message: Message, chat: Chat, caller: User, arg: stri
 
   const replied = await gateway.fetchRepliedMessage(message)
 
-  // Self-banan: no reply needed, anyone can sit on their own banana.
   if (!replied) {
+    /**
+     * An admin typing a bare `/banan` holds the banana up for the chat — and
+     * mutes nobody. It is the oldest joke in this bot (v1 `banan.show`) and v2
+     * shipped without the branch, so an admin who typed it fell through to the
+     * self-banan below and silenced themselves for ten minutes. Restored
+     * 2026-08-07: the pose is the whole point, and the punishment was never it.
+     */
+    if (await isChatAdmin(chat.id, caller.id)) {
+      await gateway.tg.sendText(chat.id, viewHtml(locale.banan.show(escapeName(caller.displayName))))
+        .catch(() => { /* non-fatal */ })
+      return
+    }
+
+    // Everyone else: no reply needed, anyone can sit on their own banana.
     const ok = await gateway.moderationActions.mute(chat.id, caller.id, seconds)
       .then(() => true).catch(() => false)
     if (ok) {

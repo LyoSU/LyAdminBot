@@ -264,6 +264,12 @@ export interface Locale {
     needReply: string
     undoButton: string
     units: { m: string; h: string; d: string }
+    /**
+     * An admin typing a bare `/banan`, muting nobody: they just hold the banana
+     * up for the chat to see. Restored 2026-08-07 — v2 dropped the branch, so
+     * the admin fell through to the self-banan and muted themselves instead.
+     */
+    show: (name: string) => string
   }
 
   /** Captcha gate for suspicious newcomers. */

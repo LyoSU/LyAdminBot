@@ -220,7 +220,18 @@ describe('extractMessageSignals — suspicious signals', () => {
       expect(flagged(ws.map((w) => [...w].join(sep)).join(' '))).toBe(true)
       // One per word is the shape of real orthography, and must stay silent —
       // except for the two code points that are named outright above.
-      const sprinkled = ws.map((w) => w.slice(0, 1) + sep + w.slice(1)).join(' ')
+      //
+      // Split by code POINT, as the line above already does. `\p{Ll}` includes
+      // lowercase letters outside the BMP, and `.slice(0, 1)` on one of those
+      // takes half a surrogate pair — so the property was occasionally asserting
+      // about a string no message can contain (seed -1868766338 found it in 37
+      // runs, four days after the same defect took the classifier down in
+      // production). Cutting user-shaped text by code unit is the bug, in a test
+      // exactly as much as in a prompt.
+      const sprinkled = ws.map((w) => {
+        const [first = '', ...rest] = [...w]
+        return first + sep + rest.join('')
+      }).join(' ')
       expect(flagged(sprinkled)).toBe(sep === '​' || sep === '⁠')
     }), { numRuns: 60 })
   })

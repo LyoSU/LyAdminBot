@@ -248,6 +248,19 @@ describe('locales', () => {
       expect(Object.keys(locale.reasons).sort(), `locale ${code}`).toEqual(reference)
     }
   })
+
+  it('every locale can show the banana, and it says nothing about muting', () => {
+    // The oldest joke in this bot: an admin types a bare `/banan` and holds the
+    // banana up, punishing nobody. Restored 2026-08-07 after v2 shipped without
+    // it — the branch was gone, so the admin muted themselves instead. A
+    // duration anywhere in this string would mean the branch went missing again.
+    for (const [code, locale] of Object.entries(LOCALES)) {
+      const line = locale.banan.show('Хтось')
+      expect(line, `locale ${code}`).toContain('Хтось')
+      expect(line, `locale ${code}`).toContain('🍌')
+      expect(line, `locale ${code}`).not.toMatch(/\d/)
+    }
+  })
 })
 
 describe('settings', () => {

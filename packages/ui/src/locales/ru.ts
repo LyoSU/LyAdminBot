@@ -347,7 +347,8 @@ export const ru: Locale = {
     self: (name, duration) => `🍌 ${name} сам себя забанил на ${duration}. Уважаю`,
     needReply: 'Сделай /banan ответом на сообщение, или /banan без реплая для себя.',
     undoButton: '↩️ Отменить',
-    units: { m: 'мин', h: 'ч', d: 'дн' }
+    units: { m: 'мин', h: 'ч', d: 'дн' },
+    show: (name) => `🍌 ${name} показывает банан`
   },
 
   captcha: {

@@ -347,7 +347,8 @@ export const tr: Locale = {
     self: (name, duration) => `🍌 ${name} kendini ${duration} boyunca muzladı. Saygılar`,
     needReply: 'Yanıt olarak /banan kullan veya kendini muzlamak için sade /banan yaz.',
     undoButton: '↩️ Geri al',
-    units: { m: 'dk', h: 'sa', d: 'g' }
+    units: { m: 'dk', h: 'sa', d: 'g' },
+    show: (name) => `🍌 ${name} muzu gösteriyor`
   },
 
   captcha: {

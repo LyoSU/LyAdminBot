@@ -347,7 +347,8 @@ export const en: Locale = {
     self: (name, duration) => `🍌 ${name} banana'd themselves for ${duration}. Respect`,
     needReply: 'Use /banan as a reply, or plain /banan to banana yourself.',
     undoButton: '↩️ Undo',
-    units: { m: 'min', h: 'h', d: 'd' }
+    units: { m: 'min', h: 'h', d: 'd' },
+    show: (name) => `🍌 ${name} holds up the banana`
   },
 
   captcha: {
