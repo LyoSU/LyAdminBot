@@ -12,6 +12,7 @@
  * deterministic action — it only matters stacked with newness in the score.
  */
 import type { Signal } from '../types.js'
+import { truncate } from '../text/normalize.js'
 import { classifyUrl, URL_TOKEN_REGEX, PROMO_URL_KINDS } from './urls.js'
 import { PHONE_REGEX, CASHTAG_REGEX } from './message.js'
 
@@ -47,7 +48,7 @@ export const extractBioSignals = (
     const found = promoIn(text)
     // One profile advertised in three fields is still one profile: the first
     // hit names the signal and the rest would only double-count it.
-    if (found) return [{ name: 'promo_in_bio', evidence: `${source}: ${found}`.slice(0, 80) }]
+    if (found) return [{ name: 'promo_in_bio', evidence: truncate(`${source}: ${found}`, 80) }]
   }
   return []
 }

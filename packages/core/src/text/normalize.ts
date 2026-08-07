@@ -22,6 +22,66 @@ const EMOJI_REGEX = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF
  */
 const INVISIBLE_REGEX = /\p{Cf}|[\uD800-\uDFFF]/gu
 
+/**
+ * Unpaired surrogates, and ONLY unpaired ones.
+ *
+ * The `u` flag is what makes that true rather than approximate: in Unicode mode
+ * the pattern matches code points, so a valid pair is a single code point above
+ * U+FFFF and cannot match a BMP range — while an orphaned half, having no
+ * partner, is itself a code point in D800–DFFF and does. Without the flag this
+ * would match both halves of every emoji. Same reliance as INVISIBLE_REGEX.
+ */
+const LONE_SURROGATE = /[\uD800-\uDFFF]/gu
+const HAS_LONE_SURROGATE = /[\uD800-\uDFFF]/u
+
+/**
+ * True when the string can be encoded as UTF-8 at all — i.e. carries no orphaned
+ * surrogate half. ES2024's `String.prototype.isWellFormed`, which this repo
+ * cannot name because it targets lib ES2023.
+ */
+export const isWellFormed = (text: string): boolean => !HAS_LONE_SURROGATE.test(text)
+
+/**
+ * Make a string encodable, replacing each orphaned surrogate with U+FFFD.
+ *
+ * For use at the boundary of anything that will encode to UTF-8 — every HTTP
+ * body, every stored document. Not because such strings are expected, but
+ * because the failure mode is grotesquely disproportionate: ONE orphaned half
+ * anywhere in a prompt makes the entire request unencodable and the provider
+ * rejects all of it (2026-08-07, OpenAI 400 "unpaired UTF-16 surrogate code
+ * point"). A replacement character costs one glyph of fidelity; the alternative
+ * cost every verdict in that call.
+ *
+ * U+FFFD rather than deletion, matching both the ES2024 operation of the same
+ * name and what Node's own UTF-8 encoder does on the Mongo path — so the loud
+ * boundary and the silent one now agree instead of diverging.
+ */
+export const toWellFormed = (text: string): string => text.replace(LONE_SURROGATE, '�')
+
+/**
+ * Cut a string to at most `limit` UTF-16 code units WITHOUT splitting a surrogate
+ * pair. Use instead of `.slice(0, n)` on anything a user wrote.
+ *
+ * `.slice()` counts code units, so any limit landing between the two halves of an
+ * emoji orphans one — and an orphan is not merely odd, it is unencodable. On
+ * 2026-08-07 that is what took the classifier down: a 200-unit cut on a bio,
+ * shipped as the legal JSON escape \udXXX, refused by the provider as a whole
+ * request. The same cut on the embeddings path failed silently instead, inside a
+ * catch that returns null, so it had been losing vectors invisibly.
+ *
+ * The limit stays in code units on purpose: these limits exist to bound prompt
+ * and document SIZE, and size is units, not code points. So a cut may yield one
+ * unit less than asked, never one more. The dangling half is dropped rather than
+ * replaced — half an emoji is not a character, and inventing a U+FFFD where we
+ * chose to cut would put an artifact in front of the model.
+ */
+export const truncate = (text: string, limit: number): string => {
+  if (text.length <= limit) return text
+  const cut = text.slice(0, limit)
+  const last = cut.charCodeAt(limit - 1)
+  return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut
+}
+
 export const stripEmoji = (text: string): string => text.replace(EMOJI_REGEX, '')
 
 export const stripInvisible = (text: string): string => text.replace(INVISIBLE_REGEX, '')

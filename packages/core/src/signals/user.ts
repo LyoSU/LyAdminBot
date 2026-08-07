@@ -7,6 +7,7 @@
  * weight below auto-action threshold so policy routes it through vote.
  */
 import type { Signal, UserSnapshot } from '../types.js'
+import { truncate } from '../text/normalize.js'
 import { classifyUrl, URL_TOKEN_REGEX, PROMO_URL_KINDS } from './urls.js'
 
 const SLEEPER_GAP_DAYS = 365
@@ -90,7 +91,7 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
   // Telegram's own restriction_reason text — when it names spam/scam it is a
   // labelled verdict, stronger than the bare `restricted` boolean.
   if (user.restrictionReasons.some((r) => /spam|scam/i.test(r))) {
-    signals.push({ name: 'restricted_for_spam', evidence: user.restrictionReasons.join(', ').slice(0, 60) })
+    signals.push({ name: 'restricted_for_spam', evidence: truncate(user.restrictionReasons.join(', '), 60) })
   }
 
   // Server-side detection of a dangerous unofficial client
@@ -179,7 +180,7 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
   // bio, which costs an enrichment call and is often empty.
   const namePromo = findNamePromo(user)
   if (namePromo !== null) {
-    signals.push({ name: 'promo_in_name', evidence: `name: ${namePromo}`.slice(0, 80) })
+    signals.push({ name: 'promo_in_name', evidence: truncate(`name: ${namePromo}`, 80) })
   }
   if (INVISIBLE_IN_NAME_REGEX.test(user.displayName)) {
     signals.push({ name: 'invisible_in_name', evidence: 'invisible chars in display name' })

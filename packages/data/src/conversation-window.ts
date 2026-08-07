@@ -9,6 +9,7 @@
  * context as if it were live.
  */
 import type { ConversationLine } from '@lyadmin/core'
+import { truncate } from '@lyadmin/core'
 
 const DEFAULT_WINDOW = 12
 const DEFAULT_MAX_CHATS = 500
@@ -30,7 +31,10 @@ export class MemoryConversationWindow {
   ) {}
 
   record(chatId: number, line: ConversationLine): void {
-    const preview = (line.textPreview ?? '').trim().slice(0, PREVIEW_LIMIT)
+    // Second cut on an already-cut preview, and every one of these lines is
+    // rendered into the LLM prompt — so this is one of the two places the
+    // 2026-08-07 outage could have originated. `truncate` never orphans a half.
+    const preview = truncate((line.textPreview ?? '').trim(), PREVIEW_LIMIT)
     if (preview.length === 0) return
 
     let lines = this.chats.get(chatId)

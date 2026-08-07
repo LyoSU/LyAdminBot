@@ -6,6 +6,7 @@
  */
 import type { Document } from 'mongodb'
 import type { SignatureMatch, SignaturePort } from '@lyadmin/core'
+import { truncate } from '@lyadmin/core'
 import { isDistinctive } from '@lyadmin/core'
 import type { MongoStore } from './mongo.js'
 import { computeSignatureHashes, normalizeHeavy } from './hashing.js'
@@ -118,7 +119,7 @@ export class MongoSignaturePort implements SignaturePort {
         $setOnInsert: {
           exactHash: hashes.exactHash,
           normalizedHash: hashes.normalizedHash,
-          sampleText: text.slice(0, 200),
+          sampleText: truncate(text, 200),
           source,
           firstSeenAt: now
         },

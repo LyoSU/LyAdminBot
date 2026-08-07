@@ -60,7 +60,7 @@
  */
 import { randomBytes, createHash } from 'node:crypto'
 import type { EvaluationInput, LlmPort, LlmVerdict } from '@lyadmin/core'
-import { isDistinctive } from '@lyadmin/core'
+import { isDistinctive, toWellFormed, truncate } from '@lyadmin/core'
 import { foldConfusables, normalizeLight } from './hashing.js'
 import type { MongoStore } from './mongo.js'
 
@@ -426,7 +426,10 @@ export class OpenRouterLlmPort implements LlmPort {
     const reasonCode = (REASON_CODES as readonly string[]).includes(answer.reason_code ?? '')
       ? (answer.reason_code as string)
       : (isSpam ? 'other_spam' : 'other_clean')
-    const evidence = typeof answer.evidence === 'string' ? answer.evidence.slice(0, 200) : null
+    // The model's own quote, and it is quoting text full of emoji — so this cut
+    // needs the same care as the outbound ones. It goes on to a Telegram
+    // notification and a Mongo document, both UTF-8.
+    const evidence = typeof answer.evidence === 'string' ? truncate(answer.evidence, 200) : null
 
     if (cacheKey && this.store) {
       await this.store.llmCache.updateOne(
@@ -480,7 +483,25 @@ export class OpenRouterLlmPort implements LlmPort {
             { role: 'system', content: system },
             { role: 'user', content: userContent }
           ]
-        })
+        },
+        /**
+         * Last line of defence at the encode boundary: every string in the body,
+         * whatever produced it, is made UTF-8-encodable here.
+         *
+         * A replacer rather than a call per field because the field that broke
+         * production was not one anybody was watching, and the next one will not
+         * be either. This prompt assembles a dozen strings from Telegram, Mongo
+         * and the daily briefing; any single orphaned surrogate half in any of
+         * them costs the entire verdict, since the provider rejects the whole
+         * request. `truncate` is what stops them being created — this is what
+         * stops one that got in anyway from being fatal.
+         *
+         * Note it cannot be caught locally: `JSON.stringify` is well-formed by
+         * spec (ES2019) and escapes an orphan as \udXXX, which is valid JSON in
+         * a valid UTF-8 body. The corruption ships successfully and dies at the
+         * far end, decoded back into the same broken string.
+         */
+        (_key, value: unknown) => typeof value === 'string' ? toWellFormed(value) : value)
       })
       clearTimeout(timer)
       if (!response.ok) {
@@ -491,7 +512,7 @@ export class OpenRouterLlmPort implements LlmPort {
         // unattributable silence. Truncated because it is provider text, and it
         // reaches the log only — never a user.
         const detail = await response.text().then(
-          (t) => t.trim().slice(0, 300) || undefined,
+          (t) => truncate(t.trim(), 300) || undefined,
           () => undefined
         )
         this.config.onFailure?.({
@@ -633,8 +654,11 @@ const untrusted = (raw: string, limit: number): string => {
     .replace(/[\u0000-\u001F\u007F-\u009F\u2028\u2029]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, limit)
-  return `«${flat}»`
+  // NOT `.slice()`. Every value here is user text and most of it is full of
+  // emoji, so a code-unit cut lands inside a surrogate pair routinely — and one
+  // orphaned half makes the whole request unencodable, not just this value
+  // (2026-08-07: OpenAI 400 on every call). See `truncate`.
+  return `«${truncate(flat, limit)}»`
 }
 
 /**

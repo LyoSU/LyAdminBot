@@ -11,6 +11,7 @@ import type { Message } from '@mtcute/node'
 import { Chat, User } from '@mtcute/node'
 import type { tl } from '@mtcute/node'
 import type { MessageAttachmentInfo, NormalizedMessage } from '@lyadmin/core'
+import { truncate } from '@lyadmin/core'
 
 export interface NormalizeContext {
   isEdit?: boolean
@@ -61,8 +62,12 @@ const OBFUSCATION_INVISIBLES = /[\u2060\u200B\u00AD\uFEFF]/gu
 
 const countInvisibles = (text: string): number => (text.match(OBFUSCATION_INVISIBLES) ?? []).length
 
+// `truncate` because a preview is cut at a fixed code-unit count and previews
+// are mostly short chatty messages, i.e. dense with emoji: a plain slice
+// orphans a surrogate half, which is unencodable as UTF-8 and takes down the
+// whole request that carries it downstream (2026-08-07).
 const preview = (text: string): string | null =>
-  text ? text.slice(0, PREVIEW_LIMIT) : null
+  text ? truncate(text, PREVIEW_LIMIT) : null
 
 const peerToUserId = (peer: tl.TypePeer | undefined): number | null =>
   peer && peer._ === 'peerUser' ? peer.userId : null

@@ -9,6 +9,7 @@
 import { createHash } from 'node:crypto'
 import type { Document } from 'mongodb'
 import type { ForwardOrigin, ForwardPort, ForwardReputation } from '@lyadmin/core'
+import { truncate } from '@lyadmin/core'
 import type { MongoStore } from './mongo.js'
 
 /** v1 thresholds: hidden sources are the most suspicious. */
@@ -91,9 +92,9 @@ export class MongoForwardPort implements ForwardPort {
         $addToSet: { uniqueGroups: chatId },
         $setOnInsert: {
           forwardHash: info.hash,
-          sourceIdentifier: info.identifier.slice(0, 64),
+          sourceIdentifier: truncate(info.identifier, 64),
           firstSeenAt: new Date(),
-          ...(sampleText ? { sampleText: sampleText.slice(0, 200) } : {})
+          ...(sampleText ? { sampleText: truncate(sampleText, 200) } : {})
         }
       } as never,
       { upsert: true, returnDocument: 'after' }

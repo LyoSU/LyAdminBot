@@ -501,6 +501,79 @@ describe('OpenRouterLlmPort.classify (2026-07-30 review)', () => {
     expect(failures[0]?.detail).toContain('requested parameters')
   })
 
+  it('REGRESSION: the request body is always UTF-8-encodable', async () => {
+    // 2026-08-07: a bio was cut at 200 code units, the boundary fell inside an
+    // emoji, and the orphaned surrogate half made the whole request unencodable —
+    // OpenAI 400 "unpaired UTF-16 surrogate code point ... cannot be encoded as
+    // valid UTF-8", verified live against the shipped model. It could not be seen
+    // locally because JSON.stringify escapes an orphan as \udXXX: legal JSON, in a
+    // valid UTF-8 body, decoded back into the broken string at the far end.
+    //
+    // So the assertion is about the bytes, not about any one field: whatever the
+    // prompt was assembled from, what leaves this port must survive a UTF-8
+    // round-trip unchanged.
+    const bodies: string[] = []
+    const spy = vi.fn(async (_url: string, init?: { body?: string }) => {
+      bodies.push(init?.body ?? '')
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({
+          is_spam: false, confidence: 90, reason_code: 'other_clean', evidence: null
+        }) } }]
+      }))
+    }) as unknown as typeof fetch
+
+    // One leading ASCII char is what puts every subsequent cut on an odd offset.
+    const emojiWall = `a${'🔥'.repeat(200)}`
+    await new OpenRouterLlmPort({ apiKey: 'k', model: 'm', fetchImpl: spy }).classify(makeInput({
+      msg: { text: emojiWall },
+      chat: { title: emojiWall, description: emojiWall },
+      user: { displayName: emojiWall },
+      enrichment: {
+        bio: emojiWall,
+        businessTexts: [emojiWall],
+        conversationWindow: [
+          { authorId: 7, authorKind: 'user', textPreview: emojiWall }
+        ]
+      }
+    }))
+
+    const body = bodies[0] ?? ''
+    expect(body).not.toBe('')
+    // The property that actually matters, stated as the provider sees it.
+    expect(Buffer.from(body, 'utf8').toString('utf8')).toBe(body)
+    // And no orphan survived anywhere in it, by any route. In `u` mode this class
+    // matches ONLY unpaired halves — a valid pair is a single code point above
+    // U+FFFF and cannot match a BMP range.
+    expect(JSON.stringify(JSON.parse(body))).not.toMatch(/[\uD800-\uDFFF]/u)
+  })
+
+  it('an orphan that gets in by some other route is neutralised, not sent', async () => {
+    // Defence in depth: `truncate` stops these being created, and the replacer at
+    // the encode boundary stops one created elsewhere from costing the verdict.
+    // Here the raw message text carries an orphan that no cut of ours produced.
+    const bodies: string[] = []
+    const spy = vi.fn(async (_url: string, init?: { body?: string }) => {
+      bodies.push(init?.body ?? '')
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({
+          is_spam: false, confidence: 90, reason_code: 'other_clean', evidence: null
+        }) } }]
+      }))
+    }) as unknown as typeof fetch
+
+    await new OpenRouterLlmPort({ apiKey: 'k', model: 'm', fetchImpl: spy })
+      .classify(makeInput({ msg: { text: 'купуй \ud83d зараз' } }))
+
+    const parsed = JSON.parse(bodies[0] ?? '{}') as {
+      messages: { role: string; content: string }[]
+    }
+    const user = parsed.messages.find((m) => m.role === 'user')?.content ?? ''
+    expect(user).not.toMatch(/[\uD800-\uDFFF]/u)
+    // Replaced in place, so the surrounding text — the actual evidence — is intact.
+    expect(user).toContain('купуй')
+    expect(user).toContain('зараз')
+  })
+
   it('the schema is strict in the way strict mode actually requires', async () => {
     // Both of these are load-bearing, not stylistic: an implementation with a
     // native strict mode rejects a schema without them, and the documented

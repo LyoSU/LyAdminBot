@@ -7,6 +7,7 @@
  */
 import { MongoClient, ObjectId, type Collection, type Db, type Document } from 'mongodb'
 import type { Verdict, Signal } from '@lyadmin/core'
+import { truncate } from '@lyadmin/core'
 import { normalizeExtra, type NormalizedExtra } from './extras.js'
 import { VELOCITY_WINDOW_MS, SESSION_WINDOW_MS } from './persistent-ports.js'
 import {
@@ -565,7 +566,11 @@ export class MongoStore {
       chatId: params.chatId,
       userId: params.userId,
       messageId: params.messageId,
-      textPreview: params.textPreview.slice(0, 200),
+      // `truncate`: BSON is UTF-8, so a slice through a surrogate pair does not
+      // fail here — Node's encoder quietly substitutes U+FFFD and the record is
+      // stored subtly wrong forever. Same defect that shouted on the LLM path
+      // 2026-08-07; on this path it never says a word.
+      textPreview: truncate(params.textPreview, 200),
       pSpam: params.verdict.pSpam,
       action: params.verdict.action,
       decidedBy: params.verdict.decidedBy,
@@ -670,9 +675,12 @@ export class MongoStore {
         chatId: params.chatId,
         messageId: params.messageId,
         targetUserId: params.targetUserId,
-        targetLabel: params.targetLabel.slice(0, 64),
-        textPreview: params.textPreview.slice(0, 200),
-        learnText: (params.learnText ?? params.textPreview).slice(0, MongoStore.MAX_LEARN_TEXT),
+        targetLabel: truncate(params.targetLabel, 64),
+        textPreview: truncate(params.textPreview, 200),
+        // `learnText` matters most of the three: it is hashed later to match the
+        // signature it teaches, and a U+FFFD substituted at the cut is a byte
+        // difference the hash sees.
+        learnText: truncate(params.learnText ?? params.textPreview, MongoStore.MAX_LEARN_TEXT),
         openedBy: params.openedBy,
         promptMessageId: null,
         ballots: [],

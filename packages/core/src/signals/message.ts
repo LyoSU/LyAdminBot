@@ -7,7 +7,7 @@
  * catalogue (`registry.ts`), not repeated at each raise site.
  */
 import type { NormalizedMessage, Signal } from '../types.js'
-import { isEmojiOnly } from '../text/normalize.js'
+import { isEmojiOnly, truncate } from '../text/normalize.js'
 import { mixesConfusableScripts } from '../text/script.js'
 import { classifyUrl, sameDestination } from './urls.js'
 
@@ -170,7 +170,7 @@ export const extractMessageSignals = (msg: NormalizedMessage): Signal[] => {
   // words it objected to.
   const mixedWord = firstMixedScriptWord(text)
   if (mixedWord !== null) {
-    signals.push({ name: 'mixed_script_word', evidence: `«${mixedWord.slice(0, 40)}»` })
+    signals.push({ name: 'mixed_script_word', evidence: `«${truncate(mixedWord, 40)}»` })
   }
 
   if (msg.customEmoji.length >= CUSTOM_EMOJI_HEAVY_MIN) {

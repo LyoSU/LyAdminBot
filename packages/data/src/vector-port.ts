@@ -9,7 +9,7 @@
 import { QdrantClient } from '@qdrant/js-client-rest'
 import OpenAI from 'openai'
 import type { VectorMatch, VectorPort } from '@lyadmin/core'
-import { hasTextualContent, isDistinctive } from '@lyadmin/core'
+import { hasTextualContent, isDistinctive, truncate } from '@lyadmin/core'
 import { sha256 } from './hashing.js'
 
 /** Deterministic point id from the text, so re-learning the same spam upserts
@@ -151,7 +151,11 @@ export class QdrantVectorPort implements VectorPort {
     try {
       const response = await this.openai.embeddings.create({
         model: EMBEDDING_MODEL,
-        input: text.slice(0, 4000)
+        // `truncate`, not `.slice()`: an orphaned surrogate half makes the whole
+        // request unencodable and the API refuses it (2026-08-07). Here that was
+        // the worst case of the three — the catch below returns null, so a long
+        // message cut mid-emoji simply had no vector, forever, with no log line.
+        input: truncate(text, 4000)
       })
       return response.data[0]?.embedding ?? null
     } catch {
