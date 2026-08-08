@@ -1988,6 +1988,10 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       // believing its reason, this one because it believes it and still will not
       // remove somebody over an act members also perform.
       cappedImitable: verdict.meta['cappedImitable'] ?? undefined,
+      // Present only when the message evidence WAS sufficient and the sender's
+      // standing in the chat overruled it — the one branch whose cost is a
+      // judgement call rather than a measurement, so it has to be countable.
+      cappedStanding: verdict.meta['cappedStanding'] ?? undefined,
       llmKey: verdict.meta['llmKey'] ?? undefined,
       // The model is an environment variable, so it changes between restarts
       // with nothing in the data to say so (2026-08-07).

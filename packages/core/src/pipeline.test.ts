@@ -1170,6 +1170,79 @@ describe('evaluateMessage — an act members also perform (2026-08-07 audit)', (
     expect(removesSender(v.action)).toBe(true)
     expect(v.meta['cappedImitable']).toBeUndefined()
   })
+
+  /**
+   * ...unless the chat already knows the sender. Production 2026-08-08 08:58:
+   * `private_invite_link` + `promo_in_message_link` = 3.0 units, comfortably over
+   * the bar, banned an `established_user`, and an admin undid it in 31 seconds.
+   * Over the fortnight, standing tripled the reversal rate on these codes.
+   */
+  describe('and the sender is not a stranger', () => {
+    const corroboratedBy = (user: Partial<UserSnapshot>): EvaluationInput => makeInput({
+      msg: { text: 'Народ, заходьте в групу, пишіть на 067-000-00-00, є що обговорити' },
+      user
+    })
+    const withVelocity: PipelinePorts = {
+      ...llmSaying('channel_promo'),
+      velocity: { check: async () => ({ exceeded: true, singleAuthor: true }) }
+    }
+    /**
+     * Chatty, and known for less than a week — which is the whole population
+     * this branch is about. `established_user` is earned by volume alone (50
+     * messages), while the established-regular exempt additionally wants 7 days
+     * of local tenure, so between the two lies a person who has already talked a
+     * lot and whom the exempt does not yet wave through. Both reversals of
+     * 2026-08-07/08 sat exactly there: 172 messages first seen 3 days earlier,
+     * and 98 messages first seen the same day.
+     */
+    const established = { messagesInChat: 40, messagesGlobal: 172, localAgeDays: 3 }
+
+    it('standing outranks message evidence on an imitable code', async () => {
+      const v = await evaluateMessage(corroboratedBy(established), withVelocity)
+      expect(v.signals.some((s) => s.name === 'established_user')).toBe(true)
+      // The evidence bar is met — and deliberately not the last word here.
+      expect(mayRemoveSender(v.signals)).toBe(true)
+      expect(removesSender(v.action)).toBe(false)
+      expect(v.action).toBe('delete')
+      expect(v.needsVote).toBe(true)
+      expect(v.meta['cappedStanding']).toBe(true)
+      expect(v.meta['cappedImitable']).toBe('channel_promo')
+    })
+
+    it('being caught before spends the standing', async () => {
+      // Volume earns standing; being caught twice spends it. Four of every five
+      // long-standing accounts punished on an imitable code had already been
+      // caught spamming twice (20 of 25 over the fortnight), so an unconditional
+      // shield would mostly be shielding repeat offenders — even though, on the
+      // stored data, every one of those 20 was below the evidence bar and the
+      // ceiling held it anyway. This asserts the guard, not a past outcome.
+      const v = await evaluateMessage(
+        corroboratedBy({ ...established, spamDetections: 3 }), withVelocity
+      )
+      expect(v.signals.some((s) => s.name === 'prior_spam_detections')).toBe(true)
+      expect(removesSender(v.action)).toBe(true)
+      expect(v.meta['cappedStanding']).toBeUndefined()
+    })
+
+    it('standing does not shield a code that names the act itself', async () => {
+      // The ceiling is about acts with two readings. Nobody recruits for a fake
+      // job by accident, however long they have been here.
+      const v = await evaluateMessage(corroboratedBy(established), {
+        ...withVelocity, ...llmSaying('job_scam')
+      })
+      expect(removesSender(v.action)).toBe(true)
+      expect(v.meta['cappedStanding']).toBeUndefined()
+    })
+
+    it('cappedStanding marks only the branch where evidence was sufficient', async () => {
+      // A stranger with no corroboration is capped too, by the original rule —
+      // and must NOT be counted as a standing cap, or the next audit prices the
+      // wrong thing.
+      const v = await evaluateMessage(promoInput(), llmSaying('channel_promo'))
+      expect(v.meta['cappedImitable']).toBe('channel_promo')
+      expect(v.meta['cappedStanding']).toBeUndefined()
+    })
+  })
 })
 
 describe('evaluateMessage — resilience', () => {

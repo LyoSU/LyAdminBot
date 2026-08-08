@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import type { Signal } from './types.js'
 import {
-  scoreSignals, hasDecisiveSignal, mayRemoveSender, contentEvidence,
+  scoreSignals, hasDecisiveSignal, mayRemoveSender, hasSenderStanding, contentEvidence,
   BASE_RATE_BIAS, DECISIVE_MIN_WEIGHT, SENDER_REMOVAL_MIN_EVIDENCE
 } from './score.js'
 import {
@@ -492,5 +492,50 @@ describe('contentEvidence and the correlation ceilings', () => {
         expect(contentEvidence([{ name }]).strongest, name).toBe(weight)
       }
     }
+  })
+})
+
+describe('hasSenderStanding (2026-08-08)', () => {
+  it('standing is the chat history, not the message', () => {
+    expect(hasSenderStanding([{ name: 'established_user' }])).toBe(true)
+    expect(hasSenderStanding([])).toBe(false)
+    expect(hasSenderStanding([{ name: 'private_invite_link' }])).toBe(false)
+  })
+
+  it('being caught before revokes it', () => {
+    // 20 of the 25 imitable sender-removals carrying `established_user` over the
+    // fortnight to 2026-08-08 also carried this. A guard, not a measured effect
+    // — see `hasSenderStanding` for why it is kept anyway.
+    const caught: Signal[] = [
+      { name: 'established_user' },
+      { name: 'prior_spam_detections', evidence: '2 prior detections' }
+    ]
+    expect(hasSenderStanding(caught)).toBe(false)
+  })
+
+  it('is independent of how much evidence the message carries', () => {
+    // The whole point: these two predicates answer different questions, so one
+    // must not move when the other does.
+    const heavy: Signal[] = [
+      { name: 'established_user' },
+      { name: 'private_invite_link' },
+      { name: 'promo_in_message_link' }
+    ]
+    expect(mayRemoveSender(heavy)).toBe(true)
+    expect(hasSenderStanding(heavy)).toBe(true)
+  })
+
+  it('trust signals other than standing do not stand in for it', () => {
+    // `verified_account` is Telegram vouching for an identity and `is_reply` is
+    // a shape; neither is a history in this chat. Keeping the set at one signal
+    // is what keeps the measured blast radius the measured one.
+    for (const name of ['verified_account', 'trusted_reputation', 'is_reply'] satisfies SignalName[]) {
+      expect(hasSenderStanding([{ name }]), name).toBe(false)
+    }
+  })
+
+  it('duplicate signals do not change the answer', () => {
+    const twice: Signal[] = [{ name: 'established_user' }, { name: 'established_user' }]
+    expect(hasSenderStanding(twice)).toBe(true)
   })
 })

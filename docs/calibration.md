@@ -101,7 +101,27 @@ what the data raised and did **not** settle:
 - **`external_ban_new` is 9 of the 52.** Second-largest FP source after the
   demoted stages, and nothing in the message earns it — the listing is about the
   account. Candidate for the same treatment: believe the listing, cap what it
-  may do alone.
+  may do alone. Unchanged as of 2026-08-08: still 52% of all bans (122 of 234 in
+  a day), still nothing in the message behind them.
+
+### Followed up 2026-08-08: standing beats message evidence on imitable codes
+
+The second question above is now half-closed. The imitable ceiling shipped on
+2026-08-07 lifted whenever `mayRemoveSender` held — and message evidence answers
+a question about the message, which on these codes was never the disputed part.
+Production 08:58 the next morning: `private_invite_link` +
+`promo_in_message_link` = 3.0 units banned an `established_user`, and an admin
+undid it in 31 seconds. `hasSenderStanding` now overrides the evidence bar on
+these three codes only; measured over every stored verdict it changes 4 of 141
+imitable sender-removals, one of them that confirmed FP.
+
+Worth knowing for the next pass, because it defines a population nothing else
+sees: **`established_user` is earned by volume (50 messages) while the
+established-regular exempt additionally wants 7 days of local tenure.** Both
+reversals of 2026-08-07/08 sat in that gap — 172 messages first seen 3 days
+earlier, 98 messages first seen the same day. Somebody who talks a lot and whom
+we have known briefly is exempt from nothing and vouched for by one signal worth
+-1.5, which the session path does not read at all.
 
 ## What is NOT in scope
 

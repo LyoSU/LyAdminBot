@@ -137,6 +137,38 @@ export const hasDecisiveSignal = (signals: Signal[]): boolean =>
 export const mayRemoveSender = (signals: Signal[]): boolean =>
   contentEvidence(signals).total >= SENDER_REMOVAL_MIN_EVIDENCE
 
+/**
+ * Whether the chat's own history vouches for the sender — and what revokes that.
+ *
+ * `mayRemoveSender` answers a question about the MESSAGE, and answers it well:
+ * two independent facts about the text are two facts however wrote it. But on a
+ * reason code that names an act ordinary members also perform (see
+ * `IMITABLE_REASON_CODES`), the evidence is not in dispute — a link IS a link —
+ * and what remains in dispute is the person. Message evidence cannot settle
+ * that, so on those codes it must not be the last word.
+ *
+ * Measured against every stored verdict, 2026-07-25 → 2026-08-08: of 141 sender
+ * removals on an imitable code, 25 carried `established_user`, and this shield
+ * changes the outcome of 4 of them — the rest sat below the evidence bar and the
+ * ceiling already held them. One of the 4 is the confirmed false positive above;
+ * the other 3 were uncontested mutes that become a delete plus a chat vote.
+ *
+ * The revoker, honestly: it has never yet changed an outcome. All 20 standing
+ * carriers that also carried `prior_spam_detections` were below 2.0 anyway, so
+ * the original ceiling got there first. It stays for what that 20-of-25 says
+ * about the population — when a long-standing account IS punished on one of
+ * these codes, four times in five the chat has already caught it spamming twice.
+ * A shield over that population cannot be unconditional, and the first heavy
+ * link from a repeat offender is the case it exists for. Standing is earned by
+ * volume and spent by being caught: the same reasoning `extractUserSignals`
+ * applies for a *hard* verdict (Telegram's scam/fake flags, an external ban),
+ * extended to the softer verdict this chat produced about itself.
+ */
+export const hasSenderStanding = (signals: Signal[]): boolean => {
+  const names = new Set(signals.map((s) => s.name))
+  return names.has('established_user') && !names.has('prior_spam_detections')
+}
+
 export interface ScoreResult {
   pSpam: number
   /** Distinct signals with non-zero weight, sorted by |weight| desc. */

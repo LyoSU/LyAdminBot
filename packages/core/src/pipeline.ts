@@ -22,7 +22,9 @@ import { extractBioSignals } from './signals/bio.js'
 import { extractLinkedChannelSignals } from './signals/channel.js'
 import { applyDeterministicRules } from './rules.js'
 import { parseCustomRule, customRuleMatches } from './custom-rules.js'
-import { scoreSignals, hasDecisiveSignal, mayRemoveSender, contentEvidence } from './score.js'
+import {
+  scoreSignals, hasDecisiveSignal, mayRemoveSender, hasSenderStanding, contentEvidence
+} from './score.js'
 import { PERMANENT_BAN_SIGNALS, isTrustSignal } from './signals/registry.js'
 import {
   decideAction, isEnforcementAction, removesSender, IMITABLE_REASON_CODES, type PolicyDecision
@@ -313,14 +315,27 @@ export const evaluateMessage = async (
    *  - it does not ask for a captcha. That question separates a human from a
    *    script, and by construction these codes name something humans do — so
    *    the answer is known in advance and filters nobody.
-   *  - it does not fire when `mayRemoveSender` holds. Corroborating message
-   *    evidence is exactly what turns a guess about intent into a finding.
+   *  - it does not fire when `mayRemoveSender` holds AND the sender is a
+   *    stranger. Corroborating message evidence is what turns a guess about
+   *    intent into a finding — about the message. For somebody the chat's own
+   *    history vouches for it settles nothing, because the disputed thing was
+   *    never whether a link is a link (`hasSenderStanding` carries the
+   *    measurement, including what revokes the standing). 2026-08-08 08:58: an
+   *    `established_user` was banned on `private_invite_link` +
+   *    `promo_in_message_link` = 3.0, over the 2.0 bar, and an admin undid it
+   *    31 seconds later.
    */
   const capImitableAct = (verdict: Verdict): Verdict => {
     if (!IMITABLE_REASON_CODES.has(verdict.reasonCode)) return verdict
-    if (!removesSender(verdict.action) || mayRemoveSender(verdict.signals)) return verdict
+    if (!removesSender(verdict.action)) return verdict
+    const earnedIt = mayRemoveSender(verdict.signals)
+    if (earnedIt && !hasSenderStanding(verdict.signals)) return verdict
     meta['cappedFrom'] = verdict.action
     meta['cappedImitable'] = verdict.reasonCode
+    // Only when the evidence WAS sufficient and standing overrode it. Marks
+    // exactly this branch, so the next audit can price it without re-deriving
+    // which of two reasons capped the verdict.
+    if (earnedIt) meta['cappedStanding'] = true
     return {
       ...verdict,
       action: 'delete' as VerdictAction,
