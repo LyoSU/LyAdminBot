@@ -344,6 +344,51 @@ export const evaluateMessage = async (
     }
   }
 
+  /**
+   * Hold a SESSION verdict to `observe` + a chat vote when the signals vouch for
+   * the sender.
+   *
+   * Every other stage passes an evidence bar before it may act; this one, by
+   * construction, cannot (see `judgeAccumulated`) — it hands the model's pSpam
+   * straight to `policyFor`, so `established_user` (-1.5), `trusted_reputation`
+   * (-2.5) and `is_reply` (-1) were computed, logged, and then not consulted.
+   *
+   * Production 2026-08-17/18: 14 session verdicts on `flood`, 4 acted on, 2 of
+   * the 3 subsequently reviewed overturned by the chat 0:3. One carried
+   * scorePSpam 0.0003 against the model's 0.94 — four leading zeros of
+   * arithmetic saying innocent, outvoted by one call on five concatenated
+   * one-liners. Eight more were stopped by the trusted/admin guard in the
+   * executor, i.e. after the verdict rather than by it, which is why they show
+   * as `skipped` and not as a ceiling.
+   *
+   * Why `observe` and not the usual `delete` ceiling: on every other path the
+   * message evidence is not in dispute and only the punishment was too much. A
+   * session verdict has no message evidence at all — the input is by definition
+   * lines that meant nothing individually — so there is nothing left to justify
+   * removing anything. The chat is asked instead, and answers in seconds; a
+   * spam-resolved vote deletes and mutes through `enforceVoteSpam` exactly as
+   * before.
+   *
+   * Deliberately NOT limited to `IMITABLE_REASON_CODES`: that ceiling is about
+   * acts ordinary members also perform, and this is about a stage with no bar.
+   * The revoker is the shared one — an account carrying `prior_spam_detections`,
+   * a Telegram scam/fake flag or an external listing never earns
+   * `established_user` in the first place (`extractUserSignals`), so a
+   * sold long-time account keeps no standing to spend here.
+   */
+  const capVouchedSession = (verdict: Verdict): Verdict => {
+    if (!isEnforcementAction(verdict.action)) return verdict
+    if (!hasSenderStanding(verdict.signals)) return verdict
+    meta['cappedFrom'] = verdict.action
+    meta['cappedVouched'] = true
+    return {
+      ...verdict,
+      action: 'observe' as VerdictAction,
+      needsVote: input.policy.votingEnabled,
+      banDurationSeconds: null
+    }
+  }
+
   const none = (decidedBy: DecidedBy, reasonCode: string, signals: Signal[] = []): Verdict =>
     finalize(
       { pSpam: 0, decidedBy, ruleId: null, reasonCode, reasonEvidence: null },
@@ -534,7 +579,7 @@ export const evaluateMessage = async (
          * a translation of this guard. What the band should be is a calibration
          * decision; see `docs/calibration.md`.
          */
-        return capImitableAct(finalize(
+        return capVouchedSession(capImitableAct(finalize(
           {
             pSpam: llmVerdict.pSpam,
             decidedBy: 'session',
@@ -543,7 +588,7 @@ export const evaluateMessage = async (
             reasonEvidence: llmVerdict.evidence
           },
           signals
-        ))
+        )))
       }
     }
     return null

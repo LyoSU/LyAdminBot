@@ -595,6 +595,100 @@ describe('evaluateMessage — abstain & session', () => {
     expect(removesSender(v.action)).toBe(true)
   })
 
+  /**
+   * The population these two tests separate is the one nothing else sees:
+   * `established_user` is earned at 50 messages, while the established-regular
+   * exempt additionally wants 7 days of local tenure. Somebody who talks a lot
+   * and whom the chat has known briefly sits in that gap — vouched for by one
+   * signal worth -1.5 that the session path did not read at all.
+   */
+  it('a session verdict may not remove the message of somebody the signals vouch for', async () => {
+    // Production 2026-08-17/18: 14 session `flood` verdicts, 4 acted on, and of
+    // the 3 that were then reviewed, 2 were overturned by the chat 0:3. Eight of
+    // the remaining 10 were stopped only by the trusted/admin execution guard,
+    // i.e. after the verdict, not by it. The arithmetic had already said
+    // innocent — one at scorePSpam 0.0003 against the model's 0.94 — because a
+    // session verdict hands its pSpam straight to `policyFor`, which makes the
+    // trust weights telemetry. The chat is still asked; the message stays until
+    // it answers.
+    const ports: PipelinePorts = {
+      session: {
+        append: async () => ({ combinedText: 'ага\nтак\nну\nбуло таке\nі шо', count: 5 }),
+        reset: async () => { /* noop */ }
+      },
+      llm: {
+        classify: async () => ({ pSpam: 0.96, reasonCode: 'flood', evidence: null, cached: false })
+      }
+    }
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'і шо' },
+      // Enough volume for `established_user`, too little local tenure for the
+      // established-regular exempt — which would otherwise answer first.
+      user: { messagesGlobal: 60, messagesInChat: 8, localAgeDays: 3 }
+    }), ports)
+    expect(v.decidedBy).toBe('session')
+    expect(v.signals.some((s) => s.name === 'established_user')).toBe(true)
+    expect(isEnforcementAction(v.action)).toBe(false)
+    expect(v.action).toBe('observe')
+    expect(v.needsVote).toBe(true)
+  })
+
+  it('...and still removes it for a stranger, who has no standing to read', async () => {
+    const ports: PipelinePorts = {
+      session: {
+        append: async () => ({ combinedText: 'ок\nда\nугу\n+\nну от', count: 5 }),
+        reset: async () => { /* noop */ }
+      },
+      llm: {
+        classify: async () => ({ pSpam: 0.96, reasonCode: 'flood', evidence: null, cached: false })
+      }
+    }
+    const v = await evaluateMessage(makeInput({ msg: { text: 'ну от' }, user: newcomer }), ports)
+    expect(v.decidedBy).toBe('session')
+    expect(v.action).toBe('delete')
+  })
+
+  it('a session verdict on a NON-imitable code is capped by standing too', async () => {
+    // The imitable ceiling shipped 2026-08-07 covers 3 reason codes. The gap the
+    // calibration runbook names is the general one: any session verdict at all
+    // on somebody the signals vouch for, since none of them pass an evidence bar.
+    const ports: PipelinePorts = {
+      session: {
+        append: async () => ({ combinedText: 'ага\nтак\nну\nбуло таке\nі шо', count: 5 }),
+        reset: async () => { /* noop */ }
+      },
+      llm: {
+        classify: async () => ({ pSpam: 0.99, reasonCode: 'job_scam', evidence: null, cached: false })
+      }
+    }
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'і шо' },
+      user: { messagesGlobal: 60, messagesInChat: 8, localAgeDays: 3 }
+    }), ports)
+    expect(v.action).toBe('observe')
+    expect(v.needsVote).toBe(true)
+  })
+
+  it('standing spent by being caught does not shield a session verdict', async () => {
+    // Same revoker as `hasSenderStanding` everywhere else: an account this chat
+    // has already caught twice keeps no vouching.
+    const ports: PipelinePorts = {
+      session: {
+        append: async () => ({ combinedText: 'ага\nтак\nну\nбуло таке\nі шо', count: 5 }),
+        reset: async () => { /* noop */ }
+      },
+      llm: {
+        classify: async () => ({ pSpam: 0.96, reasonCode: 'flood', evidence: null, cached: false })
+      }
+    }
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'і шо' },
+      user: { messagesGlobal: 60, messagesInChat: 8, localAgeDays: 3, spamDetections: 2 }
+    }), ports)
+    expect(v.signals.some((s) => s.name === 'prior_spam_detections')).toBe(true)
+    expect(isEnforcementAction(v.action)).toBe(true)
+  })
+
   it('records the judged window, so a session verdict is reviewable from a log line', async () => {
     // The log prints the triggering message; the verdict was about the blob.
     // Without this, a session FP cannot be reviewed at all — the 19:15 ban is
