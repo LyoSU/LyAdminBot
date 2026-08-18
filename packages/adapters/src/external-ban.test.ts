@@ -210,6 +210,30 @@ describe('fetchExternalBan source selection', () => {
     expect(result?.cas).toBeNull()
   })
 
+  it('reports which asked sources answered nothing, apart from a clean answer', async () => {
+    // Production 2026-08-18: one source sat at the 2s timeout ceiling for hours.
+    // The cache already told the two apart — a clean account is a record with
+    // `banned: false`, a failure is null — but nothing in the log stream did, so
+    // the only trace of the outage was the `extban` latency field happening to
+    // read 2001ms. A caller cannot warn about what it cannot see.
+    const fetchImpl = (async (url: string) => {
+      if (url.includes('cas.chat')) throw new Error('TimeoutError')
+      return { json: async () => ({ ok: true, banned: false }) }
+    }) as never
+    const result = await fetchExternalBan(42, { fetchImpl, now: NOW2 })
+    // lols answered, and the answer is "clean" — not a failure.
+    expect(result?.lols?.banned).toBe(false)
+    expect(result?.failed).toEqual({ lols: false, cas: true })
+  })
+
+  it('a source not asked is not a source that failed', async () => {
+    const fetchImpl = (async () => ({ json: async () => ({ ok: true, banned: false }) })) as never
+    const result = await fetchExternalBan(42, {
+      fetchImpl, now: NOW2, sources: { lols: true, cas: false }
+    })
+    expect(result?.failed).toEqual({ lols: false, cas: false })
+  })
+
   it('asking for nothing costs no request', async () => {
     let called = false
     const fetchImpl = (async () => { called = true; return { json: async () => ({}) } }) as never
@@ -217,6 +241,9 @@ describe('fetchExternalBan source selection', () => {
       fetchImpl, now: NOW2, sources: { lols: false, cas: false }
     })
     expect(called).toBe(false)
-    expect(result).toEqual({ lols: null, cas: null, attempted: { lols: false, cas: false } })
+    expect(result).toEqual({
+      lols: null, cas: null,
+      attempted: { lols: false, cas: false }, failed: { lols: false, cas: false }
+    })
   })
 })

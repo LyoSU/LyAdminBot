@@ -1767,6 +1767,22 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     if (sources.lols || sources.cas) {
       const fresh = await timed('extban', () => fetchExternalBan(sender.id, { sources }))
       if (fresh) {
+        // An outage in a ban database has to be visible while it is happening.
+        // 2026-08-18, ~10:45 to ~17:30: one source timed out at its 2s ceiling
+        // and the only trace was the `extban` field of unrelated log lines
+        // reading 2001. The cache knew (`failedAt`, 10-minute retry) and said
+        // nothing out loud, so every verdict in the window silently rested on
+        // one database instead of two.
+        if (fresh.failed.lols || fresh.failed.cas) {
+          log.warn('external_ban_source_down', {
+            chatId: chat.id,
+            userId: sender.id,
+            down: (['lols', 'cas'] as const).filter((n) => fresh.failed[n]).join('+'),
+            // What DID answer, so one line says whether the lookup was blind or
+            // merely one-eyed.
+            answered: (['lols', 'cas'] as const).filter((n) => fresh[n] !== null).join('+') || 'none'
+          })
+        }
         store.saveExternalBan(sender.id, fresh).catch(() => { /* cache is best-effort */ })
         externalBan = mergeExternalBan({
           lols: fresh.lols ?? (cached?.lols as never),

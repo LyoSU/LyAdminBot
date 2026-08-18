@@ -161,6 +161,25 @@ export interface ExternalBanLookup {
    * differently: one is a failure to back off from, the other is nothing.
    */
   attempted: ExternalBanSources
+  /**
+   * Which asked sources answered nothing at all.
+   *
+   * Distinct from a `null` side, which is also what an unasked source leaves,
+   * and distinct from a clean verdict, which is a record carrying
+   * `banned: false` — the cache has always told those apart (`saveExternalBan`
+   * writes `failedAt` only for a real failure, remembered for
+   * EXTERNAL_BAN_RETRY_MS against the week a real answer keeps).
+   *
+   * What nothing told apart was the log stream. Production 2026-08-18: one
+   * source sat at the 2s timeout ceiling from ~10:45 to ~17:30 — across that
+   * window not one verdict named both sources, every deterministic ruling paid
+   * 2.2-3.4s instead of 0.1-0.5s, and anybody listed only in the silent database
+   * passed as unlisted. The single trace was the `extban` latency field reading
+   * 2001. Since external listings are the largest single ground for a ban, an
+   * outage in one has to be visible while it is happening, and only the caller
+   * can say so.
+   */
+  failed: ExternalBanSources
 }
 
 type FetchLike = (url: string) => Promise<{ json: () => Promise<unknown> }>
@@ -196,12 +215,23 @@ export const fetchExternalBan = async (
     lols: opts.sources?.lols ?? true,
     cas: opts.sources?.cas ?? true
   }
-  if (!attempted.lols && !attempted.cas) return { lols: null, cas: null, attempted }
+  const noFailure: ExternalBanSources = { lols: false, cas: false }
+  if (!attempted.lols && !attempted.cas) {
+    return { lols: null, cas: null, attempted, failed: noFailure }
+  }
   const fetchImpl = opts.fetchImpl ?? ((url: string) => fetch(url, { signal: AbortSignal.timeout(2000) }))
   const now = opts.now ?? new Date()
   const [lols, cas] = await Promise.all([
     attempted.lols ? queryOne(LOLS_URL(userId), fetchImpl, parseLolsResponse, now) : null,
     attempted.cas ? queryOne(CAS_URL(userId), fetchImpl, parseCasResponse, now) : null
   ])
-  return { lols, cas, attempted }
+  return {
+    lols,
+    cas,
+    attempted,
+    failed: {
+      lols: attempted.lols && lols === null,
+      cas: attempted.cas && cas === null
+    }
+  }
 }
