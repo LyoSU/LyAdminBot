@@ -104,6 +104,27 @@ what the data raised and did **not** settle:
   may do alone. Unchanged as of 2026-08-08: still 52% of all bans (122 of 234 in
   a day), still nothing in the message behind them.
 
+### Closed 2026-08-19: the session path now reads standing
+
+The second question above is closed for the general case. `capVouchedSession`
+holds ANY session verdict to `observe` plus a chat vote when `hasSenderStanding`
+holds — not only the three imitable codes, because the thing being fixed is a
+stage with no evidence bar rather than an act ordinary members also perform.
+
+What raised it: 2026-08-17/18, 14 session `flood` verdicts. Four were acted on;
+of the three then reviewed, two were overturned by the chat 0:3. Eight of the
+remaining ten were stopped by the trusted/admin guard in the executor — after
+the verdict, not by it, which is why they logged as `skipped` rather than as a
+ceiling and did not show up as near-misses in any count.
+
+Still open, and NOT addressed here: one of the two overturned verdicts carried no
+standing signal at all (no `established_user`), so nothing in this change would
+have caught it. A session verdict on a genuine stranger still rests on one call
+over concatenated one-liners with no bar of any kind. The remaining lever is an
+evidence band, and the objection in `judgeAccumulated` stands: text-only
+solicitation carries no `contentEvidence`, so any band above 0 retires that
+detection entirely. Unresolved on purpose.
+
 ### Followed up 2026-08-08: standing beats message evidence on imitable codes
 
 The second question above is now half-closed. The imitable ceiling shipped on
