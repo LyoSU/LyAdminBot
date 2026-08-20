@@ -126,12 +126,24 @@ export const whyDeepLink = (
   userId: number
 ): string => `https://t.me/${botUsername}?start=why_${chatId}_${messageId}_${userId}`
 
-/** One-line moderation notice posted after an enforcement action. */
+/**
+ * One-line moderation notice posted after an enforcement action.
+ *
+ * `incidentCount` turns the line into the notice for a RUN of messages from one
+ * sender rather than for one message. The card is then edited in place instead
+ * of a second one being posted: eight messages from a banned spammer used to
+ * mean eight cards, which is the chat reading our bookkeeping instead of the
+ * conversation.
+ *
+ * The count is rendered as a bare "×N" and deliberately not routed through the
+ * locale — it is a numeral, and every language in `LOCALES` writes it the same
+ * way. The words around it are localised as before.
+ */
 export const compactNotification = (
   locale: Locale,
   verdict: Verdict,
   target: { chatId: number; messageId: number; userId: number; userLabel: string },
-  options: { botUsername?: string | undefined } = {}
+  options: { botUsername?: string | undefined; incidentCount?: number | undefined } = {}
 ): ViewMessage => {
   const action = verdict.action
   if (action === 'none' || action === 'observe') {
@@ -143,8 +155,10 @@ export const compactNotification = (
   const whyButton = options.botUsername
     ? { text: locale.notification.whyButton, url: whyDeepLink(options.botUsername, target.chatId, target.messageId, target.userId) }
     : { text: locale.notification.whyButton, data: callbackData.why(target.chatId, target.messageId) }
+  const repeats = options.incidentCount ?? 1
   return {
-    text: locale.notification.compact(locale.actions[action], escapeHtml(target.userLabel)),
+    text: locale.notification.compact(locale.actions[action], escapeHtml(target.userLabel)) +
+      (repeats > 1 ? ` · ×${repeats}` : ''),
     buttons: [[
       whyButton,
       { text: locale.notification.notSpamButton, data: callbackData.override(target.chatId, target.messageId, target.userId) }

@@ -7,7 +7,7 @@ import { BotKeyboard, Chat, User, html, type Message } from '@mtcute/node'
 import {
   evaluateMessage, tallyVotes, extractBioSignals, isEnforcementAction, countsAsDetection,
   shouldAutoLearn, autoLearnSource, voteLearnStatus, conversationLineFor, nsfwProfileHit,
-  classifyUrl,
+  classifyUrl, removesSender, BURST_GREY_FLOOR,
   type ChannelPreview, type EvaluationInput, type ForwardOrigin, type PipelinePorts,
   type UserSnapshot, type Verdict, type VoteBallot
 } from '@lyadmin/core'
@@ -21,7 +21,7 @@ import {
 import {
   MongoStore, MongoSignaturePort, MongoForwardPort, QdrantVectorPort,
   OpenAiModerationPort, OpenRouterLlmPort,
-  PersistentVelocityPort, PersistentSessionPort, MemoryConversationWindow,
+  PersistentVelocityPort, PersistentSessionPort, PersistentBurstPort, MemoryConversationWindow,
   matchExtras, buildWelcomeGreeting, PendingInput,
   groupDocToChatPolicy, presetToThreshold, userDocToHistory, mergeExternalBan,
   type NormalizedExtra, type PendingEntry
@@ -40,6 +40,7 @@ import { formatSignals, log } from './logger.js'
 import { RightsMemory, RIGHTS_ERROR_REGEX } from './rights.js'
 import { LlmHealth } from './llm-health.js'
 import { JOIN_WINDOW_MS, JoinRateTracker } from './join-rate.js'
+import { IncidentTracker, SenderMessageLog, incidentPowerFor, type Incident } from './incident.js'
 
 const config = loadConfig()
 
@@ -47,6 +48,9 @@ const store = new MongoStore()
 // Velocity/session live in Mongo (TTL-expired) so the flood window and
 // abstain accumulation survive restarts and are shared across instances.
 const sessionPort = new PersistentSessionPort(store)
+// A sender's recent judged messages, with what the pipeline made of each — the
+// one input that describes a run rather than a message. See PersistentBurstPort.
+const burstPort = new PersistentBurstPort(store)
 const velocityPort = new PersistentVelocityPort(store)
 const signaturePort = new MongoSignaturePort(store)
 const forwardPort = new MongoForwardPort(store)
@@ -73,6 +77,7 @@ const buildPorts = (): PipelinePorts => {
     signatures: signaturePort,
     velocity: velocityPort,
     session: sessionPort,
+    burst: burstPort,
     forwards: forwardPort
   }
   if (vectorPort) ports.vectors = vectorPort
@@ -159,6 +164,14 @@ const resolveTmePreview = createTmePreviewResolver()
 
 const ports = buildPorts()
 const joinRate = new JoinRateTracker()
+/**
+ * One spammer's run of messages, as one event: see `incident.ts` for the ceiling
+ * that keeps it safe. Memory-only on purpose — an incident creates no judgement,
+ * so a restart costs nothing but the saving.
+ */
+const incidents = new IncidentTracker()
+/** Which of a removed sender's earlier messages go with them. */
+const senderLog = new SenderMessageLog()
 
 /** Verdicts kept for the [Why?] button (memory, bounded). */
 const recentVerdicts = new Map<string, Verdict>()
@@ -626,12 +639,31 @@ const restoreFalsePositive = async (params: {
   source: 'admin' | 'community_vote'
 }): Promise<void> => {
   const verdict = await recallVerdict(params.chatId, params.messageId)
+  /**
+   * An incident must not outlive the verdict that opened it: without this it
+   * would go on deleting the messages of somebody the chat has just vouched for,
+   * unread, for the rest of its ten minutes.
+   *
+   * Its count is also the only honest answer to "what did this mistake cost".
+   * Lifting a ban and giving standing back are both reversible; the deletions are
+   * not, and a correction that cannot say how many messages it could not restore
+   * is a correction nobody can price. Reported only when the incident is the one
+   * this message opened — a live incident from a LATER verdict is a different
+   * event and its count is not this one's.
+   */
+  const incident = incidents.live(params.chatId, params.userId)
+  const removedCount = incident?.triggerMessageId === params.messageId
+    ? incident.removedCount
+    : undefined
+  incidents.close(params.chatId, params.userId)
+  senderLog.forget(params.chatId, params.userId)
   await store.recordOverride({
     chatId: params.chatId,
     messageId: params.messageId,
     userId: params.userId,
     adminId: params.byUserId,
     source: params.source,
+    ...(removedCount !== undefined ? { removedCount } : {}),
     // A label with no recallable verdict keeps no evidence — the decision
     // record expired or the bot restarted. Recorded anyway (somebody did say
     // "not spam"), but it cannot take part in calibration replay.
@@ -1510,6 +1542,108 @@ const handleTop = async (message: Message, chat: Chat, caller: User, kind: 'mess
   }
 }
 
+/**
+ * True only if we KNOW this user is an admin here, from the cache and without a
+ * network call.
+ *
+ * The incident short-circuit runs before any enrichment, and asking Telegram
+ * would spend the very call the short-circuit exists to avoid. A cache miss
+ * reads as "not known to be an admin", which is safe here for a specific
+ * reason: an incident only exists because `applyVerdict` already removed this
+ * sender, and it refuses to touch admins — so the cache was warm and said no
+ * when the incident opened. The window this leaves is a promotion inside the
+ * incident's ten minutes, and a failed delete closes the incident anyway.
+ */
+const knownAdmin = (chatId: number, userId: number): boolean => {
+  const cached = adminCache.get(`${chatId}:${userId}`)
+  return cached !== undefined && cached.expiresMs > Date.now() && cached.isAdmin
+}
+
+/**
+ * Re-render the incident's card in place with the running count.
+ *
+ * Editing rather than posting is the whole point: a run of eight messages used
+ * to leave eight cards, so the chat read our bookkeeping instead of the
+ * conversation. The verdict is recalled rather than stored on the incident —
+ * `recentVerdicts` holds it for exactly this kind of lookup, and after a restart
+ * `pipeline_decisions` answers instead.
+ */
+const refreshIncidentCard = async (
+  chatId: number,
+  userId: number,
+  incident: Incident,
+  userLabel: string,
+  locale: Locale
+): Promise<boolean> => {
+  if (incident.cardMessageId === null) return false
+  const verdict = await recallVerdict(chatId, incident.triggerMessageId)
+  // `compactNotification` speaks only for enforcement actions, and a recalled
+  // verdict that is not one means the card we are holding is not ours.
+  if (!verdict || verdict.action === 'none' || verdict.action === 'observe') return false
+  const view = compactNotification(locale, verdict, {
+    chatId, messageId: incident.triggerMessageId, userId, userLabel
+  }, { botUsername: selfUsername ?? undefined, incidentCount: incident.removedCount })
+  // The count is in the text and rises with every message, so an edit that
+  // "changed nothing" is not a case that arises — a failure here means the card
+  // is gone (its 90-second TTL expired under a run that is allowed ten minutes),
+  // and the caller posts a fresh one rather than leaving the run unannounced.
+  return await gateway.tg.editMessage({
+    chatId, message: incident.cardMessageId,
+    text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons)
+  }).then(() => true).catch(() => false)
+}
+
+/**
+ * A message from a sender we have already removed from this chat.
+ *
+ * Everything the pipeline would do here has been done: the evidence was weighed
+ * once, cleared the bar for taking the chat away from this account, and the
+ * account was removed. What arrives after that is the tail of a flood — messages
+ * already in flight, or a mute that does not stop the client from trying — and
+ * judging each of them again buys nothing but a bill.
+ *
+ * So: no enrichment, no ports, no classifier, no second card and no second
+ * decision record. The one thing that DOES happen is the count, because a
+ * correction has to be able to say how many messages the verdict cost.
+ */
+const silenceUnderIncident = async (params: {
+  chat: Chat
+  senderId: number
+  senderLabel: string
+  messageId: number
+  incident: Incident
+  locale: Locale
+}): Promise<void> => {
+  const { chat, senderId, messageId, incident } = params
+  const deleted = await gateway.tg.deleteMessagesById(chat.id, [messageId])
+    .then(() => true)
+    .catch(() => false)
+  if (!deleted) {
+    // Telegram refusing the delete is the only evidence we get that our standing
+    // in this chat has changed — rights revoked, or the sender back and legitimate.
+    // Closing the incident sends the next message through the full pipeline,
+    // which is the honest default when we no longer know where we stand.
+    incidents.close(chat.id, senderId)
+    log.warn('incident_echo_failed', { chatId: chat.id, userId: senderId, messageId })
+    return
+  }
+  const updated = incidents.addRemoved(chat.id, senderId) ?? incident
+  await store.appendIncidentMessage(chat.id, incident.triggerMessageId, messageId)
+    .catch(() => { /* telemetry must never break moderation */ })
+  // The card, if it is still up. It lives ninety seconds and the run lives ten
+  // minutes, so most of a long flood is announced once and then simply stops
+  // arriving — which is the quiet this whole path exists to produce. The count
+  // keeps rising either way, because a correction still has to be able to say
+  // what the verdict cost.
+  log.info('incident_echo', {
+    chatId: chat.id, chat: chat.title ?? undefined, userId: senderId, user: params.senderLabel,
+    messageId, action: incident.action, reason: incident.reasonCode,
+    // The saving, stated in the log so it can be counted rather than assumed.
+    removed: updated.removedCount, sinceMs: Date.now() - incident.openedAt
+  })
+  await refreshIncidentCard(chat.id, senderId, updated, params.senderLabel, params.locale)
+}
+
 const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void> => {
   const chat = message.chat
   if (!(chat instanceof Chat)) {
@@ -1642,6 +1776,36 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     }
     if (/^\/welcome(@\w+)?(\s|$)/.test(commandText)) {
       await handleWelcomeCommand(message, chat, userSender, commandText.replace(/^\/welcome(@\w+)?\s*/, ''))
+      return
+    }
+  }
+
+  /**
+   * The sender is already out of this chat by a verdict of ours, minutes ago.
+   *
+   * Placed here on purpose: after the commands, because a removed sender has no
+   * commands to give, and BEFORE the hashtag utilities, because somebody we are
+   * mid-way through removing does not get to trigger the chat's extras either.
+   *
+   * The two guards are defence in depth. An incident cannot open for an admin or
+   * a trusted member — `applyVerdict` refuses to act on them, and no application
+   * means no incident — but trust can be GRANTED in the meantime, by an override
+   * or a ham vote, and that must take effect on the next message rather than in
+   * ten minutes.
+   */
+  if (policy.enabled) {
+    const memo = incidents.silencing(chat.id, sender.id)
+    if (memo &&
+        !policy.trustedUserIds.includes(sender.id) &&
+        !knownAdmin(chat.id, sender.id)) {
+      await silenceUnderIncident({
+        chat,
+        senderId: sender.id,
+        senderLabel: sender.displayName,
+        messageId: message.id,
+        incident: memo,
+        locale: resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
+      })
       return
     }
   }
@@ -1952,6 +2116,44 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     gateway.moderationActions
   )
 
+  /**
+   * The rest of the run goes with the sender.
+   *
+   * `applyVerdict` is given one message id, because a verdict is about one
+   * message. Spam does not arrive that way: it arrives as a run, and the verdict
+   * lands on whichever message finally crossed the bar — so banning the sender of
+   * the sixth advert used to leave the first five in the chat for good.
+   *
+   * Only on `removesSender`, and only for messages the pipeline had already
+   * declined to call clean (`BURST_GREY_FLOOR`, the same 0.35 that opens the
+   * classifier's grey band). Both halves matter. Removing the person is the one
+   * action that has passed `SENDER_REMOVAL_MIN_EVIDENCE`, and deleting is the one
+   * thing an override cannot undo — so the blast radius of a false positive is
+   * decided by this bar and nothing else. An ordinary exchange scores around 0.1,
+   * which is what keeps the member who was mid-argument out of this.
+   */
+  let retroPurged = 0
+  if (result.applied && removesSender(verdict.action)) {
+    const targets = senderLog.purgeTargets(chat.id, sender.id, {
+      except: message.id, minPSpam: BURST_GREY_FLOOR
+    })
+    if (targets.length > 0) {
+      const purged = await gateway.tg.deleteMessagesById(chat.id, targets)
+        .then(() => true)
+        .catch(() => false)
+      if (purged) retroPurged = targets.length
+      // Either way the run is spent: a failed sweep must not be retried on the
+      // next verdict against the same person, and a successful one has nothing
+      // left to sweep.
+      senderLog.forget(chat.id, sender.id)
+      log.info('retro_purge', {
+        chatId: chat.id, chat: chat.title ?? undefined, userId: sender.id,
+        user: sender.displayName, messages: targets.length, applied: purged,
+        action: verdict.action, minPSpam: BURST_GREY_FLOOR
+      })
+    }
+  }
+
   // Operational log: one line per actioned message (and per skipped action),
   // so prod moderation is fully auditable from the container logs. Carries the
   // human context (chat title, sender name/@username, message text) so a line
@@ -2033,6 +2235,9 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
         ? (verdict.meta['judgedText'] as string).replace(/\n/g, ' ⏎ ').slice(0, 300)
         : undefined,
       needsVote: verdict.needsVote || undefined,
+      // Messages of the same run taken down with the sender. Absent when there
+      // were none, so a line that carries it is a line worth reading twice.
+      retroPurged: retroPurged || undefined,
       errors: result.errors.length > 0 ? result.errors : undefined,
       latencyMs: Date.now() - started
     })
@@ -2087,6 +2292,28 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   if (!removed) {
     const line = conversationLineFor(normalized, { id: sender.id, isChannel: channelSender !== null })
     if (line) conversationWindow.record(chat.id, line)
+  }
+
+  /**
+   * The sender's own run — recorded with what we made of this message, and
+   * governed by the OPPOSITE rule to the conversation window above.
+   *
+   * That window is the chat's context and spam must not poison it. This one is
+   * the sender's conduct, and their spam is precisely the thing worth
+   * remembering: it is what tells the next evaluation that the run has been
+   * scoring badly, and what decides which messages go if the sender does.
+   *
+   * Not for an established regular: the pipeline waves them through before it
+   * reads any window, so recording theirs would be a write nothing ever reads.
+   * Not for an edit either — the same message would be counted twice.
+   */
+  if (!isEdit && verdict.meta['established_regular'] !== true) {
+    senderLog.note(chat.id, sender.id, message.id, verdict.pSpam)
+    void burstPort.append(chat.id, sender.id, {
+      text: normalized.text,
+      pSpam: verdict.pSpam,
+      at: Date.now()
+    })
   }
 
   // ── record + notify ─────────────────────────────────────────────────
@@ -2147,6 +2374,56 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     if (normalized.forward) rememberForward(chat.id, message.id, normalized.forward)
     const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
 
+    const power = incidentPowerFor(verdict, result.applied)
+    const live = incidents.live(chat.id, sender.id)
+    const askingChat = verdict.needsVote && policy.votingEnabled
+
+    /**
+     * One notice per run, not per message — with one exception, which is the
+     * whole shape of this block: **a question is never suppressed, a statement
+     * is.**
+     *
+     * A live incident means we told this chat about this sender within the last
+     * ten minutes, so the second and eighth message of the run belong to that
+     * notice rather than to notices of their own. But an unsure verdict is not a
+     * notice, it is the chat's chance to correct us — the mechanism by which
+     * nearly every false positive in this system has been caught. Silencing it
+     * because a card is already up would quietly trade away the correction
+     * channel to save a line. What IS suppressed is a SECOND ballot on a
+     * question already open: that is how one settled text came to be voted on
+     * seven times (2026-08-02), and every roll of it could enforce.
+     *
+     * Note what none of this skips. The message was judged in full — the standing
+     * debit, the learning writes and its own decision record all happened above,
+     * exactly as before. A run shares a notice, never a verdict.
+     */
+    if (live) {
+      // No `appendIncidentMessage` here, deliberately: this message was judged in
+      // full and has a decision record of its own a few lines above. That field
+      // counts the messages with NO record — the ones the memo removed unread —
+      // and inflating it with messages that are already rows would make every
+      // count over the collection double what happened.
+      const updated = incidents.addRemoved(chat.id, sender.id) ?? live
+      log.info('incident_joined', {
+        chatId: chat.id, userId: sender.id, messageId: message.id, ...logContext,
+        trigger: live.triggerMessageId, removed: updated.removedCount,
+        notice: askingChat ? 'vote' : 'card'
+      })
+      if (askingChat) {
+        // The ballot's own text is left alone: it quotes the message that opened
+        // the question and shows the tally, and the answer applies to the sender
+        // either way (`enforceVoteSpam`).
+        if (live.hasOpenVote) return
+      } else if (await refreshIncidentCard(
+        chat.id, sender.id, updated, sender.displayName, locale)) {
+        return
+      }
+      // Falling through means one of two things: the chat has not been asked yet,
+      // or the card expired (90 seconds) while the run continued (ten minutes).
+      // An enforcement with no notice at all is invisible moderation, so a fresh
+      // notice goes up and the incident adopts it.
+    }
+
     // Grey-zone verdicts ask the community: the vote prompt (with the quoted
     // text) replaces the compact line. An admin's 👌 resolves it instantly,
     // which doubles as the override path for voted decisions.
@@ -2165,6 +2442,14 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
           replyMarkup: toKeyboard(view.buttons)
         }).catch(() => null)
         if (prompt) await store.setVotePrompt(chat.id, message.id, prompt.id).catch(() => { /* ok */ })
+        if (live) incidents.markVoteOpen(chat.id, sender.id)
+        else if (power) {
+          incidents.open(chat.id, sender.id, {
+            power, action: verdict.action, reasonCode: verdict.reasonCode,
+            triggerMessageId: message.id, cardMessageId: null,
+            hasOpenVote: true, removedCount: 1 + retroPurged
+          })
+        }
         return
       }
     }
@@ -2176,6 +2461,19 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       replyMarkup: toKeyboard(view.buttons)
     }).catch(() => null)
     if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_COMPACT_MS, `mod_event:${verdict.action}`)
+    if (live) {
+      // The run continues under its own count; only the notice is new.
+      if (sent) incidents.attachCard(chat.id, sender.id, sent.id)
+    } else if (power) {
+      // `removedCount` starts at the trigger plus whatever the sweep took: the
+      // number exists so a correction can say how much this verdict cost, and
+      // the swept messages cost exactly as much as the one that triggered it.
+      incidents.open(chat.id, sender.id, {
+        power, action: verdict.action, reasonCode: verdict.reasonCode,
+        triggerMessageId: message.id, cardMessageId: sent?.id ?? null,
+        removedCount: 1 + retroPurged
+      })
+    }
   }
 }
 

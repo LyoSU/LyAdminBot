@@ -15,7 +15,10 @@
  * them. Both ports degrade safely: a backend error returns null (velocity)
  * or a single-message window (session) and never throws into moderation.
  */
-import type { EvaluationInput, SessionPort, SessionWindow, VelocityPort, VelocityResult } from '@lyadmin/core'
+import type {
+  BurstEntry, BurstPort, EvaluationInput, SessionPort, SessionWindow, VelocityPort, VelocityResult
+} from '@lyadmin/core'
+import { truncate } from '@lyadmin/core'
 import { normalizeHeavy, sha256 } from './hashing.js'
 import type { VelocityOptions, SessionOptions } from './index.js'
 
@@ -30,6 +33,21 @@ import type { VelocityOptions, SessionOptions } from './index.js'
  */
 export const VELOCITY_WINDOW_MS = 6 * 60 * 60 * 1000
 export const SESSION_WINDOW_MS = 30 * 60 * 1000
+/**
+ * How long a sender's run of messages stays one run: ten minutes from its FIRST
+ * message, not from its last.
+ *
+ * Expiring from the start is what makes the window a window rather than a
+ * rolling record of everything a chatty member ever said — somebody talking for
+ * half an hour is three separate runs here, which is the honest reading. It is
+ * also how the session window already behaves, and the TTL index is on the same
+ * field for the same reason.
+ *
+ * Shorter than the velocity window (six hours) on purpose: velocity asks whether
+ * a TEXT is going round, which unfolds over hours, while this asks whether a
+ * PERSON is mid-burst, which does not.
+ */
+export const BURST_WINDOW_MS = 10 * 60 * 1000
 
 export interface VelocityBackend {
   /** Record one sighting of `hash` and return the windowed aggregates. */
@@ -41,6 +59,13 @@ export interface SessionBackend {
   /** Append `text` (if any) to the window, trim to maxMessages, return it. */
   appendSession(key: string, text: string, maxMessages: number): Promise<string[]>
   resetSession(key: string): Promise<void>
+}
+
+export interface BurstBackend {
+  /** Append one judged message, keeping at most `maxEntries` newest. */
+  appendBurst(key: string, entry: BurstEntry, maxEntries: number): Promise<void>
+  readBurst(key: string): Promise<BurstEntry[]>
+  resetBurst(key: string): Promise<void>
 }
 
 /**
@@ -126,5 +151,63 @@ export class PersistentSessionPort implements SessionPort {
 
   async reset(chatId: number, userId: number): Promise<void> {
     await this.backend.resetSession(`${chatId}:${userId}`).catch(() => { /* best-effort */ })
+  }
+}
+
+/** At most this many messages of one run are remembered. */
+const BURST_MAX_ENTRIES = 10
+/**
+ * Per-message text kept in the window. Enough for a solicitation to read as one
+ * in the blob, and small enough that ten of them are a document nobody notices —
+ * the store has hit its size quota once already (2026-07-06).
+ */
+const BURST_MAX_TEXT = 500
+
+/**
+ * The sender's recent messages in one chat, with what the pipeline made of each.
+ *
+ * In Mongo rather than in process memory, unlike the conversation window: these
+ * entries feed SIGNALS and can open a classifier call, so a verdict has to be
+ * reproducible from stored state — `tools/replay` and every calibration argument
+ * depend on that. The incident memo in the app layer is the opposite case (it
+ * creates no judgement) and stays in memory deliberately.
+ */
+export class PersistentBurstPort implements BurstPort {
+  constructor(private readonly backend: BurstBackend) {}
+
+  private key(chatId: number, userId: number): string { return `${chatId}:${userId}` }
+
+  async read(chatId: number, userId: number): Promise<BurstEntry[]> {
+    try {
+      const entries = await this.backend.readBurst(this.key(chatId, userId))
+      // The TTL index bounds the DOCUMENT, and Mongo sweeps it on its own
+      // schedule — up to a minute late, and later still on a shared tier. The
+      // window is a claim about the last ten minutes, so it is enforced here too.
+      const floor = Date.now() - BURST_WINDOW_MS
+      return entries.filter((e) => e.at >= floor)
+    } catch {
+      // A window we cannot read is a window with nothing in it: the signals
+      // simply do not fire. Never an exception into moderation.
+      return []
+    }
+  }
+
+  async append(chatId: number, userId: number, entry: Omit<BurstEntry, 'template'>): Promise<void> {
+    // `truncate`, not `slice`: cutting between the halves of a surrogate pair
+    // yields a string Mongo stores as U+FFFD and the LLM request cannot encode
+    // at all (2026-08-07). The template is computed from the FULL text, since it
+    // has to match what velocity counts.
+    const stored: BurstEntry = {
+      text: truncate(entry.text, BURST_MAX_TEXT),
+      template: normalizeHeavy(entry.text),
+      pSpam: entry.pSpam,
+      at: entry.at
+    }
+    await this.backend.appendBurst(this.key(chatId, userId), stored, BURST_MAX_ENTRIES)
+      .catch(() => { /* the window is an optimisation, never a precondition */ })
+  }
+
+  async reset(chatId: number, userId: number): Promise<void> {
+    await this.backend.resetBurst(this.key(chatId, userId)).catch(() => { /* best-effort */ })
   }
 }

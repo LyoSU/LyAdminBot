@@ -176,7 +176,9 @@ export const en: Locale = {
       vector_similar_spam: 'semantically close to spam',
       velocity_repeats: 'same text posted repeatedly',
       velocity_wave: 'same text from several accounts',
-      bot_mention: 'mentions a bot'
+      bot_mention: 'mentions a bot',
+      sender_burst: 'a run of messages from one account',
+      burst_grey_repeat: 'a run with several already-suspicious messages'
     },
     messageTitle: 'The message:',
     decidedBy: {
@@ -190,6 +192,7 @@ export const en: Locale = {
       llm: 'AI analysis',
       llm_cached: 'AI analysis (cached)',
       session: 'message series analysis',
+      burst: 'sender run analysis',
       score: 'signal score',
       abstain: 'abstained',
       error: 'error'

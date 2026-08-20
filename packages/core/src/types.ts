@@ -319,6 +319,7 @@ export type DecidedBy =
   | 'llm'
   | 'llm_cached'
   | 'session'         // session scoring of the accumulated buffer
+  | 'burst'           // classification of a sender's run of recent messages
   | 'score'           // weighted signal score without LLM involvement
   | 'abstain'
   | 'error'

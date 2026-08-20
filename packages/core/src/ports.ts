@@ -137,6 +137,50 @@ export interface SessionPort {
   reset(chatId: number, userId: number): Promise<void>
 }
 
+/**
+ * One message this sender already had judged in this chat, recently.
+ *
+ * Distinct from `SessionWindow`, and deliberately a second window rather than a
+ * generalisation of it: the session window holds only the messages NOBODY could
+ * classify and is emptied the moment the pile is judged, because "read five of
+ * them together" means five unclassifiable ones. This window holds every
+ * message that went through the pipeline, with what the pipeline made of it, and
+ * answers a different question — is this sender in the middle of a burst.
+ */
+export interface BurstEntry {
+  /** Message text as sent, truncated by the port. Empty for media-only. */
+  text: string
+  /**
+   * The heavy-normalised template of `text` — the same reduction `velocity`
+   * counts repeats by, computed by the port because that normaliser is the
+   * signature vocabulary and must have exactly one owner.
+   *
+   * Why it travels with the entry instead of being derived here: distinctness
+   * is the whole guard against double-counting. `velocity_repeats` (1.5) already
+   * pays for the same text arriving twice, so a burst signal that counted those
+   * copies as separate messages would charge one fact twice — the mistake the
+   * newness group cap exists to undo. A weaker normaliser in this package would
+   * silently reintroduce it.
+   */
+  template: string
+  /** What the pipeline concluded about it, 0..1. */
+  pSpam: number
+  at: number
+}
+
+export interface BurstPort {
+  /**
+   * The sender's PRECEDING messages in this chat, oldest first — never
+   * including the one being judged, which has no `pSpam` yet.
+   */
+  read(chatId: number, userId: number): Promise<BurstEntry[]>
+  /** Record a judged message. Called after the verdict, by the app layer. */
+  append(chatId: number, userId: number, entry: Omit<BurstEntry, 'template'>): Promise<void>
+  /** Discard the window — same discipline as `SessionPort.reset`: a judged
+   *  window is spent, or the next message re-rolls the same blob. */
+  reset(chatId: number, userId: number): Promise<void>
+}
+
 /** Long-term reputation of a forward origin (v1 forwardblacklists). */
 export type ForwardReputation = 'clean' | 'suspicious' | 'blacklisted'
 
@@ -153,5 +197,6 @@ export interface PipelinePorts {
   moderation?: ModerationPort
   llm?: LlmPort
   session?: SessionPort
+  burst?: BurstPort
   forwards?: ForwardPort
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   ChatPolicy, Enrichment, EvaluationInput, NormalizedChat, NormalizedMessage, UserSnapshot
 } from './types.js'
-import type { ModerationResult, PipelinePorts, SessionPort } from './ports.js'
+import type { BurstEntry, BurstPort, ModerationResult, PipelinePorts, SessionPort } from './ports.js'
 import { evaluateMessage } from './pipeline.js'
 import { isEnforcementAction, removesSender } from './policy.js'
 import { contentEvidence, mayRemoveSender } from './score.js'
@@ -2071,5 +2071,138 @@ describe('evaluateMessage — an external listing is not evidence about the mess
     expect(v.decidedBy).toBe('deterministic')
     expect(v.ruleId).toBe('external_ban_new')
     expect(v.action).toBe('ban')
+  })
+})
+
+describe('evaluateMessage — a sender mid-burst', () => {
+  const burstEntry = (over: Partial<BurstEntry> = {}): BurstEntry => ({
+    text: 'є вакансія для всіх бажаючих', template: 'є вакансія для всіх бажаючих',
+    pSpam: 0.5, at: Date.now(), ...over
+  })
+
+  const fakeBurst = (entries: BurstEntry[]): { port: BurstPort; resets: () => number } => {
+    let resets = 0
+    return {
+      port: {
+        read: async () => entries,
+        append: async () => { /* the app layer writes; the pipeline only reads */ },
+        reset: async () => { resets += 1 }
+      },
+      resets: () => resets
+    }
+  }
+
+  it('a run of distinct messages raises the signals and cannot enforce alone', async () => {
+    // `shape`, not `evidence`, on purpose: velocity was the repetition-as-verdict
+    // stage and the 2026-08-07 audit priced it at 16% false positives, because
+    // cross-posting is something members do. A cadence opens the gate to the
+    // stage that reads the words; it does not answer in its place.
+    const burst = fakeBurst([
+      burstEntry({ template: 'перше', pSpam: 0.5 }),
+      burstEntry({ template: 'друге', pSpam: 0.6 }),
+      burstEntry({ template: 'третє', pSpam: 0.1 })
+    ])
+    const v = await evaluateMessage(makeInput(), { burst: burst.port })
+    expect(v.signals.map((sig) => sig.name)).toEqual(
+      expect.arrayContaining(['sender_burst', 'burst_grey_repeat']))
+    expect(isEnforcementAction(v.action)).toBe(false)
+  })
+
+  it('reads the run together when nothing could be said about the message', async () => {
+    // The shape nothing else in the pipeline can see: a pitch with no link, a
+    // photo, and "write to me privately" are each unremarkable on their own, and
+    // every stage judges them one at a time.
+    let classified: string | null = null
+    const burst = fakeBurst([
+      burstEntry({ text: 'є робота для всіх', template: 'є робота', pSpam: 0.5 }),
+      burstEntry({ text: 'умови дуже прості', template: 'умови прості', pSpam: 0.2 })
+    ])
+    const v = await evaluateMessage(makeInput({ msg: { text: 'пиши мені в особисті' } }), {
+      burst: burst.port,
+      llm: {
+        classify: async (input) => {
+          classified = input.message.text
+          return { pSpam: 0.93, reasonCode: 'job_scam', evidence: null, cached: false }
+        }
+      }
+    })
+    expect(v.decidedBy).toBe('burst')
+    expect(classified).toBe('є робота для всіх\nумови дуже прості\nпиши мені в особисті')
+    expect(v.meta['judgedCount']).toBe(3)
+    // A judged window is spent — the same rule as the session pile. Without it
+    // every later message re-rolls substantially the same blob, and any one roll
+    // can enforce.
+    expect(burst.resets()).toBe(1)
+  })
+
+  it('may take the message down and never the person', async () => {
+    // The most cautious stage in the file, deliberately. A blob has no single
+    // subject and by construction no line that meant anything alone, so a new
+    // stage does not get to be the one that removes people on a cadence.
+    const burst = fakeBurst([
+      burstEntry({ text: 'є робота для всіх', template: 'є робота', pSpam: 0.5 }),
+      burstEntry({ text: 'умови дуже прості', template: 'умови прості', pSpam: 0.2 })
+    ])
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'пиши мені в особисті' }, user: newcomer
+    }), {
+      burst: burst.port,
+      llm: { classify: async () => ({ pSpam: 0.99, reasonCode: 'job_scam', evidence: null, cached: false }) }
+    })
+    expect(removesSender(v.action)).toBe(false)
+    expect(mayRemoveSender(v.signals)).toBe(false)
+  })
+
+  it('does not ask about the run when the message itself was decided', async () => {
+    // One classifier call per message, still. The blob is the last resort, not a
+    // second opinion on a verdict that already exists.
+    let calls = 0
+    const burst = fakeBurst([
+      burstEntry({ template: 'перше' }), burstEntry({ template: 'друге' })
+    ])
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'заходь сюди t.me/+abcdefghijk, там усе розкажуть', urls: [
+        { visible: 't.me/+abcdefghijk', target: 'https://t.me/+abcdefghijk', hidden: false }
+      ] },
+      user: newcomer
+    }), {
+      burst: burst.port,
+      llm: {
+        classify: async () => {
+          calls += 1
+          return { pSpam: 0.96, reasonCode: 'promo_link', evidence: null, cached: false }
+        }
+      }
+    })
+    // A private invite from a newcomer is a deterministic rule, so not even the
+    // classifier is asked — which makes the point twice over: the blob is a last
+    // resort, never a second opinion on a verdict that already exists.
+    expect(isEnforcementAction(v.action)).toBe(true)
+    expect(v.decidedBy).not.toBe('burst')
+    expect(calls).toBe(0)
+    expect(burst.resets()).toBe(0)
+  })
+
+  it('a quiet sender pays for nothing', async () => {
+    let calls = 0
+    const burst = fakeBurst([])
+    const v = await evaluateMessage(makeInput(), {
+      burst: burst.port,
+      llm: { classify: async () => { calls += 1; return null } }
+    })
+    expect(v.signals.map((sig) => sig.name)).not.toContain('sender_burst')
+    expect(calls).toBe(0)
+  })
+
+  it('survives a window it cannot read', async () => {
+    const v = await evaluateMessage(makeInput(), {
+      burst: {
+        read: async () => { throw new Error('mongo down') },
+        append: async () => { /* noop */ },
+        reset: async () => { /* noop */ }
+      }
+    })
+    expect(v.signals.map((sig) => sig.name)).not.toContain('sender_burst')
+    expect(v.meta['portError_burst']).toBe(true)
   })
 })

@@ -176,7 +176,9 @@ export const by: Locale = {
       vector_similar_spam: 'семантычна блізка да спаму',
       velocity_repeats: 'той самы тэкст паўтараецца',
       velocity_wave: 'той самы тэкст з некалькіх акаўнтаў',
-      bot_mention: 'згадка бота'
+      bot_mention: 'згадка бота',
+      sender_burst: 'серыя паведамленняў ад аднаго акаўнта',
+      burst_grey_repeat: 'серыя, дзе некалькі паведамленняў ужо выглядалі падазрона'
     },
     messageTitle: 'Паведамленне:',
     decidedBy: {
@@ -190,6 +192,7 @@ export const by: Locale = {
       llm: 'ШІ-аналіз',
       llm_cached: 'ШІ-аналіз (кэш)',
       session: 'аналіз серыі паведамленняў',
+      burst: 'аналіз серыі ад аднаго акаўнта',
       score: 'сума сігналаў',
       abstain: 'устрыманне',
       error: 'памылка'

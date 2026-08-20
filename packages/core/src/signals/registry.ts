@@ -50,6 +50,7 @@ export type SignalKind = 'evidence' | 'shape' | 'trust'
 
 export type SignalGroupName =
   | 'newness' | 'profile_promo' | 'profile_nsfw' | 'external_ban_source' | 'promo_urls'
+  | 'burst'
 
 export interface SignalSpec {
   /**
@@ -169,7 +170,15 @@ export const SIGNAL_GROUPS: Record<SignalGroupName, { cap: number }> = {
    * in here with the shape classes it comments on, or one URL scores 1.8 + 1.5
    * and clears the sender-removal bar by itself.
    */
-  promo_urls: { cap: 3.0 }
+  promo_urls: { cap: 3.0 },
+  /**
+   * Two readings of one behaviour: that the sender is mid-burst, and that the
+   * burst has been scoring badly. The second cannot happen without the first,
+   * so the ceiling sits at the heavier member rather than at twice it — the
+   * `profile_nsfw` argument (an avatar and a story are not two observations of
+   * one person posting explicit imagery) applied to conduct.
+   */
+  burst: { cap: 1.2 }
 }
 
 export const SIGNALS = {
@@ -288,6 +297,36 @@ export const SIGNALS = {
    * chat, and only the first is the sender's doing.
    */
   velocity_wave: { weight: 1.2, kind: 'evidence' },
+
+  // ──────────────── conduct across messages (shape) ────────────────
+  // Both are about the sender's PATTERN, not about this sentence, which is why
+  // neither is `evidence` however clear the pattern looks. `velocity` was the
+  // pipeline's one repetition-as-verdict stage and the 2026-08-07 audit priced
+  // it: 10 of 52 known false positives, 16% of its own verdicts, because
+  // cross-posting is something members do. Repetition opens the gate to the
+  // stage that can READ the messages; it does not answer in its place.
+
+  /**
+   * Several DIFFERENT messages from this account inside the window.
+   *
+   * Distinctness is measured on the heavy template, so copies of one text are
+   * one message here — `velocity_repeats` (1.5) already charges for those, and
+   * counting them twice is the double-billing the group caps exist to stop.
+   *
+   * Light on its own by design: three messages in a few minutes is what an
+   * argument looks like, and the whole value of the signal is opening the
+   * classifier's gate for the blob (see `burstBlob`), not the weight.
+   */
+  sender_burst: { weight: 0.8, kind: 'shape', group: 'burst' },
+  /**
+   * Two or more of those messages already scored above the grey floor.
+   *
+   * Heavier than the bare burst because it is no longer only a cadence: the
+   * pipeline looked at each of them separately and each time came back unsure
+   * rather than clean. A sender who keeps landing at 0.4 is a different fact
+   * from a sender who is merely talkative.
+   */
+  burst_grey_repeat: { weight: 1.0, kind: 'shape', group: 'burst' },
 
   /**
    * A link in THIS message leads to a channel that is itself an advert.

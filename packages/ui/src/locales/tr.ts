@@ -176,7 +176,9 @@ export const tr: Locale = {
       vector_similar_spam: 'anlamca spama yakın',
       velocity_repeats: 'aynı metin tekrar tekrar gönderildi',
       velocity_wave: 'aynı metin birkaç hesaptan',
-      bot_mention: 'bot bahsi'
+      bot_mention: 'bot bahsi',
+      sender_burst: 'tek hesaptan gelen mesaj dizisi',
+      burst_grey_repeat: 'birkaç mesajı zaten şüpheli görünen dizi'
     },
     messageTitle: 'Mesaj:',
     decidedBy: {
@@ -190,6 +192,7 @@ export const tr: Locale = {
       llm: 'yapay zeka analizi',
       llm_cached: 'yapay zeka analizi (önbellekten)',
       session: 'mesaj serisi analizi',
+      burst: 'tek gönderenin dizisinin analizi',
       score: 'sinyal puanı',
       abstain: 'çekimser kalındı',
       error: 'hata'

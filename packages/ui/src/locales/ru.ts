@@ -176,7 +176,9 @@ export const ru: Locale = {
       vector_similar_spam: 'семантически близко к спаму',
       velocity_repeats: 'тот же текст повторяется',
       velocity_wave: 'тот же текст с нескольких аккаунтов',
-      bot_mention: 'упоминание бота'
+      bot_mention: 'упоминание бота',
+      sender_burst: 'серия сообщений от одного аккаунта',
+      burst_grey_repeat: 'серия, где несколько сообщений уже выглядели подозрительно'
     },
     messageTitle: 'Сообщение:',
     decidedBy: {
@@ -190,6 +192,7 @@ export const ru: Locale = {
       llm: 'ИИ-анализ',
       llm_cached: 'ИИ-анализ (кеш)',
       session: 'анализ серии сообщений',
+      burst: 'анализ серии от одного аккаунта',
       score: 'сумма сигналов',
       abstain: 'воздержался',
       error: 'ошибка'

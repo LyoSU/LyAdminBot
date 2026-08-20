@@ -15,7 +15,7 @@
  * the outcome MORE cautious (observe), never clean.
  */
 import type { EvaluationInput, Signal, Verdict, VerdictAction, DecidedBy, UserSnapshot, ChatPolicy } from './types.js'
-import type { LlmVerdict, PipelinePorts } from './ports.js'
+import type { BurstEntry, LlmVerdict, PipelinePorts } from './ports.js'
 import { extractMessageSignals } from './signals/message.js'
 import { extractUserSignals } from './signals/user.js'
 import { extractBioSignals } from './signals/bio.js'
@@ -29,11 +29,21 @@ import { PERMANENT_BAN_SIGNALS, isTrustSignal } from './signals/registry.js'
 import {
   decideAction, isEnforcementAction, removesSender, IMITABLE_REASON_CODES, type PolicyDecision
 } from './policy.js'
+import { burstBlob, burstSignals } from './signals/burst.js'
 import { shouldAbstain } from './text/abstain.js'
+import { truncate } from './text/normalize.js'
 import { isForeignScript } from './text/script.js'
 import { isDistinctive } from './learning.js'
 
-const LLM_GREY_LOW = 0.35
+/**
+ * Grey band: below the floor arithmetic decides alone, above the ceiling it may
+ * decide alone only on evidence it earned.
+ *
+ * The floor is exported because it is also the answer to "did the pipeline think
+ * this was clean" — `BURST_GREY_FLOOR` mirrors it for the burst window and the
+ * app layer's retro-purge, and a test pins the two together.
+ */
+export const LLM_GREY_LOW = 0.35
 const LLM_GREY_HIGH = 0.75
 const SESSION_EVAL_MIN_MESSAGES = 5
 /**
@@ -345,11 +355,11 @@ export const evaluateMessage = async (
   }
 
   /**
-   * Hold a SESSION verdict to `observe` + a chat vote when the signals vouch for
-   * the sender.
+   * Hold a WINDOW verdict — the session pile or the burst blob — to `observe`
+   * plus a chat vote when the signals vouch for the sender.
    *
-   * Every other stage passes an evidence bar before it may act; this one, by
-   * construction, cannot (see `judgeAccumulated`) — it hands the model's pSpam
+   * Every other stage passes an evidence bar before it may act; these two, by
+   * construction, cannot (see `judgeAccumulated`) — they hand the model's pSpam
    * straight to `policyFor`, so `established_user` (-1.5), `trusted_reputation`
    * (-2.5) and `is_reply` (-1) were computed, logged, and then not consulted.
    *
@@ -376,7 +386,7 @@ export const evaluateMessage = async (
    * `established_user` in the first place (`extractUserSignals`), so a
    * sold long-time account keeps no standing to spend here.
    */
-  const capVouchedSession = (verdict: Verdict): Verdict => {
+  const capVouchedWindow = (verdict: Verdict): Verdict => {
     if (!isEnforcementAction(verdict.action)) return verdict
     if (!hasSenderStanding(verdict.signals)) return verdict
     meta['cappedFrom'] = verdict.action
@@ -510,6 +520,29 @@ export const evaluateMessage = async (
     return verdict
   }
 
+  // ── 3b. the sender's recent run ─────────────────────────────────────
+
+  /**
+   * The sender's preceding messages in this chat — the only input in the pipeline
+   * that describes a cadence rather than a message.
+   *
+   * Read BEFORE the abstain gate, which costs one indexed lookup on a path that
+   * used to reach the ports without any. That is deliberate and it is the whole
+   * point: the message that finishes a split-up pitch is "write to me privately",
+   * which is exactly the shape the abstain gate calls too short to judge. Reading
+   * the window after that gate would have left the one stage that can see the
+   * pattern blind to the messages the pattern is made of.
+   *
+   * Still free where it must be. The established-regular exempt returns above
+   * this line, so a known regular pays nothing; and the gate below already pays
+   * for a session-window round-trip on every message it buffers, so this is one
+   * more read on a path that was never port-free.
+   */
+  const burstWindow = ports.burst
+    ? (await safe('burst', () => ports.burst!.read(input.message.chatId, input.user.id))) ?? []
+    : []
+  signals.push(...burstSignals(burstWindow))
+
   // ── 4. abstain gate + session window ────────────────────────────────
 
   /**
@@ -579,7 +612,7 @@ export const evaluateMessage = async (
          * a translation of this guard. What the band should be is a calibration
          * decision; see `docs/calibration.md`.
          */
-        return capVouchedSession(capImitableAct(finalize(
+        return capVouchedWindow(capImitableAct(finalize(
           {
             pSpam: llmVerdict.pSpam,
             decidedBy: 'session',
@@ -594,6 +627,60 @@ export const evaluateMessage = async (
     return null
   }
 
+  /**
+   * Ask the classifier about the sender's whole run of recent messages.
+   *
+   * The case for the call is not that this message is suspicious — nothing here
+   * said it was — but that it is the third in a few minutes and the ones before
+   * it kept coming back unsure. Spam split across messages is invisible to every
+   * other stage by construction: a pitch with no link, a photo, and "write to me
+   * privately" are each unremarkable, and the pipeline judges each of them
+   * alone.
+   *
+   * Deliberately the most cautious stage in the file. A blob is weak input — no
+   * single subject, no line that meant anything by itself — so on top of the
+   * shared window ceiling it may take the MESSAGE down and never the person,
+   * unless the message evidence earns a removal on the bar every other stage
+   * answers to. A new stage does not get to be the one that removes people on a
+   * cadence; if calibration later says it can be trusted with more, that is a
+   * measured change and this is the line to change.
+   */
+  const judgeBurst = async (entries: readonly BurstEntry[]): Promise<Verdict | null> => {
+    if (!ports.burst || !ports.llm) return null
+    const blob = burstBlob(entries, text)
+    if (!blob) return null
+    const llmVerdict = await safe('llm_burst', () => ports.llm!.classify({
+      ...input,
+      message: { ...input.message, text: blob.text }
+    }))
+    if (!llmVerdict) return null
+    // A judged window is spent — the same rule as the session pile, for the same
+    // reason: without it the next message re-rolls substantially the same blob,
+    // and any one roll enforces.
+    await ports.burst.reset(input.message.chatId, input.user.id)
+      .catch(() => { /* best-effort: worst case is one extra evaluation */ })
+    // The caller logs the triggering message; the verdict is about the run.
+    // Truncated through `truncate`, not `slice`: a cut through a surrogate pair
+    // is stored as U+FFFD and the record is then subtly wrong forever.
+    meta['judgedText'] = truncate(blob.text, 1000)
+    meta['judgedCount'] = blob.count
+    if (llmVerdict.model !== undefined) meta['llmModel'] = llmVerdict.model
+    const judged = capVouchedWindow(capImitableAct(finalize(
+      {
+        pSpam: llmVerdict.pSpam,
+        decidedBy: 'burst',
+        ruleId: null,
+        reasonCode: llmVerdict.reasonCode,
+        reasonEvidence: llmVerdict.evidence
+      },
+      signals
+    )))
+    if (removesSender(judged.action) && !mayRemoveSender(signals)) {
+      return capUnearnedRemoval(judged)
+    }
+    return judged
+  }
+
   // A message in an unfamiliar script is never "too little to judge": whatever
   // it says it says in full, and unlike a bare "@user" it is trivially readable
   // — by the LLM, if by nothing else here.
@@ -603,6 +690,19 @@ export const evaluateMessage = async (
     // shortcut below must not reach in here.
     const judged = await judgeAccumulated(SESSION_EVAL_MIN_MESSAGES)
     if (judged) return judged
+
+    /**
+     * Too little to judge ON ITS OWN is not too little to judge as the third
+     * message of a run. "Write to me privately" carries nothing; a pitch, a
+     * photo and then "write to me privately" carries the whole thing.
+     *
+     * Rate-limited by construction rather than by a counter: `burstBlob` will not
+     * ask unless one of the preceding messages already scored above the grey
+     * floor, and an abstained message scores zero — so a sender whose run is
+     * nothing but small talk never reaches the classifier here.
+     */
+    const burstJudged = await judgeBurst(burstWindow)
+    if (burstJudged) return burstJudged
 
     return finalize(
       { pSpam: 0, decidedBy: 'abstain', ruleId: null, reasonCode: 'low_information', reasonEvidence: null },
@@ -950,6 +1050,20 @@ export const evaluateMessage = async (
   if (verdict.action === 'none' && contentEvidence(signals).strongest === 0) {
     const judged = await judgeAccumulated(
       input.user.messagesInChat <= SESSION_SOLO_MAX_INCHAT ? 1 : SESSION_EVAL_MIN_MESSAGES)
+    if (judged) return judged
+  }
+
+  /**
+   * Last: the run this message belongs to, if it belongs to one.
+   *
+   * After the session pile rather than before it, because the two ask different
+   * questions of overlapping inputs and the pile's is narrower — those messages
+   * were unreadable, and reading five of them together is the answer already
+   * measured. This one only gets asked when nothing else, including that, has
+   * concluded anything, and never about a message the pipeline already acted on.
+   */
+  if (!isEnforcementAction(verdict.action)) {
+    const judged = await judgeBurst(burstWindow)
     if (judged) return judged
   }
   return verdict

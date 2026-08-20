@@ -6,10 +6,10 @@
  *   llm_cache          — LLM verdict cache, TTL 7d
  */
 import { MongoClient, ObjectId, type Collection, type Db, type Document } from 'mongodb'
-import type { Verdict, Signal } from '@lyadmin/core'
+import type { BurstEntry, Verdict, Signal } from '@lyadmin/core'
 import { truncate } from '@lyadmin/core'
 import { normalizeExtra, type NormalizedExtra } from './extras.js'
-import { VELOCITY_WINDOW_MS, SESSION_WINDOW_MS } from './persistent-ports.js'
+import { VELOCITY_WINDOW_MS, SESSION_WINDOW_MS, BURST_WINDOW_MS } from './persistent-ports.js'
 import {
   addWelcomeItem, removeAt, type AddReason,
   MAX_WELCOME_TEXTS, MAX_WELCOME_GIFS, MAX_WELCOME_TEXT_LEN
@@ -75,6 +75,8 @@ export class MongoStore {
   // Persistent moderation state (survives restarts; TTL-expired).
   get velocityEvents(): Collection<Document> { return this.collection('velocity_events') }
   get sessionWindows(): Collection<Document> { return this.collection('session_windows') }
+  /** A sender's recent judged messages per chat — see PersistentBurstPort. */
+  get burstWindows(): Collection<Document> { return this.collection('burst_windows') }
   /**
    * What Telegram refuses us, per chat. Deliberately NOT TTL-expired: unlike
    * every other collection here it holds a fact rather than an observation, and
@@ -134,6 +136,7 @@ export class MongoStore {
     // to carry a `windowMs` of their own that this method silently overruled.
     await this.ensureTtlIndex(this.velocityEvents, { firstSeenAt: 1 }, VELOCITY_WINDOW_MS / 1000)
     await this.ensureTtlIndex(this.sessionWindows, { startedAt: 1 }, SESSION_WINDOW_MS / 1000)
+    await this.ensureTtlIndex(this.burstWindows, { startedAt: 1 }, BURST_WINDOW_MS / 1000)
     // `spamsignatures` is a v1 collection and v1 owns the exactHash/normalizedHash
     // indexes. The folded layer added in 2026-07-31 needs its own, or the `$or`
     // in `MongoSignaturePort.match` loses index coverage for that branch and
@@ -499,6 +502,29 @@ export class MongoStore {
     await this.sessionWindows.deleteOne({ _id: key } as never)
   }
 
+  async appendBurst(key: string, entry: BurstEntry, maxEntries: number): Promise<void> {
+    await this.burstWindows.updateOne(
+      { _id: key } as never,
+      {
+        $push: { entries: { $each: [entry], $slice: -maxEntries } },
+        // The TTL runs from the run's FIRST message, so this must not be
+        // refreshed on every append — see BURST_WINDOW_MS.
+        $setOnInsert: { startedAt: new Date() }
+      } as never,
+      { upsert: true }
+    )
+  }
+
+  async readBurst(key: string): Promise<BurstEntry[]> {
+    const doc = await this.burstWindows.findOne({ _id: key } as never) as
+      { entries?: BurstEntry[] } | null
+    return doc?.entries ?? []
+  }
+
+  async resetBurst(key: string): Promise<void> {
+    await this.burstWindows.deleteOne({ _id: key } as never)
+  }
+
   /** Track first-seen + global message counters (additive to v1 fields). */
   async touchUser(telegramId: number): Promise<void> {
     await this.users.updateOne(
@@ -652,6 +678,35 @@ export class MongoStore {
   }
 
   /**
+   * Add a message to the decision record of the run it belongs to.
+   *
+   * One record per incident rather than one per message (user decision
+   * 2026-08-20). The alternative was a full row for every message of a flood,
+   * and the cluster has hit its size quota once already — while for reading the
+   * data back, eight rows that each say "this account was banned" are eight
+   * copies of one event, and the audit has to re-derive the grouping every time.
+   *
+   * Strictly for messages with NO record of their own: the ones removed unread
+   * because the sender was already gone. A message the pipeline actually judged
+   * gets its own row, with its own signals and score, and must not also be
+   * counted here — otherwise every count over the collection is inflated by
+   * exactly the messages that are easiest to double-count.
+   *
+   * `incidentMessageIds` is capped: a run of hundreds is one event whose exact
+   * tail nobody will ever look up, and an unbounded array in a document is how a
+   * collection stops fitting in memory.
+   */
+  async appendIncidentMessage(chatId: number, triggerMessageId: number, messageId: number): Promise<void> {
+    await this.decisions.updateOne(
+      { chatId, messageId: triggerMessageId },
+      {
+        $inc: { incidentCount: 1 },
+        $push: { incidentMessageIds: { $each: [messageId], $slice: -MongoStore.MAX_INCIDENT_IDS } }
+      } as never
+    )
+  }
+
+  /**
    * Rebuild a best-effort Verdict from the persisted decision, so the Why?
    * card and admin override survive a restart (the in-process verdict cache
    * is lost, but pipeline_decisions keeps the record for 90d). Signal
@@ -724,6 +779,8 @@ export class MongoStore {
    * hashing different strings and neither could ever promote the other's entry.
    */
   private static readonly MAX_LEARN_TEXT = 4096
+  /** Message ids kept on one incident's decision record — see appendIncidentMessage. */
+  private static readonly MAX_INCIDENT_IDS = 50
 
   /** Open a vote. Returns false when one already exists for this message. */
   async openVote(params: {
@@ -893,6 +950,17 @@ export class MongoStore {
      * community vote could get here.
      */
     source?: 'admin' | 'community_vote'
+    /**
+     * How many of the sender's messages this verdict removed, the triggering one
+     * included — omitted when we no longer know.
+     *
+     * The one cost of a mistake that a correction cannot undo. Lifting a ban and
+     * returning standing are reversible; a deleted message is gone, and since a
+     * verdict may now take a whole run of them down at once, a ground-truth set
+     * that counts every mistake as costing one message would understate exactly
+     * the mistakes that cost the most.
+     */
+    removedCount?: number
     verdict: Pick<Verdict, 'decidedBy' | 'ruleId' | 'reasonCode' | 'pSpam' | 'action' | 'signals' | 'meta'>
   }): Promise<void> {
     const source = params.source ?? 'admin'
@@ -929,6 +997,7 @@ export class MongoStore {
         pSpam: params.verdict.pSpam,
         action: params.verdict.action,
         signals: params.verdict.signals.map((s) => s.name),
+        ...(params.removedCount !== undefined ? { removedCount: params.removedCount } : {}),
         // `scorePSpam` / `contentEvidence` / `cappedGroups` are what make the
         // arithmetic reproducible when the verdict came from a port or the LLM.
         meta: params.verdict.meta
