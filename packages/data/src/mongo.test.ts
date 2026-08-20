@@ -14,7 +14,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { Verdict } from '@lyadmin/core'
-import { MongoStore } from './mongo.js'
+import { MongoStore, ensureTtlIndex } from './mongo.js'
 
 interface Captured {
   doc: Record<string, unknown> | null
@@ -417,5 +417,73 @@ describe('saveExternalBan', () => {
     const { store, updates } = captureStore()
     await store.saveExternalBan(42, { lols: null, cas: null })
     expect(updates).toEqual([])
+  })
+})
+
+/**
+ * Startup must survive a collection that does not exist yet.
+ *
+ * Production 2026-08-20 08:23: the bot crash-looped on
+ * `ns does not exist: LyAdminBot.burst_windows`. `burst_windows` was the newest
+ * TTL collection and nothing had written to it, so it had no namespace —
+ * `listIndexes` on a missing namespace is an error, while `createIndex` would
+ * have created the collection implicitly. Reading the existing indexes before
+ * writing one therefore made every NEW TTL collection an unbootable bot on its
+ * first deploy, in a restart loop that never reaches the write that fixes it.
+ */
+describe('ensureTtlIndex', () => {
+  interface FakeIndex { key: Record<string, number>; name?: string; expireAfterSeconds?: number }
+
+  const fakeCollection = (indexes: () => Promise<FakeIndex[]>) => {
+    const created: { keySpec: unknown; options: unknown }[] = []
+    const dropped: string[] = []
+    return {
+      created,
+      dropped,
+      collection: {
+        collectionName: 'burst_windows',
+        indexes,
+        createIndex: async (keySpec: unknown, options: unknown) => {
+          created.push({ keySpec, options })
+          return 'idx'
+        },
+        dropIndex: async (name: string) => { dropped.push(name) }
+      } as never
+    }
+  }
+
+  it('REGRESSION: a missing namespace is not an error, it is an empty collection', async () => {
+    const nsNotFound = Object.assign(
+      new Error('ns does not exist: LyAdminBot.burst_windows'),
+      { code: 26, codeName: 'NamespaceNotFound' }
+    )
+    const { collection, created } = fakeCollection(() => Promise.reject(nsNotFound))
+    await ensureTtlIndex(collection, { startedAt: 1 }, 600)
+    expect(created).toEqual([{ keySpec: { startedAt: 1 }, options: { expireAfterSeconds: 600 } }])
+  })
+
+  it('any OTHER failure to read the indexes still propagates', async () => {
+    // Not authorized, not reachable, wrong database: configuration faults. A bot
+    // that quietly carried on without its TTL indexes would fill the cluster
+    // instead of saying so. Only the empty case is benign.
+    const unauthorized = Object.assign(new Error('not authorized'), { code: 13 })
+    const { collection, created } = fakeCollection(() => Promise.reject(unauthorized))
+    await expect(ensureTtlIndex(collection, { startedAt: 1 }, 600)).rejects.toThrow('not authorized')
+    expect(created).toEqual([])
+  })
+
+  it('an existing index with a different expiry is dropped and recreated', async () => {
+    const { collection, created, dropped } = fakeCollection(async () =>
+      [{ key: { startedAt: 1 }, name: 'startedAt_1', expireAfterSeconds: 999 }])
+    await ensureTtlIndex(collection, { startedAt: 1 }, 600)
+    expect(dropped).toEqual(['startedAt_1'])
+    expect(created).toEqual([{ keySpec: { startedAt: 1 }, options: { expireAfterSeconds: 600 } }])
+  })
+
+  it('a matching index is left alone', async () => {
+    const { collection, dropped } = fakeCollection(async () =>
+      [{ key: { startedAt: 1 }, name: 'startedAt_1', expireAfterSeconds: 600 }])
+    await ensureTtlIndex(collection, { startedAt: 1 }, 600)
+    expect(dropped).toEqual([])
   })
 })

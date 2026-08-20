@@ -34,6 +34,67 @@ export interface RightsBlockRecord {
   warnedUntil: number
 }
 
+/**
+ * MongoDB's error code for a namespace that does not exist. `listIndexes` on a
+ * collection nothing has ever written to raises it; `createIndex` instead
+ * creates the collection implicitly.
+ */
+const NAMESPACE_NOT_FOUND = 26
+
+/**
+ * Create a TTL index, tolerating an already-present index on the same key with
+ * a *different* expiry. `createIndex` is not an upsert: re-issuing it with a
+ * changed expireAfterSeconds throws IndexOptionsConflict. The clean fix
+ * (`collMod`) is blocked on shared Atlas tiers (M0), so the only way to retune
+ * a TTL there is drop + recreate.
+ *
+ * A collection that does not exist yet has no index to reconcile, and that is
+ * the ordinary state of every NEW TTL collection on its first deploy. Reading
+ * the indexes first made that state fatal: production 2026-08-20 08:23 crash-
+ * looped on `ns does not exist: LyAdminBot.burst_windows` — the newest window
+ * collection, which nothing had written to, in a restart loop that could never
+ * reach the `createIndex` below that would have created it.
+ *
+ * Only THAT error is benign. Not-authorized, not-reachable or wrong-database
+ * are configuration faults, and a bot that quietly ran on without its TTL
+ * indexes would fill the cluster (it has hit its quota once already) instead of
+ * saying so on the first line of its log.
+ *
+ * Module-level rather than a method: it touches no instance state, and as a
+ * private method the behaviour above could not be tested at all.
+ */
+export const ensureTtlIndex = async (
+  collection: Collection<Document>,
+  keySpec: Document,
+  expireAfterSeconds: number,
+): Promise<void> => {
+  const key = JSON.stringify(keySpec)
+  let current: Awaited<ReturnType<Collection<Document>['indexes']>> = []
+  try {
+    current = await collection.indexes()
+  } catch (err) {
+    if ((err as { code?: number }).code !== NAMESPACE_NOT_FOUND) throw err
+    // Nothing to reconcile — fall through to the create, which makes both the
+    // collection and the index.
+  }
+  const existing = current.find((ix) => JSON.stringify(ix.key) === key)
+  if (existing && existing.expireAfterSeconds !== expireAfterSeconds) {
+    try {
+      await collection.dropIndex(existing.name as string)
+    } catch (err) {
+      // If even dropIndex is denied (stricter M0 policies), keep the stale
+      // TTL rather than crash startup — a bounded-but-wrong retention beats
+      // an unbootable bot. Surface it so the mismatch shows up in logs.
+      console.warn(
+        `[mongo] cannot retune TTL index ${existing.name ?? key} on ${collection.collectionName} ` +
+          `(${existing.expireAfterSeconds}s → ${expireAfterSeconds}s): ${(err as Error).message}`,
+      )
+      return
+    }
+  }
+  await collection.createIndex(keySpec, { expireAfterSeconds })
+}
+
 export class MongoStore {
   private client: MongoClient | null = null
   private db: Db | null = null
@@ -86,57 +147,26 @@ export class MongoStore {
    */
   get rightsBlocks(): Collection<Document> { return this.collection('pipeline_rights') }
 
-  /**
-   * Create a TTL index, tolerating an already-present index on the same key
-   * with a *different* expiry. `createIndex` is not an upsert: re-issuing it
-   * with a changed expireAfterSeconds throws IndexOptionsConflict. The clean
-   * fix (`collMod`) is blocked on shared Atlas tiers (M0), so the only way to
-   * retune a TTL there is drop + recreate.
-   */
-  private async ensureTtlIndex(
-    collection: Collection<Document>,
-    keySpec: Document,
-    expireAfterSeconds: number,
-  ): Promise<void> {
-    const key = JSON.stringify(keySpec)
-    const existing = (await collection.indexes()).find((ix) => JSON.stringify(ix.key) === key)
-    if (existing && existing.expireAfterSeconds !== expireAfterSeconds) {
-      try {
-        await collection.dropIndex(existing.name as string)
-      } catch (err) {
-        // If even dropIndex is denied (stricter M0 policies), keep the stale
-        // TTL rather than crash startup — a bounded-but-wrong retention beats
-        // an unbootable bot. Surface it so the mismatch shows up in logs.
-        console.warn(
-          `[mongo] cannot retune TTL index ${existing.name ?? key} on ${collection.collectionName} ` +
-            `(${existing.expireAfterSeconds}s → ${expireAfterSeconds}s): ${(err as Error).message}`,
-        )
-        return
-      }
-    }
-    await collection.createIndex(keySpec, { expireAfterSeconds })
-  }
-
   private async ensureIndexes(): Promise<void> {
-    await this.ensureTtlIndex(this.decisions, { createdAt: 1 }, DECISIONS_TTL_DAYS * 86400)
+    await ensureTtlIndex(this.decisions, { createdAt: 1 }, DECISIONS_TTL_DAYS * 86400)
     await this.decisions.createIndex({ chatId: 1, userId: 1, createdAt: -1 })
     // Why?/override lookup (getDecision) filters by chat+message.
     await this.decisions.createIndex({ chatId: 1, messageId: 1, createdAt: -1 })
     await this.feedback.createIndex({ chatId: 1, messageId: 1 })
-    await this.ensureTtlIndex(this.llmCache, { createdAt: 1 }, LLM_CACHE_TTL_DAYS * 86400)
+    await ensureTtlIndex(this.llmCache, { createdAt: 1 }, LLM_CACHE_TTL_DAYS * 86400)
     await this.llmCache.createIndex({ key: 1 }, { unique: true })
     await this.votes.createIndex({ chatId: 1, messageId: 1 }, { unique: true })
-    await this.ensureTtlIndex(this.votes, { createdAt: 1 }, 7 * 86400)
+    await ensureTtlIndex(this.votes, { createdAt: 1 }, 7 * 86400)
     // Scheduled deletions: single deleteAt index doubles as the due-query
     // index and a 1h TTL backstop (3600s after deleteAt) if a sweep is missed.
-    await this.ensureTtlIndex(this.scheduledDeletions, { deleteAt: 1 }, 3600)
+    await ensureTtlIndex(this.scheduledDeletions, { deleteAt: 1 }, 3600)
     // These TTLs ARE the windows — the aggregate is the surviving document, and
     // no query bounds it. Read from the port constants so the number cannot
     // drift from the thresholds that were calibrated against it; the ports used
     // to carry a `windowMs` of their own that this method silently overruled.
-    await this.ensureTtlIndex(this.velocityEvents, { firstSeenAt: 1 }, VELOCITY_WINDOW_MS / 1000)
-    await this.ensureTtlIndex(this.sessionWindows, { startedAt: 1 }, SESSION_WINDOW_MS / 1000)
-    await this.ensureTtlIndex(this.burstWindows, { startedAt: 1 }, BURST_WINDOW_MS / 1000)
+    await ensureTtlIndex(this.velocityEvents, { firstSeenAt: 1 }, VELOCITY_WINDOW_MS / 1000)
+    await ensureTtlIndex(this.sessionWindows, { startedAt: 1 }, SESSION_WINDOW_MS / 1000)
+    await ensureTtlIndex(this.burstWindows, { startedAt: 1 }, BURST_WINDOW_MS / 1000)
     // `spamsignatures` is a v1 collection and v1 owns the exactHash/normalizedHash
     // indexes. The folded layer added in 2026-07-31 needs its own, or the `$or`
     // in `MongoSignaturePort.match` loses index coverage for that branch and
