@@ -171,6 +171,28 @@ describe('userProfileLines', () => {
     expect(text).not.toContain('⚠️')
   })
 
+  it('REGRESSION: a long-standing member is not filed under risk with a 🆕', () => {
+    // The condition used to be "we know the join date at all", so a member of
+    // two years was listed among the risk flags beside the external-ban and
+    // promo-in-bio lines. Telegram's join date is the one hard tenure fact we
+    // have and the card spent it as an accusation (2026-08-20).
+    const text = userProfileLines(uk, facts({
+      joinedAgoSeconds: 700 * 86400, externalBan: null, promoInBio: false
+    })).join('\n')
+    expect(text).not.toContain('🆕')
+  })
+
+  it('REGRESSION: tenure is not "never seen" when Telegram places them in the chat', () => {
+    // `localAgeDays` restarts whenever our own record does, so the card said
+    // "never seen" about a present member — and the admin could not see the
+    // tenure the verdict had been based on.
+    const text = userProfileLines(uk, facts({
+      localAgeDays: null, joinedAgoSeconds: 700 * 86400
+    })).join('\n')
+    expect(text).not.toContain(uk.profile.neverSeen)
+    expect(text).toMatch(/1р|2р/)
+  })
+
   it('escapes an attacker-controlled username', () => {
     const text = userProfileLines(uk, facts({ username: '<b>x' }), { html: true }).join('\n')
     expect(text).toContain('&lt;b&gt;x')

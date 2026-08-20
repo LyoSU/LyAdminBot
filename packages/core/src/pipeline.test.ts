@@ -1970,6 +1970,139 @@ describe('evaluateMessage — established-regular exempt', () => {
   })
 })
 
+/**
+ * Reported 2026-08-20: a member the chat had known for a long time, removed for
+ * advertising. The pipeline had every fact needed to know better and consulted
+ * none of them, because standing was defined twice and the two definitions
+ * disagreed.
+ *
+ * The exempt above accepts local standing OR global volume, and its own note
+ * calls that OR deliberate. Every stage past it — the trust weight, both
+ * ceilings, the clean rules — read `established_user`, which was earned by
+ * global volume alone. And the exempt stands down for exactly the messages that
+ * can cost somebody the chat, so the local half of the OR was reachable only
+ * where nothing was at stake.
+ *
+ * The second half of the report is the clock. Tenure was measured from the first
+ * time WE saw the account, which restarts at zero whenever our own record does.
+ * Telegram's answer for this chat (channels.getParticipant.date) was already on
+ * the snapshot and was read only to accuse — `just_joined` — so a gap in our
+ * data read as a fact about the person, in the direction of a harsher action.
+ */
+describe('evaluateMessage — a quiet regular of one chat (2026-08-20 report)', () => {
+  // A message whose OWN signals clear the sender-removal bar: that is what
+  // stands the exempt down, so the exempt is absent from this whole suite by
+  // construction. A masked link, an invite and a phone number — the shape of
+  // the 2026-08-08 reversal, and the shape of an ordinary "come join us" too,
+  // which is the entire difficulty.
+  const promoMsg = {
+    text: 'Заходьте до нас, там багато цікавого, пишіть на 067-000-00-00',
+    urls: [
+      { visible: 'наш сайт', target: 'https://example.com/promo', hidden: true },
+      { visible: 'https://t.me/+AbCdEfGhIjKl', target: 'https://t.me/+AbCdEfGhIjKl', hidden: false }
+    ]
+  }
+  const llmSaying = (reasonCode: string): PipelinePorts => ({
+    llm: { classify: async () => ({ pSpam: 0.97, reasonCode, evidence: null, cached: false }) }
+  })
+
+  /** Long known here, barely known anywhere else — 14 messages over a year. */
+  const quietRegular = { messagesInChat: 14, messagesGlobal: 20, localAgeDays: 400 }
+  /** The same person after our own record of them was lost. */
+  const recordWiped = {
+    messagesInChat: 14, messagesGlobal: 20, localAgeDays: 0, joinedAgoSeconds: 700 * 86_400
+  }
+
+  it('the exempt does stand down here (regression anchor)', async () => {
+    const v = await evaluateMessage(
+      makeInput({ msg: promoMsg, user: quietRegular }), llmSaying('channel_promo'))
+    expect(v.reasonCode).not.toBe('established_regular')
+    expect(mayRemoveSender(v.signals)).toBe(true)
+  })
+
+  it('REGRESSION: the chat\'s own history is standing, and standing caps an imitable act', async () => {
+    const v = await evaluateMessage(
+      makeInput({ msg: promoMsg, user: quietRegular }), llmSaying('channel_promo'))
+    expect(v.signals.map((s) => s.name)).toContain('established_user')
+    expect(removesSender(v.action)).toBe(false)
+    expect(v.action).toBe('delete')
+    expect(v.needsVote).toBe(true)
+    expect(v.meta['cappedStanding']).toBe(true)
+    // The reason survives — the punishment was too much, the reason stands.
+    expect(v.reasonCode).toBe('channel_promo')
+  })
+
+  it('REGRESSION: a lost record does not make a long-time member ban-eligible', async () => {
+    // `isNewish` is what strips the ban shield in `decideAction`, and its tenure
+    // term used to read our first-seen date alone. A member of two years whose
+    // record we had just recreated was therefore "newish", and a 0.97 verdict
+    // that would have been a reversible mute became a 30-day ban with no vote.
+    //
+    // Deliberately too quiet for the exempt AND for standing (5 in chat, 30
+    // globally), so the tenure clock is the only thing under test here: no
+    // `established_regular`, no `established_user`, and one lighter link so the
+    // classifier is the stage that decides. Before the fix: ban, 2592000s, no
+    // vote. After: mute, which an admin can undo and which expires by itself.
+    const thinRecordWiped = {
+      messagesInChat: 5, messagesGlobal: 30, localAgeDays: 0, joinedAgoSeconds: 700 * 86_400
+    }
+    const oneLink = {
+      text: 'Заходьте до нас, там багато цікавого',
+      urls: [{ visible: 'https://t.me/+AbCdEfGhIjKl', target: 'https://t.me/+AbCdEfGhIjKl', hidden: false }]
+    }
+    const v = await evaluateMessage(
+      makeInput({ msg: oneLink, user: thinRecordWiped }), llmSaying('job_scam'))
+    expect(v.signals.map((s) => s.name)).not.toContain('established_user')
+    expect(v.action).not.toBe('ban')
+    expect(removesSender(v.action)).toBe(true) // a job scam is still a job scam
+  })
+
+  it('REGRESSION: a lost record does not make a long-time member a sleeper either', async () => {
+    // Same clock, same shape: `sleeper_awakened` means an old account that has
+    // only just become visible HERE. Telegram's join date contradicts that
+    // outright, so the signal was asserting a premise the snapshot disproved.
+    const v = await evaluateMessage(makeInput({
+      msg: promoMsg,
+      user: {
+        messagesInChat: 5, messagesGlobal: 30, localAgeDays: 0,
+        predictedAgeDays: 800, joinedAgoSeconds: 700 * 86_400
+      }
+    }), llmSaying('channel_promo'))
+    expect(v.signals.map((s) => s.name)).not.toContain('sleeper_awakened')
+  })
+
+  it('Telegram\'s join date carries the standing our own record lost', async () => {
+    const v = await evaluateMessage(
+      makeInput({ msg: promoMsg, user: recordWiped }), llmSaying('channel_promo'))
+    expect(v.signals.map((s) => s.name)).toContain('established_user')
+    expect(removesSender(v.action)).toBe(false)
+  })
+
+  it('but an afternoon of chatter still buys nothing', async () => {
+    // The tenure bar is the whole reason volume alone cannot earn standing:
+    // the counters rise on every message with no rate condition.
+    const v = await evaluateMessage(makeInput({
+      msg: promoMsg, user: { messagesInChat: 14, messagesGlobal: 20, localAgeDays: 1 }
+    }), llmSaying('channel_promo'))
+    expect(v.signals.map((s) => s.name)).not.toContain('established_user')
+    expect(removesSender(v.action)).toBe(true)
+  })
+
+  it('and joining long ago while saying nothing buys nothing either', async () => {
+    // The sleeper case, stated as a test: tenure without volume is not standing.
+    // Both halves are required, which is what keeps a year-old dormant account
+    // from waking up with a shield.
+    const v = await evaluateMessage(makeInput({
+      msg: promoMsg,
+      user: {
+        messagesInChat: 2, messagesGlobal: 3, localAgeDays: 0,
+        joinedAgoSeconds: 700 * 86_400
+      }
+    }), llmSaying('channel_promo'))
+    expect(v.signals.map((s) => s.name)).not.toContain('established_user')
+  })
+})
+
 describe('evaluateMessage — a script the chat does not use', () => {
   const cjk = {
     // Ten logographic characters plus a handle: a complete sentence whose

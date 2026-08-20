@@ -8,7 +8,7 @@
  *  - settings panel only in PM; group /settings replies with a deep link
  */
 import type { Verdict } from '@lyadmin/core'
-import { isSuspicionSignal } from '@lyadmin/core'
+import { isSuspicionSignal, ESTABLISHED_MIN_TENURE_DAYS } from '@lyadmin/core'
 import type { Locale } from './locale.js'
 import { uk } from './locales/uk.js'
 import { en } from './locales/en.js'
@@ -265,6 +265,14 @@ export interface UserFacts {
   personalChannel: boolean
 }
 
+/**
+ * How recent a join still counts as a risk flag on the card. The pipeline's own
+ * newness bar, imported rather than restated, so the card flags the population
+ * the pipeline actually treats as new — not merely everyone whose join date we
+ * happen to know.
+ */
+const JOINED_RECENTLY_MAX_SECONDS = ESTABLISHED_MIN_TENURE_DAYS * 86400
+
 /** Compact relative span ("щойно", "5хв", "3д", "2міс", "1р") from seconds. */
 const humanSpan = (locale: Locale, totalSeconds: number): string => {
   const u = locale.profile.units
@@ -296,7 +304,15 @@ export const userProfileLines = (locale: Locale, facts: UserFacts, options: { ht
   lines.push(idLine)
 
   const age = facts.predictedAgeDays !== null ? `~${humanSpan(locale, facts.predictedAgeDays * 86400)}` : p.unknownAge
-  const seen = facts.localAgeDays !== null ? humanSpan(locale, facts.localAgeDays * 86400) : p.neverSeen
+  // The same reading the pipeline uses (`tenureDays`), for the same reason: our
+  // first-seen date restarts whenever our record does, so this line used to say
+  // "never seen" about somebody Telegram places in the chat for years — and the
+  // admin reading the card could not see the tenure the verdict was based on.
+  const tenureSeconds = Math.max(
+    facts.localAgeDays !== null ? facts.localAgeDays * 86400 : 0,
+    facts.joinedAgoSeconds ?? 0
+  )
+  const seen = tenureSeconds > 0 ? humanSpan(locale, tenureSeconds) : p.neverSeen
   lines.push(`${p.accountAge(age)} · ${p.firstSeen(seen)}`)
 
   lines.push(p.activity(facts.messagesGlobal, facts.groupsActive))
@@ -311,7 +327,13 @@ export const userProfileLines = (locale: Locale, facts: UserFacts, options: { ht
       : ''
     risk.push(`🚫 ${p.externalBan(ago, facts.externalBan.offenses)}`)
   }
-  if (facts.joinedAgoSeconds !== null) {
+  // A risk flag only while the join actually IS recent. The condition used to be
+  // "we know the join date at all", so the card filed a member of two years
+  // under risk flags with a 🆕 beside them — the join date rendered as an
+  // accusation whatever it said, which is the display half of the same defect
+  // `tenureDays` fixes. The bar is the pipeline's own newness bar, so the flag
+  // marks exactly the population the pipeline treats as new.
+  if (facts.joinedAgoSeconds !== null && facts.joinedAgoSeconds <= JOINED_RECENTLY_MAX_SECONDS) {
     risk.push(`🆕 ${p.justJoined(humanSpan(locale, facts.joinedAgoSeconds))}`)
   }
   const extras: string[] = []

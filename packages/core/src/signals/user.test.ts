@@ -231,7 +231,48 @@ describe('extractUserSignals — trust (negative)', () => {
 
   it('trusts established users', () => {
     expect(trust(makeUser({ messagesGlobal: 200, reputationScore: 70 }))).toContain('established_user')
-    expect(trust(makeUser({ messagesGlobal: 10 }))).not.toContain('established_user')
+    // Nothing anywhere: too quiet globally AND locally, and no tenure.
+    expect(trust(makeUser({ messagesGlobal: 10, messagesInChat: 4, localAgeDays: 1 })))
+      .not.toContain('established_user')
+  })
+
+  /**
+   * The chat's own history counts, on the same terms the established-regular
+   * exempt already states: enough messages HERE, and enough time to have said
+   * them. Until 2026-08-20 only `messagesGlobal` could earn this signal, so a
+   * quiet regular of one chat was a stranger to every stage that reads standing
+   * — the trust weight, both ceilings, and the clean rules.
+   *
+   * The exempt's own note calls the OR deliberate ("local standing here OR a
+   * long history across our chats"), and the exempt implements it. What made
+   * that half unreachable where it mattered is that the exempt stands down for
+   * exactly the messages that can remove a sender, which is the only case in
+   * which standing has any work to do.
+   */
+  it('the chat\'s own history earns standing, not only the network\'s', () => {
+    expect(trust(makeUser({ messagesInChat: 14, messagesGlobal: 20, localAgeDays: 400 })))
+      .toContain('established_user')
+  })
+
+  it('local volume without tenure earns nothing (an afternoon is not standing)', () => {
+    // The counters carry no rate condition, so fourteen messages of "ок" in a
+    // group the sender controls must not buy the trust weight — the reason the
+    // exempt grew a tenure bar on 2026-07-30.
+    expect(trust(makeUser({ messagesInChat: 14, messagesGlobal: 20, localAgeDays: 2 })))
+      .not.toContain('established_user')
+  })
+
+  it('Telegram\'s join date supplies the tenure our own record lost', () => {
+    // `localAgeDays` counts from the first time WE saw the account, so it
+    // restarts at zero whenever our record does — a v1→v2 migration, the
+    // 2026-07-06 quota cleanup, a chat we only just joined. The join date from
+    // channels.getParticipant survives all of that, and until now it was read
+    // only to accuse (`just_joined`): the bot knew to the second when somebody
+    // had joined and used that fact only against them.
+    expect(trust(makeUser({
+      messagesInChat: 14, messagesGlobal: 20, localAgeDays: 0,
+      joinedAgoSeconds: 400 * 86_400
+    }))).toContain('established_user')
   })
 
   it('REGRESSION: standing does not require a reputation score nothing writes', () => {
@@ -270,10 +311,11 @@ describe('extractUserSignals — trust (negative)', () => {
     // now settles at compile time — there is no such name to raise. What still
     // needs testing is the decision itself: a premium badge and nothing else
     // must not earn the account any leniency.
-    // messagesGlobal below the established bar, so the badge is the only thing
+    // Below the established bar in BOTH scopes, so the badge is the only thing
     // that could possibly earn leniency here.
     const premium = makeUser({
       messagesGlobal: 3,
+      messagesInChat: 2,
       flags: { scam: false, fake: false, restricted: false, verified: false, premium: true, bot: false }
     })
     expect(extractUserSignals(premium).filter((s) => isTrustSignal(s.name))).toEqual([])

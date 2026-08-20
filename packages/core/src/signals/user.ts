@@ -22,10 +22,64 @@ const MANY_SHARED_CHATS_MIN = 5
 /** Kept equal to the pipeline's `HARD_VERDICT_MIN_DETECTIONS` on purpose. */
 const PRIOR_DETECTIONS_MIN = 2
 const JUST_JOINED_MAX_SECONDS = 120
-const ESTABLISHED_MIN_MESSAGES = 50
 const AVATAR_FRESH_MAX_DAYS = 7
 
 const MS_PER_DAY = 86_400_000
+const SECONDS_PER_DAY = 86_400
+
+/**
+ * What earns `established_user` — the one signal every stage reads when it asks
+ * whether the sender has standing: the trust weight, both enforcement ceilings
+ * (`hasSenderStanding`), and the clean rules.
+ *
+ * Exported because the pipeline's established-regular exempt is the same
+ * decision at the same bar, and it used to keep its own copy of these numbers.
+ * One definition, because the two disagreed in the way that matters: the exempt
+ * accepted local standing OR global volume and this signal accepted only the
+ * global half, so a quiet regular of one chat was a stranger to every stage
+ * past the exempt — and the exempt stands down for exactly the messages that
+ * can cost somebody the chat (2026-08-20 report).
+ */
+export const ESTABLISHED_MIN_MESSAGES = 50
+export const ESTABLISHED_MIN_IN_CHAT = 10
+export const ESTABLISHED_MIN_TENURE_DAYS = 7
+
+/**
+ * How long this sender has demonstrably been around, in days — null when
+ * nothing says.
+ *
+ * Two clocks measure it and neither is complete. `localAgeDays` counts from the
+ * first time WE saw the account anywhere, so it restarts at zero whenever our
+ * own record does: a v1→v2 migration, the 2026-07-06 quota cleanup, a chat the
+ * bot only just joined. `joinedAgoSeconds` is Telegram's own answer for THIS
+ * chat (channels.getParticipant.date), so it survives anything we do to our
+ * database, and says nothing about the rest of the network.
+ *
+ * Both are lower bounds on real tenure, so the larger is the honest reading and
+ * can only be closer to the truth. Until 2026-08-20 only the first was consulted
+ * for tenure while the second was read exclusively to accuse (`just_joined`):
+ * the bot knew to the second when somebody had joined and spent that fact only
+ * against them. A hole in our records thereby counted as a fact about the
+ * person, always in the direction of the harsher action.
+ */
+export const tenureDays = (user: UserSnapshot): number | null => {
+  const joined = user.joinedAgoSeconds !== null ? user.joinedAgoSeconds / SECONDS_PER_DAY : null
+  if (user.localAgeDays === null) return joined
+  if (joined === null) return user.localAgeDays
+  return Math.max(user.localAgeDays, joined)
+}
+
+/**
+ * Standing earned in THIS chat: enough messages here, and enough time to have
+ * said them. The tenure half is not decoration — the counters rise on every
+ * message with no rate or quality condition, so without it a spammer's
+ * afternoon in a group they control would buy the shield (2026-07-30 review).
+ */
+const hasLocalStanding = (user: UserSnapshot): boolean => {
+  const tenure = tenureDays(user)
+  return user.messagesInChat >= ESTABLISHED_MIN_IN_CHAT &&
+    tenure !== null && tenure >= ESTABLISHED_MIN_TENURE_DAYS
+}
 
 /**
  * Invisible characters with no legitimate use in a display name. Deliberately
@@ -137,8 +191,12 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
 
   // ── account age structure ──────────────────────────────────────────
 
+  // Tenure, not the age of our record: a member Telegram says joined two years
+  // ago is not "locally new" because our own row for them is a day old.
+  const tenure = tenureDays(user)
+
   const isLocallyNew =
-    (user.localAgeDays !== null && user.localAgeDays <= SLEEPER_LOCAL_MAX_DAYS) ||
+    (tenure !== null && tenure <= SLEEPER_LOCAL_MAX_DAYS) ||
     user.messagesGlobal <= NEW_GLOBALLY_MAX
 
   // The age prediction carries an uncertainty interval; both age signals
@@ -148,16 +206,19 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
   const predictedAgeLo = user.predictedAgeBoundsDays?.lo ?? user.predictedAgeDays
   const predictedAgeHi = user.predictedAgeBoundsDays?.hi ?? user.predictedAgeDays
 
+  // A sleeper is an old account that has only just become visible HERE. When
+  // Telegram's join date says otherwise the premise is simply false, whatever
+  // our own first-seen row happens to hold.
   if (
     predictedAgeLo !== null &&
     user.predictedAgeDays !== null &&
-    user.localAgeDays !== null &&
-    predictedAgeLo - user.localAgeDays > SLEEPER_GAP_DAYS &&
-    user.localAgeDays <= SLEEPER_LOCAL_MAX_DAYS
+    tenure !== null &&
+    predictedAgeLo - tenure > SLEEPER_GAP_DAYS &&
+    tenure <= SLEEPER_LOCAL_MAX_DAYS
   ) {
     signals.push({
       name: 'sleeper_awakened',
-      evidence: `~${Math.round(user.predictedAgeDays)}d old account, locally active ${Math.round(user.localAgeDays)}d`
+      evidence: `~${Math.round(user.predictedAgeDays)}d old account, locally active ${Math.round(tenure)}d`
     })
   }
 
@@ -249,6 +310,12 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
   // both treat `established_user` as a shield, so an account Telegram or an
   // external database has already condemned must never earn it. That is the
   // sold/compromised long-time account from the threat model.
+  //
+  // Volume in EITHER scope, since 2026-08-20 — the same OR the exempt has
+  // always applied, and for the same stated reason: a member with standing here
+  // and a member with a long history across our chats both count. See
+  // `hasLocalStanding` for why the local half additionally requires tenure and
+  // the global half does not.
   const hasHardVerdict =
     user.flags.scam ||
     user.flags.fake ||
@@ -256,7 +323,8 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
     user.reputationStatus === 'suspicious' ||
     user.reputationStatus === 'restricted' ||
     user.restrictionReasons.some((r) => /spam|scam/i.test(r))
-  if (user.messagesGlobal >= ESTABLISHED_MIN_MESSAGES && !hasHardVerdict) {
+  const hasVolume = user.messagesGlobal >= ESTABLISHED_MIN_MESSAGES || hasLocalStanding(user)
+  if (hasVolume && !hasHardVerdict) {
     signals.push({ name: 'established_user' })
   }
 

@@ -17,7 +17,10 @@
 import type { EvaluationInput, Signal, Verdict, VerdictAction, DecidedBy, UserSnapshot, ChatPolicy } from './types.js'
 import type { BurstEntry, LlmVerdict, PipelinePorts } from './ports.js'
 import { extractMessageSignals } from './signals/message.js'
-import { extractUserSignals } from './signals/user.js'
+import {
+  extractUserSignals, tenureDays,
+  ESTABLISHED_MIN_MESSAGES, ESTABLISHED_MIN_IN_CHAT, ESTABLISHED_MIN_TENURE_DAYS
+} from './signals/user.js'
 import { extractBioSignals } from './signals/bio.js'
 import { extractLinkedChannelSignals } from './signals/channel.js'
 import { applyDeterministicRules } from './rules.js'
@@ -142,37 +145,26 @@ const spamModerationHit = (
   return null
 }
 
-/** How new does a user have to be for ban-eligibility / captcha gating. */
-const isNewish = (input: EvaluationInput): boolean =>
-  input.user.messagesInChat <= 3 ||
-  input.user.messagesGlobal <= 5 ||
-  (input.user.localAgeDays !== null && input.user.localAgeDays <= 7)
+/**
+ * How new does a user have to be for ban-eligibility / captcha gating.
+ *
+ * The tenure term reads `tenureDays`, not our own first-seen date. Production
+ * shape of the 2026-08-20 report: a member of two years whose row we had just
+ * recreated counted as newish on that term alone, which is what strips the ban
+ * shield in `decideAction` — so a verdict that should have been a reversible
+ * mute became a 30-day ban with no vote. Losing our record of somebody is not
+ * an observation about them.
+ */
+const isNewish = (input: EvaluationInput): boolean => {
+  const tenure = tenureDays(input.user)
+  return input.user.messagesInChat <= 3 ||
+    input.user.messagesGlobal <= 5 ||
+    (tenure !== null && tenure <= ESTABLISHED_MIN_TENURE_DAYS)
+}
 
 const isTrusted = (input: EvaluationInput): boolean =>
   input.policy.trustedUserIds.includes(input.user.id) ||
   input.user.reputationStatus === 'trusted'
-
-/**
- * Established-regular fast path. Posting enough — either in THIS chat or across
- * the bot's whole network — earns a clean pass without running any heuristic or
- * knowledge port: a regular's link should never be deleted on a signature/
- * vector/velocity match the way a newcomer's would.
- *
- * The OR is deliberate: a member with local standing here OR a long history
- * across our chats both count. Thresholds are conservative — the global bar
- * matches ESTABLISHED_MIN_MESSAGES (50) from signal extraction.
- *
- * Standing also has to have taken TIME (2026-07-30 review). The counters are
- * incremented on every message in every chat the bot watches, with no rate or
- * quality condition, so 50 messages of "ок" in a group the spammer controls
- * bought a total bypass of the pipeline — before any port, in all 52 chats. A
- * regular is someone who has been around, not someone who typed a lot this
- * afternoon; `localAgeDays` is the cheapest honest proxy we have, and it is
- * already computed for every sender.
- */
-const EXEMPT_INCHAT_MIN = 10
-const EXEMPT_GLOBAL_MIN = 50
-const EXEMPT_MIN_LOCAL_AGE_DAYS = 7
 
 /**
  * Hard account verdicts that cancel the exempt: facts that mark the account as
@@ -198,12 +190,34 @@ const hasHardAccountVerdict = (u: UserSnapshot, policy: ChatPolicy): boolean =>
   u.unofficialClientRisk === true ||
   u.restrictionReasons.some((r) => /spam|scam/i.test(r))
 
+/**
+ * Established-regular fast path. Posting enough — either in THIS chat or across
+ * the bot's whole network — earns a clean pass without running any heuristic or
+ * knowledge port: a regular's link should never be deleted on a signature/
+ * vector/velocity match the way a newcomer's would.
+ *
+ * The OR is deliberate: a member with local standing here OR a long history
+ * across our chats both count.
+ *
+ * Standing also has to have taken TIME (2026-07-30 review). The counters are
+ * incremented on every message in every chat the bot watches, with no rate or
+ * quality condition, so 50 messages of "ок" in a group the spammer controls
+ * bought a total bypass of the pipeline — before any port, in all 52 chats. A
+ * regular is someone who has been around, not someone who typed a lot this
+ * afternoon; `tenureDays` is the cheapest honest reading we have, and it is
+ * already computed for every sender.
+ *
+ * Every threshold here is `extractUserSignals`' own (2026-08-20). They used to
+ * be declared twice, and the copies disagreed on the half that matters: this
+ * one accepted local standing, `established_user` did not, and this one stands
+ * down for exactly the messages where the difference decides something.
+ */
 const isEstablishedRegular = (input: EvaluationInput): boolean => {
-  const volume = input.user.messagesInChat >= EXEMPT_INCHAT_MIN ||
-    input.user.messagesGlobal >= EXEMPT_GLOBAL_MIN
-  // An unknown local age (no first-seen recorded) is not evidence of tenure.
-  const tenured = input.user.localAgeDays !== null &&
-    input.user.localAgeDays >= EXEMPT_MIN_LOCAL_AGE_DAYS
+  const volume = input.user.messagesInChat >= ESTABLISHED_MIN_IN_CHAT ||
+    input.user.messagesGlobal >= ESTABLISHED_MIN_MESSAGES
+  // Neither clock saying anything is not evidence of tenure.
+  const tenure = tenureDays(input.user)
+  const tenured = tenure !== null && tenure >= ESTABLISHED_MIN_TENURE_DAYS
   return volume && tenured && !hasHardAccountVerdict(input.user, input.policy)
 }
 

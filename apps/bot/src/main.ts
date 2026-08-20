@@ -7,7 +7,7 @@ import { BotKeyboard, Chat, User, html, type Message } from '@mtcute/node'
 import {
   evaluateMessage, tallyVotes, extractBioSignals, isEnforcementAction, countsAsDetection,
   shouldAutoLearn, autoLearnSource, voteLearnStatus, conversationLineFor, nsfwProfileHit,
-  classifyUrl, removesSender, BURST_GREY_FLOOR,
+  classifyUrl, removesSender, BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS,
   type ChannelPreview, type EvaluationInput, type ForwardOrigin, type PipelinePorts,
   type UserSnapshot, type Verdict, type VoteBallot
 } from '@lyadmin/core'
@@ -1887,9 +1887,11 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
    * paying for enrichment is worth it — the authoritative exempt still lives in
    * the pipeline, where hard account verdicts can cancel it.
    */
+  const localTenureDays = history?.firstSeenUnix != null
+    ? (Date.now() / 1000 - history.firstSeenUnix) / 86_400
+    : null
   const exemptish = (memberCount >= 10 || (history?.messagesGlobal ?? 0) >= 50) &&
-    history?.firstSeenUnix != null &&
-    (Date.now() / 1000 - history.firstSeenUnix) >= 7 * 86_400
+    localTenureDays !== null && localTenureDays >= ESTABLISHED_MIN_TENURE_DAYS
 
   /**
    * Profile enrichment: bio, personal channel, avatar and — most importantly —
@@ -1905,11 +1907,26 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     ? await timed('profile', () => cachedUserProfile(userSender.id))
     : EMPTY_PROFILE
 
-  // Authoritative chat join time (channels.getParticipant). Only for newish
-  // senders — "joined seconds ago then posted" is the pattern it catches, and
-  // it costs one admin-only call. Degrades to null on anything unexpected.
+  /**
+   * Authoritative chat join time (channels.getParticipant). One admin-only call,
+   * so it is asked for only when the answer can change a decision.
+   *
+   * Two cases now, not one. The original is "joined seconds ago then posted" —
+   * the drive-by, which is what `newish` selects. The second arrived with
+   * `tenureDays` (2026-08-20): this date is also the only tenure fact that
+   * survives our own database, and a short or missing local record is exactly
+   * when our clock cannot be trusted. Gating on `newish` alone would have left
+   * the shield unavailable precisely where it is needed — for the member whose
+   * counters look established while our first-seen row was recreated yesterday.
+   *
+   * Self-limiting: it stops firing for an account once our own record of them
+   * passes the tenure bar, so this is a call per sender for their first week,
+   * not a call per message forever. Degrades to null on anything unexpected.
+   */
+  const tenureUncertain = localTenureDays === null ||
+    localTenureDays < ESTABLISHED_MIN_TENURE_DAYS
   let joinedAgoSeconds: number | null = null
-  if (newish) {
+  if (newish || tenureUncertain) {
     const joinedDate = await timed('joined', () =>
       gateway.tg.getChatMember({ chatId: chat.id, userId: sender.id })
         .then((m) => m?.joinedDate ?? null)
