@@ -55,12 +55,29 @@ describe('compactNotification', () => {
     expect(why.url).toBeUndefined()
   })
 
-  it('with botUsername the why button becomes a PM deep link, override stays callback', () => {
+  it('with botUsername the why route moves into the text, leaving one button', () => {
     const view = compactNotification(uk, makeVerdict(), target, { botUsername: 'LyAdminBot' })
-    const [why, override] = view.buttons[0]!
-    expect(why!.url).toBe('https://t.me/LyAdminBot?start=why_-100123_7_42')
-    expect(why!.data).toBeUndefined()
-    expect(override!.data).toBe('ovr:-100123:7:42')
+    expect(view.text).toContain('<a href="https://t.me/LyAdminBot?start=why_-100123_7_42">за що?</a>')
+    expect(view.text).not.toContain('\n') // still one line
+    expect(view.buttons[0]).toHaveLength(1)
+    expect(view.buttons[0]![0]!.data).toBe('ovr:-100123:7:42')
+    // No button may repeat the link — that was the whole point of moving it.
+    expect(view.buttons.flat().some((b) => b.url !== undefined)).toBe(false)
+  })
+
+  it('the inline link sits after the repeat count, so the run count reads first', () => {
+    const view = compactNotification(uk, makeVerdict(), target, { botUsername: 'LyAdminBot', incidentCount: 4 })
+    expect(view.text).toMatch(/×4 · <a href=/)
+  })
+
+  it('an attacker-controlled name cannot break out into the why link', () => {
+    const view = compactNotification(uk, makeVerdict(), {
+      ...target, userLabel: '</a><a href="https://evil.example">клац'
+    }, { botUsername: 'LyAdminBot' })
+    // Exactly one anchor, and it is ours.
+    expect(view.text.match(/<a href=/g)).toHaveLength(1)
+    expect(view.text).toContain('t.me/LyAdminBot?start=why_')
+    expect(view.text).not.toMatch(/<a href="https:\/\/evil/)
   })
 })
 
@@ -92,6 +109,63 @@ describe('whyCard', () => {
   it('wraps the offending message in a blockquote', () => {
     const view = whyCard(uk, makeVerdict(), target, { canOverride: false })
     expect(view.text).toContain('<blockquote>оплата щодня</blockquote>')
+  })
+
+  it('leads with the action and the name, then the evidence, then our verdict', () => {
+    const view = whyCard(uk, makeVerdict({ action: 'delete' }), { ...target, userLabel: 'Іван' }, {
+      canOverride: true, chatTitle: 'Наш чат'
+    })
+    const lines = view.text.split('\n').filter((l) => l !== '')
+    expect(lines[0]).toBe(`<b>${uk.actions.delete} · Іван</b>`)
+    expect(lines[1]).toBe('<i>у чаті Наш чат</i>')
+    // Evidence above the confidence line — the reader judges the text first.
+    expect(view.text.indexOf('<blockquote>')).toBeLessThan(view.text.indexOf('93%'))
+  })
+
+  it('carries the mute duration in the headline (a week is not a minute)', () => {
+    const week = whyCard(uk, makeVerdict({ action: 'mute', banDurationSeconds: 7 * 86400 }), target, { canOverride: true })
+    expect(week.text.split('\n')[0]).toContain('7д')
+    const month = whyCard(uk, makeVerdict({ action: 'mute', banDurationSeconds: 30 * 86400 }), target, { canOverride: true })
+    expect(month.text.split('\n')[0]).toContain('1міс')
+    // No duration on the verdict → the bare action, never a stray "0".
+    const plain = whyCard(uk, makeVerdict({ action: 'mute' }), target, { canOverride: true })
+    expect(plain.text.split('\n')[0]).toBe(`<b>${uk.actions.mute} · Іван</b>`)
+  })
+
+  it('names the chat only when it was given one', () => {
+    const view = whyCard(uk, makeVerdict(), target, { canOverride: false })
+    expect(view.text).not.toContain('у чаті')
+  })
+
+  it('takes the name from the profile facts when the caller had none', () => {
+    const view = whyCard(uk, makeVerdict(), { chatId: -100123, messageId: 7, userId: 42 }, {
+      canOverride: false,
+      facts: {
+        userId: 42, username: 'x', displayName: 'Оксана', predictedAgeDays: null, localAgeDays: null,
+        messagesGlobal: 0, groupsActive: 0, reputationStatus: 'neutral', premium: false,
+        externalBan: null, joinedAgoSeconds: null, promoInBio: false, personalChannel: false
+      }
+    })
+    expect(view.text.split('\n')[0]).toContain('Оксана')
+  })
+
+  it('escapes an attacker-controlled name in the headline', () => {
+    const view = whyCard(uk, makeVerdict(), { ...target, userLabel: '<b>x</b>' }, { canOverride: false })
+    expect(view.text).toContain('&lt;b&gt;x&lt;/b&gt;')
+  })
+
+  it('offers the profile route to admins only (it shows ban history)', () => {
+    const admin = whyCard(uk, makeVerdict(), target, { canOverride: true })
+    expect(admin.buttons[0]!.map((b) => b.data)).toEqual(['ovr:-100123:7:42', 'prof:-100123:42'])
+    const member = whyCard(uk, makeVerdict(), target, { canOverride: false })
+    expect(member.buttons).toHaveLength(0)
+  })
+
+  it('cuts long evidence without orphaning half an emoji', () => {
+    const view = whyCard(uk, makeVerdict({ reasonEvidence: `${'а'.repeat(299)}🙂` }), target, { canOverride: false })
+    // A lone surrogate is unencodable and would take the whole card down.
+    expect(view.text).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/)
+    expect(view.text).not.toMatch(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/)
   })
 
   it('escapes HTML in attacker-controlled evidence', () => {
@@ -139,7 +213,7 @@ describe('whyView', () => {
 
 describe('userProfileLines', () => {
   const facts = (over: Partial<UserFacts> = {}): UserFacts => ({
-    userId: 7856024228, username: 'verdont_luna', predictedAgeDays: 800, localAgeDays: 0.003,
+    userId: 7856024228, username: 'verdont_luna', displayName: 'Місяць', predictedAgeDays: 800, localAgeDays: 0.003,
     messagesGlobal: 26, groupsActive: 8, reputationStatus: 'suspicious', premium: false,
     externalBan: { banned: true, bannedAtDaysAgo: 0.003, offenses: 3 }, joinedAgoSeconds: 240,
     promoInBio: true, personalChannel: false, ...over
@@ -150,10 +224,20 @@ describe('userProfileLines', () => {
     expect(text).toContain('👤')
     expect(text).toContain('@verdont_luna')
     expect(text).toContain('26 повідомлень')
-    expect(text).toContain('8 наших чатів')
-    expect(text).toContain('репутація: підозрілий')
+    expect(text).toContain('8 чатів')
+    expect(text).toContain('статус: підозрілий') // agrees in gender, unlike "репутація: підозрілий"
     expect(text).toContain('спам-базах')
     expect(text).toContain('промо в біо')
+  })
+
+  it('declines the counts it prints (a card that writes "1 чатів" reads as a machine)', () => {
+    const line = (m: number, c: number): string =>
+      userProfileLines(uk, facts({ messagesGlobal: m, groupsActive: c })).join('\n')
+    expect(line(1, 1)).toContain('1 повідомлення · 1 чат')
+    expect(line(3, 2)).toContain('3 повідомлення · 2 чати')
+    expect(line(26, 8)).toContain('26 повідомлень · 8 чатів')
+    // The teens all take the many form, however they end.
+    expect(line(11, 21)).toContain('11 повідомлень · 21 чат')
   })
 
   it('humanizes spans (account ~years, just-joined minutes)', () => {
@@ -328,7 +412,7 @@ describe('settings', () => {
 
   it('/check card carries a trust toggle for admins', () => {
     const facts: UserFacts = {
-      userId: 42, username: null, predictedAgeDays: null, localAgeDays: null,
+      userId: 42, username: null, displayName: null, predictedAgeDays: null, localAgeDays: null,
       messagesGlobal: 0, groupsActive: 0, reputationStatus: 'neutral', premium: false,
       externalBan: null, joinedAgoSeconds: null, promoInBio: false, personalChannel: false
     }

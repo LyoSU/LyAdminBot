@@ -210,6 +210,30 @@ const rememberFacts = (chatId: number, messageId: number, facts: UserFacts): voi
 const recallFacts = (chatId: number, messageId: number): UserFacts | undefined =>
   recentFacts.get(`${chatId}:${messageId}`)
 
+/**
+ * Chat titles for the PM "Why?" card. An admin opens that card by link, out of
+ * context, for one of many chats — without the title the card describes a
+ * removal somewhere. Filled from the message flow (free, always current) and,
+ * for a card opened after a restart, from one getChat per chat.
+ */
+const chatTitles = new Map<number, string>()
+const rememberChatTitle = (chatId: number, title: string | null | undefined): void => {
+  if (!title) return
+  if (chatTitles.get(chatId) === title) return
+  chatTitles.set(chatId, title)
+  if (chatTitles.size > 2000) {
+    const firstKey = chatTitles.keys().next().value
+    if (firstKey !== undefined) chatTitles.delete(firstKey)
+  }
+}
+const chatTitleFor = async (chatId: number): Promise<string | null> => {
+  const known = chatTitles.get(chatId)
+  if (known) return known
+  const fetched = await gateway.tg.getChat(chatId).then((c) => c.title || null).catch(() => null)
+  rememberChatTitle(chatId, fetched)
+  return fetched
+}
+
 /** Map a UserSnapshot to the ui's display contract. */
 const factsFromSnapshot = (
   user: UserSnapshot,
@@ -219,6 +243,7 @@ const factsFromSnapshot = (
   return {
     userId: user.id,
     username: user.username,
+    displayName: user.displayName,
     predictedAgeDays: user.predictedAgeDays,
     localAgeDays: user.localAgeDays,
     messagesGlobal: user.messagesGlobal,
@@ -880,7 +905,11 @@ const handlePrivateMessage = async (message: Message): Promise<void> => {
       const canOverride = Number.isFinite(chatId) && await isChatAdmin(chatId, sender.id)
       await sendView(message, whyCard(locale, verdict, {
         chatId, messageId: Number(messageIdRaw), userId: Number(userIdRaw)
-      }, { canOverride, facts: recallFacts(chatId, Number(messageIdRaw)) }))
+      }, {
+        canOverride,
+        facts: recallFacts(chatId, Number(messageIdRaw)),
+        chatTitle: Number.isFinite(chatId) ? await chatTitleFor(chatId) : null
+      }))
     } else {
       await sendView(message, { text: locale.why.expired, buttons: [] })
     }
@@ -1045,6 +1074,37 @@ const handleUntrust = async (message: Message, chat: Chat, caller: User): Promis
 }
 
 /**
+ * Live profile facts for one user in one chat: stored history + getFullUser +
+ * external ban + join time, mapped to the ui's display contract.
+ *
+ * Shared by /check and by the profile button on the "Why?" card, so both cards
+ * are built from the same reading — a profile that differed by which surface
+ * asked for it would be a second source of truth about the same account.
+ */
+const buildLiveFacts = async (chatId: number, target: User): Promise<UserFacts> => {
+  const userDoc = await store.getUserDoc(target.id).catch(() => null)
+  const history = userDocToHistory(userDoc as never, 0)
+  const profile = await fetchUserProfile(gateway.tg, target.id)
+  let externalBan = history?.externalBan ?? null
+  const fresh = await fetchExternalBan(target.id).catch(() => null)
+  if (fresh) externalBan = mergeExternalBan({ lols: fresh.lols as never, cas: fresh.cas as never })
+  const joinedDate = await gateway.tg.getChatMember({ chatId, userId: target.id })
+    .then((m) => m?.joinedDate ?? null).catch(() => null)
+  const joinedAgoSeconds = joinedDate ? Math.max(0, (Date.now() - joinedDate.getTime()) / 1000) : null
+
+  const user = buildUserSnapshot(
+    target,
+    history === null ? null : { ...history, avatars: profile.avatars, externalBan },
+    undefined,
+    { unofficialClientRisk: profile.unofficialClientRisk, joinedAgoSeconds }
+  )
+  return factsFromSnapshot(user, {
+    promoInBio: extractBioSignals(profile.bio).length > 0,
+    personalChannel: profile.personalChannelId !== null
+  })
+}
+
+/**
  * /check — admin looks up the profile of the replied-to user. Builds a LIVE
  * snapshot (history + getFullUser + external-ban + join time) and renders the
  * profile card. Reply required; admin-only; the card auto-deletes.
@@ -1063,26 +1123,7 @@ const handleCheck = async (message: Message, chat: Chat, caller: User): Promise<
   }
   const target = replied.sender
 
-  const userDoc = await store.getUserDoc(target.id).catch(() => null)
-  const history = userDocToHistory(userDoc as never, 0)
-  const profile = await fetchUserProfile(gateway.tg, target.id)
-  let externalBan = history?.externalBan ?? null
-  const fresh = await fetchExternalBan(target.id).catch(() => null)
-  if (fresh) externalBan = mergeExternalBan({ lols: fresh.lols as never, cas: fresh.cas as never })
-  const joinedDate = await gateway.tg.getChatMember({ chatId: chat.id, userId: target.id })
-    .then((m) => m?.joinedDate ?? null).catch(() => null)
-  const joinedAgoSeconds = joinedDate ? Math.max(0, (Date.now() - joinedDate.getTime()) / 1000) : null
-
-  const user = buildUserSnapshot(
-    target,
-    history === null ? null : { ...history, avatars: profile.avatars, externalBan },
-    undefined,
-    { unofficialClientRisk: profile.unofficialClientRisk, joinedAgoSeconds }
-  )
-  const facts = factsFromSnapshot(user, {
-    promoInBio: extractBioSignals(profile.bio).length > 0,
-    personalChannel: profile.personalChannelId !== null
-  })
+  const facts = await buildLiveFacts(chat.id, target)
   log.info('check', { chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName, by: caller.id })
   const checkPolicy = groupDocToChatPolicy(await store.getGroupDoc(chat.id).catch(() => null) as never)
   const card = userProfileCard(locale, facts, {
@@ -1180,8 +1221,12 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
     const view = compactNotification(locale, verdict, {
       chatId: chat.id, messageId: replied.id, userId: target.id, userLabel: target.displayName
     }, { botUsername: selfUsername ?? undefined })
-    const sent = await gateway.tg.sendText(chat.id, viewHtml(view.text), { replyMarkup: toKeyboard(view.buttons) })
-      .catch(() => null)
+    const sent = await gateway.tg.sendText(chat.id, viewHtml(view.text), {
+      replyMarkup: toKeyboard(view.buttons),
+      // The inline "why?" link must not drag a preview card of our own bot
+      // under a notice whose whole point is being one line.
+      disableWebPreview: true
+    }).catch(() => null)
     if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_COMPACT_MS, 'mod_event:admin_report')
     return
   }
@@ -1589,7 +1634,8 @@ const refreshIncidentCard = async (
   // and the caller posts a fresh one rather than leaving the run unannounced.
   return await gateway.tg.editMessage({
     chatId, message: incident.cardMessageId,
-    text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons)
+    text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons),
+    disableWebPreview: true
   }).then(() => true).catch(() => false)
 }
 
@@ -2066,6 +2112,9 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     }])
   })
 
+  // Free while the flow is here anyway; the PM "Why?" card reads it later.
+  rememberChatTitle(chat.id, chat.title)
+
   const input: EvaluationInput = {
     message: normalized,
     chat: {
@@ -2475,7 +2524,8 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       chatId: chat.id, messageId: message.id, userId: sender.id, userLabel: sender.displayName
     }, { botUsername: selfUsername ?? undefined })
     const sent = await gateway.tg.sendText(chat.id, viewHtml(view.text), {
-      replyMarkup: toKeyboard(view.buttons)
+      replyMarkup: toKeyboard(view.buttons),
+      disableWebPreview: true
     }).catch(() => null)
     if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_COMPACT_MS, `mod_event:${verdict.action}`)
     if (live) {
@@ -2653,6 +2703,42 @@ const wireCallbacks = (): void => {
       return
     }
 
+    // Profile button on the "Why?" card: the card carries the facts captured at
+    // decision time, which is what the verdict was based on — but an admin
+    // reviewing it hours later wants to know what is true NOW (a ban database
+    // may have caught up since), so this builds the profile live.
+    if (kind === 'prof') {
+      const [chatIdRaw = '', userIdRaw = ''] = parts
+      const chatId = Number(chatIdRaw)
+      const userId = Number(userIdRaw)
+      if (!Number.isFinite(chatId) || !Number.isFinite(userId)) { await query.answer({}); return }
+      if (!(await isChatAdmin(chatId, query.user.id))) {
+        await query.answer({ text: locale.notification.adminOnly, alert: true })
+        return
+      }
+      const [target] = await gateway.tg.getUsers([userId]).catch(() => [null])
+      if (!target) {
+        await query.answer({ text: locale.profile.notFound, alert: true })
+        return
+      }
+      const facts = await buildLiveFacts(chatId, target).catch(() => null)
+      if (!facts) {
+        await query.answer({ text: locale.profile.notFound, alert: true })
+        return
+      }
+      const policy = groupDocToChatPolicy(await store.getGroupDoc(chatId).catch(() => null) as never)
+      const card = userProfileCard(locale, facts, {
+        chatId,
+        isTrusted: policy.trustedUserIds.includes(userId)
+      })
+      log.info('profile_opened', { chatId, userId, by: query.user.id, via: 'why_card' })
+      await gateway.tg.sendText(query.user.id, viewHtml(card.text), {
+        ...(card.buttons.length > 0 ? { replyMarkup: toKeyboard(card.buttons) } : {})
+      }).catch(() => { /* PM closed */ })
+      await query.answer({})
+      return
+    }
+
     if (kind === 'tr') {
       const [chatIdRaw = '', userIdRaw = '', flagRaw = ''] = parts
       const chatId = Number(chatIdRaw)
@@ -2671,7 +2757,12 @@ const wireCallbacks = (): void => {
         text: makeTrusted ? locale.trust.untrustButton : locale.trust.button,
         data: `tr:${chatId}:${userId}:${makeTrusted ? '0' : '1'}`
       }]])
-      await gateway.tg.editMessage({ chatId, message: query.messageId, replyMarkup: flipped }).catch(() => { /* card may be gone */ })
+      // Edit where the card IS, not where the user is: this same card is now
+      // opened from the PM "Why?" card, and editing by the group's chatId there
+      // addressed a message id that does not exist in that chat — the button
+      // stayed on its old label after a trust it had already applied.
+      await gateway.tg.editMessage({ chatId: query.chat.id, message: query.messageId, replyMarkup: flipped })
+        .catch(() => { /* card may be gone */ })
       await query.answer({ text: makeTrusted ? locale.trust.added : locale.trust.removed })
       return
     }

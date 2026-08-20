@@ -33,7 +33,7 @@ export const en: Locale = {
     '/check — user card with buttons (trust, etc.)',
     '/welcome — newcomer greetings · /extra, /extras — triggers',
     '',
-    'Under every decision: <b>[🤨 Why?]</b> and <b>[✅ Not spam]</b> for admins.'
+    'Every notice carries a <b>why?</b> link with the full decision card. Admins also get <b>[✅ Not spam]</b>.'
   ].join('\n'),
 
   lang: {
@@ -70,6 +70,7 @@ export const en: Locale = {
 
   notification: {
     compact: (action, userLabel) => `${action} · ${userLabel}`,
+    whyLink: 'why?',
     whyButton: '🤨 Why?',
     notSpamButton: '✅ Not spam',
     overrideDone: 'Done, reverted. User is back and trusted in this chat now.',
@@ -112,12 +113,12 @@ export const en: Locale = {
 
   why: {
     title: '🛡 Why I acted',
+    inChat: (chatTitle) => `in ${chatTitle}`,
     confidence: {
       high: (percent) => `🔴 Very likely spam · ${percent}%`,
       medium: (percent) => `🟠 Probably spam · ${percent}%`,
       low: (percent) => `🟡 Possibly spam · ${percent}%`
     },
-    reasonLine: (reason) => `Reason: ${reason}`,
     noticedTitle: 'What I noticed:',
     signalLabels: {
       external_ban: 'the account is in spam databases',
@@ -180,7 +181,6 @@ export const en: Locale = {
       sender_burst: 'a run of messages from one account',
       burst_grey_repeat: 'a run with several already-suspicious messages'
     },
-    messageTitle: 'The message:',
     decidedBy: {
       custom_rule: 'chat rule',
       deterministic: 'deterministic rule',
@@ -202,9 +202,11 @@ export const en: Locale = {
 
   profile: {
     title: '👤 Profile',
+    openButton: '👤 Profile',
     accountAge: (age) => `account ${age}`,
     firstSeen: (seen) => `here ${seen}`,
-    activity: (messages, chats) => `${messages} messages · ${chats} of our chats`,
+    activity: (messages, chats) =>
+      `${messages} message${messages === 1 ? '' : 's'} · ${chats} chat${chats === 1 ? '' : 's'}`,
     reputation: (status) => `reputation: ${status}`,
     premium: 'Premium',
     externalBan: (ago, offenses) => [

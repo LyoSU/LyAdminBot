@@ -58,6 +58,13 @@ export interface Locale {
   /** One-line compact moderation notice: {action} {user}. */
   notification: {
     compact: (action: string, userLabel: string) => string
+    /**
+     * Inline "why?" link inside the compact line — the primary route to the
+     * explanation. Reads as running text, not as a label on a button, because
+     * it is one: lowercase, no emoji of its own.
+     */
+    whyLink: string
+    /** Same destination as a button. Only for the no-username fallback. */
     whyButton: string
     notSpamButton: string
     overrideDone: string
@@ -71,16 +78,21 @@ export interface Locale {
   reasonFallback: string
 
   why: {
-    /** Card header, e.g. "🛡 Why I acted". */
+    /**
+     * Fallback header, used only when the verdict took no action (a recalled
+     * `observe`). Every enforcement card is headed by the action itself —
+     * "what did you do to whom" is the admin's first question, and a generic
+     * "Why I acted" answered none of it.
+     */
     title: string
+    /** Which chat this happened in — an admin reads this card for many. */
+    inChat: (chatTitle: string) => string
     /** Verdict line with a traffic-light emoji, chosen by pSpam bucket. */
     confidence: {
       high: (percent: number) => string
       medium: (percent: number) => string
       low: (percent: number) => string
     }
-    /** Human one-liner for the decision, e.g. "Reason: …". */
-    reasonLine: (reason: string) => string
     /** Header above the bulleted, humanized signal list. */
     noticedTitle: string
     /**
@@ -95,8 +107,6 @@ export interface Locale {
      * Trust signals are deliberately absent: they are never shown to anyone.
      */
     signalLabels: Record<SuspicionSignalName, string>
-    /** Header above the quoted offending message. */
-    messageTitle: string
     /** Technical footer (admins only): how the verdict was reached. */
     decidedBy: Record<string, string>
     expired: string
@@ -104,7 +114,10 @@ export interface Locale {
 
   /** User profile card — shared by /check and the "Why?" card's context block. */
   profile: {
+    /** Header used only when we have no display name for the account. */
     title: string
+    /** Opens the live profile card from the "Why?" card (admins only). */
+    openButton: string
     accountAge: (age: string) => string
     firstSeen: (seen: string) => string
     activity: (messages: number, chats: number) => string

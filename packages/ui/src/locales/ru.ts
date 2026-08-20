@@ -1,5 +1,19 @@
 import type { Locale } from '../locale.js'
 
+/**
+ * Slavic plural picker: one / few (2-4) / many (5+, and the whole 11-19 teens).
+ * The profile line used to read "1 наших чатів" — a count is not a decoration,
+ * and a card that misdeclines its own numbers reads as machine output.
+ */
+const plural = (n: number, one: string, few: string, many: string): string => {
+  const mod100 = Math.abs(n) % 100
+  const mod10 = mod100 % 10
+  if (mod100 >= 11 && mod100 <= 19) return many
+  if (mod10 === 1) return one
+  if (mod10 >= 2 && mod10 <= 4) return few
+  return many
+}
+
 export const ru: Locale = {
   languageName: 'Русский',
 
@@ -33,7 +47,7 @@ export const ru: Locale = {
     '/check — карточка пользователя с кнопками (доверие и т.д.)',
     '/welcome — приветствие новичков · /extra, /extras — триггеры',
     '',
-    'Под каждым решением: <b>[🤨 За что?]</b> и <b>[✅ Не спам]</b> для админов.'
+    'В каждом уведомлении есть ссылка <b>за что?</b> — там вся карточка решения. Админам ещё и <b>[✅ Не спам]</b>.'
   ].join('\n'),
 
   lang: {
@@ -70,6 +84,7 @@ export const ru: Locale = {
 
   notification: {
     compact: (action, userLabel) => `${action} · ${userLabel}`,
+    whyLink: 'за что?',
     whyButton: '🤨 За что?',
     notSpamButton: '✅ Не спам',
     overrideDone: 'Ок, отменил. Юзер разблокирован и теперь в доверенных этого чата.',
@@ -112,12 +127,12 @@ export const ru: Locale = {
 
   why: {
     title: '🛡 Почему я вмешался',
+    inChat: (chatTitle) => `в чате ${chatTitle}`,
     confidence: {
       high: (percent) => `🔴 Очень похоже на спам · ${percent}%`,
       medium: (percent) => `🟠 Вероятно спам · ${percent}%`,
       low: (percent) => `🟡 Возможно спам · ${percent}%`
     },
-    reasonLine: (reason) => `Причина: ${reason}`,
     noticedTitle: 'Что я заметил:',
     signalLabels: {
       external_ban: 'аккаунт в спам-базах',
@@ -180,7 +195,6 @@ export const ru: Locale = {
       sender_burst: 'серия сообщений от одного аккаунта',
       burst_grey_repeat: 'серия, где несколько сообщений уже выглядели подозрительно'
     },
-    messageTitle: 'Сообщение:',
     decidedBy: {
       custom_rule: 'правило чата',
       deterministic: 'детерминированное правило',
@@ -202,15 +216,17 @@ export const ru: Locale = {
 
   profile: {
     title: '👤 Профиль',
+    openButton: '👤 Профиль',
     accountAge: (age) => `аккаунт ${age}`,
     firstSeen: (seen) => `у нас ${seen}`,
-    activity: (messages, chats) => `${messages} сообщений · ${chats} наших чатов`,
-    reputation: (status) => `репутация: ${status}`,
+    activity: (messages, chats) =>
+      `${messages} ${plural(messages, 'сообщение', 'сообщения', 'сообщений')} · ${chats} ${plural(chats, 'чат', 'чата', 'чатов')}`,
+    reputation: (status) => `статус: ${status}`,
     premium: 'Premium',
     externalBan: (ago, offenses) => [
       'в спам-базах',
       ...(ago ? [`бан ${ago} назад`] : []),
-      ...(offenses > 1 ? [`${offenses} нарушений`] : [])
+      ...(offenses > 1 ? [`${offenses} ${plural(offenses, 'нарушение', 'нарушения', 'нарушений')}`] : [])
     ].join(' · '),
     justJoined: (ago) => `в чате всего ${ago}`,
     promoInBio: 'промо в био',

@@ -8,7 +8,7 @@
  *  - settings panel only in PM; group /settings replies with a deep link
  */
 import type { Verdict } from '@lyadmin/core'
-import { isSuspicionSignal, ESTABLISHED_MIN_TENURE_DAYS } from '@lyadmin/core'
+import { isSuspicionSignal, truncate, ESTABLISHED_MIN_TENURE_DAYS } from '@lyadmin/core'
 import type { Locale } from './locale.js'
 import { uk } from './locales/uk.js'
 import { en } from './locales/en.js'
@@ -53,6 +53,8 @@ export const callbackData = {
     `tr:${chatId}:${userId}:${makeTrusted ? '1' : '0'}`,
   vote: (chatId: number, messageId: number, choice: 'spam' | 'ham'): string =>
     `vt:${chatId}:${messageId}:${choice === 'spam' ? 's' : 'h'}`,
+  /** Live profile card for a user, opened from the "Why?" card. Admins only. */
+  profile: (chatId: number, userId: number): string => `prof:${chatId}:${userId}`,
   help: (): string => 'help',
   langPicker: (): string => 'lang',
   langSet: (code: string): string => `lang:${code}`,
@@ -149,20 +151,35 @@ export const compactNotification = (
   if (action === 'none' || action === 'observe') {
     throw new Error('compactNotification is only for enforcement actions')
   }
-  // With a known bot username the [Why?] button leaves the group entirely:
-  // a t.me deep link opens the expanded card in PM. Without it (e.g. in unit
-  // tests) it falls back to the in-group callback.
-  const whyButton = options.botUsername
-    ? { text: locale.notification.whyButton, url: whyDeepLink(options.botUsername, target.chatId, target.messageId, target.userId) }
-    : { text: locale.notification.whyButton, data: callbackData.why(target.chatId, target.messageId) }
+  // With a known bot username the explanation is reached by a link INSIDE the
+  // line rather than by a button under it. The notice is read in a scrolling
+  // chat, most often after the fact, and a button row is a second visual object
+  // per event: at a wave of removals the chat filled with chrome instead of
+  // notices. As running text it costs two words, and the one button left is the
+  // one that actually changes state.
+  //
+  // Without a username (unit tests, or before /getMe lands) there is no deep
+  // link to point at, so it falls back to the in-group callback button.
+  const notSpam = {
+    text: locale.notification.notSpamButton,
+    data: callbackData.override(target.chatId, target.messageId, target.userId)
+  }
   const repeats = options.incidentCount ?? 1
+  const line = locale.notification.compact(locale.actions[action], escapeHtml(target.userLabel)) +
+    (repeats > 1 ? ` · ×${repeats}` : '')
+  if (!options.botUsername) {
+    return {
+      text: line,
+      buttons: [[
+        { text: locale.notification.whyButton, data: callbackData.why(target.chatId, target.messageId) },
+        notSpam
+      ]]
+    }
+  }
+  const url = whyDeepLink(options.botUsername, target.chatId, target.messageId, target.userId)
   return {
-    text: locale.notification.compact(locale.actions[action], escapeHtml(target.userLabel)) +
-      (repeats > 1 ? ` · ×${repeats}` : ''),
-    buttons: [[
-      whyButton,
-      { text: locale.notification.notSpamButton, data: callbackData.override(target.chatId, target.messageId, target.userId) }
-    ]]
+    text: `${line} · <a href="${url}">${locale.notification.whyLink}</a>`,
+    buttons: [[notSpam]]
   }
 }
 
@@ -178,6 +195,48 @@ export interface WhyOptions {
    * Admins only — it is developer-facing noise for everyone else.
    */
   technical?: boolean
+  /**
+   * Who this was about and where. Both optional: a card rebuilt after a restart
+   * knows the verdict but not the names, and the card degrades to the verdict
+   * rather than lying about them.
+   */
+  context?: {
+    userLabel?: string | null
+    chatTitle?: string | null
+  }
+}
+
+/**
+ * Compact relative span ("щойно", "5хв", "3д", "2міс", "1р") from seconds.
+ * Shared by the profile block and by the action headline's duration, so a mute
+ * of a month reads the same way an account age of a month does.
+ */
+const humanSpan = (locale: Locale, totalSeconds: number): string => {
+  const u = locale.profile.units
+  if (totalSeconds < 60) return u.now
+  const minutes = totalSeconds / 60
+  const hours = minutes / 60
+  const days = hours / 24
+  if (days >= 365) return `${Math.round(days / 365)}${u.y}`
+  if (days >= 30) return `${Math.round(days / 30)}${u.mo}`
+  if (days >= 1) return `${Math.round(days)}${u.d}`
+  if (hours >= 1) return `${Math.round(hours)}${u.h}`
+  return `${Math.round(minutes)}${u.m}`
+}
+
+/**
+ * The headline: what was done, and for how long. An enforcement card is headed
+ * by its own action — the duration included, because "muted" and "muted for a
+ * month" are different decisions to review. A verdict that took no action (a
+ * recalled `observe`) has nothing to announce and keeps the generic title.
+ */
+const actionHeadline = (locale: Locale, verdict: Verdict): string => {
+  const action = verdict.action
+  if (action === 'none' || action === 'observe') return locale.why.title
+  const label = locale.actions[action]
+  return verdict.banDurationSeconds
+    ? `${label} ${humanSpan(locale, verdict.banDurationSeconds)}`
+    : label
 }
 
 /**
@@ -186,15 +245,34 @@ export interface WhyOptions {
  * machine tokens — decidedBy, ruleId, signal names — only surface in the
  * admin-only technical footer; everyone else sees plain language. Unmapped
  * signals are dropped from the human list so no code ever leaks.
+ *
+ * Block order is evidence-first (chosen 2026-08-20): action + who + where, then
+ * the message itself, then our verdict and its grounds. An admin opening this
+ * is deciding one thing — "was the bot right?" — and the message is what
+ * decides it. Leading with the bot's own confidence instead put our conclusion
+ * ahead of the evidence for it, which is the wrong way round for a review
+ * surface: the reader should judge the text, then see whether we agreed.
  */
 export const whyView = (locale: Locale, verdict: Verdict, options: WhyOptions = {}): string => {
-  const { html: asHtml = false, technical = false } = options
+  const { html: asHtml = false, technical = false, context = {} } = options
   const esc = asHtml ? escapeHtml : (s: string): string => s
   const b = asHtml ? (s: string): string => `<b>${s}</b>` : (s: string): string => s
   const dim = asHtml ? (s: string): string => `<i>${s}</i>` : (s: string): string => s
 
   const lines: string[] = []
-  lines.push(b(esc(locale.why.title)))
+  const headline = actionHeadline(locale, verdict)
+  lines.push(b(esc(context.userLabel
+    ? `${headline} · ${context.userLabel}`
+    : headline)))
+  if (context.chatTitle) lines.push(dim(esc(locale.why.inChat(context.chatTitle))))
+
+  // The evidence, before our reading of it. `truncate` rather than `.slice`:
+  // the text is whatever a stranger typed, and a cut through an emoji leaves an
+  // unencodable half that Telegram rejects — the whole card, not the emoji.
+  if (verdict.reasonEvidence) {
+    const quote = esc(truncate(verdict.reasonEvidence, 300))
+    lines.push('', asHtml ? `<blockquote>${quote}</blockquote>` : `"${quote}"`)
+  }
 
   const pct = Math.round(verdict.pSpam * 100)
   const confidence = verdict.pSpam >= 0.85
@@ -205,7 +283,7 @@ export const whyView = (locale: Locale, verdict: Verdict, options: WhyOptions = 
   lines.push('', b(esc(confidence(pct))))
 
   const reason = locale.reasons[verdict.reasonCode] ?? locale.reasonFallback
-  lines.push(esc(locale.why.reasonLine(reason)))
+  lines.push(esc(reason))
 
   // Trust signals are never listed: nobody needs telling that their message was
   // a reply. Which signals those are comes from the catalogue, not from a flag
@@ -229,18 +307,29 @@ export const whyView = (locale: Locale, verdict: Verdict, options: WhyOptions = 
     for (const label of humanized) lines.push(`• ${esc(label)}`)
   }
 
-  if (verdict.reasonEvidence) {
-    const quote = esc(verdict.reasonEvidence.slice(0, 200))
-    lines.push('', esc(locale.why.messageTitle))
-    lines.push(asHtml ? `<blockquote>${quote}</blockquote>` : `"${quote}"`)
-  }
+  if (technical) lines.push('', whyTechnicalFooter(locale, verdict, { html: asHtml }))
 
-  if (technical) {
-    const decidedBy = locale.why.decidedBy[verdict.decidedBy] ?? verdict.decidedBy
-    lines.push('', dim(esc(`${decidedBy}${verdict.ruleId ? ` · ${verdict.ruleId}` : ''}`)))
-    if (suspicious.length > 0) lines.push(dim(esc(suspicious.slice(0, 8).join(', '))))
-  }
+  return lines.join('\n')
+}
 
+/**
+ * Technical footer (admins only): how the verdict was reached, plus the raw
+ * signal codes. Separate from `whyView` so the PM card can place it after the
+ * profile block — machine tokens belong at the bottom of a card, not wedged
+ * between two blocks a human is reading.
+ */
+export const whyTechnicalFooter = (
+  locale: Locale,
+  verdict: Verdict,
+  options: { html?: boolean } = {}
+): string => {
+  const asHtml = options.html ?? false
+  const esc = asHtml ? escapeHtml : (s: string): string => s
+  const dim = asHtml ? (s: string): string => `<i>${s}</i>` : (s: string): string => s
+  const decidedBy = locale.why.decidedBy[verdict.decidedBy] ?? verdict.decidedBy
+  const codes = verdict.signals.map((s) => s.name).filter(isSuspicionSignal).slice(0, 8)
+  const lines = [dim(esc(`${decidedBy}${verdict.ruleId ? ` · ${verdict.ruleId}` : ''}`))]
+  if (codes.length > 0) lines.push(dim(esc(codes.join(', '))))
   return lines.join('\n')
 }
 
@@ -251,6 +340,11 @@ export const whyView = (locale: Locale, verdict: Verdict, options: WhyOptions = 
 export interface UserFacts {
   userId: number
   username: string | null
+  /**
+   * The name Telegram shows for the account. Attacker-controlled, so escaped
+   * on the way out. Null — we only have the id (a card rebuilt from storage).
+   */
+  displayName: string | null
   /** Account age estimated from the id, in days. Null — unknown. */
   predictedAgeDays: number | null
   /** Days since we first saw the account locally. Null — never seen. */
@@ -273,20 +367,6 @@ export interface UserFacts {
  */
 const JOINED_RECENTLY_MAX_SECONDS = ESTABLISHED_MIN_TENURE_DAYS * 86400
 
-/** Compact relative span ("щойно", "5хв", "3д", "2міс", "1р") from seconds. */
-const humanSpan = (locale: Locale, totalSeconds: number): string => {
-  const u = locale.profile.units
-  if (totalSeconds < 60) return u.now
-  const minutes = totalSeconds / 60
-  const hours = minutes / 60
-  const days = hours / 24
-  if (days >= 365) return `${Math.round(days / 365)}${u.y}`
-  if (days >= 30) return `${Math.round(days / 30)}${u.mo}`
-  if (days >= 1) return `${Math.round(days)}${u.d}`
-  if (hours >= 1) return `${Math.round(hours)}${u.h}`
-  return `${Math.round(minutes)}${u.m}`
-}
-
 /**
  * User profile card (LolsBot-inspired, built only from data a bot can see).
  * Rendered as plain text by default; pass `{ html: true }` for the PM surfaces.
@@ -298,10 +378,19 @@ export const userProfileLines = (locale: Locale, facts: UserFacts, options: { ht
   const code = asHtml ? (s: string): string => `<code>${s}</code>` : (s: string): string => s
   const p = locale.profile
 
-  const lines: string[] = [b(p.title)]
+  const lines: string[] = []
 
-  const idLine = `${code(String(facts.userId))}${facts.username ? ` · @${escapeHtml(facts.username)}` : ''}`
-  lines.push(idLine)
+  // Header names the account instead of the block: "👤 Профіль" over a bare id
+  // told the reader nothing they could match against the chat they were just
+  // reading. The id stays — it is what /check and the logs are keyed by — but
+  // after the name and the handle, in the order an admin actually recognises.
+  const handle = facts.username ? ` · @${escapeHtml(facts.username)}` : ''
+  if (facts.displayName) {
+    lines.push(`👤 ${b(escapeHtml(facts.displayName))}${handle} · ${code(String(facts.userId))}`)
+  } else {
+    lines.push(b(p.title))
+    lines.push(`${code(String(facts.userId))}${handle}`)
+  }
 
   const age = facts.predictedAgeDays !== null ? `~${humanSpan(locale, facts.predictedAgeDays * 86400)}` : p.unknownAge
   // The same reading the pipeline uses (`tenureDays`), for the same reason: our
@@ -315,8 +404,14 @@ export const userProfileLines = (locale: Locale, facts: UserFacts, options: { ht
   const seen = tenureSeconds > 0 ? humanSpan(locale, tenureSeconds) : p.neverSeen
   lines.push(`${p.accountAge(age)} · ${p.firstSeen(seen)}`)
 
-  lines.push(p.activity(facts.messagesGlobal, facts.groupsActive))
-  lines.push(`${p.reputation(locale.stats.repStatus[facts.reputationStatus])}${facts.premium ? ` · ${p.premium}` : ''}`)
+  // Activity and reputation on one line: they answer the same question ("is
+  // this a member or an arrival?"), and every line spent here is a line the
+  // evidence and the signals are pushed down by.
+  lines.push([
+    p.activity(facts.messagesGlobal, facts.groupsActive),
+    p.reputation(locale.stats.repStatus[facts.reputationStatus]),
+    ...(facts.premium ? [p.premium] : [])
+  ].join(' · '))
 
   // Risk flags grouped under a blank line, so the "who" block reads apart
   // from the "what's wrong" block.
@@ -367,22 +462,45 @@ export const userProfileCard = (
 
 /**
  * Expanded "Why?" card for PM. Rendered as HTML; admins additionally get the
- * override button and the technical footer, since the group notification has
- * auto-deleted by the time they open this. When `facts` are supplied a compact
- * profile block is appended under the verdict.
+ * override button, the technical footer and a route to the live profile, since
+ * the group notification has auto-deleted by the time they open this. When
+ * `facts` are supplied a compact profile block is appended under the verdict.
+ *
+ * `userLabel` and `chatTitle` are what make the card readable out of context —
+ * an admin arrives here from a link, hours later, for one of many chats. Both
+ * are optional and the card simply omits what it was not given.
  */
 export const whyCard = (
   locale: Locale,
   verdict: Verdict,
-  target: { chatId: number; messageId: number; userId: number },
-  options: { canOverride: boolean; facts?: UserFacts | undefined }
+  target: { chatId: number; messageId: number; userId: number; userLabel?: string | null },
+  options: {
+    canOverride: boolean
+    facts?: UserFacts | undefined
+    chatTitle?: string | null
+  }
 ): ViewMessage => {
-  const body = whyView(locale, verdict, { html: true, technical: options.canOverride })
+  const body = whyView(locale, verdict, {
+    html: true,
+    context: {
+      userLabel: target.userLabel ?? options.facts?.displayName ?? null,
+      chatTitle: options.chatTitle ?? null
+    }
+  })
   const profile = options.facts ? `\n\n${userProfileLines(locale, options.facts, { html: true }).join('\n')}` : ''
+  // Footer last, under the profile: the reader works down from what happened to
+  // who it happened to, and only then to how we decided it.
+  const footer = options.canOverride ? `\n\n${whyTechnicalFooter(locale, verdict, { html: true })}` : ''
   return {
-    text: body + profile,
+    text: body + profile + footer,
+    // Both buttons are moderator tools — the override changes state, the
+    // profile shows ban history and reputation — so a non-admin reader (whose
+    // own message this was) gets the explanation and nothing else.
     buttons: options.canOverride
-      ? [[{ text: locale.notification.notSpamButton, data: callbackData.override(target.chatId, target.messageId, target.userId) }]]
+      ? [[
+          { text: locale.notification.notSpamButton, data: callbackData.override(target.chatId, target.messageId, target.userId) },
+          { text: locale.profile.openButton, data: callbackData.profile(target.chatId, target.userId) }
+        ]]
       : []
   }
 }
@@ -516,8 +634,14 @@ export const langPanel = (locale: Locale, chatId: number, currentLocale: string)
 
 // ── PM welcome / extras editor (opened from /settings) ─────────────────────
 
-const truncate = (s: string, max: number): string =>
-  s.length <= max ? s : `${s.slice(0, max - 1)}…`
+/**
+ * Preview shortener for editor lists: cut, then mark the cut with an ellipsis.
+ * Cuts through `truncate` (core) rather than `.slice`, because admin-authored
+ * welcome texts are as full of emoji as any other message, and half an emoji
+ * is unencodable — it would take the whole editor screen down, not one row.
+ */
+const ellipsize = (s: string, max: number): string =>
+  s.length <= max ? s : `${truncate(s, max - 1)}…`
 
 /** Chunk delete buttons + build a ‹ N/M › pager row (empty when single page). */
 const paginate = <T>(
@@ -584,7 +708,7 @@ export const welcomeTextsScreen = (
   }
   const { pageItems, nav } = paginate(texts, page, 5, (p) => callbackData.welcome(chatId, 'tpage', String(p)))
   const list = pageItems
-    .map(({ item, index }) => e.textsItem(index + 1, truncate(item.replace(/\n/g, ' '), 50)))
+    .map(({ item, index }) => e.textsItem(index + 1, ellipsize(item.replace(/\n/g, ' '), 50)))
     .join('\n')
   const delRow = pageItems.map(({ index }) => ({
     text: `${index + 1} 🗑`,

@@ -33,7 +33,7 @@ export const tr: Locale = {
     '/check — butonlu kullanıcı kartı (güven vb.)',
     '/welcome — yeni üye karşılama · /extra, /extras — tetikleyiciler',
     '',
-    'Her kararın altında: <b>[🤨 Neden?]</b> ve yöneticiler için <b>[✅ Spam değil]</b>.'
+    'Her bildirimde tam karar kartına giden bir <b>neden?</b> bağlantısı var. Yöneticiler ayrıca <b>[✅ Spam değil]</b> görür.'
   ].join('\n'),
 
   lang: {
@@ -70,6 +70,7 @@ export const tr: Locale = {
 
   notification: {
     compact: (action, userLabel) => `${action} · ${userLabel}`,
+    whyLink: 'neden?',
     whyButton: '🤨 Neden?',
     notSpamButton: '✅ Spam değil',
     overrideDone: 'Tamam, geri alındı. Kullanıcı geri döndü ve artık bu sohbette güveniliyor.',
@@ -112,12 +113,12 @@ export const tr: Locale = {
 
   why: {
     title: '🛡 Neden işlem yaptım',
+    inChat: (chatTitle) => `${chatTitle} sohbetinde`,
     confidence: {
       high: (percent) => `🔴 Büyük olasılıkla spam · ${percent}%`,
       medium: (percent) => `🟠 Muhtemelen spam · ${percent}%`,
       low: (percent) => `🟡 Spam olabilir · ${percent}%`
     },
-    reasonLine: (reason) => `Neden: ${reason}`,
     noticedTitle: 'Fark ettiklerim:',
     signalLabels: {
       external_ban: 'hesap spam veritabanlarında',
@@ -180,7 +181,6 @@ export const tr: Locale = {
       sender_burst: 'tek hesaptan gelen mesaj dizisi',
       burst_grey_repeat: 'birkaç mesajı zaten şüpheli görünen dizi'
     },
-    messageTitle: 'Mesaj:',
     decidedBy: {
       custom_rule: 'sohbet kuralı',
       deterministic: 'kesin kural',
@@ -202,6 +202,7 @@ export const tr: Locale = {
 
   profile: {
     title: '👤 Profil',
+    openButton: '👤 Profil',
     accountAge: (age) => `hesap ${age}`,
     firstSeen: (seen) => `burada ${seen}`,
     activity: (messages, chats) => `${messages} mesaj · sohbetlerimizin ${chats} tanesinde`,
