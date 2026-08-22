@@ -344,8 +344,22 @@ describe('extractUserSignals — robustness', () => {
   it('property: never throws on arbitrary unicode, lone surrogates included', () => {
     // `unit: 'binary'` generates raw UTF-16 code units, so unpaired surrogates
     // reach the regexes — the shape that has bitten this codebase before.
+    //
+    // Called plainly rather than through `expect(...).not.toThrow()`: a throw
+    // fails the property either way, and fast-check then reports the shrunk
+    // counterexample, which is the more useful message. The wrapper captured a
+    // stack per run, a hundred of them, for no gain.
+    //
+    // This test times out intermittently under the full suite (2026-08-22), and
+    // the wrapper is NOT the whole story: the property itself measures ~15ms per
+    // hundred runs standalone, `extractUserSignals` ~2µs per case over 5000
+    // arbitrary binary strings, and the file alone runs in 300ms. Whatever
+    // pushes it past 5s is contention, not this code — the same report showed a
+    // second property test at 7s. Left as a known flake rather than papered over
+    // with a longer timeout, because the cause is not yet understood.
     fc.assert(fc.property(fc.string({ unit: 'binary' }), (displayName) => {
-      expect(() => extractUserSignals(makeUser({ displayName }))).not.toThrow()
+      extractUserSignals(makeUser({ displayName }))
+      return true
     }))
   })
 
