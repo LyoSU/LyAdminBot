@@ -147,6 +147,33 @@ export class QdrantVectorPort implements VectorPort {
     } catch { /* best-effort, mirrors signaturePort.learn */ }
   }
 
+  /**
+   * Stop a learned point from ever matching again.
+   *
+   * `search` has skipped points carrying `disabledAt` since this port was
+   * written, and until 2026-08-22 nothing anywhere wrote one — a read with no
+   * writer, so a vector generating false positives could not be retired by
+   * anybody, admin included. The signature layer had the equivalent from the
+   * start (`disabledAt` on the signature document, honoured by `match`), and
+   * this is its twin.
+   *
+   * No lookup: `pointIdFor` derives the id from the text, so retiring addresses
+   * exactly the point `learn` would have written. That also means the two must
+   * keep agreeing, which is what the test pins.
+   *
+   * The payload is set rather than the point deleted, so the record of what was
+   * once believed survives for calibration replay — the same reason the
+   * signature is demoted to `candidate` instead of being removed.
+   */
+  async retire(text: string): Promise<void> {
+    try {
+      await this.qdrant.setPayload(SPAM_COLLECTION, {
+        payload: { disabledAt: new Date().toISOString() },
+        points: [pointIdFor(text)]
+      })
+    } catch { /* nothing learned for this text, or Qdrant is down — best-effort */ }
+  }
+
   private async embed(text: string): Promise<number[] | null> {
     try {
       const response = await this.openai.embeddings.create({

@@ -87,6 +87,38 @@ export class MongoSignaturePort implements SignaturePort {
   }
 
   /**
+   * Retire whatever signature this text matches, by the text rather than by id.
+   *
+   * `recordOverride` already disables the signature an admin overruled, but only
+   * when it was the DECIDER (`decidedBy === 'signature'`, via its `ruleId`). A
+   * candidate that merely contributed `signature_candidate_match` to an LLM
+   * verdict never appears as the decider, so it survived the correction and went
+   * on matching the next person. Looking it up by text catches both, and needs
+   * no id to have been recorded.
+   *
+   * Demoted, not deleted, for the same reason `recordOverride` demotes: a
+   * signature fires in every chat for ninety days, so its history is worth
+   * keeping for calibration replay even once it is switched off.
+   *
+   * Authority is the caller's business — this is reachable only from the admin
+   * override path. A chat's own ballot is not authority over the network (see
+   * `recordOverride`), and nothing here changes that.
+   */
+  async retire(text: string): Promise<void> {
+    const hashes = computeSignatureHashes(text)
+    if (!hashes) return
+    // The same three layers `match` searches, in the same order — a signature
+    // reachable by the lookup must be reachable by the retirement.
+    const query: Document[] = [{ exactHash: hashes.exactHash }]
+    if (hashes.normalizedHash) query.push({ normalizedHash: hashes.normalizedHash })
+    if (hashes.foldedHash) query.push({ foldedHash: hashes.foldedHash })
+    await this.store.spamSignatures.updateOne(
+      { $or: query },
+      { $set: { status: 'candidate', disabledAt: new Date(), disabledBy: 'admin_override' } }
+    ).catch(() => { /* a missing signature is fine */ })
+  }
+
+  /**
    * Self-learning ingest: store a spam text (vote, threat feed, auto-verdict).
    *
    * Three things this deliberately does NOT do the obvious way (2026-07-30

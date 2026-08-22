@@ -212,6 +212,33 @@ const recallFacts = (chatId: number, messageId: number): UserFacts | undefined =
   recentFacts.get(`${chatId}:${messageId}`)
 
 /**
+ * The message text a verdict was about, kept so an admin override can retire
+ * what matched it.
+ *
+ * Not read back from `pipeline_decisions`: that record stores `textPreview`
+ * truncated to 200 characters, and both retirement paths key on the WHOLE text
+ * — `computeSignatureHashes` hashes it, `pointIdFor` derives the vector id from
+ * it — so a preview addresses a different signature and a different point than
+ * the one that actually fired.
+ *
+ * In-memory only, and bounded like the two maps above. After a restart an
+ * override still lifts the punishment and files the feedback record; it just
+ * cannot retire the rule, the same way the Why? card degrades to the verdict
+ * alone. The community vote is unaffected — its `learnText` lives in Mongo.
+ */
+const recentTexts = new Map<string, string>()
+const rememberText = (chatId: number, messageId: number, text: string): void => {
+  if (!text) return
+  recentTexts.set(`${chatId}:${messageId}`, text)
+  if (recentTexts.size > 2000) {
+    const firstKey = recentTexts.keys().next().value
+    if (firstKey) recentTexts.delete(firstKey)
+  }
+}
+const recallText = (chatId: number, messageId: number): string | undefined =>
+  recentTexts.get(`${chatId}:${messageId}`)
+
+/**
  * Chat titles for the PM "Why?" card. An admin opens that card by link, out of
  * context, for one of many chats — without the title the card describes a
  * removal somewhere. Filled from the message flow (free, always current) and,
@@ -663,6 +690,11 @@ const restoreFalsePositive = async (params: {
   /** Who said so — an admin's id, or the voter who closed a community vote. */
   byUserId: number
   source: 'admin' | 'community_vote'
+  /**
+   * The full text the verdict was about, when we still have it. Only an admin
+   * correction retires anything with it — see the retirement block below.
+   */
+  learnText?: string | undefined
 }): Promise<void> => {
   const verdict = await recallVerdict(params.chatId, params.messageId)
   /**
@@ -713,6 +745,27 @@ const restoreFalsePositive = async (params: {
   // and two detections strip an account of every benefit of the doubt at once.
   await store.adjustSpamMessages(params.chatId, params.userId, -1, true)
     .catch(() => { /* counters are best-effort */ })
+  /**
+   * Retire what matched, so the same mistake is not made about the next person.
+   *
+   * Admin only, and deliberately so. `recordOverride` already retires the
+   * signature that DECIDED, and states the reason the community may not: a
+   * signature fires in every chat for ninety days, so switching one off is a
+   * network-wide act, and a crew posting spam in a group they control could
+   * otherwise vote their own text clean and take the rule down everywhere.
+   * Nothing here widens that authority.
+   *
+   * What it widens is reach, on two fronts the id-based retirement cannot see:
+   *  - a candidate that only contributed `signature_candidate_match` to an LLM
+   *    verdict is never the decider, so no `ruleId` ever pointed at it;
+   *  - the vector twin, whose `disabledAt` the search has always honoured and
+   *    nobody ever wrote — a false positive there was unretirable by anyone.
+   */
+  if (params.source === 'admin' && params.learnText) {
+    await signaturePort.retire(params.learnText).catch(() => { /* best-effort */ })
+    await vectorPort?.retire(params.learnText).catch(() => { /* best-effort */ })
+  }
+
   // A forwarded FP also earns its origin a clean point (v1 2:1 math).
   const key = `${params.chatId}:${params.messageId}`
   const forward = recentForwards.get(key)
@@ -2478,6 +2531,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   if (result.applied && enforced) {
     void sessionPort.reset(chat.id, sender.id).catch(() => { /* best-effort */ })
     rememberVerdict(chat.id, message.id, verdict)
+    rememberText(chat.id, message.id, normalized.text ?? '')
     rememberFacts(chat.id, message.id, factsFromSnapshot(user, {
       promoInBio: verdict.signals.some((s) => s.name === 'promo_in_bio'),
       personalChannel: input.enrichment.personalChannelId !== null
@@ -2950,7 +3004,8 @@ const wireCallbacks = (): void => {
         messageId: Number(messageIdRaw),
         userId: Number(userIdRaw),
         byUserId: query.user.id,
-        source: 'admin'
+        source: 'admin',
+        learnText: recallText(chatId, Number(messageIdRaw))
       })
       // The admin vouched — auto-trust this user in this chat from now on.
       await store.addTrustedUser(chatId, Number(userIdRaw))

@@ -3,10 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // The port builds its own Qdrant/OpenAI clients, so the seams are the modules.
 const search = vi.fn()
 const upsert = vi.fn()
+const setPayload = vi.fn()
 const embeddings = vi.fn(async () => ({ data: [{ embedding: [0.1, 0.2, 0.3] }] }))
 
 vi.mock('@qdrant/js-client-rest', () => ({
-  QdrantClient: class { search = search; upsert = upsert }
+  QdrantClient: class { search = search; upsert = upsert; setPayload = setPayload }
 }))
 vi.mock('openai', () => ({
   default: class { embeddings = { create: embeddings } }
@@ -29,6 +30,7 @@ const payloadOf = (call: number = 0): Record<string, unknown> =>
 beforeEach(() => {
   search.mockReset()
   upsert.mockReset()
+  setPayload.mockReset()
 })
 
 describe('QdrantVectorPort.search', () => {
@@ -106,5 +108,37 @@ describe('QdrantVectorPort.learn (2026-07-30 review)', () => {
     await port.learn(spamText, 'a', 'candidate')
     await port.learn(spamText, 'b', 'confirmed')
     expect(upsert.mock.calls[0]?.[1].points[0].id).toBe(upsert.mock.calls[1]?.[1].points[0].id)
+  })
+})
+
+describe('QdrantVectorPort.retire', () => {
+  it('disables the point for a text an admin called clean', async () => {
+    // `search` has always skipped points carrying `disabledAt`, but nothing in
+    // the codebase ever wrote one: a read with no writer, so a vector that kept
+    // producing false positives could not be retired by anybody, admin
+    // included. The signature layer had this from the start.
+    await port.retire(spamText)
+    expect(setPayload).toHaveBeenCalledTimes(1)
+    const [collection, args] = setPayload.mock.calls[0] as [string, {
+      payload: Record<string, unknown>; points: string[]
+    }]
+    expect(collection).toBe('spam_vectors')
+    expect(typeof args.payload['disabledAt']).toBe('string')
+    expect(args.points).toHaveLength(1)
+  })
+
+  it('addresses the same point learning would have written', async () => {
+    // The id is derived from the text, so retiring needs no lookup — but it
+    // also means the two must agree, or retirement silently misses.
+    await port.learn(spamText, 'test', 'candidate')
+    await port.retire(spamText)
+    const learned = (upsert.mock.calls[0]?.[1] as { points: { id: string }[] }).points[0]?.id
+    const retired = (setPayload.mock.calls[0]?.[1] as { points: string[] }).points[0]
+    expect(retired).toBe(learned)
+  })
+
+  it('a text that was never learned is a no-op, not a throw', async () => {
+    setPayload.mockRejectedValueOnce(new Error('point not found'))
+    await expect(port.retire('нічого такого не було')).resolves.toBeUndefined()
   })
 })

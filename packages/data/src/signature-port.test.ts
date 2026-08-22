@@ -183,3 +183,50 @@ describe('MongoSignaturePort.learn (2026-07-30 review)', () => {
     expect(stub.updates).toHaveLength(0)
   })
 })
+
+describe('MongoSignaturePort.retire', () => {
+  const spamText = 'Заработок от 500$ в день, пиши в личку прямо сейчас!!!'
+
+  /** Store stub that records the update `retire` issues. */
+  const storeRecording = (): { store: MongoStore; calls: unknown[][] } => {
+    const calls: unknown[][] = []
+    const store = {
+      spamSignatures: {
+        updateOne: async (...args: unknown[]) => { calls.push(args); return { matchedCount: 1 } }
+      }
+    } as unknown as MongoStore
+    return { store, calls }
+  }
+
+  it('disables the signature and drops it back to candidate', async () => {
+    // Retiring is a network-wide act — the signature fires in every chat for
+    // ninety days — so it demotes rather than deletes: the record of what was
+    // once believed survives for calibration replay.
+    const { store, calls } = storeRecording()
+    await new MongoSignaturePort(store).retire(spamText)
+    expect(calls).toHaveLength(1)
+    const update = calls[0]?.[1] as { $set: Record<string, unknown> }
+    expect(update.$set['status']).toBe('candidate')
+    expect(update.$set['disabledAt']).toBeInstanceOf(Date)
+    expect(update.$set['disabledBy']).toBe('admin_override')
+  })
+
+  it('finds the signature by every layer match() would have used', async () => {
+    // The candidate that only contributed a SIGNAL is the case this exists for:
+    // it never appears as `decidedBy`, so the ruleId path never reaches it, and
+    // it has to be found by the text instead — through the same three hashes.
+    const { store, calls } = storeRecording()
+    await new MongoSignaturePort(store).retire(spamText)
+    const filter = calls[0]?.[0] as { $or: Record<string, string>[] }
+    const hashes = computeSignatureHashes(spamText)!
+    expect(filter.$or.map((c) => Object.keys(c)[0]))
+      .toEqual(['exactHash', 'normalizedHash', 'foldedHash'])
+    expect(filter.$or[0]?.['exactHash']).toBe(hashes.exactHash)
+  })
+
+  it('text with nothing to hash is a no-op', async () => {
+    const { store, calls } = storeRecording()
+    await new MongoSignaturePort(store).retire('   ')
+    expect(calls).toHaveLength(0)
+  })
+})
