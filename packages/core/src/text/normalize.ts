@@ -9,7 +9,14 @@
 
 // Covers the major Unicode emoji ranges plus joiners/selectors so that
 // ZWJ sequences and keycaps are removed entirely (no stray combiners left).
-const EMOJI_REGEX = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FE0F}]|\u{200D}|\u{20E3}|[\u{1FA00}-\u{1FAFF}]|[\u{2300}-\u{23FF}]|[\u{2B05}-\u{2B07}]|[\u{2B1B}-\u{2B1C}]|\u{3030}|\u{303D}|\u{3297}|\u{3299}|[\u{E0020}-\u{E007F}]/gu
+/**
+ * Regional indicators (U+1F1E6-1F1FF) sit BELOW the main pictograph block, so
+ * they were absent here and a flag survived stripping as if it were text. That
+ * gave the same gesture two answers depending on how often it was made: one
+ * flag is four code units and slipped under `isEmojiOnly`'s old five-character
+ * bar, two flags did not. Added 2026-08-22 alongside the bar itself.
+ */
+const EMOJI_REGEX = /[\u{1F300}-\u{1F9FF}]|[\u{1F1E6}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FE0F}]|\u{200D}|\u{20E3}|[\u{1FA00}-\u{1FAFF}]|[\u{2300}-\u{23FF}]|[\u{2B05}-\u{2B07}]|[\u{2B1B}-\u{2B1C}]|\u{3030}|\u{303D}|\u{3297}|\u{3299}|[\u{E0020}-\u{E007F}]/gu
 
 /**
  * Unicode Format category (zero-width, directional marks, BOM, tags, …) plus
@@ -96,5 +103,19 @@ export const hasTextualContent = (text: string, minLength = 5): boolean => {
   return stripped.length >= minLength
 }
 
+/**
+ * True when nothing but emoji is left — not "not much text", but none.
+ *
+ * The distinction is the whole function. `hasTextualContent` answers "is there
+ * enough here to be worth embedding", and its five-character default belongs to
+ * that question. Borrowing it made every message under five characters count as
+ * emoji: production 2026-08-20 handed the 1.5 reaction discount to the
+ * two-letter text "NV", and stacked with `short_message` that paid a newcomer
+ * 2.3 of trust for typing almost nothing.
+ *
+ * Punctuation-only text ("...", "?") is deliberately not a reaction here. It is
+ * text, `short_message` already covers its brevity, and reading it as emoji
+ * would be the same borrowing in a smaller costume.
+ */
 export const isEmojiOnly = (text: string): boolean =>
-  text.length > 0 && !hasTextualContent(text)
+  text.length > 0 && !hasTextualContent(text, 1)

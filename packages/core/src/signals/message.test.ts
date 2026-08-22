@@ -392,10 +392,27 @@ describe('extractMessageSignals — trust signals (negative)', () => {
     // family is 7, so a bar set for "three emoji" has to allow 21.
     expect(trust(makeMsg({ text: '👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦' }))).toContain('emoji_only')
     expect(trust(makeMsg({ text: '❤️‍🔥❤️‍🔥' }))).toContain('emoji_only')
-    // Flags are deliberately absent from this list: `stripEmoji` does not cover
-    // regional indicators, so flag-only text has never been emoji-only and does
-    // not become so here. A pre-existing gap in the emoji ranges, and the only
-    // cost is a withheld discount.
+  })
+
+  it('a flag is a reaction, and stays one when repeated', () => {
+    // This used to be recorded here as "flag-only text has never been
+    // emoji-only". It was not true: one flag is four code units, which slipped
+    // under the old five-character bar, while two flags did not — the same
+    // gesture read as a reaction or as content depending on how many times it
+    // was made. `stripEmoji` now covers regional indicators, so neither is
+    // decided by length.
+    expect(trust(makeMsg({ text: '🇺🇦' }))).toContain('emoji_only')
+    expect(trust(makeMsg({ text: '🇺🇦🇺🇦' }))).toContain('emoji_only')
+  })
+
+  it('REGRESSION: a short word is not a reaction', () => {
+    // Production 2026-08-20: two-letter text collected the 1.5 reaction
+    // discount because the emoji test borrowed a five-character threshold
+    // written for a different question. Stacked with `short_message` it paid a
+    // newcomer 2.3 of trust for typing almost nothing.
+    expect(trust(makeMsg({ text: 'NV' }))).not.toContain('emoji_only')
+    expect(trust(makeMsg({ text: 'ок' }))).not.toContain('emoji_only')
+    expect(suspicious(makeMsg({ text: 'NV' }))).not.toContain('emoji_only')
   })
 
   it('short message with no suspicious signals is trust', () => {

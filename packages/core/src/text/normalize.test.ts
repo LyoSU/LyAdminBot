@@ -82,6 +82,30 @@ describe('isEmojiOnly', () => {
     expect(isEmojiOnly('привіт 😀 друже')).toBe(false)
     expect(isEmojiOnly('')).toBe(false)
   })
+
+  test('REGRESSION: a short word is not an emoji', () => {
+    // Until 2026-08-22 this borrowed `hasTextualContent`'s default of five
+    // characters, so ANY text under five characters read as emoji-only and
+    // collected the reaction discount. Production 2026-08-20 logged
+    // `emoji_only=-1.5` against the two-letter text "NV". The question here is
+    // not "is there enough text to embed" but "is there any text at all".
+    expect(isEmojiOnly('NV')).toBe(false)
+    expect(isEmojiOnly('ок')).toBe(false)
+    expect(isEmojiOnly('...')).toBe(false)
+    expect(isEmojiOnly('+')).toBe(false)
+    // One stray character is enough to stop it being emoji-only.
+    expect(isEmojiOnly('😀!')).toBe(false)
+  })
+
+  test('flags read as emoji whatever the count', () => {
+    // Regional indicators sit at U+1F1E6-1F1FF, below the range `stripEmoji`
+    // covered, so they survived stripping and counted as text. One flag slipped
+    // through as emoji-only anyway — four code units, under the old five-char
+    // bar — while two flags did not. Same input shape, opposite answers.
+    expect(isEmojiOnly('🇺🇦')).toBe(true)
+    expect(isEmojiOnly('🇺🇦🇺🇦')).toBe(true)
+    expect(isEmojiOnly('🇺🇦 слава')).toBe(false)
+  })
 })
 
 describe('truncate', () => {
