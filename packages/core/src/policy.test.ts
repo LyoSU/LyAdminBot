@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import type { StrictnessPreset, VerdictAction } from './types.js'
 import {
-  decideAction, isEnforcementAction, countsAsDetection, ENFORCEMENT_ACTIONS,
+  decideAction, isEnforcementAction, countsAsDetection, countsAgainstSender, ENFORCEMENT_ACTIONS,
   PRESET_THRESHOLDS, TIMED_BAN_SECONDS, type PolicyInput
 } from './policy.js'
 
@@ -355,5 +355,29 @@ describe('countsAsDetection', () => {
         if (countsAsDetection(v)) expect(isEnforcementAction(action)).toBe(true)
       }
     ))
+  })
+})
+
+describe('countsAgainstSender', () => {
+  it('a verdict nothing stopped is a fact about the sender', () => {
+    expect(countsAgainstSender(null)).toBe(true)
+  })
+
+  it('a verdict WE declined to apply says nothing about them', () => {
+    // The exemptions are our own policy: we looked at who sent it and decided
+    // not to act. Recording a detection anyway let an admin accumulate 25 of
+    // them (production, two days to 2026-08-22) while every verdict about them
+    // was skipped by design — and for a chat-trusted member the same counter
+    // quietly strips the standing the trust was granted to protect.
+    for (const reason of ['senderIsAdmin', 'senderIsSelf', 'senderIsTrusted']) {
+      expect(countsAgainstSender(reason), reason).toBe(false)
+    }
+  })
+
+  it('takes no view on whether Telegram let us act', () => {
+    // Deliberately not a parameter. A refused delete is a fact about our rights
+    // in that chat, not about the person — and a chat where enforcement fails
+    // is exactly where free standing piles up fastest.
+    expect(countsAgainstSender(null)).toBe(true)
   })
 })

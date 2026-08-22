@@ -171,6 +171,26 @@ export const countsAsDetection = (verdict: {
   !verdict.needsVote &&
   verdict.reasonCode !== 'content_unconfirmed'
 
+/**
+ * Whether a verdict is about the SENDER at all, or only about our own rules.
+ *
+ * The executor refuses to act on three grounds — the sender is an admin, is us,
+ * or is trusted in this chat — and each is a decision we made about who they
+ * are, not a finding about what they wrote. Recording it against the account
+ * anyway means the exemption quietly erodes the very standing it exists to
+ * protect: production to 2026-08-22 shows one admin at 25 `prior_spam_detections`
+ * without a single verdict about them ever being applied, and two detections are
+ * enough to strip the established-regular bypass and the ban shield.
+ *
+ * Deliberately NOT a function of whether the action succeeded. Telegram refusing
+ * a delete is a fact about our rights in that chat, and a chat where enforcement
+ * fails is precisely where unearned standing piles up fastest — so those still
+ * count. The distinction this draws is between "we could not" and "we chose not
+ * to", which the executor already records and nothing consulted.
+ */
+export const countsAgainstSender = (skippedReason: string | null): boolean =>
+  skippedReason === null
+
 export const PRESET_THRESHOLDS: Record<StrictnessPreset, PresetThresholds> = {
   soft: { ban: 0.98, mute: 0.94, kick: 0.86, delete: 0.78, grey: 0.55 },
   standard: { ban: 0.95, mute: 0.88, kick: 0.75, delete: 0.6, grey: 0.4 },

@@ -6,6 +6,7 @@
 import { BotKeyboard, Chat, User, html, type Message } from '@mtcute/node'
 import {
   evaluateMessage, tallyVotes, extractBioSignals, isEnforcementAction, countsAsDetection,
+  countsAgainstSender,
   shouldAutoLearn, autoLearnSource, voteLearnStatus, conversationLineFor, nsfwProfileHit,
   classifyUrl, removesSender, truncate, BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS,
   type ChannelPreview, type EvaluationInput, type ForwardOrigin, type PipelinePorts,
@@ -2389,7 +2390,12 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
   // shield that keeps an account with local standing at `mute` instead of
   // `ban`. The visible symptom was an advert reposted six times in a hundred
   // minutes, muted every time, never banned.
-  if (isEnforcementAction(verdict.action)) {
+  // Both counters, not just the detection: a verdict the executor declined to
+  // apply because of WHO sent it is not a finding about them, so neither the
+  // standing debit nor the account record follows from it. `countsAgainstSender`
+  // carries the distinction between "Telegram would not let us" (still counts)
+  // and "we decided not to" (does not).
+  if (isEnforcementAction(verdict.action) && countsAgainstSender(result.skippedReason)) {
     await store.adjustSpamMessages(chat.id, sender.id, 1, countsAsDetection(verdict))
       .catch(() => { /* counters are best-effort */ })
   }
