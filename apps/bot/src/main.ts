@@ -7,7 +7,7 @@ import { BotKeyboard, Chat, User, html, type Message } from '@mtcute/node'
 import {
   evaluateMessage, tallyVotes, extractBioSignals, isEnforcementAction, countsAsDetection,
   shouldAutoLearn, autoLearnSource, voteLearnStatus, conversationLineFor, nsfwProfileHit,
-  classifyUrl, removesSender, BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS,
+  classifyUrl, removesSender, truncate, BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS,
   type ChannelPreview, type EvaluationInput, type ForwardOrigin, type PipelinePorts,
   type UserSnapshot, type Verdict, type VoteBallot
 } from '@lyadmin/core'
@@ -134,7 +134,7 @@ const campaignBriefing = async (): Promise<string | null> => {
   if (briefingCache.at !== 0 && now - briefingCache.at < BRIEFING_TTL_MS) return briefingCache.text
   const samples = await store.recentConfirmedSpamSamples(8, now - BRIEFING_WINDOW_MS).catch(() => [])
   const text = samples.length > 0
-    ? samples.map((s) => `- ${s.replace(/\s+/g, ' ').slice(0, 120)}`).join('\n')
+    ? samples.map((s) => `- ${truncate(s.replace(/\s+/g, ' '), 120)}`).join('\n')
     : null
   briefingCache = { text, at: now }
   return text
@@ -1177,7 +1177,7 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
   }
 
   const fullText = replied.text ?? ''
-  const textPreview = fullText.slice(0, 200)
+  const textPreview = truncate(fullText, 200)
   await store.openVote({
     chatId: chat.id,
     messageId: replied.id,
@@ -1192,7 +1192,7 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
   log.info('report', {
     chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName,
     by: reporter.id, byName: reporter.displayName, byAdmin: reporterIsAdmin, messageId: replied.id,
-    text: textPreview ? textPreview.slice(0, 160) : undefined
+    text: textPreview ? truncate(textPreview, 160) : undefined
   })
   await store.castBallot({
     chatId: chat.id, messageId: replied.id,
@@ -2270,7 +2270,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     chat: chat.title ?? undefined,
     user: sender.displayName,
     username: sender.username ?? undefined,
-    text: normalized.text ? normalized.text.slice(0, 160) : undefined,
+    text: normalized.text ? truncate(normalized.text, 160) : undefined,
     // Media-only spam logs no text at all, which leaves the line unreadable and
     // the verdict unreproducible (2026-07-30 12:33 was exactly that: a photo
     // job-scam at 0.99 with nothing but ids in the log).
@@ -2340,7 +2340,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       // A session verdict judged the sender's accumulated window, not the
       // message above: without the window the line cannot be reviewed.
       judged: typeof verdict.meta['judgedText'] === 'string'
-        ? (verdict.meta['judgedText'] as string).replace(/\n/g, ' ⏎ ').slice(0, 300)
+        ? truncate((verdict.meta['judgedText'] as string).replace(/\n/g, ' ⏎ '), 300)
         : undefined,
       needsVote: verdict.needsVote || undefined,
       // Messages of the same run taken down with the sender. Absent when there
@@ -2925,7 +2925,7 @@ const wireCallbacks = (): void => {
       const [chatId = '', messageId = ''] = parts
       const verdict = await recallVerdict(Number(chatId), Number(messageId))
       await query.answer({
-        text: verdict ? whyView(locale, verdict).slice(0, 200) : '…',
+        text: verdict ? truncate(whyView(locale, verdict), 200) : '…',
         alert: true
       })
       return
