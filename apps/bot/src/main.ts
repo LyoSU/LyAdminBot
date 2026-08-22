@@ -1388,6 +1388,43 @@ const maybeSendJoinSurgeAlert = async (chat: Chat): Promise<void> => {
   if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_COMPACT_MS, 'join_surge')
 }
 
+/**
+ * Lookups already on the wire, so concurrent screenings of one account collapse
+ * into a single `photos.getUserPhotos` — the same guard `chat-profile.ts` needed
+ * for chat descriptions, and for the same reason.
+ */
+const joinerAvatarsInFlight = new Map<number, Promise<string | null>>()
+
+/**
+ * The joiner's avatar bytes, at most one download per account per TTL.
+ *
+ * This path used to WRITE `avatarCache` without ever reading it, so a spammer
+ * seeding six chats — or, before update deduplication, one join delivered more
+ * than once — paid a fresh `photos.getUserPhotos` and a fresh moderation call
+ * every time. Production 2026-08-21 ended that burst in a flood wait, which
+ * stalls the shared connection and with it moderation everywhere. The message
+ * path had already learned this twice; the join path had not.
+ *
+ * `screenJoinerAvatars` is fire-and-forget, so several runs genuinely overlap —
+ * a plain cache read is not enough on its own, hence the in-flight map.
+ */
+const joinerAvatar = async (userId: number): Promise<string | null> => {
+  const cached = avatarCache.get(userId)
+  if (cached && cached.expiresAt > Date.now()) return cached.base64
+  const pending = joinerAvatarsInFlight.get(userId)
+  if (pending) return pending
+  const task = downloadAvatarBase64(gateway.tg, userId)
+    .then((base64) => {
+      pruneExpired(avatarCache, AVATAR_CACHE_MAX)
+      avatarCache.set(userId, { base64, expiresAt: Date.now() + AVATAR_CACHE_TTL_MS })
+      return base64
+    })
+    .catch(() => null)
+    .finally(() => { joinerAvatarsInFlight.delete(userId) })
+  joinerAvatarsInFlight.set(userId, task)
+  return task
+}
+
 const screenJoinerAvatars = async (chat: Chat, joiners: User[]): Promise<void> => {
   // A bulk add can carry dozens of users; screening all of them sequentially
   // would stall the update loop and burn a moderation call each. The cap keeps
@@ -1403,9 +1440,7 @@ const screenJoinerAvatars = async (chat: Chat, joiners: User[]): Promise<void> =
       await maybeSendJoinSurgeAlert(chat)
     }
     if (!ports.moderation) continue
-    const base64 = await downloadAvatarBase64(gateway.tg, joiner.id)
-    pruneExpired(avatarCache, AVATAR_CACHE_MAX)
-    avatarCache.set(joiner.id, { base64, expiresAt: Date.now() + AVATAR_CACHE_TTL_MS })
+    const base64 = await joinerAvatar(joiner.id)
     if (!base64) continue
     try {
       const result = await ports.moderation.check('', base64)
@@ -1446,7 +1481,14 @@ const handleWelcomeGreeting = async (message: Message, chat: Chat, joiners: User
         .then((m) => [m.id])
         .catch((err) => { log.warn('welcome_send_failed', { chatId: chat.id, kind: 'text', err: String(err) }); return [] })
   for (const id of sentIds) scheduleDelete(chat.id, id, welcome.timer * 1000, 'welcome')
-  log.info('welcome', { chatId: chat.id, chat: chat.title ?? undefined, joiners: joiners.map((j) => j.id) })
+  // The service message id is what makes a repeat diagnosable: the same id
+  // twice is a redelivery, two ids is a person who really did join twice.
+  // Without it, production 2026-08-21 (one joiner greeted twelve times) could
+  // not be attributed to either.
+  log.info('welcome', {
+    chatId: chat.id, chat: chat.title ?? undefined,
+    messageId: message.id, joiners: joiners.map((j) => j.id)
+  })
 }
 
 /** Map an add-list rejection reason to a localized one-liner. */
@@ -2950,6 +2992,10 @@ const main = async (): Promise<void> => {
 
   gateway.onMessage(handleMessage)
   gateway.onError((err) => log.error('handler_error', { err: err instanceof Error ? err : String(err) }))
+  // Debug, not warn: a redelivery is the transport working as specified, and
+  // the pipeline now absorbs it. It becomes interesting only in bulk, which
+  // `total` makes visible without a line per occurrence being worth reading.
+  gateway.onDuplicate((info) => log.debug('duplicate_delivery', { ...info }))
   wireCallbacks()
   const self = await gateway.start()
   selfId = self.id
