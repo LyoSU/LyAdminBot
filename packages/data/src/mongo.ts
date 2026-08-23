@@ -650,6 +650,23 @@ export class MongoStore {
    * It is global only. A detection is a statement about the account, and the
    * per-chat document already carries the per-chat story.
    */
+  /**
+   * Record a detection against the account WITHOUT debiting standing again.
+   *
+   * The two travel together on the automatic path, where one message produces
+   * one verdict. A vote is the other shape: the uncertain enforcement already
+   * debited the message on its way out (`adjustSpamMessages(+1, false)`), and
+   * the chat's later answer adds the finding about the account, not a second
+   * message. Charging both would cost one message two messages' worth of
+   * standing, locally and globally.
+   */
+  async recordSpamDetection(telegramId: number): Promise<void> {
+    await this.users.updateOne(
+      { telegram_id: telegramId },
+      { $inc: { 'globalStats.spamDetections': 1 } }
+    )
+  }
+
   async adjustSpamMessages(
     chatId: number, telegramId: number, delta: 1 | -1, detection = false
   ): Promise<void> {
@@ -872,12 +889,12 @@ export class MongoStore {
      * "no name was recorded" from "their name is empty".
      */
     label?: string
-  }): Promise<void> {
+  }): Promise<boolean> {
     const ballot = {
       userId: params.userId, isAdmin: params.isAdmin, choice: params.choice, at: new Date(),
       ...(params.label !== undefined && params.label !== '' ? { label: truncate(params.label, 64) } : {})
     }
-    await this.votes.updateOne(
+    const result = await this.votes.updateOne(
       // `expiresAt` as well as `status`: the sweep that flips the status runs
       // once a minute, so the status alone leaves a window — a whole restart
       // gap, at worst — in which a question whose time is up still takes
@@ -889,6 +906,11 @@ export class MongoStore {
       // The driver's PushOperator<Document> rejects concrete array elements.
       { $push: { ballots: ballot } } as never
     )
+    // Reported, not swallowed: the filter can miss because the question closed
+    // OR because its window ran out before the sweep noticed, and a caller that
+    // cannot tell the difference between those and success answers "counted"
+    // for a ballot it never wrote.
+    return result.modifiedCount === 1
   }
 
   // ── scheduled deletions (persistent, survives restarts) ──────────────
@@ -944,7 +966,14 @@ export class MongoStore {
     chatId: number; messageId: number; targetUserId: number; promptMessageId: number | null
   }[]> {
     const due = await this.votes
-      .find({ status: 'open', expiresAt: { $lte: new Date() } })
+      // The `$or` carries rows written before votes had a window: they match
+      // neither `expiresAt > now` (so they refuse every ballot) nor a plain
+      // `expiresAt <= now`, which left them apparently open forever with their
+      // prompt still in the chat. A row with no deadline is past it.
+      .find({
+        status: 'open',
+        $or: [{ expiresAt: { $lte: new Date() } }, { expiresAt: { $exists: false } }]
+      })
       .limit(limit)
       .toArray()
     const claimed: {

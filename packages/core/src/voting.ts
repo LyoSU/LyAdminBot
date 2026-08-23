@@ -154,9 +154,21 @@ export const voterRoster = (ballots: VoteBallot[]): VoterRoster => {
     entries.set(ballot.userId, entry)
   }
 
-  const times = valid.map((b) => timestampMs(b.at)).filter((ms): ms is number => ms !== null)
-  const spanSeconds = times.length >= 2
-    ? Math.round((Math.max(...times) - Math.min(...times)) / 1000)
+  // Folded rather than spread: nothing rate-limits taps and nothing caps the
+  // array, so `Math.max(...times)` over a long-running question was one
+  // determined account away from a RangeError that takes the whole roster down.
+  let earliest: number | null = null
+  let latest: number | null = null
+  let timed = 0
+  for (const ballot of valid) {
+    const ms = timestampMs(ballot.at)
+    if (ms === null) continue
+    timed += 1
+    if (earliest === null || ms < earliest) earliest = ms
+    if (latest === null || ms > latest) latest = ms
+  }
+  const spanSeconds = timed >= 2 && earliest !== null && latest !== null
+    ? Math.round((latest - earliest) / 1000)
     : null
 
   const all = [...entries.values()]

@@ -8,7 +8,8 @@ import {
   evaluateMessage, tallyVotes, extractBioSignals, isEnforcementAction, countsAsDetection,
   countsAgainstSender,
   shouldAutoLearn, autoLearnSource, VOTE_LEARN_STATUS, conversationLineFor, nsfwProfileHit,
-  voterRoster, voteEligibility, needsRestitution, type VoterStanding,
+  voterRoster, voteEligibility, needsRestitution, restitutionLiftsRestrictions,
+  type VoterStanding,
   classifyUrl, removesSender, truncate, BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS,
   type ChannelPreview, type EvaluationInput, type ForwardOrigin, type PipelinePorts,
   type UserSnapshot, type Verdict, type VoteBallot
@@ -737,8 +738,12 @@ const enforceVoteSpam = async (vote: {
    * community had voted a spammer ten times over stayed a full member in every
    * one of those readings, including as a voter on the next question. The
    * counter had a reader before it had this writer.
+   *
+   * The detection alone, deliberately: the uncertain enforcement that opened
+   * this question already debited the message. Adding a second debit here would
+   * make one message cost two messages of standing.
    */
-  await store.adjustSpamMessages(vote.chatId, vote.targetUserId, 1, true)
+  await store.recordSpamDetection(vote.targetUserId)
     .catch(() => { /* counters are best-effort */ })
 
   if (vote.learnText.trim().length > 0) {
@@ -844,11 +849,18 @@ const restoreFalsePositive = async (params: {
       pSpam: 0, action: 'none', signals: [], meta: {}
     }
   }).catch(() => { /* keep going — lifting the punishment matters more */ })
-  // Lift restrictions (empty restrictions object = unrestrict).
-  await gateway.tg.restrictChatMember({ chatId: params.chatId, userId: params.userId, restrictions: {} })
-    .catch(() => { /* may not have been muted */ })
-  await gateway.tg.unbanChatMember({ chatId: params.chatId, participantId: params.userId })
-    .catch(() => { /* may not have been banned */ })
+  /**
+   * Lift restrictions (empty restrictions object = unrestrict) — but only the
+   * ones our own verdict imposed. These two calls undo whatever is in place
+   * whoever put it there, so after a delete-only verdict, which restricts
+   * nobody, the only thing they can lift is somebody else's decision.
+   */
+  if (restitutionLiftsRestrictions(verdict)) {
+    await gateway.tg.restrictChatMember({ chatId: params.chatId, userId: params.userId, restrictions: {} })
+      .catch(() => { /* may not have been muted */ })
+    await gateway.tg.unbanChatMember({ chatId: params.chatId, participantId: params.userId })
+      .catch(() => { /* may not have been banned */ })
+  }
   // Give the standing back. Enforcing debited it, and the debit withholds the
   // benefit of the doubt — leaving it in place after a correction would let one
   // false positive make the next one against the same person more likely.
@@ -3056,6 +3068,14 @@ const wireCallbacks = (): void => {
         await query.answer({})
         return
       }
+      /**
+       * The payload names the chat, and a payload is forgeable — the captcha
+       * path has said so since it was written. A user client can send any
+       * `data` for any message it can see, so without this an established
+       * account could answer a question in a chat it is not even in, given only
+       * the two ids. The tap has to have come from the chat it claims.
+       */
+      if (query.chat.id !== chatId) { await query.answer({}); return }
       const existing = await store.getVote(chatId, messageId).catch(() => null)
       if (!existing || existing['status'] !== 'open') {
         await query.answer({ text: locale.vote.alreadyEnded })
@@ -3072,10 +3092,17 @@ const wireCallbacks = (): void => {
         await query.answer({ text: refusal, alert: true })
         return
       }
-      await store.castBallot({
+      const written = await store.castBallot({
         chatId, messageId, userId: query.user.id, isAdmin: standing.isAdmin, choice,
         label: query.user.displayName
-      }).catch(() => { /* race with close — tally below re-checks */ })
+      }).catch(() => false)
+      if (!written) {
+        // The window ran out, or the question closed, between the read above
+        // and this write. Saying "counted" here would be a lie, and re-rendering
+        // the prompt would put a live-looking question back on a dead one.
+        await query.answer({ text: locale.vote.alreadyEnded })
+        return
+      }
 
       const vote = await store.getVote(chatId, messageId).catch(() => null)
       if (!vote) { await query.answer({}); return }
@@ -3152,6 +3179,9 @@ const wireCallbacks = (): void => {
       const [chatIdRaw = '', messageIdRaw = ''] = parts
       const chatId = Number(chatIdRaw)
       const messageId = Number(messageIdRaw)
+      // Same forgeable-payload rule as the ballot path: a roster names people,
+      // and it is only for the chat that watched them vote.
+      if (query.chat.id !== chatId) { await query.answer({}); return }
       const vote = Number.isFinite(chatId) && Number.isFinite(messageId)
         ? await store.getVote(chatId, messageId).catch(() => null)
         : null
@@ -3168,6 +3198,13 @@ const wireCallbacks = (): void => {
        * the people who answered it, and giving them the list would turn a
        * transparency feature into a target list.
        */
+      if (vote['status'] === 'open') {
+        // Mid-vote the roster would be a live scoreboard of who has taken which
+        // side, which is the one thing that makes people vote with the room
+        // instead of about the message.
+        await query.answer({})
+        return
+      }
       if (query.user.id === Number(vote['targetUserId'] ?? 0)) {
         await query.answer({ text: locale.vote.voters.notForTarget, alert: true })
         return

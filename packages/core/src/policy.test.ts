@@ -3,7 +3,8 @@ import fc from 'fast-check'
 import type { StrictnessPreset, Verdict, VerdictAction } from './types.js'
 import {
   decideAction, isEnforcementAction, countsAsDetection, countsAgainstSender, ENFORCEMENT_ACTIONS,
-  PRESET_THRESHOLDS, TIMED_BAN_SECONDS, needsRestitution, type PolicyInput
+  PRESET_THRESHOLDS, TIMED_BAN_SECONDS, needsRestitution, restitutionLiftsRestrictions,
+  type PolicyInput
 } from './policy.js'
 
 const makeInput = (overrides: Partial<PolicyInput> = {}): PolicyInput => ({
@@ -411,5 +412,42 @@ describe('needsRestitution', () => {
 
   it('no verdict at all means the restriction is not ours to lift', () => {
     expect(needsRestitution(null)).toBe(false)
+  })
+})
+
+/**
+ * WHICH of our acts restitution may undo.
+ *
+ * `needsRestitution` answers "is any of this ours"; this answers "did we take
+ * away the right to speak". A `delete` costs the chat one line and imposes no
+ * restriction, so lifting one after a delete-only verdict lifts somebody
+ * else's — an admin's `/banan` on the same person still standing.
+ */
+describe('restitutionLiftsRestrictions', () => {
+  const v = (action: VerdictAction, requireCaptcha?: boolean): Pick<Verdict, 'action' | 'requireCaptcha'> =>
+    requireCaptcha === undefined ? { action } : { action, requireCaptcha }
+
+  it('lifts what a restriction of ours imposed', () => {
+    for (const action of ['captcha', 'mute', 'ban'] as const) {
+      expect(restitutionLiftsRestrictions(v(action))).toBe(true)
+    }
+  })
+
+  it('a delete restricted nobody', () => {
+    expect(restitutionLiftsRestrictions(v('delete'))).toBe(false)
+  })
+
+  it('a delete that also gated the sender did restrict them', () => {
+    expect(restitutionLiftsRestrictions(v('delete', true))).toBe(true)
+  })
+
+  it('a kick left no restriction behind — it unbanned itself', () => {
+    expect(restitutionLiftsRestrictions(v('kick'))).toBe(false)
+  })
+
+  it('nothing to lift for a verdict that acted at all', () => {
+    expect(restitutionLiftsRestrictions(v('none'))).toBe(false)
+    expect(restitutionLiftsRestrictions(v('observe'))).toBe(false)
+    expect(restitutionLiftsRestrictions(null)).toBe(false)
   })
 })

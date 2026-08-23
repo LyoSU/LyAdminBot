@@ -203,6 +203,17 @@ describe('voterRoster', () => {
     expect(roster.spanSeconds).toBe(30)
   })
 
+  it('survives a ballot list far too long to spread onto the stack', () => {
+    // Nothing rate-limits taps and nothing caps the array, so `Math.max(...)`
+    // over the timestamps was one determined account away from a RangeError
+    // that would take the roster button down for everybody.
+    const many = Array.from({ length: 200_000 }, (_, i) => ({
+      userId: i % 50, choice: 'spam' as const, isAdmin: false, at: new Date(i * 1000)
+    }))
+    expect(() => voterRoster(many)).not.toThrow()
+    expect(voterRoster(many).spanSeconds).toBe(199_999)
+  })
+
   it('drops the same garbage tallyVotes drops', () => {
     const junk = [
       null, undefined, 'spam', 42, [], { userId: 1 }, { choice: 'spam' },

@@ -501,12 +501,16 @@ describe('ensureTtlIndex', () => {
 describe('vote lifetime', () => {
   const voteStore = (rows: Record<string, unknown>[] = []) => {
     const inserted: Record<string, unknown>[] = []
+    const finds: Record<string, unknown>[] = []
     const updates: { filter: Record<string, unknown>; update: Record<string, unknown> }[] = []
     let modified = 1
     const store = {
       votes: {
         insertOne: async (doc: Record<string, unknown>) => { inserted.push(doc); return {} },
-        find: () => ({ limit: () => ({ toArray: async () => rows }) }),
+        find: (filter: Record<string, unknown>) => {
+          finds.push(filter)
+          return { limit: () => ({ toArray: async () => rows }) }
+        },
         updateOne: async (filter: Record<string, unknown>, update: Record<string, unknown>) => {
           updates.push({ filter, update })
           return { modifiedCount: modified }
@@ -520,6 +524,7 @@ describe('vote lifetime', () => {
         claimExpiredVotes: MongoStore.prototype.claimExpiredVotes
       }),
       inserted,
+      finds,
       updates,
       setModified: (n: number) => { modified = n }
     }
@@ -565,6 +570,31 @@ describe('vote lifetime', () => {
     await store.castBallot({ chatId: -100, messageId: 5, userId: 7, isAdmin: false, choice: 'spam' })
     expect(updates[0]?.filter).toMatchObject({ status: 'open' })
     expect(updates[0]?.filter).toHaveProperty('expiresAt')
+  })
+
+  it('reports whether the ballot was actually written', async () => {
+    // The filter can miss for two reasons the caller must not confuse with
+    // success: the question closed, or its window ran out before the sweep
+    // noticed. Both used to come back as `void` and be answered "counted".
+    const { store, setModified } = voteStore()
+    expect(await store.castBallot({
+      chatId: -100, messageId: 5, userId: 7, isAdmin: false, choice: 'spam'
+    })).toBe(true)
+    setModified(0)
+    expect(await store.castBallot({
+      chatId: -100, messageId: 5, userId: 7, isAdmin: false, choice: 'spam'
+    })).toBe(false)
+  })
+
+  it('also claims a vote written before votes had a window at all', async () => {
+    // Rows from before this field existed matched neither the ballot filter
+    // (`expiresAt > now`) nor a plain `expiresAt <= now` sweep, so they stayed
+    // apparently open, silently refused every ballot, and kept their prompt in
+    // the chat until the collection TTL took the document — and not the
+    // prompt — seven days later.
+    const { store, finds } = voteStore()
+    await store.claimExpiredVotes()
+    expect(JSON.stringify(finds[0])).toContain('$or')
   })
 
   it('claims a vote whose window has passed and marks it expired', async () => {

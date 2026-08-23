@@ -208,6 +208,28 @@ export const countsAgainstSender = (skippedReason: string | null): boolean =>
 export const needsRestitution = (verdict: Pick<Verdict, 'action'> | null): boolean =>
   verdict !== null && verdict.action !== 'none' && verdict.action !== 'observe'
 
+/**
+ * Whether restitution should lift restrictions, or only give standing back.
+ *
+ * `needsRestitution` asks whether any of this was ours; this asks whether we
+ * took away the right to speak. The distinction is not cosmetic, because
+ * `restrictChatMember({})` and `unbanChatMember` undo whatever is in place
+ * whoever imposed it: after a delete-only verdict there is no restriction of
+ * ours to lift, so lifting one can only remove somebody else's — an admin's
+ * `/banan` on the same person, still running.
+ *
+ * `kick` is excluded for the same reason from the other side: it is a ban
+ * immediately undone, so by the time anyone votes there is nothing to unban.
+ */
+export const restitutionLiftsRestrictions = (
+  verdict: Pick<Verdict, 'action' | 'requireCaptcha'> | null
+): boolean => {
+  if (verdict === null) return false
+  if (verdict.action === 'captcha' || verdict.action === 'mute' || verdict.action === 'ban') return true
+  // The uncertain delete gates the sender for ten minutes on its way out.
+  return verdict.action === 'delete' && verdict.requireCaptcha === true
+}
+
 export const PRESET_THRESHOLDS: Record<StrictnessPreset, PresetThresholds> = {
   soft: { ban: 0.98, mute: 0.94, kick: 0.86, delete: 0.78, grey: 0.55 },
   standard: { ban: 0.95, mute: 0.88, kick: 0.75, delete: 0.6, grey: 0.4 },
