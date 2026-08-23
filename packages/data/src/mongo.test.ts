@@ -624,3 +624,53 @@ describe('vote lifetime', () => {
     expect((await store.claimExpiredVotes())[0]?.promptMessageId).toBeNull()
   })
 })
+
+/**
+ * A community verdict becomes hard history about the account, and two of them
+ * strip the vote, the exempt and the ban shield. So the second one has to come
+ * from somewhere else: one chat can be captured by the very crew being judged,
+ * two rarely are — the same reasoning the signature layer already applies to
+ * learning a rule.
+ */
+describe('recordSpamDetection', () => {
+  const detectionStore = () => {
+    const updates: { filter: Record<string, unknown>; update: Record<string, unknown> }[] = []
+    const store = {
+      users: {
+        updateOne: async (filter: Record<string, unknown>, update: Record<string, unknown>) => {
+          updates.push({ filter, update })
+          return {}
+        }
+      }
+    } as unknown as MongoStore
+    return {
+      store: Object.assign(store, { recordSpamDetection: MongoStore.prototype.recordSpamDetection }),
+      updates
+    }
+  }
+
+  it('counts a detection only for a chat that has not produced one', async () => {
+    const { store, updates } = detectionStore()
+    await store.recordSpamDetection(-100, 42)
+    expect(updates[0]?.filter).toMatchObject({
+      telegram_id: 42,
+      'globalStats.detectionChats': { $ne: -100 }
+    })
+  })
+
+  it('remembers which chat it came from, so the next one must differ', async () => {
+    const { store, updates } = detectionStore()
+    await store.recordSpamDetection(-100, 42)
+    expect(updates[0]?.update).toMatchObject({
+      $inc: { 'globalStats.spamDetections': 1 },
+      $addToSet: { 'globalStats.detectionChats': -100 }
+    })
+  })
+
+  it('does not touch the standing counters', async () => {
+    // The message was already debited by the enforcement that opened the vote.
+    const { store, updates } = detectionStore()
+    await store.recordSpamDetection(-100, 42)
+    expect(JSON.stringify(updates)).not.toContain('spamMessages')
+  })
+})

@@ -6,15 +6,12 @@
  */
 import type { Document } from 'mongodb'
 import type { SignatureMatch, SignaturePort } from '@lyadmin/core'
-import { truncate } from '@lyadmin/core'
+import { truncate, CORROBORATING_CHATS_MIN } from '@lyadmin/core'
 import { isDistinctive } from '@lyadmin/core'
 import type { MongoStore } from './mongo.js'
 import { computeSignatureHashes, normalizeHeavy } from './hashing.js'
 
 const CONFIRMED_PSPAM = 0.96
-
-/** Distinct chats that must have reported a text before it may decide alone. */
-const CORROBORATING_CHATS_MIN = 2
 
 const TTL_DAYS: Record<'candidate' | 'confirmed', number> = { candidate: 30, confirmed: 90 }
 

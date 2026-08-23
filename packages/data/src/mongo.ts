@@ -659,11 +659,22 @@ export class MongoStore {
    * the chat's later answer adds the finding about the account, not a second
    * message. Charging both would cost one message two messages' worth of
    * standing, locally and globally.
+   *
+   * Counted once per chat — see the filter.
    */
-  async recordSpamDetection(telegramId: number): Promise<void> {
+  async recordSpamDetection(chatId: number, telegramId: number): Promise<void> {
+    // One chat, one detection, however many of its questions resolve against
+    // this account. Two detections strip the vote, the established-regular
+    // exempt and the ban shield at once, so a single room — which may be the
+    // very crew being judged — must not be able to produce them both. The
+    // filter and the `$addToSet` are one operation, so two resolutions racing
+    // in the same chat cannot both slip through.
     await this.users.updateOne(
-      { telegram_id: telegramId },
-      { $inc: { 'globalStats.spamDetections': 1 } }
+      { telegram_id: telegramId, 'globalStats.detectionChats': { $ne: chatId } },
+      {
+        $inc: { 'globalStats.spamDetections': 1 },
+        $addToSet: { 'globalStats.detectionChats': chatId }
+      }
     )
   }
 

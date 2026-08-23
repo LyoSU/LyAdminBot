@@ -701,7 +701,7 @@ const learnFromAutoVerdict = async (verdict: Verdict, text: string, chatId: numb
   // so the blunter of the two layers was the one that could convict alone.
   await signaturePort.learn(learnText, source, 'candidate', chatId)
     .catch(() => { /* learning is best-effort — never block moderation */ })
-  await vectorPort?.learn(learnText, source, 'candidate')
+  await vectorPort?.learn(learnText, source, 'candidate', chatId)
     .catch(() => { /* best-effort */ })
   log.debug('auto_learned', { decidedBy: verdict.decidedBy, reason: verdict.reasonCode })
 }
@@ -743,7 +743,7 @@ const enforceVoteSpam = async (vote: {
    * this question already debited the message. Adding a second debit here would
    * make one message cost two messages of standing.
    */
-  await store.recordSpamDetection(vote.targetUserId)
+  await store.recordSpamDetection(vote.chatId, vote.targetUserId)
     .catch(() => { /* counters are best-effort */ })
 
   if (vote.learnText.trim().length > 0) {
@@ -752,7 +752,7 @@ const enforceVoteSpam = async (vote: {
       .catch(() => null)
     // Seed the vector layer too, so semantic matching learns alongside
     // signatures instead of staying frozen at the v1 snapshot.
-    const vector = await vectorPort?.learn(vote.learnText, learnSource, requested)
+    const vector = await vectorPort?.learn(vote.learnText, learnSource, requested, vote.chatId)
       .catch(() => null) ?? null
     /**
      * Logged AFTER the writes, and reporting all three values.

@@ -9,7 +9,7 @@
 import { QdrantClient } from '@qdrant/js-client-rest'
 import OpenAI from 'openai'
 import type { VectorMatch, VectorPort } from '@lyadmin/core'
-import { hasTextualContent, isDistinctive, truncate } from '@lyadmin/core'
+import { hasTextualContent, isDistinctive, truncate, CORROBORATING_CHATS_MIN } from '@lyadmin/core'
 import { sha256 } from './hashing.js'
 
 /** Deterministic point id from the text, so re-learning the same spam upserts
@@ -45,6 +45,8 @@ interface SpamPayload {
   disabledAt?: string
   /** Unix seconds; absent on v1 points, which never expire. */
   expiresAtUnix?: number
+  /** Distinct chats that reported this text; absent on v1 points. */
+  chats?: number[]
 }
 
 export class QdrantVectorPort implements VectorPort {
@@ -120,23 +122,48 @@ export class QdrantVectorPort implements VectorPort {
   async learn(
     text: string,
     source: string,
-    status: 'candidate' | 'confirmed' = 'candidate'
+    status: 'candidate' | 'confirmed' = 'candidate',
+    chatId?: number
   ): Promise<'candidate' | 'confirmed' | null> {
     if (!hasTextualContent(text)) return null
     if (!isDistinctive(text)) return null
     const embedding = await this.embed(text)
     if (!embedding) return null
     const now = Date.now()
+    const id = pointIdFor(text)
+
+    /**
+     * The same corroboration rule the signature layer applies, for the same
+     * reason and now from the same constant: one chat reporting a text is one
+     * observation however many times it repeats it, and a semantic rule is
+     * blunter than a hash, so it must earn the deciding tier rather than be
+     * handed it. The read is needed because the point id is derived from the
+     * text — every learn upserts the same point, so without it a later
+     * candidate would overwrite what a second chat established.
+     */
+    const existing = await this.qdrant.retrieve(SPAM_COLLECTION, { ids: [id], with_payload: true })
+      .catch(() => [] as { payload?: Record<string, unknown> | null }[])
+    const previous = (existing[0]?.payload ?? undefined) as SpamPayload | undefined
+    const chats = new Set<number>(
+      Array.isArray(previous?.chats) ? previous.chats.filter((c) => typeof c === 'number') : []
+    )
+    if (chatId !== undefined) chats.add(chatId)
+    const corroborated = chats.size >= CORROBORATING_CHATS_MIN
+    const effective: 'candidate' | 'confirmed' =
+      status === 'confirmed' || corroborated || previous?.status === 'confirmed'
+        ? 'confirmed'
+        : 'candidate'
     try {
       await this.qdrant.upsert(SPAM_COLLECTION, {
         points: [{
-          id: pointIdFor(text),
+          id,
           vector: embedding,
           payload: {
             classification: 'spam',
-            status,
+            status: effective,
             source,
-            ...(status === 'confirmed'
+            chats: [...chats],
+            ...(effective === 'confirmed'
               ? { hitCount: CONFIRMED_HIT_COUNT, confidence: CONFIRMED_CONFIDENCE }
               : {}),
             createdAt: new Date(now).toISOString(),
@@ -144,7 +171,7 @@ export class QdrantVectorPort implements VectorPort {
           }
         }]
       })
-      return status
+      return effective
     } catch {
       // Best-effort, mirrors signaturePort.learn — and null says so, rather
       // than letting the caller log a rule that was never written.

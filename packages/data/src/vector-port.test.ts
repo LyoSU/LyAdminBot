@@ -4,10 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const search = vi.fn()
 const upsert = vi.fn()
 const setPayload = vi.fn()
+const retrieve = vi.fn(async () => [] as { payload?: Record<string, unknown> }[])
 const embeddings = vi.fn(async () => ({ data: [{ embedding: [0.1, 0.2, 0.3] }] }))
 
 vi.mock('@qdrant/js-client-rest', () => ({
-  QdrantClient: class { search = search; upsert = upsert; setPayload = setPayload }
+  QdrantClient: class { search = search; upsert = upsert; setPayload = setPayload; retrieve = retrieve }
 }))
 vi.mock('openai', () => ({
   default: class { embeddings = { create: embeddings } }
@@ -140,5 +141,60 @@ describe('QdrantVectorPort.retire', () => {
   it('a text that was never learned is a no-op, not a throw', async () => {
     setPayload.mockRejectedValueOnce(new Error('point not found'))
     await expect(port.retire('нічого такого не було')).resolves.toBeUndefined()
+  })
+})
+
+/**
+ * A semantic rule is blunter than a hash, so it must earn confirmation the same
+ * way — from a SECOND, independent chat. Until 2026-08-23 this layer had no
+ * corroboration at all: it took whatever status the caller asked for. That was
+ * survivable only while votes could ask for `confirmed`; once they could not,
+ * nothing in the system could ever produce a confirmed vector again, while
+ * `pipeline.ts` went on reading one as the decisive case.
+ */
+describe('QdrantVectorPort.learn — earning confirmation', () => {
+  const longSpam = 'заробіток удома від 8000 гривень на день, пиши в особисті просто зараз'
+  const port = () => new QdrantVectorPort({
+    qdrantUrl: 'http://localhost:6333', openaiApiKey: 'test'
+  })
+  const written = () => (upsert.mock.calls[0]?.[1] as {
+    points: { payload: Record<string, unknown> }[]
+  }).points[0]?.payload
+
+  beforeEach(() => {
+    retrieve.mockResolvedValue([])
+  })
+
+  it('records the chat that reported the text', async () => {
+    await port().learn(longSpam, 'community_vote', 'candidate', -100)
+    expect(written()?.['chats']).toEqual([-100])
+  })
+
+  it('stays a candidate on the first chat', async () => {
+    expect(await port().learn(longSpam, 'community_vote', 'candidate', -100)).toBe('candidate')
+    expect(written()?.['status']).toBe('candidate')
+  })
+
+  it('promotes once a SECOND chat reports the same text', async () => {
+    retrieve.mockResolvedValue([{ payload: { status: 'candidate', chats: [-100] } }])
+    expect(await port().learn(longSpam, 'community_vote', 'candidate', -200)).toBe('confirmed')
+    expect(written()?.['status']).toBe('confirmed')
+  })
+
+  it('does NOT promote on repetition inside one chat', async () => {
+    retrieve.mockResolvedValue([{ payload: { status: 'candidate', chats: [-100] } }])
+    expect(await port().learn(longSpam, 'community_vote', 'candidate', -100)).toBe('candidate')
+  })
+
+  it('never demotes a point that is already confirmed', async () => {
+    // The id is derived from the text, so every learn upserts the same point —
+    // a later candidate must not overwrite what a second chat established.
+    retrieve.mockResolvedValue([{ payload: { status: 'confirmed', chats: [-100] } }])
+    expect(await port().learn(longSpam, 'community_vote', 'candidate', -100)).toBe('confirmed')
+  })
+
+  it('a caller with real authority still confirms alone', async () => {
+    // The threat feed speaks for itself; it is not one chat's opinion.
+    expect(await port().learn(longSpam, 'cas', 'confirmed')).toBe('confirmed')
   })
 })

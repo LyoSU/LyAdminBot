@@ -90,6 +90,17 @@ export const isDistinctive = (text: string): boolean =>
  */
 export const VOTE_LEARN_STATUS = 'candidate' as const
 
+/**
+ * Distinct chats that must have reported a text before it may decide alone.
+ *
+ * Lives here rather than in one store because both learning layers have to
+ * agree on it. It was private to the signature port until 2026-08-23, and that
+ * was survivable only while a vote could ask for `confirmed` outright — the
+ * moment votes could not, the vector layer had no route to confirmation at all
+ * and `pipeline.ts` was left reading a tier nothing could write.
+ */
+export const CORROBORATING_CHATS_MIN = 2
+
 export const shouldAutoLearn = (verdict: Verdict, text: string): boolean => {
   if (!AUTO_LEARN_DECIDED_BY.has(verdict.decidedBy)) return false
   if (!Number.isFinite(verdict.pSpam) || verdict.pSpam < AUTO_LEARN_MIN_PSPAM) return false
