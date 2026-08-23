@@ -258,7 +258,7 @@ describe('voterRoster', () => {
 describe('voteEligibility', () => {
   const voter = (over: Partial<VoterStanding> = {}): VoterStanding => ({
     isAdmin: false, isTarget: false, messagesInChat: 20, messagesGlobal: 200,
-    tenureDays: 30, spamDetections: 0, ...over
+    localAgeDays: 30, joinedAgoSeconds: null, spamDetections: 0, ...over
   })
 
   it('a regular of this chat may vote', () => {
@@ -270,28 +270,57 @@ describe('voteEligibility', () => {
   })
 
   it('a newcomer may not vote', () => {
-    expect(voteEligibility(voter({ messagesInChat: 2, messagesGlobal: 3, tenureDays: 0 })))
+    expect(voteEligibility(voter({ messagesInChat: 2, messagesGlobal: 3, localAgeDays: 0 })))
       .toBe('no_standing')
   })
 
   it('volume farmed without tenure earns no vote', () => {
     // Three accounts can post ten messages each in five minutes; they cannot
     // make themselves a week old. Tenure is the half of the bar that costs.
-    expect(voteEligibility(voter({ messagesInChat: 100, tenureDays: 1 }))).toBe('no_standing')
+    expect(voteEligibility(voter({ messagesInChat: 100, localAgeDays: 1 }))).toBe('no_standing')
   })
 
   it('tenure without volume earns no vote either', () => {
-    expect(voteEligibility(voter({ messagesInChat: 1, messagesGlobal: 4, tenureDays: 400 })))
+    expect(voteEligibility(voter({ messagesInChat: 1, messagesGlobal: 4, localAgeDays: 400 })))
       .toBe('no_standing')
   })
 
   it('an unknown tenure is not evidence of tenure', () => {
-    expect(voteEligibility(voter({ tenureDays: null }))).toBe('no_standing')
+    expect(voteEligibility(voter({ localAgeDays: null }))).toBe('no_standing')
+  })
+
+  it('a member Telegram says joined months ago votes, though our record is a day old', () => {
+    // The case this bar was refusing in production: a chat the bot was only
+    // just added to, where every member's first-seen date is today and the
+    // whole chat is therefore mute for a week. Telegram's join date is the one
+    // fact that survives anything we do to our own database.
+    expect(voteEligibility(voter({ localAgeDays: 1, joinedAgoSeconds: 90 * 86400 })))
+      .toBe('eligible')
+  })
+
+  it('our own longer record still counts when Telegram says nothing', () => {
+    expect(voteEligibility(voter({ localAgeDays: 30, joinedAgoSeconds: null })))
+      .toBe('eligible')
+  })
+
+  it('the join date alone is enough when we have no record at all', () => {
+    expect(voteEligibility(voter({ localAgeDays: null, joinedAgoSeconds: 30 * 86400 })))
+      .toBe('eligible')
+  })
+
+  it('a join date of minutes ago does not lend tenure to a fresh record', () => {
+    expect(voteEligibility(voter({ localAgeDays: 1, joinedAgoSeconds: 600 })))
+      .toBe('no_standing')
+  })
+
+  it('neither clock saying anything is not tenure', () => {
+    expect(voteEligibility(voter({ localAgeDays: null, joinedAgoSeconds: null })))
+      .toBe('no_standing')
   })
 
   it('an admin may vote with no standing at all', () => {
     expect(voteEligibility(voter({
-      isAdmin: true, messagesInChat: 0, messagesGlobal: 0, tenureDays: null
+      isAdmin: true, messagesInChat: 0, messagesGlobal: 0, localAgeDays: null
     }))).toBe('eligible')
   })
 
@@ -320,7 +349,8 @@ describe('voteEligibility', () => {
   it('unusable counts read as no standing, never as standing', () => {
     for (const broken of [Number.NaN, -1, Number.POSITIVE_INFINITY]) {
       expect(voteEligibility(voter({
-        messagesInChat: broken, messagesGlobal: broken, tenureDays: broken
+        messagesInChat: broken, messagesGlobal: broken,
+        localAgeDays: broken, joinedAgoSeconds: broken
       }))).toBe('no_standing')
     }
   })

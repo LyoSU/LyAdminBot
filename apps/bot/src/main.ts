@@ -43,6 +43,7 @@ import { formatDuration, parseBananDuration } from './duration.js'
 import { formatSignals, log } from './logger.js'
 import { RightsMemory, RIGHTS_ERROR_REGEX } from './rights.js'
 import { LlmHealth } from './llm-health.js'
+import { MemberFactsCache, type MemberFacts } from './member-facts.js'
 import { JOIN_WINDOW_MS, JoinRateTracker } from './join-rate.js'
 import { IncidentTracker, SenderMessageLog, incidentPowerFor, type Incident } from './incident.js'
 
@@ -471,51 +472,50 @@ const passCaptcha = async (
   return true
 }
 
-/** Admin cache: chatId:userId → isAdmin, 10 min TTL. */
-const adminCache = new Map<string, { isAdmin: boolean; expiresMs: number }>()
-const isChatAdmin = async (chatId: number, userId: number): Promise<boolean> => {
-  const key = `${chatId}:${userId}`
-  const cached = adminCache.get(key)
-  if (cached && cached.expiresMs > Date.now()) return cached.isAdmin
-  let isAdmin = false
-  try {
-    const member = await gateway.tg.getChatMember({ chatId, userId })
-    isAdmin = member !== null && (member.status === 'admin' || member.status === 'creator')
-  } catch { /* not a member / hidden — treat as non-admin */ }
-  adminCache.set(key, { isAdmin, expiresMs: Date.now() + 10 * 60 * 1000 })
-  return isAdmin
-}
+/**
+ * Adminship and join date, from one cached `getChatMember` per person per chat.
+ * See `member-facts.ts` for why a failed lookup is not written down.
+ */
+const memberFacts = new MemberFactsCache()
+const chatMemberFacts = (chatId: number, userId: number): Promise<MemberFacts> =>
+  memberFacts.get(chatId, userId, () => gateway.tg.getChatMember({ chatId, userId }))
+
+const isChatAdmin = async (chatId: number, userId: number): Promise<boolean> =>
+  (await chatMemberFacts(chatId, userId)).isAdmin
 
 /**
  * What the chat knows about someone reaching for a ballot.
  *
- * Two reads, and only on a tap: votes are rare next to messages, so this never
- * touches the hot path.
+ * Two reads and one Telegram lookup, and only on a tap: votes are rare next to
+ * messages, so this never touches the hot path. The lookup is the adminship
+ * check, which every ballot needs anyway — the join date rides along on the
+ * same response, at no extra cost. It used to be discarded there, and tenure
+ * was read from our own first sighting alone, which is exactly the reading that
+ * refused a chat's whole membership for a week after the bot joined it.
  *
- * Two deliberate approximations, both erring toward refusing a ballot rather
- * than admitting one. Tenure uses only our own first sighting — Telegram's
- * join date for this chat is the other half of the clock the pipeline reads,
- * and it costs a call — so the answer is a lower bound. And the in-chat count
- * is raw traffic rather than the spam-adjusted standing the pipeline computes;
- * an account whose messages were mostly spam is caught by `spamDetections`
- * instead, which is the check that actually matters here.
+ * One deliberate approximation remains, and it errs toward refusing a ballot
+ * rather than admitting one: the in-chat count is raw traffic rather than the
+ * spam-adjusted standing the pipeline computes. An account whose messages were
+ * mostly spam is caught by `spamDetections` instead, which is the check that
+ * actually matters here.
  */
 const voterStandingFor = async (
   chatId: number, userId: number, targetUserId: number
 ): Promise<VoterStanding> => {
-  const [isAdmin, doc, stats] = await Promise.all([
-    isChatAdmin(chatId, userId),
+  const [facts, doc, stats] = await Promise.all([
+    chatMemberFacts(chatId, userId),
     store.getUserDoc(userId).catch(() => null),
     store.getMemberStats(chatId, userId).catch(() => ({ messagesCount: 0, bananCount: 0 }))
   ])
   const history = userDocToHistory(doc as Parameters<typeof userDocToHistory>[0], stats.messagesCount)
   const firstSeenUnix = history?.firstSeenUnix ?? null
   return {
-    isAdmin,
+    isAdmin: facts.isAdmin,
     isTarget: userId === targetUserId,
     messagesInChat: stats.messagesCount,
     messagesGlobal: history?.messagesGlobal ?? 0,
-    tenureDays: firstSeenUnix === null ? null : (Date.now() / 1000 - firstSeenUnix) / 86400,
+    localAgeDays: firstSeenUnix === null ? null : (Date.now() / 1000 - firstSeenUnix) / 86400,
+    joinedAgoSeconds: facts.joinedAgoSeconds,
     spamDetections: history?.spamDetections ?? 0
   }
 }
@@ -1848,10 +1848,8 @@ const handleTop = async (message: Message, chat: Chat, caller: User, kind: 'mess
  * when the incident opened. The window this leaves is a promotion inside the
  * incident's ten minutes, and a failed delete closes the incident anyway.
  */
-const knownAdmin = (chatId: number, userId: number): boolean => {
-  const cached = adminCache.get(`${chatId}:${userId}`)
-  return cached !== undefined && cached.expiresMs > Date.now() && cached.isAdmin
-}
+const knownAdmin = (chatId: number, userId: number): boolean =>
+  memberFacts.peek(chatId, userId)?.isAdmin === true
 
 /**
  * Re-render the incident's card in place with the running count.

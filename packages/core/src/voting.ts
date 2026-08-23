@@ -1,6 +1,6 @@
 import {
   ESTABLISHED_MIN_IN_CHAT, ESTABLISHED_MIN_MESSAGES, ESTABLISHED_MIN_TENURE_DAYS,
-  PRIOR_DETECTIONS_MIN
+  PRIOR_DETECTIONS_MIN, mergeTenureDays
 } from './signals/user.js'
 
 /**
@@ -186,8 +186,18 @@ export interface VoterStanding {
   isTarget: boolean
   messagesInChat: number
   messagesGlobal: number
-  /** Days since we first saw the account anywhere; null when nothing says. */
-  tenureDays: number | null
+  /**
+   * Days since we first saw the account anywhere; null when nothing says.
+   *
+   * Our own clock, and it restarts whenever our records do — a migration, the
+   * quota cleanup, a chat the bot only just joined.
+   */
+  localAgeDays: number | null
+  /**
+   * Seconds since Telegram says they joined THIS chat; null when it did not
+   * say. Telegram's clock, which survives anything we do to our database.
+   */
+  joinedAgoSeconds: number | null
   /** Confirmed spam verdicts recorded against them. */
   spamDetections: number
 }
@@ -218,6 +228,13 @@ const atLeast = (value: number, bar: number): boolean =>
  *    five minutes; they cannot make themselves a week old. Tenure is the half
  *    of this bar that an attacker actually has to pay for.
  *
+ * Tenure is read from BOTH clocks and the longer wins (`mergeTenureDays`) —
+ * again the pipeline's rule rather than a second one. Our own first-seen date
+ * alone was the whole reading until 2026-08-23, and it made a hole in our
+ * records into a statement about a person: everybody in a chat the bot had just
+ * joined was told they had not settled in yet, for a week, however many years
+ * they had actually been there.
+ *
  * Note what this does NOT do: it never weighs a ballot by reputation. A scored
  * vote invites reputation farming, which this system has already been bitten by
  * once, and "may or may not vote" is a claim we can actually defend to somebody
@@ -230,7 +247,7 @@ export const voteEligibility = (voter: VoterStanding): VoteEligibility => {
 
   const volume = atLeast(voter.messagesInChat, ESTABLISHED_MIN_IN_CHAT) ||
     atLeast(voter.messagesGlobal, ESTABLISHED_MIN_MESSAGES)
-  const tenured = voter.tenureDays !== null &&
-    atLeast(voter.tenureDays, ESTABLISHED_MIN_TENURE_DAYS)
+  const tenure = mergeTenureDays(voter.localAgeDays, voter.joinedAgoSeconds)
+  const tenured = tenure !== null && atLeast(tenure, ESTABLISHED_MIN_TENURE_DAYS)
   return volume && tenured ? 'eligible' : 'no_standing'
 }

@@ -69,11 +69,29 @@ export const ESTABLISHED_MIN_TENURE_DAYS = 7
  * against them. A hole in our records thereby counted as a fact about the
  * person, always in the direction of the harsher action.
  */
-export const tenureDays = (user: UserSnapshot): number | null => {
-  const joined = user.joinedAgoSeconds !== null ? user.joinedAgoSeconds / SECONDS_PER_DAY : null
-  if (user.localAgeDays === null) return joined
-  if (joined === null) return user.localAgeDays
-  return Math.max(user.localAgeDays, joined)
+export const tenureDays = (user: UserSnapshot): number | null =>
+  mergeTenureDays(user.localAgeDays, user.joinedAgoSeconds)
+
+/**
+ * The same reading, for callers that hold the two clocks without a whole
+ * `UserSnapshot` — the ballot check is one (`voteEligibility`).
+ *
+ * It lives here, and is imported there, so that there is exactly one answer to
+ * "how long has this person been around". A second one would drift, which is
+ * the failure this file already carries a scar from: until 2026-08-23 the
+ * ballot check had its own idea of tenure — our first-seen date alone — and so
+ * refused every non-admin in a chat the bot had just been added to, for a week,
+ * while `joinedDate` sat unread in a response the same code path had already
+ * fetched to test for adminship.
+ */
+export const mergeTenureDays = (
+  localAgeDays: number | null,
+  joinedAgoSeconds: number | null
+): number | null => {
+  const joined = joinedAgoSeconds !== null ? joinedAgoSeconds / SECONDS_PER_DAY : null
+  if (localAgeDays === null) return joined
+  if (joined === null) return localAgeDays
+  return Math.max(localAgeDays, joined)
 }
 
 /**
