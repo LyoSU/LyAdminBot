@@ -7,7 +7,8 @@ import { BotKeyboard, Chat, User, html, type Message } from '@mtcute/node'
 import {
   evaluateMessage, tallyVotes, extractBioSignals, isEnforcementAction, countsAsDetection,
   countsAgainstSender,
-  shouldAutoLearn, autoLearnSource, voteLearnStatus, conversationLineFor, nsfwProfileHit,
+  shouldAutoLearn, autoLearnSource, VOTE_LEARN_STATUS, conversationLineFor, nsfwProfileHit,
+  voterRoster, voteEligibility, needsRestitution, type VoterStanding,
   classifyUrl, removesSender, truncate, BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS,
   type ChannelPreview, type EvaluationInput, type ForwardOrigin, type PipelinePorts,
   type UserSnapshot, type Verdict, type VoteBallot
@@ -30,7 +31,8 @@ import {
 import {
   captchaPrompt, compactNotification, escapeHtml as escapeName, helpView,
   langPanel, langPicker, parseCallback, resolveLocale, settingsDeepLink, settingsPanel,
-  startCard, startGroupHint, topList, userProfileCard, votePrompt, whyCard, whyView,
+  startCard, startGroupHint, topList, userProfileCard, votePrompt, voteResult,
+  voterListView, whyCard, whyView,
   welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor,
   LOCALES, type Locale, type UserFacts, type ViewMessage
 } from '@lyadmin/ui'
@@ -483,6 +485,50 @@ const isChatAdmin = async (chatId: number, userId: number): Promise<boolean> => 
   return isAdmin
 }
 
+/**
+ * What the chat knows about someone reaching for a ballot.
+ *
+ * Two reads, and only on a tap: votes are rare next to messages, so this never
+ * touches the hot path.
+ *
+ * Two deliberate approximations, both erring toward refusing a ballot rather
+ * than admitting one. Tenure uses only our own first sighting — Telegram's
+ * join date for this chat is the other half of the clock the pipeline reads,
+ * and it costs a call — so the answer is a lower bound. And the in-chat count
+ * is raw traffic rather than the spam-adjusted standing the pipeline computes;
+ * an account whose messages were mostly spam is caught by `spamDetections`
+ * instead, which is the check that actually matters here.
+ */
+const voterStandingFor = async (
+  chatId: number, userId: number, targetUserId: number
+): Promise<VoterStanding> => {
+  const [isAdmin, doc, stats] = await Promise.all([
+    isChatAdmin(chatId, userId),
+    store.getUserDoc(userId).catch(() => null),
+    store.getMemberStats(chatId, userId).catch(() => ({ messagesCount: 0, bananCount: 0 }))
+  ])
+  const history = userDocToHistory(doc as Parameters<typeof userDocToHistory>[0], stats.messagesCount)
+  const firstSeenUnix = history?.firstSeenUnix ?? null
+  return {
+    isAdmin,
+    isTarget: userId === targetUserId,
+    messagesInChat: stats.messagesCount,
+    messagesGlobal: history?.messagesGlobal ?? 0,
+    tenureDays: firstSeenUnix === null ? null : (Date.now() / 1000 - firstSeenUnix) / 86400,
+    spamDetections: history?.spamDetections ?? 0
+  }
+}
+
+/** The refusal text for a ballot that does not count, or null when it does. */
+const ballotRefusal = (locale: Locale, standing: VoterStanding): string | null => {
+  switch (voteEligibility(standing)) {
+    case 'eligible': return null
+    case 'is_target': return locale.vote.voters.notForTarget
+    case 'known_bad': return locale.vote.voters.knownBad
+    case 'no_standing': return locale.vote.voters.noStanding
+  }
+}
+
 let selfId = 0
 let selfUsername: string | null = null
 
@@ -508,7 +554,9 @@ const viewHtml = (text: string): ReturnType<typeof html> =>
  */
 const NOTIFY_TTL_COMPACT_MS = 90 * 1000
 const NOTIFY_TTL_BANAN_MS = 60 * 1000
-const NOTIFY_TTL_VOTE_RESULT_MS = 2 * 60 * 1000
+// Long enough that "who voted" is still reachable by someone who saw the
+// result scroll by, short enough that a settled question leaves the chat.
+const NOTIFY_TTL_VOTE_RESULT_MS = 15 * 60 * 1000
 const NOTIFY_TTL_TOP_MS = 10 * 60 * 1000
 
 /**
@@ -525,6 +573,30 @@ const scheduleDelete = (chatId: number, messageId: number, delayMs: number, sour
       await store.unscheduleDeletion(chatId, messageId).catch(() => { /* sweep / TTL collects it */ })
     })()
   }, delayMs).unref?.()
+}
+
+/**
+ * Retire questions the chat never answered.
+ *
+ * A vote used to have no end at all: the prompt is the only notice this bot
+ * posts without a deletion timer, so an unanswered one sat in the chat while
+ * its document expired underneath it after seven days, leaving live buttons on
+ * a question that no longer existed. Expiry decides nothing — a tally below the
+ * quorum is not a verdict, and pretending otherwise would make one ballot a
+ * ruling — but it does end the question and say so in the log, which is the
+ * only way to find out how many corrections the chats are letting lapse.
+ */
+const expireStaleVotes = async (): Promise<void> => {
+  const expired = await store.claimExpiredVotes().catch(() => [])
+  for (const vote of expired) {
+    log.info('vote_expired', {
+      chatId: vote.chatId, userId: vote.targetUserId, messageId: vote.messageId
+    })
+    if (vote.promptMessageId !== null) {
+      await gateway.tg.deleteMessagesById(vote.chatId, [vote.promptMessageId])
+        .catch(() => { /* already gone */ })
+    }
+  }
 }
 
 /** Backstop sweep: delete everything whose deleteAt has passed. */
@@ -634,14 +706,14 @@ const learnFromAutoVerdict = async (verdict: Verdict, text: string, chatId: numb
 }
 
 /**
- * A vote resolved to spam: remove the message, mute the author, and teach the
- * stores — but only as strongly as the human signal actually was.
+ * A vote resolved to spam: remove the message, mute the author, record the
+ * detection against the account, and teach the stores — as a candidate only.
  *
  * `tallyVotes` resolves instantly on a single admin ballot, which is right for
  * acting on this message and wrong as grounds for a rule that fires in every
- * chat for the next 90 days. So the ballots decide the learning strength
- * (`voteLearnStatus`), and the stores promote a candidate themselves once a
- * second, independent chat reports the same text.
+ * chat for the next 90 days. Ballots used to set the learning strength; since
+ * 2026-08-23 they no longer can (see `VOTE_LEARN_STATUS`) and promotion is left
+ * to a second, independent chat reporting the same text.
  */
 const enforceVoteSpam = async (vote: {
   chatId: number
@@ -655,16 +727,40 @@ const enforceVoteSpam = async (vote: {
     .catch(() => { /* already gone */ })
   await gateway.moderationActions.mute(vote.chatId, vote.targetUserId, MUTE_AFTER_VOTE_SECONDS)
     .catch(() => { /* may lack rights */ })
+  /**
+   * The chat confirmed it, so it is now a fact about the account and not only
+   * about the message.
+   *
+   * `spamDetections` is read by three mechanisms — the `prior_spam_detections`
+   * signal, the established-regular exempt, and the right to vote — and until
+   * 2026-08-23 only automatic enforcement ever wrote it. So somebody the
+   * community had voted a spammer ten times over stayed a full member in every
+   * one of those readings, including as a voter on the next question. The
+   * counter had a reader before it had this writer.
+   */
+  await store.adjustSpamMessages(vote.chatId, vote.targetUserId, 1, true)
+    .catch(() => { /* counters are best-effort */ })
+
   if (vote.learnText.trim().length > 0) {
-    const status = voteLearnStatus(vote.tally)
-    log.info('vote_learned', {
-      chatId: vote.chatId, status, spam: vote.tally.spam, ham: vote.tally.ham, source: learnSource
-    })
-    await signaturePort.learn(vote.learnText, learnSource, status, vote.chatId)
-      .catch(() => { /* best-effort */ })
+    const requested = VOTE_LEARN_STATUS
+    const signature = await signaturePort.learn(vote.learnText, learnSource, requested, vote.chatId)
+      .catch(() => null)
     // Seed the vector layer too, so semantic matching learns alongside
     // signatures instead of staying frozen at the v1 snapshot.
-    await vectorPort?.learn(vote.learnText, learnSource, status).catch(() => { /* best-effort */ })
+    const vector = await vectorPort?.learn(vote.learnText, learnSource, requested)
+      .catch(() => null) ?? null
+    /**
+     * Logged AFTER the writes, and reporting all three values.
+     *
+     * It used to log the requested status before either port ran, so a text
+     * the distinctiveness bar downgraded — or dropped entirely — still appeared
+     * in the log as a confirmed cross-chat rule. Any count of "how many
+     * deciding rules did votes create" taken from these lines was too high.
+     */
+    log.info('vote_learned', {
+      chatId: vote.chatId, requested, signature, vector,
+      spam: vote.tally.spam, ham: vote.tally.ham, source: learnSource
+    })
   }
 }
 
@@ -697,6 +793,24 @@ const restoreFalsePositive = async (params: {
   learnText?: string | undefined
 }): Promise<void> => {
   const verdict = await recallVerdict(params.chatId, params.messageId)
+  /**
+   * A chat may only undo what WE did. See `needsRestitution`: the calls below
+   * lift whatever restriction is in place regardless of who imposed it, and a
+   * vote can be opened by `/report` on any message at all — so without this,
+   * three ham ballots would quietly take an admin's own `/banan` off.
+   *
+   * The gate is on the community path alone, deliberately. An admin pressing
+   * the override button has the authority whatever we did or did not do, and
+   * `recallVerdict` swallows a failed Mongo read as `null` — so gating them too
+   * would turn a database hiccup into "the override button stopped working".
+   */
+  if (params.source === 'community_vote' && !needsRestitution(verdict)) {
+    log.info('restore_skipped', {
+      chatId: params.chatId, userId: params.userId, messageId: params.messageId,
+      by: params.byUserId, source: params.source, reason: verdict === null ? 'no_verdict' : verdict.action
+    })
+    return
+  }
   /**
    * An incident must not outlive the verdict that opened it: without this it
    * would go on deleting the messages of somebody the chat has just vouched for,
@@ -1204,6 +1318,9 @@ const handleDelete = async (message: Message, chat: Chat, caller: User): Promise
  * vote and casts the reporter's spam ballot. tallyVotes resolves an admin
  * ballot instantly, so an admin report is an immediate verdict while a
  * regular report starts the vote — no duplicate enforcement paths.
+ *
+ * Raising the alarm is open to everyone; only the ballot needs standing. See
+ * the eligibility block below for why the two rights are split.
  */
 const handleReport = async (message: Message, chat: Chat, reporter: User): Promise<void> => {
   const locale = await localeFor(reporter.id, reporter.language)
@@ -1242,16 +1359,27 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
     openedBy: reporter.id
   }).catch(() => false) // duplicate vote → just add the ballot below
 
-  const reporterIsAdmin = await isChatAdmin(chat.id, reporter.id)
+  const reporterStanding = await voterStandingFor(chat.id, reporter.id, target.id)
+  const reporterIsAdmin = reporterStanding.isAdmin
   log.info('report', {
     chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName,
     by: reporter.id, byName: reporter.displayName, byAdmin: reporterIsAdmin, messageId: replied.id,
     text: textPreview ? truncate(textPreview, 160) : undefined
   })
-  await store.castBallot({
-    chatId: chat.id, messageId: replied.id,
-    userId: reporter.id, isAdmin: reporterIsAdmin, choice: 'spam'
-  }).catch(() => { /* vote may have closed a moment ago */ })
+  /**
+   * Reporting and voting are different rights, on purpose. Anyone may raise
+   * the alarm — that is the channel through which the chat tells us about spam
+   * we missed, and closing it to newcomers would close it to exactly the people
+   * a fresh spam wave lands on. Deciding the question is what needs standing,
+   * so an ineligible report opens the vote and casts nothing.
+   */
+  if (voteEligibility(reporterStanding) === 'eligible') {
+    await store.castBallot({
+      chatId: chat.id, messageId: replied.id,
+      userId: reporter.id, isAdmin: reporterIsAdmin, choice: 'spam',
+      label: reporter.displayName
+    }).catch(() => { /* vote may have closed a moment ago */ })
+  }
   await dropCommand()
 
   const vote = await store.getVote(chat.id, replied.id).catch(() => null)
@@ -1282,6 +1410,19 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
       disableWebPreview: true
     }).catch(() => null)
     if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_COMPACT_MS, 'mod_event:admin_report')
+    // An admin arriving mid-vote closes the question, and the prompt it was
+    // asked through must stop asking. Without this the buttons stayed live on a
+    // closed vote and answered "already ended" to every tap, forever: the
+    // expiry sweep only claims votes still marked open.
+    const openPrompt = vote['promptMessageId']
+    if (typeof openPrompt === 'number') {
+      const receipt = voteResult(locale, { chatId: chat.id, messageId: replied.id }, 'spam')
+      await gateway.tg.editMessage({
+        chatId: chat.id, message: openPrompt,
+        text: viewHtml(receipt.text), replyMarkup: toKeyboard(receipt.buttons)
+      }).catch(() => { /* prompt already gone */ })
+      scheduleDelete(chat.id, openPrompt, NOTIFY_TTL_VOTE_RESULT_MS, 'vote_result')
+    }
     return
   }
 
@@ -2695,6 +2836,13 @@ const wireCallbacks = (): void => {
 
       const groupDoc = await store.getGroupDoc(chatId).catch(() => null)
       const policy = groupDocToChatPolicy(groupDoc as never)
+      /**
+       * Whether the tap moved anything. True by default because every toggle
+       * does by definition; the pickers are the ones that can be tapped on the
+       * value already in force, and re-picking the active preset was being
+       * written to the log as a settings change.
+       */
+      let changed = true
       if (action === 'toggle_enabled') {
         await store.updateGroupSettings(chatId, { enabled: !policy.enabled })
       } else if (action === 'toggle_captcha') {
@@ -2702,6 +2850,7 @@ const wireCallbacks = (): void => {
       } else if (action === 'toggle_voting') {
         await store.updateGroupSettings(chatId, { votingEnabled: !policy.votingEnabled })
       } else if (action === 'preset' && (value === 'soft' || value === 'standard' || value === 'strict')) {
+        changed = policy.preset !== value
         await store.updateGroupSettings(chatId, { confidenceThreshold: presetToThreshold(value) })
       } else if (action === 'toggle_bandb') {
         await store.updateGroupSettings(chatId, { banDatabase: !policy.externalBanEnabled })
@@ -2710,12 +2859,18 @@ const wireCallbacks = (): void => {
         if (!Number.isFinite(sec) || sec <= 0) { await query.answer({}); return }
         await store.updateGroupSettings(chatId, { bananDefault: sec })
       } else if (action === 'lang' && LOCALES[value]) {
+        changed = ((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale) !== value
         await store.updateGroupSettings(chatId, { locale: value })
       } else {
         await query.answer({})
         return
       }
-      log.info('settings_changed', { chatId, by: query.user.id, action, value: value || undefined })
+      // Logged only when something moved: re-picking the active preset used to
+      // be written down as a change, which inflates any audit of who altered
+      // what.
+      if (changed) {
+        log.info('settings_changed', { chatId, by: query.user.id, action, value: value || undefined })
+      }
       // Every mutation re-renders the root panel — including a language pick,
       // which returns the admin from the sub-screen back to the main panel.
       const view = await renderSettingsPanel(locale, chatId)
@@ -2906,12 +3061,33 @@ const wireCallbacks = (): void => {
         await query.answer({ text: locale.vote.alreadyEnded })
         return
       }
-      const voterIsAdmin = await isChatAdmin(chatId, query.user.id)
-      await store.castBallot({ chatId, messageId, userId: query.user.id, isAdmin: voterIsAdmin, choice })
-        .catch(() => { /* race with close — tally below re-checks */ })
+      const standing = await voterStandingFor(
+        chatId, query.user.id, Number(existing['targetUserId'] ?? 0))
+      const refusal = ballotRefusal(locale, standing)
+      if (refusal !== null) {
+        log.info('vote_refused', {
+          chatId, userId: query.user.id, messageId,
+          reason: voteEligibility(standing)
+        })
+        await query.answer({ text: refusal, alert: true })
+        return
+      }
+      await store.castBallot({
+        chatId, messageId, userId: query.user.id, isAdmin: standing.isAdmin, choice,
+        label: query.user.displayName
+      }).catch(() => { /* race with close — tally below re-checks */ })
 
       const vote = await store.getVote(chatId, messageId).catch(() => null)
       if (!vote) { await query.answer({}); return }
+      // Re-read, because `castBallot` is filtered on the window as well as the
+      // status and fails silently when either has moved. Without this the
+      // handler would tally the ballots that were already there, find them
+      // still short of the quorum, put the live prompt back up and answer
+      // "counted" — for a ballot that was never written.
+      if (vote['status'] !== 'open') {
+        await query.answer({ text: locale.vote.alreadyEnded })
+        return
+      }
       const tally = tallyVotes((vote['ballots'] ?? []) as VoteBallot[])
 
       if (tally.outcome === 'pending') {
@@ -2934,7 +3110,11 @@ const wireCallbacks = (): void => {
       }
       log.info('vote_resolved', {
         chatId, userId: Number(vote['targetUserId'] ?? 0), messageId,
-        outcome: tally.outcome, spam: tally.spam, ham: tally.ham, by: 'community'
+        outcome: tally.outcome, spam: tally.spam, ham: tally.ham,
+        // `tally.decidedBy`, not a constant: this path serves both a quorum and
+        // an admin's single decisive ballot, and the log used to call both
+        // "community".
+        by: tally.decidedBy ?? 'community'
       })
       if (tally.outcome === 'spam') {
         await enforceVoteSpam({
@@ -2957,13 +3137,51 @@ const wireCallbacks = (): void => {
           await store.addTrustedUser(chatId, targetUserId).catch(() => { /* best-effort */ })
         }
       }
+      const receipt = voteResult(locale, { chatId, messageId }, tally.outcome)
       await gateway.tg.editMessage({
         chatId, message: query.messageId,
-        text: viewHtml(tally.outcome === 'spam' ? locale.vote.resolvedSpam : locale.vote.resolvedHam)
+        text: viewHtml(receipt.text), replyMarkup: toKeyboard(receipt.buttons)
       }).catch(() => { /* ok */ })
       // The resolved prompt lingers briefly as a receipt, then cleans up.
       scheduleDelete(chatId, query.messageId, NOTIFY_TTL_VOTE_RESULT_MS, 'vote_result')
       await query.answer({ text: locale.vote.counted })
+      return
+    }
+
+    if (kind === 'vrs') {
+      const [chatIdRaw = '', messageIdRaw = ''] = parts
+      const chatId = Number(chatIdRaw)
+      const messageId = Number(messageIdRaw)
+      const vote = Number.isFinite(chatId) && Number.isFinite(messageId)
+        ? await store.getVote(chatId, messageId).catch(() => null)
+        : null
+      if (!vote) {
+        // The document outlives the receipt by days, so this is a genuinely
+        // old question rather than the usual race.
+        await query.answer({ text: locale.vote.alreadyEnded })
+        return
+      }
+      /**
+       * The one person who does not get the roster is the person it is about.
+       * Everyone else in the chat may check whether a result was honest; the
+       * subject of the question is the only reader with a motive to go after
+       * the people who answered it, and giving them the list would turn a
+       * transparency feature into a target list.
+       */
+      if (query.user.id === Number(vote['targetUserId'] ?? 0)) {
+        await query.answer({ text: locale.vote.voters.notForTarget, alert: true })
+        return
+      }
+      const roster = voterRoster((vote['ballots'] ?? []) as VoteBallot[])
+      // Whispered where the API allows it, and otherwise as a callback alert:
+      // both are private to the tapper, the whisper just fits more names.
+      const whispered = config.ephemeralCaptcha
+        ? await gateway.sendEphemeralPrompt(
+            chatId, query.user.id, voterListView(locale, roster), []).catch(() => null)
+        : null
+      await query.answer(whispered !== null
+        ? {}
+        : { text: truncate(voterListView(locale, roster, 'text'), 200), alert: true })
       return
     }
 
@@ -3070,7 +3288,10 @@ const main = async (): Promise<void> => {
   // Clear deletions that came due while we were down, then sweep periodically
   // as the backstop for the in-memory timers.
   await processDueDeletions()
-  const sweepTimer = setInterval(() => { void processDueDeletions() }, 60 * 1000)
+  const sweepTimer = setInterval(() => {
+    void processDueDeletions()
+    void expireStaleVotes()
+  }, 60 * 1000)
   sweepTimer.unref?.()
 
   const shutdown = async (): Promise<void> => {

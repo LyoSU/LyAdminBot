@@ -14,6 +14,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { Verdict } from '@lyadmin/core'
+import { VOTE_WINDOW_SECONDS } from '@lyadmin/core'
 import { MongoStore, ensureTtlIndex } from './mongo.js'
 
 interface Captured {
@@ -485,5 +486,111 @@ describe('ensureTtlIndex', () => {
       [{ key: { startedAt: 1 }, name: 'startedAt_1', expireAfterSeconds: 600 }])
     await ensureTtlIndex(collection, { startedAt: 1 }, 600)
     expect(dropped).toEqual([])
+  })
+})
+
+/**
+ * A vote nobody answers used to stay open forever: the prompt was the only
+ * notice the bot posts without a deletion timer, and the document behind it
+ * expired after seven days while the buttons stayed in the chat — so a tap on
+ * day eight answered "already closed" about a question that never closed.
+ *
+ * Worse than untidy: nothing is learned from an unresolved vote, so every
+ * question the chat ignored dropped the correction channel on the floor.
+ */
+describe('vote lifetime', () => {
+  const voteStore = (rows: Record<string, unknown>[] = []) => {
+    const inserted: Record<string, unknown>[] = []
+    const updates: { filter: Record<string, unknown>; update: Record<string, unknown> }[] = []
+    let modified = 1
+    const store = {
+      votes: {
+        insertOne: async (doc: Record<string, unknown>) => { inserted.push(doc); return {} },
+        find: () => ({ limit: () => ({ toArray: async () => rows }) }),
+        updateOne: async (filter: Record<string, unknown>, update: Record<string, unknown>) => {
+          updates.push({ filter, update })
+          return { modifiedCount: modified }
+        }
+      }
+    } as unknown as MongoStore
+    return {
+      store: Object.assign(store, {
+        openVote: MongoStore.prototype.openVote,
+        castBallot: MongoStore.prototype.castBallot,
+        claimExpiredVotes: MongoStore.prototype.claimExpiredVotes
+      }),
+      inserted,
+      updates,
+      setModified: (n: number) => { modified = n }
+    }
+  }
+
+  it('stamps an opened vote with the moment it stops accepting ballots', async () => {
+    const { store, inserted } = voteStore()
+    const before = Date.now()
+    await store.openVote({
+      chatId: -100, messageId: 5, targetUserId: 42, targetLabel: 'Alex',
+      textPreview: 'buy now', openedBy: 1
+    })
+    const expiresAt = inserted[0]?.['expiresAt'] as Date
+    expect(expiresAt).toBeInstanceOf(Date)
+    expect(expiresAt.getTime() - before).toBeGreaterThanOrEqual(VOTE_WINDOW_SECONDS * 1000 - 1000)
+    expect(expiresAt.getTime() - before).toBeLessThanOrEqual(VOTE_WINDOW_SECONDS * 1000 + 1000)
+  })
+
+  it('records the voter name alongside the ballot', async () => {
+    // Resolved later, the roster has to name who voted; the display name is
+    // free at tap time and a lookup afterwards would cost a call per voter.
+    const { store, updates } = voteStore()
+    await store.castBallot({
+      chatId: -100, messageId: 5, userId: 7, isAdmin: false, choice: 'spam', label: 'Олег'
+    })
+    const pushed = (updates[0]?.update as Record<string, Record<string, unknown>>)['$push']
+    expect(pushed?.['ballots']).toMatchObject({ userId: 7, choice: 'spam', label: 'Олег' })
+  })
+
+  it('a ballot with no name still records the vote', async () => {
+    const { store, updates } = voteStore()
+    await store.castBallot({ chatId: -100, messageId: 5, userId: 7, isAdmin: false, choice: 'ham' })
+    const pushed = (updates[0]?.update as Record<string, Record<string, unknown>>)['$push']
+    expect(pushed?.['ballots']).toMatchObject({ userId: 7, choice: 'ham' })
+    expect(pushed?.['ballots']).not.toHaveProperty('label')
+  })
+
+  it('refuses a ballot for a window that has already passed', async () => {
+    // The sweep runs once a minute, so `status: 'open'` alone leaves up to a
+    // minute — and the whole of a restart gap — in which a closed question
+    // still accepts answers.
+    const { store, updates } = voteStore()
+    await store.castBallot({ chatId: -100, messageId: 5, userId: 7, isAdmin: false, choice: 'spam' })
+    expect(updates[0]?.filter).toMatchObject({ status: 'open' })
+    expect(updates[0]?.filter).toHaveProperty('expiresAt')
+  })
+
+  it('claims a vote whose window has passed and marks it expired', async () => {
+    const { store, updates } = voteStore([
+      { chatId: -100, messageId: 5, targetUserId: 42, promptMessageId: 900 }
+    ])
+    const claimed = await store.claimExpiredVotes()
+    expect(claimed).toEqual([
+      { chatId: -100, messageId: 5, targetUserId: 42, promptMessageId: 900 }
+    ])
+    expect(updates[0]?.update).toMatchObject({ $set: { status: 'expired' } })
+    // The claim must only take a vote that is still open, or two sweeps racing
+    // would both act on it.
+    expect(updates[0]?.filter).toMatchObject({ chatId: -100, messageId: 5, status: 'open' })
+  })
+
+  it('does not claim a vote another sweep already took', async () => {
+    const { store, setModified } = voteStore([
+      { chatId: -100, messageId: 5, targetUserId: 42, promptMessageId: 900 }
+    ])
+    setModified(0)
+    expect(await store.claimExpiredVotes()).toEqual([])
+  })
+
+  it('reports no prompt when the vote never got one', async () => {
+    const { store } = voteStore([{ chatId: -100, messageId: 5, targetUserId: 42 }])
+    expect((await store.claimExpiredVotes())[0]?.promptMessageId).toBeNull()
   })
 })

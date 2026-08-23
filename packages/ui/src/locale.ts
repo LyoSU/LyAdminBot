@@ -147,6 +147,22 @@ export interface Locale {
     resolvedSpam: string
     resolvedHam: string
     alreadyEnded: string
+    /** Roster shown behind the "who voted" button on a resolved question. */
+    voters: {
+      button: string
+      title: (spam: number, ham: number) => string
+      spamGroup: string
+      hamGroup: string
+      adminMark: string
+      changedMark: string
+      span: (span: string) => string
+      more: (count: number) => string
+      nobody: string
+      /** Refused taps, by the reason `voteEligibility` gave. */
+      notForTarget: string
+      noStanding: string
+      knownBad: string
+    }
   }
 
   /** Report command feedback. */

@@ -67,29 +67,28 @@ export const isDistinctive = (text: string): boolean =>
   text.trim().length >= MIN_DISTINCTIVE_LENGTH
 
 /**
- * Net spam ballots required before a vote may write a *deciding* rule.
+ * What a resolved community vote may teach: a candidate, never more.
  *
- * `tallyVotes` resolves instantly on a single admin ballot — correct for
- * acting on THIS message, wrong as a basis for a permanent cross-chat rule.
- * One admin tapping "spam" used to write a confirmed signature (90d) and a
- * confirmed vector (no expiry at all) that then auto-enforced in every chat
- * the bot watches, with no way back except editing the database by hand.
- * Acting locally needs one human; teaching all 52 chats needs agreement.
+ * It used to be able to ask for `confirmed` once three ballots agreed, and a
+ * confirmed signature is a short circuit — `pSpam 0.96`, no LLM, no evidence
+ * bar, in all 52 chats for ninety days. The distinctiveness bar was supposed to
+ * be the guard, but it measures length and nothing else, so on 2026-08-23 a
+ * 45-character remark from one argument became a global deciding rule after a
+ * 3:0 vote. `/report` opens a question about ANY message, which makes that path
+ * available to any three members who want it.
+ *
+ * So the vote no longer mints deciding rules at all. It files a candidate, and
+ * promotion is left to the mechanism that was already the honest one: the SAME
+ * text reported from a SECOND, independent chat (`CORROBORATING_CHATS_MIN` in
+ * the signature port). One chat can be wrong, or captured; two rarely are.
+ *
+ * The cost is deliberate and worth naming: a campaign hitting a single chat is
+ * now caught a beat slower, because its first sighting only raises a signal.
+ * Note this constrains the VOTE, not the threat feed — an external source
+ * (CAS) still writes confirmed on its own authority, which is a different
+ * claim from a different place.
  */
-export const VOTE_CONFIRM_MIN_BALLOTS = 2
-
-/**
- * How strongly a spam-resolved vote may teach the stores. A `candidate` still
- * raises a signal on the next occurrence (and the stores promote it themselves
- * once a second, independent chat reports the same text) — it just may not
- * convict on its own.
- */
-export const voteLearnStatus = (
-  tally: { spam: number; ham: number }
-): 'candidate' | 'confirmed' =>
-  tally.spam >= VOTE_CONFIRM_MIN_BALLOTS && tally.spam > tally.ham
-    ? 'confirmed'
-    : 'candidate'
+export const VOTE_LEARN_STATUS = 'candidate' as const
 
 export const shouldAutoLearn = (verdict: Verdict, text: string): boolean => {
   if (!AUTO_LEARN_DECIDED_BY.has(verdict.decidedBy)) return false

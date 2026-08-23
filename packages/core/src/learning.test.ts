@@ -3,7 +3,7 @@ import fc from 'fast-check'
 import type { DecidedBy, Verdict } from './types.js'
 import {
   shouldAutoLearn, autoLearnSource, AUTO_LEARN_DECIDED_BY, AUTO_LEARN_MIN_LENGTH,
-  voteLearnStatus, isDistinctive, MIN_DISTINCTIVE_LENGTH, VOTE_CONFIRM_MIN_BALLOTS
+  isDistinctive, MIN_DISTINCTIVE_LENGTH, VOTE_LEARN_STATUS
 } from './learning.js'
 
 const makeVerdict = (overrides: Partial<Verdict> = {}): Verdict => ({
@@ -95,33 +95,6 @@ describe('shouldAutoLearn', () => {
   })
 })
 
-describe('voteLearnStatus (2026-07-30 review)', () => {
-  it('a single admin ballot teaches a candidate, not a verdict', () => {
-    // tallyVotes resolves instantly on an admin ballot — right for this
-    // message, wrong as grounds for a rule that fires in 52 chats for 90 days.
-    expect(voteLearnStatus({ spam: 1, ham: 0 })).toBe('candidate')
-  })
-
-  it('plural agreement may teach a deciding rule', () => {
-    expect(voteLearnStatus({ spam: VOTE_CONFIRM_MIN_BALLOTS, ham: 0 })).toBe('confirmed')
-  })
-
-  it('a contested vote never teaches a deciding rule', () => {
-    expect(voteLearnStatus({ spam: 2, ham: 2 })).toBe('candidate')
-    expect(voteLearnStatus({ spam: 3, ham: 4 })).toBe('candidate')
-  })
-
-  it('property: confirming always needs plural, uncontested agreement', () => {
-    fc.assert(fc.property(
-      fc.nat({ max: 20 }), fc.nat({ max: 20 }),
-      (spam, ham) => {
-        if (voteLearnStatus({ spam, ham }) !== 'confirmed') return true
-        return spam >= VOTE_CONFIRM_MIN_BALLOTS && spam > ham
-      }
-    ))
-  })
-})
-
 describe('isDistinctive', () => {
   it('is the single bar shared by signatures, vectors and auto-learn', () => {
     expect(MIN_DISTINCTIVE_LENGTH).toBe(AUTO_LEARN_MIN_LENGTH)
@@ -142,5 +115,13 @@ describe('autoLearnSource', () => {
 
   it('is distinguishable from human-confirmed sources', () => {
     expect(autoLearnSource(makeVerdict()).startsWith('auto:')).toBe(true)
+  })
+})
+
+describe('VOTE_LEARN_STATUS', () => {
+  it('is a candidate, so no vote can mint a deciding rule by itself', () => {
+    // The guard is the constant's value, not any logic around it: promotion is
+    // the signature port's job and it needs a second, independent chat.
+    expect(VOTE_LEARN_STATUS).toBe('candidate')
   })
 })

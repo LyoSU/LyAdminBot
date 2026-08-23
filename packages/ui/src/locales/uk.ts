@@ -245,7 +245,21 @@ export const uk: Locale = {
     counted: 'Голос зараховано.',
     resolvedSpam: '🗑 Спільнота вирішила: спам. Прибрав.',
     resolvedHam: '👌 Спільнота вирішила: не спам.',
-    alreadyEnded: 'Голосування вже закрите.'
+    alreadyEnded: 'Голосування вже закрите.',
+    voters: {
+      button: '👥 Хто голосував',
+      title: (spam, ham) => `👥 <b>Голосування</b> · спам ${spam} : ${ham} норм`,
+      spamGroup: '🗑 Спам',
+      hamGroup: '👌 Норм',
+      adminMark: 'адмін',
+      changedMark: 'змінив голос',
+      span: (span) => `⏱ від першого до останнього голосу: ${span}`,
+      more: (count) => `…і ще ${count}`,
+      nobody: 'Ніхто не встиг проголосувати.',
+      notForTarget: 'Це голосування про тебе.',
+      noStanding: 'Голосують ті, хто вже освоївся в чаті.',
+      knownBad: 'Твій голос тут не рахується.'
+    }
   },
 
   report: {

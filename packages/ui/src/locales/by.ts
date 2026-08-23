@@ -245,7 +245,21 @@ export const by: Locale = {
     counted: 'Голас залічаны.',
     resolvedSpam: '🗑 Супольнасць вырашыла: спам. Прыбраў.',
     resolvedHam: '👌 Супольнасць вырашыла: не спам.',
-    alreadyEnded: 'Галасаванне ўжо закрыта.'
+    alreadyEnded: 'Галасаванне ўжо закрыта.',
+    voters: {
+      button: '👥 Хто галасаваў',
+      title: (spam, ham) => `👥 <b>Галасаванне</b> · спам ${spam} : ${ham} норм`,
+      spamGroup: '🗑 Спам',
+      hamGroup: '👌 Норм',
+      adminMark: 'адмін',
+      changedMark: 'змяніў голас',
+      span: (span) => `⏱ ад першага да апошняга голасу: ${span}`,
+      more: (count) => `…і яшчэ ${count}`,
+      nobody: 'Ніхто не паспеў прагаласаваць.',
+      notForTarget: 'Гэта галасаванне пра цябе.',
+      noStanding: 'Галасуюць тыя, хто ўжо асвоіўся ў чаце.',
+      knownBad: 'Твой голас тут не лічыцца.'
+    }
   },
 
   report: {

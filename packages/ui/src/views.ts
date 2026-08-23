@@ -7,7 +7,7 @@
  *  - details live behind [Why?]; raw LLM prose never shown
  *  - settings panel only in PM; group /settings replies with a deep link
  */
-import type { Verdict } from '@lyadmin/core'
+import type { Verdict, VoterEntry, VoterRoster } from '@lyadmin/core'
 import { isSuspicionSignal, truncate, ESTABLISHED_MIN_TENURE_DAYS } from '@lyadmin/core'
 import type { Locale } from './locale.js'
 import { uk } from './locales/uk.js'
@@ -53,6 +53,8 @@ export const callbackData = {
     `tr:${chatId}:${userId}:${makeTrusted ? '1' : '0'}`,
   vote: (chatId: number, messageId: number, choice: 'spam' | 'ham'): string =>
     `vt:${chatId}:${messageId}:${choice === 'spam' ? 's' : 'h'}`,
+  /** Roster of a resolved question, whispered to whoever asks. */
+  voters: (chatId: number, messageId: number): string => `vrs:${chatId}:${messageId}`,
   /** Live profile card for a user, opened from the "Why?" card. Admins only. */
   profile: (chatId: number, userId: number): string => `prof:${chatId}:${userId}`,
   help: (): string => 'help',
@@ -806,6 +808,87 @@ export const votePrompt = (
     { text: locale.vote.spamButton(tally.spam), data: callbackData.vote(target.chatId, target.messageId, 'spam') },
     { text: locale.vote.hamButton(tally.ham), data: callbackData.vote(target.chatId, target.messageId, 'ham') }
   ]]
+})
+
+/**
+ * How many names one roster shows.
+ *
+ * A cap rather than a scroll: the roster is delivered as a whisper, and where
+ * the ephemeral API is unavailable it degrades to a 200-character callback
+ * alert. Building forty names only to have them cut mid-word would turn the
+ * transparency this view exists for into a shrug.
+ */
+export const VOTERS_SHOWN_MAX = 12
+
+/** Roster output shape: whispered as HTML, or plain for a callback alert. */
+type VoterListFormat = 'html' | 'text'
+
+const voterLine = (locale: Locale, voter: VoterEntry, format: VoterListFormat): string => {
+  const marks = [
+    voter.isAdmin ? locale.vote.voters.adminMark : null,
+    voter.changedMind ? locale.vote.voters.changedMark : null
+  ].filter((m): m is string => m !== null)
+  // A display name is whatever the person set it to, so it is markup until
+  // escaped — the same rule `viewHtml` enforces for every other user string.
+  const raw = voter.label ?? String(voter.userId)
+  const name = format === 'html' ? escapeHtml(raw) : raw
+  return marks.length > 0 ? ` • ${name} · ${marks.join(' · ')}` : ` • ${name}`
+}
+
+const voterGroup = (
+  locale: Locale, heading: string, voters: VoterEntry[], format: VoterListFormat
+): string[] => {
+  if (voters.length === 0) return []
+  const shown = voters.slice(0, VOTERS_SHOWN_MAX)
+  const hidden = voters.length - shown.length
+  return [
+    '',
+    format === 'html' ? `<b>${heading}</b>` : heading,
+    ...shown.map((v) => voterLine(locale, v, format)),
+    ...(hidden > 0 ? [` ${locale.vote.voters.more(hidden)}`] : [])
+  ]
+}
+
+/**
+ * Who voted which way on a question that has closed.
+ *
+ * The span line is the part that earns this view. Counters say three people
+ * agreed; only the clock separates a chat reacting over four minutes from three
+ * accounts tapping in two seconds, and that difference is the whole question
+ * somebody asks when they doubt a result.
+ */
+export const voterListView = (
+  locale: Locale, roster: VoterRoster, format: VoterListFormat = 'html'
+): string => {
+  const t = locale.vote.voters
+  const title = t.title(roster.spam.length, roster.ham.length)
+  const lines = [
+    format === 'html' ? title : title.replace(/<\/?b>/g, ''),
+    ...voterGroup(locale, t.spamGroup, roster.spam, format),
+    ...voterGroup(locale, t.hamGroup, roster.ham, format)
+  ]
+  if (roster.spam.length === 0 && roster.ham.length === 0) lines.push('', t.nobody)
+  if (roster.spanSeconds !== null) {
+    lines.push('', t.span(humanSpan(locale, roster.spanSeconds)))
+  }
+  return lines.join('\n')
+}
+
+/**
+ * The receipt a resolved question leaves behind. The outcome is the message;
+ * the roster is one tap away rather than in the text, so a chat reading the
+ * result is not also reading a list of who to be annoyed with.
+ */
+export const voteResult = (
+  locale: Locale,
+  target: { chatId: number; messageId: number },
+  outcome: 'spam' | 'ham'
+): ViewMessage => ({
+  text: outcome === 'spam' ? locale.vote.resolvedSpam : locale.vote.resolvedHam,
+  buttons: [[{
+    text: locale.vote.voters.button,
+    data: callbackData.voters(target.chatId, target.messageId)
+  }]]
 })
 
 /**

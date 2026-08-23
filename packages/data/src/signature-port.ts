@@ -139,9 +139,9 @@ export class MongoSignaturePort implements SignaturePort {
     source: string,
     status: 'candidate' | 'confirmed' = 'candidate',
     chatId?: number
-  ): Promise<void> {
+  ): Promise<'candidate' | 'confirmed' | null> {
     const hashes = computeSignatureHashes(text)
-    if (!hashes) return
+    if (!hashes) return null
 
     const distinctive = isDistinctive(text)
     const now = new Date()
@@ -180,5 +180,11 @@ export class MongoSignaturePort implements SignaturePort {
       { exactHash: hashes.exactHash },
       { $set: { status: effective, expiresAt: expiryFor(effective, now) } }
     )
+    // Returned, not just written: `status` is what the caller ASKED for and
+    // `effective` is what the rule actually became. Logging the request as
+    // though it were the result overstated how many deciding rules exist —
+    // a 45-character remark filed as `confirmed` in the log was a candidate
+    // in the table (2026-08-23 log audit).
+    return effective
   }
 }

@@ -19,8 +19,15 @@ const NEW_GLOBALLY_MAX = 5
 const EXTERNAL_REPEAT_OFFENSES_MIN = 2
 const FRESH_EXTERNAL_BAN_MAX_DAYS = 2
 const MANY_SHARED_CHATS_MIN = 5
-/** Kept equal to the pipeline's `HARD_VERDICT_MIN_DETECTIONS` on purpose. */
-const PRIOR_DETECTIONS_MIN = 2
+/**
+ * Kept equal to the pipeline's `HARD_VERDICT_MIN_DETECTIONS` on purpose.
+ *
+ * Exported since 2026-08-23 because the right to vote asks the same question at
+ * the same bar — an account the system has twice found to be spamming does not
+ * get a say in whether the next one is. A third copy of the number would have
+ * been the third place to forget when it moves.
+ */
+export const PRIOR_DETECTIONS_MIN = 2
 const JUST_JOINED_MAX_SECONDS = 120
 const AVATAR_FRESH_MAX_DAYS = 7
 

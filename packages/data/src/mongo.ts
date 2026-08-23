@@ -7,7 +7,7 @@
  */
 import { MongoClient, ObjectId, type Collection, type Db, type Document } from 'mongodb'
 import type { BurstEntry, Verdict, Signal } from '@lyadmin/core'
-import { truncate } from '@lyadmin/core'
+import { truncate, VOTE_WINDOW_SECONDS } from '@lyadmin/core'
 import { normalizeExtra, type NormalizedExtra } from './extras.js'
 import { VELOCITY_WINDOW_MS, SESSION_WINDOW_MS, BURST_WINDOW_MS } from './persistent-ports.js'
 import {
@@ -157,6 +157,8 @@ export class MongoStore {
     await this.llmCache.createIndex({ key: 1 }, { unique: true })
     await this.votes.createIndex({ chatId: 1, messageId: 1 }, { unique: true })
     await ensureTtlIndex(this.votes, { createdAt: 1 }, 7 * 86400)
+    // Drives the expiry sweep; without it the scan grows with the whole week.
+    await this.votes.createIndex({ status: 1, expiresAt: 1 })
     // Scheduled deletions: single deleteAt index doubles as the due-query
     // index and a 1h TTL backstop (3600s after deleteAt) if a sweep is missed.
     await ensureTtlIndex(this.scheduledDeletions, { deleteAt: 1 }, 3600)
@@ -823,6 +825,7 @@ export class MongoStore {
     learnText?: string
     openedBy: number
   }): Promise<boolean> {
+    const now = Date.now()
     try {
       await this.votes.insertOne({
         chatId: params.chatId,
@@ -838,7 +841,9 @@ export class MongoStore {
         promptMessageId: null,
         ballots: [],
         status: 'open',
-        createdAt: new Date()
+        createdAt: new Date(now),
+        // The moment the question stops being askable — see VOTE_WINDOW_SECONDS.
+        expiresAt: new Date(now + VOTE_WINDOW_SECONDS * 1000)
       })
       return true
     } catch {
@@ -861,10 +866,26 @@ export class MongoStore {
     userId: number
     isAdmin: boolean
     choice: 'spam' | 'ham'
+    /**
+     * Display name at the moment of the tap, for the roster the resolved vote
+     * shows. Omitted rather than blanked when unknown, so a roster can tell
+     * "no name was recorded" from "their name is empty".
+     */
+    label?: string
   }): Promise<void> {
-    const ballot = { userId: params.userId, isAdmin: params.isAdmin, choice: params.choice, at: new Date() }
+    const ballot = {
+      userId: params.userId, isAdmin: params.isAdmin, choice: params.choice, at: new Date(),
+      ...(params.label !== undefined && params.label !== '' ? { label: truncate(params.label, 64) } : {})
+    }
     await this.votes.updateOne(
-      { chatId: params.chatId, messageId: params.messageId, status: 'open' },
+      // `expiresAt` as well as `status`: the sweep that flips the status runs
+      // once a minute, so the status alone leaves a window — a whole restart
+      // gap, at worst — in which a question whose time is up still takes
+      // answers. The write itself is the only place that can be exact.
+      {
+        chatId: params.chatId, messageId: params.messageId, status: 'open',
+        expiresAt: { $gt: new Date() }
+      },
       // The driver's PushOperator<Document> rejects concrete array elements.
       { $push: { ballots: ballot } } as never
     )
@@ -909,6 +930,43 @@ export class MongoStore {
     if (due.length === 0) return []
     await this.scheduledDeletions.deleteMany({ _id: { $in: due.map((d) => d['_id']) } })
     return due.map((d) => ({ chatId: Number(d['chatId']), messageId: Number(d['messageId']) }))
+  }
+
+  /**
+   * Take every vote whose window has passed, marking each expired.
+   *
+   * Claimed one at a time through the same `status: 'open'` guard `closeVote`
+   * uses: the sweep runs on a timer and a restart can overlap the previous run,
+   * so two callers must never both act on one question. Only the rows this call
+   * actually flipped come back.
+   */
+  async claimExpiredVotes(limit = 50): Promise<{
+    chatId: number; messageId: number; targetUserId: number; promptMessageId: number | null
+  }[]> {
+    const due = await this.votes
+      .find({ status: 'open', expiresAt: { $lte: new Date() } })
+      .limit(limit)
+      .toArray()
+    const claimed: {
+      chatId: number; messageId: number; targetUserId: number; promptMessageId: number | null
+    }[] = []
+    for (const doc of due) {
+      const chatId = Number(doc['chatId'])
+      const messageId = Number(doc['messageId'])
+      const result = await this.votes.updateOne(
+        { chatId, messageId, status: 'open' },
+        { $set: { status: 'expired', closedAt: new Date() } }
+      )
+      if (result.modifiedCount !== 1) continue
+      const prompt = doc['promptMessageId']
+      claimed.push({
+        chatId,
+        messageId,
+        targetUserId: Number(doc['targetUserId'] ?? 0),
+        promptMessageId: typeof prompt === 'number' ? prompt : null
+      })
+    }
+    return claimed
   }
 
   /** Close atomically — only one caller wins, so resolution actions run once. */

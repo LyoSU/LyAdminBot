@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Verdict, SignalName } from '@lyadmin/core'
-import { callbackData, captchaPrompt, compactNotification, langPanel, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, userProfileCard, userProfileLines, votePrompt, whyCard, whyDeepLink, whyView, welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor, LOCALES, type UserFacts } from './views.js'
+import { callbackData, captchaPrompt, compactNotification, langPanel, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, userProfileCard, userProfileLines, votePrompt, voterListView, voteResult, VOTERS_SHOWN_MAX, whyCard, whyDeepLink, whyView, welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor, LOCALES, type UserFacts } from './views.js'
 import { uk } from './locales/uk.js'
 
 const makeVerdict = (overrides: Partial<Verdict> = {}): Verdict => ({
@@ -519,5 +519,109 @@ describe('extras editor', () => {
     const view = extrasEditor(uk, chatId, [], 3, 0)
     const add = view.buttons.flat().find((b) => b.data === callbackData.extras(chatId, 'addc'))
     expect(add).toBeTruthy()
+  })
+})
+
+/**
+ * The roster answers a question the counters cannot: was this a real vote?
+ * Three taps four minutes apart is a chat reacting; three taps in two seconds
+ * is a crew. Names alone do not show that, so the span is part of the view.
+ */
+describe('voterListView', () => {
+  const roster = {
+    spam: [
+      { userId: 1, label: 'Олег', isAdmin: true, choice: 'spam' as const, changedMind: false },
+      { userId: 2, label: 'Марія', isAdmin: false, choice: 'spam' as const, changedMind: false }
+    ],
+    ham: [
+      { userId: 3, label: 'Ігор', isAdmin: false, choice: 'ham' as const, changedMind: true }
+    ],
+    spanSeconds: 240
+  }
+
+  it('names every voter under the side they landed on', () => {
+    const text = voterListView(uk, roster)
+    expect(text).toContain('Олег')
+    expect(text).toContain('Марія')
+    expect(text).toContain('Ігор')
+  })
+
+  it('marks the admin and the one who changed their mind', () => {
+    const text = voterListView(uk, roster)
+    expect(text).toContain(uk.vote.voters.adminMark)
+    expect(text).toContain(uk.vote.voters.changedMark)
+  })
+
+  it('shows how long the voting took', () => {
+    expect(voterListView(uk, roster)).toContain(uk.vote.voters.span(`4${uk.profile.units.m}`))
+  })
+
+  it('omits the span when no two ballots were timed', () => {
+    const text = voterListView(uk, { ...roster, spanSeconds: null })
+    expect(text).not.toContain(uk.vote.voters.span(`4${uk.profile.units.m}`))
+  })
+
+  it('escapes a name that is trying to be markup', () => {
+    const text = voterListView(uk, {
+      spam: [{ userId: 1, label: '<b>bold</b>', isAdmin: false, choice: 'spam' as const, changedMind: false }],
+      ham: [], spanSeconds: null
+    })
+    expect(text).toContain('&lt;b&gt;bold&lt;/b&gt;')
+    expect(text).not.toContain('<b>bold</b>')
+  })
+
+  it('falls back to the id for a ballot cast before names were stored', () => {
+    const text = voterListView(uk, {
+      spam: [{ userId: 777, label: null, isAdmin: false, choice: 'spam' as const, changedMind: false }],
+      ham: [], spanSeconds: null
+    })
+    expect(text).toContain('777')
+  })
+
+  it('stays inside the alert-toast budget for a landslide', () => {
+    // The fallback path when ephemeral delivery is unavailable is a 200-char
+    // callback alert, so a 40-voter roster must not be produced only to be cut
+    // mid-name.
+    const many = Array.from({ length: 40 }, (_, i) => ({
+      userId: i, label: `Учасник ${i}`, isAdmin: false, choice: 'spam' as const, changedMind: false
+    }))
+    const text = voterListView(uk, { spam: many, ham: [], spanSeconds: 60 })
+    expect(text.length).toBeLessThan(1200)
+    expect(text).toContain(uk.vote.voters.more(40 - VOTERS_SHOWN_MAX))
+  })
+
+  it('renders without markup for the alert-toast fallback', () => {
+    // A callback alert does not parse HTML, so tags would show up literally and
+    // an escaped name would read as &lt;b&gt; to the person asking.
+    const text = voterListView(uk, {
+      spam: [{ userId: 1, label: '<b>bold</b>', isAdmin: false, choice: 'spam' as const, changedMind: false }],
+      ham: [], spanSeconds: null
+    }, 'text')
+    // Our own markup is gone from every heading...
+    for (const line of text.split('\n').filter((l) => !l.startsWith(' •'))) {
+      expect(line).not.toMatch(/<\/?b>/)
+    }
+    // ...and a name is passed through as the person typed it, unescaped.
+    expect(text).toContain('<b>bold</b>')
+    expect(text).not.toContain('&lt;')
+  })
+
+  it('says so plainly when nobody voted', () => {
+    expect(voterListView(uk, { spam: [], ham: [], spanSeconds: null }))
+      .toContain(uk.vote.voters.nobody)
+  })
+})
+
+describe('resolved vote receipt', () => {
+  it('offers the roster behind a button rather than in the text', () => {
+    const view = voteResult(uk, { chatId: -100123, messageId: 7 }, 'spam')
+    expect(view.text).toBe(uk.vote.resolvedSpam)
+    expect(view.buttons[0]?.[0]?.data).toBe(callbackData.voters(-100123, 7))
+  })
+
+  it('keeps the roster payload inside the 64-byte callback limit', () => {
+    const data = callbackData.voters(-1002147483647, 999999999)
+    expect(Buffer.byteLength(data, 'utf8')).toBeLessThanOrEqual(64)
+    expect(parseCallback(data)).toMatchObject({ kind: 'vrs' })
   })
 })

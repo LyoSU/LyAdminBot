@@ -245,7 +245,21 @@ export const ru: Locale = {
     counted: 'Голос засчитан.',
     resolvedSpam: '🗑 Сообщество решило: спам. Убрал.',
     resolvedHam: '👌 Сообщество решило: не спам.',
-    alreadyEnded: 'Голосование уже закрыто.'
+    alreadyEnded: 'Голосование уже закрыто.',
+    voters: {
+      button: '👥 Кто голосовал',
+      title: (spam, ham) => `👥 <b>Голосование</b> · спам ${spam} : ${ham} норм`,
+      spamGroup: '🗑 Спам',
+      hamGroup: '👌 Норм',
+      adminMark: 'админ',
+      changedMark: 'изменил голос',
+      span: (span) => `⏱ от первого до последнего голоса: ${span}`,
+      more: (count) => `…и ещё ${count}`,
+      nobody: 'Никто не успел проголосовать.',
+      notForTarget: 'Это голосование о тебе.',
+      noStanding: 'Голосуют те, кто уже освоился в чате.',
+      knownBad: 'Твой голос здесь не считается.'
+    }
   },
 
   report: {

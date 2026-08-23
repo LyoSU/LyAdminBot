@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
-import type { StrictnessPreset, VerdictAction } from './types.js'
+import type { StrictnessPreset, Verdict, VerdictAction } from './types.js'
 import {
   decideAction, isEnforcementAction, countsAsDetection, countsAgainstSender, ENFORCEMENT_ACTIONS,
-  PRESET_THRESHOLDS, TIMED_BAN_SECONDS, type PolicyInput
+  PRESET_THRESHOLDS, TIMED_BAN_SECONDS, needsRestitution, type PolicyInput
 } from './policy.js'
 
 const makeInput = (overrides: Partial<PolicyInput> = {}): PolicyInput => ({
@@ -379,5 +379,37 @@ describe('countsAgainstSender', () => {
     // in that chat, not about the person — and a chat where enforcement fails
     // is exactly where free standing piles up fastest.
     expect(countsAgainstSender(null)).toBe(true)
+  })
+})
+
+/**
+ * Restitution undoes OUR verdict. It used to run on anything a vote resolved to
+ * ham, including a question `/report` opened about a message the pipeline never
+ * acted on — and its first act is `restrictChatMember({})` + `unbanChatMember`,
+ * which lifts whatever restriction is in place no matter who put it there. Three
+ * ham ballots could therefore undo an admin's own /banan.
+ */
+describe('needsRestitution', () => {
+  const v = (action: VerdictAction): Pick<Verdict, 'action'> => ({ action })
+
+  it('an enforcement of ours is undone', () => {
+    for (const action of ['delete', 'kick', 'mute', 'ban'] as const) {
+      expect(needsRestitution(v(action))).toBe(true)
+    }
+  })
+
+  it('a captcha gate is ours too', () => {
+    // It restricts for ten minutes; leaving that in place after the chat
+    // vouched for someone is the same wrong, just smaller.
+    expect(needsRestitution(v('captcha'))).toBe(true)
+  })
+
+  it('a verdict that took nothing leaves nothing to undo', () => {
+    expect(needsRestitution(v('none'))).toBe(false)
+    expect(needsRestitution(v('observe'))).toBe(false)
+  })
+
+  it('no verdict at all means the restriction is not ours to lift', () => {
+    expect(needsRestitution(null)).toBe(false)
   })
 })

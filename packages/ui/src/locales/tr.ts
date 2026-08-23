@@ -230,7 +230,21 @@ export const tr: Locale = {
     counted: 'Oy sayıldı.',
     resolvedSpam: '🗑 Topluluk spam diyor. Kaldırıldı.',
     resolvedHam: '👌 Topluluk sorun olmadığını söylüyor.',
-    alreadyEnded: 'Bu oylama zaten kapandı.'
+    alreadyEnded: 'Bu oylama zaten kapandı.',
+    voters: {
+      button: '👥 Kim oy verdi',
+      title: (spam, ham) => `👥 <b>Oylama</b> · spam ${spam} : ${ham} temiz`,
+      spamGroup: '🗑 Spam',
+      hamGroup: '👌 Temiz',
+      adminMark: 'yönetici',
+      changedMark: 'oyunu değiştirdi',
+      span: (span) => `⏱ ilk oydan son oya: ${span}`,
+      more: (count) => `…ve ${count} kişi daha`,
+      nobody: 'Kimse zamanında oy vermedi.',
+      notForTarget: 'Bu oylama seninle ilgili.',
+      noStanding: 'Oy verme, sohbete yerleşmiş üyeler içindir.',
+      knownBad: 'Oyun burada sayılmıyor.'
+    }
   },
 
   report: {

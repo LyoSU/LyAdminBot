@@ -231,7 +231,21 @@ export const en: Locale = {
     counted: 'Vote counted.',
     resolvedSpam: '🗑 The community says spam. Removed.',
     resolvedHam: '👌 The community says it is fine.',
-    alreadyEnded: 'This vote is already closed.'
+    alreadyEnded: 'This vote is already closed.',
+    voters: {
+      button: '👥 Who voted',
+      title: (spam, ham) => `👥 <b>Vote</b> · spam ${spam} : ${ham} fine`,
+      spamGroup: '🗑 Spam',
+      hamGroup: '👌 Fine',
+      adminMark: 'admin',
+      changedMark: 'changed their vote',
+      span: (span) => `⏱ first to last ballot: ${span}`,
+      more: (count) => `…and ${count} more`,
+      nobody: 'Nobody voted in time.',
+      notForTarget: 'This vote is about you.',
+      noStanding: 'Voting is for members who have settled in.',
+      knownBad: 'Your ballot does not count here.'
+    }
   },
 
   report: {

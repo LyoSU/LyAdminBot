@@ -52,7 +52,7 @@ const main = async (): Promise<void> => {
 
     const stats = await harvestCas({
       ids: pending,
-      learn: (text) => signatures.learn(text, 'cas', 'confirmed'),
+      learn: async (text) => { await signatures.learn(text, 'cas', 'confirmed') },
       delayMs,
       shouldStop: () => stop
     })

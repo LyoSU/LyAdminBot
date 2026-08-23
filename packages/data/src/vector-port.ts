@@ -121,11 +121,11 @@ export class QdrantVectorPort implements VectorPort {
     text: string,
     source: string,
     status: 'candidate' | 'confirmed' = 'candidate'
-  ): Promise<void> {
-    if (!hasTextualContent(text)) return
-    if (!isDistinctive(text)) return
+  ): Promise<'candidate' | 'confirmed' | null> {
+    if (!hasTextualContent(text)) return null
+    if (!isDistinctive(text)) return null
     const embedding = await this.embed(text)
-    if (!embedding) return
+    if (!embedding) return null
     const now = Date.now()
     try {
       await this.qdrant.upsert(SPAM_COLLECTION, {
@@ -144,7 +144,12 @@ export class QdrantVectorPort implements VectorPort {
           }
         }]
       })
-    } catch { /* best-effort, mirrors signaturePort.learn */ }
+      return status
+    } catch {
+      // Best-effort, mirrors signaturePort.learn — and null says so, rather
+      // than letting the caller log a rule that was never written.
+      return null
+    }
   }
 
   /**

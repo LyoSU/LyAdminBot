@@ -26,7 +26,7 @@
  *    noise; below it, a second opinion is worth the prompt.
  *  - NaN / out-of-range pSpam fails safe to observe (never to action).
  */
-import type { StrictnessPreset, VerdictAction, ChatKind } from './types.js'
+import type { StrictnessPreset, Verdict, VerdictAction, ChatKind } from './types.js'
 
 export interface PolicyInput {
   pSpam: number
@@ -190,6 +190,23 @@ export const countsAsDetection = (verdict: {
  */
 export const countsAgainstSender = (skippedReason: string | null): boolean =>
   skippedReason === null
+
+/**
+ * Whether there is anything of OURS to give back.
+ *
+ * Restitution lifts restrictions with `restrictChatMember({})` and
+ * `unbanChatMember`, which undo whatever is in place regardless of who put it
+ * there. That is right for correcting our own mistake and wrong for anything
+ * else, and until 2026-08-23 nothing separated the two: a community vote can be
+ * opened by `/report` on ANY message, so three ham ballots about a message the
+ * pipeline never touched would quietly lift an admin's own `/banan`.
+ *
+ * A missing verdict reads as "not ours". With the vote window down to fifteen
+ * minutes this cannot mean "the record expired" — decisions are kept for days —
+ * so the only thing it can mean is that we never judged this message.
+ */
+export const needsRestitution = (verdict: Pick<Verdict, 'action'> | null): boolean =>
+  verdict !== null && verdict.action !== 'none' && verdict.action !== 'observe'
 
 export const PRESET_THRESHOLDS: Record<StrictnessPreset, PresetThresholds> = {
   soft: { ban: 0.98, mute: 0.94, kick: 0.86, delete: 0.78, grey: 0.55 },
