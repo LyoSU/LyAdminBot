@@ -493,11 +493,14 @@ const isChatAdmin = async (chatId: number, userId: number): Promise<boolean> =>
  * was read from our own first sighting alone, which is exactly the reading that
  * refused a chat's whole membership for a week after the bot joined it.
  *
- * One deliberate approximation remains, and it errs toward refusing a ballot
- * rather than admitting one: the in-chat count is raw traffic rather than the
- * spam-adjusted standing the pipeline computes. An account whose messages were
- * mostly spam is caught by `spamDetections` instead, which is the check that
- * actually matters here.
+ * Both halves of the volume test now read standing rather than traffic, and
+ * mean the same thing by it. The global half always did (`userDocToHistory`
+ * subtracts); the in-chat half read raw traffic until 2026-08-23, so one
+ * criterion was adding up two different quantities. The consequence was not
+ * theoretical: messages the chat had removed still counted toward the vote of
+ * whoever sent them, and `spamDetections` cannot cover that case, because a
+ * chat produces at most one detection against an account — a sender working a
+ * single room never reaches the two that take the vote away.
  */
 const voterStandingFor = async (
   chatId: number, userId: number, targetUserId: number
@@ -505,14 +508,14 @@ const voterStandingFor = async (
   const [facts, doc, stats] = await Promise.all([
     chatMemberFacts(chatId, userId),
     store.getUserDoc(userId).catch(() => null),
-    store.getMemberStats(chatId, userId).catch(() => ({ messagesCount: 0, bananCount: 0 }))
+    store.getMemberStats(chatId, userId).catch(() => ({ messagesCount: 0, standingInChat: 0, bananCount: 0 }))
   ])
-  const history = userDocToHistory(doc as Parameters<typeof userDocToHistory>[0], stats.messagesCount)
+  const history = userDocToHistory(doc as Parameters<typeof userDocToHistory>[0], stats.standingInChat)
   const firstSeenUnix = history?.firstSeenUnix ?? null
   return {
     isAdmin: facts.isAdmin,
     isTarget: userId === targetUserId,
-    messagesInChat: stats.messagesCount,
+    messagesInChat: stats.standingInChat,
     messagesGlobal: history?.messagesGlobal ?? 0,
     localAgeDays: firstSeenUnix === null ? null : (Date.now() / 1000 - firstSeenUnix) / 86400,
     joinedAgoSeconds: facts.joinedAgoSeconds,
@@ -955,7 +958,7 @@ const renderMyStats = async (locale: Locale, userId: number, chatId: number | nu
   } | null
   const lines = [locale.stats.title, '']
   if (chatId !== null) {
-    const member = await store.getMemberStats(chatId, userId).catch(() => ({ messagesCount: 0, bananCount: 0 }))
+    const member = await store.getMemberStats(chatId, userId).catch(() => ({ messagesCount: 0, standingInChat: 0, bananCount: 0 }))
     lines.push(locale.stats.inChat(member.messagesCount))
     if (member.bananCount > 0) lines.push(locale.stats.bananCaught(member.bananCount))
   }

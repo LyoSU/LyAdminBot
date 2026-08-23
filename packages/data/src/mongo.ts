@@ -42,6 +42,19 @@ export interface RightsBlockRecord {
 const NAMESPACE_NOT_FOUND = 26
 
 /**
+ * What a member's traffic in one chat earns them: messages written, less the
+ * ones the pipeline judged to be spam.
+ *
+ * One definition, because two readers need it — `touchMember`, which hands it
+ * to the pipeline as prior standing, and `getMemberStats`, which hands it to
+ * the ballot bar. They must not be able to disagree about what a message is
+ * worth. Never negative: the two counters are moved by separate writers and a
+ * negative standing would read as worse than a stranger's.
+ */
+const standingFrom = (stats: { messagesCount?: number; spamMessages?: number } | undefined): number =>
+  Math.max(0, (stats?.messagesCount ?? 0) - (stats?.spamMessages ?? 0))
+
+/**
  * Create a TTL index, tolerating an already-present index on the same key with
  * a *different* expiry. `createIndex` is not an upsert: re-issuing it with a
  * changed expireAfterSeconds throws IndexOptionsConflict. The clean fix
@@ -197,17 +210,38 @@ export class MongoStore {
     return (member as { stats?: { messagesCount?: number } } | null)?.stats?.messagesCount ?? 0
   }
 
-  /** Member stats for /mystats (reads the same doc touchMember maintains). */
-  async getMemberStats(chatId: number, telegramId: number): Promise<{ messagesCount: number; bananCount: number }> {
+  /**
+   * Member stats for /stats and for the ballot bar, which want different
+   * numbers out of the same document.
+   *
+   * `messagesCount` is traffic: how much this member wrote, the v1 meaning,
+   * and what the stats view reports. `standingInChat` is what that traffic
+   * earns — the same subtraction `touchMember` returns to the pipeline.
+   *
+   * They were one number until 2026-08-23, and the ballot bar read the traffic
+   * one. Ten adverts posted into one chat and removed by the chat therefore
+   * still bought their sender a vote a week later, because the messages were
+   * counted and the removals were not. Detections do not cover that case, and
+   * cannot: an account collects at most ONE of them per chat, so a sender
+   * working a single room never reaches the two that would take the vote away.
+   */
+  async getMemberStats(chatId: number, telegramId: number): Promise<{
+    messagesCount: number
+    standingInChat: number
+    bananCount: number
+  }> {
+    const empty = { messagesCount: 0, standingInChat: 0, bananCount: 0 }
     const group = await this.groups.findOne({ group_id: chatId }, { projection: { _id: 1 } })
-    if (!group) return { messagesCount: 0, bananCount: 0 }
+    if (!group) return empty
     const member = await this.groupMembers.findOne(
       { group: group['_id'], telegram_id: telegramId },
-      { projection: { 'stats.messagesCount': 1, 'banan.num': 1 } }
-    ) as { stats?: { messagesCount?: number }; banan?: { num?: number } } | null
+      { projection: { 'stats.messagesCount': 1, 'stats.spamMessages': 1, 'banan.num': 1 } }
+    ) as { stats?: { messagesCount?: number; spamMessages?: number }; banan?: { num?: number } } | null
+    if (!member) return empty
     return {
-      messagesCount: member?.stats?.messagesCount ?? 0,
-      bananCount: member?.banan?.num ?? 0
+      messagesCount: member.stats?.messagesCount ?? 0,
+      standingInChat: standingFrom(member.stats),
+      bananCount: member.banan?.num ?? 0
     }
   }
 
@@ -615,7 +649,7 @@ export class MongoStore {
       }
     )
     const stats = (before as { stats?: { messagesCount?: number; spamMessages?: number } } | null)?.stats
-    return Math.max(0, (stats?.messagesCount ?? 0) - (stats?.spamMessages ?? 0))
+    return standingFrom(stats)
   }
 
   /**

@@ -91,6 +91,11 @@ export interface UserDoc {
   }
   nameHistory?: { value?: string; seenAt?: Date | string }[]
   usernameHistory?: { value?: string; seenAt?: Date | string }[]
+  /**
+   * Mongoose `timestamps: true` wrote this on every v1 document, and it is the
+   * only first-seen date the oldest ones carry — see `firstSeenUnix`.
+   */
+  createdAt?: Date | string
 }
 
 const CHURN_WINDOW_MS = 24 * 60 * 60 * 1000
@@ -171,6 +176,37 @@ export const mergeExternalBan = (
   return banned || offenses > 0 ? { banned, bannedAt, offenses, sources } : null
 }
 
+const unixSeconds = (at: unknown): number | null => {
+  if (typeof at !== 'string' && typeof at !== 'number' && !(at instanceof Date)) return null
+  const ms = new Date(at).getTime()
+  return Number.isFinite(ms) ? Math.floor(ms / 1000) : null
+}
+
+/**
+ * When our record of this account begins — the earlier of the two dates that
+ * answer that, because they answer the same question and neither is always
+ * there.
+ *
+ * `globalStats.firstSeen` is v1's own field, and a Mongoose default lands only
+ * on insert: it entered the schema on 2026-01-07, so every account first
+ * recorded before that day has counters that keep growing and no first-seen
+ * date at all. Reading it alone therefore reported "we have never seen this
+ * person" about the longest-standing members we have — and tenure is exactly
+ * what protects them from the harsher action.
+ *
+ * `createdAt` is Mongoose's `timestamps: true`, present on every document v1
+ * wrote and on none that v2 writes (the raw driver sets `firstSeen` instead).
+ * The two are complementary, which is why this takes whichever is there and
+ * the earlier one when both are.
+ */
+const firstSeenUnixOf = (doc: UserDoc): number | null => {
+  const fromStats = unixSeconds(doc.globalStats?.firstSeen)
+  const fromRecord = unixSeconds(doc.createdAt)
+  if (fromStats === null) return fromRecord
+  if (fromRecord === null) return fromStats
+  return Math.min(fromStats, fromRecord)
+}
+
 export const userDocToHistory = (
   doc: UserDoc | null,
   messagesInChat: number,
@@ -179,7 +215,7 @@ export const userDocToHistory = (
   if (!doc) return null
   const stats = doc.globalStats ?? {}
   return {
-    firstSeenUnix: stats.firstSeen ? Math.floor(new Date(stats.firstSeen).getTime() / 1000) : null,
+    firstSeenUnix: firstSeenUnixOf(doc),
     messagesInChat,
     // Standing, not traffic: messages the pipeline judged to be spam buy no
     // benefit of the doubt. `totalMessages` is incremented before the verdict

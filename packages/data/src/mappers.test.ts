@@ -89,6 +89,49 @@ describe('countRecentChanges (v1 semantics)', () => {
 describe('userDocToHistory', () => {
   const NOW = 1_781_000_000_000
 
+  /**
+   * `globalStats` was added to the v1 user schema on 2026-01-07, and a Mongoose
+   * default lands only on insert — so every account first recorded before that
+   * day has no `globalStats.firstSeen` and never will, while `$inc` keeps its
+   * message counters growing. Those are the oldest members we have, and reading
+   * tenure from `firstSeen` alone said we had never seen them.
+   *
+   * `timestamps: true` wrote `createdAt` on every one of those documents. It
+   * answers the same question — when our record of this account begins — and
+   * was simply never read.
+   */
+  it('falls back to when the record was created for accounts older than the counter', () => {
+    const history = userDocToHistory({
+      telegram_id: 42,
+      globalStats: { totalMessages: 4000 },
+      createdAt: new Date(NOW - 900 * 86400 * 1000)
+    }, 0, NOW)!
+    expect(Math.round((NOW / 1000 - history.firstSeenUnix!) / 86400)).toBe(900)
+  })
+
+  it('takes the earlier of the two, since both mark the same beginning', () => {
+    const history = userDocToHistory({
+      telegram_id: 42,
+      globalStats: { firstSeen: new Date(NOW - 10 * 86400 * 1000) },
+      createdAt: new Date(NOW - 900 * 86400 * 1000)
+    }, 0, NOW)!
+    expect(Math.round((NOW / 1000 - history.firstSeenUnix!) / 86400)).toBe(900)
+  })
+
+  it('still says nothing when neither date is there', () => {
+    expect(userDocToHistory({ telegram_id: 42, globalStats: { totalMessages: 9 } }, 0, NOW)!
+      .firstSeenUnix).toBeNull()
+  })
+
+  it('an unusable date is not a date', () => {
+    for (const junk of ['nonsense', {}, Number.NaN, null]) {
+      const history = userDocToHistory(
+        { telegram_id: 42, createdAt: junk as never }, 0, NOW
+      )!
+      expect(history.firstSeenUnix).toBeNull()
+    }
+  })
+
   it('maps a real-shaped user document', () => {
     const history = userDocToHistory({
       telegram_id: 42,

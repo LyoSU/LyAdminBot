@@ -128,6 +128,56 @@ describe('touchMember — what counts as standing', () => {
   })
 })
 
+/**
+ * Traffic and standing are different questions and this method answers both.
+ *
+ * `/stats` wants traffic — how much this member wrote, which is what the v1
+ * counter has always meant. The ballot bar wants standing, the same reading
+ * `touchMember` returns to the pipeline. Handing one number to both callers is
+ * how the vote came to be bought with the very messages the chat had removed:
+ * ten deleted adverts in one chat still read as ten messages of belonging, and
+ * a chat can only ever produce ONE detection against an account, so the
+ * `known_bad` check does not catch that sender either.
+ */
+describe('getMemberStats — traffic and standing are different questions', () => {
+  const statsStore = (member: unknown, group: unknown = { _id: 'group-oid' }) => {
+    const store = {
+      groups: { findOne: async () => group },
+      groupMembers: { findOne: async () => member }
+    } as unknown as MongoStore
+    return Object.assign(store, { getMemberStats: MongoStore.prototype.getMemberStats })
+  }
+
+  it('reports traffic raw and standing net of the messages judged spam', async () => {
+    const store = statsStore({ stats: { messagesCount: 14, spamMessages: 9 } })
+    expect(await store.getMemberStats(-100, 42))
+      .toMatchObject({ messagesCount: 14, standingInChat: 5 })
+  })
+
+  it('standing equals traffic for a member with no spam behind them', async () => {
+    const store = statsStore({ stats: { messagesCount: 14 } })
+    expect(await store.getMemberStats(-100, 42))
+      .toMatchObject({ messagesCount: 14, standingInChat: 14 })
+  })
+
+  it('never reports negative standing', async () => {
+    const store = statsStore({ stats: { messagesCount: 2, spamMessages: 7 } })
+    expect((await store.getMemberStats(-100, 42)).standingInChat).toBe(0)
+  })
+
+  it('a member we have no record of has neither', async () => {
+    const store = statsStore(null)
+    expect(await store.getMemberStats(-100, 42))
+      .toEqual({ messagesCount: 0, standingInChat: 0, bananCount: 0 })
+  })
+
+  it('a chat we have no record of has neither', async () => {
+    const store = statsStore({ stats: { messagesCount: 99 } }, null)
+    expect(await store.getMemberStats(-100, 42))
+      .toEqual({ messagesCount: 0, standingInChat: 0, bananCount: 0 })
+  })
+})
+
 describe('adjustSpamMessages', () => {
   const captureUpdates = () => {
     const updates: { collection: string; filter: Record<string, unknown>; update: Record<string, unknown> }[] = []
