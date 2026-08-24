@@ -231,7 +231,7 @@ describe('signal catalogue', () => {
    * 2026-07-30 kick happened by a weight crossing a bar nobody was watching.
    */
   const REMOVES_SENDER_ALONE: SignalName[] = [
-    'scam_flag', 'fake_flag', 'unofficial_client_risk', 'edit_injected_promo',
+    'scam_flag', 'fake_flag', 'unofficial_client_risk', 'edit_injected_invisibles',
     'many_url_buttons', 'hidden_url', 'invisible_in_word'
   ]
 

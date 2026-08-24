@@ -1674,6 +1674,150 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
     expect(removesSender(v.action)).toBe(true)
   })
 
+  /**
+   * The same profile, and the message that class actually sends.
+   *
+   * Production 2026-08-24, two accounts inside one afternoon: a first message of
+   * three words under a channel post ("вот так вот"), an explicit avatar, and a
+   * personal channel whose description is a list of services. Every stage did
+   * exactly what it was built to do — the abstain gate found nothing to judge
+   * and said `observe` at pSpam 0 — and the account went on advertising itself
+   * to the chat by being in it. The avatar had already been downloaded and sent
+   * to the moderation API by then; the answer arrived after the gate had
+   * returned, so it was paid for and discarded.
+   *
+   * The distinction from the test above is the whole rule: there, somebody with
+   * a promotional profile joined the conversation and their sentence is judged
+   * like anyone else's. Here there is no sentence. What arrived was the profile.
+   */
+  /**
+   * Cost, which is a correctness property here rather than an optimisation: the
+   * profile screen is three paid round-trips, and an account already condemned
+   * by a ban database says nothing about a picture. Production runs 35 008
+   * deterministic verdicts in three days.
+   */
+  it('does not pay for a profile screen when a free rule already decided', async () => {
+    let calls = 0
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'вот так вот' },
+      user: { ...newcomer, externalBan: { banned: true, bannedAt: new Date(), offenses: 1, sources: ['cas' as const] } },
+      enrichment: { avatarBase64: 'AAAA', personalChannelId: 42 }
+    }), {
+      moderation: { check: async () => { calls += 1; return modResult({ sexual: 0.93 }) } }
+    })
+    expect(v.ruleId).toBe('external_ban_new')
+    expect(calls).toBe(0)
+  })
+
+  it('acts on a profile that is the whole advert when the message carries nothing', async () => {
+    const filler = {
+      msg: { text: 'вот так вот' },
+      user: newcomer,
+      enrichment: {
+        personalChannelId: 4242,
+        linkedChannels: [{
+          source: 'personal_channel' as const,
+          title: 'моя приватка',
+          description: 'фетиші, приват, умови в лс',
+          subscribers: 2,
+          avatarBase64: 'AAAA'
+        }]
+      }
+    }
+    const explicit: PipelinePorts = {
+      moderation: { check: async () => modResult({ sexual: 0.93 }) }
+    }
+
+    const v = await evaluateMessage(makeInput(filler), explicit)
+    expect(v.ruleId).toBe('nsfw_promo_profile')
+    expect(isEnforcementAction(v.action)).toBe(true)
+    // About the account, so the message-evidence bar must not cap it — asking
+    // whether these three words earned a removal would always answer no.
+    expect(v.meta['cappedFrom']).toBeUndefined()
+  })
+
+  /**
+   * The tier below the rule, and the reason it exists.
+   *
+   * Measured 2026-08-24 against the real avatar of a production promo account:
+   * `sexual` 0.373, the provider's own `flagged` false — under a profile bar
+   * written to ask "is this pornography". The account was one anyway. But honest
+   * people also put suggestive pictures on their profiles, alongside self-harm
+   * awareness and hunting knives, so this may never be a verdict. A captcha is
+   * the shape of "strong, not decisive": nothing is removed, and the sender
+   * settles it with one tap that a script cannot make.
+   */
+  it('asks a suggestive-profile newcomer to prove they are human', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'вот так вот' },
+      user: newcomer,
+      policy: { captchaEnabled: true },
+      enrichment: { avatarBase64: 'AAAA', personalChannelId: 42 }
+    }), { moderation: { check: async () => modResult({ sexual: 0.42 }, false) } })
+    expect(v.signals.map((s) => s.name)).toContain('suggestive_profile_media')
+    expect(v.action).toBe('captcha')
+    expect(v.reasonCode).toBe('low_information_profile')
+  })
+
+  it('does not ask an ordinary newcomer anything', async () => {
+    // The gate handles 4696 messages a week in production; a captcha for each
+    // would be the bot shouting at its own chats.
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'вот так вот' },
+      user: newcomer,
+      policy: { captchaEnabled: true }
+    }), { moderation: { check: async () => modClean } })
+    expect(v.action).toBe('observe')
+    expect(v.reasonCode).toBe('low_information')
+  })
+
+  it('never removes anything from the unreadable-message path', async () => {
+    // Shape heavy enough that arithmetic alone would delete. Nothing here has
+    // read the message, so the strongest thing that may come out is a question.
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'вот так вот' },
+      user: { ...newcomer, reputationStatus: 'suspicious' as const },
+      policy: { captchaEnabled: false },
+      enrichment: { bio: 'заходь t.me/+abcdefgh', avatarBase64: 'AAAA', personalChannelId: 42 }
+    }), { moderation: { check: async () => modResult({ sexual: 0.42 }, false) } })
+    expect(isEnforcementAction(v.action)).toBe(false)
+  })
+
+  it('does not charge twice for one picture', async () => {
+    // Explicit already said everything the suggestive tier would have said.
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'вот так вот' },
+      user: newcomer,
+      enrichment: { avatarBase64: 'AAAA' }
+    }), { moderation: { check: async () => modResult({ sexual: 0.93 }) } })
+    const names = v.signals.map((s) => s.name)
+    expect(names).toContain('nsfw_avatar')
+    expect(names).not.toContain('suggestive_profile_media')
+  })
+
+  it('leaves the same empty message alone when the profile is ordinary', async () => {
+    // The other side of the rule: three words from a newcomer with nothing
+    // remarkable about them is the abstain gate's ordinary business.
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'вот так вот' },
+      user: newcomer
+    }), { moderation: { check: async () => modClean } })
+    expect(v.action).toBe('observe')
+    expect(v.reasonCode).toBe('low_information')
+  })
+
+  it('does not act on an explicit profile that advertises nothing', async () => {
+    // NSFW alone is not the rule: an explicit avatar with no channel, no promo
+    // bio and nothing to click is somebody's taste in pictures, not a shopfront.
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'вот так вот' },
+      user: newcomer,
+      enrichment: { avatarBase64: 'AAAA' }
+    }), { moderation: { check: async () => modResult({ sexual: 0.93 }) } })
+    expect(v.ruleId).not.toBe('nsfw_promo_profile')
+    expect(isEnforcementAction(v.action)).toBe(false)
+  })
+
   it('what the profile advertises gets the message read, and decides nothing itself', async () => {
     // The escort-bot shape: a neutral, on-topic remark from an account whose
     // picture is explicit and whose linked channel is a price list. Everything

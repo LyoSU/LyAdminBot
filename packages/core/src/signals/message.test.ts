@@ -306,12 +306,12 @@ describe('extractMessageSignals — suspicious signals', () => {
       isEdit: true,
       editDelta: { injectedUrls: 1, injectedMentions: 0, injectedInvisibles: 0 }
     })
-    expect(names(injecting)).toContain('edit_injected_promo')
+    expect(names(injecting)).toContain('edit_injected_link')
     const benignEdit = makeMsg({
       isEdit: true,
       editDelta: { injectedUrls: 0, injectedMentions: 0, injectedInvisibles: 0 }
     })
-    expect(names(benignEdit)).not.toContain('edit_injected_promo')
+    expect(names(benignEdit)).not.toContain('edit_injected_link')
   })
 })
 

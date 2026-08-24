@@ -85,6 +85,21 @@ const NSFW_PROFILE_CATEGORIES = ['sexual', 'sexual/minors']
 const NSFW_PROFILE_MIN_SCORE = 0.8
 
 /**
+ * Where "suggestive" starts — the tier below explicit.
+ *
+ * Measured, not chosen: 2026-08-24, the avatar of a production escort-promo
+ * account scored `sexual` 0.373 (`flagged: false`), so the 0.8 bar — which asks
+ * "is this pornography" — said no about an account that was plainly one. An
+ * ordinary photograph, a news picture and a shopfront all score 0.00-0.02 on
+ * this category, so the gap between them and 0.35 is wide.
+ *
+ * What the tier may do is bounded by what it is: honest people put suggestive
+ * pictures on their profiles, so this may weigh and it may ask a question. It
+ * may never convict — see `suggestive_profile_media`.
+ */
+const NSFW_SUGGESTIVE_MIN_SCORE = 0.35
+
+/**
  * Sexual-category confidence above the profile threshold, if any.
  *
  * Exported so the join-time avatar screen asks the same question. It was
@@ -103,6 +118,17 @@ export const nsfwProfileHit = (result: { scores: Record<string, number> } | null
     }
   }
   return null
+}
+
+/** The sexual-category confidence, whatever it is. Null when nothing answered. */
+const sexualScore = (result: { scores: Record<string, number> } | null): number | null => {
+  if (!result) return null
+  let top = 0
+  for (const category of NSFW_PROFILE_CATEGORIES) {
+    const score = result.scores[category]
+    if (typeof score === 'number' && score > top) top = score
+  }
+  return top
 }
 
 /**
@@ -499,9 +525,166 @@ export const evaluateMessage = async (
     signals.push({ name: 'foreign_script', evidence: foreignScript })
   }
 
+  // ── 2b. what the profile itself shows ───────────────────────────────
+
+  /**
+   * Explicit imagery on the account's own surfaces — avatar, stories, and the
+   * channel the profile points at, picture and blurb alike.
+   *
+   * Placed HERE, before the abstain gate, and that placement is the fix rather
+   * than an optimisation. These signals used to sit with the message-content
+   * ports after the gate, and the gate returns `observe` for any message too
+   * short to carry meaning — which is the entire message repertoire of the
+   * class they exist to catch. Production 2026-08-24, a first message of four
+   * words under a channel post: the avatar was downloaded, sent to the
+   * moderation API, paid for, and the answer arrived after the pipeline had
+   * already decided to say nothing. The account's whole advertisement is its
+   * profile; the message is bait to put that profile in front of the chat, and
+   * it works precisely because nothing in the message is worth judging.
+   *
+   * Still `shape`, still incapable of convicting on its own — what changes is
+   * that the facts now exist by the time anything reads them.
+   *
+   * Costs nothing where it did not already run: the app layer fills these
+   * fields only for newish senders, and the moderation port caches by content,
+   * so one account's avatar is screened once every few hours however much it
+   * posts.
+   */
+  const screenProfileMedia = async (): Promise<void> => {
+    if (!ports.moderation) return
+    // Judged on the sexual categories' own confidence (NSFW_PROFILE_MIN_SCORE),
+    // never on the provider's recall-tuned `flagged` boolean — that one spans
+    // violence and self-harm, and it is what once banned first-time posters
+    // over stylised art (2026-07-27).
+    /**
+     * The strongest sexual score any profile surface returned, explicit or not.
+     *
+     * Recorded in `meta` whether or not it crossed anything, because the bars
+     * above are a calibration decision and until now nothing wrote down the
+     * number they are compared against — the store keeps signal NAMES only, so
+     * "where should this threshold sit" could not be asked of production at all.
+     * One field turns the next answer into a query instead of an argument.
+     */
+    let topSexual = 0
+    const noteSexual = (result: { scores: Record<string, number> } | null): void => {
+      const score = sexualScore(result)
+      if (score !== null && score > topSexual) topSexual = score
+    }
+
+    if (input.enrichment.avatarBase64) {
+      const avatar = await safe('moderation_avatar', () =>
+        ports.moderation!.check('', input.enrichment.avatarBase64))
+      noteSexual(avatar)
+      const hit = nsfwProfileHit(avatar)
+      if (hit !== null) signals.push({ name: 'nsfw_avatar', evidence: hit })
+    }
+    if (input.enrichment.storyBase64.length > 0) {
+      const hits = new Set<string>()
+      for (const story of input.enrichment.storyBase64) {
+        const result = await safe('moderation_story', () => ports.moderation!.check('', story))
+        noteSexual(result)
+        const hit = nsfwProfileHit(result)
+        if (hit !== null) hits.add(hit)
+      }
+      if (hits.size > 0) {
+        signals.push({ name: 'nsfw_stories', evidence: [...hits].join(', ') })
+      }
+    }
+    /**
+     * The channel the PROFILE points at — its picture and its own description.
+     *
+     * The description is read because `promo_in_linked_channel` cannot see this
+     * class at all: it asks `extractBioSignals`, which looks for a URL, a phone
+     * number or a cashtag, and an escort channel advertises in words. A blurb
+     * that is a list of services raised nothing, so the strongest fact about
+     * the account was silently worth zero.
+     *
+     * The bar is the PROFILE bar (0.8), not the message-content bar (0.5), and
+     * that is a measurement rather than an inheritance. 2026-08-24, against
+     * `omni-moderation-latest`: the production blurb — an explicit list of
+     * services — scores 0.836; "приватний канал для дорослих, умови в лс 18+"
+     * 0.206; a sex-education channel 0.065; adult humour 0.053; ordinary shops
+     * and news 0.00. Nothing in that spread lands between 0.5 and 0.8, so
+     * lowering the bar would buy no recall and only widen the class. Note what
+     * the same numbers say about reach: a softly-worded escort blurb is not
+     * catchable by text at any bar, and the avatar is what carries that case.
+     *
+     * Two calls, not one with both inputs: the port reads `results[0]`, so a
+     * combined call would silently discard whichever verdict came second.
+     *
+     * Message-link channels are deliberately excluded. Where a link in THIS
+     * message leads is a statement about the message, and mixing it into a
+     * profile signal would file message evidence under sender shape — the exact
+     * confusion `ChannelPreview.source` exists to prevent. `promo_in_message_link`
+     * is that side's signal.
+     */
+    for (const channel of input.enrichment.linkedChannels) {
+      if (channel.source === 'message_link') continue
+      const blurb = [channel.title, channel.description ?? ''].join(' ').trim()
+      const [byPhoto, byText] = [
+        channel.avatarBase64
+          ? await safe('moderation_channel', () =>
+            ports.moderation!.check('', channel.avatarBase64))
+          : null,
+        blurb.length > 0
+          ? await safe('moderation_channel_text', () => ports.moderation!.check(blurb, null))
+          : null
+      ]
+      noteSexual(byPhoto)
+      noteSexual(byText)
+      const hit = nsfwProfileHit(byPhoto) ?? nsfwProfileHit(byText)
+      if (hit !== null) {
+        signals.push({ name: 'nsfw_linked_channel', evidence: `«${truncate(channel.title, 40)}»: ${hit}` })
+        break
+      }
+    }
+
+    if (topSexual > 0) meta['profileSexual'] = Number(topSexual.toFixed(3))
+    /**
+     * Suggestive but not explicit — raised only when no surface crossed the
+     * explicit bar, so the two tiers never charge for the same picture twice.
+     */
+    if (topSexual >= NSFW_SUGGESTIVE_MIN_SCORE && topSexual < NSFW_PROFILE_MIN_SCORE) {
+      signals.push({
+        name: 'suggestive_profile_media',
+        evidence: `profile media, sexual ${topSexual.toFixed(2)}`
+      })
+    }
+  }
+
   // ── 3. deterministic rules ──────────────────────────────────────────
 
-  const deterministic = applyDeterministicRules(signals)
+  /**
+   * Whether anything in this message is classifiable on its own — the abstain
+   * gate's own question, asked once and read twice.
+   *
+   * The gate itself is stage 4, but one rule needs the answer here: an account
+   * whose profile is the advertisement posts nothing worth judging by design,
+   * so "there is nothing to read" is not a reason to stop looking, it is the
+   * shape of the thing.
+   */
+  const lowInformation = shouldAbstain(input.message)
+
+  /**
+   * Twice, and the order is the whole point: rules that cost nothing first, the
+   * ones that need paid evidence only if none of them concluded.
+   *
+   * Every rule here is a pure function of the signals, and the second pass runs
+   * over a superset of the first — so it can only find what the first could not,
+   * never contradict it. That matters for the clean rules in particular: a
+   * trusted member is waved through by pass one and never pays for a profile
+   * screen at all.
+   *
+   * Without the split, screening ran ahead of every rule and charged three
+   * moderation round-trips to verdicts that never needed them — production has
+   * 35 008 deterministic verdicts in three days, most of them an external-ban
+   * listing that says nothing about a picture.
+   */
+  let deterministic = applyDeterministicRules(signals, { lowInformation })
+  if (!deterministic) {
+    await screenProfileMedia()
+    deterministic = applyDeterministicRules(signals, { lowInformation })
+  }
   if (deterministic) {
     if (deterministic.kind === 'clean') {
       return none('deterministic', deterministic.ruleId, signals)
@@ -698,7 +881,7 @@ export const evaluateMessage = async (
   // A message in an unfamiliar script is never "too little to judge": whatever
   // it says it says in full, and unlike a bare "@user" it is trivially readable
   // — by the LLM, if by nothing else here.
-  if (foreignScript === null && shouldAbstain(input.message)) {
+  if (foreignScript === null && lowInformation) {
     // The full pile, always. A bare "@someone" as a first message is precisely
     // the noise this gate exists to stop asking the model about, so the
     // shortcut below must not reach in here.
@@ -717,6 +900,45 @@ export const evaluateMessage = async (
      */
     const burstJudged = await judgeBurst(burstWindow)
     if (burstJudged) return burstJudged
+
+    /**
+     * Nobody could judge the MESSAGE. That is not the same as knowing nothing.
+     *
+     * The gate exists because acting on an unreadable message is verdict
+     * roulette — and every word of that argument is about the message. A captcha
+     * is not about the message: it does not remove anything, it asks the sender
+     * to prove they are human, which a script cannot and a person does with one
+     * tap. So for a sender whose PROFILE is loud enough to reach the grey band
+     * on arithmetic alone, the honest answer to "we cannot read this" is to ask
+     * rather than to shrug.
+     *
+     * This is the shape of the 2026-08-24 class: one-message accounts posting
+     * "вот так вот" under a channel post, whose avatar is suggestive and whose
+     * profile links a channel. Explicit media plus a promo channel is caught by
+     * the rule above; this is the tier below it, where the evidence is real and
+     * nowhere near a verdict.
+     *
+     * Nothing but a captcha may come out of here. `decideAction` will only
+     * return one for a newish sender in a chat that enabled it, and everything
+     * else — including anything that would remove a message — falls back to
+     * `observe`, because none of it has read the text.
+     */
+    const shaped = scoreSignals(signals)
+    const asked = policyFor(shaped.pSpam, signals)
+    if (asked.action === 'captcha') {
+      meta['scorePSpam'] = Number(shaped.pSpam.toFixed(4))
+      return finalize(
+        {
+          pSpam: shaped.pSpam,
+          decidedBy: 'score',
+          ruleId: null,
+          reasonCode: 'low_information_profile',
+          reasonEvidence: null
+        },
+        signals,
+        asked
+      )
+    }
 
     return finalize(
       { pSpam: 0, decidedBy: 'abstain', ruleId: null, reasonCode: 'low_information', reasonEvidence: null },
@@ -863,42 +1085,6 @@ export const evaluateMessage = async (
       signals.push({ name: 'moderation_flagged', evidence: contentHit })
     }
 
-    // Profile-media NSFW. Avatar/stories are only downloaded for newish
-    // senders, so these signals are new-account signals by construction —
-    // a porn avatar on a fresh account is the classic escort/promo bot.
-    // Unlike message content, profile media is judged on the sexual
-    // categories' own confidence (see NSFW_PROFILE_MIN_SCORE): an avatar is
-    // not evidence about the message, so it may only nudge, never convict.
-    if (input.enrichment.avatarBase64) {
-      const avatar = await safe('moderation_avatar', () =>
-        ports.moderation!.check('', input.enrichment.avatarBase64))
-      const hit = nsfwProfileHit(avatar)
-      if (hit !== null) signals.push({ name: 'nsfw_avatar', evidence: hit })
-    }
-    if (input.enrichment.storyBase64.length > 0) {
-      const hits = new Set<string>()
-      for (const story of input.enrichment.storyBase64) {
-        const result = await safe('moderation_story', () => ports.moderation!.check('', story))
-        const hit = nsfwProfileHit(result)
-        if (hit !== null) hits.add(hit)
-      }
-      if (hits.size > 0) {
-        signals.push({ name: 'nsfw_stories', evidence: [...hits].join(', ') })
-      }
-    }
-    // The picture on the channel the profile points at. Same treatment as the
-    // avatar and for the same reason: it says what the account is for, not what
-    // this message is, so it may nudge and never convict.
-    for (const channel of input.enrichment.linkedChannels) {
-      if (!channel.avatarBase64) continue
-      const result = await safe('moderation_channel', () =>
-        ports.moderation!.check('', channel.avatarBase64))
-      const hit = nsfwProfileHit(result)
-      if (hit !== null) {
-        signals.push({ name: 'nsfw_linked_channel', evidence: `«${channel.title}»: ${hit}` })
-        break
-      }
-    }
   }
 
   // ── 6. score + LLM escalation ───────────────────────────────────────

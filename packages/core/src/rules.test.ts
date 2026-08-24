@@ -43,13 +43,13 @@ describe('applyDeterministicRules — spam rules', () => {
   })
 
   it('edit injecting promo from a non-established user is deterministic spam', () => {
-    const verdict = applyDeterministicRules(s('edit_injected_promo', 'edited_message'))
-    expect(verdict?.ruleId).toBe('edit_injected_promo')
+    const verdict = applyDeterministicRules(s('edit_injected_invisibles', 'edited_message'))
+    expect(verdict?.ruleId).toBe('edit_injected_invisibles')
   })
 
   it('edit injection from established user falls through (admins fix their links)', () => {
     expect(
-      applyDeterministicRules([...s('edit_injected_promo'), ...t('established_user')])
+      applyDeterministicRules([...s('edit_injected_invisibles'), ...t('established_user')])
     ).toBeNull()
   })
 
@@ -95,5 +95,57 @@ describe('applyDeterministicRules — clean rules', () => {
 
   it('empty signal list falls through', () => {
     expect(applyDeterministicRules([])).toBeNull()
+  })
+})
+
+describe('nsfw_promo_profile — the profile as the advert', () => {
+  const lowInfo = { lowInformation: true }
+
+  it('fires on explicit media plus somewhere the profile points, for a newcomer', () => {
+    const v = applyDeterministicRules(s('nsfw_avatar', 'personal_channel', 'new_globally'), lowInfo)
+    expect(v?.ruleId).toBe('nsfw_promo_profile')
+    expect(v?.aboutAccount).toBe(true)
+  })
+
+  /**
+   * The conjunction has to be TWO facts. `nsfw_linked_channel` satisfied both
+   * halves in the first draft, so one observation corroborated itself and the
+   * rule claimed the weight of two — the same defect `priorMatch` exists to
+   * stop on the learning side.
+   */
+  it('does not fire on an explicit linked channel alone', () => {
+    expect(applyDeterministicRules(s('nsfw_linked_channel', 'new_globally'), lowInfo)).toBeNull()
+  })
+
+  it('does not fire when the message had something to say', () => {
+    // The pipeline's standing position: a promotional profile is a reason to
+    // READ the message. This rule only speaks where there is nothing to read.
+    expect(applyDeterministicRules(s('nsfw_avatar', 'personal_channel', 'new_globally'))).toBeNull()
+  })
+
+  it('does not fire on a profile that advertises nothing', () => {
+    expect(applyDeterministicRules(s('nsfw_avatar', 'new_globally'), lowInfo)).toBeNull()
+  })
+
+  it('spares a member with standing', () => {
+    expect(applyDeterministicRules(
+      [...s('nsfw_avatar', 'personal_channel', 'new_globally'), ...t('established_user')], lowInfo
+    )).toBeNull()
+  })
+})
+
+describe('edit-to-inject — two facts, not one', () => {
+  /**
+   * Adding a link by editing is something members do constantly, and the
+   * catalogue reserves "this alone costs you the chat" for evasion with no
+   * innocent reading. Invisible characters are that; a link is not.
+   */
+  it('a link added by an edit reaches no deterministic verdict', () => {
+    expect(applyDeterministicRules(s('edit_injected_link', 'edited_message', 'new_globally'))).toBeNull()
+  })
+
+  it('invisible characters added by an edit still decide', () => {
+    expect(applyDeterministicRules(s('edit_injected_invisibles'))?.ruleId)
+      .toBe('edit_injected_invisibles')
   })
 })

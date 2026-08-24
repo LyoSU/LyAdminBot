@@ -240,7 +240,36 @@ export const SIGNALS = {
   unknown_media: { weight: 0.3, kind: 'evidence' },
   guest_bot_delivery: { weight: 0.8, kind: 'evidence' },
   edited_message: { weight: 0.2, kind: 'evidence' },
-  edit_injected_promo: { weight: 2.5, kind: 'evidence' },
+  /**
+   * An edit wedged invisible characters into the text.
+   *
+   * Structural evasion with no innocent reading — the same claim
+   * `invisible_in_word` makes, and it sits beside it in the hand-pinned list of
+   * signals that alone justify removing the sender. Nobody edits zero-width
+   * spaces into their own sentence.
+   */
+  edit_injected_invisibles: { weight: 2.5, kind: 'evidence' },
+  /**
+   * An edit added a destination — or an addressee — the message did not carry
+   * when it was judged.
+   *
+   * This half used to share the 2.5 above under the name `edit_injected_promo`,
+   * and the name was the argument: "promo" was assumed, never established. The
+   * catalogue's own criterion for that weight is evasion with no innocent
+   * reading, and adding a link is something members do constantly — "ой, забув
+   * посилання" is the same edit as the attack, byte for byte. It became visible
+   * the day the delta was first computed at all (2026-08-24): until then the
+   * claim had never once been exercised in production, so nothing contradicted
+   * it either.
+   *
+   * Heavy enough to matter and deliberately under the bar that costs somebody
+   * the chat: composed with what the link IS (a private invite, a shortener) it
+   * reaches removal on the ordinary arithmetic, and composed with nothing it
+   * reaches delete-and-ask. Editing a link in after the message passed is a
+   * reason to look again, not a verdict — the same position `velocity` was moved
+   * to on 2026-08-07.
+   */
+  edit_injected_link: { weight: 1.2, kind: 'evidence' },
 
   // ───────────────────── message text ─────────────────────
 
@@ -381,6 +410,23 @@ export const SIGNALS = {
    * message toward the LLM, which reads what was actually written.
    */
   nsfw_avatar: { weight: 1.0, kind: 'shape', group: 'profile_nsfw' },
+  /**
+   * Profile media that is suggestive without being explicit — lingerie, a pose,
+   * a mirror selfie. The escort-bot norm, and measured: the avatar of a
+   * production promo account on 2026-08-24 scored `sexual` 0.373 with the
+   * provider's own `flagged` at false, against a profile bar of 0.8 written to
+   * ask "is this pornography". The answer was no, and the account was one all
+   * the same.
+   *
+   * Deliberately its own name rather than a lower bar on `nsfw_avatar`: the two
+   * are not the same claim. Explicit imagery on a new account's profile is a
+   * finding; a suggestive picture is a fact about a photograph, and honest
+   * people post those — as they post self-harm awareness, hunting knives and
+   * war photography, all of which this provider scores. So this one may add
+   * weight and open the classifier's gate, and it may never satisfy the
+   * deterministic rule about a profile-as-advert.
+   */
+  suggestive_profile_media: { weight: 0.8, kind: 'shape', group: 'profile_nsfw' },
   nsfw_stories: { weight: 0.9, kind: 'shape', group: 'profile_nsfw' },
   /** Explicit imagery on the channel the profile points at — same group, for
    *  the same reason: it is one person's imagery, seen in one more place. */

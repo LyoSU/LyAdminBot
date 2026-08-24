@@ -199,11 +199,20 @@ export const extractMessageSignals = (msg: NormalizedMessage): Signal[] => {
 
   if (msg.isEdit) {
     signals.push({ name: 'edited_message' })
+    // `editDelta` is null when nothing remembered the earlier version, which is
+    // an absence of knowledge and not a delta of zero — so both branches read
+    // the counts and neither reads `isEdit` alone.
     const delta = msg.editDelta
-    if (delta && (delta.injectedUrls > 0 || delta.injectedMentions > 0 || delta.injectedInvisibles > 0)) {
+    if (delta && delta.injectedInvisibles > 0) {
       signals.push({
-        name: 'edit_injected_promo',
-        evidence: `+${delta.injectedUrls} urls, +${delta.injectedMentions} mentions, +${delta.injectedInvisibles} invisibles`
+        name: 'edit_injected_invisibles',
+        evidence: `+${delta.injectedInvisibles} invisible chars by edit`
+      })
+    }
+    if (delta && (delta.injectedUrls > 0 || delta.injectedMentions > 0)) {
+      signals.push({
+        name: 'edit_injected_link',
+        evidence: `+${delta.injectedUrls} urls, +${delta.injectedMentions} mentions by edit`
       })
     }
   }
