@@ -7,18 +7,38 @@
  * task titles, custom-emoji alt characters, hidden link targets, media
  * presence. Unknown TL constructors map to kind 'unknown', never dropped.
  */
+import { createHash } from 'node:crypto'
 import type { Message } from '@mtcute/node'
 import { Chat, User } from '@mtcute/node'
 import type { tl } from '@mtcute/node'
-import type { MessageAttachmentInfo, NormalizedMessage } from '@lyadmin/core'
+import type { EditBaseline, MessageAttachmentInfo, NormalizedMessage } from '@lyadmin/core'
 import { truncate } from '@lyadmin/core'
 
 export interface NormalizeContext {
   isEdit?: boolean
   /** The replied-to message when the gateway fetched it (budget 1 call). */
   repliedMessage?: Message | null
-  /** Previous normalization of the same message — enables edit deltas. */
-  previous?: NormalizedMessage | null
+  /**
+   * What the message carried BEFORE this edit.
+   *
+   * Three counters rather than the whole previous normalization, which is what
+   * this parameter used to take. The delta reads exactly those three numbers,
+   * and the app layer has to keep the answer between two separate deliveries of
+   * one message — so what travels here has to be small enough to hold in memory
+   * for every recent message and to sit in the decision record. A whole
+   * `NormalizedMessage` is neither.
+   */
+  previousBaseline?: EditBaseline | null
+  /**
+   * The other messages of the same album, when the gateway buffered one.
+   *
+   * A Telegram album is N messages the sender composed as ONE post, and the
+   * caption may ride on any of them. The gateway has buffered the siblings
+   * since it was written; until they arrived here, judging an album meant
+   * judging its first part alone — a ten-photo advert whose text sat on the
+   * last part was read as a photo with no text at all.
+   */
+  albumSiblings?: readonly Message[]
 }
 
 /** What is knowable about a message sent AS a chat (Telegram's "send as"). */
@@ -61,6 +81,65 @@ const TEXT_URL_REGEX = /(?:https?:\/\/\S+|(?:^|\s)(?:t\.me|telegram\.me|wa\.me|b
 const OBFUSCATION_INVISIBLES = /[\u2060\u200B\u00AD\uFEFF]/gu
 
 const countInvisibles = (text: string): number => (text.match(OBFUSCATION_INVISIBLES) ?? []).length
+
+/**
+ * What has to be remembered about a message so a later edit can be measured
+ * against it — see `EditBaseline` in core for why counters and not the message.
+ *
+ * Lives here, next to `countInvisibles`, because the third counter is only
+ * meaningful in the same vocabulary the normalizer uses: the count is taken
+ * over the text AFTER media captions and extracted media text are folded in,
+ * which is the only string a delta can honestly be computed against.
+ */
+/**
+ * At most this many link digests are kept. Past it the message is a link dump
+ * and the counts answer well enough — a cap that stored a PARTIAL set would be
+ * worse than none, since every link past the cap would read as newly injected.
+ */
+const BASELINE_MAX_URL_KEYS = 10
+
+/**
+ * Identity of a destination, folded so that spelling is not a difference.
+ *
+ * Case and a trailing slash are how the same link is written twice, not how two
+ * links differ — without folding them, re-posting the identical URL after an
+ * edit would count as an injection.
+ */
+const urlKeyOf = (target: string): string =>
+  createHash('sha256')
+    .update(target.trim().toLowerCase().replace(/\/+$/, ''))
+    .digest('hex')
+    .slice(0, 12)
+
+export const editBaselineOf = (
+  msg: Pick<NormalizedMessage, 'urls' | 'mentions' | 'text'>
+): EditBaseline => {
+  const keys = [...new Set(msg.urls.map((u) => urlKeyOf(u.target)))]
+  return {
+    urls: msg.urls.length,
+    mentions: msg.mentions.length,
+    invisibles: countInvisibles(msg.text),
+    ...(keys.length <= BASELINE_MAX_URL_KEYS ? { urlKeys: keys } : {})
+  }
+}
+
+/**
+ * How many destinations this version carries that the earlier one did not.
+ *
+ * Falls back to the difference in counts when the earlier version kept no keys
+ * (a record from before the field existed, or a link dump past the cap). That
+ * reading misses a swap — one link replaced by another — which is precisely why
+ * the keys exist; it is kept only because under-detecting is the safe direction
+ * for a signal that weighs 2.5.
+ */
+const injectedUrlCount = (
+  urls: NormalizedMessage['urls'],
+  baseline: EditBaseline
+): number => {
+  if (!baseline.urlKeys) return Math.max(0, urls.length - baseline.urls)
+  const before = new Set(baseline.urlKeys)
+  return [...new Set(urls.map((u) => urlKeyOf(u.target)))].filter((k) => !before.has(k)).length
+}
 
 // `truncate` because a preview is cut at a fixed code-unit count and previews
 // are mostly short chatty messages, i.e. dense with emoji: a plain slice
@@ -183,10 +262,25 @@ const mapMedia = (msg: Message): { attachments: MessageAttachmentInfo[]; extraTe
   }
 }
 
-// ── main ──────────────────────────────────────────────────────────────
+// ── content ───────────────────────────────────────────────────────────
 
-export const normalizeMessage = (msg: Message, ctx: NormalizeContext = {}): NormalizedMessage => {
-  const raw = msg.raw._ === 'message' ? msg.raw : null
+/**
+ * Everything a message SAYS, as opposed to what surrounds it.
+ *
+ * Split out from `normalizeMessage` so that the parts of an album can each be
+ * read and then merged: the identity of the post (who, where, replying to what)
+ * belongs to the first part, while the content belongs to all of them.
+ */
+interface MessageContent {
+  text: string
+  urls: NormalizedMessage['urls']
+  mentions: string[]
+  customEmoji: NormalizedMessage['customEmoji']
+  attachments: MessageAttachmentInfo[]
+  inlineButtons: NormalizedMessage['inlineButtons']
+}
+
+const extractContent = (msg: Message): MessageContent => {
   const baseText = msg.text ?? ''
 
   const { attachments, extraText, previewUrl } = mapMedia(msg)
@@ -240,6 +334,57 @@ export const normalizeMessage = (msg: Message, ctx: NormalizeContext = {}): Norm
       }
     }
   }
+
+  return { text, urls, mentions, customEmoji, attachments, inlineButtons }
+}
+
+/**
+ * One album, read as the single post the sender composed.
+ *
+ * Texts are joined in arrival order, which is the order the reader sees them
+ * in. URLs are deduplicated by destination because the same link repeated on
+ * three photos is one link — `many_url_buttons` and the promo URL classes count
+ * distinct classes, and charging one destination several times would be the
+ * double-billing the correlated-signal ceilings exist to stop. Mentions,
+ * attachments, emoji and buttons simply accumulate: ten photos really are ten
+ * photos, and three separate handles really are three.
+ *
+ * Only reached for an actual album — a lone message keeps its own record
+ * untouched, so nothing about the ordinary path changes.
+ */
+const mergeContent = (parts: readonly MessageContent[]): MessageContent => {
+  const urls: NormalizedMessage['urls'] = []
+  const seenTargets = new Set<string>()
+  const texts: string[] = []
+  const merged: MessageContent = {
+    text: '', urls, mentions: [], customEmoji: [], attachments: [], inlineButtons: []
+  }
+  for (const part of parts) {
+    if (part.text.length > 0) texts.push(part.text)
+    for (const url of part.urls) {
+      if (seenTargets.has(url.target)) continue
+      seenTargets.add(url.target)
+      urls.push(url)
+    }
+    merged.mentions.push(...part.mentions)
+    merged.customEmoji.push(...part.customEmoji)
+    merged.attachments.push(...part.attachments)
+    merged.inlineButtons.push(...part.inlineButtons)
+  }
+  merged.text = texts.join('\n')
+  return merged
+}
+
+// ── main ──────────────────────────────────────────────────────────────
+
+export const normalizeMessage = (msg: Message, ctx: NormalizeContext = {}): NormalizedMessage => {
+  const raw = msg.raw._ === 'message' ? msg.raw : null
+
+  const siblings = ctx.albumSiblings ?? []
+  const content = siblings.length === 0
+    ? extractContent(msg)
+    : mergeContent([extractContent(msg), ...siblings.map(extractContent)])
+  const { text, urls, mentions, customEmoji, attachments, inlineButtons } = content
 
   // ── forward ────────────────────────────────────────────────────────
   let forward: NormalizedMessage['forward'] = null
@@ -304,15 +449,27 @@ export const normalizeMessage = (msg: Message, ctx: NormalizeContext = {}): Norm
   }
 
   // ── edit delta ─────────────────────────────────────────────────────
+  //
+  // Null when nothing remembers the earlier version — a message from before the
+  // bot restarted, or one it never judged. That is an absence of knowledge and
+  // not a delta of zero, which is why the edit signals read these fields rather
+  // than the `isEdit` flag.
+  //
+  // Known limit, ALBUMS: the baseline is kept for the post, under the id it was
+  // delivered as, while Telegram delivers an edit of any single part on its own.
+  // So an edit of a sibling has no baseline at all, and an edit of the first
+  // part is measured against the whole post. Both under-detect and neither can
+  // accuse: the count difference floors at zero, and the key difference only
+  // ever names a destination the post did not carry anywhere.
   const isEdit = ctx.isEdit ?? false
-  let editDelta: NormalizedMessage['editDelta'] = null
-  if (isEdit && ctx.previous) {
-    editDelta = {
-      injectedUrls: Math.max(0, urls.length - ctx.previous.urls.length),
-      injectedMentions: Math.max(0, mentions.length - ctx.previous.mentions.length),
-      injectedInvisibles: Math.max(0, countInvisibles(text) - countInvisibles(ctx.previous.text))
-    }
-  }
+  const baseline = ctx.previousBaseline ?? null
+  const editDelta: NormalizedMessage['editDelta'] = isEdit && baseline
+    ? {
+        injectedUrls: injectedUrlCount(urls, baseline),
+        injectedMentions: Math.max(0, mentions.length - baseline.mentions),
+        injectedInvisibles: Math.max(0, countInvisibles(text) - baseline.invisibles)
+      }
+    : null
 
   return {
     chatId: msg.chat.id,

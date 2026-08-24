@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Long, Message, PeersIndex } from '@mtcute/node'
 import type { tl } from '@mtcute/node'
 import type { ChannelSenderFacts } from './normalize.js'
-import { normalizeMessage, shouldScanChannelSender } from './normalize.js'
+import { editBaselineOf, normalizeMessage, shouldScanChannelSender } from './normalize.js'
 
 const long = (n: number): Long => Long.fromNumber(n)
 
@@ -336,7 +336,7 @@ describe('normalizeMessage — guest bots & edits', () => {
     expect(n.guestBot).toEqual({ botId: 777, botUsername: 'guest_bot', callerId: 42 })
   })
 
-  it('computes the edit delta against the previous normalization', () => {
+  it('computes the edit delta against the previous baseline', () => {
     const before = normalizeMessage(makeMessage({ message: 'чистий текст без нічого' }))
     const after = normalizeMessage(
       makeMessage({
@@ -344,23 +344,172 @@ describe('normalizeMessage — guest bots & edits', () => {
         entities: [{ _: 'messageEntityUrl', offset: 31, length: 21 }],
         editDate: 1_780_000_100
       }),
-      { isEdit: true, previous: before }
+      { isEdit: true, previousBaseline: editBaselineOf(before) }
     )
     expect(after.isEdit).toBe(true)
     expect(after.editDelta).toEqual({ injectedUrls: 1, injectedMentions: 0, injectedInvisibles: 0 })
+  })
+
+  // The delta is a claim about two deliveries, so the ONLY thing that can
+  // produce one is a caller that kept the first. A `null` here is what the
+  // production wiring produced for every edit until 2026-08-24, with the signal
+  // and its 0.93 rule fully tested and permanently unreachable.
+  it('reports no delta when nothing remembers the earlier version', () => {
+    const after = normalizeMessage(
+      makeMessage({
+        message: 'а тепер з лінком https://spam.example',
+        entities: [{ _: 'messageEntityUrl', offset: 17, length: 20 }],
+        editDate: 1_780_000_100
+      }),
+      { isEdit: true }
+    )
+    expect(after.isEdit).toBe(true)
+    expect(after.editDelta).toBeNull()
+  })
+
+  // An edit that removes something is not an injection of a negative amount.
+  it('floors the delta at zero when the edit removed content', () => {
+    const before = normalizeMessage(makeMessage({
+      message: 'два лінки https://a.example https://b.example',
+      entities: [
+        { _: 'messageEntityUrl', offset: 10, length: 17 },
+        { _: 'messageEntityUrl', offset: 28, length: 17 }
+      ]
+    }))
+    const after = normalizeMessage(
+      makeMessage({ message: 'передумав', editDate: 1_780_000_100 }),
+      { isEdit: true, previousBaseline: editBaselineOf(before) }
+    )
+    expect(after.editDelta).toEqual({ injectedUrls: 0, injectedMentions: 0, injectedInvisibles: 0 })
+  })
+
+  // A baseline is taken over the SAME string the delta is measured against —
+  // text plus whatever the media contributed — or the two disagree and an
+  // ordinary edit of a poll reads as an injection.
+  it('takes the baseline over the media-inclusive text', () => {
+    const withPoll = normalizeMessage(makeMessage({
+      media: {
+        _: 'messageMediaPoll',
+        poll: {
+          _: 'poll', id: long(1), question: { _: 'textWithEntities', text: 'Заробіток?', entities: [] },
+          answers: [
+            { _: 'pollAnswer', text: { _: 'textWithEntities', text: 'так', entities: [] }, option: new Uint8Array([1]) }
+          ]
+        },
+        results: { _: 'pollResults' }
+      } as unknown as tl.TypeMessageMedia
+    }))
+    expect(withPoll.text).toContain('Заробіток?')
+    expect(editBaselineOf(withPoll)).toMatchObject({ urls: 0, mentions: 0, invisibles: 0 })
+  })
+
+  // The attack a count cannot see: the message keeps ONE link and the link is a
+  // different one. Every length-based delta reports nothing injected.
+  it('sees a link swapped for another link', () => {
+    const before = normalizeMessage(makeMessage({
+      message: 'ось стаття https://news.example/a',
+      entities: [{ _: 'messageEntityUrl', offset: 11, length: 22 }]
+    }))
+    const after = normalizeMessage(
+      makeMessage({
+        message: 'ось стаття https://spam.example/x',
+        entities: [{ _: 'messageEntityUrl', offset: 11, length: 22 }],
+        editDate: 1_780_000_100
+      }),
+      { isEdit: true, previousBaseline: editBaselineOf(before) }
+    )
+    expect(after.editDelta?.injectedUrls).toBe(1)
+  })
+
+  // …and the other side of it: the same link written again is not an injection.
+  it('does not count the same destination re-spelled', () => {
+    const before = normalizeMessage(makeMessage({
+      message: 'ось https://News.Example/a/',
+      entities: [{ _: 'messageEntityUrl', offset: 4, length: 23 }]
+    }))
+    const after = normalizeMessage(
+      makeMessage({
+        message: 'ось https://news.example/a і ще слово',
+        entities: [{ _: 'messageEntityUrl', offset: 4, length: 22 }],
+        editDate: 1_780_000_100
+      }),
+      { isEdit: true, previousBaseline: editBaselineOf(before) }
+    )
+    expect(after.editDelta?.injectedUrls).toBe(0)
   })
 
   it('counts injected invisible characters on edit', () => {
     const before = normalizeMessage(makeMessage({ message: 'Доброго дня' }))
     const after = normalizeMessage(
       makeMessage({ message: 'Доб⁠рого дня', editDate: 1_780_000_100 }),
-      { isEdit: true, previous: before }
+      { isEdit: true, previousBaseline: editBaselineOf(before) }
     )
     expect(after.editDelta?.injectedInvisibles).toBe(1)
   })
 })
 
 // ── channel senders ───────────────────────────────────────────────────
+
+describe('normalizeMessage — albums', () => {
+  const photo = (overrides: Partial<tl.RawMessage> = {}): Message => makeMessage({
+    media: {
+      _: 'messageMediaPhoto',
+      photo: {
+        _: 'photo', id: long(1), accessHash: long(1), fileReference: new Uint8Array(),
+        date: 1_780_000_000, sizes: [{ _: 'photoSize', type: 'x', w: 100, h: 100, size: 1000 }], dcId: 2
+      }
+    } as unknown as tl.TypeMessageMedia,
+    groupedId: long(7),
+    ...overrides
+  })
+
+  // The whole point: a Telegram album is one post whose caption may ride on any
+  // part. Judging the first part alone read a ten-photo advert as silent photos.
+  it('reads a caption that rides on a later part', () => {
+    const n = normalizeMessage(photo({ id: 10 }), {
+      albumSiblings: [
+        photo({ id: 11 }),
+        photo({ id: 12, message: 'заробіток тут https://spam.example', entities: [{ _: 'messageEntityUrl', offset: 14, length: 20 }] })
+      ]
+    })
+    expect(n.text).toContain('заробіток тут')
+    expect(n.urls.map((u) => u.target)).toEqual(['https://spam.example'])
+  })
+
+  it('counts every part as an attachment', () => {
+    const n = normalizeMessage(photo({ id: 10 }), {
+      albumSiblings: [photo({ id: 11 }), photo({ id: 12 })]
+    })
+    expect(n.attachments).toHaveLength(3)
+    expect(n.attachments.every((a) => a.kind === 'photo')).toBe(true)
+  })
+
+  // Identity belongs to the post, not to each part: the verdict, the decision
+  // record and the deletion all address the message the album was delivered as.
+  it('keeps the identity of the first part', () => {
+    const n = normalizeMessage(photo({ id: 10 }), { albumSiblings: [photo({ id: 11 })] })
+    expect(n.messageId).toBe(10)
+  })
+
+  // One link repeated across three photos is one link. Charging it three times
+  // would double-bill the promo-URL group the correlated ceilings exist to cap.
+  it('counts a link repeated across parts once', () => {
+    const captioned = (id: number): Message => photo({
+      id,
+      message: 'дивись https://spam.example',
+      entities: [{ _: 'messageEntityUrl', offset: 7, length: 20 }]
+    })
+    const n = normalizeMessage(captioned(10), { albumSiblings: [captioned(11), captioned(12)] })
+    expect(n.urls).toHaveLength(1)
+  })
+
+  // Nothing about the ordinary single message may change: the merge is only
+  // reached when the gateway actually buffered an album.
+  it('leaves a lone message byte-identical to the unmerged reading', () => {
+    const alone = makeMessage({ message: 'звичайне повідомлення @some_bot' })
+    expect(normalizeMessage(alone, { albumSiblings: [] })).toEqual(normalizeMessage(alone))
+  })
+})
 
 describe('shouldScanChannelSender', () => {
   const facts = (over: Partial<ChannelSenderFacts> = {}): ChannelSenderFacts => ({

@@ -177,7 +177,12 @@ export interface NormalizedMessage {
   replyTo: { authorId: number | null; isSelf: boolean; ageSeconds: number | null; textPreview: string | null } | null
   /** Comment under a channel post (discussion group). */
   channelComment: { channelTitle: string | null; postPreview: string | null } | null
-  /** Edit delta when isEdit: what got injected. */
+  /**
+   * Edit delta when isEdit: what got injected.
+   *
+   * Null means nobody remembers the earlier version, NOT that nothing changed —
+   * the edit signals therefore read the counts and never the `isEdit` flag.
+   */
   editDelta: { injectedUrls: number; injectedMentions: number; injectedInvisibles: number } | null
   /**
    * Custom emoji entities. `alt` is the fallback character the emoji
@@ -192,6 +197,38 @@ export interface NormalizedMessage {
    * bot-ness itself (guest bots are often legitimate).
    */
   guestBot: { botId: number; botUsername: string | null; callerId: number | null } | null
+}
+
+/**
+ * What is remembered about a message so that a later EDIT of it can be
+ * measured — the input to `NormalizedMessage.editDelta`.
+ *
+ * Counters, not the message. Edit-to-inject is the one spam shape whose
+ * evidence exists only as a DIFFERENCE between two deliveries, so somebody has
+ * to hold the earlier one; holding whole normalizations of every recent message
+ * would be a cache nobody sized, and the store would have to carry them too.
+ * These three numbers are the entire question the delta asks, they are cheap
+ * enough to keep for every message in flight, and small enough to ride along in
+ * the decision record — which is what makes the resulting verdict reproducible
+ * offline, the same requirement the burst window is held to.
+ */
+export interface EditBaseline {
+  urls: number
+  mentions: number
+  invisibles: number
+  /**
+   * Identity of the links the earlier version carried — short digests, capped.
+   *
+   * Counts alone cannot see the attack they were meant to catch: swapping one
+   * benign link for a promo one leaves the count unchanged, so a delta computed
+   * from lengths reports nothing injected. With keys, "injected" means a
+   * destination that was not there before, which is what the word claims.
+   *
+   * Absent when the earlier version carried more links than the cap, and on
+   * records written before this field existed — both fall back to the counts,
+   * which under-detect rather than over-detect.
+   */
+  urlKeys?: string[]
 }
 
 /** Enrichment result — everything optional: the call budget may run out. */

@@ -6,7 +6,7 @@
  *   llm_cache          — LLM verdict cache, TTL 7d
  */
 import { MongoClient, ObjectId, type Collection, type Db, type Document } from 'mongodb'
-import type { BurstEntry, Verdict, Signal } from '@lyadmin/core'
+import type { BurstEntry, EditBaseline, Verdict, Signal } from '@lyadmin/core'
 import { truncate, VOTE_WINDOW_SECONDS } from '@lyadmin/core'
 import { normalizeExtra, type NormalizedExtra } from './extras.js'
 import { VELOCITY_WINDOW_MS, SESSION_WINDOW_MS, BURST_WINDOW_MS } from './persistent-ports.js'
@@ -746,6 +746,11 @@ export class MongoStore {
     messageId: number
     textPreview: string
     verdict: Verdict
+    /**
+     * What this version of the message carried, so a later edit of it can be
+     * measured even across a restart — see `getEditBaseline`.
+     */
+    editBaseline?: EditBaseline
     latencyMs: number
   }): Promise<void> {
     await this.decisions.insertOne({
@@ -766,9 +771,38 @@ export class MongoStore {
       needsVote: params.verdict.needsVote,
       banDurationSeconds: params.verdict.banDurationSeconds,
       meta: params.verdict.meta,
+      ...(params.editBaseline === undefined ? {} : { editBaseline: params.editBaseline }),
       latencyMs: params.latencyMs,
       createdAt: new Date()
     })
+  }
+
+  /**
+   * What the most recent judged version of this message carried.
+   *
+   * The in-process cache in the app layer answers this for anything recent; this
+   * is what remains after a restart, and what makes an edit-injection verdict
+   * reproducible offline. Sorted newest-first for the same reason
+   * `getDecision` is: an edited message has one record per version, and a delta
+   * is honest only against the version immediately before it.
+   *
+   * Reads the index `{ chatId, messageId, createdAt }` that already exists.
+   */
+  async getEditBaseline(chatId: number, messageId: number): Promise<EditBaseline | null> {
+    const doc = await this.decisions.findOne(
+      { chatId, messageId, editBaseline: { $exists: true } },
+      { sort: { createdAt: -1 }, projection: { editBaseline: 1 } }
+    )
+    const baseline = doc?.['editBaseline'] as Partial<EditBaseline> | undefined
+    if (!baseline) return null
+    const { urls, mentions, invisibles } = baseline
+    // A record written by an older build, or a partial one, is not a baseline:
+    // reading a missing count as zero would report the whole message as freshly
+    // injected — which on the invisibles half is a 0.93 mute for an ordinary edit.
+    if (typeof urls !== 'number' || typeof mentions !== 'number' || typeof invisibles !== 'number') {
+      return null
+    }
+    return { urls, mentions, invisibles }
   }
 
   /**
@@ -790,12 +824,18 @@ export class MongoStore {
    * tail nobody will ever look up, and an unbounded array in a document is how a
    * collection stops fitting in memory.
    */
-  async appendIncidentMessage(chatId: number, triggerMessageId: number, messageId: number): Promise<void> {
+  async appendIncidentMessage(
+    chatId: number, triggerMessageId: number, messageIds: readonly number[]
+  ): Promise<void> {
+    // A list rather than one id: an album is several messages removed by one
+    // decision, and a count that says 1 where 10 went makes every audit over
+    // this collection understate what the incident cost.
+    if (messageIds.length === 0) return
     await this.decisions.updateOne(
       { chatId, messageId: triggerMessageId },
       {
-        $inc: { incidentCount: 1 },
-        $push: { incidentMessageIds: { $each: [messageId], $slice: -MongoStore.MAX_INCIDENT_IDS } }
+        $inc: { incidentCount: messageIds.length },
+        $push: { incidentMessageIds: { $each: [...messageIds], $slice: -MongoStore.MAX_INCIDENT_IDS } }
       } as never
     )
   }

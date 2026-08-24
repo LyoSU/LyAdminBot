@@ -724,3 +724,48 @@ describe('recordSpamDetection', () => {
     expect(JSON.stringify(updates)).not.toContain('spamMessages')
   })
 })
+
+
+/**
+ * The baseline is the only thing that survives a restart to tell an edit from a
+ * fresh message, and it is read straight into a signal that carries a 0.93 rule.
+ * So the question under test is not "does it read the field" but "what does it
+ * do with a field that is only half there" — a record from an older build, or a
+ * write that lost a key. Reading a missing count as zero would report the whole
+ * message as freshly injected and convict an ordinary edit.
+ */
+describe('getEditBaseline', () => {
+  const baselineStore = (doc: Record<string, unknown> | null): MongoStore => {
+    const store = {
+      decisions: { findOne: async () => doc }
+    } as unknown as MongoStore
+    return Object.assign(store, { getEditBaseline: MongoStore.prototype.getEditBaseline })
+  }
+
+  it('returns the stored counters', async () => {
+    const store = baselineStore({ editBaseline: { urls: 2, mentions: 1, invisibles: 0 } })
+    await expect(store.getEditBaseline(-100, 10)).resolves.toEqual({ urls: 2, mentions: 1, invisibles: 0 })
+  })
+
+  it('reads no record as no baseline, never as a zero baseline', async () => {
+    await expect(baselineStore(null).getEditBaseline(-100, 10)).resolves.toBeNull()
+  })
+
+  it('refuses a partial record rather than defaulting its counts to zero', async () => {
+    const store = baselineStore({ editBaseline: { urls: 2 } })
+    await expect(store.getEditBaseline(-100, 10)).resolves.toBeNull()
+  })
+
+  it('asks for the newest version of the message', async () => {
+    const calls: Record<string, unknown>[] = []
+    const store = Object.assign(
+      { decisions: { findOne: async (filter: Record<string, unknown>, opts: Record<string, unknown>) => { calls.push({ filter, opts }); return null } } } as unknown as MongoStore,
+      { getEditBaseline: MongoStore.prototype.getEditBaseline }
+    )
+    await store.getEditBaseline(-100, 10)
+    expect(calls[0]).toMatchObject({
+      filter: { chatId: -100, messageId: 10 },
+      opts: { sort: { createdAt: -1 } }
+    })
+  })
+})

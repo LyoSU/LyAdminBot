@@ -11,11 +11,12 @@ import {
   voterRoster, voteEligibility, needsRestitution, restitutionLiftsRestrictions,
   type VoterStanding,
   classifyUrl, removesSender, truncate, BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS,
-  type ChannelPreview, type EvaluationInput, type ForwardOrigin, type PipelinePorts,
-  type UserSnapshot, type Verdict, type VoteBallot
+  type ChannelPreview, type EditBaseline, type EvaluationInput, type ForwardOrigin,
+  type PipelinePorts, type UserSnapshot, type Verdict, type VoteBallot
 } from '@lyadmin/core'
 import {
   TelegramGateway, applyVerdict, buildUserSnapshot, buildChannelSnapshot, normalizeMessage,
+  editBaselineOf,
   fetchUserProfile, downloadPhotoBase64, downloadAvatarBase64, downloadStoriesBase64, rawPhotoToBase64,
   fetchExternalBan, sourcesToQuery, resolveMentionKinds, shouldScanChannelSender,
   createChatDescriptionCache, fetchChatDescription, createTmePreviewResolver,
@@ -241,6 +242,53 @@ const rememberText = (chatId: number, messageId: number, text: string): void => 
 }
 const recallText = (chatId: number, messageId: number): string | undefined =>
   recentTexts.get(`${chatId}:${messageId}`)
+
+/**
+ * What each recent message carried, so that an EDIT of it can be measured.
+ *
+ * Edit-to-inject — post something ordinary, let it pass, then edit a link into
+ * it — is the one spam shape whose evidence is a DIFFERENCE between two
+ * deliveries. Telegram sends only the new version, so unless somebody kept the
+ * old one there is nothing to subtract, and until this cache existed nobody did:
+ * `editDelta` was computed from a parameter no caller ever passed, which left
+ * the 2.5-weight signal and its 0.93 rule unreachable in production while both
+ * were fully tested.
+ *
+ * Bounded like every other map here. A miss is not a failure — see
+ * `recallEditBaseline`, which asks the decision record before giving up.
+ */
+const editBaselines = new Map<string, EditBaseline>()
+const rememberEditBaseline = (chatId: number, messageId: number, baseline: EditBaseline): void => {
+  editBaselines.set(`${chatId}:${messageId}`, baseline)
+  if (editBaselines.size > 5000) {
+    const firstKey = editBaselines.keys().next().value
+    if (firstKey !== undefined) editBaselines.delete(firstKey)
+  }
+}
+/**
+ * The earlier version's counters: memory first, then the decision record.
+ *
+ * The same two-tier shape as `recallVerdict`, for the same reason and one more.
+ * The reason: a restart must not hand a spammer a free window in which edits
+ * cannot be measured. The extra one: a verdict has to be reproducible from
+ * stored state — `tools/replay` and every calibration argument rest on that, and
+ * a signal computed purely from process memory is one nothing can re-derive.
+ *
+ * Costs a read only on an actual edit, which is a small share of traffic.
+ *
+ * Memory wins over the store deliberately, and it is only correct because this
+ * bot runs as ONE instance — the same assumption `claimDueDeletions` already
+ * documents. Within one process the cache is written in handler order and always
+ * holds the newest version, while the decision record is written later in the
+ * same handler; reading the store first would sometimes measure an edit against
+ * a version older than the one we just saw. On a second instance this would
+ * invert, and the fix then is a revision stamp, not a reordering.
+ */
+const recallEditBaseline = async (chatId: number, messageId: number): Promise<EditBaseline | null> => {
+  const cached = editBaselines.get(`${chatId}:${messageId}`)
+  if (cached) return cached
+  return store.getEditBaseline(chatId, messageId).catch(() => null)
+}
 
 /**
  * Chat titles for the PM "Why?" card. An admin opens that card by link, out of
@@ -1907,11 +1955,13 @@ const silenceUnderIncident = async (params: {
   senderId: number
   senderLabel: string
   messageId: number
+  /** Album parts delivered with it — one post, so they go together. */
+  albumIds: readonly number[]
   incident: Incident
   locale: Locale
 }): Promise<void> => {
   const { chat, senderId, messageId, incident } = params
-  const deleted = await gateway.tg.deleteMessagesById(chat.id, [messageId])
+  const deleted = await gateway.tg.deleteMessagesById(chat.id, [messageId, ...params.albumIds])
     .then(() => true)
     .catch(() => false)
   if (!deleted) {
@@ -1923,8 +1973,8 @@ const silenceUnderIncident = async (params: {
     log.warn('incident_echo_failed', { chatId: chat.id, userId: senderId, messageId })
     return
   }
-  const updated = incidents.addRemoved(chat.id, senderId) ?? incident
-  await store.appendIncidentMessage(chat.id, incident.triggerMessageId, messageId)
+  const updated = incidents.addRemoved(chat.id, senderId, 1 + params.albumIds.length) ?? incident
+  await store.appendIncidentMessage(chat.id, incident.triggerMessageId, [messageId, ...params.albumIds])
     .catch(() => { /* telemetry must never break moderation */ })
   // The card, if it is still up. It lives ninety seconds and the run lives ten
   // minutes, so most of a long flood is announced once and then simply stops
@@ -1940,7 +1990,7 @@ const silenceUnderIncident = async (params: {
   await refreshIncidentCard(chat.id, senderId, updated, params.senderLabel, params.locale)
 }
 
-const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void> => {
+const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage): Promise<void> => {
   const chat = message.chat
   if (!(chat instanceof Chat)) {
     // Private chat — only service commands live here (settings, /start).
@@ -2099,6 +2149,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
         senderId: sender.id,
         senderLabel: sender.displayName,
         messageId: message.id,
+        albumIds: albumSiblings.map((part) => part.id),
         incident: memo,
         locale: resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
       })
@@ -2163,7 +2214,22 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
 
   // ── normalize (budget call 1: replied message, only for replies) ───
   const replied = await timed('reply', () => gateway.fetchRepliedMessage(message))
-  const normalized = normalizeMessage(message, { isEdit, repliedMessage: replied })
+  // What this message said last time, when it is an edit and anybody remembers.
+  const previousBaseline = isEdit
+    ? await timed('baseline', () => recallEditBaseline(chat.id, message.id))
+    : null
+  const normalized = normalizeMessage(message, {
+    isEdit,
+    repliedMessage: replied,
+    previousBaseline,
+    // The rest of the album, so a caption riding on the ninth photo is read as
+    // part of this post rather than never at all.
+    albumSiblings
+  })
+  // Remembered for the NEXT edit, including when this delivery was itself an
+  // edit: the honest question is what a given edit injected, not what has
+  // accumulated since the original.
+  rememberEditBaseline(chat.id, message.id, editBaselineOf(normalized))
 
   // ── user snapshot ───────────────────────────────────────────────────
   const memberCount = await timed('mongo', async () => {
@@ -2286,6 +2352,11 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     : buildChannelSnapshot(channelSender!, history)
 
   // Photo for LLM vision — only when a newish user posts media.
+  //
+  // The FIRST part's photo, for an album. The other parts' images are not sent
+  // to vision or to moderation: ten images is ten times the bill for a marginal
+  // gain, and their captions — which is where albums carry their text — are
+  // merged into the judged message either way.
   const photoBase64 = newish && message.media?.type === 'photo'
     ? await downloadPhotoBase64(gateway.tg, message.media)
     : null
@@ -2448,6 +2519,33 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
    * decided by this bar and nothing else. An ordinary exchange scores around 0.1,
    * which is what keeps the member who was mid-argument out of this.
    */
+  /**
+   * The rest of the album goes with the message.
+   *
+   * `applyVerdict` is given one message id because a verdict is about one
+   * message — but an album is one message only to the sender, and to Telegram it
+   * is N. Deleting the part the verdict landed on left the other nine photos of
+   * an advert in the chat, which is most of the advert.
+   *
+   * Unconditional on the action, unlike the retro-purge below: every enforcement
+   * action deletes the message, and these ids ARE the message. Nothing here is
+   * a second judgement — the content of every part was already folded into the
+   * text that was judged.
+   */
+  const albumIds = albumSiblings.map((part) => part.id)
+  let albumRemoved = 0
+  if (result.applied && isEnforcementAction(verdict.action) && albumIds.length > 0) {
+    const purged = await gateway.tg.deleteMessagesById(chat.id, albumIds)
+      .then(() => true)
+      .catch(() => false)
+    if (purged) albumRemoved = albumIds.length
+    log.info('album_purge', {
+      chatId: chat.id, chat: chat.title ?? undefined, userId: sender.id,
+      user: sender.displayName, parts: albumIds.length, applied: purged,
+      action: verdict.action
+    })
+  }
+
   let retroPurged = 0
   if (result.applied && removesSender(verdict.action)) {
     const targets = senderLog.purgeTargets(chat.id, sender.id, {
@@ -2554,6 +2652,10 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       // Messages of the same run taken down with the sender. Absent when there
       // were none, so a line that carries it is a line worth reading twice.
       retroPurged: retroPurged || undefined,
+      // Album parts taken down with the message they belong to. Absent for the
+      // ordinary single message, so a line carrying it says "this was a post of
+      // several parts and all of them went".
+      albumRemoved: albumRemoved || undefined,
       errors: result.errors.length > 0 ? result.errors : undefined,
       latencyMs: Date.now() - started
     })
@@ -2644,6 +2746,10 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
     messageId: message.id,
     textPreview: normalized.text,
     verdict,
+    // Rides along so an edit arriving after a restart still has something to be
+    // measured against, and so a replay can recompute the delta this verdict
+    // was — or was not — given.
+    editBaseline: editBaselineOf(normalized),
     latencyMs: Date.now() - started
   }).catch(() => { /* telemetry must never break moderation */ })
 
@@ -2725,7 +2831,11 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       // counts the messages with NO record — the ones the memo removed unread —
       // and inflating it with messages that are already rows would make every
       // count over the collection double what happened.
-      const updated = incidents.addRemoved(chat.id, sender.id) ?? live
+      // Everything this delivery cost, not one message: an album is several
+      // deletions and the retro sweep may have taken more. The count exists so a
+      // correction can say what the run destroyed, and deletions are the part no
+      // correction can give back.
+      const updated = incidents.addRemoved(chat.id, sender.id, 1 + retroPurged + albumRemoved) ?? live
       log.info('incident_joined', {
         chatId: chat.id, userId: sender.id, messageId: message.id, ...logContext,
         trigger: live.triggerMessageId, removed: updated.removedCount,
@@ -2769,7 +2879,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
           incidents.open(chat.id, sender.id, {
             power, action: verdict.action, reasonCode: verdict.reasonCode,
             triggerMessageId: message.id, cardMessageId: null,
-            hasOpenVote: true, removedCount: 1 + retroPurged
+            hasOpenVote: true, removedCount: 1 + retroPurged + albumRemoved
           })
         }
         return
@@ -2794,7 +2904,7 @@ const handleMessage = async ({ message, isEdit }: IncomingMessage): Promise<void
       incidents.open(chat.id, sender.id, {
         power, action: verdict.action, reasonCode: verdict.reasonCode,
         triggerMessageId: message.id, cardMessageId: sent?.id ?? null,
-        removedCount: 1 + retroPurged
+        removedCount: 1 + retroPurged + albumRemoved
       })
     }
   }
