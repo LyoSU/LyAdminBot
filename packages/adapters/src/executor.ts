@@ -33,7 +33,28 @@ export interface ModerationActions {
 }
 
 export interface ExecutionResult {
+  /**
+   * Whether the action NAMED BY THE VERDICT took hold. For `ban`/`kick`/`mute`
+   * that is the thing done to the sender; the message deletion those actions
+   * also perform is reported separately, in `deleted`.
+   *
+   * The distinction is not pedantry. `applied: false` on a ban means "the
+   * message went, the person stayed" — most often because the bot lacks the
+   * right to ban in that chat — and reading it as "nothing happened" gets the
+   * blast radius of a false positive exactly backwards. A verdict recorded with
+   * this field alone cannot be told apart from one where nothing was attempted.
+   */
   applied: boolean
+  /**
+   * Whether the message itself was removed, or null when the action never
+   * involved removing one (`captcha`, or a skip before anything was attempted).
+   *
+   * Added 2026-08-24. Until then the delete's outcome was discarded on three of
+   * the four enforcement paths — `await attempt('delete', ...)` with no
+   * assignment — so nothing downstream and nothing in the record knew whether
+   * the spam was still in the chat.
+   */
+  deleted: boolean | null
   skippedReason: string | null
   /** App layer must post a captcha prompt when set. */
   captchaRequired: boolean
@@ -88,7 +109,7 @@ export const applyVerdict = async (
   actions: ModerationActions
 ): Promise<ExecutionResult> => {
   const result: ExecutionResult = {
-    applied: false, skippedReason: null, captchaRequired: false, errors: []
+    applied: false, deleted: null, skippedReason: null, captchaRequired: false, errors: []
   }
 
   if (verdict.action === 'none' || verdict.action === 'observe') return result
@@ -131,8 +152,9 @@ export const applyVerdict = async (
       return result
     }
     case 'delete': {
-      result.applied = await attempt('delete', () =>
+      result.deleted = await attempt('delete', () =>
         actions.deleteMessage(target.chatId, target.messageId))
+      result.applied = result.deleted
       // An uncertain verdict (see `requireCaptcha`): the message goes, and the
       // sender is gated rather than removed. The gate is only claimed if the
       // restriction actually took — otherwise the app layer would post a prompt
@@ -144,18 +166,18 @@ export const applyVerdict = async (
       return result
     }
     case 'kick': {
-      await attempt('delete', () => actions.deleteMessage(target.chatId, target.messageId))
+      result.deleted = await attempt('delete', () => actions.deleteMessage(target.chatId, target.messageId))
       result.applied = await attempt('kick', () => actions.kick(target.chatId, target.userId))
       return result
     }
     case 'mute': {
-      await attempt('delete', () => actions.deleteMessage(target.chatId, target.messageId))
+      result.deleted = await attempt('delete', () => actions.deleteMessage(target.chatId, target.messageId))
       result.applied = await attempt('mute', () =>
         actions.mute(target.chatId, target.userId, MUTE_DURATION_SECONDS))
       return result
     }
     case 'ban': {
-      await attempt('delete', () => actions.deleteMessage(target.chatId, target.messageId))
+      result.deleted = await attempt('delete', () => actions.deleteMessage(target.chatId, target.messageId))
       result.applied = await attempt('ban', () =>
         actions.ban(target.chatId, target.userId, verdict.banDurationSeconds))
       return result

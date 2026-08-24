@@ -212,6 +212,30 @@ export interface NormalizedMessage {
  * the decision record — which is what makes the resulting verdict reproducible
  * offline, the same requirement the burst window is held to.
  */
+/**
+ * What the executor managed to do about a verdict, as stored beside it.
+ *
+ * Declared here rather than beside `applyVerdict` for the same reason
+ * `EditBaseline` is: the store writes it and the store cannot import the
+ * adapter package. It mirrors `ExecutionResult` minus the parts that mean
+ * nothing after the fact (the captcha prompt the app layer still owes) and
+ * minus the raw error strings, which are Telegram's own and unbounded.
+ */
+export interface ExecutionRecord {
+  /** The action the verdict named — for a removal, what happened to the sender. */
+  applied: boolean
+  /** The message itself; null when the action never removes one. */
+  deleted: boolean | null
+  /** Why nothing was attempted: `senderIsAdmin`, `senderIsSelf`, `senderIsTrusted`. */
+  skippedReason: string | null
+  /** Labels of the calls that threw — `delete`, `ban`, `mute`, `kick`. */
+  failed: string[]
+  /** Other parts of the same album removed with it. */
+  albumRemoved: number
+  /** Earlier messages of the same run swept when the sender went. */
+  retroPurged: number
+}
+
 export interface EditBaseline {
   urls: number
   mentions: number

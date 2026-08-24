@@ -204,8 +204,48 @@ describe('applyVerdict', () => {
     actions.deleteMessage = vi.fn(async () => { throw new Error('MESSAGE_DELETE_FORBIDDEN') })
     const result = await applyVerdict(makeVerdict({ action: 'ban' }), target, noGuards, actions)
     expect(result.applied).toBe(true)
+    expect(result.deleted).toBe(false)
     expect(actions.calls).toEqual(['ban'])
     expect(result.errors).toHaveLength(1)
+  })
+
+  /**
+   * The two halves of an enforcement action, reported apart. Until 2026-08-24
+   * the delete's outcome was thrown away on ban/kick/mute, so a chat where the
+   * bot may delete but not ban — the ordinary shape of a missing right —
+   * produced `applied: false` for a message that had in fact been removed. The
+   * app layer read that as "still in the chat" and fed the spam to the next LLM
+   * prompt, and 244k stored decisions could not be asked the question at all.
+   */
+  describe('reports the message and the sender separately', () => {
+    it('a ban the bot may not perform still reports the delete it did', async () => {
+      const actions = makeActions()
+      actions.ban = vi.fn(async () => { throw new Error('CHAT_ADMIN_REQUIRED') })
+      const result = await applyVerdict(makeVerdict({ action: 'ban' }), target, noGuards, actions)
+      expect(result.applied).toBe(false) // the sender stayed
+      expect(result.deleted).toBe(true) // the message did not
+      expect(actions.calls).toEqual(['delete'])
+    })
+
+    it.each(['ban', 'kick', 'mute', 'delete'] as const)(
+      '%s reports both outcomes when both succeed', async (action) => {
+        const result = await applyVerdict(makeVerdict({ action }), target, noGuards, makeActions())
+        expect(result.applied).toBe(true)
+        expect(result.deleted).toBe(true)
+      })
+
+    it('null, not false, when the action never removes a message', async () => {
+      // `captcha` gates the sender and leaves the message standing, and a skip
+      // happens before anything is attempted. Reporting either as `false` would
+      // claim a delete was tried and refused.
+      const captcha = await applyVerdict(makeVerdict({ action: 'captcha' }), target, noGuards, makeActions())
+      expect(captcha.deleted).toBeNull()
+
+      const skipped = await applyVerdict(
+        makeVerdict({ action: 'ban' }), target, { ...noGuards, senderIsAdmin: true }, makeActions())
+      expect(skipped.deleted).toBeNull()
+      expect(skipped.skippedReason).toBe('senderIsAdmin')
+    })
   })
 })
 
