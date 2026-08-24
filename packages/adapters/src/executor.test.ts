@@ -131,6 +131,20 @@ describe('applyVerdict', () => {
     expect(actions.calls).toEqual(['delete', 'ban'])
   })
 
+  it('trust yields to Telegram\'s own account-integrity finding', async () => {
+    // The file's principle is that trust shields against OUR judgement and not
+    // against somebody else's finding. `unofficial_client_risk` is Telegram's
+    // finding — the heaviest single signal in the catalogue — and it was the one
+    // excluded, so a trusted member whose account had changed hands kept the
+    // shield against precisely the marker for that.
+    const actions = makeActions()
+    const result = await applyVerdict(
+      makeVerdict({ action: 'delete', signals: [{ name: 'unofficial_client_risk' }] }),
+      target, { ...noGuards, senderIsTrusted: true }, actions)
+    expect(result.applied).toBe(true)
+    expect(actions.calls).toEqual(['delete'])
+  })
+
   it.each(['external_ban', 'fake_flag', 'restricted_for_spam'] satisfies SignalName[])(
     'trust yields to %s as well', async (name) => {
       const actions = makeActions()

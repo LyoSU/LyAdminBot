@@ -54,7 +54,19 @@ export const dormantFilters = (now = Date.now()): { members: Document; users: Do
       // spared every document that never had the field — which is most of them.
       // `$in` with a null in the list is the form that matches absent as well.
       score: { $in: [0, null] },
-      updatedAt: { $lt: cutoff }
+      // Two clocks, as on the users half and for the same reason. `touchMember`
+      // now stamps `updatedAt` on every message, but it only started doing so on
+      // 2026-08-24 and it can only stamp a row somebody comes back to: 33567 rows
+      // written before that date carry no `updatedAt` at all, and a member who
+      // posted once in the v2 era and never returned would never acquire one.
+      // Mongo does not match a missing field against `$lt`, so those rows would
+      // have sat outside the sweep for ever — the same defect the `updatedAt`
+      // write was fixing, surviving in the population it could not reach.
+      // `stats.firstMessageAt` is set on insert and every one of those rows has it.
+      $or: [
+        { updatedAt: { $lt: cutoff } },
+        { updatedAt: { $exists: false }, 'stats.firstMessageAt': { $lt: cutoff } }
+      ]
     },
     users: {
       'globalStats.totalMessages': { $lte: 1 },

@@ -95,6 +95,19 @@ export interface SignalSpec {
    */
   thirdPartyVerdict?: true
   /**
+   * TELEGRAM's own observation about the account's integrity, as opposed to its
+   * adjudication of the account's conduct.
+   *
+   * The distinction earns a third flag rather than reusing either of the two
+   * above. It is not `platformVerdict`, because nobody adjudicated anything and
+   * there is no appeal — making it grounds for a never-expiring ban would be
+   * absurd. And it is not `thirdPartyVerdict`, because the third party here is
+   * Telegram itself. But it is emphatically not OUR guess either, which is the
+   * only thing chat trust is meant to shield against, so it belongs among the
+   * facts that outrank a trust grant.
+   */
+  accountIntegrity?: true
+  /**
    * A match against a rule the pipeline wrote from its OWN verdict and that no
    * human has confirmed. It restates an earlier conclusion about a similar
    * text; it is not a second observation of this one.
@@ -196,7 +209,7 @@ export const SIGNALS = {
    * legitimate users on unofficial apps are rare, and the flag comes from
    * Telegram's own abuse infrastructure.
    */
-  unofficial_client_risk: { weight: 3.2, kind: 'evidence' },
+  unofficial_client_risk: { weight: 3.2, kind: 'evidence', accountIntegrity: true },
 
   // ───────────────────── external ban databases ─────────────────────
   // Shape, not evidence (2026-07-31). `external_ban_new` already bans on these
@@ -567,13 +580,20 @@ export const HIGH_RISK_SIGNALS = namesWhere((s) => s.highRisk === true)
 export const PERMANENT_BAN_SIGNALS = namesWhere((s) => s.platformVerdict === true)
 
 /**
- * Condemned by somebody other than us, at either tier — the only grounds on
- * which a chat-trusted member is still actioned. A listed account deserves the
- * pipeline even here; what it does not deserve is a permanent ban, which is why
- * this set and `PERMANENT_BAN_SIGNALS` are no longer the same set.
+ * Stated by somebody other than us — the only grounds on which a chat-trusted
+ * member is still actioned. A listed account deserves the pipeline even here;
+ * what it does not deserve is a permanent ban, which is why this set and
+ * `PERMANENT_BAN_SIGNALS` are no longer the same set.
+ *
+ * `accountIntegrity` joined on 2026-08-24. The file's own principle is that
+ * trust shields against OUR judgement and not against somebody else's finding,
+ * and `unofficial_client_risk` is Telegram's finding, not ours — yet it was
+ * excluded, so the longest-standing form of the sold-account threat model was
+ * the one case nothing could reach. A trusted member whose account had changed
+ * hands kept the shield against the single heaviest signal in the catalogue.
  */
 export const OVERRIDES_CHAT_TRUST_SIGNALS = namesWhere(
-  (s) => s.platformVerdict === true || s.thirdPartyVerdict === true
+  (s) => s.platformVerdict === true || s.thirdPartyVerdict === true || s.accountIntegrity === true
 )
 
 /** Correlated groups with their members, in declaration order. */

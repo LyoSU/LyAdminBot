@@ -869,10 +869,16 @@ describe('pruneDormantRecords', () => {
   const ancient = new Date(Date.now() - 400 * DAY)
   const recent = new Date(Date.now() - 2 * DAY)
 
-  it('takes a member who left one message and never came back', async () => {
-    expect(matches(await memberFilter(), {
-      stats: { messagesCount: 1 }, updatedAt: ancient
-    })).toBe(true)
+  it('takes a member who left one message and never came back, by either clock', async () => {
+    const filter = await memberFilter()
+    // v1 wrote `updatedAt`, and v2 does since 2026-08-24...
+    expect(matches(filter, { stats: { messagesCount: 1 }, updatedAt: ancient })).toBe(true)
+    // ...but 33567 rows predate that write and can never acquire one, because a
+    // member who posted once and never returned is never touched again. Those
+    // carry `stats.firstMessageAt` from their insert.
+    expect(matches(filter, { stats: { messagesCount: 1, firstMessageAt: ancient } })).toBe(true)
+    // A recent first message is not dormancy whichever field records it.
+    expect(matches(filter, { stats: { messagesCount: 1, firstMessageAt: recent } })).toBe(false)
   })
 
   it('spares a member with standing, a record, or a recent visit', async () => {

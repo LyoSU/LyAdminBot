@@ -253,3 +253,30 @@ describe('signal catalogue', () => {
     expect(SIGNAL_WEIGHTS['external_ban']).toBeGreaterThan(SENDER_REMOVAL_MIN_EVIDENCE)
   })
 })
+
+/**
+ * Three tiers of somebody-else's-say-so, and they must stay three.
+ *
+ * They were two until 2026-08-24, and the missing one had a real cost: the only
+ * home for `unofficial_client_risk` was either "grounds for a permanent ban"
+ * (absurd — nobody adjudicated anything and there is no appeal) or nothing at
+ * all, and nothing was chosen. A flag Telegram raises about an account's
+ * integrity is not our guess, so chat trust must not shield against it.
+ */
+describe('tiers of authority', () => {
+  it('a permanent ban needs an adjudication, not merely a finding', () => {
+    expect(PERMANENT_BAN_SIGNALS.has('unofficial_client_risk')).toBe(false)
+    expect(PERMANENT_BAN_SIGNALS.has('external_ban')).toBe(false)
+    expect(PERMANENT_BAN_SIGNALS.has('scam_flag')).toBe(true)
+  })
+
+  it('chat trust yields to any of the three, and only to those', () => {
+    for (const name of ['scam_flag', 'external_ban', 'unofficial_client_risk'] as const) {
+      expect(OVERRIDES_CHAT_TRUST_SIGNALS.has(name), name).toBe(true)
+    }
+    // Our own conclusions never override a grant a human made by hand.
+    for (const name of ['prior_spam_detections', 'low_reputation', 'vector_similar_spam'] as const) {
+      expect(OVERRIDES_CHAT_TRUST_SIGNALS.has(name), name).toBe(false)
+    }
+  })
+})

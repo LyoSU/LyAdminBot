@@ -2875,9 +2875,31 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
    * voting on that card.
    */
   const actedVisibly = result.applied || result.deleted === true
+
+  /**
+   * The verdict AS EXECUTED, which is not always the verdict as decided.
+   *
+   * Everything below either tells the chat what happened or stores it for a
+   * later correction to undo, and both must describe the thing that actually
+   * took place. When a ban fails and the delete succeeds, what happened is a
+   * delete — so that is what the card announces and what the override cache
+   * holds.
+   *
+   * Not cosmetic. `restitutionLiftsRestrictions` reads the stored action to
+   * decide whether "not spam" should unrestrict and unban, and those two calls
+   * lift whatever is in place regardless of who put it there — the comment on
+   * them says so. Storing a `ban` we never managed to impose therefore armed
+   * the override to undo somebody ELSE's: an admin who banned the spammer by
+   * hand after our attempt failed would have had their ban lifted by the next
+   * person pressing the button.
+   */
+  const executed: Verdict = result.applied
+    ? verdict
+    : { ...verdict, action: 'delete', banDurationSeconds: null }
+
   if (actedVisibly && enforced) {
     void sessionPort.reset(chat.id, sender.id).catch(() => { /* best-effort */ })
-    rememberVerdict(chat.id, message.id, verdict)
+    rememberVerdict(chat.id, message.id, executed)
     rememberText(chat.id, message.id, normalized.text ?? '')
     rememberFacts(chat.id, message.id, factsFromSnapshot(user, {
       promoInBio: verdict.signals.some((s) => s.name === 'promo_in_bio'),
@@ -2889,7 +2911,11 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     if (normalized.forward) rememberForward(chat.id, message.id, normalized.forward)
     const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
 
-    const power = incidentPowerFor(verdict, result.applied)
+    // Both arguments describe what happened, not what was decided. A run whose
+    // bans keep failing still deserves ONE card rather than one per message, and
+    // a delete that stuck is `card_only` — real enough to group the run under,
+    // never enough to silence somebody the bot could not remove.
+    const power = incidentPowerFor(executed, actedVisibly)
     const live = incidents.live(chat.id, sender.id)
     const askingChat = verdict.needsVote && policy.votingEnabled
 
@@ -2964,7 +2990,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
         if (live) incidents.markVoteOpen(chat.id, sender.id)
         else if (power) {
           incidents.open(chat.id, sender.id, {
-            power, action: verdict.action, reasonCode: verdict.reasonCode,
+            power, action: executed.action, reasonCode: verdict.reasonCode,
             triggerMessageId: message.id, cardMessageId: null,
             hasOpenVote: true, removedCount: 1 + retroPurged + albumRemoved
           })
@@ -2973,7 +2999,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       }
     }
 
-    const view = compactNotification(locale, verdict, {
+    const view = compactNotification(locale, executed, {
       chatId: chat.id, messageId: message.id, userId: sender.id, userLabel: sender.displayName
     }, { botUsername: selfUsername ?? undefined })
     const sent = await gateway.tg.sendText(chat.id, viewHtml(view.text), {
@@ -2989,7 +3015,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       // number exists so a correction can say how much this verdict cost, and
       // the swept messages cost exactly as much as the one that triggered it.
       incidents.open(chat.id, sender.id, {
-        power, action: verdict.action, reasonCode: verdict.reasonCode,
+        power, action: executed.action, reasonCode: verdict.reasonCode,
         triggerMessageId: message.id, cardMessageId: sent?.id ?? null,
         removedCount: 1 + retroPurged + albumRemoved
       })
