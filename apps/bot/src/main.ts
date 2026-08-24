@@ -132,6 +132,13 @@ const buildPorts = (): PipelinePorts => {
 
 // Daily campaign briefing for the LLM: recent confirmed-spam samples, cached
 // so the per-classify hook stays cheap. Null when there is nothing fresh.
+/**
+ * When the cluster is full enough to say so loudly. The free tier holds 512 MB
+ * and refuses writes at the line, so the warning has to arrive with room to act
+ * — 85% leaves weeks at the observed growth rate, not hours.
+ */
+const FREE_TIER_WARN_MB = 435
+
 const BRIEFING_TTL_MS = 10 * 60 * 1000
 const BRIEFING_WINDOW_MS = 7 * 86400 * 1000
 let briefingCache: { text: string | null; at: number } = { text: null, at: 0 }
@@ -2300,7 +2307,20 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
   // EVERY sender (not just newish) — an established member added to CAS
   // tomorrow must still be re-checked once the TTL lapses. Persist the
   // result and use it for THIS message so a first post is caught.
-  let externalBan = history?.externalBan ?? null
+  //
+  // The cached answer is gated too, not just the refresh. Until 2026-08-24 only
+  // the lookup below sat behind the setting, while the line seeding the variable
+  // did not — so a chat that had turned the ban databases OFF still received
+  // whatever a chat with them ON had written to the shared user document, and
+  // acted on it: the `external_ban` signal at weight 2.5, the `external_ban_new`
+  // rule, and the veto on standing. The switch stopped new questions and let
+  // every old answer through, which is the one behaviour its label rules out.
+  //
+  // Gating the SNAPSHOT rather than each reader is deliberate. There were three
+  // consumers and each had to remember the setting; one of them, the pipeline's
+  // hard-verdict test, was the only one that did. Now the fact simply is not
+  // there, and every reader downstream agrees without being told.
+  let externalBan = policy.externalBanEnabled ? (history?.externalBan ?? null) : null
   if (policy.externalBanEnabled) {
     const cached = (userDoc as { externalBan?: ExternalBanCacheView } | null)?.externalBan
     // Per source: a fresh lols answer must not be thrown away because CAS is
@@ -2534,7 +2554,13 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
    */
   const albumIds = albumSiblings.map((part) => part.id)
   let albumRemoved = 0
-  if (result.applied && isEnforcementAction(verdict.action) && albumIds.length > 0) {
+  // `deleted`, like the conversation window below and for the same reason: the
+  // question is whether the message went, and on a ban `applied` answers whether
+  // the PERSON did. A ban the bot lacked the right to perform used to leave the
+  // other nine photos of an advert standing next to the one it had successfully
+  // deleted — the outcome this purge exists to prevent, produced by reading the
+  // wrong field.
+  if (result.deleted === true && isEnforcementAction(verdict.action) && albumIds.length > 0) {
     const purged = await gateway.tg.deleteMessagesById(chat.id, albumIds)
       .then(() => true)
       .catch(() => false)
@@ -2711,7 +2737,15 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
 
   // The message joins the chat context only if it stayed in the chat —
   // deleted spam must not poison the window for the next evaluation.
-  const removed = result.applied && isEnforcementAction(verdict.action)
+  //
+  // `deleted`, not `applied`. The question here is about the MESSAGE, and on a
+  // ban or a kick `applied` answers a different one: whether the sender was
+  // removed. In a chat where the bot may delete but not ban — the common shape
+  // of a missing right — every banned spammer's text was therefore filed as
+  // still present and fed to the next LLM prompt and to `isForeignScript`,
+  // although the chat could no longer see it. The two facts were never
+  // separable until `deleted` existed (2026-08-24).
+  const removed = result.deleted === true && isEnforcementAction(verdict.action)
   if (!removed) {
     const line = conversationLineFor(normalized, { id: sender.id, isChannel: channelSender !== null })
     if (line) conversationWindow.record(chat.id, line)
@@ -2750,6 +2784,30 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     // measured against, and so a replay can recompute the delta this verdict
     // was — or was not — given.
     editBaseline: editBaselineOf(normalized),
+    /**
+     * What actually happened, as opposed to what was decided.
+     *
+     * The record held only the verdict until 2026-08-24, so no query against
+     * 244k stored decisions could answer the first question anyone asks of
+     * them: was it carried out? A ban that Telegram refused, a verdict the
+     * executor declined because the sender turned out to be an admin, and a ban
+     * that went through were three identical rows. Every audit of this
+     * pipeline's false positives had to assume enforcement it could not see,
+     * and one earlier review drew the opposite conclusion from the same data —
+     * that the bot was acting on almost nothing.
+     *
+     * `errors` is stored as a COUNT with the labels only. The messages are
+     * Telegram's own strings, they are unbounded, and this collection is the
+     * largest in a database that has been up against its quota twice.
+     */
+    execution: {
+      applied: result.applied,
+      deleted: result.deleted,
+      skippedReason: result.skippedReason,
+      failed: result.errors.map((e) => e.split(':')[0] ?? 'unknown'),
+      albumRemoved,
+      retroPurged
+    },
     latencyMs: Date.now() - started
   }).catch(() => { /* telemetry must never break moderation */ })
 
@@ -3441,6 +3499,50 @@ const main = async (): Promise<void> => {
     void expireStaleVotes()
   }, 60 * 1000)
   sweepTimer.unref?.()
+
+  /**
+   * Housekeeping the database cannot do for itself.
+   *
+   * `pipeline_decisions` and the window collections expire by TTL index, but the
+   * two v1 collections hold standing rather than observations, so no blanket
+   * expiry is correct for them — and consequently nothing had ever removed a
+   * row. They reached 483k and 126k documents against a 512 MB cluster, which
+   * had already stopped accepting writes once (2026-07-06). A quota is not a
+   * warning that arrives in time to act on: the failure mode is the bot
+   * silently losing every record of what it decided.
+   *
+   * Daily, and one bounded batch per day. There is no hurry — the growth this
+   * offsets is a few thousand rows a day — and a slow sweep is the one shape
+   * that can never itself be the outage.
+   */
+  /**
+   * How full the cluster is, said out loud.
+   *
+   * A quota is not a warning that arrives in time to act on: the free tier stops
+   * accepting writes, and what stops with them is the bot's record of everything
+   * it decides. It has happened once (2026-07-06) and the first sign of it was
+   * missing data, not a log line. Atlas counts the 512 MB as data plus indexes,
+   * so both are reported and the pair is what to read — deleting documents moves
+   * the first at once and the second only when an index is rebuilt.
+   */
+  const reportStorage = async (): Promise<void> => {
+    const { dataSize, indexSize } = await store.storageStats()
+    const usedMb = Math.round((dataSize + indexSize) / 1048576)
+    const fields = { usedMb, dataMb: Math.round(dataSize / 1048576), indexMb: Math.round(indexSize / 1048576) }
+    if (usedMb >= FREE_TIER_WARN_MB) log.warn('storage_pressure', fields)
+    else log.info('storage', fields)
+  }
+
+  const prune = async (): Promise<void> => {
+    const { members, users } = await store.pruneDormantRecords()
+    if (members + users > 0) log.info('prune_dormant', { members, users })
+    await reportStorage()
+  }
+  await prune().catch((err) => log.warn('prune_dormant_failed', { err }))
+  const pruneTimer = setInterval(() => {
+    void prune().catch((err) => log.warn('prune_dormant_failed', { err }))
+  }, 24 * 60 * 60 * 1000)
+  pruneTimer.unref?.()
 
   const shutdown = async (): Promise<void> => {
     log.info('shutdown')

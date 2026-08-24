@@ -20,12 +20,14 @@ const EXTERNAL_REPEAT_OFFENSES_MIN = 2
 const FRESH_EXTERNAL_BAN_MAX_DAYS = 2
 const MANY_SHARED_CHATS_MIN = 5
 /**
- * Kept equal to the pipeline's `HARD_VERDICT_MIN_DETECTIONS` on purpose.
+ * How many confirmed detections make a pattern rather than an accusation.
  *
  * Exported since 2026-08-23 because the right to vote asks the same question at
  * the same bar — an account the system has twice found to be spamming does not
- * get a say in whether the next one is. A third copy of the number would have
- * been the third place to forget when it moves.
+ * get a say in whether the next one is. Since 2026-08-24 `hasHardAccountVerdict`
+ * reads it too; the pipeline used to keep a `HARD_VERDICT_MIN_DETECTIONS` of its
+ * own beside a list that disagreed with this file's. A second copy of a number
+ * is a second place to forget when it moves.
  */
 export const PRIOR_DETECTIONS_MIN = 2
 const JUST_JOINED_MAX_SECONDS = 120
@@ -50,6 +52,55 @@ const SECONDS_PER_DAY = 86_400
 export const ESTABLISHED_MIN_MESSAGES = 50
 export const ESTABLISHED_MIN_IN_CHAT = 10
 export const ESTABLISHED_MIN_TENURE_DAYS = 7
+
+/**
+ * Already condemned by somebody — Telegram, an external database, or our own
+ * confirmed record — and therefore ineligible for any form of standing.
+ *
+ * ONE definition, because there were two and they disagreed. This file used to
+ * hold a private `hasHardVerdict` guarding the `established_user` signal, and
+ * the pipeline a private `hasHardAccountVerdict` guarding the established-
+ * regular exempt; the pipeline's listed `spamDetections` and
+ * `unofficialClientRisk` and this one did not. The gap was not theoretical:
+ * 1969 verdicts in the 14 days to 2026-08-24 carried `established_user`
+ * *together with* `prior_spam_detections` — accounts the pipeline refused the
+ * exempt to, still collecting the −1.5 trust weight and `hasSenderStanding`
+ * from the signal, roughly 140 a day.
+ *
+ * Two lists asking one question is a duplication; two lists asking one question
+ * and answering differently is the shield being open on one side.
+ *
+ * The executor keeps a THIRD, deliberately narrower test
+ * (`OVERRIDES_CHAT_TRUST_SIGNALS`) and that one is not a duplicate of this: it
+ * governs trust an admin granted by hand, which only somebody else's verdict
+ * may override — never our own `spamDetections`, or a misfire would revoke a
+ * decision a human made.
+ *
+ * The merge is not a union of the two lists. They differed on two entries and
+ * each is settled on its own merits:
+ *
+ *  - `spamDetections` JOINS, at `PRIOR_DETECTIONS_MIN`. Two confirmed findings
+ *    of our own are a pattern, and the threat model this guard exists for is
+ *    precisely the long-time account that has started spamming. One detection
+ *    stays harmless, so a single false positive still cannot compound.
+ *  - `unofficialClientRisk` does NOT. It reports which software the account
+ *    connects with, not a judgement anybody passed on the person, and a
+ *    third-party client is not an offence. It already weighs 3.2 as evidence,
+ *    which is where a heuristic belongs. The signal file has said so in a test
+ *    since it was written; the pipeline's list simply never asked it.
+ *
+ * No `policy` parameter, unlike the copy this replaces. Whether a chat consults
+ * the ban databases is settled once, at the pipeline's door, so that every
+ * reader downstream sees one story — see `evaluateMessage`.
+ */
+export const hasHardAccountVerdict = (user: UserSnapshot): boolean =>
+  user.flags.scam ||
+  user.flags.fake ||
+  user.externalBan?.banned === true ||
+  user.spamDetections >= PRIOR_DETECTIONS_MIN ||
+  user.reputationStatus === 'suspicious' ||
+  user.reputationStatus === 'restricted' ||
+  user.restrictionReasons.some((r) => /spam|scam/i.test(r))
 
 /**
  * How long this sender has demonstrably been around, in days — null when
@@ -105,6 +156,14 @@ const hasLocalStanding = (user: UserSnapshot): boolean => {
   return user.messagesInChat >= ESTABLISHED_MIN_IN_CHAT &&
     tenure !== null && tenure >= ESTABLISHED_MIN_TENURE_DAYS
 }
+
+/**
+ * Volume in either scope — standing here, or a long history across our chats.
+ * Named separately from the verdict half so the age signals can ask "does this
+ * person have standing?" without re-deriving the answer a few lines later.
+ */
+const hasVolumeForStanding = (user: UserSnapshot): boolean =>
+  user.messagesGlobal >= ESTABLISHED_MIN_MESSAGES || hasLocalStanding(user)
 
 /**
  * Invisible characters with no legitimate use in a display name. Deliberately
@@ -220,21 +279,44 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
   // ago is not "locally new" because our own row for them is a day old.
   const tenure = tenureDays(user)
 
+  /**
+   * Whether this account has standing — computed HERE, before the two age
+   * signals, because both of them are inferences from the user id and this is a
+   * direct observation of the same account. Where they contradict it, it wins.
+   *
+   * Measured, not assumed. In the 14 days to 2026-08-24 `sleeper_awakened`
+   * fired 18863 times, and 6202 of those — a third — were on accounts carrying
+   * `established_user` in the very same verdict. Those 6202 led to enforcement
+   * 21 times (0.34%); the other 12658 led to it 1910 times (15.09%). A signal
+   * that is 44× less predictive on a third of its firings is not one signal.
+   *
+   * The contradiction is plain once stated: `sleeper_awakened` means "an old
+   * account that has only just become visible here", and `established_user`
+   * means "we have been watching this person post for a while". Both cannot be
+   * true, and the disagreement arose from `tenure` being capped at 30 days
+   * while volume has no such ceiling — a regular of three weeks satisfied both.
+   */
+  const established = hasVolumeForStanding(user) && !hasHardAccountVerdict(user)
+
   const isLocallyNew =
     (tenure !== null && tenure <= SLEEPER_LOCAL_MAX_DAYS) ||
     user.messagesGlobal <= NEW_GLOBALLY_MAX
 
-  // The age prediction carries an uncertainty interval; both age signals
-  // gate on the bound that avoids the false positive, not the point
-  // estimate (2026-08 audit: the tail of the id→age curve was off by up to
-  // 137 days, exactly where these thresholds live).
+  // The age prediction carries an uncertainty interval, and the two signals
+  // want OPPOSITE ends of it — see each one below. (2026-08 audit: the tail of
+  // the id→age curve was off by up to 137 days, exactly where these thresholds
+  // live, which is why neither reads the point estimate.)
   const predictedAgeLo = user.predictedAgeBoundsDays?.lo ?? user.predictedAgeDays
-  const predictedAgeHi = user.predictedAgeBoundsDays?.hi ?? user.predictedAgeDays
 
   // A sleeper is an old account that has only just become visible HERE. When
   // Telegram's join date says otherwise the premise is simply false, whatever
-  // our own first-seen row happens to hold.
+  // our own first-seen row happens to hold — and so it is when the account has
+  // standing, which is the same objection from the other side.
+  //
+  // `lo`, the youngest the account could be: claiming somebody woke from a
+  // year's sleep requires that a year is the LEAST it could have been asleep.
   if (
+    !established &&
     predictedAgeLo !== null &&
     user.predictedAgeDays !== null &&
     tenure !== null &&
@@ -247,8 +329,53 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
     })
   }
 
-  if (predictedAgeHi !== null && user.predictedAgeDays !== null && predictedAgeHi < FRESH_ACCOUNT_MAX_DAYS) {
-    signals.push({ name: 'fresh_account', evidence: `~${Math.round(user.predictedAgeDays)}d old` })
+  /**
+   * An id Telegram is handing out right now.
+   *
+   * This signal had fired ZERO times in the whole life of the database when it
+   * was checked on 2026-08-24, and the reason was structural rather than
+   * accidental. It used to read `hi` — the OLDEST the account could be — and
+   * demand it be under 30 days, i.e. "certainly new". Since 2024-02 Telegram
+   * allocates ids randomly inside a block and the block window is all the id
+   * discloses, so `hi` is the age of the open block: 104 days when this was
+   * written, and growing daily. No account could satisfy the test, and none
+   * ever will again while a block stays open longer than a month.
+   *
+   * `lo` asks the question the model can still answer — "could this account
+   * have been registered this month?" — and for an OPEN block the answer is
+   * yes by construction, because its window has no upper edge yet. So this
+   * reads, exactly, membership of the block currently being allocated. It needs
+   * no table of dates and cannot rot: when the block closes, ids in it stop
+   * qualifying on their own, and the next block takes over.
+   *
+   * The fact is worth having. Enforcement rate by id band over the 14 days to
+   * 2026-08-24, counted on distinct senders so a single flood cannot skew it:
+   *
+   *     < 7e9  (sequential, pre-2024)   7783 senders   9.7%
+   *     7.0–7.6e9                        530          38.1%
+   *     7.6–8.2e9                        645          42.6%
+   *     8.2–8.5e9                        447          45.6%
+   *     8.5–8.6e9                        201          52.7%
+   *     8.6–8.8e9  (previous block)      601          74.4%
+   *     8.8–9.0e9  (open block)          851          79.6%
+   *
+   * Monotone across eight bands and an eightfold spread end to end, from a
+   * signal contributing nothing to any of those verdicts. Deliberately NOT
+   * widened to the previous block as well, despite its 74.4%: "the block that
+   * was open last" is a fact with an expiry date, and a threshold in days would
+   * reintroduce exactly the rot this rewrite removes.
+   *
+   * Suppressed for an established account for the reason given above: a person
+   * who registered in June and has posted here since July is a new account and
+   * a known member, and the direct observation outranks the inference. `shape`
+   * and inside the `newness` cap, so on the ordinary newcomer — who already
+   * carries `new_globally` and `new_in_chat` — it adds nothing at all.
+   */
+  if (!established && predictedAgeLo !== null && predictedAgeLo < FRESH_ACCOUNT_MAX_DAYS) {
+    signals.push({
+      name: 'fresh_account',
+      evidence: `id issued in the current allocation block, may be days old`
+    })
   }
 
   // ── identity & profile churn ───────────────────────────────────────
@@ -330,26 +457,22 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
   // unreachable in practice. That silently deleted the whole negative half of
   // the model and biased the pipeline toward enforcement.
   //
-  // Volume now suffices, but ONLY absent a hard verdict. This veto is the
-  // single place that decision is made: the deterministic rules and the score
-  // both treat `established_user` as a shield, so an account Telegram or an
-  // external database has already condemned must never earn it. That is the
-  // sold/compromised long-time account from the threat model.
+  // Volume now suffices, but ONLY absent a hard verdict. The deterministic
+  // rules and the score both treat `established_user` as a shield, so an
+  // account Telegram, an external database or our own record has already
+  // condemned must never earn it. That is the sold/compromised long-time
+  // account from the threat model.
   //
   // Volume in EITHER scope, since 2026-08-20 — the same OR the exempt has
   // always applied, and for the same stated reason: a member with standing here
   // and a member with a long history across our chats both count. See
   // `hasLocalStanding` for why the local half additionally requires tenure and
   // the global half does not.
-  const hasHardVerdict =
-    user.flags.scam ||
-    user.flags.fake ||
-    user.externalBan?.banned === true ||
-    user.reputationStatus === 'suspicious' ||
-    user.reputationStatus === 'restricted' ||
-    user.restrictionReasons.some((r) => /spam|scam/i.test(r))
-  const hasVolume = user.messagesGlobal >= ESTABLISHED_MIN_MESSAGES || hasLocalStanding(user)
-  if (hasVolume && !hasHardVerdict) {
+  //
+  // Both halves are named functions rather than expressions inlined here,
+  // because the two age signals above ask the same question and used to get a
+  // different answer — see `established`.
+  if (established) {
     signals.push({ name: 'established_user' })
   }
 

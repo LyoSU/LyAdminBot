@@ -14,11 +14,11 @@
  * is counted in meta.portErrors. A needed-but-unavailable LLM can only make
  * the outcome MORE cautious (observe), never clean.
  */
-import type { EvaluationInput, Signal, Verdict, VerdictAction, DecidedBy, UserSnapshot, ChatPolicy } from './types.js'
+import type { EvaluationInput, Signal, Verdict, VerdictAction, DecidedBy } from './types.js'
 import type { BurstEntry, LlmVerdict, PipelinePorts } from './ports.js'
 import { extractMessageSignals } from './signals/message.js'
 import {
-  extractUserSignals, tenureDays,
+  extractUserSignals, tenureDays, hasHardAccountVerdict,
   ESTABLISHED_MIN_MESSAGES, ESTABLISHED_MIN_IN_CHAT, ESTABLISHED_MIN_TENURE_DAYS
 } from './signals/user.js'
 import { extractBioSignals } from './signals/bio.js'
@@ -193,30 +193,6 @@ const isTrusted = (input: EvaluationInput): boolean =>
   input.user.reputationStatus === 'trusted'
 
 /**
- * Hard account verdicts that cancel the exempt: facts that mark the account as
- * already-known-bad or compromised, all readable from the UserSnapshot with no
- * port call. "Established regular" must not shield a CAS-banned account or one
- * with prior confirmed spam — that would be the exact hole the threat model
- * (a sold/compromised long-time account) warns about.
- *
- * `spamDetections` needs TWO hits, not one (2026-07-27). A single past
- * detection may itself have been a false positive, and stripping the exempt
- * on it made every FP permanently compound into the next evaluation. Two
- * independent detections are a pattern; one is an accusation.
- */
-const HARD_VERDICT_MIN_DETECTIONS = 2
-
-const hasHardAccountVerdict = (u: UserSnapshot, policy: ChatPolicy): boolean =>
-  u.flags.scam ||
-  u.flags.fake ||
-  (policy.externalBanEnabled && u.externalBan?.banned === true) ||
-  u.spamDetections >= HARD_VERDICT_MIN_DETECTIONS ||
-  u.reputationStatus === 'restricted' ||
-  u.reputationStatus === 'suspicious' ||
-  u.unofficialClientRisk === true ||
-  u.restrictionReasons.some((r) => /spam|scam/i.test(r))
-
-/**
  * Established-regular fast path. Posting enough — either in THIS chat or across
  * the bot's whole network — earns a clean pass without running any heuristic or
  * knowledge port: a regular's link should never be deleted on a signature/
@@ -244,7 +220,7 @@ const isEstablishedRegular = (input: EvaluationInput): boolean => {
   // Neither clock saying anything is not evidence of tenure.
   const tenure = tenureDays(input.user)
   const tenured = tenure !== null && tenure >= ESTABLISHED_MIN_TENURE_DAYS
-  return volume && tenured && !hasHardAccountVerdict(input.user, input.policy)
+  return volume && tenured && !hasHardAccountVerdict(input.user)
 }
 
 interface VerdictDraft {
@@ -256,9 +232,29 @@ interface VerdictDraft {
 }
 
 export const evaluateMessage = async (
-  input: EvaluationInput,
+  received: EvaluationInput,
   ports: PipelinePorts
 ): Promise<Verdict> => {
+  /**
+   * A chat that switched the ban databases off does not see their answers —
+   * settled here, once, by removing the fact rather than by asking each reader
+   * to remember the setting.
+   *
+   * Three stages read `externalBan`: the `external_ban` signal at weight 2.5,
+   * the `external_ban_new` rule, and the veto on standing. Exactly one of them
+   * used to consult `externalBanEnabled`, so in a chat with the setting off the
+   * listing still added its weight and still denied the sender standing — the
+   * switch stopped new lookups and let every cached answer through. A setting
+   * that is honoured by two readers out of three is not a setting.
+   *
+   * Deleting the field is what makes the guarantee structural: there is no
+   * longer a way for a stage downstream to disagree, because there is nothing
+   * left for it to read.
+   */
+  const input: EvaluationInput = received.policy.externalBanEnabled
+    ? received
+    : { ...received, user: { ...received.user, externalBan: null } }
+
   const meta: Record<string, string | number | boolean> = {}
   let portErrors = 0
 
@@ -299,7 +295,7 @@ export const evaluateMessage = async (
     votingEnabled: input.policy.votingEnabled,
     userIsNewish: isNewish(input),
     userIsTrusted: isTrusted(input),
-    userHasHardVerdict: hasHardAccountVerdict(input.user, input.policy),
+    userHasHardVerdict: hasHardAccountVerdict(input.user),
     ephemeralCaptcha: input.policy.ephemeralCaptcha === true,
     // Grounds for a PERMANENT ban rather than a timed one: the account is
     // known-bad by someone else's verdict, not merely scored badly by us.
@@ -1125,8 +1121,38 @@ export const evaluateMessage = async (
    */
   const unearnedEnforcement = isEnforcementAction(scoreDecision.action) && !earnedIt
 
+  /**
+   * The same defect from the other side: evidence enough to remove a sender,
+   * arithmetic saying do nothing at all.
+   *
+   * `unearnedEnforcement` above stops the pipeline ACTING on a sum no stage
+   * earned. This stops it STAYING SILENT about a message several stages read and
+   * pointed at, because a fact about the account outweighed them. Trust weights
+   * are large by design — `established_user` alone is −1.5 — and they are
+   * subtracted from the same total the grey floor is measured against, so a
+   * member with standing carries a discount that firsthand observation cannot
+   * outvote however much of it there is.
+   *
+   * Measured on the fixture the ceiling tests use, which is drawn from two real
+   * reversals: a phone number (1.2) plus repeats we watched arrive (1.5) is 2.7
+   * units of firsthand evidence — past `SENDER_REMOVAL_MIN_EVIDENCE` — and
+   * scores 0.2689 once standing is applied. Below the floor, so the one stage
+   * that can read the message was never asked. The gap had been masked since
+   * whenever `sleeper_awakened` started firing on established accounts: that
+   * signal's +1.2 lifted exactly this population back over the floor, so
+   * removing it (2026-08-24) is what made the hole visible.
+   *
+   * Escalating is not enforcing. The classifier only produces a reading; every
+   * ceiling below it still applies, `capVouchedSession` and `capImitableAct`
+   * included, and the same standing that got us here still caps what may follow.
+   * The alternative on this branch is not a milder action, it is no look at all.
+   */
+  const silencedByStanding = scorePSpam < LLM_GREY_LOW && earnedIt
+  if (silencedByStanding) meta['escalatedOnEvidence'] = true
+
   const inGreyZone = scorePSpam >= LLM_GREY_LOW && scorePSpam <= LLM_GREY_HIGH
   const needsLlm = inGreyZone ||
+    silencedByStanding ||
     (scorePSpam > LLM_GREY_HIGH && (!decisive || unearnedEnforcement)) ||
     // A low score on an alien script is not a finding, it is an absence of
     // findings: signatures, vectors, custom rules and moderation were all

@@ -121,18 +121,58 @@ describe('extractUserSignals — suspicious', () => {
     expect(names(makeUser({ predictedAgeDays: 1500, localAgeDays: 400 }))).not.toContain('sleeper_awakened')
   })
 
-  it('flags fresh accounts by predicted age', () => {
-    expect(names(makeUser({ predictedAgeDays: 5 }))).toContain('fresh_account')
-    expect(names(makeUser({ predictedAgeDays: null }))).not.toContain('fresh_account')
+  it('a member who talks is not asleep, however new our record of them is', () => {
+    // Both cannot be true, and for a third of this signal's firings both were.
+    // `sleeper_awakened` fired 18863 times in the 14 days to 2026-08-24 and
+    // 6202 of those carried `established_user` in the same verdict — the
+    // ceiling on tenure is 30 days while volume has none, so a regular of three
+    // weeks satisfied each condition separately.
+    //
+    // Those 6202 led to enforcement 21 times (0.34%); the other 12658 led to it
+    // 1910 times (15.09%). The signal was 44x less predictive on the third of
+    // its firings where it contradicted itself.
+    const chatty = makeUser({
+      predictedAgeDays: 1500, localAgeDays: 20, messagesGlobal: 400, messagesInChat: 40
+    })
+    expect(names(chatty)).toContain('established_user')
+    expect(names(chatty)).not.toContain('sleeper_awakened')
   })
 
-  it('holds fresh_account when the age interval cannot confirm freshness', () => {
-    // point estimate says fresh, but the account may plausibly be 45 days old
-    expect(names(makeUser({ predictedAgeDays: 20, predictedAgeBoundsDays: { lo: 5, hi: 45 } })))
-      .not.toContain('fresh_account')
-    // certainly fresh: even the pessimistic bound is under the threshold
-    expect(names(makeUser({ predictedAgeDays: 10, predictedAgeBoundsDays: { lo: 2, hi: 20 } })))
+  /** Nobody the bot has any reason to vouch for — see `established` below. */
+  const stranger = { messagesGlobal: 2, messagesInChat: 1, localAgeDays: 3 }
+
+  it('flags fresh accounts by predicted age', () => {
+    expect(names(makeUser({ ...stranger, predictedAgeDays: 5 }))).toContain('fresh_account')
+    expect(names(makeUser({ ...stranger, predictedAgeDays: null }))).not.toContain('fresh_account')
+  })
+
+  it('reads the YOUNGEST plausible age, not the oldest', () => {
+    // REGRESSION, and the sharpest one in the file: this signal had fired zero
+    // times in the entire history of the production database when that was
+    // checked on 2026-08-24. It used to demand `hi < 30` — "certainly newer
+    // than a month" — and since Telegram began allocating ids randomly inside
+    // blocks in 2024-02, `hi` is the age of the open block. That was 104 days
+    // and rising, so nothing could satisfy it and nothing ever would again.
+    //
+    // The answerable question is the other bound: could this account have been
+    // registered this month? For a block still being handed out the answer is
+    // yes by construction, which is exactly the population meant.
+    expect(names(makeUser({ ...stranger, predictedAgeDays: 20, predictedAgeBoundsDays: { lo: 0, hi: 104 } })))
       .toContain('fresh_account')
+    // A closed block, or the sequential era: the youngest it could be is old.
+    expect(names(makeUser({ ...stranger, predictedAgeDays: 300, predictedAgeBoundsDays: { lo: 183, hi: 400 } })))
+      .not.toContain('fresh_account')
+  })
+
+  it('does not call an account new when the bot knows the person', () => {
+    // The id is an inference; the message counters are an observation of the
+    // same account, and where they contradict it the observation wins. A person
+    // who registered in June and has posted here since July is both a new
+    // account and a known member, and only the second fact is worth acting on.
+    const known = { messagesGlobal: 400, messagesInChat: 40, localAgeDays: 30 }
+    const signals = names(makeUser({ ...known, predictedAgeDays: 20, predictedAgeBoundsDays: { lo: 0, hi: 104 } }))
+    expect(signals).toContain('established_user')
+    expect(signals).not.toContain('fresh_account')
   })
 
   it('holds sleeper_awakened when the account may actually be young', () => {
@@ -291,7 +331,14 @@ describe('extractUserSignals — trust (negative)', () => {
       { externalBan: { banned: true, bannedAt: null, offenses: 1, sources: ['lols'] } },
       { reputationStatus: 'suspicious' },
       { reputationStatus: 'restricted' },
-      { restrictionReasons: ['spam'] }
+      { restrictionReasons: ['spam'] },
+      // Ours, and it joined the list on 2026-08-24 when the two definitions of
+      // "hard verdict" were merged. The pipeline had always denied the exempt
+      // on it while this signal did not, so 1969 verdicts in a fortnight
+      // carried `established_user` next to `prior_spam_detections` — standing
+      // withheld by one stage and granted by the next. Two, never one: a single
+      // detection may have been the mistake.
+      { spamDetections: 2 }
     ]
     for (const verdict of condemned) {
       expect(trust(makeUser({ ...veteran, ...verdict })), JSON.stringify(verdict))
