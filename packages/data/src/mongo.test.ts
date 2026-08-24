@@ -769,3 +769,147 @@ describe('getEditBaseline', () => {
     })
   })
 })
+
+/**
+ * The one method here that destroys data, and the one whose mistakes would not
+ * be visible until somebody lost their standing. Both queries are pinned in
+ * full, and a document is run through each of them, because every clause is
+ * load-bearing and a filter that quietly matches nothing looks exactly like a
+ * filter that has nothing to do.
+ */
+describe('pruneDormantRecords', () => {
+  const DAY = 86_400_000
+
+  /** Records every filter and reports a fixed number of hits. */
+  const pruneStore = (): {
+    store: MongoStore
+    seen: { members?: Record<string, unknown>; users?: Record<string, unknown> }
+    deleted: unknown[]
+  } => {
+    const seen: { members?: Record<string, unknown>; users?: Record<string, unknown> } = {}
+    const deleted: unknown[] = []
+    const collection = (key: 'members' | 'users', ids: string[]) => ({
+      find: (filter: Record<string, unknown>, opts: Record<string, unknown>) => {
+        seen[key] = { filter, opts }
+        return { toArray: async () => ids.map((_id) => ({ _id })) }
+      },
+      deleteMany: async (filter: unknown) => {
+        deleted.push(filter)
+        return { deletedCount: ids.length }
+      }
+    })
+    const store = {
+      groupMembers: collection('members', ['m1', 'm2']),
+      users: collection('users', ['u1'])
+    } as unknown as MongoStore
+    return {
+      store: Object.assign(store, { pruneDormantRecords: MongoStore.prototype.pruneDormantRecords }),
+      seen,
+      deleted
+    }
+  }
+
+  it('reports what it removed and deletes by id, not by the filter again', async () => {
+    const { store, deleted } = pruneStore()
+    await expect(store.pruneDormantRecords()).resolves.toEqual({ members: 2, users: 1 })
+    // Re-running the filter inside deleteMany would race a member who posted
+    // between the two calls into being deleted with their new counter unread.
+    expect(deleted).toEqual([{ _id: { $in: ['m1', 'm2'] } }, { _id: { $in: ['u1'] } }])
+  })
+
+  it('honours the batch ceiling on both collections', async () => {
+    const { store, seen } = pruneStore()
+    await store.pruneDormantRecords(7)
+    expect(seen.members?.['opts']).toMatchObject({ limit: 7 })
+    expect(seen.users?.['opts']).toMatchObject({ limit: 7 })
+  })
+
+  /** Applies a captured Mongo filter to a plain object, for the clauses used here. */
+  const matches = (filter: Record<string, unknown>, doc: Record<string, unknown>): boolean => {
+    const read = (path: string): unknown =>
+      path.split('.').reduce<unknown>((v, k) => (v as Record<string, unknown> | undefined)?.[k], doc)
+    const test = (cond: unknown, value: unknown): boolean => {
+      if (cond === null || typeof cond !== 'object') return value === cond
+      return Object.entries(cond as Record<string, unknown>).every(([op, arg]) => {
+        switch (op) {
+          case '$lte': return typeof value === 'number' && value <= (arg as number)
+          case '$lt': return value instanceof Date && value < (arg as Date)
+          case '$ne': return value !== arg
+          case '$gt': return typeof value === 'number' && value > (arg as number)
+          // Mongo matches a missing field against a null in the list.
+          case '$in': return Array.isArray(arg) &&
+            (arg.includes(value) || (value === undefined && arg.includes(null)))
+          case '$exists': return (value !== undefined) === arg
+          case '$not': return !test(arg, value)
+          default: throw new Error(`unsupported operator ${op}`)
+        }
+      })
+    }
+    return Object.entries(filter).every(([key, cond]) =>
+      key === '$or'
+        ? (cond as Record<string, unknown>[]).some((c) => matches(c, doc))
+        : test(cond, read(key)))
+  }
+
+  const memberFilter = async (): Promise<Record<string, unknown>> => {
+    const { store, seen } = pruneStore()
+    await store.pruneDormantRecords()
+    return seen.members?.['filter'] as Record<string, unknown>
+  }
+  const userFilter = async (): Promise<Record<string, unknown>> => {
+    const { store, seen } = pruneStore()
+    await store.pruneDormantRecords()
+    return seen.users?.['filter'] as Record<string, unknown>
+  }
+
+  const ancient = new Date(Date.now() - 400 * DAY)
+  const recent = new Date(Date.now() - 2 * DAY)
+
+  it('takes a member who left one message and never came back', async () => {
+    expect(matches(await memberFilter(), {
+      stats: { messagesCount: 1 }, updatedAt: ancient
+    })).toBe(true)
+  })
+
+  it('spares a member with standing, a record, or a recent visit', async () => {
+    const filter = await memberFilter()
+    for (const doc of [
+      { stats: { messagesCount: 40 }, updatedAt: ancient }, // a regular
+      { stats: { messagesCount: 1 }, updatedAt: recent }, // still around
+      { stats: { messagesCount: 1, spamMessages: 1 }, updatedAt: ancient }, // caught once
+      { stats: { messagesCount: 1 }, banan: { num: 2 }, updatedAt: ancient }, // warned
+      { stats: { messagesCount: 1 }, score: -5, updatedAt: ancient } // scored
+    ]) expect(matches(filter, doc), JSON.stringify(doc)).toBe(false)
+  })
+
+  it('takes a user seen once, by either clock', async () => {
+    const filter = await userFilter()
+    // v1 wrote lastActive...
+    expect(matches(filter, { globalStats: { totalMessages: 1, lastActive: ancient } })).toBe(true)
+    // ...and v2 documents have only firstSeen.
+    expect(matches(filter, { globalStats: { totalMessages: 1, firstSeen: ancient } })).toBe(true)
+  })
+
+  it('spares any user somebody has passed judgement on', async () => {
+    const filter = await userFilter()
+    const seenOnce = { totalMessages: 1, lastActive: ancient }
+    for (const doc of [
+      { globalStats: { ...seenOnce, totalMessages: 5 } },
+      { globalStats: { totalMessages: 1, lastActive: recent } },
+      { globalStats: { totalMessages: 1, firstSeen: recent } },
+      { globalStats: { ...seenOnce, spamDetections: 1 } },
+      { globalStats: seenOnce, reputation: { status: 'suspicious' } },
+      { globalStats: seenOnce, reputation: { status: 'trusted' } },
+      { globalStats: seenOnce, externalBan: { cas: { banned: true } } },
+      { globalStats: seenOnce, externalBan: { lols: { banned: true } } },
+      { globalStats: seenOnce, isGlobalBanned: true }
+    ]) expect(matches(filter, doc), JSON.stringify(doc)).toBe(false)
+  })
+
+  it('never takes a record with no date at all', async () => {
+    // The failure that would have made this destructive: a document with
+    // neither clock must not fall through into "older than the cutoff".
+    expect(matches(await userFilter(), { globalStats: { totalMessages: 1 } })).toBe(false)
+    expect(matches(await memberFilter(), { stats: { messagesCount: 1 } })).toBe(false)
+  })
+})

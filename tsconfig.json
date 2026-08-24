@@ -7,6 +7,7 @@
     { "path": "packages/ui" },
     { "path": "apps/bot" },
     { "path": "tools/replay" },
-    { "path": "tools/cas-harvest" }
+    { "path": "tools/cas-harvest" },
+    { "path": "tools/prune-dormant" }
   ]
 }

@@ -6,7 +6,7 @@
  *   llm_cache          — LLM verdict cache, TTL 7d
  */
 import { MongoClient, ObjectId, type Collection, type Db, type Document } from 'mongodb'
-import type { BurstEntry, EditBaseline, Verdict, Signal } from '@lyadmin/core'
+import type { BurstEntry, EditBaseline, ExecutionRecord, Verdict, Signal } from '@lyadmin/core'
 import { truncate, VOTE_WINDOW_SECONDS } from '@lyadmin/core'
 import { normalizeExtra, type NormalizedExtra } from './extras.js'
 import { VELOCITY_WINDOW_MS, SESSION_WINDOW_MS, BURST_WINDOW_MS } from './persistent-ports.js'
@@ -19,6 +19,61 @@ import {
 // write rate 90d retention refills the cluster past quota and blocks writes.
 const DECISIONS_TTL_DAYS = 14
 const LLM_CACHE_TTL_DAYS = 7
+
+/**
+ * How long a trace-free record is kept before `pruneDormantRecords` drops it.
+ *
+ * Six months, deliberately far beyond what any signal reads. Nothing consults a
+ * counter this small, so the number is not protecting a threshold — it is
+ * protecting against being wrong about that, which the 2026-07-06 cleanup was.
+ */
+const DORMANT_DAYS = 180
+/** Per-call ceiling: a sweep on a shared-tier cluster must never be a long one. */
+const PRUNE_BATCH = 5000
+
+/**
+ * Who `pruneDormantRecords` may remove, as two filters.
+ *
+ * Exported so the catch-up tool can COUNT with them before it deletes with
+ * them. A dry run that restates the query in its own words is worse than none:
+ * it would report on a set the deletion does not use, and the report would be
+ * believed. See `pruneDormantRecords` for why each clause is here.
+ */
+export const dormantFilters = (now = Date.now()): { members: Document; users: Document } => {
+  const cutoff = new Date(now - DORMANT_DAYS * 86400 * 1000)
+  return {
+    // `$not: { $gt: 0 }` rather than `$lte: 0`, throughout: the field is absent
+    // on most of these documents, and `$lte` does not match a missing field.
+    // Written the other way this would have quietly pruned nothing at all.
+    members: {
+      'stats.messagesCount': { $lte: 1 },
+      'stats.spamMessages': { $not: { $gt: 0 } },
+      'banan.num': { $not: { $gt: 0 } },
+      // `$in: [0, null]`, not `$not: { $ne: 0 }`. The second reads as "score is
+      // zero" but Mongo compares a MISSING field as not-equal-to-zero, so it
+      // spared every document that never had the field — which is most of them.
+      // `$in` with a null in the list is the form that matches absent as well.
+      score: { $in: [0, null] },
+      updatedAt: { $lt: cutoff }
+    },
+    users: {
+      'globalStats.totalMessages': { $lte: 1 },
+      'globalStats.spamDetections': { $not: { $gt: 0 } },
+      // Anybody's verdict on the account is a reason to remember it, including
+      // the cached "not listed" answers — those cost two HTTP calls to rebuild.
+      'reputation.status': { $not: { $in: ['suspicious', 'restricted', 'trusted'] } },
+      'externalBan.cas.banned': { $ne: true },
+      'externalBan.lols.banned': { $ne: true },
+      isGlobalBanned: { $ne: true },
+      // v1 wrote `lastActive`; documents v2 created carry only `firstSeen`, and
+      // for an account with one message to its name the two mean the same thing.
+      $or: [
+        { 'globalStats.lastActive': { $lt: cutoff } },
+        { 'globalStats.lastActive': { $exists: false }, 'globalStats.firstSeen': { $lt: cutoff } }
+      ]
+    }
+  }
+}
 
 /**
  * One chat's standing refusal, as stored. Structurally the bot's own
@@ -740,6 +795,69 @@ export class MongoStore {
     ])
   }
 
+  /**
+   * Drop records of people who left no trace and have not been seen since.
+   *
+   * The two v1 collections grow by one document per account per chat, for ever,
+   * and nothing has ever removed one. On 2026-08-24 that was 483k members and
+   * 126k users against a 512 MB free-tier cluster sitting at 457 MB — and Atlas
+   * measures the quota as `dataSize + indexSize`, both of which this reduces
+   * (the data at once; the indexes when they are next rebuilt). It has run out
+   * of room once already, on 2026-07-06, and a full cluster does not degrade
+   * gracefully: it stops accepting writes, which stops the bot recording
+   * anything it decides.
+   *
+   * WHAT IS SAFE TO DROP is the whole design, because the last cleanup is also
+   * the thing this pipeline's oldest scar is named after. Standing lives in
+   * these documents, and deleting a regular's row makes them a stranger to
+   * every newness signal at once. So the bar is: at most one message, nothing
+   * punitive recorded, and untouched for {@link DORMANT_DAYS}. One message is
+   * below every threshold that reads these counters — `new_in_chat` fires at 3
+   * or fewer, standing needs 10 — so removing the row changes no signal for
+   * anybody, which is the property that makes this reversible in effect if not
+   * in fact.
+   *
+   * Tenure survives it too. `mergeTenureDays` takes the LARGER of our first-seen
+   * date and Telegram's own join date for the chat, and the second is fetched
+   * per message and owes nothing to this database.
+   *
+   * Bounded per call, and returning what it did, so the caller can run it on a
+   * timer without a long-running delete on a shared-tier cluster.
+   */
+  /**
+   * What the cluster is holding, in the two numbers a free tier is measured by.
+   *
+   * Atlas counts an M0's 512 MB as `dataSize + indexSize`, which is why the two
+   * are returned apart: deleting documents moves the first immediately and the
+   * second not at all until an index is rebuilt. Knowing which half is full is
+   * the difference between pruning and reindexing.
+   */
+  async storageStats(): Promise<{ dataSize: number; indexSize: number }> {
+    if (!this.db) throw new Error('MongoStore is not connected')
+    const stats = await this.db.command({ dbStats: 1 })
+    return { dataSize: Number(stats['dataSize'] ?? 0), indexSize: Number(stats['indexSize'] ?? 0) }
+  }
+
+  async pruneDormantRecords(limit = PRUNE_BATCH): Promise<{ members: number; users: number }> {
+    const filters = dormantFilters()
+    const ids = async (collection: Collection<Document>, filter: Document): Promise<ObjectId[]> =>
+      (await collection.find(filter, { projection: { _id: 1 }, limit }).toArray()).map((d) => d._id)
+
+    // Selected first, then deleted BY ID. Re-running the filter inside
+    // deleteMany would race somebody who posted in between into being removed
+    // with their new counter unread.
+    const memberIds = await ids(this.groupMembers, filters.members)
+    const userIds = await ids(this.users, filters.users)
+
+    const members = memberIds.length > 0
+      ? (await this.groupMembers.deleteMany({ _id: { $in: memberIds } })).deletedCount
+      : 0
+    const users = userIds.length > 0
+      ? (await this.users.deleteMany({ _id: { $in: userIds } })).deletedCount
+      : 0
+    return { members, users }
+  }
+
   async recordDecision(params: {
     chatId: number
     userId: number
@@ -751,6 +869,12 @@ export class MongoStore {
      * measured even across a restart — see `getEditBaseline`.
      */
     editBaseline?: EditBaseline
+    /**
+     * What the executor managed to do about it. Optional so a replay, which
+     * executes nothing, records a verdict without claiming an outcome — an
+     * absent field and a failed action must stay distinguishable.
+     */
+    execution?: ExecutionRecord
     latencyMs: number
   }): Promise<void> {
     await this.decisions.insertOne({
@@ -772,6 +896,7 @@ export class MongoStore {
       banDurationSeconds: params.verdict.banDurationSeconds,
       meta: params.verdict.meta,
       ...(params.editBaseline === undefined ? {} : { editBaseline: params.editBaseline }),
+      ...(params.execution === undefined ? {} : { execution: params.execution }),
       latencyMs: params.latencyMs,
       createdAt: new Date()
     })
