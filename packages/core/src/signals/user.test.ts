@@ -164,6 +164,30 @@ describe('extractUserSignals — suspicious', () => {
       .not.toContain('fresh_account')
   })
 
+  it('does not call an account new when we have watched it for longer than that', () => {
+    // The id says the account could have been registered this week; our own
+    // first-seen row says we were watching it two months ago. An inference does
+    // not outrank an observation of the same account — and this is also what
+    // bounds the signal if the block table goes stale, since a block left marked
+    // open holds `lo` at zero for ever while tenure keeps moving.
+    expect(names(makeUser({
+      ...stranger, localAgeDays: 60, predictedAgeDays: 20, predictedAgeBoundsDays: { lo: 0, hi: 104 }
+    }))).not.toContain('fresh_account')
+  })
+
+  it('volume without time does not buy silence on either age signal', () => {
+    // `established_user` is earned by fifty messages anywhere with no clock on
+    // them, so a farm can have it by the afternoon. The age signals therefore
+    // ask for the exempt's bar instead — a week — because an attacker can buy
+    // volume and cannot buy tenure.
+    const farmed = makeUser({
+      messagesGlobal: 400, messagesInChat: 1, localAgeDays: 1, joinedAgoSeconds: 3600,
+      predictedAgeDays: 1500, predictedAgeBoundsDays: { lo: 800, hi: 2200 }
+    })
+    expect(names(farmed)).toContain('established_user')
+    expect(names(farmed)).toContain('sleeper_awakened')
+  })
+
   it('does not call an account new when the bot knows the person', () => {
     // The id is an inference; the message counters are an observation of the
     // same account, and where they contradict it the observation wins. A person

@@ -2615,7 +2615,13 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
   if (verdict.action !== 'none' && verdict.action !== 'observe') {
     log.info('moderation', {
       chatId: chat.id, userId: sender.id, messageId: message.id, ...logContext,
-      action: verdict.action, applied: result.applied, skipped: result.skippedReason ?? undefined,
+      action: verdict.action, applied: result.applied,
+      // Beside `applied`, never folded into it: on a removal `applied` is about
+      // the SENDER, and `applied=false deleted=true` — the shape of a chat where
+      // the bot may delete but not ban — used to read from a log line as though
+      // nothing had happened at all.
+      deleted: result.deleted ?? undefined,
+      skipped: result.skippedReason ?? undefined,
       pSpam: Math.round(verdict.pSpam * 100) / 100, decidedBy: verdict.decidedBy,
       ruleId: verdict.ruleId ?? undefined, reason: verdict.reasonCode,
       // Permanent or timed, and for how long. Only meaningful for a ban, and
@@ -2690,7 +2696,13 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     // for nothing.
     rights.noteOutcome(chat.id, result.errors)
     // Spam caught but we couldn't act → tell admins to grant rights (once/hr).
-    if (!result.applied && shouldWarnMissingRights(chat.id, result.errors)) {
+    //
+    // Either half being refused counts. `!applied` alone missed the mirror case:
+    // a ban that went through while the DELETE was forbidden left a rights error
+    // recorded, `applied` true, and nobody told — so the one chat that needed
+    // asking was the one that never got asked.
+    const partlyRefused = !result.applied || result.deleted === false
+    if (partlyRefused && shouldWarnMissingRights(chat.id, result.errors)) {
       const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
       const sent = await gateway.tg.sendText(chat.id, viewHtml(locale.notification.missingRights)).catch(() => null)
       if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'missing_rights')
@@ -2846,7 +2858,24 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     }
   }
 
-  if (result.applied && enforced) {
+  /**
+   * Something visibly happened to this message or its sender.
+   *
+   * `result.applied` alone was the test, and on a removal it reports only what
+   * became of the SENDER. So a ban Telegram refused in a chat where the bot may
+   * still delete produced `applied=false deleted=true`: the message vanished in
+   * front of everybody, and this whole block was skipped — no notice, no ballot,
+   * and none of the caches that make the override button work. A false positive
+   * of exactly that shape was therefore invisible AND uncorrectable, in the
+   * chats least able to correct it, since a missing ban right is usually a sign
+   * the bot was added with the minimum.
+   *
+   * The correction channel is not a nicety here. Nearly every false positive
+   * this system has learned from was caught by somebody pressing that button or
+   * voting on that card.
+   */
+  const actedVisibly = result.applied || result.deleted === true
+  if (actedVisibly && enforced) {
     void sessionPort.reset(chat.id, sender.id).catch(() => { /* best-effort */ })
     rememberVerdict(chat.id, message.id, verdict)
     rememberText(chat.id, message.id, normalized.text ?? '')
@@ -2854,9 +2883,9 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       promoInBio: verdict.signals.some((s) => s.name === 'promo_in_bio'),
       personalChannel: input.enrichment.personalChannelId !== null
     }))
-    // Kept with the applied branch: this cache exists so a later override can
-    // undo the report above, and an override is only offered on a message we
-    // actually acted on.
+    // Kept in this branch: the cache exists so a later override can undo the
+    // report above, and an override is only offered on a message something
+    // actually happened to.
     if (normalized.forward) rememberForward(chat.id, message.id, normalized.forward)
     const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
 

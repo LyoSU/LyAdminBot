@@ -85,9 +85,15 @@ export const ESTABLISHED_MIN_TENURE_DAYS = 7
  *    stays harmless, so a single false positive still cannot compound.
  *  - `unofficialClientRisk` does NOT. It reports which software the account
  *    connects with, not a judgement anybody passed on the person, and a
- *    third-party client is not an offence. It already weighs 3.2 as evidence,
- *    which is where a heuristic belongs. The signal file has said so in a test
+ *    third-party client is not an offence. It belongs in the score as evidence,
+ *    at 3.2, which is where a heuristic belongs. A test in this file has said so
  *    since it was written; the pipeline's list simply never asked it.
+ *
+ *    That leaves it OUT of this predicate and separately IN the exempt's own
+ *    guard — see `isEstablishedRegular`. Not a relapse into two lists: the
+ *    exempt returns before any signal is raised, so leaving it out there would
+ *    not have made the heuristic weigh 3.2, it would have made it weigh nothing
+ *    at all for precisely the accounts worth checking.
  *
  * No `policy` parameter, unlike the copy this replaces. Whether a chat consults
  * the ban databases is settled once, at the pipeline's door, so that every
@@ -298,6 +304,26 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
    */
   const established = hasVolumeForStanding(user) && !hasHardAccountVerdict(user)
 
+  /**
+   * Standing that took TIME, which is the only kind that may silence an age
+   * signal.
+   *
+   * `established` alone is not enough here, and the difference is the whole
+   * counter-farming problem: its global half asks for fifty messages anywhere
+   * and imposes no clock, so an account could talk its way out of both age
+   * signals in an afternoon. `hasHardAccountVerdict` does not catch that — it
+   * waits for two confirmed detections, which is exactly what a fresh farm does
+   * not have yet.
+   *
+   * Seven days is `ESTABLISHED_MIN_TENURE_DAYS`, the bar the established-regular
+   * exempt has always used for the same reason: an attacker can buy volume and
+   * cannot buy a week. It costs nothing against the population this suppression
+   * was built for — those 6202 contradictory verdicts all sat between seven and
+   * thirty days of tenure, which is what made the two signals collide.
+   */
+  const vouchedOverTime = established &&
+    tenure !== null && tenure >= ESTABLISHED_MIN_TENURE_DAYS
+
   const isLocallyNew =
     (tenure !== null && tenure <= SLEEPER_LOCAL_MAX_DAYS) ||
     user.messagesGlobal <= NEW_GLOBALLY_MAX
@@ -316,7 +342,7 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
   // `lo`, the youngest the account could be: claiming somebody woke from a
   // year's sleep requires that a year is the LEAST it could have been asleep.
   if (
-    !established &&
+    !vouchedOverTime &&
     predictedAgeLo !== null &&
     user.predictedAgeDays !== null &&
     tenure !== null &&
@@ -371,7 +397,17 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
    * and inside the `newness` cap, so on the ordinary newcomer — who already
    * carries `new_globally` and `new_in_chat` — it adds nothing at all.
    */
-  if (!established && predictedAgeLo !== null && predictedAgeLo < FRESH_ACCOUNT_MAX_DAYS) {
+  if (
+    !vouchedOverTime &&
+    predictedAgeLo !== null &&
+    predictedAgeLo < FRESH_ACCOUNT_MAX_DAYS &&
+    // Never against our own eyes. `lo` is what the id CANNOT rule out; tenure is
+    // something we watched happen, and an account first seen two months ago is
+    // not one that might have registered last week whatever its id permits.
+    // This also bounds the signal if the block table goes stale — a block left
+    // marked open keeps `lo` at zero for ever, and tenure is what still moves.
+    (tenure === null || tenure < FRESH_ACCOUNT_MAX_DAYS)
+  ) {
     signals.push({
       name: 'fresh_account',
       evidence: `id issued in the current allocation block, may be days old`

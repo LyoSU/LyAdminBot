@@ -809,12 +809,16 @@ describe('pruneDormantRecords', () => {
     }
   }
 
-  it('reports what it removed and deletes by id, not by the filter again', async () => {
-    const { store, deleted } = pruneStore()
+  it('deletes on the predicate AND the ids, not on the ids alone', async () => {
+    const { store, deleted, seen } = pruneStore()
     await expect(store.pruneDormantRecords()).resolves.toEqual({ members: 2, users: 1 })
-    // Re-running the filter inside deleteMany would race a member who posted
-    // between the two calls into being deleted with their new counter unread.
-    expect(deleted).toEqual([{ _id: { $in: ['m1', 'm2'] } }, { _id: { $in: ['u1'] } }])
+    // The ids bound the batch; the predicate still decides. On `_id` alone, a
+    // member who posts between the select and the delete has their row updated
+    // and then removed anyway — the one case worth protecting against, because
+    // it is the only one where the record had stopped being dormant. Re-asserting
+    // the filter makes the delete a no-op for exactly those rows.
+    expect(deleted[0]).toEqual({ ...(seen.members?.['filter'] as object), _id: { $in: ['m1', 'm2'] } })
+    expect(deleted[1]).toEqual({ ...(seen.users?.['filter'] as object), _id: { $in: ['u1'] } })
   })
 
   it('honours the batch ceiling on both collections', async () => {
@@ -906,10 +910,49 @@ describe('pruneDormantRecords', () => {
     ]) expect(matches(filter, doc), JSON.stringify(doc)).toBe(false)
   })
 
+  it('spares a user we have seen in more than one chat', async () => {
+    // `many_shared_chats` fires on this counter for accounts with almost no
+    // messages — the very population every other clause here selects. Without
+    // the guard the sweep would delete the only records that signal can read.
+    const filter = await userFilter()
+    const base = { totalMessages: 1, lastActive: ancient }
+    expect(matches(filter, { globalStats: { ...base, groupsActive: 1 } })).toBe(true)
+    expect(matches(filter, { globalStats: { ...base, groupsActive: 5 } })).toBe(false)
+  })
+
   it('never takes a record with no date at all', async () => {
     // The failure that would have made this destructive: a document with
     // neither clock must not fall through into "older than the cutoff".
     expect(matches(await userFilter(), { globalStats: { totalMessages: 1 } })).toBe(false)
     expect(matches(await memberFilter(), { stats: { messagesCount: 1 } })).toBe(false)
+  })
+})
+
+describe('touchMember', () => {
+  it('stamps updatedAt, or nothing it writes is ever prunable', async () => {
+    // v1 (mongoose) maintained this field and v2 did not, so it meant "last
+    // seen" on old rows and nothing at all on new ones. `dormantFilters` asks
+    // `updatedAt < cutoff` and Mongo does not match a missing field against
+    // `$lt`, which made every row this method created permanently unsweepable:
+    // the backlog would clear once and the collection would then grow for ever.
+    let update: Record<string, Record<string, unknown>> = {}
+    const store = Object.assign(
+      {
+        groups: { findOneAndUpdate: async () => ({ _id: 'g1' }) },
+        groupMembers: {
+          findOneAndUpdate: async (_f: unknown, u: Record<string, Record<string, unknown>>) => {
+            update = u
+            return { stats: { messagesCount: 3 } }
+          }
+        }
+      } as unknown as MongoStore,
+      { touchMember: MongoStore.prototype.touchMember }
+    )
+    await store.touchMember(-100, 42, 10)
+    expect(update['$set']?.['updatedAt']).toBeInstanceOf(Date)
+
+    // And the field the sweep reads must be the one a message moves — not the
+    // insert-only stamps beside it, which never change again.
+    expect(update['$setOnInsert']).not.toHaveProperty('updatedAt')
   })
 })

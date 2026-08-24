@@ -65,6 +65,14 @@ export const dormantFilters = (now = Date.now()): { members: Document; users: Do
       'externalBan.cas.banned': { $ne: true },
       'externalBan.lols.banned': { $ne: true },
       isGlobalBanned: { $ne: true },
+      // Being in more than one of our chats is itself a history. `many_shared_chats`
+      // reads exactly this counter, and reads it for accounts with almost no
+      // messages — which is the population every other clause here selects — so
+      // without this the sweep would delete the only records that signal can fire
+      // on. The bar is one chat rather than the signal's five: the point is to
+      // keep anything a reader might want, not to match a threshold that could
+      // move.
+      'globalStats.groupsActive': { $not: { $gt: 1 } },
       // v1 wrote `lastActive`; documents v2 created carry only `firstSeen`, and
       // for an account with one message to its name the two mean the same thing.
       $or: [
@@ -695,7 +703,15 @@ export class MongoStore {
           'stats.joinedAt': now,
           'stats.firstMessageAt': now
         },
-        $inc: { 'stats.messagesCount': 1, 'stats.textTotal': Math.max(0, textLength) }
+        $inc: { 'stats.messagesCount': 1, 'stats.textTotal': Math.max(0, textLength) },
+        // v1 (mongoose) maintained this and v2 did not, which made the field
+        // mean "last seen" for old rows and nothing at all for new ones. The
+        // dormancy sweep asks `updatedAt < cutoff` and Mongo does not match a
+        // missing field against `$lt`, so every row this method created was
+        // permanently unprunable: the backlog would clear once and then the
+        // collection would grow for ever, unswept, which is how it reached
+        // 483k rows against a 512 MB cluster in the first place.
+        $set: { updatedAt: now }
       },
       {
         upsert: true,
@@ -843,17 +859,20 @@ export class MongoStore {
     const ids = async (collection: Collection<Document>, filter: Document): Promise<ObjectId[]> =>
       (await collection.find(filter, { projection: { _id: 1 }, limit }).toArray()).map((d) => d._id)
 
-    // Selected first, then deleted BY ID. Re-running the filter inside
-    // deleteMany would race somebody who posted in between into being removed
-    // with their new counter unread.
+    // Ids bound the batch; the predicate decides. Deleting on `_id` ALONE was
+    // the inverse of the protection its comment claimed: a person who posts
+    // between the select and the delete has their row updated and then removed
+    // anyway, counter unread — which is the one case worth protecting against,
+    // since it is the only one where the record had stopped being dormant.
+    // Re-asserting the filter makes the delete a no-op for exactly those rows.
     const memberIds = await ids(this.groupMembers, filters.members)
     const userIds = await ids(this.users, filters.users)
 
     const members = memberIds.length > 0
-      ? (await this.groupMembers.deleteMany({ _id: { $in: memberIds } })).deletedCount
+      ? (await this.groupMembers.deleteMany({ ...filters.members, _id: { $in: memberIds } })).deletedCount
       : 0
     const users = userIds.length > 0
-      ? (await this.users.deleteMany({ _id: { $in: userIds } })).deletedCount
+      ? (await this.users.deleteMany({ ...filters.users, _id: { $in: userIds } })).deletedCount
       : 0
     return { members, users }
   }

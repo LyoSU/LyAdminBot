@@ -2082,6 +2082,22 @@ describe('evaluateMessage — established-regular exempt', () => {
     }
   })
 
+  it('an unofficial client cancels the exempt though it does not deny standing', async () => {
+    // The two bars differ on purpose. `hasHardAccountVerdict` leaves this out —
+    // it describes the sender's software, not a verdict on the sender, and a
+    // heuristic belongs in the score at its own weight. But this path returns
+    // before any signal is raised, so out here "leave it to the score" means
+    // leaving it nowhere: the account Telegram's own infrastructure warns about
+    // would be waved through unread, and a settled account that has changed
+    // hands is the case the flag is most useful for. A discount can be argued
+    // with; a bypass cannot.
+    const v = await evaluateMessage(
+      makeInput({ msg: wouldMatch, user: { messagesInChat: 50, messagesGlobal: 900, unofficialClientRisk: true } }),
+      confirmedSignature)
+    expect(v.reasonCode).not.toBe('established_regular')
+    expect(v.signals.some((s) => s.name === 'unofficial_client_risk')).toBe(true)
+  })
+
   it('ONE past detection does not cancel the exempt — false positives must not compound', async () => {
     // A single prior detection may itself have been a mistake. Letting it strip
     // a 900-message regular of the exempt made every FP feed the next one.

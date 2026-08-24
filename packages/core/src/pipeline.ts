@@ -220,7 +220,25 @@ const isEstablishedRegular = (input: EvaluationInput): boolean => {
   // Neither clock saying anything is not evidence of tenure.
   const tenure = tenureDays(input.user)
   const tenured = tenure !== null && tenure >= ESTABLISHED_MIN_TENURE_DAYS
-  return volume && tenured && !hasHardAccountVerdict(input.user)
+  return volume && tenured &&
+    !hasHardAccountVerdict(input.user) &&
+    /**
+     * One clause this bypass needs that the standing veto does not.
+     *
+     * `unofficialClientRisk` is deliberately absent from `hasHardAccountVerdict`
+     * — it describes the sender's software, not a verdict on the sender — and
+     * the right place for a heuristic is the score, where it weighs 3.2 and can
+     * be outweighed. But this path returns BEFORE any signal is extracted, so
+     * out here "leave it to the score" resolves to leaving it nowhere: a
+     * long-standing account flagged by Telegram's own infrastructure would take
+     * the fast path and be waved through unread. That inverts the flag's purpose,
+     * because the account it warns about most usefully is exactly the settled one
+     * that has changed hands.
+     *
+     * A discount can be argued with; a bypass cannot. So the bypass asks for one
+     * thing more, and says so here rather than growing a second private list.
+     */
+    input.user.unofficialClientRisk !== true
 }
 
 interface VerdictDraft {
