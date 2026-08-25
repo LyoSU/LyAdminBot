@@ -19,8 +19,9 @@
  * reads pictures from.) Anything else returns null, which every caller already
  * treats as "no answer".
  */
+import { createHash } from 'node:crypto'
 import jpeg from 'jpeg-js'
-import type { RgbaImage } from '@lyadmin/core'
+import { dhash, type RgbaImage } from '@lyadmin/core'
 
 /**
  * Widest image we will decode, in pixels of output.
@@ -69,3 +70,58 @@ export const decodeImageBase64 = (base64: string): RgbaImage | null => {
     return null
   }
 }
+
+/**
+ * Perceptual hash of an avatar, memoised on the bytes it came from.
+ *
+ * Decoding a JPEG in pure JS is the most expensive thing on the enrichment
+ * path, and the avatar cache in the app layer already hands us the same bytes
+ * for the same sender for hours — so memoising is worth real latency.
+ *
+ * ── The key, which is the whole point of this cache existing here ──
+ *
+ * A cost cache is allowed to forget. It is not allowed to answer WRONGLY.
+ *
+ * The first version of this cache, in the composition root, keyed entries by
+ * `length + first 64 base64 characters`. That is the 2026-02 hash-collapse
+ * defect in its sharpest form: the first 64 base64 characters are the first 48
+ * bytes of a JPEG — SOI plus the JFIF header — and Telegram re-encodes every
+ * profile photo through one encoder, so those bytes are IDENTICAL across
+ * avatars. The key collapsed to the file length alone, and two unrelated people
+ * whose avatars happened to encode to the same number of bytes were handed each
+ * other's hash.
+ *
+ * Downstream that is not a missed match but a MANUFACTURED one: the second
+ * account is written into the shared-picture store under the first account's
+ * hash, and both are then told they wear one photograph — which is
+ * `avatar_shared_with_accounts`: evidence, weight 1.8, on two strangers.
+ *
+ * A digest of the whole content is the only key that can promise otherwise.
+ * SHA-1 over a hundred kilobytes costs a fraction of a millisecond against the
+ * tens of milliseconds the decode costs, so the optimisation survives intact.
+ */
+const DHASH_CACHE_MAX = 2000
+const dhashCache = new Map<string, string | null>()
+
+export const avatarDhashOf = (base64: string): string | null => {
+  const key = createHash('sha1').update(base64).digest('hex')
+  const hit = dhashCache.get(key)
+  if (hit !== undefined) return hit
+  const image = decodeImageBase64(base64)
+  const hash = image === null ? null : dhash(image)
+  if (dhashCache.size >= DHASH_CACHE_MAX) {
+    // Coarse eviction: this is a cost cache, not a correctness one.
+    for (const k of dhashCache.keys()) {
+      dhashCache.delete(k)
+      if (dhashCache.size < DHASH_CACHE_MAX / 2) break
+    }
+  }
+  dhashCache.set(key, hash)
+  return hash
+}
+
+/** Entries currently memoised. Tests only. */
+export const avatarDhashCacheSize = (): number => dhashCache.size
+
+/** Drop everything memoised. Tests only. */
+export const resetAvatarDhashCache = (): void => { dhashCache.clear() }
