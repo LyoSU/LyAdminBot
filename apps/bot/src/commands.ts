@@ -34,13 +34,23 @@ const SLASH_NAME: Record<CommandKey, string> = {
 const SCOPES: { scope: tl.TypeBotCommandScope; keys: CommandKey[] }[] = [
   { scope: { _: 'botCommandScopeDefault' }, keys: ['start', 'help'] },
   { scope: { _: 'botCommandScopeUsers' }, keys: ['start', 'help', 'lang', 'mystats'] },
-  // Regular group members: no menu at all. An empty list overrides the wider
-  // `Default` scope that Telegram would otherwise resolve them to.
-  { scope: { _: 'botCommandScopeChats' }, keys: [] },
-  // Admins: just the core moderation actions plus settings.
+  /**
+   * Regular group members used to get NO menu, deliberately — an empty list
+   * overrides the wider `Default` scope Telegram would otherwise resolve them
+   * to. The intent was right and the size was wrong: `/report` is the channel
+   * through which the chat tells us about spam we missed, and it was reachable
+   * only by knowing it existed. Nearly every false negative correction this bot
+   * receives comes through it.
+   *
+   * Kept short on purpose. These are the four a member can actually use; the
+   * leaderboards stay out because they are for fun and the menu is not.
+   */
+  { scope: { _: 'botCommandScopeChats' }, keys: ['report', 'help', 'mystats', 'top'] },
+  // Admins: the moderation actions they act through, plus settings. `del`,
+  // `untrust`, `check` and `welcome` were implemented and unlisted.
   {
     scope: { _: 'botCommandScopeChatAdmins' },
-    keys: ['banan', 'kick', 'settings']
+    keys: ['banan', 'kick', 'del', 'check', 'untrust', 'welcome', 'extras', 'settings']
   }
 ]
 

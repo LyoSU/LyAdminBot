@@ -55,7 +55,9 @@ export const by: Locale = {
 
   lang: {
     pickerTitle: 'Выберы мову:',
-    saved: 'Гатова, цяпер па-беларуску'
+    saved: 'Гатова, цяпер па-беларуску',
+    openInPm: 'Мову для сябе выбереш у асабістых.',
+    openButton: '🌐 Выбраць мову'
   },
 
   commands: {
@@ -307,7 +309,7 @@ export const by: Locale = {
 
   stats: {
     title: '📊 <b>Твая статыстыка</b>',
-    inChat: (count) => `Паведамленняў у гэтым чаце: ${count}`,
+    inChat: (count, chatTitle) => chatTitle ? `Паведамленняў у чаце ${chatTitle}: ${count}` : `Паведамленняў у гэтым чаце: ${count}`,
     global: (count) => `Паведамленняў усюды: ${count}`,
     reputation: (score, status) => `Рэпутацыя: ${score} (${status})`,
     repStatus: { trusted: 'даверны', neutral: 'нейтральны', suspicious: 'падазроны', restricted: 'абмежаваны' },

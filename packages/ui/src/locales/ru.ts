@@ -55,7 +55,9 @@ export const ru: Locale = {
 
   lang: {
     pickerTitle: 'Выбери язык:',
-    saved: 'Готово, теперь по-русски'
+    saved: 'Готово, теперь по-русски',
+    openInPm: 'Язык для себя выберешь в личных.',
+    openButton: '🌐 Выбрать язык'
   },
 
   commands: {
@@ -307,7 +309,7 @@ export const ru: Locale = {
 
   stats: {
     title: '📊 <b>Твоя статистика</b>',
-    inChat: (count) => `Сообщений в этом чате: ${count}`,
+    inChat: (count, chatTitle) => chatTitle ? `Сообщений в чате ${chatTitle}: ${count}` : `Сообщений в этом чате: ${count}`,
     global: (count) => `Сообщений всего: ${count}`,
     reputation: (score, status) => `Репутация: ${score} (${status})`,
     repStatus: { trusted: 'доверенный', neutral: 'нейтральный', suspicious: 'подозрительный', restricted: 'ограниченный' },

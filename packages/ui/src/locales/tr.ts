@@ -41,7 +41,9 @@ export const tr: Locale = {
 
   lang: {
     pickerTitle: 'Bir dil seç:',
-    saved: 'Tamam, Türkçe olsun'
+    saved: 'Tamam, Türkçe olsun',
+    openInPm: 'Kendi dilini benimle özelden seç.',
+    openButton: '🌐 Dil seç'
   },
 
   commands: {
@@ -292,7 +294,7 @@ export const tr: Locale = {
 
   stats: {
     title: '📊 <b>İstatistiklerin</b>',
-    inChat: (count) => `Bu sohbetteki mesajlar: ${count}`,
+    inChat: (count, chatTitle) => chatTitle ? `${chatTitle} sohbetindeki mesajlar: ${count}` : `Bu sohbetteki mesajlar: ${count}`,
     global: (count) => `Her yerdeki mesajlar: ${count}`,
     reputation: (score, status) => `İtibar: ${score} (${status})`,
     repStatus: { trusted: 'güvenilir', neutral: 'nötr', suspicious: 'şüpheli', restricted: 'kısıtlı' },

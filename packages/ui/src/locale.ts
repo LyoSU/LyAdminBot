@@ -49,6 +49,12 @@ export interface Locale {
   lang: {
     pickerTitle: string
     saved: string
+    /**
+     * Group `/lang` for a non-admin. Their own language is a PM setting: it
+     * changes what the bot says to them, not what the chat reads.
+     */
+    openInPm: string
+    openButton: string
   }
 
   /**
@@ -265,7 +271,13 @@ export interface Locale {
   /** /mystats personal panel (PM only). */
   stats: {
     title: string
-    inChat: (count: number) => string
+    /**
+     * `chatTitle` arrives pre-escaped, and is absent only where the title could
+     * not be resolved. This used to say "in this chat" from a PM, where "this"
+     * names nothing: somebody with stats links for several groups could not
+     * tell which count belonged to which, and would compare unrelated numbers.
+     */
+    inChat: (count: number, chatTitle: string | null) => string
     global: (count: number) => string
     reputation: (score: number, status: string) => string
     repStatus: Record<'trusted' | 'neutral' | 'suspicious' | 'restricted', string>

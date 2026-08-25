@@ -41,7 +41,9 @@ export const en: Locale = {
 
   lang: {
     pickerTitle: 'Pick a language:',
-    saved: 'Done, English it is'
+    saved: 'Done, English it is',
+    openInPm: 'Pick your own language in a PM with me.',
+    openButton: '🌐 Pick a language'
   },
 
   commands: {
@@ -293,7 +295,7 @@ export const en: Locale = {
 
   stats: {
     title: '📊 <b>Your stats</b>',
-    inChat: (count) => `Messages in this chat: ${count}`,
+    inChat: (count, chatTitle) => chatTitle ? `Messages in ${chatTitle}: ${count}` : `Messages in this chat: ${count}`,
     global: (count) => `Messages everywhere: ${count}`,
     reputation: (score, status) => `Reputation: ${score} (${status})`,
     repStatus: { trusted: 'trusted', neutral: 'neutral', suspicious: 'suspicious', restricted: 'restricted' },

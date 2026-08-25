@@ -392,6 +392,12 @@ const CAPTCHA_TTL_MS = 10 * 60 * 1000
  */
 const CAPTCHA_WHISPER_GRACE_MS = 45 * 1000
 
+/**
+ * How long after a gate expires its visible prompt is removed. Small, and only
+ * there so a tap arriving on the last second is not racing the deletion.
+ */
+const CAPTCHA_CLEANUP_GRACE_MS = 5 * 1000
+
 interface CaptchaGate {
   expiresMs: number
   /** Set once the whisper lands; addressed via deleteEphemeralMessage. */
@@ -472,7 +478,26 @@ const deliverCaptcha = async (
       replyMarkup: toKeyboard(view.buttons)
       // Prompt failure is survivable: the restriction expires on its own.
     }).catch(() => null)
-    if (sent) gate.publicMessageId = sent.id
+    if (!sent) return
+    gate.publicMessageId = sent.id
+    /**
+     * Scheduled against the gate's own expiry, not a TTL of its own.
+     *
+     * A tap deletes this message immediately, so the schedule only ever fires
+     * on prompts nobody answered — and those had no deletion at all: the
+     * cleanup lived in `passCaptcha` and ran on success only. What was left
+     * behind was permanent chrome with a button that can no longer work, one
+     * per unanswered gate, which during a join raid is the raid's whole
+     * footprint sitting in the chat after we handled it.
+     *
+     * Persistent, via `scheduleDelete`, because the ten-minute window
+     * comfortably outlives a restart and the sweep is the backstop.
+     */
+    scheduleDelete(
+      chatId, sent.id,
+      Math.max(gate.expiresMs - Date.now(), 0) + CAPTCHA_CLEANUP_GRACE_MS,
+      'captcha_expired'
+    )
   }
 
   if (!config.ephemeralCaptcha) {
@@ -635,7 +660,16 @@ const groupLocale = async (chatId: number): Promise<Locale> => {
   return resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
 }
 
-/** Locale resolution: stored preference first, Telegram client language second. */
+/**
+ * Locale resolution for ONE PERSON: stored preference first, Telegram client
+ * language second.
+ *
+ * Right for a PM and for a callback toast, which only that person sees. Wrong
+ * for anything posted into a group — `groupLocale` is for that. Every group
+ * command used to resolve its reply through this, so a chat configured in
+ * Ukrainian answered `/banan` in Russian for one admin and in English for the
+ * next, in the same chat, minutes apart.
+ */
 const localeFor = async (userId: number, clientLanguage: string | null): Promise<Locale> => {
   const stored = await store.getUserLocale(userId).catch(() => null)
   return resolveLocale(stored ?? clientLanguage)
@@ -742,7 +776,19 @@ const tgEditMessage = async (
  * notification and the banan/vote prompts are ephemeral — they clean
  * themselves up so chats stay readable. Mirrors v1 cleanup-policy.
  */
-const NOTIFY_TTL_COMPACT_MS = 90 * 1000
+/**
+ * The compact notice carries the only two routes to reviewing what the bot did:
+ * the "why?" link and the "Not spam" button. Ninety seconds was long enough to
+ * read the notice and far too short to act on it — a moderator who was doing
+ * something else for two minutes came back to an enforcement they could neither
+ * inspect nor undo, on a message that no longer existed to reply to.
+ *
+ * Ten minutes, matching the incident window: the span this bot itself treats as
+ * "the same event". Grouping already collapses a run into one notice, so this
+ * costs one line per sender per ten minutes and buys the correction channel
+ * through which nearly every false positive in this system has been caught.
+ */
+const NOTIFY_TTL_COMPACT_MS = 10 * 60 * 1000
 const NOTIFY_TTL_BANAN_MS = 60 * 1000
 // Long enough that "who voted" is still reachable by someone who saw the
 // result scroll by, short enough that a settled question leaves the chat.
@@ -1203,7 +1249,9 @@ const renderMyStats = async (locale: Locale, userId: number, chatId: number | nu
   const lines = [locale.stats.title, '']
   if (chatId !== null) {
     const member = await store.getMemberStats(chatId, userId).catch(() => ({ messagesCount: 0, standingInChat: 0, bananCount: 0 }))
-    lines.push(locale.stats.inChat(member.messagesCount))
+    // The card is read in a PM, where "this chat" names nothing.
+    const title = await chatTitleFor(chatId)
+    lines.push(locale.stats.inChat(member.messagesCount, title === null ? null : escapeName(title)))
     if (member.bananCount > 0) lines.push(locale.stats.bananCaught(member.bananCount))
   }
   lines.push(locale.stats.global(userDoc?.globalStats?.totalMessages ?? 0))
@@ -1370,6 +1418,10 @@ const handlePrivateMessage = async (message: Message): Promise<void> => {
     }
     return
   }
+  if (payload === 'lang') {
+    await sendView(message, langPicker(locale))
+    return
+  }
   if (payload.startsWith('settings_')) {
     const chatId = Number(payload.slice('settings_'.length))
     if (Number.isFinite(chatId) && await isChatAdmin(chatId, sender.id)) {
@@ -1399,7 +1451,7 @@ const rememberBananLabel = (chatId: number, userId: number, label: string): void
  *   `/banan` with no reply, by anyone else → self-banan (the classic joke)
  */
 const handleBanan = async (message: Message, chat: Chat, caller: User, arg: string | undefined): Promise<void> => {
-  const locale = await localeFor(caller.id, caller.language)
+  const locale = await groupLocale(chat.id)
   const groupDoc = await store.getGroupDoc(chat.id).catch(() => null)
   const defaultSeconds = Number((groupDoc as { settings?: { banan?: { default?: number } } } | null)
     ?.settings?.banan?.default) || 600
@@ -1471,7 +1523,7 @@ const handleBanan = async (message: Message, chat: Chat, caller: User, arg: stri
  * Reply required; admins are kick-proof; the notice auto-deletes.
  */
 const handleKick = async (message: Message, chat: Chat, caller: User): Promise<void> => {
-  const locale = await localeFor(caller.id, caller.language)
+  const locale = await groupLocale(chat.id)
   if (!(await isChatAdmin(chat.id, caller.id))) return
   const dropCommand = (): Promise<void> =>
     gateway.tg.deleteMessagesById(chat.id, [message.id]).catch(() => { /* no rights */ })
@@ -1505,7 +1557,7 @@ const handleKick = async (message: Message, chat: Chat, caller: User): Promise<v
  * "one wrong override protects a spammer forever" gap. Reply required.
  */
 const handleUntrust = async (message: Message, chat: Chat, caller: User): Promise<void> => {
-  const locale = await localeFor(caller.id, caller.language)
+  const locale = await groupLocale(chat.id)
   if (!(await isChatAdmin(chat.id, caller.id))) return
   const dropCommand = (): Promise<void> =>
     gateway.tg.deleteMessagesById(chat.id, [message.id]).catch(() => { /* no rights */ })
@@ -1565,7 +1617,7 @@ const buildLiveFacts = async (chatId: number, target: User): Promise<UserFacts> 
  * profile card. Reply required; admin-only; the card auto-deletes.
  */
 const handleCheck = async (message: Message, chat: Chat, caller: User): Promise<void> => {
-  const locale = await localeFor(caller.id, caller.language)
+  const locale = await groupLocale(chat.id)
   if (!(await isChatAdmin(chat.id, caller.id))) return
   const dropCommand = (): Promise<void> =>
     gateway.tg.deleteMessagesById(chat.id, [message.id]).catch(() => { /* no rights */ })
@@ -1610,7 +1662,7 @@ const handleDelete = async (message: Message, chat: Chat, caller: User): Promise
  * the eligibility block below for why the two rights are split.
  */
 const handleReport = async (message: Message, chat: Chat, reporter: User): Promise<void> => {
-  const locale = await localeFor(reporter.id, reporter.language)
+  const locale = await groupLocale(chat.id)
   // The /report command itself never stays in the chat.
   const dropCommand = (): Promise<void> =>
     gateway.tg.deleteMessagesById(chat.id, [message.id]).catch(() => { /* no rights */ })
@@ -2027,7 +2079,7 @@ const welcomeAddIssue = (locale: Locale, reason: string | undefined): string => 
  */
 const handleWelcomeCommand = async (message: Message, chat: Chat, caller: User, rest: string): Promise<void> => {
   if (!(await isChatAdmin(chat.id, caller.id))) return
-  const locale = await localeFor(caller.id, caller.language)
+  const locale = await groupLocale(chat.id)
   const ack = async (text: string): Promise<void> => {
     const sent = await tgReplyText(message, viewHtml(text)).catch(() => null)
     if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'welcome_ack')
@@ -2068,7 +2120,7 @@ const handleWelcomeCommand = async (message: Message, chat: Chat, caller: User, 
  * delete that extra. /extras → list names. Triggers fire on #name hashtags.
  */
 const handleExtraCommand = async (message: Message, chat: Chat, caller: User, name: string | undefined): Promise<void> => {
-  const locale = await localeFor(caller.id, caller.language)
+  const locale = await groupLocale(chat.id)
   if (!(await isChatAdmin(chat.id, caller.id))) return
   const dropCommand = (): Promise<void> =>
     gateway.tg.deleteMessagesById(chat.id, [message.id]).catch(() => { /* no rights */ })
@@ -2112,7 +2164,7 @@ const handleExtraCommand = async (message: Message, chat: Chat, caller: User, na
 }
 
 const handleExtraList = async (message: Message, chat: Chat, caller: User): Promise<void> => {
-  const locale = await localeFor(caller.id, caller.language)
+  const locale = await groupLocale(chat.id)
   const extras = await store.getExtras(chat.id).catch(() => [])
   const text = extras.length === 0
     ? locale.extra.listEmpty
@@ -2152,7 +2204,7 @@ const fireExtras = async (message: Message, chat: Chat, text: string): Promise<v
  * leaderboard message; names resolved live via MTProto so they never go stale.
  */
 const handleTop = async (message: Message, chat: Chat, caller: User, kind: 'messages' | 'banan'): Promise<void> => {
-  const locale = await localeFor(caller.id, caller.language)
+  const locale = await groupLocale(chat.id)
   const rows = await store.getTopMembers(chat.id, kind, 10).catch(() => [])
   let entries: { name: string; value: number }[] = []
   if (rows.length > 0) {
@@ -2342,13 +2394,53 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     // PM deep link only; /start and /help reply with the one-line hint.
     const commandText = (message.text ?? '').trim()
     if (/^\/settings(@\w+)?$/.test(commandText) && selfUsername) {
-      const locale = await localeFor(userSender.id, userSender.language)
+      const locale = await groupLocale(chat.id)
       await sendView(message, settingsDeepLink(locale, selfUsername, chat.id))
       return
     }
-    if (/^\/(start|help)(@\w+)?$/.test(commandText)) {
-      const locale = await localeFor(userSender.id, userSender.language)
+    if (/^\/start(@\w+)?$/.test(commandText)) {
+      const locale = await groupLocale(chat.id)
       await sendView(message, startGroupHint(locale))
+      return
+    }
+    /**
+     * `/help` answers with the help.
+     *
+     * It used to answer with the group hint — whose own text says "/help
+     * команди". Someone following the instruction printed in front of them got
+     * the same instruction back, forever. The button beside it did work, but a
+     * typed command that loops reads as a broken bot, not as a hint to tap.
+     *
+     * It is a wall of text in a group, so it cleans itself up on the same timer
+     * `/top` uses: long enough to read, short enough not to live there.
+     */
+    if (/^\/help(@\w+)?$/.test(commandText)) {
+      const locale = await groupLocale(chat.id)
+      const sent = await tgReplyText(message, viewHtml(helpView(locale).text), {
+        disableWebPreview: true
+      }).catch(() => null)
+      if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'help')
+      return
+    }
+    /**
+     * `/lang` is advertised by the help text and had no branch at all, so it
+     * fell through to the spam pipeline and did nothing visible.
+     *
+     * Two different settings share the word. A member changing "my language"
+     * changes what the bot says to THEM, which is a PM matter. An admin
+     * changing the group's language changes what the chat reads, and that lives
+     * in the settings panel. So the reply points at whichever the caller can
+     * actually do.
+     */
+    if (/^\/lang(@\w+)?$/.test(commandText) && selfUsername) {
+      const locale = await groupLocale(chat.id)
+      const view = await isChatAdmin(chat.id, userSender.id)
+        ? settingsDeepLink(locale, selfUsername, chat.id)
+        : {
+          text: locale.lang.openInPm,
+          buttons: [[{ text: locale.lang.openButton, url: `https://t.me/${selfUsername}?start=lang` }]]
+        }
+      await sendView(message, view)
       return
     }
     if (/^\/report(@\w+)?$/.test(commandText)) {
@@ -2376,7 +2468,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       return
     }
     if (/^\/mystats(@\w+)?$/.test(commandText) && selfUsername) {
-      const locale = await localeFor(userSender.id, userSender.language)
+      const locale = await groupLocale(chat.id)
       await sendView(message, {
         text: locale.stats.openInPm,
         buttons: [[{ text: locale.stats.openButton, url: `https://t.me/${selfUsername}?start=mystats_${chat.id}` }]]
@@ -3694,8 +3786,11 @@ const wireCallbacks = (): void => {
       log.info('banan_lifted', { chatId, userId, by: query.user.id, via: 'undo' })
       const label = bananLabels.get(`${chatId}:${userId}`)
       if (label) {
+        // The message being edited sits in the group, so it speaks the group's
+        // language — not the language of whichever admin tapped undo.
         await tgEditMessage({
-          chatId, message: query.messageId, text: viewHtml(locale.banan.lifted(userMention(userId, label)))
+          chatId, message: query.messageId,
+          text: viewHtml((await groupLocale(chatId)).banan.lifted(userMention(userId, label)))
         }).catch(() => { /* ok */ })
       } else {
         await gateway.tg.deleteMessagesById(chatId, [query.messageId]).catch(() => { /* ok */ })
