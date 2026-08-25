@@ -441,6 +441,66 @@ describe('votePrompt', () => {
       expect(Buffer.byteLength(btn.data ?? '')).toBeLessThanOrEqual(64)
     }
   })
+
+  it('cuts the quote on a character boundary, not a code unit', () => {
+    // The report path has already cut this to 200 CODE POINTS; a second cut at
+    // 200 CODE UNITS lands inside a surrogate pair whenever an odd number of
+    // units precedes one — here, a single leading letter. The orphan then went
+    // through escapeHtml into Telegram HTML, and this spam is mostly emoji.
+    const view = votePrompt(uk, {
+      chatId: -1, messageId: 1, userLabel: 'x', textPreview: 'a' + '\u{1F381}'.repeat(200)
+    }, { spam: 0, ham: 0, outcome: 'pending' })
+    expect(view.text).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/)
+    expect(view.text).not.toMatch(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/)
+  })
+
+  it('a message with no words names what it was instead of quoting nothing', () => {
+    // Production 2026-08-25: a ballot rendered `""` and collected two spam
+    // votes. Emptiness presented as content is not "no text", it is a claim
+    // that the message said nothing — and people vote on it regardless.
+    const view = votePrompt(uk, {
+      chatId: -1, messageId: 1, userLabel: 'Іра', textPreview: '', media: 'photo'
+    }, { spam: 0, ham: 0, outcome: 'pending' })
+    expect(view.text).not.toContain('""')
+    expect(view.text).toContain('світлина')
+    expect(view.text).toContain('Іра')
+  })
+
+  it('whitespace-only is no text either', () => {
+    const view = votePrompt(uk, {
+      chatId: -1, messageId: 1, userLabel: 'Іра', textPreview: '   \n  ', media: 'sticker'
+    }, { spam: 0, ham: 0, outcome: 'pending' })
+    expect(view.text).not.toContain('""')
+    expect(view.text).toContain('стікер')
+  })
+
+  it('says the plain thing when there was not even an attachment to name', () => {
+    const view = votePrompt(uk, {
+      chatId: -1, messageId: 1, userLabel: 'Іра', textPreview: '', media: null
+    }, { spam: 0, ham: 0, outcome: 'pending' })
+    expect(view.text).not.toContain('""')
+    expect(view.text).toContain('без тексту')
+  })
+
+  it('the medium is not mentioned when there is text to read', () => {
+    // A caption IS the message; naming the photo as well would invite a vote on
+    // the picture nobody can see once it is deleted.
+    const view = votePrompt(uk, {
+      chatId: -1, messageId: 1, userLabel: 'Іра', textPreview: 'купи крипту', media: 'photo'
+    }, { spam: 0, ham: 0, outcome: 'pending' })
+    expect(view.text).toContain('купи крипту')
+    expect(view.text).not.toContain('світлина')
+  })
+
+  it('every locale can ask about a wordless message', () => {
+    for (const locale of Object.values(LOCALES)) {
+      const view = votePrompt(locale, {
+        chatId: -1, messageId: 1, userLabel: 'X', textPreview: '', media: 'voice'
+      }, { spam: 0, ham: 0, outcome: 'pending' })
+      expect(view.text).not.toContain('""')
+      expect(view.text.length).toBeGreaterThan(10)
+    }
+  })
 })
 
 describe('captchaPrompt', () => {

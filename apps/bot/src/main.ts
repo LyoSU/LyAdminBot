@@ -9,12 +9,12 @@ import {
   isEnforcementAction, countsAsDetection,
   countsAgainstSender,
   shouldAutoLearn, autoLearnSource, VOTE_LEARN_STATUS, conversationLineFor, nsfwProfileHit,
-  voterRoster, voteEligibility, needsRestitution, restitutionLiftsRestrictions,
+  voterRoster, voteEligibility, voteMayRecordDetection, needsRestitution, restitutionLiftsRestrictions,
   type VoterStanding,
-  classifyUrl, strongestTelegramLink, removesSender, truncate,
+  classifyUrl, strongestTelegramLink, removesSender, truncate, mediaCategoryOf,
   BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS,
   type ChannelPreview, type EditBaseline, type EvaluationInput, type ForwardOrigin,
-  type PipelinePorts, type UserSnapshot, type Verdict, type VoteBallot
+  type MediaCategory, type PipelinePorts, type UserSnapshot, type Verdict, type VoteBallot
 } from '@lyadmin/core'
 import {
   TelegramGateway, applyVerdict, buildUserSnapshot, buildChannelSnapshot, normalizeMessage,
@@ -802,11 +802,24 @@ const enforceVoteSpam = async (vote: {
    * The detection alone, deliberately: the uncertain enforcement that opened
    * this question already debited the message. Adding a second debit here would
    * make one message cost two messages of standing.
+   *
+   * And only when the question had something in it — see
+   * `voteMayRecordDetection`, which is also the condition the learning below
+   * already used. The removal and the mute still stand on a wordless ballot;
+   * the durable counter does not.
    */
-  await store.recordSpamDetection(vote.chatId, vote.targetUserId)
-    .catch(() => { /* counters are best-effort */ })
+  const hasContent = voteMayRecordDetection(vote.learnText)
+  if (hasContent) {
+    await store.recordSpamDetection(vote.chatId, vote.targetUserId)
+      .catch(() => { /* counters are best-effort */ })
+  } else {
+    log.info('vote_spam_no_content', {
+      chatId: vote.chatId, userId: vote.targetUserId, messageId: vote.messageId,
+      spam: vote.tally.spam, ham: vote.tally.ham, source: learnSource
+    })
+  }
 
-  if (vote.learnText.trim().length > 0) {
+  if (hasContent) {
     const requested = VOTE_LEARN_STATUS
     const signature = await signaturePort.learn(vote.learnText, learnSource, requested, vote.chatId)
       .catch(() => null)
@@ -1421,12 +1434,17 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
 
   const fullText = replied.text ?? ''
   const textPreview = truncate(fullText, 200)
+  // Through the normalizer rather than reading `replied.media` here: it is the
+  // one place that knows every TL constructor, and a ballot that misnames what
+  // it is asking about is the thing this is meant to stop.
+  const media = mediaCategoryOf(normalizeMessage(replied).attachments)
   await store.openVote({
     chatId: chat.id,
     messageId: replied.id,
     targetUserId: target.id,
     targetLabel: target.displayName,
     textPreview,
+    media,
     learnText: fullText,
     openedBy: reporter.id
   }).catch(() => false) // duplicate vote → just add the ballot below
@@ -1501,7 +1519,7 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
   // Community path: post (or refresh) the vote prompt.
   const view = votePrompt(locale, {
     chatId: chat.id, messageId: replied.id,
-    userLabel: target.displayName, textPreview
+    userLabel: target.displayName, textPreview, media
   }, tally)
   if (vote['promptMessageId']) {
     await gateway.tg.editMessage({
@@ -3041,13 +3059,15 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     if (verdict.needsVote && policy.votingEnabled) {
       const opened = await store.openVote({
         chatId: chat.id, messageId: message.id, targetUserId: sender.id,
-        targetLabel: sender.displayName, textPreview: normalized.text, openedBy: selfId
+        targetLabel: sender.displayName, textPreview: normalized.text,
+        media: mediaCategoryOf(normalized.attachments), openedBy: selfId
       }).catch(() => false)
       if (opened) {
         log.info('vote_opened', { chatId: chat.id, userId: sender.id, messageId: message.id, ...logContext, pSpam: Math.round(verdict.pSpam * 100) / 100, reason: verdict.reasonCode })
         const view = votePrompt(locale, {
           chatId: chat.id, messageId: message.id,
-          userLabel: sender.displayName, textPreview: normalized.text
+          userLabel: sender.displayName, textPreview: normalized.text,
+          media: mediaCategoryOf(normalized.attachments)
         }, { spam: 0, ham: 0, outcome: 'pending' })
         const prompt = await gateway.tg.sendText(chat.id, viewHtml(view.text), {
           replyMarkup: toKeyboard(view.buttons)
@@ -3410,7 +3430,8 @@ const wireCallbacks = (): void => {
       if (tally.outcome === 'pending') {
         const view = votePrompt(locale, {
           chatId, messageId,
-          userLabel: String(vote['targetLabel'] ?? ''), textPreview: String(vote['textPreview'] ?? '')
+          userLabel: String(vote['targetLabel'] ?? ''), textPreview: String(vote['textPreview'] ?? ''),
+          media: (vote['media'] ?? null) as MediaCategory | null
         }, tally)
         await gateway.tg.editMessage({
           chatId, message: query.messageId,

@@ -233,6 +233,13 @@ export const en: Locale = {
 
   vote: {
     prompt: (userLabel, textPreview) => `🤔 <b>Is this spam?</b> Message from ${userLabel}:\n\n"${textPreview}"`,
+    promptNoText: (userLabel, what) => what
+      ? `🤔 <b>Is this spam?</b> Message from ${userLabel} — no text, just a ${what}.`
+      : `🤔 <b>Is this spam?</b> Message from ${userLabel} — no text.`,
+    media: {
+      photo: 'photo', sticker: 'sticker', video: 'video',
+      voice: 'voice message', file: 'file', other: 'attachment'
+    },
     spamButton: (count) => `🗑 Spam (${count})`,
     hamButton: (count) => `👌 Fine (${count})`,
     counted: 'Vote counted.',

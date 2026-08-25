@@ -209,6 +209,43 @@ closed the quote and continued in the position the system prompt reserves for
 us. Now folded to `"` inside `untrusted()`, with a test per surface.
 
 
+### Closed 2026-08-25: a ballot that quoted nothing still collected votes
+
+Production screenshot: `🤔 Is this spam? Message from <name>:` followed by `""`,
+and **Spam (2)** already on the button. The message had no words, so the
+preview was the empty string and the prompt rendered it as a quotation. People
+voted anyway — on the accusation and the name, since that was all there was.
+
+Three separate faults in one line, now fixed:
+
+- `escapeHtml(textPreview.slice(0, 200))`. The report path had already cut to
+  200 **code points**; a second cut at 200 **code units** lands mid-surrogate
+  whenever an odd number of units precedes an emoji, and this spam is mostly
+  emoji. Now `truncate`.
+- `""` for a wordless message. Now the medium is named — "світлина", "стікер",
+  "голосове" — via `mediaCategoryOf` in core. Deliberately NOT the bio or the
+  linked channel: a chat shown a profile votes on the profile, and the result
+  is filed as a finding about the message.
+- A spam quorum on such a ballot wrote `spamDetections`. It no longer does
+  (`voteMayRecordDetection`). The delete and the mute stay — both are about the
+  incident, both expire, and a ham vote reverses them. A detection is durable
+  and two of its three readers make the NEXT judgement harsher, so it has to
+  rest on something the record can still show. Same asymmetry as
+  `VOTE_LEARN_STATUS`: a chat may overturn alone and may accuse only with
+  corroboration.
+
+Watch `vote_spam_no_content` for how often this population exists at all.
+
+### Closed 2026-08-25: the only network port with no clock
+
+`moderation-port` constructed `new OpenAI({ apiKey })` — SDK defaults, ten
+minutes an attempt with two retries. Every sibling had a ceiling: llm 30s,
+t.me 4s, external ban 2s. Production 10:21:10 shows `moderation_avatar=135628`
+inside a `latencyMs` of 140 180, and nothing in the log named the dependency —
+only the pipeline looked slow. Now 4s, `maxRetries: 0`: this is one input to a
+signal and never a decision, and `safe()` already reads a missing answer as no
+answer.
+
 ## What is NOT in scope
 
 No background job rewrites `score.ts`. The "calibration loop" is: feedback

@@ -7,7 +7,7 @@
  *  - details live behind [Why?]; raw LLM prose never shown
  *  - settings panel only in PM; group /settings replies with a deep link
  */
-import type { Verdict, VoterEntry, VoterRoster } from '@lyadmin/core'
+import type { MediaCategory, Verdict, VoterEntry, VoterRoster } from '@lyadmin/core'
 import { isSuspicionSignal, truncate, ESTABLISHED_MIN_TENURE_DAYS } from '@lyadmin/core'
 import type { Locale } from './locale.js'
 import { uk } from './locales/uk.js'
@@ -794,21 +794,50 @@ export const extrasEditor = (
   return { text: e.title(extras.length, maxExtra) + '\n\n' + list, buttons }
 }
 
+/** How much of the message the question quotes back. */
+const VOTE_PREVIEW_LIMIT = 200
+
 /**
  * Community vote prompt. Counts live on the buttons; both the quoted text
  * and the user label are escaped here — they are attacker-controlled.
+ *
+ * `truncate`, not `.slice`. The report path has already cut the text to 200
+ * CODE POINTS, and a second cut at 200 CODE UNITS lands mid-surrogate on any
+ * text where emoji outnumber letters — which is what most of this spam is. The
+ * orphaned half then went through `escapeHtml` into Telegram HTML.
+ *
+ * A message with no words gets a different sentence rather than this one with
+ * an empty string in it. Rendering `""` presented emptiness as content, and it
+ * did not stop anybody voting: production 2026-08-25 shows two spam votes on a
+ * ballot that quoted nothing at all. Naming the medium is the smallest true
+ * thing available, and it is the only thing available — what the profile
+ * advertises must NOT go here, however tempting. A chat shown a bio votes on
+ * the bio, and the result is recorded as a finding about the message.
  */
 export const votePrompt = (
   locale: Locale,
-  target: { chatId: number; messageId: number; userLabel: string; textPreview: string },
+  target: {
+    chatId: number
+    messageId: number
+    userLabel: string
+    textPreview: string
+    /** What the message was, when it had no words. */
+    media?: MediaCategory | null
+  },
   tally: { spam: number; ham: number; outcome: string }
-): ViewMessage => ({
-  text: locale.vote.prompt(escapeHtml(target.userLabel), escapeHtml(target.textPreview.slice(0, 200))),
-  buttons: [[
-    { text: locale.vote.spamButton(tally.spam), data: callbackData.vote(target.chatId, target.messageId, 'spam') },
-    { text: locale.vote.hamButton(tally.ham), data: callbackData.vote(target.chatId, target.messageId, 'ham') }
-  ]]
-})
+): ViewMessage => {
+  const quoted = target.textPreview.trim()
+  const name = escapeHtml(target.userLabel)
+  return {
+    text: quoted.length > 0
+      ? locale.vote.prompt(name, escapeHtml(truncate(quoted, VOTE_PREVIEW_LIMIT)))
+      : locale.vote.promptNoText(name, target.media ? locale.vote.media[target.media] : null),
+    buttons: [[
+      { text: locale.vote.spamButton(tally.spam), data: callbackData.vote(target.chatId, target.messageId, 'spam') },
+      { text: locale.vote.hamButton(tally.ham), data: callbackData.vote(target.chatId, target.messageId, 'ham') }
+    ]]
+  }
+}
 
 /**
  * How many names one roster shows.

@@ -232,6 +232,13 @@ export const tr: Locale = {
 
   vote: {
     prompt: (userLabel, textPreview) => `🤔 <b>Bu spam mı?</b> ${userLabel} adlı kullanıcıdan mesaj:\n\n"${textPreview}"`,
+    promptNoText: (userLabel, what) => what
+      ? `🤔 <b>Bu spam mı?</b> ${userLabel} kişisinden gelen mesajda metin yok, yalnızca ${what} var.`
+      : `🤔 <b>Bu spam mı?</b> ${userLabel} kişisinden gelen mesajda metin yok.`,
+    media: {
+      photo: 'fotoğraf', sticker: 'çıkartma', video: 'video',
+      voice: 'sesli mesaj', file: 'dosya', other: 'ek'
+    },
     spamButton: (count) => `🗑 Spam (${count})`,
     hamButton: (count) => `👌 Sorun yok (${count})`,
     counted: 'Oy sayıldı.',

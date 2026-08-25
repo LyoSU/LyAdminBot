@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import {
-  tallyVotes, voterRoster, voteEligibility, type VoteBallot, type VoterStanding
+  tallyVotes, voterRoster, voteEligibility, voteMayRecordDetection,
+  type VoteBallot, type VoterStanding
 } from './voting.js'
 
 const b = (userId: number, choice: 'spam' | 'ham', isAdmin = false): VoteBallot =>
@@ -353,5 +354,28 @@ describe('voteEligibility', () => {
         localAgeDays: broken, joinedAgoSeconds: broken
       }))).toBe('no_standing')
     }
+  })
+})
+
+describe('voteMayRecordDetection', () => {
+  it('a vote on words may be written down against the account', () => {
+    expect(voteMayRecordDetection('заробіток від 5000 на день, пиши в лс')).toBe(true)
+  })
+
+  it('a vote on a wordless message may not', () => {
+    // The ballot quoted nothing; the removal and the mute still stand, but the
+    // durable counter that makes the next judgement harsher does not.
+    expect(voteMayRecordDetection('')).toBe(false)
+  })
+
+  it('whitespace is not content', () => {
+    expect(voteMayRecordDetection('   \n\t  ')).toBe(false)
+  })
+
+  it('one character is content — the bar here is "anything", not "enough"', () => {
+    // Deliberately not the distinctiveness bar: that one governs what may be
+    // LEARNED and fires globally. This governs one counter on one account, and
+    // a single visible character is still something a voter read.
+    expect(voteMayRecordDetection('?')).toBe(true)
   })
 })

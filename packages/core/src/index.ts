@@ -1,4 +1,5 @@
 export * from './types.js'
+export * from './media.js'
 export * from './text/normalize.js'
 export * from './text/abstain.js'
 export * from './signals/index.js'

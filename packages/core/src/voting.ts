@@ -251,3 +251,32 @@ export const voteEligibility = (voter: VoterStanding): VoteEligibility => {
   const tenured = tenure !== null && atLeast(tenure, ESTABLISHED_MIN_TENURE_DAYS)
   return volume && tenured ? 'eligible' : 'no_standing'
 }
+
+/**
+ * Whether a resolved spam vote may be written down against the ACCOUNT, or
+ * only acted on for this message.
+ *
+ * A message with no words produces a ballot with nothing to quote, and people
+ * vote on those anyway: production 2026-08-25 recorded two spam votes on a
+ * question whose body was a pair of empty quotes. Naming the medium (see
+ * `mediaCategoryOf`) makes the question honest, but it does not make the
+ * answer informed — nobody judged any words, because there were none.
+ *
+ * So the two consequences separate. Deleting the message and muting for a
+ * while are about this incident: both expire, and a ham vote reverses them.
+ * A detection is neither. It is durable, three mechanisms read it, and two of
+ * those — `prior_spam_detections` and the shield that keeps a non-newish
+ * account at `mute` instead of `ban` — make the NEXT judgement harsher. A
+ * count that raises the price of somebody's next message has to rest on
+ * something the record can still show.
+ *
+ * This is the asymmetry the vote already lives under rather than a new one:
+ * since 2026-08-23 a ballot may overturn on its own authority but may only
+ * file a candidate, with promotion left to a second independent chat. Undoing
+ * needs less than accusing, because the two errors do not cost the same.
+ *
+ * Takes the learn text, not the display preview: the preview is truncated for
+ * a screen and could in principle be empty while the message was not.
+ */
+export const voteMayRecordDetection = (learnText: string): boolean =>
+  learnText.trim().length > 0

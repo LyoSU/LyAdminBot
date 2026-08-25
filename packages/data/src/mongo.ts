@@ -6,7 +6,7 @@
  *   llm_cache          — LLM verdict cache, TTL 7d
  */
 import { MongoClient, ObjectId, type Collection, type Db, type Document } from 'mongodb'
-import type { BurstEntry, EditBaseline, ExecutionRecord, Verdict, Signal } from '@lyadmin/core'
+import type { BurstEntry, EditBaseline, ExecutionRecord, MediaCategory, Verdict, Signal } from '@lyadmin/core'
 import { truncate, VOTE_WINDOW_SECONDS } from '@lyadmin/core'
 import { normalizeExtra, type NormalizedExtra } from './extras.js'
 import { VELOCITY_WINDOW_MS, SESSION_WINDOW_MS, BURST_WINDOW_MS } from './persistent-ports.js'
@@ -1081,6 +1081,12 @@ export class MongoStore {
     textPreview: string
     /** Full message text for signature learning on resolution (preview is display-only). */
     learnText?: string
+    /**
+     * What the message was, when it had no words. Stored rather than recomputed
+     * because the ballot is re-rendered on every tap, long after the message
+     * itself may be gone.
+     */
+    media?: MediaCategory | null
     openedBy: number
   }): Promise<boolean> {
     const now = Date.now()
@@ -1095,6 +1101,7 @@ export class MongoStore {
         // signature it teaches, and a U+FFFD substituted at the cut is a byte
         // difference the hash sees.
         learnText: truncate(params.learnText ?? params.textPreview, MongoStore.MAX_LEARN_TEXT),
+        media: params.media ?? null,
         openedBy: params.openedBy,
         promptMessageId: null,
         ballots: [],

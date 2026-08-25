@@ -6,7 +6,7 @@
  *  - reason CODES are localized here; raw LLM text never reaches users
  *  - no country flags anywhere (language names are plain text)
  */
-import type { VerdictAction, SuspicionSignalName } from '@lyadmin/core'
+import type { VerdictAction, SuspicionSignalName, MediaCategory } from '@lyadmin/core'
 
 export interface Locale {
   /** Language name in its own language, NO flag emoji. */
@@ -141,6 +141,19 @@ export interface Locale {
   vote: {
     /** Prompt above the quoted text (HTML). Inputs arrive pre-escaped. */
     prompt: (userLabel: string, textPreview: string) => string
+    /**
+     * Prompt for a message with no words in it (HTML). `what` is one of
+     * `media` below, already localized, or absent when there was not even an
+     * attachment to name.
+     *
+     * Separate from `prompt` rather than passing it an empty string: a ballot
+     * that renders `""` presents emptiness as content, and people vote on it
+     * anyway — production 2026-08-25 shows two spam votes cast on a pair of
+     * empty quotes. What the message WAS is the smallest honest thing to say.
+     */
+    promptNoText: (userLabel: string, what: string | null) => string
+    /** Media names as a voter would say them, not as the transport calls them. */
+    media: Record<MediaCategory, string>
     spamButton: (count: number) => string
     hamButton: (count: number) => string
     counted: string

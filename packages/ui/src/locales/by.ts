@@ -247,6 +247,13 @@ export const by: Locale = {
 
   vote: {
     prompt: (userLabel, textPreview) => `🤔 <b>Гэта спам?</b> Паведамленне ад ${userLabel}:\n\n"${textPreview}"`,
+    promptNoText: (userLabel, what) => what
+      ? `🤔 <b>Гэта спам?</b> Паведамленне ад ${userLabel} — без тэксту, толькі ${what}.`
+      : `🤔 <b>Гэта спам?</b> Паведамленне ад ${userLabel} — без тэксту.`,
+    media: {
+      photo: 'здымак', sticker: 'стыкер', video: 'відэа',
+      voice: 'аўдыя', file: 'файл', other: 'укладанне'
+    },
     spamButton: (count) => `🗑 Спам (${count})`,
     hamButton: (count) => `👌 Норм (${count})`,
     counted: 'Голас залічаны.',
