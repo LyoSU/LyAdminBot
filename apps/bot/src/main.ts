@@ -5,7 +5,8 @@
  */
 import { BotKeyboard, Chat, User, html, type Message } from '@mtcute/node'
 import {
-  evaluateMessage, tallyVotes, extractBioSignals, isEnforcementAction, countsAsDetection,
+  evaluateMessage, tallyVotes, extractBioSignals, BIO_PROMO_SIGNALS,
+  isEnforcementAction, countsAsDetection,
   countsAgainstSender,
   shouldAutoLearn, autoLearnSource, VOTE_LEARN_STATUS, conversationLineFor, nsfwProfileHit,
   voterRoster, voteEligibility, needsRestitution, restitutionLiftsRestrictions,
@@ -2902,7 +2903,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     rememberVerdict(chat.id, message.id, executed)
     rememberText(chat.id, message.id, normalized.text ?? '')
     rememberFacts(chat.id, message.id, factsFromSnapshot(user, {
-      promoInBio: verdict.signals.some((s) => s.name === 'promo_in_bio'),
+      promoInBio: verdict.signals.some((s) => BIO_PROMO_SIGNALS.has(s.name)),
       personalChannel: input.enrichment.personalChannelId !== null
     }))
     // Kept in this branch: the cache exists so a later override can undo the

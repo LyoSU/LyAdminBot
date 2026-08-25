@@ -420,6 +420,31 @@ describe('extractMessageSignals — trust signals (negative)', () => {
     expect(trust(makeMsg({ text: 'дякую bit.ly/x', urls: [{ visible: 'bit.ly/x', target: 'bit.ly/x', hidden: false }] }))).not.toContain('short_message')
   })
 
+  it('REGRESSION: brevity is not a second fact about an empty message', () => {
+    // The other half of the 2026-08-20 finding above. That one stopped a short
+    // WORD from being read as a reaction; this one stops a genuine reaction from
+    // being paid twice — once for holding no words and once for being short.
+    // Measured 2026-08-25: −1.5 and −0.8 together sank a profile advertising a
+    // private channel below the grey floor, so nothing ever read it.
+    const heart = trust(makeMsg({ text: '💗' }))
+    expect(heart).toContain('emoji_only')
+    expect(heart).not.toContain('short_message')
+
+    // Same for the other two readings of "there is nothing here to read".
+    expect(trust(makeMsg({ text: 't.me/durov' }))).toContain('internal_link_only')
+    expect(trust(makeMsg({ text: 't.me/durov' }))).not.toContain('short_message')
+
+    // And the discount itself is untouched — withheld, never turned into
+    // suspicion, which is what a floor over trust must not become.
+    expect(suspicious(makeMsg({ text: '💗' }))).toEqual([])
+  })
+
+  it('a short message that reads as nothing else still earns the discount', () => {
+    // The guard is a tie-break between restatements, not a repeal: with no
+    // stronger reading present, brevity is still the one fact there is.
+    expect(trust(makeMsg({ text: 'дякую!' }))).toContain('short_message')
+  })
+
   it('never crashes on a fully empty message', () => {
     expect(() => extractMessageSignals(makeMsg())).not.toThrow()
   })

@@ -388,10 +388,46 @@ export const SIGNALS = {
   // ───────────────────── profile / identity (shape) ─────────────────────
 
   /**
-   * Promo link/contact/phone in the bio. Low weight + a confirmed v1 FP class
-   * (innocent website bios) → only bites stacked with newness in the score.
+   * A promo URL in the bio — a website, a shortener, a messenger contact, a bot
+   * deeplink. Still low, and lower than it was: measured over 3797 stored bios
+   * on 2026-08-25, a bio carrying an ordinary URL sat at −0.14 log-odds against
+   * a bio carrying none, 95% CI [−0.72, +0.44] on n=68. Zero, in other words,
+   * and the old 1.2 fell far outside that interval — the weight was being
+   * charged for a property that carries no information, which is the same
+   * confirmed v1 FP class (innocent website bios) written down as a number.
+   *
+   * Not taken to nothing: the interval is wide at n=68, and this branch also
+   * covers shorteners and messenger contacts, which the corpus never separated
+   * out and which hide their destination by construction.
    */
-  promo_in_bio: { weight: 1.2, kind: 'shape', group: 'profile_promo' },
+  promo_in_bio: { weight: 0.3, kind: 'shape', group: 'profile_promo' },
+  /**
+   * A private invite (`t.me/+…`) in the bio — the same corpus, the other end of
+   * it: 907 such bios, 62.5% known-bad against a 24.6% baseline for bios with no
+   * URL at all. +1.63 log-odds, 95% CI [+1.47, +1.79].
+   *
+   * `classifyUrl` has always computed this kind and `promoIn` has always thrown
+   * it away, so the one URL class that carries information was priced like the
+   * one that carries none. That flatness is also why the comparison survives its
+   * own circularity: the label counts our past detections, but the old signal
+   * fired identically on every URL kind, so it cannot have manufactured a
+   * difference BETWEEN kinds — only a common shift in all of them.
+   *
+   * Weighted at the bottom of the interval rather than at the point estimate:
+   * 1.63 is a MARGINAL odds ratio, and a bio like this also tends to belong to a
+   * new account that says little, so some of that effect is already being paid
+   * to the signals firing beside this one. Still shape, still inside
+   * `profile_promo` — it clears no evidence bar, so alone it can only ask.
+   */
+  private_invite_in_bio: { weight: 1.5, kind: 'shape', group: 'profile_promo' },
+  /**
+   * A phone number or a cashtag in the bio: not a link, but a way to be reached
+   * or paid off-platform. Split out of `promo_in_bio` keeping its old weight,
+   * precisely BECAUSE the corpus that re-priced the URL branch says nothing
+   * about this one — a measurement about websites must not quietly re-price
+   * phone numbers.
+   */
+  contact_in_bio: { weight: 1.2, kind: 'shape', group: 'profile_promo' },
   /**
    * Promo URL / foreign @handle carried in the display name or username itself.
    * Nobody names themselves after a promo link by accident, so this is the
@@ -405,9 +441,9 @@ export const SIGNALS = {
    * The channel the profile points at turned out to be an advert itself — its
    * title or its own description reads the way a promo bio reads.
    *
-   * Heavier than `promo_in_bio` (1.2) because it is a step less ambiguous: a
-   * link in a bio may be a second account or a friend's, while a channel whose
-   * blurb is a price list has stated its purpose. Still shape, and still
+   * Heavier than a raw link in a bio because it is a step less ambiguous: a link
+   * in a bio may be a second account or a friend's, while a channel whose blurb
+   * is a price list has stated its purpose. Still shape, and still
    * capped with the rest of `profile_promo` — one profile advertised in several
    * places is one profile.
    */

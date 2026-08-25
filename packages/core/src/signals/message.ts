@@ -25,6 +25,20 @@ const SHORT_TEXT_THRESHOLD = 50
 const EMOJI_ONLY_MAX_CODEPOINTS = 32
 
 const codepointLength = (text: string): number => [...text].length
+
+/**
+ * Trust signals that are all one observation of one property — there is barely
+ * anything here to read — so at most one of them may be paid for.
+ *
+ * They are not independent facts about a message: `emoji_only` says what little
+ * text there is is not words, `internal_link_only` says it is a pointer,
+ * `media_only` says there is none at all. `short_message` says the same thing
+ * again, weaker, and is therefore the one that yields.
+ */
+const SPARSE_CONTENT_TRUST: ReadonlySet<Signal['name']> = new Set([
+  'media_only', 'emoji_only', 'internal_link_only'
+])
+
 const MANY_URL_BUTTONS_MIN = 3
 const CUSTOM_EMOJI_HEAVY_MIN = 3
 const RECENT_REPLY_MAX_AGE_SECONDS = 3600
@@ -270,7 +284,24 @@ export const extractMessageSignals = (msg: NormalizedMessage): Signal[] => {
     signals.push({ name: 'internal_link_only' })
   }
 
-  if (text && text.length < SHORT_TEXT_THRESHOLD && !hasSuspicious) {
+  /**
+   * Brevity is not a second fact about a message that already read as empty.
+   *
+   * Measured on 2026-08-25: a lone heart from an account with no standing
+   * collected `emoji_only` (−1.5) AND `short_message` (−0.8) for the one
+   * property of being a lone heart, and −2.3 was enough to sink a profile
+   * advertising a private channel below the grey floor, so the classifier was
+   * never asked about it at all.
+   *
+   * The scorer cannot correct this downstream and should not be made to:
+   * `scoreSignals` deliberately exempts negative weights from group ceilings,
+   * on the ground that a ceiling over trust could only ever make the pipeline
+   * harsher. So the restatement is withheld where it is raised — the same
+   * doctrine as the `plainEmojiReaction` guards above, and worth stating twice:
+   * a discount is withheld, never turned into suspicion.
+   */
+  const alreadyReadsAsEmpty = signals.some((s) => SPARSE_CONTENT_TRUST.has(s.name))
+  if (text && text.length < SHORT_TEXT_THRESHOLD && !hasSuspicious && !alreadyReadsAsEmpty) {
     signals.push({ name: 'short_message' })
   }
 

@@ -16,6 +16,7 @@ import type { Signal } from './types.js'
 import {
   PROMO_SIGNALS, HIGH_RISK_SIGNALS, isTrustSignal, type SignalName
 } from './signals/registry.js'
+import { BIO_PROMO_SIGNALS } from './signals/bio.js'
 
 export interface DeterministicVerdict {
   kind: 'spam' | 'clean'
@@ -154,7 +155,7 @@ export const applyDeterministicRules = (
    * raised — it was present on both production accounts.
    */
   const profilePointsSomewhere = has('personal_channel') ||
-    has('promo_in_bio') || has('promo_in_linked_channel')
+    has('promo_in_linked_channel') || [...BIO_PROMO_SIGNALS].some(has)
   if (message.lowInformation && nsfwProfile && profilePointsSomewhere && isNewish && !isEstablished) {
     return { kind: 'spam', ruleId: 'nsfw_promo_profile', pSpam: 0.93, aboutAccount: true }
   }

@@ -9,6 +9,7 @@ import {
   SIGNAL_GROUP_CAPS, SIGNAL_GROUPS, SIGNAL_WEIGHTS, SIGNAL_NAMES, SOFT_SHAPE_SIGNALS,
   type SignalName
 } from './signals/registry.js'
+import { BIO_PROMO_SIGNALS } from './signals/bio.js'
 
 describe('scoreSignals', () => {
   it('returns the base rate for an empty signal list', () => {
@@ -116,8 +117,13 @@ describe('scoreSignals — NSFW calibration (2026-07-27)', () => {
     expect(content).toBeGreaterThan(profile)
   })
 
-  it('name promo is weighted above bio promo — it is far harder to do by accident', () => {
-    expect(SIGNAL_WEIGHTS['promo_in_name'] ?? 0).toBeGreaterThan(SIGNAL_WEIGHTS['promo_in_bio'] ?? 0)
+  it('name promo outweighs every bio promo — it is far harder to do by accident', () => {
+    // Stated over the whole family rather than one member: the bio side was
+    // split into three on 2026-08-25, and the heaviest of them (a private
+    // invite, 1.5) is the one that could quietly overtake this.
+    for (const name of BIO_PROMO_SIGNALS) {
+      expect(SIGNAL_WEIGHTS['promo_in_name'] ?? 0, name).toBeGreaterThan(SIGNAL_WEIGHTS[name] ?? 0)
+    }
   })
 })
 

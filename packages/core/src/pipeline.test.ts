@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type {
-  ChatPolicy, Enrichment, EvaluationInput, NormalizedChat, NormalizedMessage, UserSnapshot
+  ChatPolicy, Enrichment, EvaluationInput, NormalizedChat, NormalizedMessage, UserSnapshot,
+  VerdictAction
 } from './types.js'
 import type { BurstEntry, BurstPort, ModerationResult, PipelinePorts, SessionPort } from './ports.js'
 import { evaluateMessage } from './pipeline.js'
@@ -1402,18 +1403,41 @@ describe('evaluateMessage — soft-shape-only guard (2026-06-21 FP)', () => {
   // — four signals about WHO sent the message, none about WHAT was sent. The
   // stacked score (0.82) sat above the old LLM ceiling (0.75), so the only
   // content-reading stage was skipped and the score deleted blind.
-  const softShapeOver = {
+  const shapeOnlySender = {
     msg: { text: 'Чи я не правий і таке можна зробити? Бо я не розбирався в цьому ще' },
     // messagesInChat kept below the exempt bar (10) so the soft-shape guard —
     // not the established-regular fast path — is what's under test here.
     user: { predictedAgeDays: 1500, localAgeDays: 3, messagesGlobal: 2, messagesInChat: 8 },
-    enrichment: { bio: 'Мій сайт: example.com', personalChannelId: 7777 }
+    enrichment: { bio: 'Мій канал: t.me/+abcdefghij', personalChannelId: 7777 }
+  }
+  /** The FP exactly as it happened, website bio and all. */
+  const softShapeOver = {
+    ...shapeOnlySender,
+    enrichment: { ...shapeOnlySender.enrichment, bio: 'Мій сайт: example.com' }
   }
 
-  it('the four prod signals alone score above 0.75 (regression anchor)', async () => {
+  it('the prod stack no longer reaches the ceiling at all (2026-08-25)', async () => {
+    // The FP's own bio was a website, and a website in a bio was re-priced from
+    // 1.2 to 0.3 once it was measured: −0.14 log-odds against a bio with no link,
+    // 95% CI [−0.72, +0.44]. So one of the four signals that pushed this over the
+    // ceiling was being charged for a property carrying no information, and this
+    // particular message can no longer be deleted blind for want of a guard.
+    //
+    // The guard is still needed — this asserts the FP is gone, not the class.
     const v = await evaluateMessage(makeInput(softShapeOver), {})
     expect(v.signals.map((s) => s.name)).toEqual(expect.arrayContaining(
       ['sleeper_awakened', 'new_globally', 'promo_in_bio', 'personal_channel']))
+    expect(v.pSpam).toBeLessThan(0.75)
+  })
+
+  it('four signals about WHO still score above 0.75 (regression anchor)', async () => {
+    // Same four signals, same absence of anything read from the message — with
+    // the one bio weight that IS earned (a private invite, 62.5% known-bad over
+    // 907 stored bios) standing in for the one that was not. This is the stack
+    // the guard exists for.
+    const v = await evaluateMessage(makeInput(shapeOnlySender), {})
+    expect(v.signals.map((s) => s.name)).toEqual(expect.arrayContaining(
+      ['sleeper_awakened', 'new_globally', 'private_invite_in_bio', 'personal_channel']))
     expect(v.pSpam).toBeGreaterThan(0.75)
   })
 
@@ -1427,14 +1451,14 @@ describe('evaluateMessage — soft-shape-only guard (2026-06-21 FP)', () => {
         }
       }
     }
-    const v = await evaluateMessage(makeInput(softShapeOver), ports)
+    const v = await evaluateMessage(makeInput(shapeOnlySender), ports)
     expect(calls).toBe(1)
     expect(v.decidedBy).toBe('llm')
     expect(v.action).toBe('none')
   })
 
   it('without an LLM, soft-shape-only never enforces — observe, not delete', async () => {
-    const v = await evaluateMessage(makeInput(softShapeOver), {})
+    const v = await evaluateMessage(makeInput(shapeOnlySender), {})
     expect(v.action).toBe('observe')
     expect(v.decidedBy).toBe('score')
   })
@@ -1446,10 +1470,70 @@ describe('evaluateMessage — soft-shape-only guard (2026-06-21 FP)', () => {
     // it is the commonest ham content in a group chat, so on its own it now
     // buys an LLM look, not an enforcement. See the content-confirmation suite.
     const v = await evaluateMessage(makeInput({
-      ...softShapeOver,
+      ...shapeOnlySender,
       msg: { text: 'подивись обовʼязково тут, пиши +380671234567' }
     }), {})
     expect(['delete', 'mute', 'ban']).toContain(v.action)
+  })
+})
+
+describe('evaluateMessage — an advertised profile behind an empty message (2026-08-25 FN)', () => {
+  // The mirror image of the two suites above, and the class they left open: a
+  // new account posts a single heart, which carries nothing to read, while its
+  // profile advertises a closed channel. Three separate things conspired to
+  // return `none`:
+  //
+  //   - the heart earned `emoji_only` (−1.5) AND `short_message` (−0.8) for the
+  //     one property of being a heart;
+  //   - the invite in the bio was priced like an ordinary website (1.2);
+  //   - the avatar was not sexual to the moderation provider at all (0.001), so
+  //     no NSFW signal was ever going to fire.
+  //
+  // Nothing here reads the message, so nothing here may remove anybody: the
+  // ceiling is a reversible human check, and the suite asserts that too.
+  const advertisedProfile = {
+    msg: { text: '💗' },
+    user: { ...newcomer, joinedAgoSeconds: 3600, avatars: { count: 1, latestSetDaysAgo: 5 } },
+    enrichment: { bio: 'Мій каналчик тут t.me/+abcdefghij' }
+  }
+
+  it('asks the sender to prove they are human instead of ignoring them', async () => {
+    const v = await evaluateMessage(makeInput(advertisedProfile), {})
+    expect(v.action).toBe('captcha')
+    expect(v.signals.map((s) => s.name)).toEqual(expect.arrayContaining(
+      ['emoji_only', 'private_invite_in_bio']))
+    // Paid once for holding nothing to read, not twice.
+    expect(v.signals.map((s) => s.name)).not.toContain('short_message')
+  })
+
+  it('never removes anyone on a profile alone', async () => {
+    const v = await evaluateMessage(makeInput(advertisedProfile), {})
+    expect(removesSender(v.action)).toBe(false)
+    // The bio is shape by construction, so it cannot reach either evidence bar
+    // however heavy it gets.
+    expect(contentEvidence(v.signals).strongest).toBe(0)
+    expect(mayRemoveSender(v.signals)).toBe(false)
+  })
+
+  it('the innocent version of the same profile is left alone', async () => {
+    // A website in a bio was measured at −0.14 log-odds against no link at all,
+    // so the sender who merely links their homepage keeps meeting nothing. This
+    // is the half of the change that REMOVES friction, and it is the half that
+    // would break first if the weight were ever tuned to chase a threshold.
+    for (const bio of ['Мій сайт example.com', null]) {
+      const v = await evaluateMessage(
+        makeInput({ ...advertisedProfile, enrichment: { bio } }), {})
+      expect(v.action, bio ?? 'no bio').toBe('observe')
+    }
+  })
+
+  it('someone the chat already knows is not asked, invite or no invite', async () => {
+    const v = await evaluateMessage(makeInput({
+      ...advertisedProfile,
+      user: { messagesInChat: 60, messagesGlobal: 300, localAgeDays: 400 }
+    }), {})
+    expect(v.action).toBe('none')
+    expect(v.reasonCode).toBe('established_regular')
   })
 })
 
@@ -1468,7 +1552,13 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
       mentions: ['lyubchak']
     },
     user: { predictedAgeDays: 1500, localAgeDays: 3, messagesGlobal: 2, messagesInChat: 8 },
-    enrichment: { bio: 'Мій сайт: example.com', personalChannelId: 7777 }
+    // The FP's own bio was a website. Re-priced from 1.2 to 0.3 on 2026-08-25
+    // once measured (−0.14 log-odds against a bio with no link at all), that
+    // stack no longer reaches the ceiling — see the sibling suite, which asserts
+    // exactly that. What this suite is for is the crumb of message evidence that
+    // let the guard stand down, so the bio here carries the one weight that IS
+    // earned (a private invite) and the shape stack keeps its historical height.
+    enrichment: { bio: 'Мій канал: t.me/+abcdefghij', personalChannelId: 7777 }
   }
 
   it('the stack still scores into kick territory (regression anchor)', async () => {
@@ -1523,7 +1613,10 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
     expect(v.action).toBe('delete')
     expect(v.needsVote).toBe(true)
     expect(v.reasonCode).toBe('content_unconfirmed')
-    expect(v.meta['cappedFrom']).toBe('kick')
+    // The rung it was capped DOWN FROM is what matters, not which rung: the
+    // claim is that arithmetic over signals wanted the sender gone and the cap
+    // refused. Pinning 'kick' would make this test a hostage of weight tuning.
+    expect(removesSender(v.meta['cappedFrom'] as VerdictAction)).toBe(true)
     // Zero, though a 1.0 signal was raised: the logged figure is the evidence
     // that would license removing the SENDER, and a resemblance is not part of
     // it (2026-08-01). The signal list beside it in the log still shows the
@@ -1988,12 +2081,14 @@ describe('evaluateMessage — enforcement ladder end to end', () => {
 
   it('the same score only deletes for someone with local standing', async () => {
     // Same 0.8 verdict, but the sender has been around: kick and ban are off
-    // the table, so the ladder stops at delete.
+    // the table, so the ladder stops at delete. The bio is only scaffolding to
+    // reach the grey zone and be asked — it holds an invite rather than a
+    // website because a website in a bio was measured at nothing on 2026-08-25.
     const v = await evaluateMessage(
       makeInput({
         msg: spamText,
         user: { messagesInChat: 9, messagesGlobal: 49, localAgeDays: 300 },
-        enrichment: { bio: 'Пиши https://promo.example' }
+        enrichment: { bio: 'Пиши t.me/+abcdefghij' }
       }), {
         llm: { classify: async () => ({ pSpam: 0.8, reasonCode: 'promo', evidence: null, cached: false }) }
       })
