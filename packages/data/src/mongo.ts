@@ -924,6 +924,20 @@ export class MongoStore {
       reasonCode: params.verdict.reasonCode,
       signals: params.verdict.signals.map((s) => s.name),
       needsVote: params.verdict.needsVote,
+      /**
+       * Persisted because restitution reads it, and reads it after the verdict
+       * has left memory.
+       *
+       * `restitutionLiftsRestrictions` treats a delete-plus-captcha as a verdict
+       * that took away the right to speak, and lifts the restriction when the
+       * chat votes ham. It asks `verdict.requireCaptcha` — which `getDecision`
+       * could not reconstruct, because this insert dropped it. So once the
+       * in-process cache evicted the record (2000 entries) or the process
+       * restarted, the same verdict reloaded as an ordinary delete and the ham
+       * path silently declined to unmute. The restriction then ran its full term
+       * on somebody the chat had already exonerated.
+       */
+      requireCaptcha: params.verdict.requireCaptcha === true,
       banDurationSeconds: params.verdict.banDurationSeconds,
       meta: params.verdict.meta,
       ...(params.editBaseline === undefined ? {} : { editBaseline: params.editBaseline }),
@@ -1010,6 +1024,9 @@ export class MongoStore {
       pSpam: Number(doc['pSpam'] ?? 0),
       action: (doc['action'] ?? 'none') as Verdict['action'],
       needsVote: Boolean(doc['needsVote']),
+      // Absent on records written before 2026-08-25, which read as `false` —
+      // the same answer the code gave for all of them before it was stored.
+      requireCaptcha: doc['requireCaptcha'] === true,
       // Rebuilt only for display/override; the ban itself was already applied
       // when the decision was made, so a missing value is simply "unknown".
       banDurationSeconds: typeof doc['banDurationSeconds'] === 'number'

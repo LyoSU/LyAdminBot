@@ -727,6 +727,68 @@ describe('recordSpamDetection', () => {
 
 
 /**
+ * `requireCaptcha` is the one verdict field whose reader runs long after the
+ * verdict left memory, so a serializer that drops it fails only in production
+ * and only for the person it hurts.
+ *
+ * `restitutionLiftsRestrictions` uses it to decide whether a ham vote owes the
+ * sender an unmute. Until 2026-08-25 `recordDecision` never wrote it, so once
+ * the in-process cache evicted the verdict — or the bot restarted — a
+ * delete-plus-captcha reloaded as a plain delete, and the chat's own
+ * exoneration quietly failed to lift the restriction it had imposed.
+ */
+describe('recordDecision / getDecision — requireCaptcha round-trip', () => {
+  const verdict = (requireCaptcha: boolean): Parameters<typeof MongoStore.prototype.recordDecision>[0]['verdict'] =>
+    ({
+      pSpam: 0.7, action: 'delete', needsVote: true, banDurationSeconds: null,
+      decidedBy: 'score', ruleId: null, signals: [], reasonCode: 'content_unconfirmed',
+      reasonEvidence: null, meta: {}, requireCaptcha
+    }) as never
+
+  const writer = (): { inserted: Record<string, unknown>[]; store: MongoStore } => {
+    const inserted: Record<string, unknown>[] = []
+    const store = Object.assign(
+      { decisions: { insertOne: async (doc: Record<string, unknown>) => { inserted.push(doc) } } } as unknown as MongoStore,
+      { recordDecision: MongoStore.prototype.recordDecision }
+    )
+    return { inserted, store }
+  }
+
+  it('stores the flag so restitution can find it later', async () => {
+    const { inserted, store } = writer()
+    await store.recordDecision({
+      chatId: -100, userId: 7, messageId: 10, textPreview: 'x',
+      verdict: verdict(true), latencyMs: 1
+    })
+    expect(inserted[0]?.['requireCaptcha']).toBe(true)
+  })
+
+  it('stores a definite false rather than omitting the field', async () => {
+    const { inserted, store } = writer()
+    await store.recordDecision({
+      chatId: -100, userId: 7, messageId: 10, textPreview: 'x',
+      verdict: verdict(false), latencyMs: 1
+    })
+    expect(inserted[0]?.['requireCaptcha']).toBe(false)
+  })
+
+  it('reads the flag back, and reads a pre-2026-08-25 record as false', async () => {
+    const load = (doc: Record<string, unknown>): Promise<unknown> => {
+      const store = Object.assign(
+        { decisions: { findOne: async () => doc } } as unknown as MongoStore,
+        { getDecision: MongoStore.prototype.getDecision }
+      )
+      return store.getDecision(-100, 10)
+    }
+    await expect(load({ action: 'delete', requireCaptcha: true }))
+      .resolves.toMatchObject({ requireCaptcha: true })
+    // The field simply did not exist on older records; false is what the code
+    // effectively assumed for all of them anyway.
+    await expect(load({ action: 'delete' })).resolves.toMatchObject({ requireCaptcha: false })
+  })
+})
+
+/**
  * The baseline is the only thing that survives a restart to tell an edit from a
  * fresh message, and it is read straight into a signal that carries a 0.93 rule.
  * So the question under test is not "does it read the field" but "what does it
