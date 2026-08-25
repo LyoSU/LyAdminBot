@@ -134,6 +134,23 @@ describe('whyCard', () => {
     expect(view.text).toContain('<blockquote>оплата щодня</blockquote>')
   })
 
+  it('does not hand a member the invite it removed', () => {
+    // The card is reached from a link in a notice the whole chat reads. A
+    // non-admin tapping it used to get the destination, in a PM from the bot.
+    const member = whyCard(uk, makeVerdict({ reasonEvidence: 'жми t.me/+AbCd123' }), target, {
+      canOverride: false
+    })
+    expect(member.text).not.toContain('AbCd123')
+    expect(member.text).toContain(uk.vote.redacted.invite)
+
+    // The admin is the one asked to judge it, and the message it came from is
+    // already deleted by the time they look.
+    const admin = whyCard(uk, makeVerdict({ reasonEvidence: 'жми t.me/+AbCd123' }), target, {
+      canOverride: true
+    })
+    expect(admin.text).toContain('AbCd123')
+  })
+
   it('leads with the action and the name, then the evidence, then our verdict', () => {
     const view = whyCard(uk, makeVerdict({ action: 'delete' }), { ...target, userLabel: 'Іван' }, {
       canOverride: true, chatTitle: 'Наш чат'

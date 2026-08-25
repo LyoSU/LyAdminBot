@@ -260,6 +260,16 @@ export interface WhyOptions {
    */
   technical?: boolean
   /**
+   * Whether the reader may see the raw destination in the evidence quote.
+   *
+   * Separate from `technical`: `whyCard` renders its own footer, so it never
+   * sets that flag, and the two questions are different anyway — one is "show
+   * the machine tokens", this one is "is this reader the one being asked to
+   * judge". Defaults to false, so a caller that says nothing gets the safe
+   * version.
+   */
+  showRawEvidence?: boolean
+  /**
    * Who this was about and where. Both optional: a card rebuilt after a restart
    * knows the verdict but not the names, and the card degrades to the verdict
    * rather than lying about them.
@@ -320,7 +330,7 @@ const actionHeadline = (locale: Locale, verdict: Verdict): string => {
  * surface: the reader should judge the text, then see whether we agreed.
  */
 export const whyView = (locale: Locale, verdict: Verdict, options: WhyOptions = {}): string => {
-  const { html: asHtml = false, technical = false, context = {} } = options
+  const { html: asHtml = false, technical = false, showRawEvidence = false, context = {} } = options
   const esc = asHtml ? escapeHtml : (s: string): string => s
   const b = asHtml ? (s: string): string => `<b>${s}</b>` : (s: string): string => s
   const dim = asHtml ? (s: string): string => `<i>${s}</i>` : (s: string): string => s
@@ -346,7 +356,22 @@ export const whyView = (locale: Locale, verdict: Verdict, options: WhyOptions = 
   // the text is whatever a stranger typed, and a cut through an emoji leaves an
   // unencodable half that Telegram rejects — the whole card, not the emoji.
   if (verdict.reasonEvidence) {
-    const quote = esc(truncate(verdict.reasonEvidence, 300))
+    /**
+     * Redacted for everyone but the reviewer.
+     *
+     * This card is reached by a link inside a notice the whole chat reads, so a
+     * member who taps it gets the evidence in a PM from the bot — invite
+     * intact. A narrower channel than the ballot, and the same channel: our own
+     * delivery of the thing we removed.
+     *
+     * The reviewer — the reader who can override — does need the destination,
+     * because the message it came from is deleted by the time they are asked to
+     * weigh it. Everybody else is being informed, not consulted.
+     */
+    const evidence = showRawEvidence
+      ? verdict.reasonEvidence
+      : redactLinks(verdict.reasonEvidence, locale.vote.redacted)
+    const quote = esc(truncate(evidence, 300))
     lines.push('', asHtml ? `<blockquote>${quote}</blockquote>` : `"${quote}"`)
   }
 
@@ -568,6 +593,8 @@ export const whyCard = (
 ): ViewMessage => {
   const body = whyView(locale, verdict, {
     html: true,
+    // The reader who can undo this is the reader being asked to judge it.
+    showRawEvidence: options.canOverride,
     context: {
       userLabel: target.userLabel ?? options.facts?.displayName ?? null,
       userId: target.userId,
