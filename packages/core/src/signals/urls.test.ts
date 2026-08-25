@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { classifyUrl } from './urls.js'
+import { classifyUrl, trimUrlPunctuation, strongestTelegramLink } from './urls.js'
 
 describe('classifyUrl', () => {
   it('classifies private invite links', () => {
@@ -55,5 +55,58 @@ describe('classifyUrl', () => {
   it('extracts the host', () => {
     expect(classifyUrl('https://Sub.Example.COM/a').host).toBe('sub.example.com')
     expect(classifyUrl('t.me/x').host).toBe('t.me')
+  })
+})
+
+describe('trimUrlPunctuation', () => {
+  it('gives back what the sentence borrowed', () => {
+    // `URL_TOKEN_REGEX` ends a token at the first space, so prose donates
+    // whatever sat between the link and the next word.
+    expect(trimUrlPunctuation('t.me/foo),')).toBe('t.me/foo')
+    expect(trimUrlPunctuation('example.com.')).toBe('example.com')
+    expect(trimUrlPunctuation('t.me/x?!')).toBe('t.me/x')
+    expect(trimUrlPunctuation('«t.me/x»')).toBe('«t.me/x')
+  })
+
+  it('keeps a bracket the link itself opened', () => {
+    expect(trimUrlPunctuation('en.wikipedia.org/wiki/Foo_(bar)')).toBe('en.wikipedia.org/wiki/Foo_(bar)')
+    expect(trimUrlPunctuation('en.wikipedia.org/wiki/Foo_(bar))')).toBe('en.wikipedia.org/wiki/Foo_(bar)')
+  })
+
+  it('leaves an ordinary link alone', () => {
+    expect(trimUrlPunctuation('https://t.me/+abcdef')).toBe('https://t.me/+abcdef')
+    expect(trimUrlPunctuation('')).toBe('')
+  })
+})
+
+describe('strongestTelegramLink', () => {
+  it('prefers the closed door over the open one', () => {
+    // The rule the bio signals use: a profile offering both a website and a way
+    // into a closed channel is advertising the channel, typed first or not.
+    expect(strongestTelegramLink(['сайт example.com, вхід t.me/+abcdefghij']))
+      .toMatchObject({ kind: 'private_invite', url: 't.me/+abcdefghij', username: null })
+    expect(strongestTelegramLink(['t.me/durov і t.me/+secret'])?.kind).toBe('private_invite')
+  })
+
+  it('names who a public link points at, for identity rather than resemblance', () => {
+    expect(strongestTelegramLink(['мій канал T.ME/MyChannel'])?.username).toBe('mychannel')
+    expect(strongestTelegramLink(['t.me/@handle'])?.username).toBe('handle')
+  })
+
+  it('ignores everything that is not a Telegram destination', () => {
+    expect(strongestTelegramLink(['сайт example.com і bit.ly/x'])).toBeNull()
+    expect(strongestTelegramLink(['звичайне біо', ''])).toBeNull()
+    expect(strongestTelegramLink([])).toBeNull()
+  })
+
+  it('reads every field it is given, not just the first', () => {
+    // Bio and the Telegram Business texts beside it are one self-description.
+    expect(strongestTelegramLink(['люблю котів', 'прайс — t.me/+abcdefghij'])?.kind)
+      .toBe('private_invite')
+  })
+
+  it('hands back a fetchable token, punctuation and all removed', () => {
+    expect(strongestTelegramLink(['пиши сюди (t.me/+abcdefghij), там усе'])?.url)
+      .toBe('t.me/+abcdefghij')
   })
 })

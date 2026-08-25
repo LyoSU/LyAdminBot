@@ -755,7 +755,17 @@ export const buildUserContent = (
   // said plainly to be about the ACCOUNT: a channel is a fact about who is
   // talking, and this pipeline's recurring failure is profile evidence leaking
   // into a verdict about a sentence.
-  for (const channel of input.enrichment.linkedChannels.slice(0, 3)) {
+  // Chosen by provenance rather than by position. The list can now hold four —
+  // a personal channel, a channel reached from the bio, and two message
+  // destinations — and a flat `slice(0, 3)` dropped whichever came last, which
+  // was always a message link: the half that is evidence about the MESSAGE, and
+  // the half whose advert may be phrased in words no signal can recognise. Two
+  // of each, so neither provenance can crowd out the other.
+  const rendered = [
+    ...input.enrichment.linkedChannels.filter((c) => c.source !== 'message_link').slice(0, 2),
+    ...input.enrichment.linkedChannels.filter((c) => c.source === 'message_link').slice(0, 2)
+  ]
+  for (const channel of rendered) {
     const size = channel.subscribers !== null ? `, ${channel.subscribers} subscribers` : ''
     const about = channel.description ? ` — ${untrusted(channel.description, 200)}` : ''
     // Where a link in THIS message goes is a different claim from what the

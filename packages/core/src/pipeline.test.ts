@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type {
-  ChatPolicy, Enrichment, EvaluationInput, NormalizedChat, NormalizedMessage, UserSnapshot,
-  VerdictAction
+  ChannelPreview, ChatPolicy, Enrichment, EvaluationInput, NormalizedChat, NormalizedMessage,
+  UserSnapshot, VerdictAction
 } from './types.js'
 import type { BurstEntry, BurstPort, ModerationResult, PipelinePorts, SessionPort } from './ports.js'
 import { evaluateMessage } from './pipeline.js'
@@ -1525,6 +1525,40 @@ describe('evaluateMessage — an advertised profile behind an empty message (202
         makeInput({ ...advertisedProfile, enrichment: { bio } }), {})
       expect(v.action, bio ?? 'no bio').toBe('observe')
     }
+  })
+
+  it('reading the destination adds to the case, and only when it says something', async () => {
+    // The bio_link wire: `ChannelPreview` has carried this source since it was
+    // introduced and nothing produced one until 2026-08-25, so the strongest
+    // fact reachable about this class — what the advertised channel says it is
+    // — was never asked for. Note the asymmetry, which is deliberate: today
+    // this can only accuse. `private_invite_in_bio` is raised on the link's
+    // shape whatever is behind it, so an ordinary community changes nothing.
+    const withChannel = async (channel: Partial<ChannelPreview> | null) =>
+      evaluateMessage(makeInput({
+        ...advertisedProfile,
+        enrichment: {
+          ...advertisedProfile.enrichment,
+          linkedChannels: channel === null ? [] : [{
+            source: 'bio_link', title: 'Канал', description: null,
+            subscribers: null, avatarBase64: null, ...channel
+          } as ChannelPreview]
+        }
+      }), {})
+
+    const bare = await withChannel(null)
+    const advert = await withChannel({ description: 'умови wa.me/79991234567' })
+    const community = await withChannel({ title: 'Кулінарія', description: 'рецепти щодня' })
+
+    expect(advert.signals.map((s) => s.name)).toContain('promo_in_linked_channel')
+    expect(advert.pSpam).toBeGreaterThan(bare.pSpam)
+    expect(community.pSpam).toBe(bare.pSpam)
+
+    // Still a question, not a punishment: the destination is the profile's
+    // self-description, so it is capped with the rest of `profile_promo` and
+    // reaches no evidence bar.
+    expect(advert.action).toBe('captcha')
+    expect(mayRemoveSender(advert.signals)).toBe(false)
   })
 
   it('someone the chat already knows is not asked, invite or no invite', async () => {

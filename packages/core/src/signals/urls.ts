@@ -82,6 +82,73 @@ export const sameDestination = (a: string, b: string): boolean => {
   return key(at) === key(bt)
 }
 
+const TRAILING_PUNCTUATION = /[.,;:!?…«»"'“”‘’]+$/
+
+/**
+ * Drop the punctuation a sentence leaves stuck to a link.
+ *
+ * `URL_TOKEN_REGEX` ends a token at the first space, so prose donates whatever
+ * sat between the link and the next word: `подивись (t.me/foo), там усе` yields
+ * `t.me/foo),`. Harmless for classification, which reads only the host — and
+ * not harmless at all for anything that FETCHES the token, which would then ask
+ * Telegram for a path nobody wrote and read the answer as "leads nowhere".
+ *
+ * A closing bracket is punctuation only when the token does not already
+ * BALANCE it: `…/foo)` came from the sentence, `…/wiki/Foo_(bar)` is the link,
+ * and `…/wiki/Foo_(bar))` is the link inside a parenthetical. Counting rather
+ * than merely looking for an opener is what separates the last two.
+ */
+export const trimUrlPunctuation = (token: string): string => {
+  const occurrences = (text: string, character: string): number =>
+    text.split(character).length - 1
+
+  let trimmed = token.replace(TRAILING_PUNCTUATION, '')
+  while (/[)\]}]$/.test(trimmed)) {
+    const closer = trimmed.slice(-1)
+    const opener = { ')': '(', ']': '[', '}': '{' }[closer]!
+    const withoutBracket = trimmed.slice(0, -1)
+    if (occurrences(withoutBracket, opener) > occurrences(withoutBracket, closer)) break
+    trimmed = withoutBracket.replace(TRAILING_PUNCTUATION, '')
+  }
+  return trimmed
+}
+
+/** A Telegram destination worth resolving, found in free text. */
+export interface TelegramLink {
+  /** Fetchable form — the surrounding sentence's punctuation removed. */
+  url: string
+  kind: 'private_invite' | 'telegram_internal'
+  /** The name a public link points at, lowercased; null for a private invite. */
+  username: string | null
+}
+
+/** The name a public t.me link points at, or null if it points at no one. */
+const linkUsername = (raw: string): string | null => {
+  const segment = parse(raw)?.pathname.replace(/^\/+/, '').split('/')[0] ?? ''
+  return segment.length > 0 ? segment.replace(/^@/, '').toLowerCase() : null
+}
+
+/**
+ * The strongest Telegram destination advertised across some free text.
+ *
+ * "Strongest" is the rule the bio signals already use: a profile offering both
+ * a website and a way into a closed channel is advertising the channel,
+ * whichever was typed first. Only the two kinds worth a lookup are considered —
+ * everything else is either not Telegram or not a destination.
+ */
+export const strongestTelegramLink = (texts: readonly string[]): TelegramLink | null => {
+  const found: TelegramLink[] = []
+  for (const text of texts) {
+    for (const token of text.match(URL_TOKEN_REGEX) ?? []) {
+      const url = trimUrlPunctuation(token)
+      const { kind } = classifyUrl(url)
+      if (kind !== 'private_invite' && kind !== 'telegram_internal') continue
+      found.push({ url, kind, username: kind === 'private_invite' ? null : linkUsername(url) })
+    }
+  }
+  return found.find((link) => link.kind === 'private_invite') ?? found[0] ?? null
+}
+
 export const classifyUrl = (raw: string): ClassifiedUrl => {
   const url = parse(raw.trim())
   if (!url) return { kind: 'external', host: '' }

@@ -87,6 +87,43 @@ describe('buildUserContent — author labels', () => {
   })
 })
 
+describe('buildUserContent — linked channels', () => {
+  const channel = (source: 'personal_channel' | 'bio_link' | 'message_link', title: string) =>
+    ({ source, title, description: null, subscribers: null, avatarBase64: null })
+
+  it('a message destination is never crowded out by the profile', () => {
+    // The list holds four once the bio is resolved (2026-08-25), and a flat
+    // `slice(0, 3)` always dropped the last — a message link, which is the half
+    // that is evidence about the MESSAGE and the half whose advert may be
+    // phrased in words no deterministic signal can read.
+    const text = asText(buildUserContent(makeInput({
+      enrichment: {
+        linkedChannels: [
+          channel('personal_channel', 'Особистий'),
+          channel('bio_link', 'З біо'),
+          channel('message_link', 'Перше з повідомлення'),
+          channel('message_link', 'Друге з повідомлення')
+        ]
+      }
+    }), 'c'))
+
+    for (const title of ['Особистий', 'З біо', 'Перше з повідомлення', 'Друге з повідомлення']) {
+      expect(text, title).toContain(title)
+    }
+  })
+
+  it('still bounded — a profile pointing at five places renders two', () => {
+    const text = asText(buildUserContent(makeInput({
+      enrichment: {
+        linkedChannels: ['A', 'B', 'C', 'D', 'E'].map((t) => channel('bio_link', `Канал ${t}`))
+      }
+    }), 'c'))
+    expect(text).toContain('Канал A')
+    expect(text).toContain('Канал B')
+    expect(text).not.toContain('Канал C')
+  })
+})
+
 describe('buildUserContent — fence', () => {
   it('wraps the message text between canary fences', () => {
     const text = asText(buildUserContent(makeInput({ msg: { text: 'купи крипту' } }), 'ABC123'))

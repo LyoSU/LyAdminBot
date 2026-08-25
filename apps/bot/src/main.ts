@@ -11,7 +11,8 @@ import {
   shouldAutoLearn, autoLearnSource, VOTE_LEARN_STATUS, conversationLineFor, nsfwProfileHit,
   voterRoster, voteEligibility, needsRestitution, restitutionLiftsRestrictions,
   type VoterStanding,
-  classifyUrl, removesSender, truncate, BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS,
+  classifyUrl, strongestTelegramLink, removesSender, truncate,
+  BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS,
   type ChannelPreview, type EditBaseline, type EvaluationInput, type ForwardOrigin,
   type PipelinePorts, type UserSnapshot, type Verdict, type VoteBallot
 } from '@lyadmin/core'
@@ -2454,6 +2455,69 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     }])
   })
 
+  /**
+   * Where a t.me link in the PROFILE goes — the other half of the same lookup,
+   * and the one this module was written for. `ChannelPreview` has carried
+   * `source: 'bio_link'` since it was introduced and nothing ever produced one:
+   * `extractLinkedChannelSignals` could already read a channel reached from a
+   * bio, `label()` already had a phrase for it, `screenProfileMedia` already
+   * screened it before the abstain gate. The only missing piece was the fetch.
+   *
+   * Not gated on newness, for the reason `profile` itself stopped being
+   * (2026-07-30): gating the profile layer on newness makes it unreachable for
+   * an account after six messages of "ok". Bounded by cost instead — one link,
+   * the strongest one, answers cached by URL for six hours across every chat,
+   * which is exactly what a bio copied between accounts is worth.
+   *
+   * Honest about direction: today this can only accuse. `private_invite_in_bio`
+   * is raised on the link's shape whatever sits behind it, and nothing
+   * subtracts when the destination turns out to be an ordinary community.
+   *
+   * The message path is only a little better and it is worth being exact about
+   * how: a clean destination there does not lift `private_invite_link` either,
+   * and `private_invite_new` still fires deterministically for an account with
+   * no global history. What reading the destination buys on that side is
+   * context for the LLM, for the sender who HAS history — which is exactly the
+   * 2026-08-01 case it was built for. There is no such route here, because a
+   * profile never reaches a content stage.
+   *
+   * Making this cut both ways would mean conditioning the weight on the
+   * destination, and there is nothing labelled to price that with: the 62.5%
+   * it was calibrated on is a rate over private-invite bios of every kind, so
+   * subtracting for an ordinary-LOOKING preview would adjust twice for the same
+   * mix. "No promo token in the blurb" is weak evidence of ordinary intent.
+   */
+  const bioChannels = await timed('biolinks', async () => {
+    const target = strongestTelegramLink([profile.bio ?? '', ...profile.businessTexts])
+    // Already in the list below, and asking again would be asking about the
+    // same channel: a public link naming the account's own channel is the same
+    // fact arriving by a second route.
+    //
+    // Identity, never resemblance. Comparing TITLES was the first version and it
+    // was wrong twice over: channels share generic names constantly, so a bio
+    // channel whose blurb is a price list would be discarded for agreeing with
+    // an innocent personal channel called the same thing — and even for one
+    // genuine channel, `channels.getFullChannel` can fail and leave the MTProto
+    // description null while the web preview carries it, so the match would
+    // throw away the richer of the two. A username is a name Telegram enforces
+    // as unique; a title is a coincidence waiting to happen.
+    if (target === null) return []
+    if (target.username !== null &&
+      target.username === profile.linkedChannel?.username?.toLowerCase()) return []
+    const preview = await resolveTmePreview(target.url)
+    if (preview === null) return []
+    return [{
+      source: 'bio_link' as const,
+      title: preview.title,
+      description: preview.description,
+      subscribers: null,
+      // Text only, like the message path: the picture is a URL on Telegram's
+      // CDN rather than bytes we hold, and the profile path already covers
+      // imagery.
+      avatarBase64: null
+    }]
+  })
+
   // Free while the flow is here anyway; the PM "Why?" card reads it later.
   rememberChatTitle(chat.id, chat.title)
 
@@ -2493,6 +2557,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
               avatarBase64: linkedChannelAvatar
             }]
           : []),
+        ...bioChannels,
         ...messageChannels
       ],
       resolvedMentions: resolveMentionKinds(normalized.mentions),
