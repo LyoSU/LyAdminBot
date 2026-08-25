@@ -246,6 +246,66 @@ only the pipeline looked slow. Now 4s, `maxRetries: 0`: this is one input to a
 signal and never a decision, and `safe()` already reads a missing answer as no
 answer.
 
+### Measured 2026-08-25: the session path, and a correction to the table above
+
+The 0.50 % given for `session` earlier on this page is wrong, and wrong the way
+this page has twice criticised: the denominator (4796) counts every session
+decision, 4572 of which are `none`. Nobody overturns a `none`. Against the 229
+session decisions that did something, 22 were overturned — **9.61 %**.
+
+It is not spread evenly, and the shape is the finding:
+
+| action | overturned | decisions | rate |
+|---|---|---|---|
+| `delete` | 17 | 75 | **22.67 %** |
+| `kick` | 1 | 4 | 25 % (n=4) |
+| `observe` | 1 | 19 | 5.26 % |
+| `ban` | 1 | 107 | 0.93 % |
+| `mute` | 0 | 24 | 0 % |
+
+The bans are fine. The deletes are the worst number in the system — worse than
+`private_invite_new`. And **all 17 carry an imitable reason code**: `flood`
+13/66 (19.7 %), `channel_promo` 2/5, `ad_network` 2/3. What was deleted reads
+as people talking: a train on Monday, "i use arch btw", a petition to the
+mayor, an argument about the prosecutor's office, and — twice over — somebody
+objecting to having been muted.
+
+So the 2026-08-07 ceiling identified the right population and treated the
+symptom. It lowered the ACTION on imitable codes (mute → delete + ballot) and
+left the trigger alone, and the trigger still fires on members having a
+conversation. Every one of these 66 does open a ballot, and 13 were voted down,
+so this is self-correcting rather than silent — but the correction is a tax on
+the chat, and the message it deletes meanwhile is an innocent one once in five.
+
+Two gates were tested against the data and **both fail**:
+
+- **Require our own rate measurement.** `flood` is the one code where we have a
+  firsthand instrument, and the registry already says the classifier's opinion
+  is not the same claim as `velocity_repeats`. But of 66, only 6 carry any rate
+  signal. Demanding one would drop 46 correct actions to avoid 14 mistakes.
+- **Escalate to a ballot when the sender is vouched.** Backwards: on the 92
+  imitable session actions, `established_user` present overturns at 8.9 % and
+  absent at 31.9 %. Trust anti-predicts the error here.
+
+That is the real answer to why the bar is "unresolved on purpose": it is not
+only that an evidence band retires text-only detection (100 % of session
+verdicts carry `contentEvidence: 0`), it is that no signal we hold separates
+these errors at all.
+
+Worth recording about the other 135 — the sender removals — because it changes
+what the stage IS: **93.3 % judged exactly one message** (`meta.judgedCount`),
+not the split-across-messages case that justifies the stage having no bar. And
+every one of the 135 scored below `LLM_GREY_LOW` — max 0.332 — so the scorer
+had ruled the message not worth asking about. In practice the session path is a
+second, ungated route to the classifier for messages the model dismissed. On
+bans that route is 0.93 % wrong. On imitable deletes it is 19.7 %.
+
+The remaining lever needs no discriminator and is a product decision, not a
+calibration one: on an imitable code the session path could `observe` and ask,
+rather than delete and ask. Cost, at these rates: about 53 spam lines stay
+visible until quorum; about 13 ordinary messages never disappear. Not taken
+here.
+
 ## What is NOT in scope
 
 No background job rewrites `score.ts`. The "calibration loop" is: feedback
