@@ -3,6 +3,7 @@
  * data (Mongo/Qdrant/LLM) + ui (views). No business logic lives here —
  * only assembly, the per-message flow, and callback handling.
  */
+import { createHash } from 'node:crypto'
 import { BotKeyboard, Chat, User, html, type Message } from '@mtcute/node'
 import {
   evaluateMessage, tallyVotes, extractBioSignals, BIO_PROMO_SIGNALS,
@@ -12,7 +13,7 @@ import {
   voterRoster, voteEligibility, voteMayRecordDetection, needsRestitution, restitutionLiftsRestrictions,
   type VoterStanding,
   classifyUrl, strongestTelegramLink, removesSender, truncate, mediaCategoryOf,
-  BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS, dhash,
+  BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS,
   type ChannelPreview, type EditBaseline, type EvaluationInput, type ForwardOrigin,
   type MediaCategory, type PipelinePorts, type UserSnapshot, type Verdict, type VoteBallot
 } from '@lyadmin/core'
@@ -22,7 +23,7 @@ import {
   fetchUserProfile, downloadPhotoBase64, downloadAvatarBase64, downloadStoriesBase64, rawPhotoToBase64,
   fetchExternalBan, sourcesToQuery, resolveMentionKinds, shouldScanChannelSender,
   createChatDescriptionCache, fetchChatDescription, createTmePreviewResolver,
-  decodeImageBase64,
+  avatarDhashOf,
   type ExternalBanCacheView, type IncomingMessage
 } from '@lyadmin/adapters'
 import {
@@ -382,18 +383,6 @@ const rememberForward = (chatId: number, messageId: number, forward: ForwardOrig
  * MTProto, and a gate may end up with both.
  */
 /**
- * How long the button stays valid.
- *
- * Long, and deliberately far longer than the answer window below. A gate is the
- * one restriction in this bot that the restricted person can lift themselves,
- * so the only thing a short validity buys is a member who came back to a dead
- * button and no way out — the exact failure the whisper-first design exists to
- * avoid. A tap is the cheapest possible exit and must not expire while the
- * restriction it lifts is still in force.
- */
-const CAPTCHA_TTL_MS = 24 * 60 * 60 * 1000
-
-/**
  * How long silence is given the benefit of the doubt before the gate acts.
  *
  * Until 2026-08-25 an unanswered captcha had NO consequence whatsoever: the
@@ -456,6 +445,31 @@ const CAPTCHA_WHISPER_GRACE_MS = 45 * 1000
  */
 const CAPTCHA_CLEANUP_GRACE_MS = 5 * 1000
 
+/**
+ * How long the button stays valid — and, because the visible prompt is cleaned
+ * up against this same moment, how long that prompt can sit in the chat.
+ *
+ * DERIVED, not chosen. The rule is one sentence: a tap is the cheapest possible
+ * exit from a restriction and must not expire while the restriction it lifts is
+ * still in force. So the gate has to outlive the longest sequence it can
+ * produce — silence until the answer grace, then the ignored-gate mute — and
+ * nothing beyond that.
+ *
+ * It was a flat 24 hours until 2026-08-25, written when the gate's own mute was
+ * ten minutes, and it stopped meaning anything when the consequence was added:
+ * the longest restriction became 62 minutes, while an UNANSWERED PUBLIC PROMPT
+ * stayed in the chat for a day. That is a card with a live button, addressed to
+ * somebody who is no longer muted, sitting above the conversation for
+ * twenty-three hours after it stopped being about anything — the exact
+ * "permanent chrome" this cleanup was introduced to remove.
+ *
+ * Expressed in terms of the two constants above so the two can never drift
+ * apart again; the extra ten minutes is slack for a slow consequence, not a
+ * policy.
+ */
+const CAPTCHA_TTL_MS =
+  CAPTCHA_ANSWER_GRACE_MS + CAPTCHA_IGNORED_MUTE_SECONDS * 1000 + 10 * 60 * 1000
+
 interface CaptchaGate {
   expiresMs: number
   /** Set once the whisper lands; addressed via deleteEphemeralMessage. */
@@ -469,7 +483,10 @@ interface CaptchaGate {
    * precisely why it has to come down if the asking is ignored.
    */
   triggerMessageId: number | null
-  /** Fires the unanswered-gate consequence once. */
+  /**
+   * Fires the unanswered-gate consequence once — and is ARMED ONLY BY A PROMPT
+   * THAT WAS ACTUALLY SENT. See `armConsequence`.
+   */
   consequenceTimer: ReturnType<typeof setTimeout> | null
   /** Set once the consequence ran, so it cannot run twice for one gate. */
   consequenceApplied: boolean
@@ -550,6 +567,48 @@ const applyIgnoredCaptcha = async (
       .then(() => true).catch(() => false)
   }
   log.info('captcha_ignored', { chatId, userId, held, removed })
+
+  /**
+   * Written down, because it happened.
+   *
+   * A mute and a deletion used to leave this function as a log line and nothing
+   * else: no row in `pipeline_decisions`, so the "За що?" card had nothing to
+   * show the member, no audit could count these against the pipeline's false
+   * positives, and the 2026-08-24 lesson — that a decision record which omits
+   * what was CARRIED OUT makes three different outcomes look identical — was
+   * being relearned one level up.
+   *
+   * `decidedBy: 'captcha_ignored'` rather than borrowing a judge's name: no
+   * judge was involved, and a row claiming `score` decided this would be a lie
+   * to every query that later trusts the field.
+   */
+  await store.recordDecision({
+    chatId,
+    userId,
+    messageId: gate.triggerMessageId ?? 0,
+    textPreview: '',
+    verdict: {
+      pSpam: 0,
+      action: 'mute',
+      needsVote: false,
+      banDurationSeconds: CAPTCHA_IGNORED_MUTE_SECONDS,
+      decidedBy: 'captcha_ignored',
+      ruleId: null,
+      signals: [],
+      reasonCode: 'captcha_ignored',
+      reasonEvidence: null,
+      meta: {}
+    },
+    execution: {
+      applied: held,
+      deleted: gate.triggerMessageId === null ? null : removed,
+      skippedReason: null,
+      failed: [],
+      albumRemoved: 0,
+      retroPurged: 0
+    },
+    latencyMs: 0
+  }).catch(() => { /* telemetry must never break moderation */ })
 }
 
 /**
@@ -579,21 +638,55 @@ const deliverCaptcha = async (
   const view = captchaPrompt(locale, { chatId, userId, userLabel })
 
   /**
-   * What an ignored gate costs. Scheduled here rather than at the call site so
-   * that every way of issuing a captcha carries it — the branch that asks and
-   * the capped verdict that deletes and then asks.
+   * Start the clock on an ignored gate — and only ever from a prompt that left
+   * the building.
+   *
+   * Scheduling this up front, as this function did until 2026-08-25, made
+   * silence and non-delivery the same event. The first captcha ever issued in
+   * production went to an account Telegram would not accept a whisper for
+   * (`USER_NOT_PARTICIPANT`); two minutes later it was muted for an hour and
+   * its message was deleted, for failing to answer a question. Whether it ever
+   * arrived is not visible from here — so the only defensible rule is that a
+   * send we did not manage to make cannot cost the member anything.
+   *
+   * `restart` exists because the clock belongs to the prompt the member can
+   * SEE. A whisper that goes unanswered posts a visible prompt at 45s, and
+   * without restarting, that prompt would carry only the 75s left of the
+   * original two minutes.
    */
-  const consequence = setTimeout(() => {
-    // A tap replaced or spent the gate: nothing owed.
-    if (pendingCaptchas.get(captchaKey(chatId, userId)) !== gate) return
+  const armConsequence = (restart = false): void => {
     if (gate.consequenceApplied) return
-    gate.consequenceApplied = true
-    void applyIgnoredCaptcha(chatId, userId, gate)
-  }, CAPTCHA_ANSWER_GRACE_MS)
-  consequence.unref?.()
-  gate.consequenceTimer = consequence
+    if (gate.consequenceTimer !== null) {
+      if (!restart) return
+      clearTimeout(gate.consequenceTimer)
+    }
+    const consequence = setTimeout(() => {
+      // A tap replaced or spent the gate: nothing owed.
+      if (pendingCaptchas.get(captchaKey(chatId, userId)) !== gate) return
+      if (gate.consequenceApplied) return
+      gate.consequenceApplied = true
+      void applyIgnoredCaptcha(chatId, userId, gate)
+    }, CAPTCHA_ANSWER_GRACE_MS)
+    consequence.unref?.()
+    gate.consequenceTimer = consequence
+  }
 
-  const postVisible = async (): Promise<void> => {
+  /**
+   * Nobody could be asked, so nobody owes an answer.
+   *
+   * The executor closed a ten-minute gate before this function was called, and
+   * that gate only makes sense as the other half of a question. With no
+   * question deliverable it is a ten-minute mute for a message nothing read, so
+   * it comes off and the gate is dropped rather than left to lapse.
+   */
+  const abandonUndeliverable = async (): Promise<void> => {
+    const lifted = await gateway.tg.restrictChatMember({ chatId, userId, restrictions: {} })
+      .then(() => true).catch(() => false)
+    forgetCaptcha(captchaKey(chatId, userId))
+    log.warn('captcha_undeliverable', { chatId, userId, lifted })
+  }
+
+  const postVisible = async (): Promise<boolean> => {
     const sent = await tgSendText(chatId, viewHtml(view.text), {
       replyMarkup: toKeyboard(view.buttons),
       // Replied to the message that triggered it, so the member sees what this
@@ -603,7 +696,13 @@ const deliverCaptcha = async (
       ...(gate.triggerMessageId !== null ? { replyTo: gate.triggerMessageId } : {})
       // Prompt failure is survivable: the restriction expires on its own.
     }).catch(() => null)
-    if (!sent) return
+    if (!sent) {
+      // Logged, because until 2026-08-25 this returned in silence and the logs
+      // could not tell "asked and ignored" from "never asked at all" — which is
+      // exactly the distinction the consequence now turns on.
+      log.warn('captcha_prompt_failed', { chatId, userId })
+      return false
+    }
     gate.publicMessageId = sent.id
     /**
      * Scheduled against the gate's own expiry, not a TTL of its own.
@@ -615,18 +714,21 @@ const deliverCaptcha = async (
      * per unanswered gate, which during a join raid is the raid's whole
      * footprint sitting in the chat after we handled it.
      *
-     * Persistent, via `scheduleDelete`, because the ten-minute window
-     * comfortably outlives a restart and the sweep is the backstop.
+     * Persistent, via `scheduleDelete`, because the window outlives a restart
+     * and the sweep is the backstop — the in-memory gate does not, so without
+     * this the card would be the one part of an abandoned gate that survives.
      */
     scheduleDelete(
       chatId, sent.id,
       Math.max(gate.expiresMs - Date.now(), 0) + CAPTCHA_CLEANUP_GRACE_MS,
       'captcha_expired'
     )
+    return true
   }
 
   if (!config.ephemeralCaptcha) {
-    await postVisible()
+    if (await postVisible()) armConsequence()
+    else await abandonUndeliverable()
     return
   }
 
@@ -637,19 +739,44 @@ const deliverCaptcha = async (
       gate.triggerMessageId ?? undefined
     )
     log.info('captcha_whispered', { chatId, userId })
+    armConsequence()
 
     const timer = setTimeout(() => {
       // Still the same open gate? A tap (or a re-issue) already replaced it.
       if (pendingCaptchas.get(captchaKey(chatId, userId)) !== gate) return
       log.warn('captcha_whisper_unanswered', { chatId, userId })
-      void postVisible()
+      // The visible prompt is the one the member can be sure of seeing, so it
+      // gets the full answering window rather than the remainder of the
+      // whisper's.
+      void postVisible().then((ok) => { if (ok) armConsequence(true) })
     }, CAPTCHA_WHISPER_GRACE_MS)
     // A pending fallback must not keep the process alive on shutdown.
     timer.unref?.()
     gate.fallbackTimer = timer
   } catch (err) {
+    /**
+     * A whisper that could not be SENT is not a whisper that went unanswered,
+     * and the two must not share a fallback.
+     *
+     * This posted the visible prompt here until 2026-08-25, and production
+     * showed what that means: both captchas the bot has ever issued landed as
+     * public cards in comment sections under channel posts, seconds after the
+     * message — because a commenter in a linked discussion group is frequently
+     * not a MEMBER of that group, and Telegram answers `USER_NOT_PARTICIPANT`.
+     *
+     * Whispering is the entire reason this branch is allowed to ask at all: a
+     * wrong guess costs the member one private tap instead of a public
+     * accusation in front of the chat. `mayAskCaptcha` even encodes that — in a
+     * discussion group it permits the ask ONLY when ephemeral prompts are
+     * configured. Falling back to a visible card therefore did precisely the
+     * thing the permission was granted on the promise of avoiding.
+     *
+     * So: no send, no ask, no consequence. The unanswered-whisper path below
+     * keeps its visible net, because there the prompt demonstrably arrived and
+     * only the answer is missing.
+     */
     log.warn('captcha_whisper_failed', { chatId, userId, err })
-    await postVisible()
+    await abandonUndeliverable()
   }
 }
 
@@ -2054,34 +2181,6 @@ const avatarCache = new Map<number, { base64: string | null; expiresAt: number }
 const AVATAR_CACHE_TTL_MS = 6 * 60 * 60 * 1000
 const AVATAR_CACHE_MAX = 2000
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024
-
-/**
- * Perceptual hash of an avatar, memoised on the base64 it came from.
- *
- * Decoding a JPEG in pure JS is the most expensive thing on this path, and the
- * avatar cache already hands us the same bytes for the same sender for hours.
- * Keyed by length plus a cheap prefix rather than by the whole string, so the
- * key does not itself cost a megabyte per entry.
- */
-const dhashCache = new Map<string, string | null>()
-const DHASH_CACHE_MAX = 2000
-
-const avatarDhashOf = (base64: string): string | null => {
-  const key = `${base64.length}:${base64.slice(0, 64)}`
-  const hit = dhashCache.get(key)
-  if (hit !== undefined) return hit
-  const image = decodeImageBase64(base64)
-  const hash = image === null ? null : dhash(image)
-  if (dhashCache.size >= DHASH_CACHE_MAX) {
-    // Coarse eviction: this is a cost cache, not a correctness one.
-    for (const k of dhashCache.keys()) {
-      dhashCache.delete(k)
-      if (dhashCache.size < DHASH_CACHE_MAX / 2) break
-    }
-  }
-  dhashCache.set(key, hash)
-  return hash
-}
 
 type UserProfile = Awaited<ReturnType<typeof fetchUserProfile>>
 
@@ -3544,10 +3643,20 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       chatId: chat.id, userId: sender.id, ...logContext, action: verdict.action
     })
     const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
-    // The triggering message, so an ignored gate can take it down. For a
-    // `delete`-plus-captcha verdict the executor already removed it; deleting an
-    // absent message is a no-op, so no branch is needed here.
-    await deliverCaptcha(chat.id, sender.id, sender.displayName, locale, message.id)
+    /**
+     * The triggering message, so an ignored gate can take it down — but only
+     * while it still exists.
+     *
+     * This passed `message.id` unconditionally until 2026-08-25, reasoning that
+     * for a `delete`-plus-captcha verdict the executor had already removed it
+     * and deleting an absent message is a no-op. True of the deletion, and
+     * beside the point: this id is also the REPLY TARGET of both prompts. On
+     * that path we were asking Telegram to reply to a message we had just
+     * deleted, and a send that fails is a gate with no button — the member is
+     * left restricted, holding nothing to tap.
+     */
+    const replyTarget = result.deleted === true ? null : message.id
+    await deliverCaptcha(chat.id, sender.id, sender.displayName, locale, replyTarget)
   }
 
   const enforced = verdict.action !== 'none' && verdict.action !== 'observe' && verdict.action !== 'captcha'

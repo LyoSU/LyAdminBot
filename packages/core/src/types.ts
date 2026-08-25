@@ -393,6 +393,13 @@ export type DecidedBy =
   | 'session'         // session scoring of the accumulated buffer
   | 'burst'           // classification of a sender's run of recent messages
   | 'score'           // weighted signal score without LLM involvement
+  /**
+   * A gate that was asked and not answered. Not a judgement of the message —
+   * nothing read it — but it is an action taken against a member, and until
+   * 2026-08-25 it was the only one this pipeline took that left no record
+   * anywhere but a log line.
+   */
+  | 'captcha_ignored'
   | 'abstain'
   | 'error'
 

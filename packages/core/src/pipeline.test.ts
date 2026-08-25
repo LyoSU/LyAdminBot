@@ -1887,6 +1887,35 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
   })
 
   /**
+   * The first captcha this branch ever issued in production, and why it must
+   * not have been issued.
+   *
+   * 2026-08-25, one word of Ukrainian under a channel post. The entire case
+   * against the account was that we had not met it: a dormant account
+   * (`sleeper_awakened` 1.2), new to us (0.8), new to the chat (0.4), editing
+   * its message (0.2) — no bio, no avatar, no linked channel, nothing the
+   * branch is named after. Those stack to exactly the grey band, and the
+   * account was then muted and its message deleted for not tapping a button it
+   * could never have received.
+   *
+   * `newness` is a correlated group by design — one fact about an account
+   * counted three ways — which is why it has a cap that keeps it from reaching
+   * a verdict. This asserts it cannot reach a QUESTION either.
+   */
+  it('does not ask a stranger to prove themselves for being a stranger', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'Каракіс' },
+      user: newcomer,
+      policy: { captchaEnabled: true }
+    }), { moderation: { check: async () => modClean } })
+    const names = v.signals.map((s) => s.name)
+    expect(names).toContain('new_globally')
+    // Nothing about the profile spoke, so there is nothing to ask about.
+    expect(v.action).not.toBe('captcha')
+    expect(isEnforcementAction(v.action)).toBe(false)
+  })
+
+  /**
    * The case this branch existed for and could not reach.
    *
    * Production, 2026-08-25: an account posted "💗" five times into one chat over

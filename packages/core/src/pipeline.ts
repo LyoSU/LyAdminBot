@@ -28,7 +28,9 @@ import { parseCustomRule, customRuleMatches } from './custom-rules.js'
 import {
   scoreSignals, hasDecisiveSignal, mayRemoveSender, hasSenderStanding, contentEvidence
 } from './score.js'
-import { PERMANENT_BAN_SIGNALS, isTrustSignal } from './signals/registry.js'
+import {
+  PERMANENT_BAN_SIGNALS, PROFILE_EVIDENCE_SIGNALS, isTrustSignal
+} from './signals/registry.js'
 import {
   decideAction, isEnforcementAction, removesSender, mayAskCaptcha, IMITABLE_REASON_CODES,
   type PolicyDecision, type PolicyInput
@@ -1003,7 +1005,23 @@ export const evaluateMessage = async (
      * where a question is permitted.
      */
     const deserved = asked.action !== 'observe' && asked.action !== 'none'
-    if (deserved && mayAskCaptcha(policyInputFor(shaped.pSpam, signals))) {
+    /**
+     * The profile has to have SAID something. Measured, 2026-08-25.
+     *
+     * The first captcha this branch ever issued in production went to an
+     * account whose entire case was newness: a dormant account, new to us, new
+     * to the chat, editing its message. No bio, no avatar, no linked channel —
+     * nothing the branch is named after. Three newness signals stack to the
+     * grey band on their own, so without this the branch asks "prove you are
+     * human" of anyone the bot has simply not met before, which is a join gate
+     * wearing a message gate's clothes.
+     *
+     * `newness` is a correlated group by design — one fact about an account
+     * counted three ways — and a group cap keeps it from reaching a verdict.
+     * It must not reach a question either.
+     */
+    const profileSpoke = signals.some((s) => PROFILE_EVIDENCE_SIGNALS.has(s.name as never))
+    if (deserved && profileSpoke && mayAskCaptcha(policyInputFor(shaped.pSpam, signals))) {
       meta['scorePSpam'] = Number(shaped.pSpam.toFixed(4))
       // Which discount was withheld, so a captcha that turned on this rule can
       // be told apart from one the arithmetic reached on its own.
