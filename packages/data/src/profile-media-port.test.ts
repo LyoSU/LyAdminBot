@@ -8,9 +8,7 @@ import type { MongoStore } from './mongo.js'
  * like and what a blank avatar does not.
  */
 const HASH = '9d8f9e0f6f6f6766'
-/** One bit away — a re-encode of the same picture. */
-const NEAR = '9d8f9e0f6f6f6767'
-/** Nothing like it. */
+/** A different picture, used to check that a second write happens. */
 const FAR = '0000ffff0000ffff'
 
 interface Row { hash: string; userId: number }
@@ -38,27 +36,20 @@ const port = (rows: Row[]): {
 describe('MongoProfileMediaPort.seen', () => {
   it('reports another account wearing the same picture', async () => {
     const { port: p } = port([{ hash: HASH, userId: 222 }])
-    await expect(p.seen(111, HASH)).resolves.toEqual({
-      otherAccounts: 1, sampleUserIds: [222], closestDistance: 0
-    })
-  })
-
-  it('accepts a re-encode a few bits away', async () => {
-    const { port: p } = port([{ hash: NEAR, userId: 222 }])
-    const hit = await p.seen(111, HASH)
-    expect(hit?.otherAccounts).toBe(1)
-    expect(hit?.closestDistance).toBe(1)
+    await expect(p.seen(111, HASH)).resolves.toEqual({ otherAccounts: 1, sampleUserIds: [222] })
   })
 
   /**
-   * The band lookup returns candidates, not matches — that is the whole point of
-   * it. Rows that merely collide in one 16-bit band must be discarded by true
-   * distance, or the signal would fire on unrelated pictures roughly once in
-   * every 65,536 rows examined.
+   * An exact hash match, deliberately — see the port's own note. dHash is stable
+   * across the re-encodes that actually happen (640px and 320px of one photo
+   * hash identically), and both re-use clusters found on real banned accounts
+   * were byte-identical files. Paying four index entries per row to tolerate a
+   * drift the data does not show would cost more index than document.
    */
-  it('discards a band collision that is not the same picture', async () => {
-    const { port: p } = port([{ hash: FAR, userId: 222 }])
-    await expect(p.seen(111, HASH)).resolves.toBeNull()
+  it('asks for the hash itself, served by the unique key prefix', async () => {
+    const { port: p, queries } = port([])
+    await p.seen(111, HASH)
+    expect(queries[0]).toEqual({ hash: HASH })
   })
 
   /**
@@ -71,10 +62,10 @@ describe('MongoProfileMediaPort.seen', () => {
     await expect(p.seen(111, HASH)).resolves.toBeNull()
   })
 
-  it('counts accounts, not rows — one account with two near hashes is one account', async () => {
+  it('counts accounts, not rows', async () => {
     const { port: p } = port([
       { hash: HASH, userId: 222 },
-      { hash: NEAR, userId: 222 }
+      { hash: HASH, userId: 222 }
     ])
     const hit = await p.seen(111, HASH)
     expect(hit?.otherAccounts).toBe(1)
@@ -90,17 +81,25 @@ describe('MongoProfileMediaPort.seen', () => {
     expect(update['$set']).toMatchObject({ hash: HASH, userId: 111 })
   })
 
-  it('stores four bands and asks for a match in any of them', async () => {
+  /**
+   * The lookup runs on every message from a newish sender; the write only has to
+   * happen when something changed. On a 512 MB tier that is the difference
+   * between a write per message and a write per sender.
+   */
+  it('writes once per sender and picture, then only reads', async () => {
     const { port: p, writes, queries } = port([])
     await p.seen(111, HASH)
-    const set = (writes[0]?.['update'] as Record<string, Record<string, unknown>>)['$set']!
-    expect(set['b0']).toBe('9d8f')
-    expect(set['b1']).toBe('9e0f')
-    expect(set['b2']).toBe('6f6f')
-    expect(set['b3']).toBe('6766')
-    expect(queries[0]).toEqual({
-      $or: [{ b0: '9d8f' }, { b1: '9e0f' }, { b2: '6f6f' }, { b3: '6766' }]
-    })
+    await p.seen(111, HASH)
+    await p.seen(111, HASH)
+    expect(writes).toHaveLength(1)
+    expect(queries).toHaveLength(3)
+  })
+
+  it('writes again when the same sender changes picture', async () => {
+    const { port: p, writes } = port([])
+    await p.seen(111, HASH)
+    await p.seen(111, FAR)
+    expect(writes).toHaveLength(2)
   })
 
   /**

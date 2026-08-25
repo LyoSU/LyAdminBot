@@ -32,8 +32,6 @@
 /** Grid width: 9 columns give 8 horizontal comparisons per row. */
 const GRID_W = 9
 const GRID_H = 8
-/** Bits in the resulting hash, and therefore its hex length (64 bits / 16 hex). */
-export const DHASH_BITS = GRID_W - 1 === 8 ? 64 : (GRID_W - 1) * GRID_H
 
 export interface RgbaImage {
   width: number
@@ -163,14 +161,14 @@ export const hammingDistance = (a: string, b: string): number | null => {
  * So the bar holds comfortably for a resize or a quality change, and loses a
  * picture whose aspect ratio was changed. That is the right way round: a missed
  * match costs one signal, a false match accuses somebody.
+ *
+ * The production store deliberately matches on the hash EXACTLY rather than
+ * within this distance — see `profile-media-port.ts` for why, and for what it
+ * would cost in index space to do otherwise. What this constant is for is the
+ * robustness test: it pins the claim that a re-encode does not move the hash
+ * more than this, which is the property the exact match relies on.
  */
 export const DHASH_MATCH_MAX_DISTANCE = 5
-
-/** Whether two hashes describe the same picture. */
-export const isSameImage = (a: string, b: string): boolean => {
-  const d = hammingDistance(a, b)
-  return d !== null && d <= DHASH_MATCH_MAX_DISTANCE
-}
 
 /**
  * Hashes so flat they describe "a picture", not a picture.

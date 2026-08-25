@@ -206,7 +206,6 @@ export interface ProfileMediaPort {
   seen(userId: number, hash: string): Promise<{
     otherAccounts: number
     sampleUserIds: number[]
-    closestDistance: number
   } | null>
 }
 

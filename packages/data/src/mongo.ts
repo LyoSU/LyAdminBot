@@ -279,15 +279,19 @@ export class MongoStore {
      * active use is kept and one retired months ago expires — the store
      * remembers campaigns, not history.
      *
-     * One index per band because the lookup is an `$or` over four equalities:
-     * without all four, whichever band lacked an index would turn every avatar
-     * check into a collection scan, and it would do so silently.
+     * TWO functional indexes, and the count is the point on a tier that was at
+     * 401 MB of 512 MB when this collection was added. The unique key exists to
+     * keep one row per account per picture, and because `hash` is its PREFIX it
+     * also serves the lookup — so recognising a shared photograph costs no index
+     * of its own. `groupmembers` next door carries 61 MB of index over 62 MB of
+     * documents, which is what happens when a small document gets four.
+     *
+     * A fuzzy lookup would have needed four band entries per row — more index
+     * than document. The measurement that says it is not needed is in
+     * `profile-media-port.ts`.
      */
     await ensureTtlIndex(this.profileMedia(), { lastSeenAt: 1 }, PROFILE_MEDIA_TTL_DAYS * 86400)
     await this.profileMedia().createIndex({ hash: 1, userId: 1 }, { unique: true })
-    for (const band of ['b0', 'b1', 'b2', 'b3']) {
-      await this.profileMedia().createIndex({ [band]: 1 })
-    }
   }
 
   // ── reads used per message ───────────────────────────────────────────

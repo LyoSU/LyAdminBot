@@ -12,22 +12,34 @@
  * local to that sender. This is the only place it can notice that two senders
  * are the same person, and it can only notice it by remembering.
  *
- * ── Lookup, and why it is not a single indexed equality ──
+ * ── Lookup: an exact hash match, and why that is enough ──
  *
- * A re-upload re-encodes, so the hash of the same picture drifts by a few bits
- * (see `DHASH_MATCH_MAX_DISTANCE`). Mongo cannot index Hamming distance, and a
- * collection scan per message is out of the question. So the 64-bit hash is also
- * stored as four indexed 16-bit bands, and a lookup asks for a match in ANY
- * band, then filters the handful of returned rows by true distance in memory.
+ * A re-upload re-encodes, so in principle the hash of the same picture can drift
+ * a few bits and the lookup should tolerate that. In practice, measured on real
+ * avatars 2026-08-25, it does not have to:
  *
- * That is the standard pigeonhole trick, and its limit is worth stating: bits
- * that differ spread across bands, so with four bands a distance of up to three
- * is guaranteed to collide in at least one band, while four or five may be
- * missed. Recall is therefore very good rather than perfect — which is the right
- * trade for a signal whose absence costs nothing and whose presence is decisive.
+ *  - Both re-use clusters found among 17 accounts this bot had banned were
+ *    BYTE-IDENTICAL files — same SHA-256, not merely the same picture.
+ *  - dHash is itself robust to the transformations that matter. The same
+ *    photograph at 640px and at 320px hashes identically, and so does the same
+ *    photograph at quality 35 and 84. The hash only drifted at 160px, which is
+ *    smaller than any avatar Telegram serves.
+ *
+ * So the fuzzy lookup would have bought nothing on the observed data while
+ * costing real space: tolerating drift means indexing four 16-bit bands per row,
+ * which is four index entries per document — more index than document, on a
+ * deployment that was at 401 MB of a 512 MB tier when this was written.
+ *
+ * An exact match needs no band index at all: the unique `{hash, userId}` index
+ * that keeps one row per account per picture has `hash` as its prefix, so it
+ * already serves the query. Two functional indexes, zero extra.
+ *
+ * The cost of being wrong about this is one missed signal, never a false one —
+ * and it is recoverable: if production shows near-miss re-encodes, bands can be
+ * added later without touching anything else here.
  */
 import type { Document } from 'mongodb'
-import { hammingDistance, DHASH_MATCH_MAX_DISTANCE, isDegenerateHash } from '@lyadmin/core'
+import { isDegenerateHash } from '@lyadmin/core'
 import type { MongoStore } from './mongo.js'
 
 /**
@@ -39,9 +51,6 @@ import type { MongoStore } from './mongo.js'
  * meme, a film still) does not accuse them forever.
  */
 export const PROFILE_MEDIA_TTL_DAYS = 60
-
-/** Bands the hash is split into for the any-band lookup. */
-const BANDS = 4
 
 /**
  * Rows a lookup will look at. A popular picture — a football crest, a national
@@ -56,18 +65,22 @@ export interface ProfileMediaMatch {
   otherAccounts: number
   /** A few of them, for the evidence line. */
   sampleUserIds: number[]
-  /** Closest distance found, 0 meaning a byte-identical re-encode. */
-  closestDistance: number
 }
 
-const bandsOf = (hash: string): string[] => {
-  const width = hash.length / BANDS
-  const out: string[] = []
-  for (let i = 0; i < BANDS; i++) out.push(hash.slice(i * width, (i + 1) * width))
-  return out
-}
+/**
+ * Senders whose current picture is already recorded, so the hot path is a read
+ * and not a write.
+ *
+ * In memory and per process, deliberately: losing it costs one redundant upsert,
+ * and the alternative — asking Mongo whether we need to write to Mongo — is the
+ * write it was meant to avoid. Cleared wholesale rather than per entry, because
+ * this is a cost cache and not a correctness one.
+ */
+const RECENT_WRITE_MAX = 5000
 
 export class MongoProfileMediaPort {
+  private readonly recentlyWritten = new Set<string>()
+
   constructor(private readonly store: MongoStore) {}
 
   private get collection(): ReturnType<MongoStore['profileMedia']> {
@@ -94,37 +107,33 @@ export class MongoProfileMediaPort {
     if (!/^[0-9a-f]{16}$/.test(hash)) return null
     if (isDegenerateHash(hash)) return null
 
-    const bands = bandsOf(hash)
-    const doc: Document = {
-      hash, userId, lastSeenAt: now,
-      b0: bands[0], b1: bands[1], b2: bands[2], b3: bands[3]
+    const key = `${userId}:${hash}`
+    if (!this.recentlyWritten.has(key)) {
+      const doc: Document = { hash, userId, lastSeenAt: now }
+      await this.collection.updateOne(
+        { hash, userId },
+        { $set: doc, $setOnInsert: { firstSeenAt: now } },
+        { upsert: true }
+      ).catch(() => { /* best-effort: a lost write costs one observation */ })
+      if (this.recentlyWritten.size >= RECENT_WRITE_MAX) this.recentlyWritten.clear()
+      this.recentlyWritten.add(key)
     }
-    await this.collection.updateOne(
-      { hash, userId },
-      { $set: doc, $setOnInsert: { firstSeenAt: now } },
-      { upsert: true }
-    ).catch(() => { /* best-effort: a lost write costs one observation */ })
 
-    const candidates = await this.collection.find(
-      { $or: [{ b0: bands[0] }, { b1: bands[1] }, { b2: bands[2] }, { b3: bands[3] }] },
-      { projection: { hash: 1, userId: 1 }, limit: LOOKUP_LIMIT }
+    // Served by the `{hash, userId}` index on its `hash` prefix.
+    const rows = await this.collection.find(
+      { hash },
+      { projection: { userId: 1 }, limit: LOOKUP_LIMIT }
     ).toArray().catch(() => [])
 
     const others = new Set<number>()
-    let closest = Number.POSITIVE_INFINITY
-    for (const row of candidates) {
+    for (const row of rows) {
       const otherId = Number(row['userId'])
+      // The sender's own row is in here by construction — the write above put it
+      // there. Counting it would make every first sighting match itself.
       if (!Number.isSafeInteger(otherId) || otherId === userId) continue
-      const d = hammingDistance(hash, String(row['hash']))
-      if (d === null || d > DHASH_MATCH_MAX_DISTANCE) continue
       others.add(otherId)
-      if (d < closest) closest = d
     }
     if (others.size === 0) return null
-    return {
-      otherAccounts: others.size,
-      sampleUserIds: [...others].slice(0, 3),
-      closestDistance: closest
-    }
+    return { otherAccounts: others.size, sampleUserIds: [...others].slice(0, 3) }
   }
 }

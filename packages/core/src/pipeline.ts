@@ -616,16 +616,12 @@ export const evaluateMessage = async (
         ports.profileMedia!.seen(input.user.id, input.enrichment.avatarDhash!))
       if (reuse !== null && reuse.otherAccounts > 0) {
         const shared = reuse.sampleUserIds.join(', ')
-        const exact = reuse.closestDistance === 0 ? 'identical' : `${reuse.closestDistance} bits`
         signals.push(reuse.otherAccounts >= 2
           ? {
               name: 'avatar_shared_with_accounts',
-              evidence: `same profile photo on ${reuse.otherAccounts} other accounts (${exact}): ${shared}`
+              evidence: `same profile photo on ${reuse.otherAccounts} other accounts: ${shared}`
             }
-          : {
-              name: 'avatar_shared_with_account',
-              evidence: `same profile photo as ${shared} (${exact})`
-            })
+          : { name: 'avatar_shared_with_account', evidence: `same profile photo as ${shared}` })
         meta['avatarSharedWith'] = reuse.otherAccounts
       }
     }

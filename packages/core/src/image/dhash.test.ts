@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import {
-  dhash, hammingDistance, isSameImage, isDegenerateHash,
-  DHASH_MATCH_MAX_DISTANCE, type RgbaImage
+  dhash, hammingDistance, isDegenerateHash, DHASH_MATCH_MAX_DISTANCE, type RgbaImage
 } from './dhash.js'
 
 /** Build an RGBA image from a per-pixel luma function. */
@@ -55,7 +54,7 @@ describe('dhash', () => {
     const brighter = image(64, 64, (x, y) => ((x * 37 + y * 91 + 39) % 251) * 0.8 + 40)
     const a = dhash(base)
     const b = dhash(brighter)
-    expect(isSameImage(a!, b!)).toBe(true)
+    expect(hammingDistance(a!, b!)).toBeLessThanOrEqual(DHASH_MATCH_MAX_DISTANCE)
   })
 
   it('refuses an image smaller than the grid rather than hashing noise', () => {
