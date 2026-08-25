@@ -270,6 +270,20 @@ export const PRESET_THRESHOLDS: Record<StrictnessPreset, PresetThresholds> = {
   strict: { ban: 0.92, mute: 0.84, kick: 0.7, delete: 0.55, grey: 0.32 }
 }
 
+/**
+ * Whether this chat and this sender may be asked a captcha at all.
+ *
+ * Exported because two places need the identical answer and used to be able to
+ * disagree. `decideAction` asks it for the grey band; the low-information branch
+ * asks it when the arithmetic came out ABOVE the grey band and has to be pulled
+ * back down to a question — that branch has not read the message, so a captcha
+ * is its ceiling however high the score climbs. Written twice, the second copy
+ * would eventually grant a captcha where the first refused one.
+ */
+export const mayAskCaptcha = (input: PolicyInput): boolean =>
+  input.captchaEnabled && input.userIsNewish &&
+  (input.chatKind !== 'discussion' || input.ephemeralCaptcha === true)
+
 export const decideAction = (input: PolicyInput): PolicyDecision => {
   const t = PRESET_THRESHOLDS[input.preset] ?? PRESET_THRESHOLDS.standard
   const p = input.pSpam
@@ -313,11 +327,7 @@ export const decideAction = (input: PolicyInput): PolicyDecision => {
   // single grey-band message is worse than deleting it and watching.
   if (p >= t.kick && input.userIsNewish) return decide('kick', uncertain)
   if (p >= t.delete) return decide('delete', uncertain)
-  if (p >= t.grey) {
-    const captchaAllowed = input.captchaEnabled && input.userIsNewish &&
-      (input.chatKind !== 'discussion' || input.ephemeralCaptcha === true)
-    return decide(captchaAllowed ? 'captcha' : 'observe')
-  }
+  if (p >= t.grey) return decide(mayAskCaptcha(input) ? 'captcha' : 'observe')
 
   return decide('none')
 }

@@ -377,7 +377,61 @@ const rememberForward = (chatId: number, messageId: number, forward: ForwardOrig
  * by its own ephemeral id over the Bot API, a visible one by message id over
  * MTProto, and a gate may end up with both.
  */
-const CAPTCHA_TTL_MS = 10 * 60 * 1000
+/**
+ * How long the button stays valid.
+ *
+ * Long, and deliberately far longer than the answer window below. A gate is the
+ * one restriction in this bot that the restricted person can lift themselves,
+ * so the only thing a short validity buys is a member who came back to a dead
+ * button and no way out — the exact failure the whisper-first design exists to
+ * avoid. A tap is the cheapest possible exit and must not expire while the
+ * restriction it lifts is still in force.
+ */
+const CAPTCHA_TTL_MS = 24 * 60 * 60 * 1000
+
+/**
+ * How long silence is given the benefit of the doubt before the gate acts.
+ *
+ * Until 2026-08-25 an unanswered captcha had NO consequence whatsoever: the
+ * executor muted for ten minutes, the mute lapsed on its own, and the message
+ * that triggered the gate stayed in the chat. So the whole branch amounted to
+ * asking a bot to wait ten minutes, which is not a cost a bot notices — while
+ * the advert it had already posted stayed up. Measured: `action: 'captcha'` was
+ * unreachable in production anyway, so this had never been exercised.
+ *
+ * The consequence is deliberately not a ban. Silence has an innocent
+ * explanation — somebody posted and closed Telegram — so what happens is the
+ * pair of things that are undone by one tap: the message comes down, and the
+ * restriction stops lapsing on its own. Nothing here is irreversible, and the
+ * account is never removed from the chat.
+ *
+ * Two minutes, not ten. This window is exactly how long the message stays up,
+ * and a captcha that leaves an advert in the chat for ten minutes has bought
+ * the chat nothing over plain `observe` — which is the complaint that started
+ * this work. Two minutes is generous for the population being asked: they sent
+ * a message seconds ago, so they are holding the phone, and the whisper arrives
+ * instantly. It also sits after `CAPTCHA_WHISPER_GRACE_MS` (45s) with room to
+ * spare, so a member who never received the whisper still gets the visible
+ * prompt and time to tap it.
+ */
+const CAPTCHA_ANSWER_GRACE_MS = 2 * 60 * 1000
+
+/**
+ * Restriction imposed once a gate goes unanswered, in seconds.
+ *
+ * Bounded by what the tap can actually undo, NOT by what would inconvenience a
+ * bot most. Gates live in `pendingCaptchas`, in memory: after a restart the
+ * button is still in the chat but `peekCaptcha` no longer recognises it, so the
+ * member's own way out is gone and only Telegram's own expiry remains. The
+ * restriction must therefore never be longer than we are willing to leave
+ * somebody muted with no button — an hour, not a day.
+ *
+ * This is the same rule the whisper-first design already states from the other
+ * side: "a restriction the user cannot lift is the one failure mode that must
+ * not exist". Persisting the gate would let this be longer; until it is
+ * persisted, it may not be.
+ */
+const CAPTCHA_IGNORED_MUTE_SECONDS = 60 * 60
 
 /**
  * How long a whispered prompt gets on its own before the visible one goes up
@@ -405,6 +459,16 @@ interface CaptchaGate {
   /** Set once a visible prompt is posted; an ordinary message id. */
   publicMessageId: number | null
   fallbackTimer: ReturnType<typeof setTimeout> | null
+  /**
+   * The message that triggered the gate. A standalone captcha deliberately
+   * leaves it up — the sender has not been judged, only asked — which is
+   * precisely why it has to come down if the asking is ignored.
+   */
+  triggerMessageId: number | null
+  /** Fires the unanswered-gate consequence once. */
+  consequenceTimer: ReturnType<typeof setTimeout> | null
+  /** Set once the consequence ran, so it cannot run twice for one gate. */
+  consequenceApplied: boolean
 }
 
 const pendingCaptchas = new Map<string, CaptchaGate>()
@@ -414,6 +478,7 @@ const captchaKey = (chatId: number, userId: number): string => `${chatId}:${user
 const forgetCaptcha = (key: string): void => {
   const gate = pendingCaptchas.get(key)
   if (gate?.fallbackTimer) clearTimeout(gate.fallbackTimer)
+  if (gate?.consequenceTimer) clearTimeout(gate.consequenceTimer)
   pendingCaptchas.delete(key)
 }
 
@@ -427,7 +492,10 @@ const issueCaptcha = (chatId: number, userId: number): CaptchaGate => {
     expiresMs: Date.now() + CAPTCHA_TTL_MS,
     ephemeralMessageId: null,
     publicMessageId: null,
-    fallbackTimer: null
+    fallbackTimer: null,
+    triggerMessageId: null,
+    consequenceTimer: null,
+    consequenceApplied: false
   }
   pendingCaptchas.set(captchaKey(chatId, userId), gate)
   return gate
@@ -450,6 +518,37 @@ const peekCaptcha = (chatId: number, userId: number): CaptchaGate | null => {
 }
 
 /**
+ * A gate nobody answered.
+ *
+ * Two acts, both undone by one late tap: the triggering message comes down, and
+ * the ten-minute mute is replaced by one that does not lapse on its own. The
+ * gate itself is KEPT — that is the whole design. The member who returns still
+ * has a working button, and `passCaptcha` lifts the restriction in full.
+ *
+ * What this deliberately is not: a kick, a ban, or a learned detection. Nothing
+ * here read the message, so nothing here may conclude anything about it. The
+ * only fact established is that an account was asked to tap once and did not.
+ */
+const applyIgnoredCaptcha = async (
+  chatId: number, userId: number, gate: CaptchaGate
+): Promise<void> => {
+  // Through the shared action, not a hand-rolled `restrictChatMember`: a mute in
+  // this API is fifteen separate permission flags, and a call that passes only
+  // `sendMessages` leaves photos, stickers and media wide open — which is the
+  // half of the traffic this class of account actually posts.
+  const held = await gateway.moderationActions
+    .mute(chatId, userId, CAPTCHA_IGNORED_MUTE_SECONDS)
+    .then(() => true).catch(() => false)
+
+  let removed = false
+  if (gate.triggerMessageId !== null) {
+    removed = await gateway.tg.deleteMessagesById(chatId, [gate.triggerMessageId])
+      .then(() => true).catch(() => false)
+  }
+  log.info('captcha_ignored', { chatId, userId, held, removed })
+}
+
+/**
  * Ask the sender to prove they are human: whisper first, visible prompt as the
  * safety net.
  *
@@ -468,14 +567,36 @@ const deliverCaptcha = async (
   chatId: number,
   userId: number,
   userLabel: string,
-  locale: Locale
+  locale: Locale,
+  triggerMessageId: number | null = null
 ): Promise<void> => {
   const gate = issueCaptcha(chatId, userId)
+  gate.triggerMessageId = triggerMessageId
   const view = captchaPrompt(locale, { chatId, userId, userLabel })
+
+  /**
+   * What an ignored gate costs. Scheduled here rather than at the call site so
+   * that every way of issuing a captcha carries it — the branch that asks and
+   * the capped verdict that deletes and then asks.
+   */
+  const consequence = setTimeout(() => {
+    // A tap replaced or spent the gate: nothing owed.
+    if (pendingCaptchas.get(captchaKey(chatId, userId)) !== gate) return
+    if (gate.consequenceApplied) return
+    gate.consequenceApplied = true
+    void applyIgnoredCaptcha(chatId, userId, gate)
+  }, CAPTCHA_ANSWER_GRACE_MS)
+  consequence.unref?.()
+  gate.consequenceTimer = consequence
 
   const postVisible = async (): Promise<void> => {
     const sent = await tgSendText(chatId, viewHtml(view.text), {
-      replyMarkup: toKeyboard(view.buttons)
+      replyMarkup: toKeyboard(view.buttons),
+      // Replied to the message that triggered it, so the member sees what this
+      // is about and gets a notification for it. Without the reply the prompt is
+      // one more line in a busy chat, and the person it is addressed to is
+      // exactly the person who must not miss it.
+      ...(gate.triggerMessageId !== null ? { replyTo: gate.triggerMessageId } : {})
       // Prompt failure is survivable: the restriction expires on its own.
     }).catch(() => null)
     if (!sent) return
@@ -508,7 +629,8 @@ const deliverCaptcha = async (
   try {
     gate.ephemeralMessageId = await gateway.sendEphemeralPrompt(
       chatId, userId, view.text,
-      view.buttons.map((row) => row.map((b) => ({ text: b.text, data: b.data ?? '' })))
+      view.buttons.map((row) => row.map((b) => ({ text: b.text, data: b.data ?? '' }))),
+      gate.triggerMessageId ?? undefined
     )
     log.info('captcha_whispered', { chatId, userId })
 
@@ -3381,7 +3503,10 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       chatId: chat.id, userId: sender.id, ...logContext, action: verdict.action
     })
     const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
-    await deliverCaptcha(chat.id, sender.id, sender.displayName, locale)
+    // The triggering message, so an ignored gate can take it down. For a
+    // `delete`-plus-captcha verdict the executor already removed it; deleting an
+    // absent message is a no-op, so no branch is needed here.
+    await deliverCaptcha(chat.id, sender.id, sender.displayName, locale, message.id)
   }
 
   const enforced = verdict.action !== 'none' && verdict.action !== 'observe' && verdict.action !== 'captcha'

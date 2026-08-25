@@ -5,7 +5,7 @@ import type {
 } from './types.js'
 import type { BurstEntry, BurstPort, ModerationResult, PipelinePorts, SessionPort } from './ports.js'
 import { evaluateMessage } from './pipeline.js'
-import { isEnforcementAction, removesSender } from './policy.js'
+import { isEnforcementAction, removesSender, PRESET_THRESHOLDS } from './policy.js'
 import { contentEvidence, mayRemoveSender } from './score.js'
 
 // ── fixtures ──────────────────────────────────────────────────────────
@@ -1884,6 +1884,91 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
     expect(v.signals.map((s) => s.name)).toContain('suggestive_profile_media')
     expect(v.action).toBe('captcha')
     expect(v.reasonCode).toBe('low_information_profile')
+  })
+
+  /**
+   * The case this branch existed for and could not reach.
+   *
+   * Production, 2026-08-25: an account posted "💗" five times into one chat over
+   * ten hours, its bio holding a private invite (it swapped a plain promo link
+   * for the invite between the second and third). Every one of the five was
+   * `observe`, pSpam 0. Two separate faults had to line up for that:
+   * `emoji_only` (-1.5) cancelled the invite (+1.5) exactly, and the branch then
+   * compared the policy action to 'captcha' for equality — so once the score DID
+   * clear the band, it cleared it into `delete`/`kick` and was dropped.
+   */
+  it('asks the emoji-poster whose bio advertises, and never more than asks', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { text: '💗' },
+      user: newcomer,
+      policy: { captchaEnabled: true },
+      enrichment: { bio: 'мій канал t.me/+AAAAAAAAAAAAAAAA' }
+    }), { moderation: { check: async () => modClean } })
+    const names = v.signals.map((s) => s.name)
+    expect(names).toContain('private_invite_in_bio')
+    expect(names).toContain('emoji_only')
+    expect(v.action).toBe('captcha')
+    expect(v.reasonCode).toBe('low_information_profile')
+    // The discount was withheld, and the record says which one — otherwise a
+    // captcha earned by this rule is indistinguishable from one the arithmetic
+    // reached on its own.
+    expect(v.meta['suspendedDiscounts']).toBe('emoji_only')
+  })
+
+  /**
+   * The ceiling is structural, not a threshold: the score here is well past the
+   * removal bar and the outcome is still a question, because no stage in this
+   * branch read the message.
+   *
+   * (An explicit avatar on top of the bio promo is deliberately NOT the case
+   * used: that combination is caught by a deterministic rule further up and
+   * never reaches this branch at all — which is correct, and is why the rule
+   * exists.)
+   */
+  it('never enforces out of the low-information branch, however high the score', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { text: '💗' },
+      user: newcomer,
+      policy: { captchaEnabled: true },
+      enrichment: { bio: 'мій канал t.me/+AAAAAAAAAAAAAAAA' }
+    }), { moderation: { check: async () => modClean } })
+    expect(isEnforcementAction(v.action)).toBe(false)
+    expect(v.action).toBe('captcha')
+    // The arithmetic asked for more than a captcha and was held to one.
+    expect(Number(v.meta['scorePSpam'])).toBeGreaterThan(PRESET_THRESHOLDS.standard.delete)
+  })
+
+  /**
+   * The discount is suspended, not deleted. A silent message from a sender whose
+   * profile says nothing keeps every bit of the benefit of the doubt — which is
+   * what stops this from becoming a tax on everyone who writes one word.
+   */
+  it('keeps the discount when the profile carries no charge', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { text: '💗' },
+      user: newcomer,
+      policy: { captchaEnabled: true }
+    }), { moderation: { check: async () => modClean } })
+    expect(v.action).toBe('observe')
+    expect(v.reasonCode).toBe('low_information')
+    expect(v.meta['suspendedDiscounts']).toBeUndefined()
+  })
+
+  /**
+   * A weak profile hint is not a charge. `suggestive_profile_media` (0.8) and
+   * `personal_channel` (0.5) sit below `DECISIVE_MIN_WEIGHT` deliberately: they
+   * are grounds to look closer, and the sender keeps the short-message discount.
+   * Measured 2026-08-25 — suspending on those instead produced `delete` and
+   * `kick` on "Усьо", "?" and "Привіт :)".
+   */
+  it('does not suspend the discount for a sub-threshold profile hint', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'ага' },
+      user: newcomer,
+      policy: { captchaEnabled: true },
+      enrichment: { personalChannelId: 42 }
+    }), { moderation: { check: async () => modClean } })
+    expect(v.meta['suspendedDiscounts']).toBeUndefined()
   })
 
   it('does not ask an ordinary newcomer anything', async () => {

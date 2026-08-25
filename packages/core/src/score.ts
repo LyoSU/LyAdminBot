@@ -9,7 +9,8 @@
  */
 import type { Signal } from './types.js'
 import {
-  PRIOR_MATCH_SIGNALS, RESEMBLANCE_SIGNALS, SIGNAL_GROUP_CAPS, SOFT_SHAPE_SIGNALS, weightOf
+  NOTHING_TO_READ_SIGNALS, PRIOR_MATCH_SIGNALS, PROFILE_EVIDENCE_SIGNALS, RESEMBLANCE_SIGNALS,
+  SIGNAL_GROUP_CAPS, SOFT_SHAPE_SIGNALS, weightOf
 } from './signals/registry.js'
 
 /** z-offset so that a signal-less message scores ≈ 0.10 (ham prior). */
@@ -175,21 +176,91 @@ export interface ScoreResult {
   topContributors: { name: string; weight: number }[]
   /** Groups whose ceiling actually bit, for calibration telemetry. */
   cappedGroups: string[]
+  /**
+   * Trust discounts withheld because the case rested on the profile rather than
+   * on the message — see `hasProfileCharge`. Recorded so a verdict that turned
+   * on this rule can be told apart from one that never had a discount to lose.
+   */
+  suspendedDiscounts: string[]
 }
 
 const sigmoid = (z: number): number => 1 / (1 + Math.exp(-z))
 
-export const scoreSignals = (signals: Signal[]): ScoreResult => {
+/**
+ * Whether the profile carries a charge that a silent message cannot answer.
+ *
+ * The bar is `DECISIVE_MIN_WEIGHT`, deliberately reusing the pipeline's existing
+ * definition of "evidence at all" rather than inventing a second one. That
+ * choice decides the two production cases apart, which is the point:
+ *
+ *  - A bio holding a private invite (1.5) or an explicit avatar (1.0) clears it.
+ *    Nothing about posting an emoji speaks to either, so the discount is void.
+ *  - A merely suggestive avatar (0.8) or the bare fact of owning a channel (0.5)
+ *    does not. Those are grounds to look closer, and the sender keeps the
+ *    benefit of the doubt a short message buys — landing in the captcha band
+ *    instead of the removal band, which is where "ask, do not act" belongs.
+ */
+const hasProfileCharge = (distinct: Set<string>): boolean => {
+  for (const name of distinct) {
+    if (!PROFILE_EVIDENCE_SIGNALS.has(name as never)) continue
+    if (weightOf(name) >= DECISIVE_MIN_WEIGHT) return true
+  }
+  return false
+}
+
+export interface ScoreOptions {
+  /**
+   * Withhold "there was nothing to read" discounts when the case rests on the
+   * profile — see `hasProfileCharge`.
+   *
+   * Opt-in per call site, and deliberately NOT the default. Measured against 14
+   * days of production verdicts, applying it globally moved 16 of 43 affected
+   * rows to `delete` or worse, and the texts were "Усьо", "?", "Привіт :)" and
+   * "Фига, спасибки" — ordinary members whose profile happened to carry one
+   * heavy signal. Removing the discount raises the score without adding any
+   * evidence about the message, so on its own it converts silence into a
+   * verdict. The only caller that may ask for it is therefore one that cannot
+   * return an enforcing action at all (the low-information captcha branch),
+   * where the answer to "we cannot read this" is a question, not a punishment.
+   */
+  suspendProfileAnsweringDiscounts?: boolean
+}
+
+export const scoreSignals = (signals: Signal[], options: ScoreOptions = {}): ScoreResult => {
   // Dedup: a fact is a fact — repeating it must not double its weight.
   const distinct = new Set(signals.map((s) => s.name))
 
+  /**
+   * A discount for "there was nothing to read" is suspended when the case
+   * against the sender does not rest on what they wrote.
+   *
+   * This is not extra severity bolted on; it removes leniency that was being
+   * applied to the wrong account. `emoji_only` states a fact about the message.
+   * Set against `private_invite_in_bio`, it was answering a charge nobody made
+   * — and answering it decisively, since -1.5 outweighs the +1.5 it cancelled.
+   *
+   * Suspended, not reversed: the signal keeps its weight everywhere else, and a
+   * silent message from a sender whose profile says nothing is still treated
+   * exactly as gently as before. Measured on 14 days of production verdicts,
+   * this changes the recorded action for a small, specific population — see the
+   * impact table in the 2026-08-25 commit.
+   */
+  const profileCharged = options.suspendProfileAnsweringDiscounts === true &&
+    hasProfileCharge(distinct)
+
   const contributors: { name: string; weight: number }[] = []
   const groupTotals = new Map<string, number>()
+  /** Discounts withheld because the charge was about the profile, for telemetry. */
+  const suspended: string[] = []
   let z = BASE_RATE_BIAS
 
   for (const name of distinct) {
     const weight = weightOf(name)
     if (weight === 0) continue
+    if (profileCharged && NOTHING_TO_READ_SIGNALS.has(name as never)) {
+      suspended.push(name)
+      continue
+    }
     contributors.push({ name, weight })
 
     // Trust signals are never capped: a ceiling on them could only ever make
@@ -214,5 +285,5 @@ export const scoreSignals = (signals: Signal[]): ScoreResult => {
 
   contributors.sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight))
 
-  return { pSpam: sigmoid(z), topContributors: contributors, cappedGroups }
+  return { pSpam: sigmoid(z), topContributors: contributors, cappedGroups, suspendedDiscounts: suspended }
 }

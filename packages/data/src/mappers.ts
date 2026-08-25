@@ -55,7 +55,25 @@ export const groupDocToChatPolicy = (doc: GroupDoc | null): ChatPolicy => {
   return {
     enabled: spam?.enabled ?? true,
     preset: thresholdToPreset(spam?.confidenceThreshold),
-    captchaEnabled: doc?.settings?.captcha?.enabled ?? false,
+    /**
+     * On by default, unlike every other opt-in this bot has — and the only
+     * default that was ever false, which is what made it dead code.
+     *
+     * Measured 2026-08-25 over 14 days and 239,528 verdicts: `action: 'captcha'`
+     * occurred ZERO times, and `low_information_profile` — the reason code that
+     * exists solely to ask an unreadable-but-suspicious sender to prove they are
+     * human — was written zero times. Of 753 groups, one had this flag on. So
+     * the whole branch below `decideAction`'s grey band, tests and all, had
+     * never once run in production.
+     *
+     * Defaulting it true is safe in a way that no other enforcement default is:
+     * a captcha removes nothing and bans nobody. It is delivered as an MTProto
+     * ephemeral message that only its recipient can see, so a wrong guess costs
+     * that member one tap and costs the chat nothing — no public accusation, no
+     * deleted message. That asymmetry is the entire argument for asking instead
+     * of acting, and it only pays off if asking is actually reachable.
+     */
+    captchaEnabled: doc?.settings?.captcha?.enabled ?? true,
     votingEnabled: doc?.settings?.voting?.enabled ?? true,
     externalBanEnabled: doc?.settings?.banDatabase ?? true,
     customRules: spam?.customRules ?? [],

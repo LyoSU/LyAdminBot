@@ -30,7 +30,8 @@ import {
 } from './score.js'
 import { PERMANENT_BAN_SIGNALS, isTrustSignal } from './signals/registry.js'
 import {
-  decideAction, isEnforcementAction, removesSender, IMITABLE_REASON_CODES, type PolicyDecision
+  decideAction, isEnforcementAction, removesSender, mayAskCaptcha, IMITABLE_REASON_CODES,
+  type PolicyDecision, type PolicyInput
 } from './policy.js'
 import { burstBlob, burstSignals } from './signals/burst.js'
 import { shouldAbstain } from './text/abstain.js'
@@ -305,7 +306,7 @@ export const evaluateMessage = async (
    * `finalize` because the LLM gate has to know the *prospective* action before
    * deciding whether the message may be judged on arithmetic alone.
    */
-  const policyFor = (pSpam: number, signals: Signal[]): PolicyDecision => decideAction({
+  const policyInputFor = (pSpam: number, signals: Signal[]): PolicyInput => ({
     pSpam,
     preset: input.policy.preset,
     chatKind: input.chat.kind,
@@ -321,6 +322,9 @@ export const evaluateMessage = async (
     // admin having to notice it.
     hasPermanentBanGrounds: signals.some((s) => PERMANENT_BAN_SIGNALS.has(s.name))
   })
+
+  const policyFor = (pSpam: number, signals: Signal[]): PolicyDecision =>
+    decideAction(policyInputFor(pSpam, signals))
 
   const finalize = (draft: VerdictDraft, signals: Signal[], decision?: PolicyDecision): Verdict => {
     const policyDecision = decision ?? policyFor(draft.pSpam, signals)
@@ -937,10 +941,46 @@ export const evaluateMessage = async (
      * else — including anything that would remove a message — falls back to
      * `observe`, because none of it has read the text.
      */
-    const shaped = scoreSignals(signals)
+    /**
+     * The one call site allowed to withhold "nothing to read" discounts.
+     *
+     * Safe here and nowhere else, for a structural reason rather than a
+     * calibrated one: nothing but a captcha can come out of this branch (see the
+     * note above), so a score raised by withholding a discount can only ever buy
+     * a question. The 2026-08-25 measurement of applying it globally is in
+     * `ScoreOptions` — it produced `delete` and `kick` on "Усьо" and "Привіт :)".
+     *
+     * What it fixes: an account advertising in its bio used to be handed a -1.5
+     * discount for posting an emoji, which cancelled the +1.5 invite link and
+     * landed it below the grey band. Four identical "💗" from one such account
+     * were observed four times over.
+     */
+    const shaped = scoreSignals(signals, { suspendProfileAnsweringDiscounts: true })
     const asked = policyFor(shaped.pSpam, signals)
-    if (asked.action === 'captcha') {
+    /**
+     * A captcha is this branch's CEILING, not one point on its ladder.
+     *
+     * `policyFor` answers the general question "what does this score deserve",
+     * and above the grey band it stops consulting `mayAskCaptcha` at all — it
+     * returns `delete`, `kick`, `mute`. None of those may come out of here,
+     * because nothing here read the message. Testing for equality with
+     * 'captcha' therefore dropped exactly the strongest cases on the floor:
+     * measured over 14 days, 56 rows scored ABOVE the captcha band and were
+     * answered with `observe`, among them the case this branch was written for
+     * — an account advertising a private invite in its bio, posting one emoji.
+     *
+     * Heavier evidence has to mean at least as much action, never less. So
+     * anything from the grey band upward becomes the same question, asked only
+     * where a question is permitted.
+     */
+    const deserved = asked.action !== 'observe' && asked.action !== 'none'
+    if (deserved && mayAskCaptcha(policyInputFor(shaped.pSpam, signals))) {
       meta['scorePSpam'] = Number(shaped.pSpam.toFixed(4))
+      // Which discount was withheld, so a captcha that turned on this rule can
+      // be told apart from one the arithmetic reached on its own.
+      if (shaped.suspendedDiscounts.length > 0) {
+        meta['suspendedDiscounts'] = shaped.suspendedDiscounts.join(',')
+      }
       return finalize(
         {
           pSpam: shaped.pSpam,
@@ -950,7 +990,10 @@ export const evaluateMessage = async (
           reasonEvidence: null
         },
         signals,
-        asked
+        // The literal action, not `asked` — which for a score above the band
+        // says `delete`/`kick`. Passing it through was how a branch that
+        // promises "nothing but a captcha" could have enforced.
+        { action: 'captcha', needsVote: false, banDurationSeconds: null }
       )
     }
 

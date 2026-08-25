@@ -123,18 +123,29 @@ export class TelegramGateway {
     chatId: number,
     receiverId: number,
     text: string,
-    buttons: { text: string; data: string }[][]
+    buttons: { text: string; data: string }[][],
+    /**
+     * Message this prompt answers. A whisper is invisible to everyone else, so
+     * without the reply the recipient has nothing tying it to what they just
+     * sent — and a bare "prove you are human" with no referent reads like a
+     * phishing attempt. The reply also produces the notification that makes an
+     * ephemeral message noticed at all.
+     */
+    replyTo?: number
   ): Promise<number> {
     const sent = await this.tg.sendEphemeralMessage(
       chatId,
       receiverId,
       html(text.replace(/\n/g, '<br>')),
-      buttons.length > 0
-        ? {
-            replyMarkup: BotKeyboard.inline(
-              buttons.map((row) => row.map((b) => BotKeyboard.callback(b.text, b.data))))
-          }
-        : {}
+      {
+        ...(buttons.length > 0
+          ? {
+              replyMarkup: BotKeyboard.inline(
+                buttons.map((row) => row.map((b) => BotKeyboard.callback(b.text, b.data))))
+            }
+          : {}),
+        ...(replyTo !== undefined ? { replyTo } : {})
+      }
     )
     return sent.id
   }

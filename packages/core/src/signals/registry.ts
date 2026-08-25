@@ -66,6 +66,32 @@ export interface SignalSpec {
    * not independent. See `SIGNAL_GROUPS`.
    */
   group?: SignalGroupName
+  /**
+   * A trust signal whose whole claim is that there was nothing to read: an
+   * emoji, three words, a bare sticker. Marked because such a discount may not
+   * be spent on a charge it does not answer.
+   *
+   * Measured 2026-08-25, over 14 days of production verdicts: conditioned on
+   * having seen the account again, `emoji_only` on a quiet verdict predicted a
+   * later removal at 5.2x the base rate and `short_message` at 4.0x. Both carry
+   * NEGATIVE weight. The sign is inverted because the discount is being read as
+   * a statement about the sender when it is only a statement about the message.
+   *
+   * The concrete case: four identical "💗" from an account whose bio held a
+   * private invite scored 0.4502 and were observed four times. Without the
+   * `emoji_only` -1.5 the same signals score 0.7858 — removal territory. A
+   * discount for "we could not read it" had cancelled an invite link sitting in
+   * plain sight on the profile.
+   *
+   * See `PROFILE_EVIDENCE_SIGNALS` for what suspends these.
+   */
+  nothingToRead?: true
+  /**
+   * A fact about the sender's PROFILE — bio, name, avatar, linked channel —
+   * as opposed to the message. Read alongside `nothingToRead`: evidence here
+   * survives a silent message, because it was never about the message.
+   */
+  profileEvidence?: true
   /** Carries promo intent — input to the deterministic promo rules. */
   promo?: true
   /** Structural evasion, near-zero FP by shape rather than by content. */
@@ -400,7 +426,7 @@ export const SIGNALS = {
    * covers shorteners and messenger contacts, which the corpus never separated
    * out and which hide their destination by construction.
    */
-  promo_in_bio: { weight: 0.3, kind: 'shape', group: 'profile_promo' },
+  promo_in_bio: { weight: 0.3, kind: 'shape', group: 'profile_promo', profileEvidence: true },
   /**
    * A private invite (`t.me/+…`) in the bio — the same corpus, the other end of
    * it: 907 such bios, 62.5% known-bad against a 24.6% baseline for bios with no
@@ -419,7 +445,7 @@ export const SIGNALS = {
    * to the signals firing beside this one. Still shape, still inside
    * `profile_promo` — it clears no evidence bar, so alone it can only ask.
    */
-  private_invite_in_bio: { weight: 1.5, kind: 'shape', group: 'profile_promo' },
+  private_invite_in_bio: { weight: 1.5, kind: 'shape', group: 'profile_promo', profileEvidence: true },
   /**
    * A phone number or a cashtag in the bio: not a link, but a way to be reached
    * or paid off-platform. Split out of `promo_in_bio` keeping its old weight,
@@ -427,16 +453,16 @@ export const SIGNALS = {
    * about this one — a measurement about websites must not quietly re-price
    * phone numbers.
    */
-  contact_in_bio: { weight: 1.2, kind: 'shape', group: 'profile_promo' },
+  contact_in_bio: { weight: 1.2, kind: 'shape', group: 'profile_promo', profileEvidence: true },
   /**
    * Promo URL / foreign @handle carried in the display name or username itself.
    * Nobody names themselves after a promo link by accident, so this is the
    * highest-precision profile signal we have — but it is still about WHO, not
    * WHAT, so it stays shape.
    */
-  promo_in_name: { weight: 1.8, kind: 'shape', group: 'profile_promo' },
+  promo_in_name: { weight: 1.8, kind: 'shape', group: 'profile_promo', profileEvidence: true },
   /** Linked personal channel — weak alone (legit users have them too). */
-  personal_channel: { weight: 0.5, kind: 'shape', group: 'profile_promo' },
+  personal_channel: { weight: 0.5, kind: 'shape', group: 'profile_promo', profileEvidence: true },
   /**
    * The channel the profile points at turned out to be an advert itself — its
    * title or its own description reads the way a promo bio reads.
@@ -447,7 +473,7 @@ export const SIGNALS = {
    * capped with the rest of `profile_promo` — one profile advertised in several
    * places is one profile.
    */
-  promo_in_linked_channel: { weight: 1.5, kind: 'shape', group: 'profile_promo' },
+  promo_in_linked_channel: { weight: 1.5, kind: 'shape', group: 'profile_promo', profileEvidence: true },
   /** Invisible/zero-width characters in the display name — no legitimate use. */
   invisible_in_name: { weight: 1.2, kind: 'shape' },
   identity_churn_24h: { weight: 1.5, kind: 'shape' },
@@ -458,7 +484,7 @@ export const SIGNALS = {
    * recall-tuned `flagged` boolean caught on `violence`. They now only nudge the
    * message toward the LLM, which reads what was actually written.
    */
-  nsfw_avatar: { weight: 1.0, kind: 'shape', group: 'profile_nsfw' },
+  nsfw_avatar: { weight: 1.0, kind: 'shape', group: 'profile_nsfw', profileEvidence: true },
   /**
    * Profile media that is suggestive without being explicit — lingerie, a pose,
    * a mirror selfie. The escort-bot norm, and measured: the avatar of a
@@ -475,11 +501,11 @@ export const SIGNALS = {
    * weight and open the classifier's gate, and it may never satisfy the
    * deterministic rule about a profile-as-advert.
    */
-  suggestive_profile_media: { weight: 0.8, kind: 'shape', group: 'profile_nsfw' },
-  nsfw_stories: { weight: 0.9, kind: 'shape', group: 'profile_nsfw' },
+  suggestive_profile_media: { weight: 0.8, kind: 'shape', group: 'profile_nsfw', profileEvidence: true },
+  nsfw_stories: { weight: 0.9, kind: 'shape', group: 'profile_nsfw', profileEvidence: true },
   /** Explicit imagery on the channel the profile points at — same group, for
    *  the same reason: it is one person's imagery, seen in one more place. */
-  nsfw_linked_channel: { weight: 1.0, kind: 'shape', group: 'profile_nsfw' },
+  nsfw_linked_channel: { weight: 1.0, kind: 'shape', group: 'profile_nsfw', profileEvidence: true },
 
   // ───────────────────── history / age (shape) ─────────────────────
 
@@ -518,10 +544,10 @@ export const SIGNALS = {
 
   is_reply: { weight: -1.0, kind: 'trust' },
   recent_reply: { weight: -0.8, kind: 'trust' },
-  media_only: { weight: -1.5, kind: 'trust' },
-  emoji_only: { weight: -1.5, kind: 'trust' },
-  internal_link_only: { weight: -1.0, kind: 'trust' },
-  short_message: { weight: -0.8, kind: 'trust' },
+  media_only: { weight: -1.5, kind: 'trust', nothingToRead: true },
+  emoji_only: { weight: -1.5, kind: 'trust', nothingToRead: true },
+  internal_link_only: { weight: -1.0, kind: 'trust', nothingToRead: true },
+  short_message: { weight: -0.8, kind: 'trust', nothingToRead: true },
   verified_account: { weight: -3.0, kind: 'trust' },
   trusted_reputation: { weight: -2.5, kind: 'trust' },
   established_user: { weight: -1.5, kind: 'trust' }
@@ -585,6 +611,18 @@ export const PRIOR_MATCH_SIGNALS = namesWhere((s) => s.priorMatch === true)
  * never help make up the evidence for removing the person who sent it.
  */
 export const RESEMBLANCE_SIGNALS = namesWhere((s) => s.resemblance === true)
+
+/**
+ * Trust discounts whose only claim is that the message carried nothing to read
+ * — see `SignalSpec.nothingToRead`.
+ */
+export const NOTHING_TO_READ_SIGNALS = namesWhere((s) => s.nothingToRead === true)
+
+/**
+ * Facts about the sender's profile rather than about the message — see
+ * `SignalSpec.profileEvidence`.
+ */
+export const PROFILE_EVIDENCE_SIGNALS = namesWhere((s) => s.profileEvidence === true)
 
 /** True for a signal that lowers the score — derived, never re-declared. */
 export const isTrustSignal = (name: string): boolean =>

@@ -43,7 +43,10 @@ describe('groupDocToChatPolicy', () => {
     expect(policy.enabled).toBe(true)
     expect(policy.preset).toBe('standard')
     expect(policy.votingEnabled).toBe(true)
-    expect(policy.captchaEnabled).toBe(false)
+    // On by default since 2026-08-25. It was the only false default in the file,
+    // and the measurement is in `groupDocToChatPolicy`: one group of 753 had it
+    // on, so `action: 'captcha'` occurred zero times in 239,528 verdicts.
+    expect(policy.captchaEnabled).toBe(true)
   })
 
   it('external ban databases are on by default (v1 banDatabase parity)', () => {
