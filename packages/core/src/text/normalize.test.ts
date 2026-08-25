@@ -187,11 +187,19 @@ describe('redactLinks', () => {
     expect(redactLinks('лист a.b@gmail.com', m)).toBe('лист [посилання]')
   })
 
+  test('a naked host with a spam-shaped suffix is still a destination', () => {
+    expect(redactLinks('деталі casino-x.com', m)).toBe('деталі [посилання]')
+    expect(redactLinks('заходь на shop.online зараз', m)).toBe('заходь на [посилання] зараз')
+    expect(redactLinks('vk.ru', m)).toBe('[посилання]')
+  })
+
   test('ordinary writing survives', () => {
     // The whole failure mode of a redactor is eating the words it was asked to
     // show. A filename and a module name are not destinations; neither is the
     // "t.me" that hides inside an ordinary word.
     const plain = 'звіт.pdf і node.js лежать у part.men, і т.д.'
+    // The curated suffix list is what keeps these out: none of them is a TLD we
+    // redact bare, and none of them carries a path.
     expect(redactLinks(plain, m)).toBe(plain)
     expect(redactLinks('пиши @всім і @ok', m)).toBe('пиши @всім і @ok')
   })

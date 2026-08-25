@@ -35,7 +35,7 @@ import {
 import {
   captchaPrompt, compactNotification, escapeHtml as escapeName, helpView,
   langPanel, langPicker, parseCallback, resolveLocale, settingsDeepLink, settingsPanel,
-  startCard, startGroupHint, topList, userMention, userProfileCard, votePrompt, voteResult,
+  nameIsPromo, startCard, startGroupHint, topList, userMention, userProfileCard, votePrompt, voteResult,
   voterListView, whyCard, whyView,
   welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor,
   LOCALES, type Locale, type UserFacts, type ViewMessage
@@ -1239,11 +1239,23 @@ const sendWelcomePreview = async (userId: number, sampleName: string, chatId: nu
 }
 
 /**
+ * Whether the capture window is finished with.
+ *
+ * `keep` covers two different situations that both need the same thing: a
+ * recoverable validation or write failure, where the admin's corrected next
+ * message must still land in this flow, and the extra-name step, which has
+ * already replaced the entry with the next one itself.
+ */
+type PendingOutcome = 'consume' | 'keep'
+
+/**
  * Capture the next PM message as input for an in-progress editor flow (add a
  * welcome text/gif, name/define an extra). After a successful add we echo the
  * refreshed list so the admin can keep adding without re-opening the menu.
  */
-const handlePendingInput = async (message: Message, userId: number, entry: PendingEntry, locale: Locale): Promise<void> => {
+const handlePendingInput = async (
+  message: Message, userId: number, entry: PendingEntry, locale: Locale
+): Promise<PendingOutcome> => {
   const reply = (text: string): Promise<void> =>
     tgSendText(userId, viewHtml(text)).then(() => undefined).catch(() => { /* PM closed */ })
   const text = (message.text ?? '').trim()
@@ -1252,34 +1264,39 @@ const handlePendingInput = async (message: Message, userId: number, entry: Pendi
     const r = await store.addWelcomeText(entry.chatId, text).catch(() => ({ added: false as const, reason: undefined }))
     await reply(r.added ? locale.welcome.editor.added : welcomeAddIssue(locale, r.reason))
     await sendView(message, await renderWelcomeTexts(locale, entry.chatId, 0))
-    return
+    // A rejected text is a text the admin can fix and resend; the prompt stays.
+    return r.added ? 'consume' : 'keep'
   }
   if (entry.type === 'welcome.gif') {
     const fileId = mediaFileId(message)
-    if (!fileId) { await reply(locale.welcome.editor.invalidGif); return }
+    if (!fileId) { await reply(locale.welcome.editor.invalidGif); return 'keep' }
     const r = await store.addWelcomeGif(entry.chatId, fileId).catch(() => ({ added: false as const, reason: undefined }))
     await reply(r.added ? locale.welcome.editor.added : welcomeAddIssue(locale, r.reason))
     await sendView(message, await renderWelcomeGifs(locale, entry.chatId, 0))
-    return
+    return r.added ? 'consume' : 'keep'
   }
   if (entry.type === 'extra.name') {
     const name = text.replace(/^#/, '')
-    if (!/^[\p{L}\p{N}_]+$/u.test(name)) { await reply(locale.extra.editor.invalidName); return }
-    // Second step of the flow: now wait for the content under this name.
+    if (!/^[\p{L}\p{N}_]+$/u.test(name)) { await reply(locale.extra.editor.invalidName); return 'keep' }
+    // Second step of the flow: now wait for the content under this name. The
+    // entry it just wrote is the state — 'keep' so the caller leaves it alone.
     pendingInput.set(userId, { type: 'extra.content', chatId: entry.chatId, arg: name })
     await reply(locale.extra.editor.promptContent(name))
-    return
+    return 'keep'
   }
   if (entry.type === 'extra.content') {
     const name = entry.arg ?? ''
     const fileId = mediaFileId(message)
-    if (!text && !fileId) { await reply(locale.extra.editor.cancelled); return }
+    if (!text && !fileId) { await reply(locale.extra.editor.cancelled); return 'consume' }
     const extra: NormalizedExtra = { name, text, fileId }
-    await store.saveExtra(entry.chatId, extra).catch(() => { /* best-effort */ })
-    await reply(locale.extra.editor.added(name))
+    // Reported, not swallowed. "✅ Збережено #name" over a write Mongo refused
+    // sends the admin away believing a trigger exists that will never fire.
+    const saved = await store.saveExtra(entry.chatId, extra).then(() => true).catch(() => false)
+    await reply(saved ? locale.extra.editor.added(escapeName(name)) : locale.writeFailed)
     await sendView(message, await renderExtrasEditor(locale, entry.chatId, 0))
-    return
+    return saved ? 'consume' : 'keep'
   }
+  return 'consume'
 }
 
 /** PM entry: /start card, /help, /lang, settings deep links, editor input. */
@@ -1290,13 +1307,24 @@ const handlePrivateMessage = async (message: Message): Promise<void> => {
   const locale = await localeFor(sender.id, sender.language)
 
   // In-progress editor flow: this message is the input the admin was asked for.
-  const pending = pendingInput.take(sender.id)
+  const pending = pendingInput.peek(sender.id)
+  if (pending === 'expired') {
+    // Said out loud. The five-minute window lapsing used to be silent, so the
+    // admin's next message was read as a fresh command and answered with the
+    // /start card — which reads exactly like the editor having forgotten them.
+    await tgSendText(sender.id, viewHtml(locale.welcome.editor.expired))
+      .catch(() => { /* PM closed */ })
+    return
+  }
   if (pending) {
     if (/^\/cancel\b/i.test(text)) {
+      pendingInput.cancel(sender.id)
       await tgSendText(sender.id, viewHtml(locale.welcome.editor.cancelled)).catch(() => { /* PM closed */ })
       return
     }
-    await handlePendingInput(message, sender.id, pending, locale)
+    if (await handlePendingInput(message, sender.id, pending, locale) === 'consume') {
+      pendingInput.cancel(sender.id)
+    }
     return
   }
 
@@ -2025,9 +2053,14 @@ const handleWelcomeCommand = async (message: Message, chat: Chat, caller: User, 
   }
 
   const current = await store.getWelcome(chat.id).catch(() => ({ enable: false }))
-  await store.setWelcomeEnabled(chat.id, !current.enable).catch(() => { /* best-effort */ })
-  log.info('welcome_toggle', { chatId: chat.id, by: caller.id, enabled: !current.enable })
-  await ack(!current.enable ? locale.welcome.enabled : locale.welcome.disabled)
+  const toggled = await store.setWelcomeEnabled(chat.id, !current.enable)
+    .then(() => true).catch(() => false)
+  log.info('welcome_toggle', { chatId: chat.id, by: caller.id, enabled: !current.enable, ok: toggled })
+  // "Увімкнув" over a write that failed leaves the admin waiting for greetings
+  // that will never come, with nothing to suggest looking again.
+  await ack(!toggled
+    ? locale.writeFailed
+    : !current.enable ? locale.welcome.enabled : locale.welcome.disabled)
 }
 
 /**
@@ -2044,20 +2077,37 @@ const handleExtraCommand = async (message: Message, chat: Chat, caller: User, na
     return
   }
   const cleanName = name.replace(/^#/, '')
+  /**
+   * The same bar the PM editor applies, which this path did not.
+   *
+   * Two separate consequences of skipping it. A name is interpolated into
+   * Telegram HTML by every acknowledgement and by the list, so `<b>x</b>`
+   * restyled the reply — and a name holding anything a hashtag cannot contain
+   * was reported as saved while being unable to ever fire, because the trigger
+   * matches `#name` in chat text.
+   */
+  if (!/^[\p{L}\p{N}_]+$/u.test(cleanName)) {
+    await dropCommand()
+    const bad = await tgSendText(chat.id, viewHtml(locale.extra.editor.invalidName)).catch(() => null)
+    if (bad) scheduleDelete(chat.id, bad.id, NOTIFY_TTL_BANAN_MS, 'extra_invalid')
+    return
+  }
+  const shown = escapeName(cleanName)
   const replied = await gateway.fetchRepliedMessage(message)
   if (replied) {
     const extra: NormalizedExtra = { name: cleanName, text: replied.text ?? '', fileId: mediaFileId(replied) }
-    await store.saveExtra(chat.id, extra).catch(() => { /* best-effort */ })
-    log.info('extra_saved', { chatId: chat.id, by: caller.id, name: cleanName, hasMedia: extra.fileId !== null })
+    const saved = await store.saveExtra(chat.id, extra).then(() => true).catch(() => false)
+    log.info('extra_saved', { chatId: chat.id, by: caller.id, name: cleanName, hasMedia: extra.fileId !== null, ok: saved })
     await dropCommand()
-    const sent = await tgSendText(chat.id, viewHtml(locale.extra.saved(cleanName))).catch(() => null)
+    const sent = await tgSendText(chat.id, viewHtml(saved ? locale.extra.saved(shown) : locale.writeFailed))
+      .catch(() => null)
     if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'extra_ack')
     return
   }
   const removed = await store.deleteExtra(chat.id, cleanName).catch(() => false)
   await dropCommand()
   if (removed) log.info('extra_deleted', { chatId: chat.id, by: caller.id, name: cleanName })
-  const sent = await tgSendText(chat.id, viewHtml(removed ? locale.extra.deleted(cleanName) : locale.extra.notFound(cleanName))).catch(() => null)
+  const sent = await tgSendText(chat.id, viewHtml(removed ? locale.extra.deleted(shown) : locale.extra.notFound(shown))).catch(() => null)
   if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'extra_ack')
 }
 
@@ -3339,7 +3389,10 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
         const view = votePrompt(locale, {
           chatId: chat.id, messageId: message.id,
           userId: sender.id, userLabel: sender.displayName, textPreview: normalized.text,
-          media: mediaCategoryOf(normalized.attachments)
+          media: mediaCategoryOf(normalized.attachments),
+          // A name that is itself an advert must not be reprinted on a ballot
+          // the whole chat reads, least of all as a link to its owner.
+          promoName: nameIsPromo(verdict)
         }, { spam: 0, ham: 0, outcome: 'pending' }, { botUsername: selfUsername ?? undefined })
         const prompt = await tgSendText(chat.id, viewHtml(view.text), {
           replyMarkup: toKeyboard(view.buttons),
@@ -3500,15 +3553,24 @@ const wireCallbacks = (): void => {
       if (kind === 'wel') {
         if (action === 'toggle') {
           const cur = await store.getWelcome(chatId).catch(() => ({ enable: false }))
-          await store.setWelcomeEnabled(chatId, !cur.enable).catch(() => { /* best-effort */ })
+          const ok = await store.setWelcomeEnabled(chatId, !cur.enable)
+            .then(() => true).catch(() => false)
+          if (!ok) { await query.answer({ text: locale.writeFailed, alert: true }); return }
         } else if (action === 'tdel') {
-          await store.removeWelcomeText(chatId, Number(arg)).catch(() => false)
+          // The returned boolean was thrown away, so a tap on a row that had
+          // already been deleted from another screen still answered "🗑
+          // Видалено" — and the admin believed stale content was gone.
+          const gone = await store.removeWelcomeText(chatId, Number(arg)).catch(() => false)
           await edit(await renderWelcomeTexts(locale, chatId, 0))
-          await query.answer({ text: locale.welcome.editor.removed }); return
+          await query.answer({
+            text: gone ? locale.welcome.editor.removed : locale.welcome.editor.removeMissing
+          }); return
         } else if (action === 'gdel') {
-          await store.removeWelcomeGif(chatId, Number(arg)).catch(() => false)
+          const gone = await store.removeWelcomeGif(chatId, Number(arg)).catch(() => false)
           await edit(await renderWelcomeGifs(locale, chatId, 0))
-          await query.answer({ text: locale.welcome.editor.removed }); return
+          await query.answer({
+            text: gone ? locale.welcome.editor.removed : locale.welcome.editor.removeMissing
+          }); return
         } else if (action === 'taddc') {
           pendingInput.set(query.user.id, { type: 'welcome.text', chatId })
           await tgSendText(query.user.id, viewHtml(locale.welcome.editor.promptText)).catch(() => { /* PM closed */ })
@@ -3702,12 +3764,17 @@ const wireCallbacks = (): void => {
 
       if (tally.outcome === 'pending') {
         const targetUserId = Number(vote['targetUserId'] ?? 0)
+        // Re-derived from the remembered verdict rather than stored on the
+        // ballot: without it the neutral label would hold until the first vote
+        // and then the re-render would put the advertised name back.
+        const openingVerdict = await recallVerdict(chatId, messageId)
         // The ballot is the group's message; the toast below is the voter's.
         const view = votePrompt(await groupLocale(chatId), {
           chatId, messageId,
           userId: targetUserId > 0 ? targetUserId : null,
           userLabel: String(vote['targetLabel'] ?? ''), textPreview: String(vote['textPreview'] ?? ''),
-          media: (vote['media'] ?? null) as MediaCategory | null
+          media: (vote['media'] ?? null) as MediaCategory | null,
+          promoName: openingVerdict ? nameIsPromo(openingVerdict) : false
         }, tally, { botUsername: selfUsername ?? undefined })
         await tgEditMessage({
           chatId, message: query.messageId,
@@ -3755,10 +3822,12 @@ const wireCallbacks = (): void => {
       }
       const subjectId = Number(vote['targetUserId'] ?? 0)
       const subjectLabel = String(vote['targetLabel'] ?? '')
+      const closingVerdict = await recallVerdict(chatId, messageId)
       const receipt = voteResult(await groupLocale(chatId), {
         chatId, messageId,
         userId: subjectId > 0 ? subjectId : null,
-        userLabel: subjectLabel.length > 0 ? subjectLabel : null
+        userLabel: subjectLabel.length > 0 ? subjectLabel : null,
+        promoName: closingVerdict ? nameIsPromo(closingVerdict) : false
       }, tally.outcome, { botUsername: selfUsername ?? undefined, enforced })
       await tgEditMessage({
         chatId, message: query.messageId,

@@ -25,6 +25,27 @@ export interface Locale {
   /** /help — full command reference (HTML). */
   helpText: string
 
+  /**
+   * A write we told the admin about did not confirm.
+   *
+   * Shared across the editors because it is one fact: Mongo did not say yes.
+   * Every one of those paths used to swallow the failure and answer "saved" —
+   * an admin leaves setup believing a greeting or a trigger is live, and finds
+   * out when it never fires.
+   */
+  writeFailed: string
+
+  /**
+   * A stand-in for a display name that IS the advertisement.
+   *
+   * `promo_in_name` exists precisely because some accounts buy their name as ad
+   * space. Every notice about such an account reprinted that name — and once
+   * names became tappable mentions, the notice about the advert became a tap
+   * into the advertiser's profile. The neutral form keeps the notice navigable
+   * (the link still resolves) without carrying the payload.
+   */
+  hiddenName: (userId: number) => string
+
   lang: {
     pickerTitle: string
     saved: string
@@ -324,6 +345,13 @@ export interface Locale {
       cancelled: string
       invalidGif: string
       removed: string
+      /** The row the tap named was already gone — a stale screen, not a write. */
+      removeMissing: string
+      /**
+       * The five-minute capture window lapsed before the admin replied. Said
+       * out loud, because silence sent the correction into the /start handler.
+       */
+      expired: string
       previewEmpty: string
     }
   }

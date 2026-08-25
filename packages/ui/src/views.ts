@@ -98,6 +98,31 @@ export const userMention = (userId: number | null | undefined, label: string): s
     ? `<a href="tg://user?id=${userId}">${escapeHtml(label)}</a>`
     : escapeHtml(label)
 
+/** True when the verdict says the display name is itself the advertisement. */
+export const nameIsPromo = (verdict: Verdict): boolean =>
+  verdict.signals.some((sig) => sig.name === 'promo_in_name')
+
+/**
+ * The subject of a moderation notice, named as safely as the notice allows.
+ *
+ * Escaping was never the whole job. `promo_in_name` fires on accounts whose
+ * display name is bought ad space, and every notice about one reprinted that
+ * name verbatim — so the moment names became tappable, the notice announcing
+ * the advert became a link into the advertiser. A neutral id keeps the notice
+ * navigable while carrying nothing.
+ *
+ * The mention still points at the real account: the id is what the link needs,
+ * and the id is not the advert.
+ */
+export const subjectMention = (
+  locale: Locale,
+  userId: number | null | undefined,
+  label: string,
+  promoName = false
+): string => promoName && typeof userId === 'number'
+  ? userMention(userId, locale.hiddenName(userId))
+  : userMention(userId, label)
+
 /**
  * PM welcome card. The add-to-group link pre-requests exactly the admin
  * rights the bot needs — one tap instead of a manual rights dance.
@@ -192,7 +217,7 @@ export const compactNotification = (
     data: callbackData.override(target.chatId, target.messageId, target.userId)
   }
   const repeats = options.incidentCount ?? 1
-  const line = locale.notification.compact(locale.actions[action], userMention(target.userId, target.userLabel)) +
+  const line = locale.notification.compact(locale.actions[action], subjectMention(locale, target.userId, target.userLabel, nameIsPromo(verdict))) +
     (repeats > 1 ? ` · ×${repeats}` : '')
   if (!options.botUsername) {
     return {
@@ -295,7 +320,13 @@ export const whyView = (locale: Locale, verdict: Verdict, options: WhyOptions = 
   // out as its own tags.
   const who = context.userLabel === null || context.userLabel === undefined
     ? null
-    : asHtml ? userMention(context.userId, context.userLabel) : context.userLabel
+    : asHtml
+      ? subjectMention(locale, context.userId, context.userLabel, nameIsPromo(verdict))
+      // The plain-text toast has no link to compromise, but reprinting a bought
+      // name is still reprinting it.
+      : nameIsPromo(verdict) && typeof context.userId === 'number'
+        ? locale.hiddenName(context.userId)
+        : context.userLabel
   lines.push(who === null ? b(esc(headline)) : b(`${esc(headline)} · ${who}`))
   if (context.chatTitle) lines.push(dim(esc(locale.why.inChat(context.chatTitle))))
 
@@ -863,6 +894,8 @@ export const votePrompt = (
     textPreview: string
     /** What the message carried besides words, or instead of them. */
     media?: MediaCategory | null
+    /** The display name is itself an advert — see `subjectMention`. */
+    promoName?: boolean
   },
   tally: { spam: number; ham: number; outcome: string },
   options: { botUsername?: string | undefined } = {}
@@ -872,7 +905,7 @@ export const votePrompt = (
   // a destination becomes a marker, not nothing — so a quote-only-a-link
   // message still takes the quoting branch instead of claiming "no text".
   const quoted = redactLinks(target.textPreview, locale.vote.redacted).trim()
-  const name = userMention(target.userId, target.userLabel)
+  const name = subjectMention(locale, target.userId, target.userLabel, target.promoName ?? false)
   // Named on the ballot even when the message HAD words: the caption under an
   // advert is the innocuous half, and a ballot that quotes only the caption
   // asks about half the message. Until now `media` was read on the no-text
@@ -997,6 +1030,7 @@ export const voteResult = (
     messageId: number
     userId?: number | null
     userLabel?: string | null
+    promoName?: boolean
   },
   outcome: 'spam' | 'ham',
   options: {
@@ -1009,7 +1043,9 @@ export const voteResult = (
     enforced?: { deleted: boolean; muted: boolean } | undefined
   } = {}
 ): ViewMessage => {
-  const who = target.userLabel ? userMention(target.userId, target.userLabel) : null
+  const who = target.userLabel
+    ? subjectMention(locale, target.userId, target.userLabel, target.promoName ?? false)
+    : null
   const whyLink = options.botUsername && typeof target.userId === 'number'
     ? `<a href="${whyDeepLink(options.botUsername, target.chatId, target.messageId, target.userId)}">${locale.notification.whyLink}</a>`
     : null

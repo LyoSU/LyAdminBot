@@ -27,6 +27,27 @@ export class PendingInput {
     this.store.set(userId, { ...entry, at: now })
   }
 
+  /**
+   * Read WITHOUT removing. `'expired'` where a lapsed entry was evicted, which
+   * the caller needs told apart from "there was never one".
+   *
+   * The flows used to consume on read, before validation. So "that's not media,
+   * send a gif" and "invalid name" both destroyed the state they were asking
+   * the admin to correct: the corrected second message arrived with no pending
+   * entry, fell through to the /start handler, and the editor looked broken. An
+   * expiry did the same thing silently. Consumption now belongs to the caller
+   * that knows the flow finished.
+   */
+  peek(userId: number, now: number = Date.now()): PendingEntry | 'expired' | null {
+    const e = this.store.get(userId)
+    if (!e) return null
+    if (now - e.at > this.ttlMs) {
+      this.store.delete(userId)
+      return 'expired'
+    }
+    return { type: e.type, chatId: e.chatId, ...(e.arg !== undefined ? { arg: e.arg } : {}) }
+  }
+
   /** Read AND remove the pending entry (one-shot). Null if absent or expired. */
   take(userId: number, now: number = Date.now()): PendingEntry | null {
     const e = this.store.get(userId)

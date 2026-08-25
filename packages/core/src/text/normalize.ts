@@ -150,13 +150,35 @@ const TG_HOST_REGEX = new RegExp(
 const SCHEME_URL_REGEX = /(?:[a-z][a-z0-9+.-]*:\/\/|www\.)\S+/gi
 const EMAIL_REGEX = /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\.[a-z]{2,24}/giu
 /**
- * A bare host is only treated as a link when it carries a path. Without that
- * requirement the pattern eats ordinary writing — a filename ("звіт.pdf"), a
- * module ("node.js") — and a ballot that redacts the words it was asked about
- * is worse than one that shows a dead host. Telegram's own hosts are matched
- * above without the path, because there a bare host IS the destination.
+ * Anything with a path is a destination, whatever its suffix. A path is the one
+ * unambiguous signal: no filename and no abbreviation carries one.
  */
 const HOSTED_PATH_REGEX = /[\p{L}\p{N}][\p{L}\p{N}-]*(?:\.[\p{L}\p{N}-]+)*\.[a-z]{2,24}\/\S*/giu
+
+/**
+ * Suffixes a bare host is redacted for even with no path.
+ *
+ * Requiring a path was the first cut and it leaves real spam readable — a naked
+ * `something.com` is a destination anybody can type into a browser, and the
+ * ballot was reprinting it. Matching every `word.tld` instead is worse: it eats
+ * a filename ("звіт.pdf"), a module ("node.js"), an abbreviation, and a ballot
+ * that redacts the words it was asked to show is useless.
+ *
+ * So: a curated list, not a rule. These are the suffixes that actually appear
+ * in what this bot removes, chosen so that none of them doubles as a common
+ * file extension in the languages these chats are written in. Adding one is a
+ * deliberate act — weigh it against what it will eat.
+ */
+const BARE_HOST_TLDS = [
+  'com', 'net', 'org', 'info', 'biz', 'xyz', 'top', 'club', 'online', 'site',
+  'shop', 'store', 'live', 'link', 'click', 'space', 'website', 'vip', 'win',
+  'bet', 'casino', 'cash', 'money', 'icu', 'fun', 'life', 'world',
+  'ru', 'ua', 'by', 'kz', 'pl', 'de', 'fr', 'uk', 'su', 'tv', 'cc'
+].join('|')
+const BARE_HOST_REGEX = new RegExp(
+  `(?<![\\p{L}\\p{N}_.-])[\\p{L}\\p{N}][\\p{L}\\p{N}-]*(?:\\.[\\p{L}\\p{N}-]+)*\\.(?:${BARE_HOST_TLDS})(?![\\p{L}\\p{N}-])`,
+  'giu'
+)
 /**
  * Telegram handles are 5–32 chars and start with a letter, which is what keeps
  * this off the vocative "@всім" and off a bare "@" used as punctuation.
@@ -192,5 +214,6 @@ export const redactLinks = (text: string, markers: RedactionMarkers): string => 
     .replace(SCHEME_URL_REGEX, link)
     .replace(EMAIL_REGEX, link)
     .replace(HOSTED_PATH_REGEX, link)
+    .replace(BARE_HOST_REGEX, link)
     .replace(HANDLE_REGEX, (_match, before: string) => `${before}${markers.mention}`)
 }

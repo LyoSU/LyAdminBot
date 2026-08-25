@@ -36,6 +36,9 @@ export const tr: Locale = {
     'Her bildirimde tam karar kartına giden bir <b>neden?</b> bağlantısı var. Yöneticiler ayrıca <b>[✅ Spam değil]</b> görür.'
   ].join('\n'),
 
+  writeFailed: '⚠️ Kaydedilmedi — tekrar dene.',
+  hiddenName: (userId) => `kullanıcı ${userId}`,
+
   lang: {
     pickerTitle: 'Bir dil seç:',
     saved: 'Tamam, Türkçe olsun'
@@ -362,6 +365,8 @@ export const tr: Locale = {
       cancelled: '❌ İptal edildi.',
       invalidGif: '⚠️ Bu bir medya değil. Bir gif, video veya fotoğraf gönder.',
       removed: '🗑 Silindi.',
+      removeMissing: 'O zaten yok — listeyi yeniledim.',
+      expired: '⌛ Süre doldu. Düzenleyiciyi yeniden aç.',
       previewEmpty: 'Gösterilecek bir şey yok — metin veya gif ekle.'
     }
   },

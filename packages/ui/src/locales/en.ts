@@ -36,6 +36,9 @@ export const en: Locale = {
     'Every notice carries a <b>why?</b> link with the full decision card. Admins also get <b>[✅ Not spam]</b>.'
   ].join('\n'),
 
+  writeFailed: '⚠️ Not saved — try again.',
+  hiddenName: (userId) => `user ${userId}`,
+
   lang: {
     pickerTitle: 'Pick a language:',
     saved: 'Done, English it is'
@@ -363,6 +366,8 @@ export const en: Locale = {
       cancelled: '❌ Cancelled.',
       invalidGif: '⚠️ That’s not media. Send a gif, video or photo.',
       removed: '🗑 Removed.',
+      removeMissing: 'That one is already gone — refreshed the list.',
+      expired: '⌛ That took too long. Open the editor again.',
       previewEmpty: 'Nothing to show yet — add a text or a gif.'
     }
   },

@@ -43,4 +43,23 @@ describe('PendingInput', () => {
     expect(p.take(1)).toEqual({ type: 'welcome.text', chatId: -100 })
     expect(p.take(2)).toEqual({ type: 'extra', chatId: -200, arg: 'faq' })
   })
+
+  it('peeks without consuming, so a validation failure can ask again', () => {
+    const p = new PendingInput()
+    p.set(1, { type: 'welcome.gif', chatId: -100 })
+    expect(p.peek(1)).toEqual({ type: 'welcome.gif', chatId: -100 })
+    // Still there: the whole point. "That's not media, send a gif" used to
+    // destroy the flow it was asking the admin to correct.
+    expect(p.peek(1)).toEqual({ type: 'welcome.gif', chatId: -100 })
+    expect(p.take(1)).toEqual({ type: 'welcome.gif', chatId: -100 })
+    expect(p.peek(1)).toBeNull()
+  })
+
+  it('distinguishes a lapsed flow from no flow at all', () => {
+    const p = new PendingInput(1000)
+    p.set(1, { type: 'extra.name', chatId: -100 }, 0)
+    expect(p.peek(1, 1001)).toBe('expired')
+    // Evicted by that read, so the next one is an honest "nothing here".
+    expect(p.peek(1, 1002)).toBeNull()
+  })
 })

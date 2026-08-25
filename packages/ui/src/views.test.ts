@@ -20,6 +20,20 @@ describe('compactNotification', () => {
     expect(view.buttons[0]).toHaveLength(2)
   })
 
+  it('does not reprint a display name that IS the advert', () => {
+    // `promo_in_name` fires on accounts whose name is bought ad space. The
+    // notice about the advert used to print the advert — and once names became
+    // tappable, it became a link into the advertiser. The id is not the advert,
+    // so the mention still resolves.
+    const view = compactNotification(uk, makeVerdict({
+      signals: [{ name: 'promo_in_name' }]
+    }), { ...target, userLabel: 'КУПИ КРИПТУ t.me/x' })
+    expect(view.text).not.toContain('КУПИ')
+    expect(view.text).not.toContain('t.me')
+    expect(view.text).toContain(uk.hiddenName(42))
+    expect(view.text).toContain('<a href="tg://user?id=42">')
+  })
+
   it('never contains em-dash or « » (AI-slop markers)', () => {
     for (const action of ['delete', 'mute', 'ban'] as const) {
       const view = compactNotification(uk, makeVerdict({ action }), target)
