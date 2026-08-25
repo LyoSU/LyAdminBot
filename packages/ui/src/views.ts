@@ -742,7 +742,13 @@ export const welcomeTextsScreen = (
   }
   const { pageItems, nav } = paginate(texts, page, 5, (p) => callbackData.welcome(chatId, 'tpage', String(p)))
   const list = pageItems
-    .map(({ item, index }) => e.textsItem(index + 1, ellipsize(item.replace(/\n/g, ' '), 50)))
+    // Escaped, like the extras list beside it and unlike this line until now.
+    // The template is admin-authored, not attacker-authored, but `viewHtml`
+    // parses it as HTML either way: a `<` or an `&` in a greeting — or a tag
+    // sliced in half by the 50-character preview — takes the whole editor
+    // screen down. Ellipsize first, so the budget counts characters and not
+    // entity escapes.
+    .map(({ item, index }) => e.textsItem(index + 1, escapeHtml(ellipsize(item.replace(/\n/g, ' '), 50))))
     .join('\n')
   const delRow = pageItems.map(({ index }) => ({
     text: `${index + 1} 🗑`,
@@ -959,6 +965,22 @@ export const voterListView = (
 }
 
 /**
+ * Which of the four enforcement sentences this outcome earned. `undefined` in,
+ * `null` out: a caller that attempted nothing asserts nothing.
+ */
+const enforcementClause = (
+  locale: Locale,
+  enforced: { deleted: boolean; muted: boolean } | undefined
+): string | null => {
+  if (enforced === undefined) return null
+  const e = locale.vote.enforcement
+  if (enforced.deleted && enforced.muted) return e.done
+  if (enforced.deleted) return e.deletedOnly
+  if (enforced.muted) return e.mutedOnly
+  return e.failed
+}
+
+/**
  * The receipt that replaces a resolved question, in place.
  *
  * It names the person, which the first version did not: the ballot's own text —
@@ -977,7 +999,15 @@ export const voteResult = (
     userLabel?: string | null
   },
   outcome: 'spam' | 'ham',
-  options: { botUsername?: string | undefined } = {}
+  options: {
+    botUsername?: string | undefined
+    /**
+     * What the bot actually managed. Omitted means "do not claim anything" —
+     * which is what a caller that did not attempt enforcement should do, and
+     * what the receipt used to do while claiming removal anyway.
+     */
+    enforced?: { deleted: boolean; muted: boolean } | undefined
+  } = {}
 ): ViewMessage => {
   const who = target.userLabel ? userMention(target.userId, target.userLabel) : null
   const whyLink = options.botUsername && typeof target.userId === 'number'
@@ -985,8 +1015,8 @@ export const voteResult = (
     : null
   return {
     text: outcome === 'spam'
-      ? locale.vote.resolvedSpam(who, whyLink)
-      : locale.vote.resolvedHam(who, whyLink),
+      ? locale.vote.resolvedSpam({ who, enforcement: enforcementClause(locale, options.enforced), whyLink })
+      : locale.vote.resolvedHam({ who, whyLink }),
     buttons: [[{
       text: locale.vote.voters.button,
       data: callbackData.voters(target.chatId, target.messageId)

@@ -618,6 +618,17 @@ describe('welcome editor', () => {
     expect(add).toBeTruthy()
   })
 
+  it('escapes a greeting preview — the editor screen is HTML too', () => {
+    // The extras list beside it has always escaped; this one did not. The
+    // template is admin-authored, but `viewHtml` parses it as HTML either way,
+    // so a stray `<` or a tag cut in half by the 50-character preview took the
+    // whole editor screen down rather than just looking odd.
+    const view = welcomeTextsScreen(uk, chatId, ['<b>вітаю %name% & друзі'], 0)
+    expect(view.text).toContain('&lt;b&gt;')
+    expect(view.text).toContain('&amp;')
+    expect(view.text).not.toContain('<b>вітаю')
+  })
+
   it('gifs screen paginates past one page', () => {
     const gifs = Array.from({ length: 20 }, (_, i) => `file${i}`)
     const view = welcomeGifsScreen(uk, chatId, gifs, 0)
@@ -742,7 +753,7 @@ describe('voterListView', () => {
 describe('resolved vote receipt', () => {
   it('offers the roster behind a button rather than in the text', () => {
     const view = voteResult(uk, { chatId: -100123, messageId: 7 }, 'spam')
-    expect(view.text).toBe(uk.vote.resolvedSpam(null, null))
+    expect(view.text).toBe(uk.vote.resolvedSpam({ who: null, enforcement: null, whyLink: null }))
     expect(view.buttons[0]?.[0]?.data).toBe(callbackData.voters(-100123, 7))
   })
 
@@ -762,9 +773,40 @@ describe('resolved vote receipt', () => {
     expect(view.text.match(/<a href=/g)).toHaveLength(1)
   })
 
+  it('claims only what the enforcement actually managed', () => {
+    const both = voteResult(uk, { chatId: -1, messageId: 1 }, 'spam', {
+      enforced: { deleted: true, muted: true }
+    })
+    expect(both.text).toContain(uk.vote.enforcement.done)
+
+    const gone = voteResult(uk, { chatId: -1, messageId: 1 }, 'spam', {
+      enforced: { deleted: true, muted: false }
+    })
+    expect(gone.text).toContain(uk.vote.enforcement.deletedOnly)
+
+    const quiet = voteResult(uk, { chatId: -1, messageId: 1 }, 'spam', {
+      enforced: { deleted: false, muted: true }
+    })
+    expect(quiet.text).toContain(uk.vote.enforcement.mutedOnly)
+
+    // The case the old receipt got wrong: rights lost mid-ballot, message still
+    // on screen, author still posting — and "Прибрав." printed anyway.
+    const neither = voteResult(uk, { chatId: -1, messageId: 1 }, 'spam', {
+      enforced: { deleted: false, muted: false }
+    })
+    expect(neither.text).toContain(uk.vote.enforcement.failed)
+  })
+
+  it('asserts nothing about enforcement when the caller attempted none', () => {
+    const view = voteResult(uk, { chatId: -1, messageId: 1 }, 'spam')
+    for (const clause of Object.values(uk.vote.enforcement)) {
+      expect(view.text).not.toContain(clause)
+    }
+  })
+
   it('says less rather than guessing when a restart lost the label', () => {
     const view = voteResult(uk, { chatId: -1, messageId: 1, userId: null, userLabel: null }, 'ham')
-    expect(view.text).toBe(uk.vote.resolvedHam(null, null))
+    expect(view.text).toBe(uk.vote.resolvedHam({ who: null, whyLink: null }))
   })
 
   it('keeps the roster payload inside the 64-byte callback limit', () => {

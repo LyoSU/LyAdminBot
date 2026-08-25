@@ -74,6 +74,7 @@ export const en: Locale = {
     whyButton: '🤨 Why?',
     notSpamButton: '✅ Not spam',
     overrideDone: 'Done, reverted. User is back and trusted in this chat now.',
+    overridePartial: 'Reverted, but not everything went through. Try again, or check my rights.',
     overrideAlreadyDone: 'Already reverted.',
     adminOnly: 'Chat admins only.',
     missingRights: '⚠️ Caught spam but I lack the rights to remove it. Please grant me delete-messages and ban-users rights.'
@@ -250,15 +251,18 @@ export const en: Locale = {
     spamButton: (count) => `🗑 Spam (${count})`,
     hamButton: (count) => `👌 Fine (${count})`,
     counted: 'Vote counted.',
-    resolvedSpam: (who, whyLink) =>
-      (who
-        ? `🗑 The community says the message from ${who} is spam. Removed.`
-        : '🗑 The community says spam. Removed.')
+    enforcement: {
+      done: 'Removed.',
+      deletedOnly: 'Removed, but could not mute the author — missing rights.',
+      mutedOnly: 'Muted the author, but could not remove the message.',
+      failed: '⚠️ Could neither remove nor restrict — missing rights.'
+    },
+    resolvedSpam: ({ who, enforcement, whyLink }) =>
+      (who ? `🗑 The community says the message from ${who} is spam.` : '🗑 The community says spam.')
+      + (enforcement ? ` ${enforcement}` : '')
       + (whyLink ? ` · ${whyLink}` : ''),
-    resolvedHam: (who, whyLink) =>
-      (who
-        ? `👌 The community says the message from ${who} is fine.`
-        : '👌 The community says it is fine.')
+    resolvedHam: ({ who, whyLink }) =>
+      (who ? `👌 The community says the message from ${who} is fine.` : '👌 The community says it is fine.')
       + (whyLink ? ` · ${whyLink}` : ''),
     alreadyEnded: 'This vote is already closed.',
     voters: {
@@ -403,6 +407,7 @@ export const en: Locale = {
     prompt: (name) => `👋 ${name}, tap the button to keep chatting. Quick check that you are not a bot.`,
     button: '🙋 I am human',
     passed: 'Done, go ahead.',
+    retry: 'Could not lift the restriction. Tap again.',
     notForYou: 'This button is not for you.'
   },
 

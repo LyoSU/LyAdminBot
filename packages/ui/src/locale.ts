@@ -68,6 +68,12 @@ export interface Locale {
     whyButton: string
     notSpamButton: string
     overrideDone: string
+    /**
+     * The correction was recorded but something it promises did not land — the
+     * unrestrict, or the trust write. Shown as an alert, and the button is left
+     * in place so it can be pressed again.
+     */
+    overridePartial: string
     overrideAlreadyDone: string
     adminOnly: string
     /** Posted when the bot caught spam but lacks the rights to act. */
@@ -181,13 +187,33 @@ export interface Locale {
     hamButton: (count: number) => string
     counted: string
     /**
+     * What the bot managed to do about a message the chat called spam.
+     *
+     * A separate sentence from the verdict, because they are separate facts:
+     * the community can be certain while the bot is powerless. The receipt used
+     * to assert removal unconditionally, so a chat that took the bot's rights
+     * away mid-ballot got a settled-looking result over a message still on
+     * screen — and a settled result is one moderators stop checking.
+     */
+    enforcement: {
+      done: string
+      deletedOnly: string
+      mutedOnly: string
+      failed: string
+    }
+    /**
      * The receipt (HTML). `who` names the person the question was about and is
      * absent only when a restart lost the label — the resolved prompt replaces
      * the question in place, and scrolled past a week later "the community says
-     * spam" names nobody and settles nothing.
+     * spam" names nobody and settles nothing. `enforcement` is one of the
+     * sentences above, or absent where the caller does not know the outcome.
      */
-    resolvedSpam: (who: string | null, whyLink: string | null) => string
-    resolvedHam: (who: string | null, whyLink: string | null) => string
+    resolvedSpam: (parts: {
+      who: string | null
+      enforcement: string | null
+      whyLink: string | null
+    }) => string
+    resolvedHam: (parts: { who: string | null; whyLink: string | null }) => string
     alreadyEnded: string
     /** Roster shown behind the "who voted" button on a resolved question. */
     voters: {
@@ -349,6 +375,13 @@ export interface Locale {
     prompt: (name: string) => string
     button: string
     passed: string
+    /**
+     * The tap was ours and valid, but lifting the restriction failed. The gate
+     * is deliberately NOT spent in that case, so this asks for another tap —
+     * the alternative was a success toast over a member who stayed muted with
+     * nothing left to tap.
+     */
+    retry: string
     notForYou: string
   }
 

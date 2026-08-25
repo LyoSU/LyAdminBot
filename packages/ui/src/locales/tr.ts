@@ -74,6 +74,7 @@ export const tr: Locale = {
     whyButton: '🤨 Neden?',
     notSpamButton: '✅ Spam değil',
     overrideDone: 'Tamam, geri alındı. Kullanıcı geri döndü ve artık bu sohbette güveniliyor.',
+    overridePartial: 'Geri aldım, ama her şey uygulanamadı. Tekrar dene veya yetkilerimi kontrol et.',
     overrideAlreadyDone: 'Zaten geri alınmış.',
     adminOnly: 'Yalnızca sohbet yöneticileri.',
     missingRights: '⚠️ Spam yakaladım ama temizlemek için yetkim yok. Lütfen bana mesaj silme ve kullanıcı yasaklama yetkisi ver.'
@@ -249,15 +250,18 @@ export const tr: Locale = {
     spamButton: (count) => `🗑 Spam (${count})`,
     hamButton: (count) => `👌 Sorun yok (${count})`,
     counted: 'Oy sayıldı.',
-    resolvedSpam: (who, whyLink) =>
-      (who
-        ? `🗑 Topluluk ${who} kişisinin mesajına spam dedi. Kaldırıldı.`
-        : '🗑 Topluluk spam diyor. Kaldırıldı.')
+    enforcement: {
+      done: 'Kaldırıldı.',
+      deletedOnly: 'Kaldırıldı, ama yazarı susturamadım — yetki yok.',
+      mutedOnly: 'Yazarı susturdum, ama mesajı kaldıramadım.',
+      failed: '⚠️ Ne kaldırabildim ne kısıtlayabildim — yetki yok.'
+    },
+    resolvedSpam: ({ who, enforcement, whyLink }) =>
+      (who ? `🗑 Topluluk ${who} kişisinin mesajına spam dedi.` : '🗑 Topluluk spam diyor.')
+      + (enforcement ? ` ${enforcement}` : '')
       + (whyLink ? ` · ${whyLink}` : ''),
-    resolvedHam: (who, whyLink) =>
-      (who
-        ? `👌 Topluluk ${who} kişisinin mesajında sorun görmedi.`
-        : '👌 Topluluk sorun olmadığını söylüyor.')
+    resolvedHam: ({ who, whyLink }) =>
+      (who ? `👌 Topluluk ${who} kişisinin mesajında sorun görmedi.` : '👌 Topluluk sorun olmadığını söylüyor.')
       + (whyLink ? ` · ${whyLink}` : ''),
     alreadyEnded: 'Bu oylama zaten kapandı.',
     voters: {
@@ -402,6 +406,7 @@ export const tr: Locale = {
     prompt: (name) => `👋 ${name}, sohbete devam etmek için düğmeye dokun. Bot olmadığını gösteren hızlı bir kontrol.`,
     button: '🙋 Ben insanım',
     passed: 'Tamam, devam edebilirsin.',
+    retry: 'Kısıtlama kaldırılamadı. Tekrar dokun.',
     notForYou: 'Bu düğme senin için değil.'
   },
 

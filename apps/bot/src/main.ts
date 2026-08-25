@@ -427,12 +427,19 @@ const issueCaptcha = (chatId: number, userId: number): CaptchaGate => {
   return gate
 }
 
-/** The gate this tap belongs to, consumed; null if forged, stale or expired. */
-const consumeCaptcha = (chatId: number, userId: number): CaptchaGate | null => {
-  const key = captchaKey(chatId, userId)
-  const gate = pendingCaptchas.get(key)
+/**
+ * The gate this tap belongs to, WITHOUT spending it; null if forged or expired.
+ *
+ * Split from spending it, because the two used to happen in the wrong order.
+ * The gate was consumed first and the unrestrict attempted after, inside a
+ * swallowing catch — so a permissions or network failure left the newcomer
+ * still muted, holding a toast that said "Готово, пиши", with the only valid
+ * gate already gone and nothing left to tap. A restriction the user cannot
+ * lift is the one failure mode the whole whisper-first design exists to avoid.
+ */
+const peekCaptcha = (chatId: number, userId: number): CaptchaGate | null => {
+  const gate = pendingCaptchas.get(captchaKey(chatId, userId))
   if (gate === undefined) return null
-  forgetCaptcha(key)
   return gate.expiresMs > Date.now() ? gate : null
 }
 
@@ -509,14 +516,24 @@ const passCaptcha = async (
   locale: Locale,
   answer: (text?: string) => Promise<void>
 ): Promise<boolean> => {
-  // Forgeable payload: lift the gate only if WE issued it, and only once.
-  const gate = consumeCaptcha(chatId, userId)
+  // Forgeable payload: lift the gate only if WE issued it.
+  const gate = peekCaptcha(chatId, userId)
   if (!gate) {
     await answer()
     return false
   }
-  await gateway.tg.restrictChatMember({ chatId, userId, restrictions: {} })
-    .catch(() => { /* window may have expired already */ })
+  const lifted = await gateway.tg.restrictChatMember({ chatId, userId, restrictions: {} })
+    .then(() => true).catch(() => false)
+  if (!lifted) {
+    // The gate stays. Another tap is the only thing the member can do, and it
+    // is worth something — the usual cause is transient.
+    log.warn('captcha_unrestrict_failed', { chatId, userId })
+    await answer(locale.captcha.retry)
+    return false
+  }
+  // Spent only now that it worked. A second tap arriving in the window between
+  // these two lines costs an idempotent unrestrict, which is nothing.
+  forgetCaptcha(captchaKey(chatId, userId))
   log.info('captcha_passed', {
     chatId, userId, via: gate.ephemeralMessageId !== null ? 'whisper' : 'visible'
   })
@@ -603,6 +620,20 @@ let selfUsername: string | null = null
 const toKeyboard = (buttons: ViewMessage['buttons']): ReturnType<typeof BotKeyboard.inline> =>
   BotKeyboard.inline(buttons.map((row) => row.map((b) =>
     b.url ? BotKeyboard.url(b.text, b.url) : BotKeyboard.callback(b.text, b.data ?? ''))))
+
+/**
+ * The locale a GROUP is configured in, for anything the whole group reads.
+ *
+ * Distinct from `localeFor`, which answers "what language does this person
+ * read" and is right for a toast or a PM. It is wrong for a shared message:
+ * the ballot is re-rendered on every counted vote, so resolving its language
+ * from the voter meant one Turkish-locale member turned the question Turkish
+ * for everybody, and the next voter turned it back.
+ */
+const groupLocale = async (chatId: number): Promise<Locale> => {
+  const groupDoc = await store.getGroupDoc(chatId).catch(() => null)
+  return resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
+}
 
 /** Locale resolution: stored preference first, Telegram client language second. */
 const localeFor = async (userId: number, clientLanguage: string | null): Promise<Locale> => {
@@ -864,6 +895,12 @@ const learnFromAutoVerdict = async (verdict: Verdict, text: string, chatId: numb
   log.debug('auto_learned', { decidedBy: verdict.decidedBy, reason: verdict.reasonCode })
 }
 
+/** What a resolved-spam vote actually managed to do. */
+interface VoteEnforcement {
+  deleted: boolean
+  muted: boolean
+}
+
 /**
  * A vote resolved to spam: remove the message, mute the author, record the
  * detection against the account, and teach the stores — as a candidate only.
@@ -881,11 +918,23 @@ const enforceVoteSpam = async (vote: {
   /** Full text to learn (not the truncated display preview). */
   learnText: string
   tally: { spam: number; ham: number }
-}, learnSource: string): Promise<void> => {
-  await gateway.moderationActions.deleteMessage(vote.chatId, vote.messageId)
-    .catch(() => { /* already gone */ })
-  await gateway.moderationActions.mute(vote.chatId, vote.targetUserId, MUTE_AFTER_VOTE_SECONDS)
-    .catch(() => { /* may lack rights */ })
+}, learnSource: string): Promise<VoteEnforcement> => {
+  // Both outcomes are reported, on the same reasoning `ExecutionResult` already
+  // separates `applied` from `deleted`: "the message went, the person stayed"
+  // is a different fact from "nothing happened", and the receipt used to
+  // announce "Прибрав" for both. A chat that loses the bot's rights mid-ballot
+  // got a settled-looking result over a message still on screen, written by an
+  // author still posting — and moderators stop checking a settled result.
+  const deleted = await gateway.moderationActions.deleteMessage(vote.chatId, vote.messageId)
+    .then(() => true).catch(() => false)
+  const muted = await gateway.moderationActions.mute(vote.chatId, vote.targetUserId, MUTE_AFTER_VOTE_SECONDS)
+    .then(() => true).catch(() => false)
+  if (!deleted || !muted) {
+    log.warn('vote_enforce_incomplete', {
+      chatId: vote.chatId, userId: vote.targetUserId, messageId: vote.messageId,
+      deleted, muted, source: learnSource
+    })
+  }
   /**
    * The chat confirmed it, so it is now a fact about the account and not only
    * about the message.
@@ -938,6 +987,8 @@ const enforceVoteSpam = async (vote: {
       spam: vote.tally.spam, ham: vote.tally.ham, source: learnSource
     })
   }
+
+  return { deleted, muted }
 }
 
 /**
@@ -955,6 +1006,17 @@ const enforceVoteSpam = async (vote: {
  * authority the community vote only has when an admin voted in it, and its
  * caller decides that.
  */
+/**
+ * Whether the restitution a correction PROMISES actually landed.
+ *
+ * `lifted` is vacuously true when there was nothing to lift — a delete-only
+ * verdict restricts nobody. It is false only when we tried and failed, which
+ * is exactly the case the override toast used to describe as "розблокований".
+ */
+interface RestitutionResult {
+  lifted: boolean
+}
+
 const restoreFalsePositive = async (params: {
   chatId: number
   messageId: number
@@ -967,7 +1029,7 @@ const restoreFalsePositive = async (params: {
    * correction retires anything with it — see the retirement block below.
    */
   learnText?: string | undefined
-}): Promise<void> => {
+}): Promise<RestitutionResult> => {
   const verdict = await recallVerdict(params.chatId, params.messageId)
   /**
    * A chat may only undo what WE did. See `needsRestitution`: the calls below
@@ -985,7 +1047,8 @@ const restoreFalsePositive = async (params: {
       chatId: params.chatId, userId: params.userId, messageId: params.messageId,
       by: params.byUserId, source: params.source, reason: verdict === null ? 'no_verdict' : verdict.action
     })
-    return
+    // Nothing was ours to undo, so nothing failed to be undone.
+    return { lifted: true }
   }
   /**
    * An incident must not outlive the verdict that opened it: without this it
@@ -1026,11 +1089,23 @@ const restoreFalsePositive = async (params: {
    * whoever put it there, so after a delete-only verdict, which restricts
    * nobody, the only thing they can lift is somebody else's decision.
    */
+  let lifted = true
   if (restitutionLiftsRestrictions(verdict)) {
-    await gateway.tg.restrictChatMember({ chatId: params.chatId, userId: params.userId, restrictions: {} })
-      .catch(() => { /* may not have been muted */ })
-    await gateway.tg.unbanChatMember({ chatId: params.chatId, participantId: params.userId })
-      .catch(() => { /* may not have been banned */ })
+    // Either call succeeding is enough: only one of the two restrictions was
+    // ever in place, and the other one failing means "there was nothing there",
+    // not "we could not". Both failing is the case worth reporting — the person
+    // is still silenced and the moderator was about to be told otherwise.
+    const unmuted = await gateway.tg.restrictChatMember({ chatId: params.chatId, userId: params.userId, restrictions: {} })
+      .then(() => true).catch(() => false)
+    const unbanned = await gateway.tg.unbanChatMember({ chatId: params.chatId, participantId: params.userId })
+      .then(() => true).catch(() => false)
+    lifted = unmuted || unbanned
+    if (!lifted) {
+      log.warn('restore_lift_failed', {
+        chatId: params.chatId, userId: params.userId, messageId: params.messageId,
+        by: params.byUserId, source: params.source
+      })
+    }
   }
   // Give the standing back. Enforcing debited it, and the debit withholds the
   // benefit of the doubt — leaving it in place after a correction would let one
@@ -1071,6 +1146,7 @@ const restoreFalsePositive = async (params: {
     recentForwards.delete(key)
   }
   recentVerdicts.delete(key)
+  return { lifted }
 }
 
 /** Settings panel always renders from a fresh group document. */
@@ -1093,8 +1169,8 @@ const renderSettingsPanel = async (locale: Locale, chatId: number): Promise<View
 /** Language sub-screen for the settings panel (rendered from a fresh doc). */
 const renderLangPanel = async (locale: Locale, chatId: number): Promise<ViewMessage> => {
   const groupDoc = await store.getGroupDoc(chatId).catch(() => null)
-  const groupLocale = (groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale ?? 'en'
-  return langPanel(locale, chatId, groupLocale)
+  const current = (groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale ?? 'en'
+  return langPanel(locale, chatId, current)
 }
 
 // ── Welcome / extras editor sub-screens (rendered fresh from Mongo) ─────────
@@ -1578,36 +1654,55 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
     // Admin ballot resolved instantly.
     if (!(await store.closeVote(chat.id, replied.id, 'spam'))) return
     log.info('vote_resolved', { chatId: chat.id, userId: target.id, messageId: replied.id, outcome: 'spam', by: 'admin_report' })
-    await enforceVoteSpam({
+    const enforced = await enforceVoteSpam({
       chatId: chat.id, messageId: replied.id, targetUserId: target.id, learnText: fullText,
       tally: { spam: tally.spam, ham: tally.ham }
     }, 'admin_report')
+    /**
+     * The action is read off what happened, not asserted.
+     *
+     * This used to be a hard-coded `action: 'mute'` with `banDurationSeconds:
+     * null` — a notice announcing a mute the bot may never have applied, and
+     * announcing it without the duration it did apply. When neither the delete
+     * nor the mute lands there is no enforcement to announce at all, and
+     * `compactNotification` rightly refuses to render one: the chat gets the
+     * missing-rights notice instead, which is the true and actionable thing.
+     */
+    const action = enforced.muted ? 'mute' : enforced.deleted ? 'delete' : 'observe'
     const verdict: Verdict = {
-      pSpam: 0.99, action: 'mute', needsVote: false, banDurationSeconds: null, decidedBy: 'deterministic',
+      pSpam: 0.99, action, needsVote: false,
+      banDurationSeconds: enforced.muted ? MUTE_AFTER_VOTE_SECONDS : null,
+      decidedBy: 'deterministic',
       ruleId: 'admin_report', signals: [], reasonCode: 'admin_report',
       reasonEvidence: textPreview || null, meta: {}
     }
     rememberVerdict(chat.id, replied.id, verdict)
-    const view = compactNotification(locale, verdict, {
-      chatId: chat.id, messageId: replied.id, userId: target.id, userLabel: target.displayName
-    }, { botUsername: selfUsername ?? undefined })
-    const sent = await tgSendText(chat.id, viewHtml(view.text), {
-      replyMarkup: toKeyboard(view.buttons),
-      // The inline "why?" link must not drag a preview card of our own bot
-      // under a notice whose whole point is being one line.
-      disableWebPreview: true
-    }).catch(() => null)
-    if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_COMPACT_MS, 'mod_event:admin_report')
+    if (action === 'observe') {
+      const warned = await tgSendText(chat.id, viewHtml(locale.notification.missingRights))
+        .catch(() => null)
+      if (warned) scheduleDelete(chat.id, warned.id, NOTIFY_TTL_COMPACT_MS, 'missing_rights:admin_report')
+    } else {
+      const view = compactNotification(locale, verdict, {
+        chatId: chat.id, messageId: replied.id, userId: target.id, userLabel: target.displayName
+      }, { botUsername: selfUsername ?? undefined })
+      const sent = await tgSendText(chat.id, viewHtml(view.text), {
+        replyMarkup: toKeyboard(view.buttons),
+        // The inline "why?" link must not drag a preview card of our own bot
+        // under a notice whose whole point is being one line.
+        disableWebPreview: true
+      }).catch(() => null)
+      if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_COMPACT_MS, 'mod_event:admin_report')
+    }
     // An admin arriving mid-vote closes the question, and the prompt it was
     // asked through must stop asking. Without this the buttons stayed live on a
     // closed vote and answered "already ended" to every tap, forever: the
     // expiry sweep only claims votes still marked open.
     const openPrompt = vote['promptMessageId']
     if (typeof openPrompt === 'number') {
-      const receipt = voteResult(locale, {
+      const receipt = voteResult(await groupLocale(chat.id), {
         chatId: chat.id, messageId: replied.id,
         userId: target.id, userLabel: target.displayName
-      }, 'spam', { botUsername: selfUsername ?? undefined })
+      }, 'spam', { botUsername: selfUsername ?? undefined, enforced })
       await tgEditMessage({
         chatId: chat.id, message: openPrompt,
         text: viewHtml(receipt.text), replyMarkup: toKeyboard(receipt.buttons),
@@ -3607,7 +3702,8 @@ const wireCallbacks = (): void => {
 
       if (tally.outcome === 'pending') {
         const targetUserId = Number(vote['targetUserId'] ?? 0)
-        const view = votePrompt(locale, {
+        // The ballot is the group's message; the toast below is the voter's.
+        const view = votePrompt(await groupLocale(chatId), {
           chatId, messageId,
           userId: targetUserId > 0 ? targetUserId : null,
           userLabel: String(vote['targetLabel'] ?? ''), textPreview: String(vote['textPreview'] ?? ''),
@@ -3635,8 +3731,9 @@ const wireCallbacks = (): void => {
         // "community".
         by: tally.decidedBy ?? 'community'
       })
+      let enforced: VoteEnforcement | undefined
       if (tally.outcome === 'spam') {
-        await enforceVoteSpam({
+        enforced = await enforceVoteSpam({
           chatId, messageId,
           targetUserId: Number(vote['targetUserId'] ?? 0),
           learnText: String(vote['learnText'] ?? vote['textPreview'] ?? ''),
@@ -3658,11 +3755,11 @@ const wireCallbacks = (): void => {
       }
       const subjectId = Number(vote['targetUserId'] ?? 0)
       const subjectLabel = String(vote['targetLabel'] ?? '')
-      const receipt = voteResult(locale, {
+      const receipt = voteResult(await groupLocale(chatId), {
         chatId, messageId,
         userId: subjectId > 0 ? subjectId : null,
         userLabel: subjectLabel.length > 0 ? subjectLabel : null
-      }, tally.outcome, { botUsername: selfUsername ?? undefined })
+      }, tally.outcome, { botUsername: selfUsername ?? undefined, enforced })
       await tgEditMessage({
         chatId, message: query.messageId,
         text: viewHtml(receipt.text), replyMarkup: toKeyboard(receipt.buttons),
@@ -3753,7 +3850,7 @@ const wireCallbacks = (): void => {
         return
       }
       const verdict = await recallVerdict(chatId, Number(messageIdRaw))
-      await restoreFalsePositive({
+      const restitution = await restoreFalsePositive({
         chatId,
         messageId: Number(messageIdRaw),
         userId: Number(userIdRaw),
@@ -3762,15 +3859,39 @@ const wireCallbacks = (): void => {
         learnText: recallText(chatId, Number(messageIdRaw))
       })
       // The admin vouched — auto-trust this user in this chat from now on.
-      await store.addTrustedUser(chatId, Number(userIdRaw))
-        .catch(() => { /* trust write is best-effort */ })
+      // No longer "best-effort" in the sense of unreported: the toast promises
+      // trust in so many words, and a Mongo outage used to make that a lie.
+      const trusted = await store.addTrustedUser(chatId, Number(userIdRaw))
+        .then(() => true).catch(() => false)
       log.info('override', {
         chatId, userId: Number(userIdRaw), messageId: Number(messageIdRaw), by: query.user.id,
-        wasDecidedBy: verdict?.decidedBy, wasReason: verdict?.reasonCode
+        wasDecidedBy: verdict?.decidedBy, wasReason: verdict?.reasonCode,
+        lifted: restitution.lifted, trusted
       })
-      await query.answer({ text: locale.notification.overrideDone })
-      // Remove the notification message itself — keep chats clean.
-      await gateway.tg.deleteMessagesById(chatId, [query.messageId]).catch(() => { /* ok */ })
+      const complete = restitution.lifted && trusted
+      // An alert, not a toast, when it is partial: a moderator who is told
+      // "розблокований і в довірених" walks away, and this is the one moment
+      // they could still fix it by hand.
+      await query.answer(complete
+        ? { text: locale.notification.overrideDone }
+        : { text: locale.notification.overridePartial, alert: true })
+      // `query.chat.id`, not `chatId`. This button rides two different messages:
+      // the compact notice in the group, where the two ids agree, and the "why"
+      // card in the admin's PM, where they do not. Message ids are scoped per
+      // chat, so deleting a PM message id FROM THE GROUP deleted whatever group
+      // message happened to hold that number — an unrelated member's, most
+      // likely — while the card that was tapped stayed up with a live button.
+      //
+      // The group notice tapped from PM is left standing: we do not keep its id.
+      //
+      // And nothing is removed at all when the correction was partial — the
+      // button is the only retry there is, and taking it away would leave a
+      // moderator who has just been told "not everything applied" with no way
+      // to apply the rest.
+      if (complete) {
+        await gateway.tg.deleteMessagesById(query.chat.id, [query.messageId])
+          .catch(() => { /* ok */ })
+      }
     }
   })
 
