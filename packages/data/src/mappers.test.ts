@@ -36,7 +36,6 @@ describe('groupDocToChatPolicy', () => {
     expect(policy.preset).toBe('strict')
     expect(policy.customRules).toEqual(['DENY: казино'])
     expect(policy.trustedUserIds).toEqual([42])
-    expect(policy.reactionModeration).toBe(false)
   })
 
   it('defaults sanely for a missing document', () => {
@@ -55,11 +54,6 @@ describe('groupDocToChatPolicy', () => {
   it('respects a group that turned external ban databases off', () => {
     const policy = groupDocToChatPolicy({ group_id: -1, settings: { banDatabase: false } })
     expect(policy.externalBanEnabled).toBe(false)
-  })
-
-  it('reaction moderation is off by default but reachable when a group enables it', () => {
-    expect(groupDocToChatPolicy(null).reactionModeration).toBe(false)
-    expect(groupDocToChatPolicy({ group_id: -1, settings: { reactionModeration: true } }).reactionModeration).toBe(true)
   })
 })
 

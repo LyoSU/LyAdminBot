@@ -4,6 +4,7 @@ import type { StrictnessPreset, Verdict, VerdictAction } from './types.js'
 import {
   decideAction, isEnforcementAction, countsAsDetection, countsAgainstSender, ENFORCEMENT_ACTIONS,
   PRESET_THRESHOLDS, TIMED_BAN_SECONDS, needsRestitution, restitutionLiftsRestrictions,
+  IMITABLE_REASON_CODES, LLM_REASON_CODES,
   type PolicyInput
 } from './policy.js'
 
@@ -449,5 +450,37 @@ describe('restitutionLiftsRestrictions', () => {
     expect(restitutionLiftsRestrictions(v('none'))).toBe(false)
     expect(restitutionLiftsRestrictions(v('observe'))).toBe(false)
     expect(restitutionLiftsRestrictions(null)).toBe(false)
+  })
+})
+
+describe('the classifier vocabulary and the ceiling that filters it', () => {
+  it('every imitable code is one the model can actually return', () => {
+    // The `satisfies` in policy.ts already fails the build on a code that is
+    // not in the vocabulary. This is the other direction of the same worry:
+    // proof at run time that the ceiling is matching against live strings and
+    // not against three literals nothing can produce any more.
+    for (const code of IMITABLE_REASON_CODES) {
+      expect(LLM_REASON_CODES as readonly string[]).toContain(code)
+    }
+  })
+
+  it('the ceiling covers some of the vocabulary, not all and not none', () => {
+    // Either extreme means the ceiling stopped being a distinction: covering
+    // nothing removes it silently, covering everything makes `capImitableAct`
+    // a blanket rule rather than a statement about imitable acts.
+    expect(IMITABLE_REASON_CODES.size).toBeGreaterThan(0)
+    expect(IMITABLE_REASON_CODES.size).toBeLessThan(LLM_REASON_CODES.length)
+  })
+
+  it('the vocabulary keeps a way to answer "spam", "clean" and "I cannot tell"', () => {
+    const codes = LLM_REASON_CODES as readonly string[]
+    expect(codes).toContain('other_spam')
+    expect(codes).toContain('other_clean')
+    // A model with no way to abstain invents a label instead.
+    expect(codes).toContain('unsure')
+  })
+
+  it('no duplicates — a repeated code silently widens whatever set names it', () => {
+    expect(new Set(LLM_REASON_CODES).size).toBe(LLM_REASON_CODES.length)
   })
 })

@@ -60,16 +60,16 @@
  */
 import { randomBytes, createHash } from 'node:crypto'
 import type { EvaluationInput, LlmPort, LlmVerdict } from '@lyadmin/core'
-import { isDistinctive, toWellFormed, truncate } from '@lyadmin/core'
+import { isDistinctive, LLM_REASON_CODES, toWellFormed, truncate } from '@lyadmin/core'
 import { foldConfusables, normalizeLight } from './hashing.js'
 import type { MongoStore } from './mongo.js'
 
-const REASON_CODES = [
-  'job_scam', 'crypto_scam', 'gambling_promo', 'adult_promo', 'ad_network',
-  'flirt_bait', 'phishing', 'channel_promo', 'guest_bot_promo', 'flood',
-  'prompt_injection', 'other_spam',
-  'legit_question', 'legit_conversation', 'legit_share', 'other_clean', 'unsure'
-] as const
+/**
+ * Declared in core, not here, because the ceiling that filters these codes
+ * (`IMITABLE_REASON_CODES`) lives there and the two must not drift apart.
+ * See the note beside `LLM_REASON_CODES`.
+ */
+const REASON_CODES = LLM_REASON_CODES
 
 /**
  * Why a call produced no verdict. Every one of these degrades to `null`, and
@@ -662,9 +662,27 @@ export const buildSystemPrompt = (fence: string, briefing: string | null): strin
  * them a BETTER injection vector than the fenced message itself
  * (2026-07-30 review).
  *
- * Two things happen here. Newlines and control characters are collapsed, so no
- * value can forge a section header or a fence line; and the result is wrapped in
- * the guillemets the system prompt defines as "untrusted data".
+ * Three things happen here. Newlines and control characters are collapsed, so
+ * no value can forge a section header or a fence line; guillemets inside the
+ * value become ordinary quotes; and the result is wrapped in the guillemets the
+ * system prompt defines as "untrusted data".
+ *
+ * That middle step is what makes the last one a delimiter rather than a
+ * decoration (2026-08-25). Only the message under review gets the random fence;
+ * every context section — bio, chat purpose, conversation window, channel
+ * descriptions — is held by the guillemets alone, and the system prompt draws
+ * the line exactly there: quoted text is data, unquoted text is ours. A value
+ * carrying its own guillemet closed the quote early, and everything after it
+ * read as prompt we wrote.
+ *
+ * Randomising it the way the fence is randomised is not available: the fence
+ * delimits one block on its own lines, while these mark twenty-odd values
+ * inline, and a per-value token would cost more prompt than the values. So the
+ * mark is fixed and public — and «» are ordinary quotation marks in the
+ * languages these chats speak, which is to say they turn up in innocent bios
+ * constantly. A delimiter that can occur inside the content it delimits is not
+ * one. They are folded to `"` rather than dropped because a bio quoting
+ * somebody means to be quoting somebody.
  */
 const untrusted = (raw: string, limit: number): string => {
   const flat = raw
@@ -672,6 +690,8 @@ const untrusted = (raw: string, limit: number): string => {
     // invisible to reviewers, and a stray one would silently widen the class.
     .replace(/[\u0000-\u001F\u007F-\u009F\u2028\u2029]+/g, ' ')
     .replace(/\s+/g, ' ')
+    // Fold, do not strip: see the note above.
+    .replace(/[«»]/g, '"')
     .trim()
   // NOT `.slice()`. Every value here is user text and most of it is full of
   // emoji, so a code-unit cut lands inside a surrogate pair routinely — and one

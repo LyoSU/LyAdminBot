@@ -21,7 +21,7 @@ const makeInput = (chatId: number, userId: number, text: string): EvaluationInpu
   },
   policy: {
     enabled: true, preset: 'standard', captchaEnabled: false, votingEnabled: true,
-    reactionModeration: false, externalBanEnabled: true, customRules: [], trustedUserIds: []
+    externalBanEnabled: true, customRules: [], trustedUserIds: []
   },
   enrichment: {
     bio: null, businessTexts: [], personalChannelId: null, linkedChannels: [],

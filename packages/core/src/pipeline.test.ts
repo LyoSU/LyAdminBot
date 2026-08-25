@@ -37,7 +37,7 @@ const chat: NormalizedChat = { id: -100123, kind: 'group', title: 'Test', topLan
 
 const makePolicy = (overrides: Partial<ChatPolicy> = {}): ChatPolicy => ({
   enabled: true, preset: 'standard', captchaEnabled: true, votingEnabled: true,
-  reactionModeration: false, externalBanEnabled: true, customRules: [], trustedUserIds: [],
+  externalBanEnabled: true, customRules: [], trustedUserIds: [],
   ...overrides
 })
 

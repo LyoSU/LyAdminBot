@@ -144,6 +144,71 @@ earlier, 98 messages first seen the same day. Somebody who talks a lot and whom
 we have known briefly is exempt from nothing and vouched for by one signal worth
 -1.5, which the session path does not read at all.
 
+### Measured 2026-08-25: which stage actually produces the false positives
+
+Prompted by an outside review that named `external_ban_new` as risk #2 on the
+strength of its **absolute** ban count. Ranking by count answers "where do the
+bans come from", which is not the question. Overturn rate per decision, over the
+14 days `pipeline_decisions` retains (2026-08-11 → 08-25), joined to
+`pipeline_feedback` in the same window:
+
+| stage | overturned | decisions | rate |
+|---|---|---|---|
+| `private_invite_new` | 5 | 163 | **3.07 %** |
+| `session` | 24 | 4796 | 0.50 % |
+| `llm` | 14 | 4048 | 0.35 % |
+| `external_ban_new` | 3 | 2458 | **0.12 %** |
+| `score` | 2 | 8268 | 0.02 % |
+
+So the busiest deterministic rule is the second most precise thing we run, and
+the outlier is `private_invite_new` — 25× its rate on a base 15× smaller, and
+invisible to any count-ordered view. `session` remains the largest single source
+in absolute terms (24), which is the open question above, now with a rate.
+
+### Rejected 2026-08-25: gating `external_ban_new` on listing freshness
+
+The proposal was to require `fresh_external_ban` or `external_repeat_offender`
+for the automatic ban and route the rest to delete + captcha + vote. Measured
+before deciding, and it fails on three separate counts:
+
+1. **Wrong target.** It softens the 0.12 % stage and leaves the 3.07 % one alone.
+2. **`external_repeat_offender` cannot carry the fallback.** It has fired 0 times
+   in 239 619 decisions. Of 37 423 CAS records, 1803 are bans and 1794 report
+   exactly one offence; three accounts in the whole store report two or more.
+   lols exposes no offence count at all. The gate would in practice be
+   freshness alone.
+3. **The gate would read a missing date as innocence.** Of the 290 accounts the
+   gate would newly spare, 71 (24.5 %) have no ban date from either source — the
+   signal is absent because nothing was recorded, not because the listing is
+   old. The remaining 219 have a median age of 18 days against a
+   `FRESH_EXTERNAL_BAN_MAX_DAYS` of 2; an account listed a fortnight ago and
+   posting a job scam today is persistent, not rehabilitated. Spot-reading that
+   residual returns recruitment pitches, astroturf and duplicated filler text.
+
+This is the same defect class as `extban-cache-retry` and the t.me resolver:
+`null` standing for two different facts — "known clean" and "never established"
+— and a decision reading it as the first.
+
+What the numbers do argue for is looking at `private_invite_new`, where the
+deterministic rule fires on a link before any stage has read where the link
+goes, even though the profile path now resolves exactly that. Not changed here:
+it moves enforcement and belongs in a measured pass of its own.
+
+### Closed 2026-08-25: the quote marks were not a delimiter
+
+Same review claimed the classifier has no injection defence at all. It has one,
+and the code cites the paper it comes from — but reading it properly turned up a
+real gap the claim had walked past. Only MESSAGE UNDER REVIEW gets the random
+per-call fence. Every context section (bio, chat purpose, conversation window,
+channel titles and descriptions, MESSAGE FACTS) is held by `untrusted()`, which
+collapses newlines — closing the line-oriented vector in 2026-07-30 — and wraps
+the value in the guillemets the system prompt defines as untrusted data.
+
+The value's own guillemets were passed through. `.» ... «` in a bio therefore
+closed the quote and continued in the position the system prompt reserves for
+us. Now folded to `"` inside `untrusted()`, with a test per surface.
+
+
 ## What is NOT in scope
 
 No background job rewrites `score.ts`. The "calibration loop" is: feedback

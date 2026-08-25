@@ -259,9 +259,22 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
       : ', date unknown'
     signals.push({ name: 'external_ban', evidence: `listed by ${who}${age}` })
 
-    // Repeat offender: CAS counts prior offences across its network. A second
-    // listing is a much stronger signal than a single one (replaces the dead
-    // `external_high_spam_factor` — lols dropped the spam_factor field).
+    /*
+     * Repeat offender: CAS counts prior offences across its network, and a
+     * second listing would be much stronger than a first.
+     *
+     * It almost never gets to say so. Measured 2026-08-25 against the whole
+     * store: of 37 423 CAS records, 1803 are bans and 1794 of those report
+     * exactly one offence — three accounts in the entire database have ever
+     * reported two or more. Across 239 619 pipeline decisions this signal has
+     * fired zero times. lols cannot help: it exposes no offence count at all,
+     * so `parseLolsResponse` pins banned records at 1 by construction.
+     *
+     * Left in place because when it does fire it is honest and strong, but
+     * nothing downstream may be designed around it — in particular it cannot
+     * serve as the fallback half of a freshness gate on `external_ban_new`,
+     * which is what it looks like it is for.
+     */
     if (user.externalBan.offenses >= EXTERNAL_REPEAT_OFFENSES_MIN) {
       signals.push({
         name: 'external_repeat_offender',

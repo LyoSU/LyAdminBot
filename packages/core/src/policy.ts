@@ -110,6 +110,32 @@ export const removesSender = (action: VerdictAction): boolean =>
   (SENDER_REMOVING_ACTIONS as readonly VerdictAction[]).includes(action)
 
 /**
+ * The vocabulary the classifier is allowed to answer with.
+ *
+ * This lives in core rather than beside the port that sends it because two
+ * things downstream must agree with it and neither is the port:
+ * `IMITABLE_REASON_CODES` below picks three of these codes out for a ceiling,
+ * and the UI keeps a translation per code. The list used to be declared inside
+ * `llm-port.ts`, one package away from the ceiling that filters it — two string
+ * literals with nothing but goodwill holding them level. Retiring a code there
+ * would have left the ceiling matching a string the model can no longer emit,
+ * and a ceiling that silently stops applying is worse than one that was never
+ * written: the tests that cover it keep passing, because they name the code
+ * too. Declared here, that same edit fails to compile.
+ *
+ * `unsure` is deliberately answerable — a model forced to choose a label it
+ * does not believe will invent one.
+ */
+export const LLM_REASON_CODES = [
+  'job_scam', 'crypto_scam', 'gambling_promo', 'adult_promo', 'ad_network',
+  'flirt_bait', 'phishing', 'channel_promo', 'guest_bot_promo', 'flood',
+  'prompt_injection', 'other_spam',
+  'legit_question', 'legit_conversation', 'legit_share', 'other_clean', 'unsure'
+] as const
+
+export type LlmReasonCode = (typeof LLM_REASON_CODES)[number]
+
+/**
  * Reason codes that name an act ordinary members also perform.
  *
  * Every other spam code names something a member does not do: nobody recruits
@@ -137,9 +163,17 @@ export const removesSender = (action: VerdictAction): boolean =>
  * The consequence is a ceiling, not an exemption: the message still goes and
  * the chat is still asked. See `capImitableAct` in the pipeline.
  */
-export const IMITABLE_REASON_CODES: ReadonlySet<string> = new Set([
-  'channel_promo', 'ad_network', 'flood'
-])
+const IMITABLE = ['channel_promo', 'ad_network', 'flood'] as const satisfies
+  readonly LlmReasonCode[]
+
+/**
+ * Kept as `ReadonlySet<string>` on purpose: `Verdict.reasonCode` is a plain
+ * string because rule ids share the field with the model's vocabulary, and a
+ * narrower set would only force a cast back at every call site. The check that
+ * matters is on the literals above, where `satisfies` fails the build if a code
+ * here is not one the model can return.
+ */
+export const IMITABLE_REASON_CODES: ReadonlySet<string> = new Set(IMITABLE)
 
 /**
  * Whether a verdict is firm enough to be remembered AGAINST THE ACCOUNT rather
