@@ -400,6 +400,12 @@ export type DecidedBy =
    * anywhere but a log line.
    */
   | 'captcha_ignored'
+  /**
+   * The door, not the conversation: a joiner stopped on what their profile
+   * shows before they have said anything. Named apart from every judge above
+   * because no message existed to judge.
+   */
+  | 'join_screen'
   | 'abstain'
   | 'error'
 

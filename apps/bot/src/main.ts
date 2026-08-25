@@ -13,7 +13,7 @@ import {
   voterRoster, voteEligibility, voteMayRecordDetection, needsRestitution, restitutionLiftsRestrictions,
   type VoterStanding,
   classifyUrl, strongestTelegramLink, removesSender, truncate, mediaCategoryOf,
-  BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS,
+  BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS, ESTABLISHED_MIN_MESSAGES,
   type ChannelPreview, type EditBaseline, type EvaluationInput, type ForwardOrigin,
   type MediaCategory, type PipelinePorts, type UserSnapshot, type Verdict, type VoteBallot
 } from '@lyadmin/core'
@@ -2298,7 +2298,96 @@ const joinerAvatar = async (userId: number): Promise<string | null> => {
   return task
 }
 
-const screenJoinerAvatars = async (chat: Chat, joiners: User[]): Promise<void> => {
+/**
+ * How long a joiner gated on an explicit avatar is held.
+ *
+ * The same ten minutes the executor gives a captcha on the message path, and
+ * for the same reason: it lapses on its own, so the worst case of every failure
+ * mode here — a restart, a whisper the client never rendered, a person who put
+ * their phone down — is ten minutes of silence rather than a member stuck
+ * behind a button nobody can press.
+ */
+const JOIN_GATE_MUTE_SECONDS = 10 * 60
+
+/**
+ * An account whose profile picture is pornography, stopped at the door.
+ *
+ * Until now this was a log line. `screen_joiner_avatars` has been recognising
+ * explicit avatars for months — production, 2026-08-25: two accounts joined one
+ * chat within seven seconds at `sexual 0.92` and `0.93` — and did nothing with
+ * the finding but count it towards a surge alert. The account then waited for
+ * its first message to be judged, which is the moment this whole class was
+ * asked to be caught BEFORE.
+ *
+ * A gate rather than a removal, deliberately. An avatar is a fact about the
+ * account and not about anything said, so it may support a question and never a
+ * verdict — the same line the message path draws. What makes asking cheap here
+ * is that a joiner IS a participant, which is exactly what the commenters this
+ * gate cannot reach on the message path are not: the whisper goes through, and
+ * a member who is simply careless about their profile picture spends one tap.
+ *
+ * Deliberately NOT gated on the account being new. An explicit avatar is an
+ * explicit avatar; but somebody the CHAT already knows is exempted below,
+ * because a returning regular has standing that a stranger does not.
+ */
+const gateExplicitJoiner = async (
+  chat: Chat, joiner: User, hit: string, joinMessageId: number,
+  history: { messagesGlobal: number } | null
+): Promise<void> => {
+  const groupDoc = await store.getGroupDoc(chat.id).catch(() => null)
+  const policy = groupDocToChatPolicy(groupDoc as never)
+  // Both switches apply: the chat's own captcha setting, and its master spam
+  // switch. A chat that turned the pipeline off did not ask to be policed at
+  // the door instead.
+  if (!policy.enabled || !policy.captchaEnabled) return
+  // Standing earned elsewhere still counts — see `established_user`.
+  if ((history?.messagesGlobal ?? 0) >= ESTABLISHED_MIN_MESSAGES) return
+  if (await isChatAdmin(chat.id, joiner.id)) return
+
+  const held = await gateway.moderationActions
+    .mute(chat.id, joiner.id, JOIN_GATE_MUTE_SECONDS)
+    .then(() => true).catch(() => false)
+  // No gate, no prompt: a question about a door that is not closed asks the
+  // member to unlock something already open.
+  if (!held) {
+    log.warn('join_gate_failed', { chatId: chat.id, userId: joiner.id, hit })
+    return
+  }
+  log.info('join_gate', { chatId: chat.id, chat: chat.title ?? undefined, userId: joiner.id, hit })
+
+  const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
+  // Replied to Telegram's own join line, so the prompt has a referent: a
+  // whisper with nothing attached reads like a phishing attempt.
+  await deliverCaptcha(chat.id, joiner.id, joiner.displayName, locale, joinMessageId)
+
+  await store.recordDecision({
+    chatId: chat.id,
+    userId: joiner.id,
+    messageId: joinMessageId,
+    textPreview: '',
+    verdict: {
+      pSpam: 0,
+      action: 'captcha',
+      needsVote: false,
+      banDurationSeconds: null,
+      decidedBy: 'join_screen',
+      ruleId: null,
+      signals: [],
+      reasonCode: 'nsfw_avatar_join',
+      reasonEvidence: hit,
+      meta: {}
+    },
+    execution: {
+      applied: true, deleted: null, skippedReason: null,
+      failed: [], albumRemoved: 0, retroPurged: 0
+    },
+    latencyMs: 0
+  }).catch(() => { /* telemetry must never break moderation */ })
+}
+
+const screenJoinerAvatars = async (
+  chat: Chat, joiners: User[], joinMessageId: number
+): Promise<void> => {
   // A bulk add can carry dozens of users; screening all of them sequentially
   // would stall the update loop and burn a moderation call each. The cap keeps
   // the join path bounded — the authoritative check still runs per message.
@@ -2328,6 +2417,7 @@ const screenJoinerAvatars = async (chat: Chat, joiners: User[]): Promise<void> =
         })
         joinRate.noteRisk(chat.id, joiner.id)
         await maybeSendJoinSurgeAlert(chat)
+        await gateExplicitJoiner(chat, joiner, hit, joinMessageId, history)
       }
     } catch { /* dead key / API error surfaces via the message-path meta log */ }
   }
@@ -2658,7 +2748,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       arrivals.noteJoin(chat.id, joiners.map((joiner) => joiner.id), message.id)
       await handleWelcomeGreeting(message, chat, joiners)
       // Fire-and-forget: avatar download must never delay update handling.
-      void screenJoinerAvatars(chat, joiners).catch(() => { /* best-effort */ })
+      void screenJoinerAvatars(chat, joiners, message.id).catch(() => { /* best-effort */ })
     }
     return
   }
