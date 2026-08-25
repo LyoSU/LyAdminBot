@@ -3061,15 +3061,26 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     ? await downloadPhotoBase64(gateway.tg, message.media)
     : null
 
-  // NSFW moderation of profile media — newish senders only (this gate is what
-  // makes nsfw_avatar/nsfw_stories new-account signals). Avatar reuses bytes
-  // cached at join when fresh; stories are best-effort (user-only surface).
+  // Profile media — newish senders only (this gate is what makes
+  // nsfw_avatar/nsfw_stories new-account signals). Avatar reuses bytes cached
+  // at join when fresh; stories are best-effort (user-only surface).
   let avatarBase64: string | null = null
   let storyBase64: string[] = []
   let linkedChannelAvatar: string | null = null
-  // `userSender`: profile media is a user surface — a channel has none, and
-  // asking would be an error rather than a null.
-  if (newish && userSender && ports.moderation) {
+  /**
+   * `userSender`: profile media is a user surface — a channel has none, and
+   * asking would be an error rather than a null.
+   *
+   * The moderation port is no longer part of this condition, and that is the
+   * point. These bytes have TWO consumers: the NSFW check, which needs an
+   * external classifier, and the shared-picture store, which needs nothing but
+   * the bytes and answers the one question in this pipeline that is a fact
+   * rather than a judgement. Requiring `ports.moderation` made recognising the
+   * same photograph across accounts silently depend on an OpenAI key being
+   * configured — an unrelated port, whose absence would have disabled it with
+   * no error anywhere.
+   */
+  if (newish && userSender && (ports.moderation || ports.profileMedia)) {
     const cached = avatarCache.get(sender.id)
     if (cached && cached.expiresAt > Date.now()) {
       avatarBase64 = cached.base64
@@ -3085,13 +3096,15 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       pruneExpired(avatarCache, AVATAR_CACHE_MAX)
       avatarCache.set(sender.id, { base64: avatarBase64, expiresAt: Date.now() + AVATAR_CACHE_TTL_MS })
     }
-    // The picture of the channel the profile points at, on the same gate and
-    // from bytes `fetchUserProfile` already has.
-    if (profile.linkedChannel?.photo) {
+    // The picture of the channel the profile points at, from bytes
+    // `fetchUserProfile` already has. Unlike the avatar, this one has a single
+    // consumer — the NSFW check — so it is fetched only when that can run.
+    if (ports.moderation && profile.linkedChannel?.photo) {
       linkedChannelAvatar = await rawPhotoToBase64(
         gateway.tg, profile.linkedChannel.photo, AVATAR_MAX_BYTES)
     }
-    if (storiesSurfaceAvailable) {
+    // Stories likewise: only the NSFW check reads them.
+    if (ports.moderation && storiesSurfaceAvailable) {
       storyBase64 = await downloadStoriesBase64(gateway.tg, sender.id)
       // downloadStoriesBase64 swallows the MTProto refusal and returns [], so
       // an empty first result is our only evidence the surface is unavailable.
