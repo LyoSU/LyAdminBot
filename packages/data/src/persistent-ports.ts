@@ -16,7 +16,8 @@
  * or a single-message window (session) and never throws into moderation.
  */
 import type {
-  BurstEntry, BurstPort, EvaluationInput, SessionPort, SessionWindow, VelocityPort, VelocityResult
+  BurstEntry, BurstPort, EvaluationInput, SessionPort, SessionWindow,
+  VelocityCheckOptions, VelocityPort, VelocityResult
 } from '@lyadmin/core'
 import { truncate } from '@lyadmin/core'
 import { normalizeHeavy, sha256 } from './hashing.js'
@@ -90,21 +91,44 @@ const VELOCITY_DEFAULTS: Required<Omit<VelocityOptions, 'maxTrackedTexts' | 'win
   soloThreshold: 3
 }
 
+/**
+ * What this window counts copies of — a template, or the exact text.
+ *
+ * Namespaced apart (`t:` / `x:`) rather than hashed into one space, so a
+ * template and a raw text can never share a counter. They mean different
+ * things: one is "messages shaped like this", the other is "this message,
+ * again", and a caller reading a count must know which it got.
+ *
+ * Null means "nothing safe to count", which every caller already treats as the
+ * stage having no opinion.
+ */
+export const velocityKey = (text: string, options: VelocityCheckOptions = {}): string | null => {
+  const template = normalizeHeavy(text)
+  if (template.length >= 5) return `t:${sha256(template)}`
+  if (options.countExactWhenTemplateUnusable !== true) return null
+  const exact = text.trim()
+  // An empty message is the one thing exact matching must still refuse: it is
+  // the same collapse the template rule exists to prevent, arriving by another
+  // road. (2026-08: an empty ballot collected votes for the same reason.)
+  if (exact.length === 0) return null
+  return `x:${sha256(exact)}`
+}
+
 export class PersistentVelocityPort implements VelocityPort {
   private readonly opts: Required<Omit<VelocityOptions, 'maxTrackedTexts' | 'windowMs'>>
   constructor(private readonly backend: VelocityBackend, options: VelocityOptions = {}) {
     this.opts = { ...VELOCITY_DEFAULTS, ...options }
   }
 
-  async check(input: EvaluationInput): Promise<VelocityResult | null> {
+  async check(input: EvaluationInput, options: VelocityCheckOptions = {}): Promise<VelocityResult | null> {
     const text = input.message.text
     if (!text) return null
-    const template = normalizeHeavy(text)
-    if (template.length < 5) return null
+    const key = velocityKey(text, options)
+    if (key === null) return null
 
     try {
       const { count, chatCount, userCount } =
-        await this.backend.bumpVelocity(sha256(template), input.message.chatId, input.user.id)
+        await this.backend.bumpVelocity(key, input.message.chatId, input.user.id)
       // Computed since the counter existed and thrown away until 2026-08-01,
       // which left `singleAuthor` permanently absent — read conservatively as a
       // wave, so the one-account branch of the verdict had never once run.

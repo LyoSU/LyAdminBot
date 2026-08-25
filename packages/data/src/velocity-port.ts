@@ -3,9 +3,10 @@
  * blasted across chats in a short window. v1 used per-process memory too;
  * a Redis backend can be added behind the same interface later.
  */
-import type { EvaluationInput, VelocityPort, VelocityResult } from '@lyadmin/core'
-import { normalizeHeavy, sha256 } from './hashing.js'
-import { VELOCITY_WINDOW_MS } from './persistent-ports.js'
+import type {
+  EvaluationInput, VelocityCheckOptions, VelocityPort, VelocityResult
+} from '@lyadmin/core'
+import { VELOCITY_WINDOW_MS, velocityKey } from './persistent-ports.js'
 
 interface WindowEntry {
   chatIds: Set<number>
@@ -42,13 +43,14 @@ export class MemoryVelocityPort implements VelocityPort {
     this.options = { ...DEFAULTS, ...options }
   }
 
-  async check(input: EvaluationInput): Promise<VelocityResult | null> {
+  async check(input: EvaluationInput, options: VelocityCheckOptions = {}): Promise<VelocityResult | null> {
     const text = input.message.text
     if (!text) return null
-    const template = normalizeHeavy(text)
-    if (template.length < 5) return null
+    // Shared with the Mongo port deliberately: two implementations of "what
+    // counts as the same message" is two answers to one question.
+    const key = velocityKey(text, options)
+    if (key === null) return null
 
-    const key = sha256(template)
     const nowMs = this.now()
 
     let entry = this.entries.get(key)

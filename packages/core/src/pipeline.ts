@@ -927,10 +927,52 @@ export const evaluateMessage = async (
     return judged
   }
 
+  /**
+   * Whether anything about the ACCOUNT spoke — used twice below, so computed
+   * once here: it decides whether repetition is worth counting, and whether a
+   * captcha may be asked at all.
+   */
+  const profileSpoke = signals.some((s) => PROFILE_EVIDENCE_SIGNALS.has(s.name as never))
+
+  /**
+   * The same nothing, again, is not nothing.
+   *
+   * Measured 2026-08-25, and the case that motivated this whole area: an
+   * account with a private invite in its bio posted ONE heart emoji into one
+   * chat six times over twelve hours. Every one of the six was judged as if it
+   * were the first — pSpam 0, `observe` — because every clock this pipeline
+   * owns is shorter than the gap between them (burst 10 minutes, session 30)
+   * and because the one window that is long enough, velocity at six hours,
+   * refuses to key on a text whose normalised template is under five
+   * characters. An emoji normalises to the empty string, so the counter never
+   * saw a single copy. Meanwhile each repeat earned the account tenure.
+   *
+   * So: count the exact text, and only for a sender whose profile already said
+   * something. That restriction is the whole safety of it — an ordinary member
+   * sending "👍" three times is exactly what exact matching would otherwise
+   * charge for, and they are not the population being looked at here.
+   *
+   * What it does is narrow on purpose: it does not decide anything, it removes
+   * the excuse. A message that repeats is no longer "too little to judge", so
+   * the ladder below runs normally — signatures, vectors, the classifier — and
+   * whatever they conclude is reached with the message read, not guessed at.
+   */
+  const repetition = lowInformation && profileSpoke && ports.velocity
+    ? await safe('velocity', () =>
+        ports.velocity!.check(input, { countExactWhenTemplateUnusable: true }))
+    : null
+  const repeatsItself = repetition?.exceeded === true && repetition.singleAuthor === true
+  if (repeatsItself) {
+    signals.push({
+      name: 'velocity_repeats',
+      evidence: repetition?.evidence ?? 'the same message repeated by this account'
+    })
+  }
+
   // A message in an unfamiliar script is never "too little to judge": whatever
   // it says it says in full, and unlike a bare "@user" it is trivially readable
   // — by the LLM, if by nothing else here.
-  if (foreignScript === null && lowInformation) {
+  if (foreignScript === null && lowInformation && !repeatsItself) {
     // The full pile, always. A bare "@someone" as a first message is precisely
     // the noise this gate exists to stop asking the model about, so the
     // shortcut below must not reach in here.
@@ -1020,7 +1062,6 @@ export const evaluateMessage = async (
      * counted three ways — and a group cap keeps it from reaching a verdict.
      * It must not reach a question either.
      */
-    const profileSpoke = signals.some((s) => PROFILE_EVIDENCE_SIGNALS.has(s.name as never))
     if (deserved && profileSpoke && mayAskCaptcha(policyInputFor(shaped.pSpam, signals))) {
       meta['scorePSpam'] = Number(shaped.pSpam.toFixed(4))
       // Which discount was withheld, so a captcha that turned on this rule can
@@ -1094,7 +1135,11 @@ export const evaluateMessage = async (
     }
   }
 
-  if (ports.velocity) {
+  // `repetition !== null` means the low-information gate already asked this
+  // window about this message. Asking twice would BUMP THE COUNTER twice for
+  // one arrival — the window counts copies, and a second call is indistinguishable
+  // from a second copy — so the earlier answer is reused rather than re-fetched.
+  if (ports.velocity && repetition === null) {
     const velocity = await safe('velocity', () => ports.velocity!.check(input))
     if (velocity?.exceeded) {
       // What was observed, recorded as a signal rather than only as a score.

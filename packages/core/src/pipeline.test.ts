@@ -1887,6 +1887,68 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
   })
 
   /**
+   * The same nothing, six times, is not nothing.
+   *
+   * Production, 2026-08-25: an account whose bio held a private invite posted
+   * one heart emoji into one chat six times across twelve hours. All six were
+   * judged as if each were the first — pSpam 0, `observe` — because the gaps
+   * are longer than every window this pipeline owns, and the one window long
+   * enough refuses to key on a text that normalises to nothing.
+   *
+   * The repetition does not decide anything here. It removes the excuse: a
+   * message that has arrived before is no longer "too little to judge", so the
+   * ladder runs and the classifier gets to read it. That is the difference
+   * asserted below — not the verdict, but who is allowed to reach one.
+   */
+  it('stops calling it unjudgeable once the account has sent it before', async () => {
+    const repeats: PipelinePorts = {
+      moderation: { check: async () => modClean },
+      velocity: {
+        check: async (_input, options) => (
+          options?.countExactWhenTemplateUnusable === true
+            ? { exceeded: true, singleAuthor: true, evidence: '6 copies in 1 chats from 1 accounts within window' }
+            : { exceeded: false }
+        )
+      },
+      llm: { classify: async () => ({ pSpam: 0.9, reasonCode: 'channel_promo', evidence: null, cached: false }) }
+    }
+    const v = await evaluateMessage(makeInput({
+      msg: { text: '💗' },
+      user: newcomer,
+      policy: { captchaEnabled: true },
+      enrichment: { bio: 'мій канал t.me/+AAAAAAAAAAAAAAAA' }
+    }), repeats)
+    expect(v.signals.map((s) => s.name)).toContain('velocity_repeats')
+    // The gate no longer answers; something that read the message does.
+    expect(v.reasonCode).not.toBe('low_information')
+    expect(v.decidedBy).not.toBe('abstain')
+  })
+
+  /**
+   * And the guard that keeps the rule from eating ordinary people: an account
+   * whose profile said nothing is never asked about repetition at all, so the
+   * member who sends "👍" all afternoon is judged exactly as before.
+   */
+  it('never counts repetition for a sender whose profile said nothing', async () => {
+    let askedExact = false
+    const ports: PipelinePorts = {
+      moderation: { check: async () => modClean },
+      velocity: {
+        check: async (_input, options) => {
+          if (options?.countExactWhenTemplateUnusable === true) askedExact = true
+          return { exceeded: false }
+        }
+      }
+    }
+    const v = await evaluateMessage(makeInput({
+      msg: { text: '👍' }, user: newcomer, policy: { captchaEnabled: true }
+    }), ports)
+    expect(askedExact).toBe(false)
+    expect(v.signals.map((s) => s.name)).not.toContain('velocity_repeats')
+    expect(isEnforcementAction(v.action)).toBe(false)
+  })
+
+  /**
    * The first captcha this branch ever issued in production, and why it must
    * not have been issued.
    *

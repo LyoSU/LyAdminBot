@@ -32,9 +32,36 @@ export interface VelocityResult {
   evidence?: string
 }
 
+export interface VelocityCheckOptions {
+  /**
+   * Count EXACT repeats of the raw text when the heavy-normalised template is
+   * too short to key on.
+   *
+   * The window normally keys on `normalizeHeavy(text)` and refuses anything
+   * under five characters, which is right: a two-character template describes
+   * half the chat, and 2026-02 shipped that defect three times — a normaliser
+   * that collapses unrelated inputs to one value produces an entry matching
+   * everybody.
+   *
+   * But refusing to KEY on it became refusing to COUNT it, and a whole class
+   * walked through the hole. Measured 2026-08-25: an account with a private
+   * invite in its bio posted one heart emoji into one chat six times over
+   * twelve hours. `normalizeHeavy('❤')` is the empty string, so the window
+   * never saw a single one of them; the burst window is ten minutes and the
+   * session window thirty, so a message every ninety minutes is below every
+   * clock this pipeline owns.
+   *
+   * Exact text has none of the collapse problem — it cannot map two different
+   * messages onto one key, because it is not a mapping. What it can do is
+   * count an ordinary member's third "👍", so callers must only ask for it
+   * where that is not the population being looked at.
+   */
+  countExactWhenTemplateUnusable?: boolean
+}
+
 export interface VelocityPort {
   /** Sliding-window duplicate / flood detection across chats. */
-  check(input: EvaluationInput): Promise<VelocityResult | null>
+  check(input: EvaluationInput, options?: VelocityCheckOptions): Promise<VelocityResult | null>
 }
 
 export interface VectorMatch {
