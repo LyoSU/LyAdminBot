@@ -231,19 +231,34 @@ export const tr: Locale = {
   },
 
   vote: {
-    prompt: (userLabel, textPreview) => `🤔 <b>Bu spam mı?</b> ${userLabel} adlı kullanıcıdan mesaj:\n\n"${textPreview}"`,
-    promptNoText: (userLabel, what) => what
-      ? `🤔 <b>Bu spam mı?</b> ${userLabel} kişisinden gelen mesajda metin yok, yalnızca ${what} var.`
-      : `🤔 <b>Bu spam mı?</b> ${userLabel} kişisinden gelen mesajda metin yok.`,
+    prompt: ({ userLabel, textPreview, media, whyLink }) =>
+      `🤔 <b>Bu spam mı?</b> ${userLabel} adlı kullanıcıdan mesaj`
+      + (media ? ` · 📎 ${media}` : '')
+      + (whyLink ? ` · ${whyLink}` : '')
+      + `\n<pre>${textPreview}</pre>`,
+    promptNoText: (userLabel, what, whyLink) =>
+      (what
+        ? `🤔 <b>Bu spam mı?</b> ${userLabel} kişisinden gelen mesajda metin yok, yalnızca ${what} var.`
+        : `🤔 <b>Bu spam mı?</b> ${userLabel} kişisinden gelen mesajda metin yok.`)
+      + (whyLink ? ` · ${whyLink}` : ''),
     media: {
       photo: 'fotoğraf', sticker: 'çıkartma', video: 'video',
       voice: 'sesli mesaj', file: 'dosya', other: 'ek'
     },
+    redacted: { link: '[bağlantı]', mention: '[@kullanıcı]', invite: '[davet]' },
     spamButton: (count) => `🗑 Spam (${count})`,
     hamButton: (count) => `👌 Sorun yok (${count})`,
     counted: 'Oy sayıldı.',
-    resolvedSpam: '🗑 Topluluk spam diyor. Kaldırıldı.',
-    resolvedHam: '👌 Topluluk sorun olmadığını söylüyor.',
+    resolvedSpam: (who, whyLink) =>
+      (who
+        ? `🗑 Topluluk ${who} kişisinin mesajına spam dedi. Kaldırıldı.`
+        : '🗑 Topluluk spam diyor. Kaldırıldı.')
+      + (whyLink ? ` · ${whyLink}` : ''),
+    resolvedHam: (who, whyLink) =>
+      (who
+        ? `👌 Topluluk ${who} kişisinin mesajında sorun görmedi.`
+        : '👌 Topluluk sorun olmadığını söylüyor.')
+      + (whyLink ? ` · ${whyLink}` : ''),
     alreadyEnded: 'Bu oylama zaten kapandı.',
     voters: {
       button: '👥 Kim oy verdi',

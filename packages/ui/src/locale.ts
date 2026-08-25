@@ -139,8 +139,26 @@ export interface Locale {
 
   /** Community vote on a reported / grey-zone message. */
   vote: {
-    /** Prompt above the quoted text (HTML). Inputs arrive pre-escaped. */
-    prompt: (userLabel: string, textPreview: string) => string
+    /**
+     * Prompt above the quoted text (HTML). Every input arrives pre-escaped, and
+     * the quote MUST be wrapped in `<pre>`: a monospace block is the one
+     * container Telegram does not linkify, so the invite a spammer wrote stops
+     * being a tappable link in a message the whole chat reads. The bot's own
+     * authority behind a live link is the one distribution channel a spammer
+     * cannot buy, and the ballot used to hand it over.
+     *
+     * `media` names the attachment when the message had BOTH words and a file —
+     * a caption reads innocuous under a picture that is the whole advert, so a
+     * ballot that quotes only the words asks about half the message. `whyLink`
+     * is an anchor to the bot's PM explanation, or absent where there is no
+     * bot username to link to (or nothing to explain, as with a human report).
+     */
+    prompt: (parts: {
+      userLabel: string
+      textPreview: string
+      media: string | null
+      whyLink: string | null
+    }) => string
     /**
      * Prompt for a message with no words in it (HTML). `what` is one of
      * `media` below, already localized, or absent when there was not even an
@@ -151,14 +169,25 @@ export interface Locale {
      * anyway — production 2026-08-25 shows two spam votes cast on a pair of
      * empty quotes. What the message WAS is the smallest honest thing to say.
      */
-    promptNoText: (userLabel: string, what: string | null) => string
+    promptNoText: (userLabel: string, what: string | null, whyLink: string | null) => string
     /** Media names as a voter would say them, not as the transport calls them. */
     media: Record<MediaCategory, string>
+    /**
+     * What replaces a destination inside the quoted text. Bracketed, because a
+     * voter has to be able to tell our word from the sender's.
+     */
+    redacted: { link: string; mention: string; invite: string }
     spamButton: (count: number) => string
     hamButton: (count: number) => string
     counted: string
-    resolvedSpam: string
-    resolvedHam: string
+    /**
+     * The receipt (HTML). `who` names the person the question was about and is
+     * absent only when a restart lost the label — the resolved prompt replaces
+     * the question in place, and scrolled past a week later "the community says
+     * spam" names nobody and settles nothing.
+     */
+    resolvedSpam: (who: string | null, whyLink: string | null) => string
+    resolvedHam: (who: string | null, whyLink: string | null) => string
     alreadyEnded: string
     /** Roster shown behind the "who voted" button on a resolved question. */
     voters: {

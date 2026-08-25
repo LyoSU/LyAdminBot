@@ -246,19 +246,34 @@ export const ru: Locale = {
   },
 
   vote: {
-    prompt: (userLabel, textPreview) => `🤔 <b>Это спам?</b> Сообщение от ${userLabel}:\n\n"${textPreview}"`,
-    promptNoText: (userLabel, what) => what
-      ? `🤔 <b>Это спам?</b> Сообщение от ${userLabel} — без текста, только ${what}.`
-      : `🤔 <b>Это спам?</b> Сообщение от ${userLabel} — без текста.`,
+    prompt: ({ userLabel, textPreview, media, whyLink }) =>
+      `🤔 <b>Это спам?</b> Сообщение от ${userLabel}`
+      + (media ? ` · 📎 ${media}` : '')
+      + (whyLink ? ` · ${whyLink}` : '')
+      + `\n<pre>${textPreview}</pre>`,
+    promptNoText: (userLabel, what, whyLink) =>
+      (what
+        ? `🤔 <b>Это спам?</b> Сообщение от ${userLabel} — без текста, только ${what}.`
+        : `🤔 <b>Это спам?</b> Сообщение от ${userLabel} — без текста.`)
+      + (whyLink ? ` · ${whyLink}` : ''),
     media: {
       photo: 'фото', sticker: 'стикер', video: 'видео',
       voice: 'аудио', file: 'файл', other: 'вложение'
     },
+    redacted: { link: '[ссылка]', mention: '[@упоминание]', invite: '[приглашение]' },
     spamButton: (count) => `🗑 Спам (${count})`,
     hamButton: (count) => `👌 Норм (${count})`,
     counted: 'Голос засчитан.',
-    resolvedSpam: '🗑 Сообщество решило: спам. Убрал.',
-    resolvedHam: '👌 Сообщество решило: не спам.',
+    resolvedSpam: (who, whyLink) =>
+      (who
+        ? `🗑 Сообщество решило: сообщение от ${who} — спам. Убрал.`
+        : '🗑 Сообщество решило: спам. Убрал.')
+      + (whyLink ? ` · ${whyLink}` : ''),
+    resolvedHam: (who, whyLink) =>
+      (who
+        ? `👌 Сообщество решило: сообщение от ${who} — не спам.`
+        : '👌 Сообщество решило: не спам.')
+      + (whyLink ? ` · ${whyLink}` : ''),
     alreadyEnded: 'Голосование уже закрыто.',
     voters: {
       button: '👥 Кто голосовал',

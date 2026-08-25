@@ -8,7 +8,7 @@
  *  - settings panel only in PM; group /settings replies with a deep link
  */
 import type { MediaCategory, Verdict, VoterEntry, VoterRoster } from '@lyadmin/core'
-import { isSuspicionSignal, truncate, ESTABLISHED_MIN_TENURE_DAYS } from '@lyadmin/core'
+import { isSuspicionSignal, redactLinks, truncate, ESTABLISHED_MIN_TENURE_DAYS } from '@lyadmin/core'
 import type { Locale } from './locale.js'
 import { uk } from './locales/uk.js'
 import { en } from './locales/en.js'
@@ -72,6 +72,31 @@ export const callbackData = {
 /** For app-layer strings that interpolate user-controlled text into HTML. */
 export const escapeHtml = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+/**
+ * The person, as a tappable name.
+ *
+ * Every notice this bot writes names somebody, and until now none of those names
+ * went anywhere: an admin reading "muted · Іра" in a chat of four hundred had no
+ * route from the notice to the profile, and two people called Іра made the
+ * notice ambiguous rather than merely inconvenient. `tg://user?id=` is the only
+ * form that works for an account with no username, which is most of what this
+ * bot is about.
+ *
+ * mtcute turns this into `messageEntityMentionName` and resolves it against the
+ * peer cache at send time. Where that fails it logs a warning and leaves an
+ * entity the server will reject, so the app layer retries the send with mentions
+ * flattened — see `stripMentions` there. Everybody named here has just spoken or
+ * just tapped in the chat being written to, so the cache hit is the normal case
+ * and the retry is the seatbelt.
+ *
+ * A non-positive or unsafe id yields the plain escaped label rather than a link
+ * to user zero.
+ */
+export const userMention = (userId: number | null | undefined, label: string): string =>
+  typeof userId === 'number' && Number.isSafeInteger(userId) && userId > 0
+    ? `<a href="tg://user?id=${userId}">${escapeHtml(label)}</a>`
+    : escapeHtml(label)
 
 /**
  * PM welcome card. The add-to-group link pre-requests exactly the admin
@@ -167,7 +192,7 @@ export const compactNotification = (
     data: callbackData.override(target.chatId, target.messageId, target.userId)
   }
   const repeats = options.incidentCount ?? 1
-  const line = locale.notification.compact(locale.actions[action], escapeHtml(target.userLabel)) +
+  const line = locale.notification.compact(locale.actions[action], userMention(target.userId, target.userLabel)) +
     (repeats > 1 ? ` · ×${repeats}` : '')
   if (!options.botUsername) {
     return {
@@ -204,6 +229,8 @@ export interface WhyOptions {
    */
   context?: {
     userLabel?: string | null
+    /** Needed to make the label tappable. Plain-text renders ignore it. */
+    userId?: number | null
     chatTitle?: string | null
   }
 }
@@ -263,9 +290,13 @@ export const whyView = (locale: Locale, verdict: Verdict, options: WhyOptions = 
 
   const lines: string[] = []
   const headline = actionHeadline(locale, verdict)
-  lines.push(b(esc(context.userLabel
-    ? `${headline} · ${context.userLabel}`
-    : headline)))
+  // The name is a link in the HTML card and plain text in the toast. A toast is
+  // a callback alert: it has no markup at all, so an anchor there would be read
+  // out as its own tags.
+  const who = context.userLabel === null || context.userLabel === undefined
+    ? null
+    : asHtml ? userMention(context.userId, context.userLabel) : context.userLabel
+  lines.push(who === null ? b(esc(headline)) : b(`${esc(headline)} · ${who}`))
   if (context.chatTitle) lines.push(dim(esc(locale.why.inChat(context.chatTitle))))
 
   // The evidence, before our reading of it. `truncate` rather than `.slice`:
@@ -486,6 +517,7 @@ export const whyCard = (
     html: true,
     context: {
       userLabel: target.userLabel ?? options.facts?.displayName ?? null,
+      userId: target.userId,
       chatTitle: options.chatTitle ?? null
     }
   })
@@ -819,19 +851,42 @@ export const votePrompt = (
   target: {
     chatId: number
     messageId: number
+    /** Who is being asked about. Absent only where a restart lost it. */
+    userId?: number | null
     userLabel: string
     textPreview: string
-    /** What the message was, when it had no words. */
+    /** What the message carried besides words, or instead of them. */
     media?: MediaCategory | null
   },
-  tally: { spam: number; ham: number; outcome: string }
+  tally: { spam: number; ham: number; outcome: string },
+  options: { botUsername?: string | undefined } = {}
 ): ViewMessage => {
-  const quoted = target.textPreview.trim()
-  const name = escapeHtml(target.userLabel)
+  // Redact BEFORE truncating, so the cut lands in the sender's words rather
+  // than through a marker. Redaction never empties a message that had text —
+  // a destination becomes a marker, not nothing — so a quote-only-a-link
+  // message still takes the quoting branch instead of claiming "no text".
+  const quoted = redactLinks(target.textPreview, locale.vote.redacted).trim()
+  const name = userMention(target.userId, target.userLabel)
+  // Named on the ballot even when the message HAD words: the caption under an
+  // advert is the innocuous half, and a ballot that quotes only the caption
+  // asks about half the message. Until now `media` was read on the no-text
+  // branch alone, so every captioned photo was voted on as if it were text.
+  const media = target.media ? locale.vote.media[target.media] : null
+  const whyLink = options.botUsername && typeof target.userId === 'number'
+    ? `<a href="${whyDeepLink(options.botUsername, target.chatId, target.messageId, target.userId)}">${locale.notification.whyLink}</a>`
+    : null
   return {
     text: quoted.length > 0
-      ? locale.vote.prompt(name, escapeHtml(truncate(quoted, VOTE_PREVIEW_LIMIT)))
-      : locale.vote.promptNoText(name, target.media ? locale.vote.media[target.media] : null),
+      ? locale.vote.prompt({
+        userLabel: name,
+        textPreview: escapeHtml(truncate(quoted, VOTE_PREVIEW_LIMIT)),
+        media,
+        whyLink
+      })
+      : locale.vote.promptNoText(name, media, whyLink),
+    // Two buttons, both of which change state. The explanation is a link in the
+    // text, not a third button: a ballot is read in a scrolling chat and a row
+    // of read-only chrome is what made the notices unreadable in the first place.
     buttons: [[
       { text: locale.vote.spamButton(tally.spam), data: callbackData.vote(target.chatId, target.messageId, 'spam') },
       { text: locale.vote.hamButton(tally.ham), data: callbackData.vote(target.chatId, target.messageId, 'ham') }
@@ -860,7 +915,7 @@ const voterLine = (locale: Locale, voter: VoterEntry, format: VoterListFormat): 
   // A display name is whatever the person set it to, so it is markup until
   // escaped — the same rule `viewHtml` enforces for every other user string.
   const raw = voter.label ?? String(voter.userId)
-  const name = format === 'html' ? escapeHtml(raw) : raw
+  const name = format === 'html' ? userMention(voter.userId, raw) : raw
   return marks.length > 0 ? ` • ${name} · ${marks.join(' · ')}` : ` • ${name}`
 }
 
@@ -904,21 +959,40 @@ export const voterListView = (
 }
 
 /**
- * The receipt a resolved question leaves behind. The outcome is the message;
- * the roster is one tap away rather than in the text, so a chat reading the
- * result is not also reading a list of who to be annoyed with.
+ * The receipt that replaces a resolved question, in place.
+ *
+ * It names the person, which the first version did not: the ballot's own text —
+ * the quote, the label, the tally — is overwritten by this line, so a chat
+ * scrolling past "the community says spam" a minute later had no way to tell
+ * WHO had been judged, and the roster button named the voters rather than the
+ * subject. The label is optional because a restart can lose it, and a receipt
+ * that says less is better than one that guesses.
  */
 export const voteResult = (
   locale: Locale,
-  target: { chatId: number; messageId: number },
-  outcome: 'spam' | 'ham'
-): ViewMessage => ({
-  text: outcome === 'spam' ? locale.vote.resolvedSpam : locale.vote.resolvedHam,
-  buttons: [[{
-    text: locale.vote.voters.button,
-    data: callbackData.voters(target.chatId, target.messageId)
-  }]]
-})
+  target: {
+    chatId: number
+    messageId: number
+    userId?: number | null
+    userLabel?: string | null
+  },
+  outcome: 'spam' | 'ham',
+  options: { botUsername?: string | undefined } = {}
+): ViewMessage => {
+  const who = target.userLabel ? userMention(target.userId, target.userLabel) : null
+  const whyLink = options.botUsername && typeof target.userId === 'number'
+    ? `<a href="${whyDeepLink(options.botUsername, target.chatId, target.messageId, target.userId)}">${locale.notification.whyLink}</a>`
+    : null
+  return {
+    text: outcome === 'spam'
+      ? locale.vote.resolvedSpam(who, whyLink)
+      : locale.vote.resolvedHam(who, whyLink),
+    buttons: [[{
+      text: locale.vote.voters.button,
+      data: callbackData.voters(target.chatId, target.messageId)
+    }]]
+  }
+}
 
 /**
  * Captcha gate prompt posted in the group. The target user proves liveness
@@ -928,7 +1002,7 @@ export const captchaPrompt = (
   locale: Locale,
   target: { chatId: number; userId: number; userLabel: string }
 ): ViewMessage => ({
-  text: locale.captcha.prompt(escapeHtml(target.userLabel)),
+  text: locale.captcha.prompt(userMention(target.userId, target.userLabel)),
   buttons: [[{
     text: locale.captcha.button,
     data: callbackData.captcha(target.chatId, target.userId)

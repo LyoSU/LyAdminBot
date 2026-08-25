@@ -15,7 +15,7 @@ const target = { chatId: -100123, messageId: 7, userId: 42, userLabel: 'Іван
 describe('compactNotification', () => {
   it('is exactly one line with two buttons', () => {
     const view = compactNotification(uk, makeVerdict(), target)
-    expect(view.text).toBe('🔇 мут · Іван')
+    expect(view.text).toBe('🔇 мут · <a href="tg://user?id=42">Іван</a>')
     expect(view.text).not.toContain('\n')
     expect(view.buttons[0]).toHaveLength(2)
   })
@@ -44,8 +44,16 @@ describe('compactNotification', () => {
     const view = compactNotification(uk, makeVerdict(), {
       ...target, userLabel: '<a href="https://evil.example">Іван</a>'
     })
-    expect(view.text).not.toContain('<a')
+    // The name now lives inside a mention of ours, so the test is no longer
+    // "there is no anchor" but "the only anchor is ours".
+    expect(view.text).toContain('<a href="tg://user?id=42">')
     expect(view.text).toContain('&lt;a href="https://evil.example"&gt;Іван&lt;/a&gt;')
+    expect(view.text).not.toMatch(/<a href="https:\/\/evil/)
+  })
+
+  it('names the person as a tappable mention', () => {
+    const view = compactNotification(uk, makeVerdict(), target)
+    expect(view.text).toContain('<a href="tg://user?id=42">Іван</a>')
   })
 
   it('without botUsername the why button stays a callback', () => {
@@ -74,8 +82,9 @@ describe('compactNotification', () => {
     const view = compactNotification(uk, makeVerdict(), {
       ...target, userLabel: '</a><a href="https://evil.example">клац'
     }, { botUsername: 'LyAdminBot' })
-    // Exactly one anchor, and it is ours.
-    expect(view.text.match(/<a href=/g)).toHaveLength(1)
+    // Two anchors, and both are ours: the mention and the why link.
+    expect(view.text.match(/<a href=/g)).toHaveLength(2)
+    expect(view.text).toContain('<a href="tg://user?id=42">')
     expect(view.text).toContain('t.me/LyAdminBot?start=why_')
     expect(view.text).not.toMatch(/<a href="https:\/\/evil/)
   })
@@ -116,7 +125,7 @@ describe('whyCard', () => {
       canOverride: true, chatTitle: 'Наш чат'
     })
     const lines = view.text.split('\n').filter((l) => l !== '')
-    expect(lines[0]).toBe(`<b>${uk.actions.delete} · Іван</b>`)
+    expect(lines[0]).toBe(`<b>${uk.actions.delete} · <a href="tg://user?id=42">Іван</a></b>`)
     expect(lines[1]).toBe('<i>у чаті Наш чат</i>')
     // Evidence above the confidence line — the reader judges the text first.
     expect(view.text.indexOf('<blockquote>')).toBeLessThan(view.text.indexOf('93%'))
@@ -129,7 +138,7 @@ describe('whyCard', () => {
     expect(month.text.split('\n')[0]).toContain('1міс')
     // No duration on the verdict → the bare action, never a stray "0".
     const plain = whyCard(uk, makeVerdict({ action: 'mute' }), target, { canOverride: true })
-    expect(plain.text.split('\n')[0]).toBe(`<b>${uk.actions.mute} · Іван</b>`)
+    expect(plain.text.split('\n')[0]).toBe(`<b>${uk.actions.mute} · <a href="tg://user?id=42">Іван</a></b>`)
   })
 
   it('names the chat only when it was given one', () => {
@@ -482,14 +491,72 @@ describe('votePrompt', () => {
     expect(view.text).toContain('без тексту')
   })
 
-  it('the medium is not mentioned when there is text to read', () => {
-    // A caption IS the message; naming the photo as well would invite a vote on
-    // the picture nobody can see once it is deleted.
+  it('names the medium alongside the text, not only instead of it', () => {
+    // Reversed 2026-08-25, deliberately. The previous rule ("a caption IS the
+    // message") assumed the words carry the offence, and for an advert they do
+    // not: the innocuous caption is the half a voter can read, and the picture
+    // is the half doing the selling. A ballot that quotes only the caption asks
+    // about half the message, and the half it hides is the paid one.
     const view = votePrompt(uk, {
       chatId: -1, messageId: 1, userLabel: 'Іра', textPreview: 'купи крипту', media: 'photo'
     }, { spam: 0, ham: 0, outcome: 'pending' })
     expect(view.text).toContain('купи крипту')
-    expect(view.text).not.toContain('світлина')
+    expect(view.text).toContain('світлина')
+  })
+
+  it('quotes the message in a monospace block, so no link in it is tappable', () => {
+    const view = votePrompt(uk, {
+      chatId: -1, messageId: 1, userLabel: 'Іра', textPreview: 'рядок один\nрядок два'
+    }, { spam: 0, ham: 0, outcome: 'pending' })
+    // Real newlines inside the block: `viewHtml` leaves them alone there,
+    // because the HTML parser drops a <br> inside a <pre>.
+    expect(view.text).toContain('<pre>рядок один\nрядок два</pre>')
+  })
+
+  it('redacts destinations out of the quote, naming what each one was', () => {
+    // The ballot is a message the bot posts to the whole chat. Quoting a live
+    // invite means the bot delivers the spam itself, with its own authority
+    // behind it — the one channel a spammer cannot buy.
+    const view = votePrompt(uk, {
+      chatId: -1, messageId: 1, userLabel: 'Іра',
+      textPreview: 'заходь t.me/+AbCd123 і пиши @cryptoking, деталі example.com/promo'
+    }, { spam: 0, ham: 0, outcome: 'pending' })
+    expect(view.text).not.toContain('AbCd123')
+    expect(view.text).not.toContain('cryptoking')
+    expect(view.text).not.toContain('example.com')
+    expect(view.text).toContain(uk.vote.redacted.invite)
+    expect(view.text).toContain(uk.vote.redacted.mention)
+    expect(view.text).toContain(uk.vote.redacted.link)
+  })
+
+  it('a message that was nothing but a link still reads as a message with text', () => {
+    // Redaction replaces, never deletes: otherwise the ballot would claim a
+    // link-only advert "had no text" and ask about a medium instead.
+    const view = votePrompt(uk, {
+      chatId: -1, messageId: 1, userLabel: 'Іра', textPreview: 'https://evil.example/a'
+    }, { spam: 0, ham: 0, outcome: 'pending' })
+    expect(view.text).toContain('<pre>')
+    expect(view.text).not.toContain('без тексту')
+    expect(view.text).not.toContain('evil.example')
+  })
+
+  it('mentions the subject and links the explanation when a bot username is known', () => {
+    const view = votePrompt(uk, {
+      chatId: -100123, messageId: 7, userId: 42, userLabel: 'Іра', textPreview: 'текст'
+    }, { spam: 0, ham: 0, outcome: 'pending' }, { botUsername: 'LyAdminBot' })
+    expect(view.text).toContain('<a href="tg://user?id=42">Іра</a>')
+    expect(view.text).toContain('start=why_-100123_7_42')
+    // The explanation stays a link. The buttons are for the two acts that
+    // change state, and nothing else.
+    expect(view.buttons.flat()).toHaveLength(2)
+    expect(view.buttons.flat().every((b) => b.url === undefined)).toBe(true)
+  })
+
+  it('drops the why link rather than pointing it at a verdict that does not exist', () => {
+    const view = votePrompt(uk, {
+      chatId: -100123, messageId: 7, userId: 42, userLabel: 'Іра', textPreview: 'текст'
+    }, { spam: 0, ham: 0, outcome: 'pending' })
+    expect(view.text).not.toContain('start=why_')
   })
 
   it('every locale can ask about a wordless message', () => {
@@ -675,8 +742,29 @@ describe('voterListView', () => {
 describe('resolved vote receipt', () => {
   it('offers the roster behind a button rather than in the text', () => {
     const view = voteResult(uk, { chatId: -100123, messageId: 7 }, 'spam')
-    expect(view.text).toBe(uk.vote.resolvedSpam)
+    expect(view.text).toBe(uk.vote.resolvedSpam(null, null))
     expect(view.buttons[0]?.[0]?.data).toBe(callbackData.voters(-100123, 7))
+  })
+
+  it('names who the question was about — the receipt replaces the ballot in place', () => {
+    const view = voteResult(uk, {
+      chatId: -100123, messageId: 7, userId: 42, userLabel: 'Іра'
+    }, 'spam', { botUsername: 'LyAdminBot' })
+    expect(view.text).toContain('<a href="tg://user?id=42">Іра</a>')
+    expect(view.text).toContain('start=why_-100123_7_42')
+  })
+
+  it('escapes a subject label that is trying to be markup', () => {
+    const view = voteResult(uk, {
+      chatId: -1, messageId: 1, userId: 42, userLabel: '<b>Іра</b>'
+    }, 'ham')
+    expect(view.text).toContain('&lt;b&gt;Іра&lt;/b&gt;')
+    expect(view.text.match(/<a href=/g)).toHaveLength(1)
+  })
+
+  it('says less rather than guessing when a restart lost the label', () => {
+    const view = voteResult(uk, { chatId: -1, messageId: 1, userId: null, userLabel: null }, 'ham')
+    expect(view.text).toBe(uk.vote.resolvedHam(null, null))
   })
 
   it('keeps the roster payload inside the 64-byte callback limit', () => {

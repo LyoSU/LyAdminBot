@@ -119,3 +119,78 @@ export const hasTextualContent = (text: string, minLength = 5): boolean => {
  */
 export const isEmojiOnly = (text: string): boolean =>
   text.length > 0 && !hasTextualContent(text, 1)
+
+/**
+ * What a redacted destination is replaced with. Localized by the caller: a
+ * voter reading a ballot in Ukrainian must not be told "[link]".
+ */
+export interface RedactionMarkers {
+  /** A URL, a bare host with a path, or an email address. */
+  link: string
+  /** An `@handle`. */
+  mention: string
+  /** A `t.me/+…` or `/joinchat/…` invite — a door, not a page. */
+  invite: string
+}
+
+// Order matters: the narrow patterns run first, because each replacement is
+// final and a generic URL match would swallow the invite that a voter most
+// needs named. The markers themselves carry no dot, slash or `@`, so a later
+// pattern cannot match what an earlier one wrote.
+// A Telegram host is only a host when a letter, digit or dot does not run into
+// it: without the lookbehind `t.me` matches inside an ordinary word (the "t.me"
+// hiding in "part.men"), and a ballot that redacts words is worse than one that
+// shows a dead link.
+const TG_HOST = '(?<![\\p{L}\\p{N}_.-])(?:[a-z][a-z0-9+.-]*://)?(?:t|telegram)\\.(?:me|dog)'
+const INVITE_REGEX = new RegExp(`${TG_HOST}/(?:\\+|joinchat/)\\S+`, 'giu')
+const TG_HOST_REGEX = new RegExp(
+  `(?:${TG_HOST}|(?<![\\p{L}\\p{N}_.-])(?:[a-z][a-z0-9+.-]*://)?telegra\\.ph)(?![\\p{L}\\p{N}-])(?:/\\S*)?`,
+  'giu'
+)
+const SCHEME_URL_REGEX = /(?:[a-z][a-z0-9+.-]*:\/\/|www\.)\S+/gi
+const EMAIL_REGEX = /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\.[a-z]{2,24}/giu
+/**
+ * A bare host is only treated as a link when it carries a path. Without that
+ * requirement the pattern eats ordinary writing — a filename ("звіт.pdf"), a
+ * module ("node.js") — and a ballot that redacts the words it was asked about
+ * is worse than one that shows a dead host. Telegram's own hosts are matched
+ * above without the path, because there a bare host IS the destination.
+ */
+const HOSTED_PATH_REGEX = /[\p{L}\p{N}][\p{L}\p{N}-]*(?:\.[\p{L}\p{N}-]+)*\.[a-z]{2,24}\/\S*/giu
+/**
+ * Telegram handles are 5–32 chars and start with a letter, which is what keeps
+ * this off the vocative "@всім" and off a bare "@" used as punctuation.
+ */
+const HANDLE_REGEX = /(^|[^\p{L}\p{N}_@/])@([a-z][a-z0-9_]{4,31})/giu
+
+/**
+ * Replace every destination in a piece of user text with a marker naming what
+ * kind of destination it was.
+ *
+ * This exists because of what our own notices are: the ballot, the incident card
+ * and the "why" card all quote a stranger's message back into a chat that every
+ * member reads. Quoting a live invite means the bot itself delivers the spam to
+ * the whole room, with the bot's own authority behind it — the one distribution
+ * channel the spammer could not buy. Wrapping the quote in a monospace block
+ * stops it being CLICKABLE; only redaction stops it being READABLE, and both are
+ * needed, because a reader who can retype the handle is a reader who was reached.
+ *
+ * Naming the kind rather than deleting it silently is the point: "was there a
+ * link" is most of what a voter is judging, so a marker keeps the evidence while
+ * dropping the payload. What survives is the shape of the message, which is what
+ * the question is actually about.
+ */
+export const redactLinks = (text: string, markers: RedactionMarkers): string => {
+  // Every replacement goes through a function rather than a string. A marker is
+  // a TRANSLATED string, and a `$` inside one would be read as a group
+  // reference the day somebody writes a price into it.
+  const invite = (): string => markers.invite
+  const link = (): string => markers.link
+  return text
+    .replace(INVITE_REGEX, invite)
+    .replace(TG_HOST_REGEX, link)
+    .replace(SCHEME_URL_REGEX, link)
+    .replace(EMAIL_REGEX, link)
+    .replace(HOSTED_PATH_REGEX, link)
+    .replace(HANDLE_REGEX, (_match, before: string) => `${before}${markers.mention}`)
+}

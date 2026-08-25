@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'vitest'
 import fc from 'fast-check'
 import {
-  hasTextualContent, isEmojiOnly, isWellFormed, stripEmoji, stripInvisible, toWellFormed, truncate
+  hasTextualContent, isEmojiOnly, isWellFormed, redactLinks, stripEmoji, stripInvisible,
+  toWellFormed, truncate
 } from './normalize.js'
 
 describe('stripEmoji', () => {
@@ -165,6 +166,60 @@ describe('toWellFormed', () => {
       (s as unknown as { toWellFormed?: () => string }).toWellFormed?.() ?? s
     fc.assert(
       fc.property(fc.string({ unit: 'binary' }), (s) => toWellFormed(s) === native(s))
+    )
+  }, 20000)
+})
+
+describe('redactLinks', () => {
+  const m = { link: '[посилання]', mention: '[@згадка]', invite: '[запрошення]' }
+
+  test('an invite is named an invite, not merely a link', () => {
+    expect(redactLinks('заходь t.me/+AbCd123 швидко', m)).toBe('заходь [запрошення] швидко')
+    expect(redactLinks('https://t.me/joinchat/XYZ', m)).toBe('[запрошення]')
+  })
+
+  test('channels, sites and handles all lose their destination', () => {
+    expect(redactLinks('канал t.me/promo тут', m)).toBe('канал [посилання] тут')
+    expect(redactLinks('пиши @cryptoking', m)).toBe('пиши [@згадка]')
+    expect(redactLinks('деталі example.com/promo', m)).toBe('деталі [посилання]')
+    expect(redactLinks('www.foo.bar/x', m)).toBe('[посилання]')
+    expect(redactLinks('tg://user?id=1', m)).toBe('[посилання]')
+    expect(redactLinks('лист a.b@gmail.com', m)).toBe('лист [посилання]')
+  })
+
+  test('ordinary writing survives', () => {
+    // The whole failure mode of a redactor is eating the words it was asked to
+    // show. A filename and a module name are not destinations; neither is the
+    // "t.me" that hides inside an ordinary word.
+    const plain = 'звіт.pdf і node.js лежать у part.men, і т.д.'
+    expect(redactLinks(plain, m)).toBe(plain)
+    expect(redactLinks('пиши @всім і @ok', m)).toBe('пиши @всім і @ok')
+  })
+
+  test('a message made only of a link keeps a body', () => {
+    // Replacement, never deletion: the ballot decides between "quote this" and
+    // "there was no text" on whether anything is left, and a link-only advert
+    // has text.
+    expect(redactLinks('https://evil.example/a', m)).not.toBe('')
+  })
+
+  test('markers containing a dollar sign are not read as group references', () => {
+    expect(redactLinks('http://x.test/a', { link: '$1 $&', mention: '$$', invite: '$`' }))
+      .toBe('$1 $&')
+  })
+
+  test('never leaves an orphaned surrogate half', () => {
+    fc.assert(
+      fc.property(fc.string({ unit: 'binary' }), (s) => isWellFormed(redactLinks(s, m)) || !isWellFormed(s))
+    )
+  }, 20000)
+
+  test('a second pass finds nothing left to redact', () => {
+    fc.assert(
+      fc.property(fc.string(), (s) => {
+        const once = redactLinks(s, m)
+        return redactLinks(once, m) === once
+      })
     )
   }, 20000)
 })

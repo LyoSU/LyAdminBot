@@ -35,7 +35,7 @@ import {
 import {
   captchaPrompt, compactNotification, escapeHtml as escapeName, helpView,
   langPanel, langPicker, parseCallback, resolveLocale, settingsDeepLink, settingsPanel,
-  startCard, startGroupHint, topList, userProfileCard, votePrompt, voteResult,
+  startCard, startGroupHint, topList, userMention, userProfileCard, votePrompt, voteResult,
   voterListView, whyCard, whyView,
   welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor,
   LOCALES, type Locale, type UserFacts, type ViewMessage
@@ -461,7 +461,7 @@ const deliverCaptcha = async (
   const view = captchaPrompt(locale, { chatId, userId, userLabel })
 
   const postVisible = async (): Promise<void> => {
-    const sent = await gateway.tg.sendText(chatId, viewHtml(view.text), {
+    const sent = await tgSendText(chatId, viewHtml(view.text), {
       replyMarkup: toKeyboard(view.buttons)
       // Prompt failure is survivable: the restriction expires on its own.
     }).catch(() => null)
@@ -610,9 +610,101 @@ const localeFor = async (userId: number, clientLanguage: string | null): Promise
   return resolveLocale(stored ?? clientLanguage)
 }
 
-/** View texts use \n; the HTML parser collapses whitespace, so map to <br>. */
+/**
+ * A `<pre>` block and everything in it. Non-global on purpose — `split` splits
+ * on every match regardless, and the capture group is what keeps the block
+ * itself in the resulting array.
+ */
+const PRE_BLOCK = /(<pre>[\s\S]*?<\/pre>)/
+
+/**
+ * View texts use \n; the HTML parser collapses whitespace, so map to <br>.
+ *
+ * Everywhere EXCEPT inside a `<pre>`. There the parser ignores every tag that
+ * is not another `pre` — a `<br>` is dropped rather than turned into a newline —
+ * while real whitespace is preserved as written. A blanket replacement would
+ * therefore weld a multi-line quoted message into one run-on line, which is
+ * precisely the message the ballot exists to show. So: convert outside the
+ * blocks, leave the newlines inside them alone.
+ */
 const viewHtml = (text: string): ReturnType<typeof html> =>
-  html(text.replace(/\n/g, '<br>'))
+  html(text
+    .split(PRE_BLOCK)
+    .map((part, i) => (i % 2 === 1 ? part : part.replace(/\n/g, '<br>')))
+    .join(''))
+
+type RichText = ReturnType<typeof viewHtml>
+
+/**
+ * A `tg://user?id=` mention, in both spellings it can have by send time: the
+ * parser emits `messageEntityMentionName`, and `_normalizeInputText` rewrites
+ * it IN PLACE to the input form once it resolves the peer. A retry has to look
+ * for either, because the mutation happens before the call that failed.
+ */
+const MENTION_ENTITIES = new Set(['messageEntityMentionName', 'inputMessageEntityMentionName'])
+
+const hasMention = (text: RichText | string): boolean =>
+  typeof text !== 'string' && (text.entities ?? []).some((e) => MENTION_ENTITIES.has(e._))
+
+/** The same notice with its names as plain text. */
+const withoutMentions = (text: RichText): RichText => ({
+  ...text,
+  entities: (text.entities ?? []).filter((e) => !MENTION_ENTITIES.has(e._))
+})
+
+/** Errors Telegram returns for a mention it will not accept. */
+const MENTION_REJECTED = /ENTITY|MENTION|USER_INVALID|PEER_ID_INVALID/i
+
+/**
+ * Send, and if the only thing wrong was a name, send it again without the name.
+ *
+ * A mention is the one part of a notice that can fail for a reason that has
+ * nothing to do with the notice: mtcute resolves `tg://user?id=` against the
+ * peer cache, and on a miss it logs a warning and leaves an entity the server
+ * rejects — taking the whole message with it. Every send here is wrapped in
+ * `.catch(() => null)`, so that would not surface as an error, it would surface
+ * as silence: an enforcement nobody in the chat was told about, which is the
+ * one failure mode this bot's notices exist to prevent. A name is worth having
+ * and never worth the notice.
+ */
+const tgSendText = async (
+  ...[peer, text, params]: Parameters<typeof gateway.tg.sendText>
+): ReturnType<typeof gateway.tg.sendText> => {
+  try {
+    return await gateway.tg.sendText(peer, text, params)
+  } catch (err) {
+    if (!hasMention(text) || !MENTION_REJECTED.test(String(err))) throw err
+    log.warn('mention_flattened', { op: 'send', error: String(err) })
+    return await gateway.tg.sendText(peer, withoutMentions(text as RichText), params)
+  }
+}
+
+/** `replyText` under the same rule as `tgSendText`. */
+const tgReplyText = async (
+  ...[message, text, params]: Parameters<typeof gateway.tg.replyText>
+): ReturnType<typeof gateway.tg.replyText> => {
+  try {
+    return await gateway.tg.replyText(message, text, params)
+  } catch (err) {
+    if (!hasMention(text) || !MENTION_REJECTED.test(String(err))) throw err
+    log.warn('mention_flattened', { op: 'reply', error: String(err) })
+    return await gateway.tg.replyText(message, withoutMentions(text as RichText), params)
+  }
+}
+
+/** `editMessage` under the same rule as `tgSendText`. */
+const tgEditMessage = async (
+  ...[params]: Parameters<typeof gateway.tg.editMessage>
+): ReturnType<typeof gateway.tg.editMessage> => {
+  try {
+    return await gateway.tg.editMessage(params)
+  } catch (err) {
+    const text = (params as { text?: RichText | string }).text
+    if (text === undefined || !hasMention(text) || !MENTION_REJECTED.test(String(err))) throw err
+    log.warn('mention_flattened', { op: 'edit', error: String(err) })
+    return await gateway.tg.editMessage({ ...params, text: withoutMentions(text as RichText) })
+  }
+}
 
 /**
  * Auto-delete TTLs for transient in-group chrome (ms). The compact mod
@@ -675,7 +767,7 @@ const processDueDeletions = async (): Promise<void> => {
 }
 
 const sendView = async (message: Message, view: ViewMessage): Promise<void> => {
-  await gateway.tg.replyText(message, viewHtml(view.text), {
+  await tgReplyText(message, viewHtml(view.text), {
     ...(view.buttons.length > 0 ? { replyMarkup: toKeyboard(view.buttons) } : {})
   }).catch(() => { /* user may have blocked the bot / no rights */ })
 }
@@ -1057,7 +1149,7 @@ const renderMyStats = async (locale: Locale, userId: number, chatId: number | nu
 const sendWelcomePreview = async (userId: number, sampleName: string, chatId: number, locale: Locale): Promise<void> => {
   const w = await store.getWelcome(chatId).catch(() => ({ texts: [] as string[], gifs: [] as string[] }))
   if (w.texts.length === 0 && w.gifs.length === 0) {
-    await gateway.tg.sendText(userId, viewHtml(locale.welcome.editor.previewEmpty)).catch(() => { /* PM closed */ })
+    await tgSendText(userId, viewHtml(locale.welcome.editor.previewEmpty)).catch(() => { /* PM closed */ })
     return
   }
   const names = `<b>${escapeName(sampleName)}</b>`
@@ -1066,7 +1158,7 @@ const sendWelcomePreview = async (userId: number, sampleName: string, chatId: nu
   if (gif) {
     await replayMedia(userId, gif, { caption: body, tag: 'welcome_preview_failed', fields: { forChat: chatId } })
   } else {
-    await gateway.tg.sendText(userId, viewHtml(body)).catch(() => { /* PM closed */ })
+    await tgSendText(userId, viewHtml(body)).catch(() => { /* PM closed */ })
   }
 }
 
@@ -1077,7 +1169,7 @@ const sendWelcomePreview = async (userId: number, sampleName: string, chatId: nu
  */
 const handlePendingInput = async (message: Message, userId: number, entry: PendingEntry, locale: Locale): Promise<void> => {
   const reply = (text: string): Promise<void> =>
-    gateway.tg.sendText(userId, viewHtml(text)).then(() => undefined).catch(() => { /* PM closed */ })
+    tgSendText(userId, viewHtml(text)).then(() => undefined).catch(() => { /* PM closed */ })
   const text = (message.text ?? '').trim()
 
   if (entry.type === 'welcome.text') {
@@ -1125,7 +1217,7 @@ const handlePrivateMessage = async (message: Message): Promise<void> => {
   const pending = pendingInput.take(sender.id)
   if (pending) {
     if (/^\/cancel\b/i.test(text)) {
-      await gateway.tg.sendText(sender.id, viewHtml(locale.welcome.editor.cancelled)).catch(() => { /* PM closed */ })
+      await tgSendText(sender.id, viewHtml(locale.welcome.editor.cancelled)).catch(() => { /* PM closed */ })
       return
     }
     await handlePendingInput(message, sender.id, pending, locale)
@@ -1223,7 +1315,7 @@ const handleBanan = async (message: Message, chat: Chat, caller: User, arg: stri
      * 2026-08-07: the pose is the whole point, and the punishment was never it.
      */
     if (await isChatAdmin(chat.id, caller.id)) {
-      await gateway.tg.sendText(chat.id, viewHtml(locale.banan.show(escapeName(caller.displayName))))
+      await tgSendText(chat.id, viewHtml(locale.banan.show(userMention(caller.id, caller.displayName))))
         .catch(() => { /* non-fatal */ })
       return
     }
@@ -1233,7 +1325,7 @@ const handleBanan = async (message: Message, chat: Chat, caller: User, arg: stri
       .then(() => true).catch(() => false)
     if (ok) {
       log.info('banan', { chatId: chat.id, chat: chat.title ?? undefined, userId: caller.id, user: caller.displayName, by: caller.id, kind: 'self', seconds })
-      await gateway.tg.sendText(chat.id, viewHtml(locale.banan.self(escapeName(caller.displayName), human)))
+      await tgSendText(chat.id, viewHtml(locale.banan.self(userMention(caller.id, caller.displayName), human)))
         .catch(() => { /* non-fatal */ })
     }
     return
@@ -1252,7 +1344,7 @@ const handleBanan = async (message: Message, chat: Chat, caller: User, arg: stri
         .catch(() => { /* ok */ })
       await dropCommand()
       log.info('banan_lifted', { chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName, by: caller.id, byName: caller.displayName })
-      await gateway.tg.sendText(chat.id, viewHtml(locale.banan.lifted(escapeName(target.displayName))))
+      await tgSendText(chat.id, viewHtml(locale.banan.lifted(userMention(target.id, target.displayName))))
         .catch(() => { /* non-fatal */ })
       return
     }
@@ -1264,7 +1356,7 @@ const handleBanan = async (message: Message, chat: Chat, caller: User, arg: stri
   if (!ok) return
   log.info('banan', { chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName, by: caller.id, byName: caller.displayName, kind: 'admin', seconds })
   rememberBananLabel(chat.id, target.id, target.displayName)
-  const sent = await gateway.tg.sendText(chat.id, viewHtml(locale.banan.success(escapeName(target.displayName), human)), {
+  const sent = await tgSendText(chat.id, viewHtml(locale.banan.success(userMention(target.id, target.displayName), human)), {
     replyMarkup: toKeyboard([[{ text: locale.banan.undoButton, data: `un:${chat.id}:${target.id}` }]])
   }).catch(() => null)
   if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'banan')
@@ -1293,13 +1385,13 @@ const handleKick = async (message: Message, chat: Chat, caller: User): Promise<v
   await dropCommand()
   if (!ok) {
     if (shouldWarnMissingRights(chat.id, ['CHAT_ADMIN_REQUIRED'])) {
-      const sent = await gateway.tg.sendText(chat.id, viewHtml(locale.notification.missingRights)).catch(() => null)
+      const sent = await tgSendText(chat.id, viewHtml(locale.notification.missingRights)).catch(() => null)
       if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'missing_rights')
     }
     return
   }
   log.info('kick', { chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName, by: caller.id })
-  const sent = await gateway.tg.sendText(chat.id, viewHtml(locale.kick.success(escapeName(target.displayName)))).catch(() => null)
+  const sent = await tgSendText(chat.id, viewHtml(locale.kick.success(userMention(target.id, target.displayName)))).catch(() => null)
   if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'kick')
 }
 
@@ -1326,9 +1418,9 @@ const handleUntrust = async (message: Message, chat: Chat, caller: User): Promis
     chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName,
     by: caller.id, byName: caller.displayName, wasTrusted: removed
   })
-  const text = removed ? locale.untrust.success(escapeName(target.displayName))
-    : locale.untrust.notTrusted(escapeName(target.displayName))
-  const sent = await gateway.tg.sendText(chat.id, viewHtml(text)).catch(() => null)
+  const who = userMention(target.id, target.displayName)
+  const text = removed ? locale.untrust.success(who) : locale.untrust.notTrusted(who)
+  const sent = await tgSendText(chat.id, viewHtml(text)).catch(() => null)
   if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'untrust')
 }
 
@@ -1376,7 +1468,7 @@ const handleCheck = async (message: Message, chat: Chat, caller: User): Promise<
   const replied = await gateway.fetchRepliedMessage(message)
   await dropCommand()
   if (!replied || !(replied.sender instanceof User)) {
-    const sent = await gateway.tg.sendText(chat.id, viewHtml(locale.profile.checkNeedReply)).catch(() => null)
+    const sent = await tgSendText(chat.id, viewHtml(locale.profile.checkNeedReply)).catch(() => null)
     if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'check')
     return
   }
@@ -1389,7 +1481,7 @@ const handleCheck = async (message: Message, chat: Chat, caller: User): Promise<
     chatId: chat.id,
     isTrusted: checkPolicy.trustedUserIds.includes(target.id)
   })
-  const sent = await gateway.tg.sendText(chat.id, viewHtml(card.text), {
+  const sent = await tgSendText(chat.id, viewHtml(card.text), {
     ...(card.buttons.length > 0 ? { replyMarkup: toKeyboard(card.buttons) } : {})
   }).catch(() => null)
   if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'check')
@@ -1499,7 +1591,7 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
     const view = compactNotification(locale, verdict, {
       chatId: chat.id, messageId: replied.id, userId: target.id, userLabel: target.displayName
     }, { botUsername: selfUsername ?? undefined })
-    const sent = await gateway.tg.sendText(chat.id, viewHtml(view.text), {
+    const sent = await tgSendText(chat.id, viewHtml(view.text), {
       replyMarkup: toKeyboard(view.buttons),
       // The inline "why?" link must not drag a preview card of our own bot
       // under a notice whose whole point is being one line.
@@ -1512,10 +1604,16 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
     // expiry sweep only claims votes still marked open.
     const openPrompt = vote['promptMessageId']
     if (typeof openPrompt === 'number') {
-      const receipt = voteResult(locale, { chatId: chat.id, messageId: replied.id }, 'spam')
-      await gateway.tg.editMessage({
+      const receipt = voteResult(locale, {
+        chatId: chat.id, messageId: replied.id,
+        userId: target.id, userLabel: target.displayName
+      }, 'spam', { botUsername: selfUsername ?? undefined })
+      await tgEditMessage({
         chatId: chat.id, message: openPrompt,
-        text: viewHtml(receipt.text), replyMarkup: toKeyboard(receipt.buttons)
+        text: viewHtml(receipt.text), replyMarkup: toKeyboard(receipt.buttons),
+        // The "why?" anchor points at our own bot; without this a preview card
+        // of it unfurls under a one-line receipt.
+        disableWebPreview: true
       }).catch(() => { /* prompt already gone */ })
       scheduleDelete(chat.id, openPrompt, NOTIFY_TTL_VOTE_RESULT_MS, 'vote_result')
     }
@@ -1523,18 +1621,23 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
   }
 
   // Community path: post (or refresh) the vote prompt.
+  // No `botUsername` here on purpose: a ballot opened by a person has no bot
+  // reasoning behind it to link to, and `recallVerdict` would answer the deep
+  // link with "expired" — a link that leads to a shrug is worse than none.
   const view = votePrompt(locale, {
     chatId: chat.id, messageId: replied.id,
-    userLabel: target.displayName, textPreview, media
+    userId: target.id, userLabel: target.displayName, textPreview, media
   }, tally)
   if (vote['promptMessageId']) {
-    await gateway.tg.editMessage({
+    await tgEditMessage({
       chatId: chat.id, message: vote['promptMessageId'] as number,
-      text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons)
+      text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons),
+      disableWebPreview: true
     }).catch(() => { /* unchanged */ })
   } else {
-    const prompt = await gateway.tg.sendText(chat.id, viewHtml(view.text), {
-      replyMarkup: toKeyboard(view.buttons)
+    const prompt = await tgSendText(chat.id, viewHtml(view.text), {
+      replyMarkup: toKeyboard(view.buttons),
+      disableWebPreview: true
     }).catch(() => null)
     if (prompt) await store.setVotePrompt(chat.id, replied.id, prompt.id).catch(() => { /* ok */ })
   }
@@ -1566,7 +1669,7 @@ const replayMedia = async (
   }).catch((err) => { warn('media', err); return null })
   if (!sent) return []
   if (!sent.captionOmitted || opts.caption === undefined) return [sent.id]
-  const follow = await gateway.tg.sendText(chatId, viewHtml(opts.caption), reply)
+  const follow = await tgSendText(chatId, viewHtml(opts.caption), reply)
     .catch((err) => { warn('caption', err); return null })
   return follow ? [sent.id, follow.id] : [sent.id]
 }
@@ -1671,7 +1774,7 @@ const maybeSendJoinSurgeAlert = async (chat: Chat): Promise<void> => {
   const buttons = selfUsername
     ? settingsDeepLink(locale, selfUsername, chat.id).buttons
     : []
-  const sent = await gateway.tg.sendText(
+  const sent = await tgSendText(
     chat.id,
     viewHtml(locale.welcome.surgeAlert(alert.total, alert.riskCount)),
     { ...(buttons.length > 0 ? { replyMarkup: toKeyboard(buttons) } : {}) }
@@ -1768,7 +1871,7 @@ const handleWelcomeGreeting = async (message: Message, chat: Chat, joiners: User
   const gif = pickRandom(welcome.gifs)
   const sentIds = gif
     ? await replayMedia(chat.id, gif, { caption: body, replyTo: message.id, tag: 'welcome_send_failed' })
-    : await gateway.tg.sendText(chat.id, viewHtml(body), { replyTo: message.id })
+    : await tgSendText(chat.id, viewHtml(body), { replyTo: message.id })
         .then((m) => [m.id])
         .catch((err) => { log.warn('welcome_send_failed', { chatId: chat.id, kind: 'text', err: String(err) }); return [] })
   for (const id of sentIds) scheduleDelete(chat.id, id, welcome.timer * 1000, 'welcome')
@@ -1803,7 +1906,7 @@ const handleWelcomeCommand = async (message: Message, chat: Chat, caller: User, 
   if (!(await isChatAdmin(chat.id, caller.id))) return
   const locale = await localeFor(caller.id, caller.language)
   const ack = async (text: string): Promise<void> => {
-    const sent = await gateway.tg.replyText(message, viewHtml(text)).catch(() => null)
+    const sent = await tgReplyText(message, viewHtml(text)).catch(() => null)
     if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'welcome_ack')
   }
   const replied = await gateway.fetchRepliedMessage(message)
@@ -1852,14 +1955,14 @@ const handleExtraCommand = async (message: Message, chat: Chat, caller: User, na
     await store.saveExtra(chat.id, extra).catch(() => { /* best-effort */ })
     log.info('extra_saved', { chatId: chat.id, by: caller.id, name: cleanName, hasMedia: extra.fileId !== null })
     await dropCommand()
-    const sent = await gateway.tg.sendText(chat.id, viewHtml(locale.extra.saved(cleanName))).catch(() => null)
+    const sent = await tgSendText(chat.id, viewHtml(locale.extra.saved(cleanName))).catch(() => null)
     if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'extra_ack')
     return
   }
   const removed = await store.deleteExtra(chat.id, cleanName).catch(() => false)
   await dropCommand()
   if (removed) log.info('extra_deleted', { chatId: chat.id, by: caller.id, name: cleanName })
-  const sent = await gateway.tg.sendText(chat.id, viewHtml(removed ? locale.extra.deleted(cleanName) : locale.extra.notFound(cleanName))).catch(() => null)
+  const sent = await tgSendText(chat.id, viewHtml(removed ? locale.extra.deleted(cleanName) : locale.extra.notFound(cleanName))).catch(() => null)
   if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'extra_ack')
 }
 
@@ -1869,7 +1972,7 @@ const handleExtraList = async (message: Message, chat: Chat, caller: User): Prom
   const text = extras.length === 0
     ? locale.extra.listEmpty
     : [locale.extra.listTitle, '', ...extras.map((e) => `#${e.name}`)].join('\n')
-  const sent = await gateway.tg.replyText(message, viewHtml(text)).catch(() => null)
+  const sent = await tgReplyText(message, viewHtml(text)).catch(() => null)
   if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'extra_list')
 }
 
@@ -1891,7 +1994,7 @@ const fireExtras = async (message: Message, chat: Chat, text: string): Promise<v
         fields: { name: extra.name }
       })
     } else if (extra.text) {
-      await gateway.tg.replyText(message, viewHtml(escapeName(extra.text)))
+      await tgReplyText(message, viewHtml(escapeName(extra.text)))
         .catch((err) => {
           log.warn('extra_send_failed', { chatId: chat.id, name: extra.name, kind: 'text', err: String(err) })
         })
@@ -1916,7 +2019,7 @@ const handleTop = async (message: Message, chat: Chat, caller: User, kind: 'mess
     entries = rows.map((r) => ({ name: nameById.get(r.telegramId) ?? `id${r.telegramId}`, value: r.value }))
   }
   const view = topList(locale, kind, entries)
-  const sent = await gateway.tg.replyText(message, viewHtml(view.text)).catch(() => null)
+  const sent = await tgReplyText(message, viewHtml(view.text)).catch(() => null)
   if (sent) {
     scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'cmd_top')
     scheduleDelete(chat.id, message.id, NOTIFY_TTL_TOP_MS, 'cmd_top')
@@ -1966,7 +2069,7 @@ const refreshIncidentCard = async (
   // "changed nothing" is not a case that arises — a failure here means the card
   // is gone (its 90-second TTL expired under a run that is allowed ten minutes),
   // and the caller posts a fresh one rather than leaving the run unannounced.
-  return await gateway.tg.editMessage({
+  return await tgEditMessage({
     chatId, message: incident.cardMessageId,
     text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons),
     disableWebPreview: true
@@ -2144,7 +2247,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       return
     }
     if (/^\/ping(@\w+)?$/.test(commandText)) {
-      const sent = await gateway.tg.replyText(message, '🏓 pong').catch(() => null)
+      const sent = await tgReplyText(message, '🏓 pong').catch(() => null)
       if (sent) {
         scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'cmd_ping')
         scheduleDelete(chat.id, message.id, NOTIFY_TTL_BANAN_MS, 'cmd_ping')
@@ -2221,7 +2324,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     log.debug('enforcement_blocked', { chatId: chat.id, chat: chat.title ?? undefined })
     if (shouldWarnMissingRights(chat.id, ['CHAT_ADMIN_REQUIRED'])) {
       const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
-      const sent = await gateway.tg.sendText(chat.id, viewHtml(locale.notification.missingRights))
+      const sent = await tgSendText(chat.id, viewHtml(locale.notification.missingRights))
         .catch(() => null)
       if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'missing_rights')
       log.warn('missing_rights', {
@@ -2859,7 +2962,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     const partlyRefused = !result.applied || result.deleted === false
     if (partlyRefused && shouldWarnMissingRights(chat.id, result.errors)) {
       const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
-      const sent = await gateway.tg.sendText(chat.id, viewHtml(locale.notification.missingRights)).catch(() => null)
+      const sent = await tgSendText(chat.id, viewHtml(locale.notification.missingRights)).catch(() => null)
       if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'missing_rights')
       log.warn('missing_rights', { chatId: chat.id, chat: chat.title ?? undefined, action: verdict.action })
     }
@@ -3135,13 +3238,17 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       }).catch(() => false)
       if (opened) {
         log.info('vote_opened', { chatId: chat.id, userId: sender.id, messageId: message.id, ...logContext, pSpam: Math.round(verdict.pSpam * 100) / 100, reason: verdict.reasonCode })
+        // `rememberVerdict` ran above for this exact message, so the "why?"
+        // anchor on the ballot resolves to the card that explains why the bot
+        // was unsure — which is the question a voter is actually being asked.
         const view = votePrompt(locale, {
           chatId: chat.id, messageId: message.id,
-          userLabel: sender.displayName, textPreview: normalized.text,
+          userId: sender.id, userLabel: sender.displayName, textPreview: normalized.text,
           media: mediaCategoryOf(normalized.attachments)
-        }, { spam: 0, ham: 0, outcome: 'pending' })
-        const prompt = await gateway.tg.sendText(chat.id, viewHtml(view.text), {
-          replyMarkup: toKeyboard(view.buttons)
+        }, { spam: 0, ham: 0, outcome: 'pending' }, { botUsername: selfUsername ?? undefined })
+        const prompt = await tgSendText(chat.id, viewHtml(view.text), {
+          replyMarkup: toKeyboard(view.buttons),
+          disableWebPreview: true
         }).catch(() => null)
         if (prompt) await store.setVotePrompt(chat.id, message.id, prompt.id).catch(() => { /* ok */ })
         if (live) incidents.markVoteOpen(chat.id, sender.id)
@@ -3159,7 +3266,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     const view = compactNotification(locale, executed, {
       chatId: chat.id, messageId: message.id, userId: sender.id, userLabel: sender.displayName
     }, { botUsername: selfUsername ?? undefined })
-    const sent = await gateway.tg.sendText(chat.id, viewHtml(view.text), {
+    const sent = await tgSendText(chat.id, viewHtml(view.text), {
       replyMarkup: toKeyboard(view.buttons),
       disableWebPreview: true
     }).catch(() => null)
@@ -3187,7 +3294,7 @@ const wireCallbacks = (): void => {
 
     if (kind === 'help') {
       await query.answer({})
-      await gateway.tg.sendText(query.user.id, viewHtml(helpView(locale).text))
+      await tgSendText(query.user.id, viewHtml(helpView(locale).text))
         .catch(() => { /* PM closed */ })
       return
     }
@@ -3201,7 +3308,7 @@ const wireCallbacks = (): void => {
       }
       const view = langPicker(locale)
       await query.answer({})
-      await gateway.tg.sendText(query.user.id, viewHtml(view.text), { replyMarkup: toKeyboard(view.buttons) })
+      await tgSendText(query.user.id, viewHtml(view.text), { replyMarkup: toKeyboard(view.buttons) })
         .catch(() => { /* PM closed */ })
       return
     }
@@ -3219,7 +3326,7 @@ const wireCallbacks = (): void => {
         const navView = action === 'lang_open'
           ? await renderLangPanel(locale, chatId)
           : await renderSettingsPanel(locale, chatId)
-        await gateway.tg.editMessage({
+        await tgEditMessage({
           chatId: query.user.id, message: query.messageId,
           text: viewHtml(navView.text), replyMarkup: toKeyboard(navView.buttons)
         }).catch(() => { /* unchanged → MESSAGE_NOT_MODIFIED, fine */ })
@@ -3267,7 +3374,7 @@ const wireCallbacks = (): void => {
       // Every mutation re-renders the root panel — including a language pick,
       // which returns the admin from the sub-screen back to the main panel.
       const view = await renderSettingsPanel(locale, chatId)
-      await gateway.tg.editMessage({
+      await tgEditMessage({
         chatId: query.user.id, message: query.messageId,
         text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons)
       }).catch(() => { /* unchanged content → MESSAGE_NOT_MODIFIED, fine */ })
@@ -3288,7 +3395,7 @@ const wireCallbacks = (): void => {
         return
       }
       const edit = async (view: ViewMessage): Promise<void> => {
-        await gateway.tg.editMessage({
+        await tgEditMessage({
           chatId: query.user.id, message: query.messageId,
           text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons)
         }).catch(() => { /* unchanged content / message gone */ })
@@ -3309,11 +3416,11 @@ const wireCallbacks = (): void => {
           await query.answer({ text: locale.welcome.editor.removed }); return
         } else if (action === 'taddc') {
           pendingInput.set(query.user.id, { type: 'welcome.text', chatId })
-          await gateway.tg.sendText(query.user.id, viewHtml(locale.welcome.editor.promptText)).catch(() => { /* PM closed */ })
+          await tgSendText(query.user.id, viewHtml(locale.welcome.editor.promptText)).catch(() => { /* PM closed */ })
           await query.answer({}); return
         } else if (action === 'gaddc') {
           pendingInput.set(query.user.id, { type: 'welcome.gif', chatId })
-          await gateway.tg.sendText(query.user.id, viewHtml(locale.welcome.editor.promptGif)).catch(() => { /* PM closed */ })
+          await tgSendText(query.user.id, viewHtml(locale.welcome.editor.promptGif)).catch(() => { /* PM closed */ })
           await query.answer({}); return
         } else if (action === 'preview') {
           await sendWelcomePreview(query.user.id, query.user.displayName ?? 'Alex', chatId, locale)
@@ -3345,7 +3452,7 @@ const wireCallbacks = (): void => {
       }
       if (action === 'addc') {
         pendingInput.set(query.user.id, { type: 'extra.name', chatId })
-        await gateway.tg.sendText(query.user.id, viewHtml(locale.extra.editor.promptName)).catch(() => { /* PM closed */ })
+        await tgSendText(query.user.id, viewHtml(locale.extra.editor.promptName)).catch(() => { /* PM closed */ })
         await query.answer({}); return
       }
       await edit(await renderExtrasEditor(locale, chatId, action === 'page' ? page : 0))
@@ -3382,7 +3489,7 @@ const wireCallbacks = (): void => {
         isTrusted: policy.trustedUserIds.includes(userId)
       })
       log.info('profile_opened', { chatId, userId, by: query.user.id, via: 'why_card' })
-      await gateway.tg.sendText(query.user.id, viewHtml(card.text), {
+      await tgSendText(query.user.id, viewHtml(card.text), {
         ...(card.buttons.length > 0 ? { replyMarkup: toKeyboard(card.buttons) } : {})
       }).catch(() => { /* PM closed */ })
       await query.answer({})
@@ -3411,7 +3518,7 @@ const wireCallbacks = (): void => {
       // opened from the PM "Why?" card, and editing by the group's chatId there
       // addressed a message id that does not exist in that chat — the button
       // stayed on its old label after a trust it had already applied.
-      await gateway.tg.editMessage({ chatId: query.chat.id, message: query.messageId, replyMarkup: flipped })
+      await tgEditMessage({ chatId: query.chat.id, message: query.messageId, replyMarkup: flipped })
         .catch(() => { /* card may be gone */ })
       await query.answer({ text: makeTrusted ? locale.trust.added : locale.trust.removed })
       return
@@ -3430,8 +3537,8 @@ const wireCallbacks = (): void => {
       log.info('banan_lifted', { chatId, userId, by: query.user.id, via: 'undo' })
       const label = bananLabels.get(`${chatId}:${userId}`)
       if (label) {
-        await gateway.tg.editMessage({
-          chatId, message: query.messageId, text: viewHtml(locale.banan.lifted(escapeName(label)))
+        await tgEditMessage({
+          chatId, message: query.messageId, text: viewHtml(locale.banan.lifted(userMention(userId, label)))
         }).catch(() => { /* ok */ })
       } else {
         await gateway.tg.deleteMessagesById(chatId, [query.messageId]).catch(() => { /* ok */ })
@@ -3499,14 +3606,17 @@ const wireCallbacks = (): void => {
       const tally = tallyVotes((vote['ballots'] ?? []) as VoteBallot[])
 
       if (tally.outcome === 'pending') {
+        const targetUserId = Number(vote['targetUserId'] ?? 0)
         const view = votePrompt(locale, {
           chatId, messageId,
+          userId: targetUserId > 0 ? targetUserId : null,
           userLabel: String(vote['targetLabel'] ?? ''), textPreview: String(vote['textPreview'] ?? ''),
           media: (vote['media'] ?? null) as MediaCategory | null
-        }, tally)
-        await gateway.tg.editMessage({
+        }, tally, { botUsername: selfUsername ?? undefined })
+        await tgEditMessage({
           chatId, message: query.messageId,
-          text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons)
+          text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons),
+          disableWebPreview: true
         }).catch(() => { /* unchanged */ })
         await query.answer({ text: locale.vote.counted })
         return
@@ -3546,10 +3656,17 @@ const wireCallbacks = (): void => {
           await store.addTrustedUser(chatId, targetUserId).catch(() => { /* best-effort */ })
         }
       }
-      const receipt = voteResult(locale, { chatId, messageId }, tally.outcome)
-      await gateway.tg.editMessage({
+      const subjectId = Number(vote['targetUserId'] ?? 0)
+      const subjectLabel = String(vote['targetLabel'] ?? '')
+      const receipt = voteResult(locale, {
+        chatId, messageId,
+        userId: subjectId > 0 ? subjectId : null,
+        userLabel: subjectLabel.length > 0 ? subjectLabel : null
+      }, tally.outcome, { botUsername: selfUsername ?? undefined })
+      await tgEditMessage({
         chatId, message: query.messageId,
-        text: viewHtml(receipt.text), replyMarkup: toKeyboard(receipt.buttons)
+        text: viewHtml(receipt.text), replyMarkup: toKeyboard(receipt.buttons),
+        disableWebPreview: true
       }).catch(() => { /* ok */ })
       // The resolved prompt lingers briefly as a receipt, then cleans up.
       scheduleDelete(chatId, query.messageId, NOTIFY_TTL_VOTE_RESULT_MS, 'vote_result')

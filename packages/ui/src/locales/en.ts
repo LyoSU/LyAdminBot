@@ -232,19 +232,34 @@ export const en: Locale = {
   },
 
   vote: {
-    prompt: (userLabel, textPreview) => `🤔 <b>Is this spam?</b> Message from ${userLabel}:\n\n"${textPreview}"`,
-    promptNoText: (userLabel, what) => what
-      ? `🤔 <b>Is this spam?</b> Message from ${userLabel} — no text, just a ${what}.`
-      : `🤔 <b>Is this spam?</b> Message from ${userLabel} — no text.`,
+    prompt: ({ userLabel, textPreview, media, whyLink }) =>
+      `🤔 <b>Is this spam?</b> Message from ${userLabel}`
+      + (media ? ` · 📎 ${media}` : '')
+      + (whyLink ? ` · ${whyLink}` : '')
+      + `\n<pre>${textPreview}</pre>`,
+    promptNoText: (userLabel, what, whyLink) =>
+      (what
+        ? `🤔 <b>Is this spam?</b> Message from ${userLabel} — no text, just a ${what}.`
+        : `🤔 <b>Is this spam?</b> Message from ${userLabel} — no text.`)
+      + (whyLink ? ` · ${whyLink}` : ''),
     media: {
       photo: 'photo', sticker: 'sticker', video: 'video',
       voice: 'voice message', file: 'file', other: 'attachment'
     },
+    redacted: { link: '[link]', mention: '[@mention]', invite: '[invite]' },
     spamButton: (count) => `🗑 Spam (${count})`,
     hamButton: (count) => `👌 Fine (${count})`,
     counted: 'Vote counted.',
-    resolvedSpam: '🗑 The community says spam. Removed.',
-    resolvedHam: '👌 The community says it is fine.',
+    resolvedSpam: (who, whyLink) =>
+      (who
+        ? `🗑 The community says the message from ${who} is spam. Removed.`
+        : '🗑 The community says spam. Removed.')
+      + (whyLink ? ` · ${whyLink}` : ''),
+    resolvedHam: (who, whyLink) =>
+      (who
+        ? `👌 The community says the message from ${who} is fine.`
+        : '👌 The community says it is fine.')
+      + (whyLink ? ` · ${whyLink}` : ''),
     alreadyEnded: 'This vote is already closed.',
     voters: {
       button: '👥 Who voted',

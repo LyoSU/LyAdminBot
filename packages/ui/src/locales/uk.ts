@@ -246,19 +246,34 @@ export const uk: Locale = {
   },
 
   vote: {
-    prompt: (userLabel, textPreview) => `🤔 <b>Це спам?</b> Повідомлення від ${userLabel}:\n\n"${textPreview}"`,
-    promptNoText: (userLabel, what) => what
-      ? `🤔 <b>Це спам?</b> Повідомлення від ${userLabel} — без тексту, лише ${what}.`
-      : `🤔 <b>Це спам?</b> Повідомлення від ${userLabel} — без тексту.`,
+    prompt: ({ userLabel, textPreview, media, whyLink }) =>
+      `🤔 <b>Це спам?</b> Повідомлення від ${userLabel}`
+      + (media ? ` · 📎 ${media}` : '')
+      + (whyLink ? ` · ${whyLink}` : '')
+      + `\n<pre>${textPreview}</pre>`,
+    promptNoText: (userLabel, what, whyLink) =>
+      (what
+        ? `🤔 <b>Це спам?</b> Повідомлення від ${userLabel} — без тексту, лише ${what}.`
+        : `🤔 <b>Це спам?</b> Повідомлення від ${userLabel} — без тексту.`)
+      + (whyLink ? ` · ${whyLink}` : ''),
     media: {
       photo: 'світлина', sticker: 'стікер', video: 'відео',
       voice: 'аудіо', file: 'файл', other: 'вкладення'
     },
+    redacted: { link: '[посилання]', mention: '[@згадка]', invite: '[запрошення]' },
     spamButton: (count) => `🗑 Спам (${count})`,
     hamButton: (count) => `👌 Норм (${count})`,
     counted: 'Голос зараховано.',
-    resolvedSpam: '🗑 Спільнота вирішила: спам. Прибрав.',
-    resolvedHam: '👌 Спільнота вирішила: не спам.',
+    resolvedSpam: (who, whyLink) =>
+      (who
+        ? `🗑 Спільнота вирішила: повідомлення від ${who} — спам. Прибрав.`
+        : '🗑 Спільнота вирішила: спам. Прибрав.')
+      + (whyLink ? ` · ${whyLink}` : ''),
+    resolvedHam: (who, whyLink) =>
+      (who
+        ? `👌 Спільнота вирішила: повідомлення від ${who} — не спам.`
+        : '👌 Спільнота вирішила: не спам.')
+      + (whyLink ? ` · ${whyLink}` : ''),
     alreadyEnded: 'Голосування вже закрите.',
     voters: {
       button: '👥 Хто голосував',
