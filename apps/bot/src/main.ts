@@ -49,7 +49,7 @@ import { LlmHealth } from './llm-health.js'
 import { MemberFactsCache, type MemberFacts } from './member-facts.js'
 import { JOIN_WINDOW_MS, JoinRateTracker } from './join-rate.js'
 import { IncidentTracker, SenderMessageLog, incidentPowerFor, type Incident } from './incident.js'
-import { GreetingLog } from './greeting-log.js'
+import { ArrivalLog, arrivalMessageIds } from './arrival-log.js'
 
 const config = loadConfig()
 
@@ -188,8 +188,11 @@ const joinRate = new JoinRateTracker()
 const incidents = new IncidentTracker()
 /** Which of a removed sender's earlier messages go with them. */
 const senderLog = new SenderMessageLog()
-/** Greetings we posted, so removing the person can take ours back too. */
-const greetings = new GreetingLog()
+/**
+ * What a newcomer's arrival left in the chat — Telegram's "joined" service line
+ * and our greeting of them — so removing the person can take both down.
+ */
+const arrivals = new ArrivalLog()
 
 /** Verdicts kept for the [Why?] button (memory, bounded). */
 const recentVerdicts = new Map<string, Verdict>()
@@ -1769,10 +1772,9 @@ const handleWelcomeGreeting = async (message: Message, chat: Chat, joiners: User
         .then((m) => [m.id])
         .catch((err) => { log.warn('welcome_send_failed', { chatId: chat.id, kind: 'text', err: String(err) }); return [] })
   for (const id of sentIds) scheduleDelete(chat.id, id, welcome.timer * 1000, 'welcome')
-  // Remembered against the people it names, so a verdict that removes one of
-  // them can take our own greeting of them back. Same lifetime as the message:
-  // past the timer above the scheduler has already deleted it.
-  greetings.remember(chat.id, joiners.map((j) => j.id), sentIds, welcome.timer * 1000)
+  // Attached to the arrival, so a verdict that removes one of these people
+  // takes our own greeting of them down along with the join notice.
+  arrivals.noteGreeting(chat.id, joiners.map((j) => j.id), sentIds)
   // The service message id is what makes a repeat diagnosable: the same id
   // twice is a redelivery, two ids is a person who really did join twice.
   // Without it, production 2026-08-21 (one joiner greeted twelve times) could
@@ -2043,6 +2045,9 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
         log.info('join_surge', { chatId: chat.id, count: rate.total, windowMs: JOIN_WINDOW_MS })
         void maybeSendJoinSurgeAlert(chat).catch(() => { /* best-effort */ })
       }
+      // Noted before the greeting and independently of it: the service line is
+      // Telegram's own and exists whether or not this chat greets anybody.
+      arrivals.noteJoin(chat.id, joiners.map((joiner) => joiner.id), message.id)
       await handleWelcomeGreeting(message, chat, joiners)
       // Fire-and-forget: avatar download must never delay update handling.
       void screenJoinerAvatars(chat, joiners).catch(() => { /* best-effort */ })
@@ -2686,50 +2691,55 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
   }
 
   /**
-   * Our own greeting of the person we just removed.
+   * What this person's arrival left in the chat.
    *
-   * The welcome is the one thing this bot posts *about an account* rather than
-   * about a message, and it is addressed to the chat. Leaving it up after a
-   * removal leaves our endorsement of a spammer standing next to the hole where
-   * their advert was — and reprints their display name, which for an account
-   * whose name IS the advert (`promo_in_name`) undoes part of the removal.
+   * Two messages announce a newcomer and neither is about anything they said:
+   * Telegram's "joined" service line, and — when the chat has welcome on — our
+   * greeting of them by name. Left up after a removal they stand next to the
+   * hole where the advert was and reprint the display name twice, which for an
+   * account whose name IS the advert (`promo_in_name`) undoes part of the
+   * removal. The service line is the worse of the two: it has no timer at all.
    *
    * Gated on `removesSender`, not on the delete. A `delete` leaves the member in
-   * the chat, so the greeting is still true — and it is the action we measured
+   * the chat, so both messages are still true — and it is the action we measured
    * at 22.7 % overturned (2026-08-25), which is not a rate to hand an
    * irreversible second deletion to. Removal has passed
    * `SENDER_REMOVAL_MIN_EVIDENCE`, the same bar the retro-purge above rests on.
    *
    * `applied`, not `deleted`: the question is whether the PERSON went.
    */
-  let greetingRetracted = 0
+  let arrivalPurged = 0
   if (result.applied && removesSender(verdict.action)) {
-    const greeting = greetings.take(chat.id, sender.id)
-    // A bulk add is greeted once for everyone in it, and that message is still
-    // true about the people we did not remove. Retracting it would quietly take
-    // their welcome away as well, so a shared greeting stays and says so.
-    if (greeting && greeting.subjects > 1) {
-      log.info('welcome_retract_kept', {
+    const arrival = arrivals.take(chat.id, sender.id)
+    // A bulk add produces one service line and one greeting for everybody in
+    // it, and both are still true about the people we did not remove. Purging
+    // would quietly erase their arrival as well, so a shared one stays.
+    if (arrival && arrival.subjects > 1) {
+      log.info('arrival_purge_kept', {
         chatId: chat.id, chat: chat.title ?? undefined, userId: sender.id,
-        user: sender.displayName, subjects: greeting.subjects
+        user: sender.displayName, subjects: arrival.subjects
       })
-    } else if (greeting) {
-      const ids = [...greeting.messageIds]
-      const dropped = await gateway.tg.deleteMessagesById(chat.id, ids)
+    } else if (arrival) {
+      const ids = arrivalMessageIds(arrival)
+      const dropped = ids.length > 0 && await gateway.tg.deleteMessagesById(chat.id, ids)
         .then(() => true)
         .catch(() => false)
       if (dropped) {
-        greetingRetracted = ids.length
-        // The greeting had a persistent row waiting to delete it later; the row
-        // is now a sweep against a message that no longer exists.
-        for (const id of ids) {
+        arrivalPurged = ids.length
+        // Each greeting had a persistent row waiting to delete it later; those
+        // rows are now sweeps against messages that no longer exist.
+        for (const id of arrival.greetingMessageIds) {
           await store.unscheduleDeletion(chat.id, id)
             .catch(() => { /* the sweep is harmless and the TTL collects it */ })
         }
       }
-      log.info('welcome_retract', {
+      log.info('arrival_purge', {
         chatId: chat.id, chat: chat.title ?? undefined, userId: sender.id,
         user: sender.displayName, messages: ids.length, applied: dropped,
+        // Which of the two was there. A chat that hides join notices, or a
+        // greeting that never sent, both read as "nothing happened" otherwise.
+        service: arrival.serviceMessageId !== null,
+        greeting: arrival.greetingMessageIds.length || undefined,
         action: verdict.action
       })
     }
@@ -2829,10 +2839,10 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       // ordinary single message, so a line carrying it says "this was a post of
       // several parts and all of them went".
       albumRemoved: albumRemoved || undefined,
-      // Our own greeting of this account, taken back with them. Absent when
-      // there was none to take — which is every chat with welcome off, and
-      // every removal that came later than the greeting's own timer.
-      greetingRetracted: greetingRetracted || undefined,
+      // The join notice and our greeting, taken down with the person. Absent
+      // when there was nothing to take — a removal further from the join than
+      // `ARRIVAL_TTL_MS`, or a chat that hides join notices and has welcome off.
+      arrivalPurged: arrivalPurged || undefined,
       errors: result.errors.length > 0 ? result.errors : undefined,
       latencyMs: Date.now() - started
     })
