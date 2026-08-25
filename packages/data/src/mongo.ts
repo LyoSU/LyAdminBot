@@ -10,6 +10,7 @@ import type { BurstEntry, EditBaseline, ExecutionRecord, MediaCategory, Verdict,
 import { truncate, VOTE_WINDOW_SECONDS } from '@lyadmin/core'
 import { normalizeExtra, type NormalizedExtra } from './extras.js'
 import { VELOCITY_WINDOW_MS, SESSION_WINDOW_MS, BURST_WINDOW_MS } from './persistent-ports.js'
+import { PROFILE_MEDIA_TTL_DAYS } from './profile-media-port.js'
 import {
   addWelcomeItem, removeAt, type AddReason,
   MAX_WELCOME_TEXTS, MAX_WELCOME_GIFS, MAX_WELCOME_TEXT_LEN
@@ -235,6 +236,15 @@ export class MongoStore {
    */
   get rightsBlocks(): Collection<Document> { return this.collection('pipeline_rights') }
 
+  /**
+   * Profile-picture hashes, one row per (picture, account).
+   *
+   * A method rather than a getter to match how the port reaches it, and named
+   * for the medium rather than for avatars: the same store answers the same
+   * question about any profile media we come to hash.
+   */
+  profileMedia(): Collection<Document> { return this.collection('profile_media_hashes') }
+
   private async ensureIndexes(): Promise<void> {
     await ensureTtlIndex(this.decisions, { createdAt: 1 }, DECISIONS_TTL_DAYS * 86400)
     await this.decisions.createIndex({ chatId: 1, userId: 1, createdAt: -1 })
@@ -263,6 +273,21 @@ export class MongoStore {
     // scans the collection on every message. Sparse: documents written before
     // the field existed only gain it when they are next seen.
     await this.spamSignatures.createIndex({ foldedHash: 1 }, { sparse: true })
+
+    /**
+     * Profile-media hashes. The TTL is on `lastSeenAt`, so a picture still in
+     * active use is kept and one retired months ago expires — the store
+     * remembers campaigns, not history.
+     *
+     * One index per band because the lookup is an `$or` over four equalities:
+     * without all four, whichever band lacked an index would turn every avatar
+     * check into a collection scan, and it would do so silently.
+     */
+    await ensureTtlIndex(this.profileMedia(), { lastSeenAt: 1 }, PROFILE_MEDIA_TTL_DAYS * 86400)
+    await this.profileMedia().createIndex({ hash: 1, userId: 1 }, { unique: true })
+    for (const band of ['b0', 'b1', 'b2', 'b3']) {
+      await this.profileMedia().createIndex({ [band]: 1 })
+    }
   }
 
   // ── reads used per message ───────────────────────────────────────────

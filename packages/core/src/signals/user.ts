@@ -460,6 +460,45 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
     signals.push({ name: 'avatar_recently_set' })
   }
 
+  /**
+   * An old account whose entire photo history is one picture, set days ago.
+   *
+   * The shape of a TAKEN account rather than a created one, which is the
+   * dominant pattern in this class: the operator does not register anything, it
+   * signs into somebody's account, deletes the owner's photographs and uploads
+   * one of its own. `avatars.count` has been available all along and no signal
+   * read it — the count is what separates this from ordinary life, because
+   * Telegram KEEPS old photos when you add a new one. Getting to exactly one
+   * recent photo on a years-old account takes deliberately deleting the rest.
+   *
+   * Every clause earns its place:
+   *
+   *  - `count === 1` — two or more means a history, whoever is posting now.
+   *  - recent — a single photo set years ago is just somebody who never changed
+   *    it, which is extremely common and says nothing.
+   *  - `predictedAgeLo` past the sleeper gap — on a NEW account one fresh photo
+   *    is simply what signing up looks like. Reading the LOW end of the age
+   *    interval for the same reason `sleeper_awakened` does: asserting the
+   *    account is old requires that old is the least it could be.
+   *
+   * Shape, not evidence: it describes the account, never the message. It may
+   * raise the score and open the classifier's gate; it may not convict.
+   */
+  if (
+    user.avatars !== null &&
+    user.avatars.count === 1 &&
+    user.avatars.latestSetDaysAgo !== null &&
+    user.avatars.latestSetDaysAgo <= AVATAR_FRESH_MAX_DAYS &&
+    predictedAgeLo !== null &&
+    predictedAgeLo > SLEEPER_GAP_DAYS
+  ) {
+    signals.push({
+      name: 'sole_avatar_replaced',
+      evidence: `one profile photo, set ${Math.round(user.avatars.latestSetDaysAgo)}d ago ` +
+        `on a ~${Math.round(predictedAgeLo)}d+ old account`
+    })
+  }
+
   // ── local history ──────────────────────────────────────────────────
 
   if (user.messagesInChat <= NEW_IN_CHAT_MAX) signals.push({ name: 'new_in_chat' })

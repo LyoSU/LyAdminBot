@@ -316,6 +316,18 @@ export interface Enrichment {
    * this is usually empty and nsfw_stories simply never fires.
    */
   storyBase64: string[]
+  /**
+   * Perceptual hash of the sender's CURRENT profile photo, or null.
+   *
+   * The current one only, and that is the point rather than a limitation. The
+   * dominant pattern in this class is a stolen account with its photograph
+   * replaced: the old pictures belong to the real owner and say nothing about
+   * whoever is operating it now, while the new one is the campaign's.
+   *
+   * Computed in the adapter layer, because hashing needs a JPEG decoder and the
+   * core stays free of both IO and dependencies.
+   */
+  avatarDhash?: string | null
 }
 
 // ─────────────────────── chat policy ───────────────────────

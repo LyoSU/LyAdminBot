@@ -596,6 +596,39 @@ export const evaluateMessage = async (
       const hit = nsfwProfileHit(avatar)
       if (hit !== null) signals.push({ name: 'nsfw_avatar', evidence: hit })
     }
+
+    /**
+     * Is this photograph already on another account?
+     *
+     * Asked here, alongside the NSFW check, because both read the same picture —
+     * and the hash is computed once in the adapter from bytes that were
+     * downloaded for that check anyway, so this costs one indexed lookup.
+     *
+     * Deliberately independent of what the picture DEPICTS. A perfectly ordinary
+     * photograph shared across a batch of accounts says the same thing as an
+     * explicit one shared across a batch: the accounts are dressed from one
+     * folder. This is the only observation in the pipeline that concerns a
+     * different account than the sender, so it is also the only one that can
+     * see a farm rather than a member.
+     */
+    if (ports.profileMedia && typeof input.enrichment.avatarDhash === 'string') {
+      const reuse = await safe('profile_media', () =>
+        ports.profileMedia!.seen(input.user.id, input.enrichment.avatarDhash!))
+      if (reuse !== null && reuse.otherAccounts > 0) {
+        const shared = reuse.sampleUserIds.join(', ')
+        const exact = reuse.closestDistance === 0 ? 'identical' : `${reuse.closestDistance} bits`
+        signals.push(reuse.otherAccounts >= 2
+          ? {
+              name: 'avatar_shared_with_accounts',
+              evidence: `same profile photo on ${reuse.otherAccounts} other accounts (${exact}): ${shared}`
+            }
+          : {
+              name: 'avatar_shared_with_account',
+              evidence: `same profile photo as ${shared} (${exact})`
+            })
+        meta['avatarSharedWith'] = reuse.otherAccounts
+      }
+    }
     if (input.enrichment.storyBase64.length > 0) {
       const hits = new Set<string>()
       for (const story of input.enrichment.storyBase64) {

@@ -12,7 +12,7 @@ import {
   voterRoster, voteEligibility, voteMayRecordDetection, needsRestitution, restitutionLiftsRestrictions,
   type VoterStanding,
   classifyUrl, strongestTelegramLink, removesSender, truncate, mediaCategoryOf,
-  BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS,
+  BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS, dhash,
   type ChannelPreview, type EditBaseline, type EvaluationInput, type ForwardOrigin,
   type MediaCategory, type PipelinePorts, type UserSnapshot, type Verdict, type VoteBallot
 } from '@lyadmin/core'
@@ -22,12 +22,14 @@ import {
   fetchUserProfile, downloadPhotoBase64, downloadAvatarBase64, downloadStoriesBase64, rawPhotoToBase64,
   fetchExternalBan, sourcesToQuery, resolveMentionKinds, shouldScanChannelSender,
   createChatDescriptionCache, fetchChatDescription, createTmePreviewResolver,
+  decodeImageBase64,
   type ExternalBanCacheView, type IncomingMessage
 } from '@lyadmin/adapters'
 import {
   MongoStore, MongoSignaturePort, MongoForwardPort, QdrantVectorPort,
   OpenAiModerationPort, OpenRouterLlmPort,
   PersistentVelocityPort, PersistentSessionPort, PersistentBurstPort, MemoryConversationWindow,
+  MongoProfileMediaPort,
   matchExtras, buildWelcomeGreeting, PendingInput,
   groupDocToChatPolicy, presetToThreshold, userDocToHistory, mergeExternalBan,
   type NormalizedExtra, type PendingEntry
@@ -63,6 +65,7 @@ const burstPort = new PersistentBurstPort(store)
 const velocityPort = new PersistentVelocityPort(store)
 const signaturePort = new MongoSignaturePort(store)
 const forwardPort = new MongoForwardPort(store)
+const profileMediaPort = new MongoProfileMediaPort(store)
 const conversationWindow = new MemoryConversationWindow()
 // Transient per-admin input state for the PM welcome/extras editor. Memory-only
 // on purpose — a half-finished "add" is not worth persisting across restarts.
@@ -87,7 +90,8 @@ const buildPorts = (): PipelinePorts => {
     velocity: velocityPort,
     session: sessionPort,
     burst: burstPort,
-    forwards: forwardPort
+    forwards: forwardPort,
+    profileMedia: profileMediaPort
   }
   if (vectorPort) ports.vectors = vectorPort
   if (config.openaiApiKey) {
@@ -2051,6 +2055,34 @@ const AVATAR_CACHE_TTL_MS = 6 * 60 * 60 * 1000
 const AVATAR_CACHE_MAX = 2000
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024
 
+/**
+ * Perceptual hash of an avatar, memoised on the base64 it came from.
+ *
+ * Decoding a JPEG in pure JS is the most expensive thing on this path, and the
+ * avatar cache already hands us the same bytes for the same sender for hours.
+ * Keyed by length plus a cheap prefix rather than by the whole string, so the
+ * key does not itself cost a megabyte per entry.
+ */
+const dhashCache = new Map<string, string | null>()
+const DHASH_CACHE_MAX = 2000
+
+const avatarDhashOf = (base64: string): string | null => {
+  const key = `${base64.length}:${base64.slice(0, 64)}`
+  const hit = dhashCache.get(key)
+  if (hit !== undefined) return hit
+  const image = decodeImageBase64(base64)
+  const hash = image === null ? null : dhash(image)
+  if (dhashCache.size >= DHASH_CACHE_MAX) {
+    // Coarse eviction: this is a cost cache, not a correctness one.
+    for (const k of dhashCache.keys()) {
+      dhashCache.delete(k)
+      if (dhashCache.size < DHASH_CACHE_MAX / 2) break
+    }
+  }
+  dhashCache.set(key, hash)
+  return hash
+}
+
 type UserProfile = Awaited<ReturnType<typeof fetchUserProfile>>
 
 const EMPTY_PROFILE: UserProfile = {
@@ -3113,6 +3145,15 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       conversationWindow: conversationWindow.snapshot(chat.id),
       photoBase64,
       avatarBase64,
+      /**
+       * Hashed from the bytes the NSFW check already downloaded, so recognising
+       * a re-used photograph costs a decode rather than a round trip.
+       *
+       * Only the CURRENT photo, which is the whole point: the dominant pattern
+       * here is a stolen account whose pictures were replaced, so the older ones
+       * belong to the person it was taken from.
+       */
+      avatarDhash: avatarBase64 === null ? null : avatarDhashOf(avatarBase64),
       storyBase64
     }
   }

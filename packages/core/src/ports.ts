@@ -190,6 +190,26 @@ export interface ForwardPort {
   check(forward: ForwardOrigin): Promise<ForwardReputation | null>
 }
 
+/**
+ * Remembers which accounts wear which profile picture.
+ *
+ * The only port that answers a question about a DIFFERENT account than the one
+ * being judged, which is why it is here rather than folded into moderation: it
+ * is the pipeline's sole means of noticing that two senders are one operator.
+ */
+export interface ProfileMediaPort {
+  /**
+   * Record this account against this picture hash and report who else wears it.
+   * Null means nobody else does — or that the hash was unusable, which callers
+   * must treat the same way. A picture seen once is not evidence of anything.
+   */
+  seen(userId: number, hash: string): Promise<{
+    otherAccounts: number
+    sampleUserIds: number[]
+    closestDistance: number
+  } | null>
+}
+
 export interface PipelinePorts {
   signatures?: SignaturePort
   velocity?: VelocityPort
@@ -199,4 +219,5 @@ export interface PipelinePorts {
   session?: SessionPort
   burst?: BurstPort
   forwards?: ForwardPort
+  profileMedia?: ProfileMediaPort
 }

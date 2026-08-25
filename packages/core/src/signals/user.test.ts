@@ -279,6 +279,49 @@ describe('extractUserSignals — suspicious', () => {
     }
   })
 
+  /**
+   * The stolen-account shape, and the four ways it must NOT fire.
+   *
+   * `avatars.count` had been available since the profile layer was written and
+   * no signal read it. It is the field that separates "somebody changed their
+   * picture" from "somebody deleted a person's photo history and put one of
+   * their own up", because Telegram keeps the old photos when you add a new one.
+   */
+  describe('sole_avatar_replaced', () => {
+    const stolen = {
+      avatars: { count: 1, latestSetDaysAgo: 2 },
+      predictedAgeDays: 1500, localAgeDays: 1, messagesGlobal: 2, messagesInChat: 1
+    }
+
+    it('fires on one recent photo over a years-old account', () => {
+      expect(names(makeUser(stolen))).toContain('sole_avatar_replaced')
+    })
+
+    it('does not fire when there is a photo history', () => {
+      expect(names(makeUser({ ...stolen, avatars: { count: 4, latestSetDaysAgo: 2 } })))
+        .not.toContain('sole_avatar_replaced')
+    })
+
+    it('does not fire on a photo the owner set years ago and never changed', () => {
+      expect(names(makeUser({ ...stolen, avatars: { count: 1, latestSetDaysAgo: 900 } })))
+        .not.toContain('sole_avatar_replaced')
+    })
+
+    /**
+     * The case that would otherwise make this fire on half of all newcomers:
+     * one fresh photo on a new account is simply what signing up looks like.
+     */
+    it('does not fire on a genuinely new account', () => {
+      expect(names(makeUser({ ...stolen, predictedAgeDays: 5 })))
+        .not.toContain('sole_avatar_replaced')
+    })
+
+    it('does not fire when the account age is unknown', () => {
+      expect(names(makeUser({ ...stolen, predictedAgeDays: null })))
+        .not.toContain('sole_avatar_replaced')
+    })
+  })
+
   it('flags a freshly set avatar only for locally-new users', () => {
     const fresh = makeUser({ avatars: { count: 1, latestSetDaysAgo: 2 }, localAgeDays: 1, messagesGlobal: 3, messagesInChat: 1 })
     expect(names(fresh)).toContain('avatar_recently_set')

@@ -10,7 +10,8 @@
     "@lyadmin/core": "workspace:*",
     "@mtcute/dispatcher": "^0.31.0",
     "@mtcute/file-id": "^0.31.0",
-    "@mtcute/node": "^0.31.0"
+    "@mtcute/node": "^0.31.0",
+    "jpeg-js": "^0.4.4"
   },
   "scripts": {
     "test": "vitest run"

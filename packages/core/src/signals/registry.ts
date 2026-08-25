@@ -50,7 +50,7 @@ export type SignalKind = 'evidence' | 'shape' | 'trust'
 
 export type SignalGroupName =
   | 'newness' | 'profile_promo' | 'profile_nsfw' | 'external_ban_source' | 'promo_urls'
-  | 'burst'
+  | 'burst' | 'profile_reuse'
 
 export interface SignalSpec {
   /**
@@ -197,6 +197,12 @@ export const SIGNAL_GROUPS: Record<SignalGroupName, { cap: number }> = {
   newness: { cap: 2.0 },
   /** One profile, advertised in several places. */
   profile_promo: { cap: 2.0 },
+  /**
+   * One observation about one photograph. The two tiers are the same finding at
+   * different strengths, never two independent facts, so the ceiling is the
+   * heavier member alone — the `profile_nsfw` argument applied to re-use.
+   */
+  profile_reuse: { cap: 1.8 },
   /** One person posting explicit imagery; avatar and stories are not
    *  independent observations of it. */
   profile_nsfw: { cap: 1.2 },
@@ -484,6 +490,31 @@ export const SIGNALS = {
    * recall-tuned `flagged` boolean caught on `violence`. They now only nudge the
    * message toward the LLM, which reads what was actually written.
    */
+  /**
+   * This exact photograph is on ONE other account we have seen.
+   *
+   * Shape, not evidence, and weighted like a hint: people do share pictures.
+   * A meme, a film still, a club crest, a national flag, two partners using the
+   * same holiday photo — all ordinary, and none of them is a campaign. What
+   * makes this worth raising at all is that it is the only thing in the
+   * pipeline that can observe two senders being one operator.
+   */
+  avatar_shared_with_account: { weight: 0.8, kind: 'shape', group: 'profile_reuse', profileEvidence: true },
+  /**
+   * The same photograph on THREE or more accounts.
+   *
+   * Evidence, and heavy, because at that point the innocent explanations run
+   * out. A batch of accounts dressed from one folder is what an account farm
+   * looks like from the outside, and it is a fact about the bytes rather than a
+   * reading of anyone's intent — which is exactly the kind of finding this
+   * pipeline is otherwise short of.
+   *
+   * Still not a hard verdict on its own: it says the accounts are operated
+   * together, not that this message is an advert. `DECISIVE_MIN_WEIGHT` lets it
+   * license acting on the message; `SENDER_REMOVAL_MIN_EVIDENCE` deliberately
+   * does not let it remove the person by itself.
+   */
+  avatar_shared_with_accounts: { weight: 1.8, kind: 'evidence', group: 'profile_reuse', profileEvidence: true },
   nsfw_avatar: { weight: 1.0, kind: 'shape', group: 'profile_nsfw', profileEvidence: true },
   /**
    * Profile media that is suggestive without being explicit — lingerie, a pose,
@@ -519,6 +550,18 @@ export const SIGNALS = {
   new_in_chat: { weight: 0.4, kind: 'shape', group: 'newness' },
   new_globally: { weight: 0.8, kind: 'shape', group: 'newness' },
   avatar_recently_set: { weight: 0.6, kind: 'shape', group: 'newness' },
+  /**
+   * One photo, recent, on a years-old account — the signature of a stolen
+   * account that has been re-dressed. See the producer in `user.ts` for why
+   * each clause is needed.
+   *
+   * Deliberately NOT in the `newness` group: it is the opposite claim. The
+   * newness signals say "this account has no history"; this one says the
+   * account has plenty of history and somebody erased the part that had a face
+   * in it. Grouping them would let a ceiling written for restatements of
+   * newness swallow an independent observation.
+   */
+  sole_avatar_replaced: { weight: 1.2, kind: 'shape', profileEvidence: true },
   /** Joined the chat <2min before posting. */
   just_joined: { weight: 1.0, kind: 'shape', group: 'newness' },
   /** Joined inside a high-rate episode; routing context, never message proof. */
