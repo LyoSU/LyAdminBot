@@ -1367,6 +1367,22 @@ const restoreFalsePositive = async (params: {
     : undefined
   incidents.close(params.chatId, params.userId)
   senderLog.forget(params.chatId, params.userId)
+  /**
+   * The question goes with the accusation.
+   *
+   * A `delete`-plus-captcha verdict leaves a gate pending, and the gate carries
+   * a timer that mutes for an hour if nobody answers. Withdrawing the verdict
+   * lifted the restriction below but left that timer armed, so an exonerated
+   * member could be silenced again seconds later — by a question about a
+   * verdict that no longer exists.
+   *
+   * Production, 2026-08-25, with the timing visible in one log file: a vote
+   * resolved at 21:39:32 and the gate's consequence fired at 21:40:46, seventy
+   * four seconds after the case was closed. That ballot said spam, so the extra
+   * mute cost nothing; the same seventy four seconds on a HAM outcome is the
+   * chat's own exoneration being undone by a stray timer.
+   */
+  forgetCaptcha(captchaKey(params.chatId, params.userId))
   await store.recordOverride({
     chatId: params.chatId,
     messageId: params.messageId,
