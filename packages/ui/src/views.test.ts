@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Verdict, SignalName } from '@lyadmin/core'
-import { callbackData, captchaPrompt, compactNotification, langPanel, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, userProfileCard, userProfileLines, votePrompt, voterListView, voteResult, VOTERS_SHOWN_MAX, whyCard, whyDeepLink, whyView, welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor, LOCALES, type UserFacts } from './views.js'
+import { callbackData, captchaPrompt, compactNotification, startGroupHint, langPanel, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, userProfileCard, userProfileLines, votePrompt, voterListView, voteResult, VOTERS_SHOWN_MAX, whyCard, whyDeepLink, whyView, welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor, LOCALES, type UserFacts } from './views.js'
 import { uk } from './locales/uk.js'
 
 const makeVerdict = (overrides: Partial<Verdict> = {}): Verdict => ({
@@ -829,3 +829,39 @@ describe('resolved vote receipt', () => {
     expect(parseCallback(data)).toMatchObject({ kind: 'vrs' })
   })
 })
+
+describe('audit follow-ups', () => {
+  it('a PM panel is stamped with nothing by the view — the app layer does it', () => {
+    // The stamp lives in the renderers so every sub-screen gets it and no new
+    // screen can forget. The view itself stays pure, which is what makes it
+    // testable at all; this test just pins the contract that produces it.
+    expect(uk.panelForChat('Наш чат')).toContain('Наш чат')
+    expect(uk.panelForChat('Наш чат')).toContain('<b>')
+  })
+
+  it('the leaderboard links the names it knows ids for', () => {
+    const view = topList(uk, 'messages', [
+      { name: 'Іра', value: 10, userId: 42 },
+      { name: 'Ігор', value: 9 }
+    ])
+    expect(view.text).toContain('<a href="tg://user?id=42">Іра</a>')
+    // A row whose id we lost is still a row, just not a link.
+    expect(view.text).toContain('Ігор')
+    expect(view.text.match(/<a href=/g)).toHaveLength(1)
+  })
+
+  it('a leaderboard name that is trying to be markup stays escaped', () => {
+    const view = topList(uk, 'banan', [{ name: '<b>x</b>', value: 1, userId: 7 }])
+    expect(view.text).toContain('&lt;b&gt;x&lt;/b&gt;')
+  })
+
+  it('the group help button is a link once the bot knows its own username', () => {
+    const linked = startGroupHint(uk, 'LyAdminBot')
+    expect(linked.buttons[0]?.[0]?.url).toBe('https://t.me/LyAdminBot?start=help')
+    // Before /getMe lands there is nothing to link to, so the callback stays.
+    const fallback = startGroupHint(uk)
+    expect(fallback.buttons[0]?.[0]?.url).toBeUndefined()
+    expect(fallback.buttons[0]?.[0]?.data).toBeDefined()
+  })
+})
+

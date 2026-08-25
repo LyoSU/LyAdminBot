@@ -38,6 +38,7 @@ export const en: Locale = {
 
   writeFailed: '⚠️ Not saved — try again.',
   hiddenName: (userId) => `user ${userId}`,
+  panelForChat: (chatTitle) => `⚙️ Group: <b>${chatTitle}</b>`,
 
   lang: {
     pickerTitle: 'Pick a language:',

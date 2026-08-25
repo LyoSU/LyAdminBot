@@ -52,6 +52,7 @@ export const ru: Locale = {
 
   writeFailed: '⚠️ Не сохранил — попробуй ещё раз.',
   hiddenName: (userId) => `пользователь ${userId}`,
+  panelForChat: (chatTitle) => `⚙️ Группа: <b>${chatTitle}</b>`,
 
   lang: {
     pickerTitle: 'Выбери язык:',

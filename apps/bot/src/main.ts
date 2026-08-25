@@ -1195,13 +1195,36 @@ const restoreFalsePositive = async (params: {
   return { lifted }
 }
 
+/**
+ * Stamp a PM panel with the group it acts on.
+ *
+ * Applied by the renderers rather than by each view, so every sub-screen gets
+ * it and no new screen can forget: the identity belongs to the panel, not to
+ * any one of its pages. Silently omitted where the title cannot be resolved —
+ * a wrong name would be worse than none, and the panel still works.
+ */
+const forChat = async (locale: Locale, chatId: number, view: ViewMessage): Promise<ViewMessage> => {
+  const title = await chatTitleFor(chatId)
+  if (title === null) return view
+  return { ...view, text: `${locale.panelForChat(escapeName(title))}\n\n${view.text}` }
+}
+
+/**
+ * The same stamp for a bare prompt, which is not a panel but is the moment the
+ * admin is about to hand us content for one group in particular.
+ */
+const promptForChat = async (locale: Locale, chatId: number, text: string): Promise<string> => {
+  const title = await chatTitleFor(chatId)
+  return title === null ? text : `${locale.panelForChat(escapeName(title))}\n\n${text}`
+}
+
 /** Settings panel always renders from a fresh group document. */
 const renderSettingsPanel = async (locale: Locale, chatId: number): Promise<ViewMessage> => {
   const groupDoc = await store.getGroupDoc(chatId).catch(() => null)
   const policy = groupDocToChatPolicy(groupDoc as never)
   const settings = (groupDoc as { settings?: { locale?: string; banan?: { default?: number } } } | null)?.settings
   const bananDefaultSeconds = Number(settings?.banan?.default) || 600
-  return settingsPanel(locale, chatId, {
+  return forChat(locale, chatId, settingsPanel(locale, chatId, {
     enabled: policy.enabled,
     preset: policy.preset,
     captchaEnabled: policy.captchaEnabled,
@@ -1209,35 +1232,35 @@ const renderSettingsPanel = async (locale: Locale, chatId: number): Promise<View
     externalBanEnabled: policy.externalBanEnabled,
     bananDefaultSeconds,
     locale: settings?.locale ?? 'en'
-  })
+  }))
 }
 
 /** Language sub-screen for the settings panel (rendered from a fresh doc). */
 const renderLangPanel = async (locale: Locale, chatId: number): Promise<ViewMessage> => {
   const groupDoc = await store.getGroupDoc(chatId).catch(() => null)
   const current = (groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale ?? 'en'
-  return langPanel(locale, chatId, current)
+  return forChat(locale, chatId, langPanel(locale, chatId, current))
 }
 
 // ── Welcome / extras editor sub-screens (rendered fresh from Mongo) ─────────
 const renderWelcomeEditor = async (locale: Locale, chatId: number): Promise<ViewMessage> => {
   const w = await store.getWelcome(chatId).catch(() => ({ enable: false, texts: [], gifs: [] }))
-  return welcomeEditor(locale, chatId, { enable: w.enable, textsCount: w.texts.length, gifsCount: w.gifs.length })
+  return forChat(locale, chatId, welcomeEditor(locale, chatId, { enable: w.enable, textsCount: w.texts.length, gifsCount: w.gifs.length }))
 }
 const renderWelcomeTexts = async (locale: Locale, chatId: number, page: number): Promise<ViewMessage> => {
   const w = await store.getWelcome(chatId).catch(() => ({ texts: [] as string[] }))
-  return welcomeTextsScreen(locale, chatId, w.texts, page)
+  return forChat(locale, chatId, welcomeTextsScreen(locale, chatId, w.texts, page))
 }
 const renderWelcomeGifs = async (locale: Locale, chatId: number, page: number): Promise<ViewMessage> => {
   const w = await store.getWelcome(chatId).catch(() => ({ gifs: [] as string[] }))
-  return welcomeGifsScreen(locale, chatId, w.gifs, page)
+  return forChat(locale, chatId, welcomeGifsScreen(locale, chatId, w.gifs, page))
 }
 const renderExtrasEditor = async (locale: Locale, chatId: number, page: number): Promise<ViewMessage> => {
   const [extras, maxExtra] = await Promise.all([
     store.getExtras(chatId).catch(() => [] as NormalizedExtra[]),
     store.getMaxExtra(chatId).catch(() => 3)
   ])
-  return extrasEditor(locale, chatId, extras.map((e) => ({ name: e.name, hasMedia: e.fileId !== null })), maxExtra, page)
+  return forChat(locale, chatId, extrasEditor(locale, chatId, extras.map((e) => ({ name: e.name, hasMedia: e.fileId !== null })), maxExtra, page))
 }
 
 /** /mystats panel body (PM only). chatId adds the per-chat lines. */
@@ -1329,7 +1352,7 @@ const handlePendingInput = async (
     // Second step of the flow: now wait for the content under this name. The
     // entry it just wrote is the state — 'keep' so the caller leaves it alone.
     pendingInput.set(userId, { type: 'extra.content', chatId: entry.chatId, arg: name })
-    await reply(locale.extra.editor.promptContent(name))
+    await reply(await promptForChat(locale, entry.chatId, locale.extra.editor.promptContent(escapeName(name))))
     return 'keep'
   }
   if (entry.type === 'extra.content') {
@@ -1406,16 +1429,44 @@ const handlePrivateMessage = async (message: Message): Promise<void> => {
     const verdict = await recallVerdict(chatId, Number(messageIdRaw))
     if (verdict) {
       const canOverride = Number.isFinite(chatId) && await isChatAdmin(chatId, sender.id)
+      const userId = Number(userIdRaw)
+      const facts = recallFacts(chatId, Number(messageIdRaw))
+      /**
+       * The name, when the facts cache no longer has it.
+       *
+       * `recentFacts` is memory-only, so a restart leaves the verdict
+       * recallable from Mongo and the identity gone — and the card then showed
+       * an action, a chat and evidence about nobody, while still offering the
+       * button that unrestricts and trusts that hidden person. The id is in the
+       * deep link either way, so the worst case is naming them by number,
+       * which is still naming them.
+       *
+       * The override is deliberately NOT withheld when the lookup fails.
+       * Correction is the safe direction, this card is the recovery path for a
+       * false positive, and refusing it over an unavailable display name would
+       * turn a cosmetic gap into a member who stays muted.
+       */
+      const label = facts?.displayName
+        ?? (userId > 0
+          ? await gateway.tg.getUsers([userId])
+            .then((users) => users[0]?.displayName ?? locale.hiddenName(userId))
+            .catch(() => locale.hiddenName(userId))
+          : null)
       await sendView(message, whyCard(locale, verdict, {
-        chatId, messageId: Number(messageIdRaw), userId: Number(userIdRaw)
+        chatId, messageId: Number(messageIdRaw), userId,
+        ...(label === null ? {} : { userLabel: label })
       }, {
         canOverride,
-        facts: recallFacts(chatId, Number(messageIdRaw)),
+        facts,
         chatTitle: Number.isFinite(chatId) ? await chatTitleFor(chatId) : null
       }))
     } else {
       await sendView(message, { text: locale.why.expired, buttons: [] })
     }
+    return
+  }
+  if (payload === 'help') {
+    await sendView(message, helpView(locale))
     return
   }
   if (payload === 'lang') {
@@ -2206,14 +2257,18 @@ const fireExtras = async (message: Message, chat: Chat, text: string): Promise<v
 const handleTop = async (message: Message, chat: Chat, caller: User, kind: 'messages' | 'banan'): Promise<void> => {
   const locale = await groupLocale(chat.id)
   const rows = await store.getTopMembers(chat.id, kind, 10).catch(() => [])
-  let entries: { name: string; value: number }[] = []
+  let entries: { name: string; value: number; userId?: number | null }[] = []
   if (rows.length > 0) {
     const users = await gateway.tg.getUsers(rows.map((r) => r.telegramId)).catch(() => [])
     const nameById = new Map<number, string>()
     for (const u of users) {
       if (u instanceof User) nameById.set(u.id, u.displayName)
     }
-    entries = rows.map((r) => ({ name: nameById.get(r.telegramId) ?? `id${r.telegramId}`, value: r.value }))
+    entries = rows.map((r) => ({
+      name: nameById.get(r.telegramId) ?? `id${r.telegramId}`,
+      value: r.value,
+      userId: r.telegramId
+    }))
   }
   const view = topList(locale, kind, entries)
   const sent = await tgReplyText(message, viewHtml(view.text)).catch(() => null)
@@ -2400,7 +2455,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     }
     if (/^\/start(@\w+)?$/.test(commandText)) {
       const locale = await groupLocale(chat.id)
-      await sendView(message, startGroupHint(locale))
+      await sendView(message, startGroupHint(locale, selfUsername ?? undefined))
       return
     }
     /**
@@ -3532,6 +3587,18 @@ const wireCallbacks = (): void => {
     const { kind, parts } = parseCallback(query.dataStr ?? '')
     const locale = await localeFor(query.user.id, query.user.language)
 
+    /**
+     * The label between two steppers, and the page indicator between two
+     * arrows. Both are `noop` by design — a stepper without a readout is not a
+     * stepper — but nothing answered the query, and an unanswered callback
+     * leaves the tapper's client spinning until Telegram times it out. A label
+     * that does nothing is fine; a label that looks broken is not.
+     */
+    if (kind === 'noop') {
+      await query.answer({})
+      return
+    }
+
     if (kind === 'help') {
       await query.answer({})
       await tgSendText(query.user.id, viewHtml(helpView(locale).text))
@@ -3665,11 +3732,11 @@ const wireCallbacks = (): void => {
           }); return
         } else if (action === 'taddc') {
           pendingInput.set(query.user.id, { type: 'welcome.text', chatId })
-          await tgSendText(query.user.id, viewHtml(locale.welcome.editor.promptText)).catch(() => { /* PM closed */ })
+          await tgSendText(query.user.id, viewHtml(await promptForChat(locale, chatId, locale.welcome.editor.promptText))).catch(() => { /* PM closed */ })
           await query.answer({}); return
         } else if (action === 'gaddc') {
           pendingInput.set(query.user.id, { type: 'welcome.gif', chatId })
-          await tgSendText(query.user.id, viewHtml(locale.welcome.editor.promptGif)).catch(() => { /* PM closed */ })
+          await tgSendText(query.user.id, viewHtml(await promptForChat(locale, chatId, locale.welcome.editor.promptGif))).catch(() => { /* PM closed */ })
           await query.answer({}); return
         } else if (action === 'preview') {
           await sendWelcomePreview(query.user.id, query.user.displayName ?? 'Alex', chatId, locale)
@@ -3701,7 +3768,7 @@ const wireCallbacks = (): void => {
       }
       if (action === 'addc') {
         pendingInput.set(query.user.id, { type: 'extra.name', chatId })
-        await tgSendText(query.user.id, viewHtml(locale.extra.editor.promptName)).catch(() => { /* PM closed */ })
+        await tgSendText(query.user.id, viewHtml(await promptForChat(locale, chatId, locale.extra.editor.promptName))).catch(() => { /* PM closed */ })
         await query.answer({}); return
       }
       await edit(await renderExtrasEditor(locale, chatId, action === 'page' ? page : 0))

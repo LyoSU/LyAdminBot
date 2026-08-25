@@ -46,6 +46,16 @@ export interface Locale {
    */
   hiddenName: (userId: number) => string
 
+  /**
+   * Which group a PM panel is about. `chatTitle` arrives pre-escaped.
+   *
+   * Every editor screen carried the chat id in its callback data and showed it
+   * nowhere, so an admin of several groups could reopen an old panel from the
+   * scrollback and change voting, protection level, greetings or triggers in
+   * the wrong one, with nothing on screen to say so.
+   */
+  panelForChat: (chatTitle: string) => string
+
   lang: {
     pickerTitle: string
     saved: string

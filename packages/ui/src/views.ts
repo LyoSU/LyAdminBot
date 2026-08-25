@@ -142,9 +142,21 @@ export const startCard = (locale: Locale, name: string, botUsername: string): Vi
 })
 
 /** /start inside a group: one-line hint, no panel. */
-export const startGroupHint = (locale: Locale): ViewMessage => ({
+/**
+ * The one-line reply to `/start` in a group.
+ *
+ * The help button is a LINK when we know our own username, not a callback. As a
+ * callback it sent the help into the tapper's PM — which silently does nothing
+ * when they have never opened a chat with the bot, and a tap that does nothing
+ * is indistinguishable from a broken bot. A `t.me` link opens that chat as its
+ * first act, so the failure mode does not exist. The callback stays as the
+ * fallback for before `/getMe` lands.
+ */
+export const startGroupHint = (locale: Locale, botUsername?: string | undefined): ViewMessage => ({
   text: locale.start.groupHint,
-  buttons: [[{ text: locale.start.helpButton, data: callbackData.help() }]]
+  buttons: [[botUsername
+    ? { text: locale.start.helpButton, url: `https://t.me/${botUsername}?start=help` }
+    : { text: locale.start.helpButton, data: callbackData.help() }]]
 })
 
 export const helpView = (locale: Locale): ViewMessage => ({
@@ -448,9 +460,19 @@ export const userProfileLines = (locale: Locale, facts: UserFacts, options: { ht
   // told the reader nothing they could match against the chat they were just
   // reading. The id stays — it is what /check and the logs are keyed by — but
   // after the name and the handle, in the order an admin actually recognises.
-  const handle = facts.username ? ` · @${escapeHtml(facts.username)}` : ''
+  // The handle is a link where markup is available: `@name` as inert text was
+  // the one thing on this card an admin most wanted to follow, and comparing
+  // two similarly named accounts is exactly what /check is opened for.
+  const handle = facts.username
+    ? asHtml
+      ? ` · <a href="https://t.me/${encodeURIComponent(facts.username)}">@${escapeHtml(facts.username)}</a>`
+      : ` · @${facts.username}`
+    : ''
   if (facts.displayName) {
-    lines.push(`👤 ${b(escapeHtml(facts.displayName))}${handle} · ${code(String(facts.userId))}`)
+    const named = asHtml
+      ? userMention(facts.userId, facts.displayName)
+      : escapeHtml(facts.displayName)
+    lines.push(`👤 ${asHtml ? `<b>${named}</b>` : b(named)}${handle} · ${code(String(facts.userId))}`)
   } else {
     lines.push(b(p.title))
     lines.push(`${code(String(facts.userId))}${handle}`)
@@ -580,14 +602,20 @@ const MEDALS = ['🥇', '🥈', '🥉']
 export const topList = (
   locale: Locale,
   kind: 'messages' | 'banan',
-  entries: { name: string; value: number }[]
+  /**
+   * `userId` is optional because a row can outlive our knowledge of who it was.
+   * Where it is present the name becomes a mention: two people with the same
+   * display name are indistinguishable on a leaderboard otherwise, and the ids
+   * were being discarded one line before the render.
+   */
+  entries: { name: string; value: number; userId?: number | null }[]
 ): ViewMessage => {
   if (entries.length === 0) return { text: locale.top.empty, buttons: [] }
   const title = kind === 'banan' ? locale.top.titleBanan : locale.top.titleMessages
   const unit = kind === 'banan' ? locale.top.bananUnit : locale.top.messagesUnit
   const lines = entries.map((e, i) => {
     const badge = MEDALS[i] ?? `${i + 1}.`
-    return `${badge} ${escapeHtml(e.name)} · ${e.value} ${unit(e.value)}`
+    return `${badge} ${userMention(e.userId, e.name)} · ${e.value} ${unit(e.value)}`
   })
   return { text: [title, '', ...lines].join('\n'), buttons: [] }
 }

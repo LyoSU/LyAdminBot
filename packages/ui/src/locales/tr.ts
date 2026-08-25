@@ -38,6 +38,7 @@ export const tr: Locale = {
 
   writeFailed: '⚠️ Kaydedilmedi — tekrar dene.',
   hiddenName: (userId) => `kullanıcı ${userId}`,
+  panelForChat: (chatTitle) => `⚙️ Grup: <b>${chatTitle}</b>`,
 
   lang: {
     pickerTitle: 'Bir dil seç:',
