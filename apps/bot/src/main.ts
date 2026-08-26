@@ -3223,6 +3223,11 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
   const chat = message.chat
   if (!(chat instanceof Chat)) {
     // Private chat — only service commands live here (settings, /start).
+    // Nothing in PM is a reading of the text; every branch is an action, and an
+    // action belongs to the message arriving, not to it being edited afterwards.
+    // The editor is the sharp case: re-consuming an edited answer would add the
+    // extra a second time.
+    if (isEdit) return
     await handlePrivateMessage(message)
     return
   }
@@ -3279,10 +3284,20 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
   const groupDoc = await store.getGroupDoc(chat.id).catch(() => null)
   const policy = groupDocToChatPolicy(groupDoc as never)
 
-  // Commands are a USER surface: a channel posting "/banan" is not an admin,
-  // and every handler below authorises by user id. Channel senders skip
-  // straight to the spam pipeline.
-  if (userSender) {
+  /**
+   * Commands are a USER surface: a channel posting "/banan" is not an admin,
+   * and every handler below authorises by user id. Channel senders skip
+   * straight to the spam pipeline.
+   *
+   * And they run on arrival only. A command is an act, and the pipeline is
+   * allowed to re-read a message as often as the message changes — so anything
+   * that made Telegram resend it made the act happen again. That is how a
+   * reaction ran a command twice (2026-08-27); the gateway now refuses those
+   * updates, and this guard keeps a genuine edit from re-firing a ban either.
+   * Nothing is lost: an edited command falls through to the pipeline, which is
+   * where an edited message belongs.
+   */
+  if (userSender && !isEdit) {
     // Group service commands. /settings never renders a panel in the chat —
     // PM deep link only; /start and /help reply with the one-line hint.
     const commandText = (message.text ?? '').trim()
@@ -3433,8 +3448,11 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
   // independently of antispam state, so the `!policy.enabled` gate below must
   // not silence them, and they never depend on the moderation pipeline
   // completing. Uses raw message text (no normalize / replied fetch needed).
+  // Arrival only, for the same reason as the commands above: firing the extra
+  // is an act, and editing a message that happens to hold a hashtag is not a
+  // second request for it.
   const rawText = message.text ?? ''
-  if (rawText.includes('#')) {
+  if (rawText.includes('#') && !isEdit) {
     await fireExtras(message, chat, rawText).catch(() => { /* extras are best-effort */ })
   }
 
@@ -5128,6 +5146,11 @@ const main = async (): Promise<void> => {
   gateway.onDuplicate((info) => {
     duplicates.note(info.chatId)
     log.debug('duplicate_delivery', { ...info })
+  })
+  // Debug for the same reason: reactions are ordinary chat traffic, so a line
+  // per echo at `info` would drown the log. `total` carries the volume.
+  gateway.onEditEcho((info) => {
+    log.debug('edit_echo', { ...info })
   })
   wireCallbacks()
   const self = await gateway.start()

@@ -17,6 +17,7 @@ import {
 import { Dispatcher, type CallbackQueryContext } from '@mtcute/dispatcher'
 import type { ModerationActions } from './executor.js'
 import { createUpdateDedup, deliveryKey } from './update-dedup.js'
+import { isContentEdit } from './edit-updates.js'
 import {
   botApiMediaKind, resendStoredMedia, sendMediaByFileId, type ResendResult
 } from './media-resend.js'
@@ -47,6 +48,17 @@ export interface DuplicateDelivery {
   total: number
 }
 
+/**
+ * An edit-class update that carried no edit — a reaction, a pin, a TTL change.
+ * See edit-updates.ts for why Telegram calls those edits.
+ */
+export interface EditEcho {
+  chatId: number
+  messageId: number
+  /** Running count since boot. Reactions are ordinary traffic; bulk is the story. */
+  total: number
+}
+
 const ALBUM_BUFFER_MS = 600
 
 export class TelegramGateway {
@@ -57,6 +69,7 @@ export class TelegramGateway {
   private handler: MessageHandler | null = null
   private readonly dedup = createUpdateDedup()
   private duplicatesDropped = 0
+  private editEchoesDropped = 0
   /** App-supplied error sink; defaults to console.error so adapters stay pure. */
   private errorSink: (err: unknown) => void = (err) => console.error('[gateway] handler error:', err)
   /**
@@ -64,6 +77,8 @@ export class TelegramGateway {
    * "the pipeline ran once" and "the transport went quiet" look identical.
    */
   private duplicateSink: (info: DuplicateDelivery) => void = () => { /* silent by default */ }
+  /** Same reasoning as `duplicateSink`: a drop nobody records is a drop nobody can find. */
+  private editEchoSink: (info: EditEcho) => void = () => { /* silent by default */ }
 
   constructor(private readonly config: GatewayConfig) {
     this.tg = new TelegramClient({
@@ -77,6 +92,16 @@ export class TelegramGateway {
       this.routeMessage(msg, false)
     })
     this.dispatcher.onEditMessage(async (msg: Message) => {
+      // Reactions reach us as edits of the message they sit on. Handing one to
+      // the pipeline replays the message, and a replayed command is a command
+      // run twice (production 2026-08-27).
+      if (!isContentEdit(msg)) {
+        this.editEchoesDropped += 1
+        this.editEchoSink({
+          chatId: msg.chat.id, messageId: msg.id, total: this.editEchoesDropped
+        })
+        return
+      }
       this.routeMessage(msg, true)
     })
   }
@@ -93,6 +118,11 @@ export class TelegramGateway {
   /** Route dropped redeliveries somewhere structured (the app logger). */
   onDuplicate(sink: (info: DuplicateDelivery) => void): void {
     this.duplicateSink = sink
+  }
+
+  /** Route edit updates that carried no edit somewhere structured (the app logger). */
+  onEditEcho(sink: (info: EditEcho) => void): void {
+    this.editEchoSink = sink
   }
 
   /** Expose callback-query routing without leaking the dispatcher. */
