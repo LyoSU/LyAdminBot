@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   RightsMemory, RIGHTS_PROBE_MS, RIGHTS_PROBE_MAX_MS, RIGHTS_WARN_MS, RIGHTS_WARN_MAX_MS,
+  failureKind, failureLabels,
   type RightsRecord
 } from './rights.js'
 
@@ -306,5 +307,81 @@ describe('RightsMemory — persistence', () => {
     expect(rights.cannotEnforce(-710)).toBe(true)
     // Due for a probe, so recovery is one cheap call — not a full pipeline.
     expect(rights.mayProbe(-710)).toBe(true)
+  })
+})
+
+/**
+ * `execution.failed` stored the STEP that failed and nothing else — `["ban"]`.
+ * Deliberately: the messages are Telegram's own unbounded strings and
+ * `pipeline_decisions` is the largest collection in a database that has hit its
+ * quota twice.
+ *
+ * The cost showed up on 2026-08-26. 306 refused calls in 48 hours, and the
+ * first question — is this a chat that never granted the right, a flood wait,
+ * or an account that had already left — could not be answered from the record
+ * at all. It took a second collection (`pipeline_rights`) and a guess to learn
+ * that one chat accounted for 271 of them because it grants delete and not ban.
+ *
+ * A CLASS is not a message: four fixed words, six bytes on the row, and the
+ * question becomes one query. The classes stay coarse on purpose — they exist
+ * to route an operator's attention, not to reproduce Telegram's error list.
+ */
+describe('failureKind — what kind of "no" this was', () => {
+  it('reads a refusal of rights, whichever way Telegram phrases it', () => {
+    expect(failureKind('ban: CHAT_ADMIN_REQUIRED')).toBe('rights')
+    expect(failureKind('delete: MESSAGE_DELETE_FORBIDDEN')).toBe('rights')
+    expect(failureKind('mute: not enough rights to restrict')).toBe('rights')
+  })
+
+  /**
+   * The executor absorbs a flood wait up to a minute and lets longer ones
+   * through, so what reaches the record is the bot being told to slow down for
+   * a while — a fact about our own pace, not about the chat's settings. Filed
+   * with the rights refusals it would look like a chat that took the right away
+   * and gave it back.
+   */
+  it('separates being told to wait from being told no', () => {
+    expect(failureKind('ban: FLOOD_WAIT_420')).toBe('flood')
+  })
+
+  /** Nothing to act on: the account left, or the message is already gone. */
+  it('separates a target that is no longer there', () => {
+    expect(failureKind('ban: USER_NOT_PARTICIPANT')).toBe('gone')
+    expect(failureKind('delete: MESSAGE_ID_INVALID')).toBe('gone')
+    expect(failureKind('mute: PARTICIPANT_ID_INVALID')).toBe('gone')
+  })
+
+  it('never guesses: an unrecognised failure is its own class', () => {
+    expect(failureKind('ban: TIMEOUT')).toBe('other')
+    expect(failureKind('')).toBe('other')
+  })
+})
+
+describe('failureLabels — what the decision row stores', () => {
+  it('keeps the step and adds the class, and nothing of the message', () => {
+    expect(failureLabels(['delete: MESSAGE_DELETE_FORBIDDEN', 'ban: CHAT_ADMIN_REQUIRED']))
+      .toEqual(['delete:rights', 'ban:rights'])
+  })
+
+  /**
+   * The label half is what every stored row already carries, so a query written
+   * against the old shape must still find these — `execution.failed` matching
+   * /^ban/ has to keep meaning "the ban failed".
+   */
+  it('keeps the step first so the old prefix still identifies it', () => {
+    expect(failureLabels(['ban: FLOOD_WAIT_420'])[0]?.startsWith('ban')).toBe(true)
+  })
+
+  /**
+   * The executor writes `${label}: ${message}` and nothing else, so a string
+   * without a colon cannot come from it — it is a shape we do not recognise,
+   * and the whole of it is the most honest thing to call the step. `unknown` is
+   * reached only by an empty string: the previous `?? 'unknown'` could never
+   * fire at all, because `split` always returns at least one element.
+   */
+  it('does not invent a label it was not given', () => {
+    expect(failureLabels(['boom'])).toEqual(['boom:other'])
+    expect(failureLabels([''])).toEqual(['unknown:other'])
+    expect(failureLabels([])).toEqual([])
   })
 })

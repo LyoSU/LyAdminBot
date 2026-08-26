@@ -184,6 +184,77 @@ export const ensureTtlIndex = async (
   await collection.createIndex(keySpec, { expireAfterSeconds })
 }
 
+/** MongoDB's error code for a write that a unique index refused. */
+const DUPLICATE_KEY = 11000
+
+/** When a document was last written, or 0 when it does not say. */
+const writtenAt = (doc: Document): number => {
+  const raw = doc['updatedAt']
+  if (raw instanceof Date) return raw.getTime()
+  return typeof raw === 'number' ? raw : 0
+}
+
+/**
+ * Of two documents claiming the same key, the one the writes stopped landing
+ * on. `updateOne` always hits the first match in natural order, so the copy
+ * with the newer `updatedAt` is by definition the live one; the id breaks a tie
+ * towards the later insert, because a pair created in the same tick — which is
+ * how these pairs are made — has no timestamp to separate it.
+ */
+const supersededOf = (a: Document, b: Document): Document => {
+  const [ta, tb] = [writtenAt(a), writtenAt(b)]
+  if (ta !== tb) return ta < tb ? a : b
+  return String(a['_id']) < String(b['_id']) ? a : b
+}
+
+/**
+ * Collapse duplicates on `field`, then make them impossible.
+ *
+ * `updateOne` with `upsert` is not "one document per key" unless the key is
+ * unique — it is "one document per key if the timing is kind". Two writers in
+ * the same tick both match nothing and both insert, and in the chat where the
+ * record matters most, the timing is never kind: `pipeline_rights` held 96
+ * documents for 53 chats on 2026-08-26, the doubled ones with adjacent `_id`s.
+ *
+ * The sweep reads the whole collection because the collections this guards are
+ * bounded by something small — one row per chat that has ever refused us — and
+ * projects to the two fields the choice needs.
+ */
+export const ensureUniqueIndex = async (
+  collection: Collection<Document>,
+  field: string,
+): Promise<void> => {
+  const docs = await collection.find({}).project({ [field]: 1, updatedAt: 1 }).toArray()
+  const live = new Map<unknown, Document>()
+  const superseded: unknown[] = []
+  for (const doc of docs) {
+    const previous = live.get(doc[field])
+    if (previous === undefined) {
+      live.set(doc[field], doc)
+      continue
+    }
+    const loser = supersededOf(previous, doc)
+    superseded.push(loser['_id'])
+    live.set(doc[field], loser === previous ? doc : previous)
+  }
+  if (superseded.length > 0) {
+    await collection.deleteMany({ _id: { $in: superseded } } as Document)
+  }
+  try {
+    await collection.createIndex({ [field]: 1 }, { unique: true })
+  } catch (err) {
+    // A rolling deploy is two bots for a few seconds, and the second one can
+    // insert a duplicate between the sweep and the create. Refusing to boot
+    // over that trades one doubled document for no moderation at all — the
+    // wrong side of the 2026-08-20 crash loop. The next boot sweeps it.
+    if ((err as { code?: number }).code !== DUPLICATE_KEY) throw err
+    console.warn(
+      `[mongo] ${collection.collectionName}.${field} still has duplicates; ` +
+        'unique index not created, will retry next boot',
+    )
+  }
+}
+
 export class MongoStore {
   private client: MongoClient | null = null
   private db: Db | null = null
@@ -292,6 +363,17 @@ export class MongoStore {
      */
     await ensureTtlIndex(this.profileMedia(), { lastSeenAt: 1 }, PROFILE_MEDIA_TTL_DAYS * 86400)
     await this.profileMedia().createIndex({ hash: 1, userId: 1 }, { unique: true })
+
+    /**
+     * The one collection here that upserts by a key, and the one that had no
+     * index on it. See `ensureUniqueIndex` for what that cost: the record the
+     * bot adopts at boot was, on the worst-affected chat, the copy nothing had
+     * written to since the previous day — `strikes: 1`, `warnedUntil: 0` — so
+     * every restart re-asked a chat that had already been asked and reset a
+     * backoff that had climbed to hours. Exactly the 2026-08-07 regression this
+     * collection was created to end, arriving through the index list instead.
+     */
+    await ensureUniqueIndex(this.rightsBlocks, 'chatId')
   }
 
   // ── reads used per message ───────────────────────────────────────────

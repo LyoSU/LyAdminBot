@@ -15,7 +15,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Verdict } from '@lyadmin/core'
 import { VOTE_WINDOW_SECONDS } from '@lyadmin/core'
-import { MongoStore, ensureTtlIndex } from './mongo.js'
+import { MongoStore, ensureTtlIndex, ensureUniqueIndex } from './mongo.js'
 
 interface Captured {
   doc: Record<string, unknown> | null
@@ -1022,5 +1022,107 @@ describe('touchMember', () => {
     // And the field the sweep reads must be the one a message moves — not the
     // insert-only stamps beside it, which never change again.
     expect(update['$setOnInsert']).not.toHaveProperty('updatedAt')
+  })
+})
+
+/**
+ * `pipeline_rights` was the one collection that upserts by a key and had no
+ * index on it — `ensureIndexes` covered decisions, feedback, the LLM cache,
+ * votes, signatures and profile media, and skipped this one. Production
+ * 2026-08-26: 96 documents for 53 chats, 43 of them doubled, several pairs with
+ * adjacent `_id`s — two verdicts in the same chat in the same tick, both
+ * upserts finding nothing and both inserting.
+ *
+ * The damage is not the wasted documents. `updateOne` keeps hitting whichever
+ * copy comes first, `loadRightsBlocks` returns both, and `restore()` sets the
+ * map once per document — so the record the bot adopts at boot is the LAST one
+ * returned, which on the chat that prompted this was the copy nothing had
+ * written to since the day before: `strikes: 1`, `warnedUntil: 0`. That is the
+ * 2026-08-07 regression this file's persistence exists to prevent, coming back
+ * through the index list instead of through the code.
+ */
+describe('ensureUniqueIndex', () => {
+  interface FakeDoc { _id: string; chatId?: number; updatedAt?: Date | number }
+
+  const fakeCollection = (docs: FakeDoc[], createIndex?: () => Promise<string>) => {
+    const deleted: unknown[] = []
+    const created: { keySpec: unknown; options: unknown }[] = []
+    return {
+      deleted,
+      created,
+      collection: {
+        collectionName: 'pipeline_rights',
+        find: () => ({ project: () => ({ toArray: async () => docs }) }),
+        deleteMany: async (filter: { _id: { $in: unknown[] } }) => {
+          deleted.push(...filter._id.$in)
+          return { deletedCount: filter._id.$in.length }
+        },
+        createIndex: async (keySpec: unknown, options: unknown) => {
+          created.push({ keySpec, options })
+          return createIndex ? await createIndex() : 'idx'
+        }
+      } as never
+    }
+  }
+
+  it('keeps the copy the writes have been landing on, and drops the rest', async () => {
+    const { collection, deleted, created } = fakeCollection([
+      { _id: 'a', chatId: -100, updatedAt: new Date('2026-08-26T11:46:00Z') },
+      { _id: 'b', chatId: -100, updatedAt: new Date('2026-08-25T15:03:00Z') },
+      { _id: 'c', chatId: -200, updatedAt: new Date('2026-08-01T00:00:00Z') }
+    ])
+    await ensureUniqueIndex(collection, 'chatId')
+    expect(deleted).toEqual(['b'])
+    expect(created).toEqual([{ keySpec: { chatId: 1 }, options: { unique: true } }])
+  })
+
+  it('leaves a clean collection alone and still creates the index', async () => {
+    const { collection, deleted, created } = fakeCollection([
+      { _id: 'a', chatId: -100, updatedAt: new Date() }
+    ])
+    await ensureUniqueIndex(collection, 'chatId')
+    expect(deleted).toEqual([])
+    expect(created).toHaveLength(1)
+  })
+
+  /**
+   * Both copies of a pair are often written in the same millisecond — that is
+   * how they came to exist. A rule that cannot separate them would drop both or
+   * keep both; the id breaks the tie, and it breaks it towards the later insert.
+   */
+  it('breaks a tie on the timestamp rather than keeping both', async () => {
+    const { collection, deleted } = fakeCollection([
+      { _id: 'aaa1', chatId: -100, updatedAt: 1000 },
+      { _id: 'aaa2', chatId: -100, updatedAt: 1000 }
+    ])
+    await ensureUniqueIndex(collection, 'chatId')
+    expect(deleted).toEqual(['aaa1'])
+  })
+
+  it('treats a document with no timestamp as the oldest', async () => {
+    const { collection, deleted } = fakeCollection([
+      { _id: 'a', chatId: -100 },
+      { _id: 'b', chatId: -100, updatedAt: 1 }
+    ])
+    await ensureUniqueIndex(collection, 'chatId')
+    expect(deleted).toEqual(['a'])
+  })
+
+  /**
+   * A second instance can insert a duplicate between the sweep and the create —
+   * a rolling deploy is two bots for a few seconds. Refusing to boot over that
+   * would trade a doubled document for no moderation at all, which is the wrong
+   * side of the 2026-08-20 crash-loop lesson.
+   */
+  it('REGRESSION: a duplicate that slipped in during the sweep does not stop the boot', async () => {
+    const dup = Object.assign(new Error('E11000 duplicate key error'), { code: 11000 })
+    const { collection } = fakeCollection([], () => Promise.reject(dup))
+    await expect(ensureUniqueIndex(collection, 'chatId')).resolves.toBeUndefined()
+  })
+
+  it('any other failure to create the index still propagates', async () => {
+    const denied = Object.assign(new Error('not authorized'), { code: 13 })
+    const { collection } = fakeCollection([], () => Promise.reject(denied))
+    await expect(ensureUniqueIndex(collection, 'chatId')).rejects.toThrow('not authorized')
   })
 })

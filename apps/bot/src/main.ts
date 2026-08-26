@@ -50,7 +50,7 @@ import { loadConfig } from './config.js'
 import { registerBotCommands } from './commands.js'
 import { formatDuration, parseBananDuration } from './duration.js'
 import { formatSignals, log } from './logger.js'
-import { RightsMemory, RIGHTS_ERROR_REGEX } from './rights.js'
+import { RightsMemory, RIGHTS_ERROR_REGEX, failureLabels } from './rights.js'
 import { LlmHealth } from './llm-health.js'
 import { MemberFactsCache, type MemberFacts } from './member-facts.js'
 import { JOIN_WINDOW_MS, JoinRateTracker } from './join-rate.js'
@@ -3957,15 +3957,19 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
      * and one earlier review drew the opposite conclusion from the same data —
      * that the bot was acting on almost nothing.
      *
-     * `errors` is stored as a COUNT with the labels only. The messages are
-     * Telegram's own strings, they are unbounded, and this collection is the
-     * largest in a database that has been up against its quota twice.
+     * `errors` is stored as the step and the KIND of refusal — never the
+     * message. Telegram's strings are unbounded and this collection is the
+     * largest in a database that has been up against its quota twice, but the
+     * step alone turned out to be too little: 306 refused calls over 48 hours
+     * on 2026-08-26, and whether they were a chat that grants delete and not
+     * ban, a flood wait, or accounts that had already left could not be read
+     * from the record at all. See `failureLabels`.
      */
     execution: {
       applied: result.applied,
       deleted: result.deleted,
       skippedReason: result.skippedReason,
-      failed: result.errors.map((e) => e.split(':')[0] ?? 'unknown'),
+      failed: failureLabels(result.errors),
       albumRemoved,
       retroPurged
     },

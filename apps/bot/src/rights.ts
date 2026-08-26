@@ -48,6 +48,49 @@
 /** Telegram's ways of saying "you may not do that here". */
 export const RIGHTS_ERROR_REGEX = /ADMIN_REQUIRED|FORBIDDEN|not enough rights|RIGHT/i
 
+/** Telegram's ways of saying "there is nothing there to act on". */
+const GONE_ERROR_REGEX =
+  /USER_NOT_PARTICIPANT|PARTICIPANT_ID_INVALID|USER_ID_INVALID|PEER_ID_INVALID|MESSAGE_ID_INVALID/i
+
+/**
+ * What kind of "no" an execution got. Four coarse classes, because they exist
+ * to route attention rather than to reproduce Telegram's error list:
+ *
+ *  - `rights` — the chat never granted this, and only a person can change it.
+ *  - `flood` — our own pace; the executor already absorbs waits up to a minute.
+ *  - `gone`  — the account left or the message is already deleted. Nothing to do.
+ *  - `other` — unrecognised, and named as unrecognised rather than guessed at.
+ *
+ * Deliberately reuses `RIGHTS_ERROR_REGEX` rather than restating it: that
+ * pattern also decides whether a chat gets blocked and nagged, and two
+ * definitions of "refused" would eventually disagree about the same string.
+ */
+export type FailureKind = 'rights' | 'flood' | 'gone' | 'other'
+
+export const failureKind = (error: string): FailureKind => {
+  if (RIGHTS_ERROR_REGEX.test(error)) return 'rights'
+  if (/FLOOD_WAIT/i.test(error)) return 'flood'
+  if (GONE_ERROR_REGEX.test(error)) return 'gone'
+  return 'other'
+}
+
+/**
+ * What a decision row stores about a refused execution: the step, and the kind
+ * of refusal. `"ban: CHAT_ADMIN_REQUIRED"` → `"ban:rights"`.
+ *
+ * Not the message itself. Those are Telegram's own unbounded strings and
+ * `pipeline_decisions` is the largest collection in a database that has been up
+ * against its quota twice — which is why the row carried the step alone until
+ * now. The cost of that showed on 2026-08-26: 306 refused calls in 48 hours,
+ * and telling "this chat never granted the right" from "that account had
+ * already left" took a second collection and a guess.
+ *
+ * The step stays FIRST so every query written against the old shape keeps
+ * working: `execution.failed` starting with `ban` still means the ban failed.
+ */
+export const failureLabels = (errors: readonly string[]): string[] =>
+  errors.map((e) => `${e.split(':')[0]?.trim() || 'unknown'}:${failureKind(e)}`)
+
 /** How soon after a refusal the cheap capability lookup may run. */
 export const RIGHTS_PROBE_MS = 60 * 1000
 
