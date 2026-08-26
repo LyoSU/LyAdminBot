@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Verdict, VerdictAction } from '@lyadmin/core'
-import { IncidentTracker, SenderMessageLog, incidentPowerFor } from './incident.js'
+import { IncidentTracker, SenderMessageLog, incidentPowerFor, correctionOwns } from './incident.js'
 
 const verdict = (over: Partial<Verdict> = {}): Verdict => ({
   pSpam: 0.9, action: 'ban', needsVote: false, banDurationSeconds: null,
@@ -175,5 +175,28 @@ describe('SenderMessageLog — which of the run goes with the sender', () => {
     log.forget(-100, 42)
     expect(log.purgeTargets(-100, 42, { except: 0, minPSpam: 0.35 })).toEqual([])
     expect(log.purgeTargets(-100, 43, { except: 0, minPSpam: 0.35 })).toEqual([2])
+  })
+})
+
+describe('correctionOwns — a correction is about one message', () => {
+  it('clears state this message opened', () => {
+    expect(correctionOwns(7, 7)).toBe(true)
+  })
+
+  it('REGRESSION: leaves alone state that names a later message', () => {
+    // Incident A ages out at ten minutes, B opens for the same sender, A's
+    // fifteen-minute ballot then resolves ham. Without this, restoring A closes
+    // B — a valid, newer enforcement silently stops, and a captcha cancelled
+    // without lifting its mute leaves the member muted with nothing to answer.
+    expect(correctionOwns(9, 7)).toBe(false)
+  })
+
+  /**
+   * A gate whose trigger message is already gone names nobody. Refusing to
+   * clear it would bring back the stray consequence timer of `4950a6c`.
+   */
+  it('clears unowned state rather than leaving a timer armed', () => {
+    expect(correctionOwns(null, 7)).toBe(true)
+    expect(correctionOwns(undefined, 7)).toBe(true)
   })
 })

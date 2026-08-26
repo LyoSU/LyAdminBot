@@ -1042,7 +1042,10 @@ describe('touchMember', () => {
  * through the index list instead of through the code.
  */
 describe('ensureUniqueIndex', () => {
-  interface FakeDoc { _id: string; chatId?: number; updatedAt?: Date | number }
+  interface FakeDoc {
+    _id: string; chatId?: number; messageId?: number
+    updatedAt?: Date | number; createdAt?: Date | number
+  }
 
   const fakeCollection = (docs: FakeDoc[], createIndex?: () => Promise<string>) => {
     const deleted: unknown[] = []
@@ -1076,6 +1079,21 @@ describe('ensureUniqueIndex', () => {
     expect(created).toEqual([{ keySpec: { chatId: 1 }, options: { unique: true } }])
   })
 
+  /**
+   * `pipeline_feedback` is keyed by the PAIR, so two rows sharing only the chat
+   * are different labels about different messages and must both survive.
+   */
+  it('collapses on the whole composite key, not on its first field', async () => {
+    const { collection, deleted, created } = fakeCollection([
+      { _id: 'a', chatId: -100, messageId: 1, createdAt: 2 },
+      { _id: 'b', chatId: -100, messageId: 2, createdAt: 3 },
+      { _id: 'c', chatId: -100, messageId: 1, createdAt: 1 }
+    ])
+    await ensureUniqueIndex(collection, 'chatId', 'messageId')
+    expect(deleted).toEqual(['c'])
+    expect(created).toEqual([{ keySpec: { chatId: 1, messageId: 1 }, options: { unique: true } }])
+  })
+
   it('leaves a clean collection alone and still creates the index', async () => {
     const { collection, deleted, created } = fakeCollection([
       { _id: 'a', chatId: -100, updatedAt: new Date() }
@@ -1097,6 +1115,34 @@ describe('ensureUniqueIndex', () => {
     ])
     await ensureUniqueIndex(collection, 'chatId')
     expect(deleted).toEqual(['aaa1'])
+  })
+
+  /**
+   * `pipeline_feedback` stamps `createdAt` and never `updatedAt`, and it is the
+   * second collection found carrying this defect — 9 doubled pairs in 182
+   * documents on 2026-08-26, in the one permanent record of a human saying
+   * "this was not spam". Reading only `updatedAt` there would fall back to the
+   * id, which happens to pick the same survivor for the wrong reason.
+   */
+  it('falls back to createdAt for a collection that stamps only that', async () => {
+    // The ids are deliberately ordered AGAINST the timestamps: falling back to
+    // the id would drop 'a', and only reading `createdAt` drops 'b'.
+    const { collection, deleted } = fakeCollection([
+      { _id: 'a', chatId: -100, createdAt: new Date('2026-08-26T00:00:00Z') },
+      { _id: 'b', chatId: -100, createdAt: new Date('2026-08-20T00:00:00Z') }
+    ])
+    await ensureUniqueIndex(collection, 'chatId')
+    expect(deleted).toEqual(['b'])
+  })
+
+  /** A write stamp beats a creation stamp: it is the later fact about the row. */
+  it('prefers updatedAt when a document carries both', async () => {
+    const { collection, deleted } = fakeCollection([
+      { _id: 'a', chatId: -100, updatedAt: 9000, createdAt: 1 },
+      { _id: 'b', chatId: -100, updatedAt: 10, createdAt: 9999 }
+    ])
+    await ensureUniqueIndex(collection, 'chatId')
+    expect(deleted).toEqual(['b'])
   })
 
   it('treats a document with no timestamp as the oldest', async () => {

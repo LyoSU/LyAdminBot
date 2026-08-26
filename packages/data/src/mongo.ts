@@ -187,11 +187,22 @@ export const ensureTtlIndex = async (
 /** MongoDB's error code for a write that a unique index refused. */
 const DUPLICATE_KEY = 11000
 
-/** When a document was last written, or 0 when it does not say. */
+/**
+ * When a document was last written, or 0 when it does not say.
+ *
+ * `updatedAt` first and `createdAt` behind it, because the collections this
+ * guards do not agree on which they stamp: `pipeline_rights` writes only
+ * `updatedAt`, `pipeline_feedback` only `createdAt`. Reading one of them would
+ * silently fall through to the id on the other — which picks a survivor, just
+ * not for a reason anybody stated.
+ */
 const writtenAt = (doc: Document): number => {
-  const raw = doc['updatedAt']
-  if (raw instanceof Date) return raw.getTime()
-  return typeof raw === 'number' ? raw : 0
+  for (const field of ['updatedAt', 'createdAt']) {
+    const raw = doc[field]
+    if (raw instanceof Date) return raw.getTime()
+    if (typeof raw === 'number') return raw
+  }
+  return 0
 }
 
 /**
@@ -222,26 +233,36 @@ const supersededOf = (a: Document, b: Document): Document => {
  */
 export const ensureUniqueIndex = async (
   collection: Collection<Document>,
-  field: string,
+  ...fields: string[]
 ): Promise<void> => {
-  const docs = await collection.find({}).project({ [field]: 1, updatedAt: 1 }).toArray()
-  const live = new Map<unknown, Document>()
+  const projection: Document = { updatedAt: 1, createdAt: 1 }
+  const keySpec: Document = {}
+  for (const field of fields) {
+    projection[field] = 1
+    keySpec[field] = 1
+  }
+  // JSON of the field values in declared order — a composite key needs one
+  // comparable value, and the fields here are always scalars.
+  const keyOf = (doc: Document): string => JSON.stringify(fields.map((f) => doc[f]))
+  const docs = await collection.find({}).project(projection).toArray()
+  const live = new Map<string, Document>()
   const superseded: unknown[] = []
   for (const doc of docs) {
-    const previous = live.get(doc[field])
+    const key = keyOf(doc)
+    const previous = live.get(key)
     if (previous === undefined) {
-      live.set(doc[field], doc)
+      live.set(key, doc)
       continue
     }
     const loser = supersededOf(previous, doc)
     superseded.push(loser['_id'])
-    live.set(doc[field], loser === previous ? doc : previous)
+    live.set(key, loser === previous ? doc : previous)
   }
   if (superseded.length > 0) {
     await collection.deleteMany({ _id: { $in: superseded } } as Document)
   }
   try {
-    await collection.createIndex({ [field]: 1 }, { unique: true })
+    await collection.createIndex(keySpec, { unique: true })
   } catch (err) {
     // A rolling deploy is two bots for a few seconds, and the second one can
     // insert a duplicate between the sweep and the create. Refusing to boot
@@ -249,7 +270,7 @@ export const ensureUniqueIndex = async (
     // wrong side of the 2026-08-20 crash loop. The next boot sweeps it.
     if ((err as { code?: number }).code !== DUPLICATE_KEY) throw err
     console.warn(
-      `[mongo] ${collection.collectionName}.${field} still has duplicates; ` +
+      `[mongo] ${collection.collectionName}.${fields.join('+')} still has duplicates; ` +
         'unique index not created, will retry next boot',
     )
   }
@@ -321,7 +342,15 @@ export class MongoStore {
     await this.decisions.createIndex({ chatId: 1, userId: 1, createdAt: -1 })
     // Why?/override lookup (getDecision) filters by chat+message.
     await this.decisions.createIndex({ chatId: 1, messageId: 1, createdAt: -1 })
-    await this.feedback.createIndex({ chatId: 1, messageId: 1 })
+    /**
+     * One message, one label — which `recordOverride` has claimed in its
+     * docstring since it was written, and which a non-unique index cannot
+     * deliver. Production 2026-08-26: 9 doubled pairs in 182 documents. This is
+     * the only permanent record of a human saying "this was not spam" and the
+     * whole corpus for judging a calibration change, so a double-counted false
+     * positive moves production weights twice.
+     */
+    await ensureUniqueIndex(this.feedback, 'chatId', 'messageId')
     await ensureTtlIndex(this.llmCache, { createdAt: 1 }, LLM_CACHE_TTL_DAYS * 86400)
     await this.llmCache.createIndex({ key: 1 }, { unique: true })
     await this.votes.createIndex({ chatId: 1, messageId: 1 }, { unique: true })

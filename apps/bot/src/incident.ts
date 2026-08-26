@@ -281,3 +281,29 @@ export class SenderMessageLog {
     }
   }
 }
+
+/**
+ * Whether a correction about `messageId` may clear per-sender state that names
+ * `owner` as the message it belongs to.
+ *
+ * Per-sender state — the incident, the pending captcha gate — is keyed by
+ * chat and user, while a correction is about ONE message. `restoreFalsePositive`
+ * already made that distinction for the numbers it reports and not for the
+ * cleanup it performs, so restoring an old verdict closed whatever incident
+ * happened to be live and cancelled whatever gate happened to be pending.
+ *
+ * Concrete on 2026-08-26: an incident ages out after ten minutes and a ballot
+ * lives fifteen, so there is a five-minute window in which message B's fresh
+ * incident and gate are live while message A's ballot is still open. A ham
+ * outcome on A silently disarmed B — and a gate cancelled without lifting its
+ * mute leaves an exonerated member muted with nothing left to answer.
+ *
+ * `null`/`undefined` returns true on purpose, and that is the half worth
+ * stating: a gate whose trigger message was already deleted carries no owner,
+ * and refusing to clear it would restore the stray-timer bug fixed in
+ * `4950a6c` — an exoneration undone seventy-four seconds later by a question
+ * about a verdict that no longer exists. The rule is not "prove it is ours",
+ * it is "do not take one that demonstrably names another message".
+ */
+export const correctionOwns = (owner: number | null | undefined, messageId: number): boolean =>
+  owner === undefined || owner === null || owner === messageId

@@ -55,7 +55,7 @@ import { RightsMemory, RIGHTS_ERROR_REGEX, failureLabels } from './rights.js'
 import { LlmHealth } from './llm-health.js'
 import { MemberFactsCache, type MemberFacts } from './member-facts.js'
 import { JOIN_WINDOW_MS, JoinRateTracker } from './join-rate.js'
-import { IncidentTracker, SenderMessageLog, incidentPowerFor, type Incident } from './incident.js'
+import { IncidentTracker, SenderMessageLog, incidentPowerFor, correctionOwns, type Incident } from './incident.js'
 import { ArrivalLog, arrivalMessageIds } from './arrival-log.js'
 
 const config = loadConfig()
@@ -1419,7 +1419,14 @@ const restoreFalsePositive = async (params: {
   // Read before the incident is closed — closing drops the entry, and with it
   // the only id of the notice this correction contradicts.
   const cardMessageId = incident?.cardMessageId ?? null
-  incidents.close(params.chatId, params.userId)
+  // Same ownership rule the two lines above already apply to what they report,
+  // now applied to what this clears — see `correctionOwns`. Closing whatever
+  // incident happened to be live disarmed a LATER, valid one.
+  if (correctionOwns(live?.triggerMessageId, params.messageId)) {
+    incidents.close(params.chatId, params.userId)
+  }
+  // Left unconditional: forgetting a sender's recent run only makes the next
+  // purge smaller, which errs towards the member, and it rebuilds as they post.
   senderLog.forget(params.chatId, params.userId)
   /**
    * The question goes with the accusation.
@@ -1436,7 +1443,10 @@ const restoreFalsePositive = async (params: {
    * mute cost nothing; the same seventy four seconds on a HAM outcome is the
    * chat's own exoneration being undone by a stray timer.
    */
-  forgetCaptcha(captchaKey(params.chatId, params.userId))
+  const gateKey = captchaKey(params.chatId, params.userId)
+  if (correctionOwns(pendingCaptchas.get(gateKey)?.triggerMessageId, params.messageId)) {
+    forgetCaptcha(gateKey)
+  }
   await store.recordOverride({
     chatId: params.chatId,
     messageId: params.messageId,
