@@ -26,7 +26,7 @@ import { extractLinkedChannelSignals } from './signals/channel.js'
 import { applyDeterministicRules } from './rules.js'
 import { parseCustomRule, customRuleMatches } from './custom-rules.js'
 import {
-  scoreSignals, hasDecisiveSignal, mayRemoveSender, hasSenderStanding, contentEvidence
+  scoreSignals, hasDecisiveSignal, mayRemoveSender, hasSenderStanding, isStrangerHere, contentEvidence
 } from './score.js'
 import {
   PERMANENT_BAN_SIGNALS, PROFILE_EVIDENCE_SIGNALS, isTrustSignal
@@ -712,7 +712,7 @@ export const evaluateMessage = async (
    * so "there is nothing to read" is not a reason to stop looking, it is the
    * shape of the thing.
    */
-  const lowInformation = shouldAbstain(input.message)
+  const lowInformation = shouldAbstain(input.message, { stranger: isStrangerHere(signals) })
 
   /**
    * Twice, and the order is the whole point: rules that cost nothing first, the

@@ -170,6 +170,23 @@ export const hasSenderStanding = (signals: Signal[]): boolean => {
   return names.has('established_user') && !names.has('prior_spam_detections')
 }
 
+/**
+ * Nobody here knows them.
+ *
+ * `new_in_chat` alone does not say that. It fires while `messagesInChat` is at
+ * or under `NEW_IN_CHAT_MAX` — the first THREE messages, not the first — and it
+ * fires for anybody's first three messages in a chat, including an account with
+ * hundreds of messages elsewhere posting in a room it has not used before. So
+ * standing is subtracted: a stranger is somebody new here who is nobody
+ * anywhere.
+ *
+ * Deliberately not the negation of `hasSenderStanding`. Most senders are
+ * neither established nor new, and a rule reading "not established" as
+ * "stranger" would sweep in every quiet regular of every chat.
+ */
+export const isStrangerHere = (signals: Signal[]): boolean =>
+  signals.some((signal) => signal.name === 'new_in_chat') && !hasSenderStanding(signals)
+
 export interface ScoreResult {
   pSpam: number
   /** Distinct signals with non-zero weight, sorted by |weight| desc. */

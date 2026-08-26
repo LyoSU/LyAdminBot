@@ -186,6 +186,32 @@ const BARE_HOST_REGEX = new RegExp(
 const HANDLE_REGEX = /(^|[^\p{L}\p{N}_@/])@([a-z][a-z0-9_]{4,31})/giu
 
 /**
+ * Where each Telegram handle sits in a piece of text.
+ *
+ * Exported so that the redactor and the abstain gate cannot come to disagree
+ * about what a handle IS. The grammar is Telegram's own and it already settles
+ * three questions a hand-rolled `@\w+` gets wrong: `@всім` is not a handle
+ * (letter-leading, 5–32), `name@example.com` is not a handle (the character
+ * before `@` may not be a letter or digit), and the `@bot` of `/start@bot` is
+ * not a handle either — it is the command's target, and the leading class
+ * excludes `/`.
+ *
+ * Deliberately read from the text rather than from Telegram's `mention`
+ * entities. The entities are what Telegram chose to tag; the grammar is what a
+ * reader sees and can retype. The redactor has trusted the grammar since it was
+ * written, for a job where a miss means the bot republishes the advertisement
+ * itself.
+ */
+export const handleSpans = (text: string): { start: number; end: number }[] => {
+  const spans: { start: number; end: number }[] = []
+  for (const match of text.matchAll(HANDLE_REGEX)) {
+    const lead = (match[1] ?? '').length
+    spans.push({ start: match.index + lead, end: match.index + match[0].length })
+  }
+  return spans
+}
+
+/**
  * Replace every destination in a piece of user text with a marker naming what
  * kind of destination it was.
  *
