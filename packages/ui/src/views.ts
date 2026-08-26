@@ -329,6 +329,32 @@ const actionHeadline = (locale: Locale, verdict: Verdict): string => {
  * ahead of the evidence for it, which is the wrong way round for a review
  * surface: the reader should judge the text, then see whether we agreed.
  */
+
+/**
+ * Somebody else's words, quoted.
+ *
+ * Long ones are `expandable`, which Telegram collapses to a few lines behind a
+ * chevron — so a ballot stays one glance tall while the whole message is still
+ * one tap away. mtcute 0.31 maps the attribute to `collapsed` on the entity.
+ *
+ * This was `<pre>` on the ballot until 2026-08-26, and a code block is the
+ * wrong container twice over: it does not WRAP, so a long advert ran off the
+ * right edge of the card with the half that matters out of sight, and monospace
+ * reads as machine output rather than as a person talking.
+ *
+ * Height, not length, is what decides — a short text with several newlines is
+ * tall, and a long unbroken one wraps. Takes text that is ALREADY escaped: this
+ * is the presentation wrapper, and the escaping belongs with the truncation
+ * that produced the string.
+ */
+const QUOTE_EXPAND_CHARS = 120
+const QUOTE_EXPAND_LINES = 3
+export const quoteBlock = (escaped: string): string => {
+  const lines = escaped.split('\n').length
+  const long = escaped.length > QUOTE_EXPAND_CHARS || lines > QUOTE_EXPAND_LINES
+  return `<blockquote${long ? ' expandable' : ''}>${escaped}</blockquote>`
+}
+
 export const whyView = (locale: Locale, verdict: Verdict, options: WhyOptions = {}): string => {
   const { html: asHtml = false, technical = false, showRawEvidence = false, context = {} } = options
   const esc = asHtml ? escapeHtml : (s: string): string => s
@@ -372,7 +398,7 @@ export const whyView = (locale: Locale, verdict: Verdict, options: WhyOptions = 
       ? verdict.reasonEvidence
       : redactLinks(verdict.reasonEvidence, locale.vote.redacted)
     const quote = esc(truncate(evidence, 300))
-    lines.push('', asHtml ? `<blockquote>${quote}</blockquote>` : `"${quote}"`)
+    lines.push('', asHtml ? quoteBlock(quote) : `"${quote}"`)
   }
 
   const pct = Math.round(verdict.pSpam * 100)
@@ -973,7 +999,7 @@ export const votePrompt = (
     text: quoted.length > 0
       ? locale.vote.prompt({
         userLabel: name,
-        textPreview: escapeHtml(truncate(quoted, VOTE_PREVIEW_LIMIT)),
+        textPreview: quoteBlock(escapeHtml(truncate(quoted, VOTE_PREVIEW_LIMIT))),
         media,
         whyLink
       })

@@ -211,6 +211,16 @@ export interface Locale {
      */
     prompt: (parts: {
       userLabel: string
+      /**
+       * The quoted message, already escaped AND already wrapped in its own
+       * block — interpolate it, do not put a tag around it.
+       *
+       * The wrapper used to live in each translation as `<pre>`, five copies of
+       * one presentation decision. It was the wrong container (a code block
+       * does not wrap, so a long advert ran off the edge of the card) and
+       * changing it meant editing five files that had no business holding the
+       * choice. `quoteBlock` owns it now, expandable and all.
+       */
       textPreview: string
       media: string | null
       whyLink: string | null
@@ -289,6 +299,12 @@ export interface Locale {
     cantReportAdmin: string
     rateLimited: string
     accepted: string
+    /**
+     * The reply was a join line that admitted several people at once, so the
+     * report does not name anybody. One report is about one account: screening
+     * a whole bulk add off a single tap is leverage nobody should have.
+     */
+    oneAtATime: string
   }
 
   /** /mystats personal panel (PM only). */

@@ -596,13 +596,54 @@ describe('votePrompt', () => {
     expect(view.text).toContain('світлина')
   })
 
-  it('quotes the message in a monospace block, so no link in it is tappable', () => {
+  it('quotes the message as a quote, keeping its real newlines', () => {
+    // Was `<pre>` until 2026-08-26. A code block does not WRAP, so a long
+    // advert ran off the right edge of the ballot with the half that matters
+    // out of sight — and a voter who cannot read the message is being asked a
+    // question they have no way to answer. Monospace also reads as machine
+    // output rather than as a person talking.
     const view = votePrompt(uk, {
       chatId: -1, messageId: 1, userLabel: 'Іра', textPreview: 'рядок один\nрядок два'
     }, { spam: 0, ham: 0, outcome: 'pending' })
-    // Real newlines inside the block: `viewHtml` leaves them alone there,
-    // because the HTML parser drops a <br> inside a <pre>.
-    expect(view.text).toContain('<pre>рядок один\nрядок два</pre>')
+    expect(view.text).toContain('<blockquote>рядок один\nрядок два</blockquote>')
+    expect(view.text).not.toContain('<pre>')
+  })
+
+  it('a long quote is expandable, so one ballot stays one glance tall', () => {
+    const view = votePrompt(uk, {
+      chatId: -1, messageId: 1, userLabel: 'Іра', textPreview: 'дуже довгий текст '.repeat(12)
+    }, { spam: 0, ham: 0, outcome: 'pending' })
+    expect(view.text).toContain('<blockquote expandable>')
+  })
+
+  it('a tall quote counts as long even when it is short', () => {
+    // Four lines of one word each is taller than a hundred characters of prose.
+    const view = votePrompt(uk, {
+      chatId: -1, messageId: 1, userLabel: 'Іра', textPreview: 'а\nб\nв\nг'
+    }, { spam: 0, ham: 0, outcome: 'pending' })
+    expect(view.text).toContain('<blockquote expandable>')
+  })
+
+  it('a short quote is not collapsed behind a chevron for nothing', () => {
+    const view = votePrompt(uk, {
+      chatId: -1, messageId: 1, userLabel: 'Іра', textPreview: 'коротко'
+    }, { spam: 0, ham: 0, outcome: 'pending' })
+    expect(view.text).toContain('<blockquote>коротко</blockquote>')
+  })
+
+  it('REGRESSION: a bot named in a command suffix is not delivered as a link', () => {
+    // The monospace block used to make this moot — nothing inside a code block
+    // is tappable. A real blockquote linkifies, so the redactor has to carry
+    // both jobs alone now. Measured over 13,241 stored quotes the day this
+    // changed: 905 command suffixes survived redaction, against 4 other
+    // destinations in total. One systematic hole, and this is it.
+    const view = votePrompt(uk, {
+      chatId: -1, messageId: 1, userLabel: 'Іра', textPreview: 'тисни /start@EvilPromoBot зараз'
+    }, { spam: 0, ham: 0, outcome: 'pending' })
+    expect(view.text).not.toContain('EvilPromoBot')
+    // The command itself stays: it is what the message was about.
+    expect(view.text).toContain('/start')
+    expect(view.text).toContain(uk.vote.redacted.mention)
   })
 
   it('redacts destinations out of the quote, naming what each one was', () => {
@@ -627,7 +668,7 @@ describe('votePrompt', () => {
     const view = votePrompt(uk, {
       chatId: -1, messageId: 1, userLabel: 'Іра', textPreview: 'https://evil.example/a'
     }, { spam: 0, ham: 0, outcome: 'pending' })
-    expect(view.text).toContain('<pre>')
+    expect(view.text).toContain('<blockquote')
     expect(view.text).not.toContain('без тексту')
     expect(view.text).not.toContain('evil.example')
   })

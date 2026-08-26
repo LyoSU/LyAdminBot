@@ -19,7 +19,7 @@ import {
   TIMED_BAN_SECONDS,
   type AccountAction,
   type ChannelPreview, type EditBaseline, type EvaluationInput, type ForwardOrigin,
-  type MediaCategory, type PipelinePorts, type UserSnapshot, type Verdict, type VoteBallot
+  type MediaCategory, type PipelinePorts, type Signal, type UserSnapshot, type Verdict, type VoteBallot
 } from '@lyadmin/core'
 import {
   TelegramGateway, applyVerdict, buildUserSnapshot, buildChannelSnapshot, withLiveFacts, normalizeMessage,
@@ -52,6 +52,7 @@ import { registerBotCommands } from './commands.js'
 import { formatDuration, parseBananDuration } from './duration.js'
 import { formatSignals, log } from './logger.js'
 import { RightsMemory, RIGHTS_ERROR_REGEX, failureLabels } from './rights.js'
+import { joinerSource } from './join-action.js'
 import { LlmHealth } from './llm-health.js'
 import { MemberFactsCache, type MemberFacts } from './member-facts.js'
 import { JOIN_WINDOW_MS, JoinRateTracker } from './join-rate.js'
@@ -2048,6 +2049,49 @@ const handleDelete = async (message: Message, chat: Chat, caller: User): Promise
 }
 
 /**
+ * Who a report is about.
+ *
+ * On an ordinary message that is its sender. On Telegram's own join line it is
+ * the person who JOINED — and for `users_added` that is NOT the sender: the
+ * sender is whoever added them. So `/report` on an "X added Y" line used to
+ * screen X.
+ *
+ * `extractJoiners` has drawn exactly this distinction, two hundred lines away,
+ * since joins were first handled; this branch re-derived it as `replied.sender`
+ * and got it wrong. The rule the miss argues for: before reading `.sender` or
+ * `.action` in a new branch, look for the function that already reads it.
+ *
+ * The old test was `replied.action`, which is true of ANY service message — a
+ * pin, a departure, a video chat — and sent all of them down the no-ballot
+ * account path aimed at whoever the line happened to belong to.
+ *
+ * `many` is a join line that admitted several people at once. One report is
+ * about one account: turning a single tap into a screen of everybody in a bulk
+ * add is leverage that should belong to nobody.
+ */
+type ReportTarget =
+  | { kind: 'message'; user: User }
+  | { kind: 'arrival'; user: User }
+  | { kind: 'many' }
+  | { kind: 'none' }
+
+const reportTarget = async (replied: Message): Promise<ReportTarget> => {
+  if (joinerSource(replied.action).kind !== 'none') {
+    const joiners = await extractJoiners(replied)
+    if (joiners.length > 1) return { kind: 'many' }
+    const joiner = joiners[0]
+    return joiner === undefined ? { kind: 'none' } : { kind: 'arrival', user: joiner }
+  }
+  // Any other service line — a pin, a departure, a video chat — has a sender,
+  // but nobody that line is ABOUT. `replied.sender` there is whoever performed
+  // the action, and reporting them is not what the reporter asked for.
+  if (replied.action) return { kind: 'none' }
+  return replied.sender instanceof User
+    ? { kind: 'message', user: replied.sender }
+    : { kind: 'none' }
+}
+
+/**
  * /report: one flow for everyone. The report opens (or joins) a community
  * vote and casts the reporter's spam ballot. tallyVotes resolves an admin
  * ballot instantly, so an admin report is an immediate verdict while a
@@ -2067,8 +2111,19 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
     await answerAndClear(message, chat.id, locale.report.needReply, 'report_refused')
     return
   }
-  const target = replied.sender
-  if (!(target instanceof User) || target.isBot || target.id === selfId || target.id === reporter.id) {
+  const about = await reportTarget(replied)
+  if (about.kind === 'many') {
+    await answerAndClear(message, chat.id, locale.report.oneAtATime, 'report_refused')
+    return
+  }
+  if (about.kind === 'none') {
+    // A service line that is not a join — a pin, a departure, a video chat.
+    // There is no account this is a report about.
+    await answerAndClear(message, chat.id, locale.report.needReply, 'report_refused')
+    return
+  }
+  const target = about.user
+  if (target.isBot || target.id === selfId || target.id === reporter.id) {
     await dropCommand()
     return
   }
@@ -2093,7 +2148,7 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
    * So no ballot here. The question "is this account a spammer" is not a
    * question about a message, and it is answerable without one.
    */
-  if (replied.action) {
+  if (about.kind === 'arrival') {
     // The acknowledgement goes the same way the refusals do. It is a receipt,
     // not a record: what was actually decided about this account is in the log
     // and in `pipeline_decisions`, and a thank-you left in the chat forever is
@@ -2150,10 +2205,10 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
   await dropCommand()
 
   const vote = await store.getVote(chat.id, replied.id).catch(() => null)
-  if (!vote || vote['status'] !== 'open') return
-  const tally = tallyVotes((vote['ballots'] ?? []) as VoteBallot[])
+  const open = vote !== null && vote['status'] === 'open'
+  const tally = tallyVotes((vote?.['ballots'] ?? []) as VoteBallot[])
 
-  if (tally.outcome === 'spam') {
+  if (open && tally.outcome === 'spam') {
     // Admin ballot resolved instantly.
     if (!(await store.closeVote(chat.id, replied.id, 'spam'))) return
     log.info('vote_resolved', { chatId: chat.id, userId: target.id, messageId: replied.id, outcome: 'spam', by: 'admin_report' })
@@ -2227,12 +2282,24 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
    * nobody in the room is allowed to settle. The report still carries real
    * information, and the part of it this bot can act on alone is the ACCOUNT.
    *
-   * Fire-and-forget, after the prompt: the reporter should not wait on a
-   * profile fetch, and a screen that fails must not cost them their ballot.
+   * Runs whatever the ballot is doing, and that is the fix here. It used to sit
+   * below `if (!vote || status !== 'open') return`, so a storage error — and
+   * both `openVote` and `getVote` swallow theirs — took the report's ballot AND
+   * its account screen, leaving a deleted command and nothing else. The screen
+   * asks a question about the ACCOUNT; the ballot's state is no answer to it.
+   *
+   * The one case that still skips it is an admin resolving above, which returns:
+   * their ballot IS the verdict, and a second independent one on top of the
+   * action they chose would be this bot overruling them.
+   *
+   * Fire-and-forget: the reporter should not wait on a profile fetch, and a
+   * screen that fails must not cost them their ballot.
    */
   void screenAccount({
     chat, target, reason: 'reported', replyToMessageId: replied.id
   }).catch(() => { /* best-effort */ })
+
+  if (!open || vote === null) return
 
   // Community path: post (or refresh) the vote prompt.
   // No `botUsername` here on purpose: a ballot opened by a person has no bot
@@ -2290,22 +2357,22 @@ const replayMedia = async (
 
 const pickRandom = <T>(arr: T[]): T | null => (arr.length === 0 ? null : arr[Math.floor(Math.random() * arr.length)] ?? null)
 
-/** New members from a join service message (added, via link, or approved). */
+/**
+ * New members from a join service message (added, via link, or approved).
+ *
+ * Which of the three it is comes from `joinerSource`, shared with `/report`.
+ * The two used to decide separately and the report path had it wrong.
+ */
 const extractJoiners = async (message: Message): Promise<User[]> => {
-  const action = message.action
-  if (!action) return []
-  if (action.type === 'users_added') {
-    const ids = action.users.filter((id) => id !== selfId)
-    if (ids.length === 0) return []
-    const users = await gateway.tg.getUsers(ids).catch(() => [])
-    const out: User[] = []
-    for (const u of users) if (u instanceof User) out.push(u)
-    return out
-  }
-  if (action.type === 'user_joined_link' || action.type === 'user_joined_approved') {
-    return message.sender instanceof User ? [message.sender] : []
-  }
-  return []
+  const source = joinerSource(message.action)
+  if (source.kind === 'none') return []
+  if (source.kind === 'sender') return message.sender instanceof User ? [message.sender] : []
+  const ids = source.ids.filter((id) => id !== selfId)
+  if (ids.length === 0) return []
+  const users = await gateway.tg.getUsers(ids).catch(() => [])
+  const out: User[] = []
+  for (const u of users) if (u instanceof User) out.push(u)
+  return out
 }
 
 /**
@@ -2558,14 +2625,65 @@ const screenAccount = async (params: {
   replyToMessageId: number | null
 }): Promise<AccountAction> => {
   const { chat, target } = params
+  /**
+   * What this screen actually managed to look at.
+   *
+   * Without it, "looked at everything and found nothing" and "completed while
+   * blind" are the same row. Statuses only — never a bio, never avatar bytes:
+   * this is a record of coverage, not a copy of somebody's profile.
+   */
+  const saw: Record<string, string | number> = {}
+  /**
+   * The durable trace, written at every terminal point including the quiet ones.
+   *
+   * Until now a screen that concluded `none` wrote nothing anywhere that
+   * outlives the container — one `log.info` to stdout — so the database could
+   * not answer "did this branch run at all". That ambiguity is expensive here:
+   * the captcha branch was dead for 239,528 messages precisely because "nothing
+   * happened" reads the same as "working and clean". At the report rate this
+   * path runs at, the whole record is a few hundred rows behind a 14-day TTL.
+   *
+   * The outcomes are kept apart rather than collapsed into `none`, because
+   * "clean", "the chat forbids it", "Telegram refused" and "the profile never
+   * arrived" are four different things to have to fix.
+   */
+  const note = (outcome: string, signals: Signal[] = []): void => {
+    void store.recordDecision({
+      chatId: chat.id, userId: target.id, messageId: params.replyToMessageId ?? 0,
+      textPreview: '',
+      verdict: {
+        pSpam: 0, action: 'none', needsVote: false, banDurationSeconds: null,
+        decidedBy: 'join_screen', ruleId: null, signals,
+        reasonCode: params.reason, reasonEvidence: null,
+        meta: { screen: outcome, saw: Object.entries(saw).map(([k, v]) => `${k}=${v}`).join(' ') }
+      },
+      latencyMs: Date.now() - startedAt
+    }).catch(() => { /* telemetry must never break moderation */ })
+  }
+  const startedAt = Date.now()
+
   const userDoc = await store.getUserDoc(target.id).catch(() => null)
   const history = userDocToHistory(userDoc as never, 0)
   const profile = await fetchUserProfile(gateway.tg, target.id).catch(() => null)
-  if (profile === null) return 'none'
+  if (profile === null) {
+    // The one exit that used to happen before even the `account_screen` log
+    // line, so a report answered by an unreachable profile left no trace at all.
+    saw['profile'] = 'failed'
+    log.info('account_screen', {
+      chatId: chat.id, chat: chat.title ?? undefined, userId: target.id,
+      reason: params.reason, verdict: 'none', outcome: 'profile_unavailable'
+    })
+    note('profile_unavailable')
+    return 'none'
+  }
+  saw['profile'] = 'ok'
+  saw['bio'] = profile.bio ? 'yes' : 'no'
+  saw['biz'] = profile.businessTexts?.length ?? 0
 
   let externalBan = history?.externalBan ?? null
   const fresh = await fetchExternalBan(target.id).catch(() => null)
   if (fresh) externalBan = mergeExternalBan({ lols: fresh.lols as never, cas: fresh.cas as never })
+  saw['extban'] = fresh ? 'fresh' : externalBan ? 'cached' : 'none'
 
   const snapshot = buildUserSnapshot(
     target,
@@ -2583,19 +2701,22 @@ const screenAccount = async (params: {
   const avatarBase64 = profile.latestAvatar
     ? await rawPhotoToBase64(gateway.tg, profile.latestAvatar, AVATAR_MAX_BYTES).catch(() => null)
     : null
+  saw['avatar'] = profile.latestAvatar === null ? 'none' : avatarBase64 === null ? 'failed' : 'bytes'
   let evidence: string | null = null
   if (avatarBase64 !== null) {
     if (ports.moderation) {
       const hit = await ports.moderation.check('', avatarBase64)
         .then(nsfwProfileHit).catch(() => null)
+      saw['nsfw'] = hit === null ? 'clean_or_failed' : 'hit'
       if (hit !== null) {
         signals.push({ name: 'nsfw_avatar', evidence: hit })
         evidence = hit
       }
-    }
+    } else saw['nsfw'] = 'off'
     const hash = avatarDhashOf(avatarBase64)
     if (hash !== null && ports.profileMedia) {
       const reuse = await ports.profileMedia.seen(target.id, hash).catch(() => null)
+      saw['phash'] = reuse === null ? 'no_answer' : String(reuse.otherAccounts)
       if (reuse !== null && reuse.otherAccounts > 0) {
         const name = reuse.otherAccounts > 1 ? 'avatar_shared_with_accounts' : 'avatar_shared_with_account'
         const line = `same photo on ${reuse.otherAccounts} other account(s)`
@@ -2613,7 +2734,10 @@ const screenAccount = async (params: {
     chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName,
     reason: params.reason, verdict, signals: named.join(' ') || undefined
   })
-  if (verdict === 'none') return 'none'
+  if (verdict === 'none') {
+    note('clean', signals)
+    return 'none'
+  }
 
   if (verdict === 'ban') {
     /**
@@ -2640,16 +2764,20 @@ const screenAccount = async (params: {
     // get here, but `executor.ts` treats "never act on an admin" as absolute
     // and this path does not go through the executor at all.
     if (allowed !== 'allow' || await isChatAdmin(chat.id, target.id)) {
-      log.info('account_screen_ban_skipped', {
-        chatId: chat.id, userId: target.id, reason: allowed === 'allow' ? 'senderIsAdmin' : allowed
-      })
+      const why = allowed === 'allow' ? 'senderIsAdmin' : allowed
+      log.info('account_screen_ban_skipped', { chatId: chat.id, userId: target.id, reason: why })
+      saw['blocked'] = why
+      note('ban_blocked', signals)
       return 'none'
     }
 
     const banned = await gateway.moderationActions.ban(chat.id, target.id, TIMED_BAN_SECONDS)
       .then(() => true).catch(() => false)
     log.info('account_screen_ban', { chatId: chat.id, userId: target.id, applied: banned })
-    if (!banned) return 'none'
+    if (!banned) {
+      note('ban_failed', signals)
+      return 'none'
+    }
 
     const banVerdict: Verdict = {
       pSpam: 1, action: 'ban', needsVote: false, banDurationSeconds: TIMED_BAN_SECONDS,
@@ -2688,6 +2816,10 @@ const screenAccount = async (params: {
     evidence,
     replyToMessageId: params.replyToMessageId
   })
+  // `gated` writes its own `captcha` row; the other two outcomes wrote nothing,
+  // and both are real answers — the chat has captcha off, or Telegram would not
+  // hold the person while we asked.
+  if (gated !== 'gated') note(gated === 'failed' ? 'gate_failed' : 'gate_skipped', signals)
   return gated === 'gated' ? 'gate' : 'none'
 }
 

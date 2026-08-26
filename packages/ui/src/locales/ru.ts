@@ -272,7 +272,7 @@ export const ru: Locale = {
       `🤔 <b>Это спам?</b> Сообщение от ${userLabel}`
       + (media ? ` · 📎 ${media}` : '')
       + (whyLink ? ` · ${whyLink}` : '')
-      + `\n<pre>${textPreview}</pre>`,
+      + `\n${textPreview}`,
     promptNoText: (userLabel, what, whyLink) =>
       (what
         ? `🤔 <b>Это спам?</b> Сообщение от ${userLabel} — без текста, только ${what}.`
@@ -320,7 +320,8 @@ export const ru: Locale = {
     needReply: 'Сделай /report ответом на сообщение, которое хочешь зарепортить.',
     cantReportAdmin: 'Админов репортить нельзя.',
     rateLimited: 'Слишком много репортов. Подожди пару минут.',
-    accepted: 'Принял, спасибо.'
+    accepted: 'Принял, спасибо.',
+    oneAtATime: 'Тут зашло несколько человек сразу. Ответь на сообщение того, на кого жалуешься.'
   },
 
   stats: {

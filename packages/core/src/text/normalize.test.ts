@@ -178,6 +178,39 @@ describe('redactLinks', () => {
     expect(redactLinks('https://t.me/joinchat/XYZ', m)).toBe('[запрошення]')
   })
 
+  test('REGRESSION: a bot named in a command suffix loses its destination too', () => {
+    // `HANDLE_REGEX` cannot see this one — it requires a non-word character
+    // before the `@` so it never chews through an address, and a command suffix
+    // puts a letter there. Telegram links it anyway: the tap opens that bot.
+    //
+    // Harmless while every quote sat in a monospace block, which is not
+    // clickable. The ballot's quote became a real blockquote on 2026-08-26 so
+    // long messages would wrap, and 905 of 13,241 stored quotes turned out to
+    // carry one of these — against 4 destinations in total that slipped
+    // everything else.
+    expect(redactLinks('тисни /start@EvilPromoBot зараз', m))
+      .toBe('тисни /start[@згадка] зараз')
+  })
+
+  test('the command itself survives — it is what the message was about', () => {
+    expect(redactLinks('/roll@dicebot', m)).toBe('/roll[@згадка]')
+    expect(redactLinks('/pidor', m)).toBe('/pidor')
+  })
+
+  test('a handle written straight after a slash is a KNOWN gap, not a fix', () => {
+    // `HANDLE_REGEX` excludes a `/` before the `@` so it never turns a URL path
+    // into a mention, and that grammar is shared with `handleSpans`, where the
+    // abstain gate uses it to decide whether a message is nothing but a pointer
+    // outward. Widening it here would silently reclassify messages there.
+    //
+    // So this shape survives, and the number is the reason that is tolerable:
+    // over 13,241 stored quotes on 2026-08-26, the whole residual after the
+    // command pass was 10 — six handles after a letter, two bare hosts, two
+    // handles. A long tail, against 905 for the shape that IS handled above.
+    // Written down so the next reader knows it was measured, not missed.
+    expect(redactLinks('пиши /@cryptoking', m)).toBe('пиши /@cryptoking')
+  })
+
   test('channels, sites and handles all lose their destination', () => {
     expect(redactLinks('канал t.me/promo тут', m)).toBe('канал [посилання] тут')
     expect(redactLinks('пиши @cryptoking', m)).toBe('пиши [@згадка]')

@@ -219,15 +219,41 @@ export const handleSpans = (text: string): { start: number; end: number }[] => {
  * and the "why" card all quote a stranger's message back into a chat that every
  * member reads. Quoting a live invite means the bot itself delivers the spam to
  * the whole room, with the bot's own authority behind it — the one distribution
- * channel the spammer could not buy. Wrapping the quote in a monospace block
- * stops it being CLICKABLE; only redaction stops it being READABLE, and both are
- * needed, because a reader who can retype the handle is a reader who was reached.
+ * channel the spammer could not buy.
+ *
+ * This used to be half of a pair: a monospace block stopped a destination being
+ * CLICKABLE and redaction stopped it being READABLE. The block is gone as of
+ * 2026-08-26 — it did not wrap, so long quotes ran off the edge of the ballot
+ * and a voter could not read what they were voting on — which leaves redaction
+ * carrying both jobs alone. `COMMAND_HANDLE_REGEX` below is the hole that
+ * arrangement exposed.
  *
  * Naming the kind rather than deleting it silently is the point: "was there a
  * link" is most of what a voter is judging, so a marker keeps the evidence while
  * dropping the payload. What survives is the shape of the message, which is what
  * the question is actually about.
  */
+/**
+ * `/command@SomeBot` — a handle `HANDLE_REGEX` deliberately does not see.
+ *
+ * That regex requires a non-word character before the `@` so it cannot chew
+ * through an address, and in a command suffix the `@` follows a letter. Telegram
+ * links the handle half anyway: tapping it opens that bot.
+ *
+ * It stayed harmless while every quote sat inside a monospace block, which is
+ * not clickable. It stopped being harmless on 2026-08-26, when the ballot's
+ * quote became a real blockquote so that long messages would wrap and collapse
+ * — readable at last, and linkifying. Measured over 13,241 stored quotes at that
+ * point: 905 command suffixes survived redaction, against 4 URLs and handles in
+ * total that slipped everything else. One systematic hole, not a long tail.
+ *
+ * Its own pass rather than a loosened `HANDLE_REGEX`: that grammar is also read
+ * by `handleSpans`, where the abstain gate decides whether a message is nothing
+ * but a pointer outward. Widening it there would silently reclassify every bot
+ * command in every chat — a change to moderation, made while editing a renderer.
+ */
+const COMMAND_HANDLE_REGEX = /(\/[a-z0-9_]{1,32})@[a-z][a-z0-9_]{3,31}/gi
+
 export const redactLinks = (text: string, markers: RedactionMarkers): string => {
   // Every replacement goes through a function rather than a string. A marker is
   // a TRANSLATED string, and a `$` inside one would be read as a group
@@ -241,5 +267,8 @@ export const redactLinks = (text: string, markers: RedactionMarkers): string => 
     .replace(EMAIL_REGEX, link)
     .replace(HOSTED_PATH_REGEX, link)
     .replace(BARE_HOST_REGEX, link)
+    // Before the general one, and keeping the command itself: `/roll` is what
+    // the message was about, `@SomeBot` is where it points.
+    .replace(COMMAND_HANDLE_REGEX, (_match, command: string) => `${command}${markers.mention}`)
     .replace(HANDLE_REGEX, (_match, before: string) => `${before}${markers.mention}`)
 }

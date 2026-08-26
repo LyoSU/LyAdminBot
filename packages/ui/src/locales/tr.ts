@@ -257,7 +257,7 @@ export const tr: Locale = {
       `🤔 <b>Bu spam mı?</b> ${userLabel} adlı kullanıcıdan mesaj`
       + (media ? ` · 📎 ${media}` : '')
       + (whyLink ? ` · ${whyLink}` : '')
-      + `\n<pre>${textPreview}</pre>`,
+      + `\n${textPreview}`,
     promptNoText: (userLabel, what, whyLink) =>
       (what
         ? `🤔 <b>Bu spam mı?</b> ${userLabel} kişisinden gelen mesajda metin yok, yalnızca ${what} var.`
@@ -305,7 +305,8 @@ export const tr: Locale = {
     needReply: 'Bildirmek istediğin mesaja yanıt olarak /report kullan.',
     cantReportAdmin: 'Yöneticiler bildirilemez.',
     rateLimited: 'Çok fazla bildirim. Birkaç dakika bekle.',
-    accepted: 'Anlaşıldı, teşekkürler.'
+    accepted: 'Anlaşıldı, teşekkürler.',
+    oneAtATime: 'O satırda birden fazla kişi katıldı. Kastettiğin kişinin mesajına yanıt ver.'
   },
 
   stats: {

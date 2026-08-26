@@ -258,7 +258,7 @@ export const en: Locale = {
       `🤔 <b>Is this spam?</b> Message from ${userLabel}`
       + (media ? ` · 📎 ${media}` : '')
       + (whyLink ? ` · ${whyLink}` : '')
-      + `\n<pre>${textPreview}</pre>`,
+      + `\n${textPreview}`,
     promptNoText: (userLabel, what, whyLink) =>
       (what
         ? `🤔 <b>Is this spam?</b> Message from ${userLabel} — no text, just a ${what}.`
@@ -306,7 +306,8 @@ export const en: Locale = {
     needReply: 'Use /report as a reply to the message you want to report.',
     cantReportAdmin: 'Admins cannot be reported.',
     rateLimited: 'Too many reports. Wait a few minutes.',
-    accepted: 'Got it, thanks.'
+    accepted: 'Got it, thanks.',
+    oneAtATime: 'Several people joined on that line. Reply to a message from the one you mean.'
   },
 
   stats: {
