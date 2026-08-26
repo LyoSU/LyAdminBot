@@ -867,6 +867,24 @@ export class MongoStore {
       .filter((t): t is string => typeof t === 'string' && t.length > 0)
   }
 
+  /**
+   * The window's numbers without recording a sighting.
+   *
+   * A missing document reads as zeros rather than as one: this is asked only
+   * about a message the window should ALREADY hold, so nothing there means
+   * nothing was counted, and inventing a sighting is the error this method
+   * exists to avoid.
+   */
+  async readVelocity(hash: string): Promise<{ count: number; chatCount: number; userCount: number }> {
+    const doc = await this.velocityEvents.findOne({ _id: hash } as never) as
+      { count?: number; chats?: number[]; users?: number[] } | null
+    return {
+      count: doc?.count ?? 0,
+      chatCount: doc?.chats?.length ?? 0,
+      userCount: doc?.users?.length ?? 0
+    }
+  }
+
   async resetSession(key: string): Promise<void> {
     await this.sessionWindows.deleteOne({ _id: key } as never)
   }

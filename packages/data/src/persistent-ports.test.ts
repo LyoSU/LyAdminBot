@@ -16,6 +16,11 @@ class FakeVelocityBackend implements VelocityBackend {
     this.byHash.set(hash, e)
     return { count: e.count, chatCount: e.chats.size, userCount: e.users.size }
   }
+  async readVelocity(hash: string): Promise<{ count: number; chatCount: number; userCount: number }> {
+    if (this.fail) throw new Error('mongo down')
+    const e = this.byHash.get(hash)
+    return { count: e?.count ?? 0, chatCount: e?.chats.size ?? 0, userCount: e?.users.size ?? 0 }
+  }
 }
 
 class FakeSessionBackend implements SessionBackend {
@@ -34,8 +39,8 @@ class FakeSessionBackend implements SessionBackend {
   async resetSession(key: string): Promise<void> { this.byKey.delete(key) }
 }
 
-const makeInput = (text: string, chatId: number, userId: number): EvaluationInput =>
-  ({ message: { text, chatId }, user: { id: userId } } as unknown as EvaluationInput)
+const makeInput = (text: string, chatId: number, userId: number, isEdit = false): EvaluationInput =>
+  ({ message: { text, chatId, isEdit }, user: { id: userId } } as unknown as EvaluationInput)
 
 describe('PersistentVelocityPort', () => {
   it('flags the same template across enough chats', async () => {
@@ -111,6 +116,48 @@ describe('PersistentVelocityPort', () => {
     const backend = new FakeVelocityBackend(); backend.fail = true
     const port = new PersistentVelocityPort(backend)
     expect(await port.check(makeInput('a long enough spam template here', 1, 10))).toBeNull()
+  })
+
+  it('REGRESSION: editing a message is not another sighting of its text', async () => {
+    // Production 2026-08-24, solo threshold 3: a neighbourhood outage notice was
+    // posted twice and edited three times, the counter reached five, and
+    // `velocity_repeats` deleted it at 0.908 — after the classifier had called
+    // that exact text `legit_share` on each of the four preceding passes.
+    const port = new PersistentVelocityPort(new FakeVelocityBackend(), { soloThreshold: 3 })
+    const text = 'Район 3-ї школи: вул. Саксаганського, Кармелюка, Святкова'
+    await port.check(makeInput(text, 1, 10))
+    await port.check(makeInput(text, 1, 10, true))
+    await port.check(makeInput(text, 1, 10, true))
+    expect((await port.check(makeInput(text, 1, 10, true)))?.exceeded).toBe(false)
+  })
+
+  it('an edit still SEES a count the text genuinely earned', async () => {
+    // Not counting is not the same as not looking: real repetition by other
+    // senders must still be visible to a message that arrives as an edit.
+    const port = new PersistentVelocityPort(new FakeVelocityBackend(), { chatThreshold: 3 })
+    const text = 'buy cheap followers right here right now'
+    await port.check(makeInput(text, 1, 10))
+    await port.check(makeInput(text, 2, 11))
+    await port.check(makeInput(text, 3, 12))
+    expect((await port.check(makeInput(text, 4, 13, true)))?.exceeded).toBe(true)
+  })
+
+  it('a message edited into something else is counted once, on its new text', async () => {
+    // The key IS the normalised text, which is what makes skipping the bump
+    // safe: an advert edited in has a different key and earns its own first
+    // sighting there. Without that, this fix would have hidden `edit_injected`.
+    const backend = new FakeVelocityBackend()
+    const port = new PersistentVelocityPort(backend, { soloThreshold: 1 })
+    await port.check(makeInput('доброго ранку всім у цьому чаті', 1, 10))
+    const after = await port.check(makeInput('заходьте у мій канал за заробітком', 1, 10, true))
+    expect(after?.exceeded).toBe(false)
+  })
+
+  it('a message that arrives first as an edit is not invented a sighting', async () => {
+    // Gap recovery can replay a message the window never saw. Zeros, not one.
+    const port = new PersistentVelocityPort(new FakeVelocityBackend(), { soloThreshold: 1 })
+    expect((await port.check(makeInput('a long enough spam template here', 1, 10, true)))?.exceeded)
+      .toBe(false)
   })
 })
 

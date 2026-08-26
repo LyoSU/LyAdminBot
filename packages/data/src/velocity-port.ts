@@ -64,9 +64,21 @@ export class MemoryVelocityPort implements VelocityPort {
       this.evictIfNeeded()
     }
 
-    entry.chatIds.add(input.message.chatId)
-    entry.userIds.add(input.user.id)
-    entry.count += 1
+    /**
+     * An edit is not a new sighting — see `PersistentVelocityPort.check` for
+     * the production case. Skipped rather than de-duplicated by id, because the
+     * key IS the normalised text: a message edited into something else lands on
+     * a different key and earns its first sighting there, correctly.
+     *
+     * The comment above about sharing `velocityKey` is exactly why this is here
+     * too. Two implementations of "the same message" is two answers to one
+     * question, and for a while the id half of that answer was in neither.
+     */
+    if (!input.message.isEdit) {
+      entry.chatIds.add(input.message.chatId)
+      entry.userIds.add(input.user.id)
+      entry.count += 1
+    }
 
     // `userIds` was tracked and then thrown away (2026-07-30 review). It is the
     // difference between the two things this window sees: ONE account repeating
