@@ -1105,6 +1105,37 @@ const sendView = async (message: Message, view: ViewMessage): Promise<void> => {
   }).catch(() => { /* user may have blocked the bot / no rights */ })
 }
 
+/** A refusal is worth reading once, and the chat should not keep it. */
+const NOTIFY_TTL_REFUSAL_MS = 60 * 1000
+
+/**
+ * Answer a command that went nowhere, and take the whole exchange with it.
+ *
+ * `sendView` is the wrong tool for this in a group and structurally so: it
+ * discards the message it sent, so nothing built on it could ever schedule its
+ * own removal. That is the whole reason every refusal path in this file used to
+ * leave permanent chrome while every success path cleaned up after itself —
+ * not a policy about refusals, just the one helper that could not.
+ *
+ * `/report` is where it stops being untidiness. The command names a member and
+ * accuses them; the answer says the accusation went nowhere. Left standing, the
+ * pair publishes an accusation that had no consequence, permanently, in the
+ * chat, under the name of whoever typed it — and the three refusals here are
+ * precisely the cases where the bot decided there was nothing to answer.
+ *
+ * Both halves on one timer rather than dropping the command at once: a reply
+ * whose target has been deleted is an orphan quoting a hole, and for a minute
+ * the exchange still has to make sense to whoever is reading it.
+ */
+const answerAndClear = async (
+  message: Message, chatId: number, text: string, source: string
+): Promise<void> => {
+  const sent = await tgReplyText(message, viewHtml(text))
+    .catch(() => null) // no rights to speak here, or the command is already gone
+  scheduleDelete(chatId, message.id, NOTIFY_TTL_REFUSAL_MS, `${source}:cmd`)
+  if (sent) scheduleDelete(chatId, sent.id, NOTIFY_TTL_REFUSAL_MS, source)
+}
+
 /** Report rate limit: 3 reports per reporter per 5 minutes. */
 const REPORT_WINDOW_MS = 5 * 60 * 1000
 const reportTimes = new Map<number, number[]>()
@@ -1317,6 +1348,22 @@ const enforceVoteSpam = async (vote: {
  */
 interface RestitutionResult {
   lifted: boolean
+  /**
+   * The enforcement notice this correction has just made false, if we still
+   * hold its id.
+   *
+   * Returned rather than deleted here, because only the caller knows what it is
+   * holding. An admin tapping "Not spam" ON the notice is already deleting the
+   * message under their finger; an admin tapping the same button from the "Why?"
+   * card in PM is not, and until now nothing did — the comment at that call site
+   * said the group notice was unreachable, which was true of `query.messageId`
+   * and never true of the incident, which has carried the id all along.
+   *
+   * And only when the restitution landed. A notice announcing a mute that is
+   * still in force is not stale, and its button is the only retry a moderator
+   * has.
+   */
+  staleCardMessageId: number | null
 }
 
 const restoreFalsePositive = async (params: {
@@ -1349,8 +1396,9 @@ const restoreFalsePositive = async (params: {
       chatId: params.chatId, userId: params.userId, messageId: params.messageId,
       by: params.byUserId, source: params.source, reason: verdict === null ? 'no_verdict' : verdict.action
     })
-    // Nothing was ours to undo, so nothing failed to be undone.
-    return { lifted: true }
+    // Nothing was ours to undo, so nothing failed to be undone — and no notice
+    // of ours is on screen to have been made false by it.
+    return { lifted: true, staleCardMessageId: null }
   }
   /**
    * An incident must not outlive the verdict that opened it: without this it
@@ -1364,10 +1412,12 @@ const restoreFalsePositive = async (params: {
    * this message opened — a live incident from a LATER verdict is a different
    * event and its count is not this one's.
    */
-  const incident = incidents.live(params.chatId, params.userId)
-  const removedCount = incident?.triggerMessageId === params.messageId
-    ? incident.removedCount
-    : undefined
+  const live = incidents.live(params.chatId, params.userId)
+  const incident = live !== null && live.triggerMessageId === params.messageId ? live : null
+  const removedCount = incident?.removedCount
+  // Read before the incident is closed — closing drops the entry, and with it
+  // the only id of the notice this correction contradicts.
+  const cardMessageId = incident?.cardMessageId ?? null
   incidents.close(params.chatId, params.userId)
   senderLog.forget(params.chatId, params.userId)
   /**
@@ -1464,7 +1514,7 @@ const restoreFalsePositive = async (params: {
     recentForwards.delete(key)
   }
   recentVerdicts.delete(key)
-  return { lifted }
+  return { lifted, staleCardMessageId: lifted ? cardMessageId : null }
 }
 
 /**
@@ -1992,7 +2042,7 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
 
   const replied = await gateway.fetchRepliedMessage(message)
   if (!replied) {
-    await sendView(message, { text: locale.report.needReply, buttons: [] })
+    await answerAndClear(message, chat.id, locale.report.needReply, 'report_refused')
     return
   }
   const target = replied.sender
@@ -2001,11 +2051,11 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
     return
   }
   if (await isChatAdmin(chat.id, target.id)) {
-    await sendView(message, { text: locale.report.cantReportAdmin, buttons: [] })
+    await answerAndClear(message, chat.id, locale.report.cantReportAdmin, 'report_refused')
     return
   }
   if (!reportAllowed(reporter.id)) {
-    await sendView(message, { text: locale.report.rateLimited, buttons: [] })
+    await answerAndClear(message, chat.id, locale.report.rateLimited, 'report_refused')
     return
   }
 
@@ -2022,10 +2072,11 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
    * question about a message, and it is answerable without one.
    */
   if (replied.action) {
-    // Answered before the command is removed: `sendView` replies to it, and a
-    // reply whose target we just deleted is a send that can fail outright.
-    await sendView(message, { text: locale.report.accepted, buttons: [] })
-    await dropCommand()
+    // The acknowledgement goes the same way the refusals do. It is a receipt,
+    // not a record: what was actually decided about this account is in the log
+    // and in `pipeline_decisions`, and a thank-you left in the chat forever is
+    // one more line naming somebody next to the word "report".
+    await answerAndClear(message, chat.id, locale.report.accepted, 'report_accepted')
     log.info('report', {
       chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName,
       by: reporter.id, byName: reporter.displayName, messageId: replied.id, on: 'arrival'
@@ -4534,10 +4585,22 @@ const wireCallbacks = (): void => {
         // the same finding. Admin ham ballot additionally carries override
         // authority → the user also becomes trusted in this chat.
         const targetUserId = Number(vote['targetUserId'] ?? 0)
-        await restoreFalsePositive({
+        const restitution = await restoreFalsePositive({
           chatId, messageId, userId: targetUserId,
           byUserId: query.user.id, source: 'community_vote'
         })
+        /**
+         * The chat has just said this was not spam; the notice saying it was
+         * must not go on standing beside the receipt that overturns it.
+         *
+         * Reachable because `/report` can open a ballot on a message the
+         * pipeline already acted on and announced — the vote-first path posts no
+         * notice at all, so this is the overlap case and only that.
+         */
+        if (restitution.staleCardMessageId !== null) {
+          await gateway.tg.deleteMessagesById(chatId, [restitution.staleCardMessageId])
+            .catch(() => { /* already gone with its own TTL */ })
+        }
         const ballots = (vote['ballots'] ?? []) as VoteBallot[]
         if (ballots.some((b) => b.isAdmin && b.choice === 'ham')) {
           await store.addTrustedUser(chatId, targetUserId).catch(() => { /* best-effort */ })
@@ -4674,8 +4737,6 @@ const wireCallbacks = (): void => {
       // message happened to hold that number — an unrelated member's, most
       // likely — while the card that was tapped stayed up with a live button.
       //
-      // The group notice tapped from PM is left standing: we do not keep its id.
-      //
       // And nothing is removed at all when the correction was partial — the
       // button is the only retry there is, and taking it away would leave a
       // moderator who has just been told "not everything applied" with no way
@@ -4683,6 +4744,26 @@ const wireCallbacks = (): void => {
       if (complete) {
         await gateway.tg.deleteMessagesById(query.chat.id, [query.messageId])
           .catch(() => { /* ok */ })
+      }
+      /**
+       * The group notice, which the line above cannot reach when the button was
+       * tapped in PM — different chat, different id space.
+       *
+       * This used to be written off as unreachable. It is not: the incident that
+       * the enforcement opened has held the notice's id since it was posted, and
+       * `restoreFalsePositive` now hands it back. Without this an admin who
+       * corrected a verdict from their private "Why?" card left the chat reading
+       * an accusation the bot had already withdrawn, for the rest of its ten
+       * minutes, under a button that would silently redo work already done.
+       *
+       * Guarded on `complete` for the same reason as the delete above, and
+       * against `query.messageId` so the in-group tap does not delete twice.
+       */
+      if (complete
+        && restitution.staleCardMessageId !== null
+        && !(query.chat.id === chatId && restitution.staleCardMessageId === query.messageId)) {
+        await gateway.tg.deleteMessagesById(chatId, [restitution.staleCardMessageId])
+          .catch(() => { /* already gone with its own TTL */ })
       }
     }
   })

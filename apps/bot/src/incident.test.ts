@@ -94,6 +94,24 @@ describe('IncidentTracker', () => {
     expect(t.addRemoved(-100, 42)).toBeNull()
   })
 
+  /**
+   * The incident is the only thing that remembers where the enforcement notice
+   * is, and closing the incident is the first thing a correction does — so a
+   * caller that means to take that notice down has to read the id first.
+   *
+   * Written down because `restoreFalsePositive` depends on the ordering and
+   * nothing about the two lines says so: swapping them leaves the chat reading
+   * an accusation the bot has already withdrawn, and every test still passes.
+   */
+  it('forgets where the notice was as soon as it is closed', () => {
+    const t = new IncidentTracker()
+    open(t, 'silence_sender')
+    t.attachCard(-100, 42, 777)
+    expect(t.live(-100, 42)?.cardMessageId).toBe(777)
+    t.close(-100, 42)
+    expect(t.live(-100, 42)).toBeNull()
+  })
+
   it('stays bounded under load', () => {
     const t = new IncidentTracker({ maxTracked: 10 })
     for (let i = 0; i < 100; i += 1) {
