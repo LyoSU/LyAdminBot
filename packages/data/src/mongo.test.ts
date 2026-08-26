@@ -1047,18 +1047,30 @@ describe('ensureUniqueIndex', () => {
     updatedAt?: Date | number; createdAt?: Date | number
   }
 
-  const fakeCollection = (docs: FakeDoc[], createIndex?: () => Promise<string>) => {
+  interface FakeIndex { name: string; key: Record<string, number>; unique?: boolean }
+
+  const fakeCollection = (
+    docs: FakeDoc[],
+    createIndex?: () => Promise<string>,
+    existing: FakeIndex[] = []
+  ) => {
     const deleted: unknown[] = []
     const created: { keySpec: unknown; options: unknown }[] = []
+    const dropped: string[] = []
     return {
       deleted,
       created,
+      dropped,
       collection: {
         collectionName: 'pipeline_rights',
         find: () => ({ project: () => ({ toArray: async () => docs }) }),
         deleteMany: async (filter: { _id: { $in: unknown[] } }) => {
           deleted.push(...filter._id.$in)
           return { deletedCount: filter._id.$in.length }
+        },
+        indexes: async () => [{ name: '_id_', key: { _id: 1 } }, ...existing],
+        dropIndex: async (name: string) => {
+          dropped.push(name)
         },
         createIndex: async (keySpec: unknown, options: unknown) => {
           created.push({ keySpec, options })
@@ -1166,9 +1178,47 @@ describe('ensureUniqueIndex', () => {
     await expect(ensureUniqueIndex(collection, 'chatId')).resolves.toBeUndefined()
   })
 
-  it('any other failure to create the index still propagates', async () => {
-    const denied = Object.assign(new Error('not authorized'), { code: 13 })
-    const { collection } = fakeCollection([], () => Promise.reject(denied))
-    await expect(ensureUniqueIndex(collection, 'chatId')).rejects.toThrow('not authorized')
+  /**
+   * 2026-08-26, 71 minutes with no moderation: `pipeline_feedback` already
+   * carried a NON-unique index on the same key, so `createIndex` raised
+   * IndexOptionsConflict (85) rather than 11000, and the boot died on it.
+   * There is no failure of index hygiene worth trading for a bot that is not
+   * in the chats — the collections here work unindexed, they are tiny.
+   */
+  it('REGRESSION: no failure to create the index stops the boot', async () => {
+    for (const code of [11000, 85, 86, 13, undefined]) {
+      const err = Object.assign(new Error(`index failure ${String(code)}`), { code })
+      const { collection } = fakeCollection([], () => Promise.reject(err))
+      await expect(ensureUniqueIndex(collection, 'chatId')).resolves.toBeUndefined()
+    }
+  })
+
+  it('REGRESSION: replaces an index that has the right key and is not unique', async () => {
+    const { collection, created, dropped } = fakeCollection([], undefined, [
+      { name: 'chatId_1_messageId_1', key: { chatId: 1, messageId: 1 } }
+    ])
+    await ensureUniqueIndex(collection, 'chatId', 'messageId')
+    expect(dropped).toEqual(['chatId_1_messageId_1'])
+    expect(created).toEqual([
+      { keySpec: { chatId: 1, messageId: 1 }, options: { unique: true } }
+    ])
+  })
+
+  it('leaves an index that is already unique alone', async () => {
+    const { collection, created, dropped } = fakeCollection([], undefined, [
+      { name: 'chatId_1', key: { chatId: 1 }, unique: true }
+    ])
+    await ensureUniqueIndex(collection, 'chatId')
+    expect(dropped).toEqual([])
+    expect(created).toEqual([])
+  })
+
+  it('does not touch an index on other fields', async () => {
+    const { collection, created, dropped } = fakeCollection([], undefined, [
+      { name: 'userId_1', key: { userId: 1 } }
+    ])
+    await ensureUniqueIndex(collection, 'chatId')
+    expect(dropped).toEqual([])
+    expect(created).toHaveLength(1)
   })
 })

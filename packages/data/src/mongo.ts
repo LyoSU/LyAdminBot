@@ -184,9 +184,6 @@ export const ensureTtlIndex = async (
   await collection.createIndex(keySpec, { expireAfterSeconds })
 }
 
-/** MongoDB's error code for a write that a unique index refused. */
-const DUPLICATE_KEY = 11000
-
 /**
  * When a document was last written, or 0 when it does not say.
  *
@@ -216,6 +213,34 @@ const supersededOf = (a: Document, b: Document): Document => {
   const [ta, tb] = [writtenAt(a), writtenAt(b)]
   if (ta !== tb) return ta < tb ? a : b
   return String(a['_id']) < String(b['_id']) ? a : b
+}
+
+/**
+ * Make the key unique, over whatever index is already sitting on it.
+ *
+ * `createIndex` is idempotent only for an IDENTICAL spec. Given the same key
+ * with different options it does not upgrade the index, it raises
+ * IndexOptionsConflict — so a collection that has been indexed non-uniquely
+ * for months, which is every collection this is added to after the fact, is
+ * exactly the case that fails. The index must be replaced, not requested.
+ *
+ * Dropping first leaves these collections unindexed for the length of one
+ * create. They are bounded by something small — one row per chat that has
+ * refused us, one per message a human has labelled — and a collection scan
+ * over hundreds of documents is not worth a window where the key is not
+ * guarded.
+ */
+const claimIndex = async (collection: Collection<Document>, keySpec: Document): Promise<void> => {
+  const wanted = JSON.stringify(keySpec)
+  for (const existing of await collection.indexes()) {
+    // Key order is part of an index's identity, and `keySpec` is built in the
+    // caller's declared order, so comparing the serialised object is the whole
+    // comparison: a different order is a different index and stays.
+    if (JSON.stringify(existing.key) !== wanted) continue
+    if (existing.unique === true) return
+    await collection.dropIndex(existing.name as string)
+  }
+  await collection.createIndex(keySpec, { unique: true })
 }
 
 /**
@@ -262,16 +287,25 @@ export const ensureUniqueIndex = async (
     await collection.deleteMany({ _id: { $in: superseded } } as Document)
   }
   try {
-    await collection.createIndex(keySpec, { unique: true })
+    await claimIndex(collection, keySpec)
   } catch (err) {
-    // A rolling deploy is two bots for a few seconds, and the second one can
-    // insert a duplicate between the sweep and the create. Refusing to boot
-    // over that trades one doubled document for no moderation at all — the
-    // wrong side of the 2026-08-20 crash loop. The next boot sweeps it.
-    if ((err as { code?: number }).code !== DUPLICATE_KEY) throw err
+    // Nothing that can go wrong here is worth a bot that is not in the chats.
+    //
+    // This used to be gated on 11000 alone, for the rolling-deploy case: two
+    // bots for a few seconds, the second inserting a duplicate between the
+    // sweep and the create. The reason given was that refusing to boot trades
+    // one doubled document for no moderation at all — and then it was written
+    // as a check on ONE error code, which is not that reason, it is a guess at
+    // which errors the reason covers.
+    //
+    // On 2026-08-26 the guess was wrong by one: `pipeline_feedback` already
+    // had a non-unique index on the same key, `createIndex` raised
+    // IndexOptionsConflict, and the bot was out of every chat for 71 minutes.
+    // These collections are hundreds of documents and work unindexed; the
+    // index is hygiene, and hygiene does not get to stop moderation.
     console.warn(
-      `[mongo] ${collection.collectionName}.${fields.join('+')} still has duplicates; ` +
-        'unique index not created, will retry next boot',
+      `[mongo] ${collection.collectionName}.${fields.join('+')}: unique index not in ` +
+        `place (${(err as Error).message}); will retry next boot`,
     )
   }
 }
