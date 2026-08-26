@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { User } from '@mtcute/node'
 import type { tl } from '@mtcute/node'
-import { buildUserSnapshot, type UserHistory } from './snapshot.js'
+import { buildUserSnapshot, withLiveFacts, type UserHistory } from './snapshot.js'
 
 const NOW = 1_781_000_000
 
@@ -73,5 +73,56 @@ describe('buildUserSnapshot', () => {
     expect(
       buildUserSnapshot(makeSender(), null, NOW, { unofficialClientRisk: null, joinedAgoSeconds: 12 }).joinedAgoSeconds
     ).toBe(12)
+  })
+})
+
+
+/**
+ * The three callers that enrich a stored history with something they just
+ * fetched — fresh avatars, a live lols/CAS answer — all guarded the enrichment
+ * with `history === null ? null : {...}`, so the live answer was computed and
+ * then dropped for every account we had no row for. That is precisely the
+ * account arriving for the first time: 634 of the 1208 external-ban bans in the
+ * week to 2026-08-26 were accounts unknown to us until the message we banned
+ * them for.
+ */
+describe('withLiveFacts', () => {
+  const banned = {
+    banned: true, bannedAt: new Date('2026-08-01'), offenses: 2, sources: ['cas']
+  } as UserHistory['externalBan']
+
+  it('REGRESSION: a live ban answer survives having no stored history', () => {
+    const snap = buildUserSnapshot(makeSender(), withLiveFacts(null, {
+      avatars: { count: 1, latestSetDaysAgo: 0 }, externalBan: banned
+    }), NOW)
+    expect(snap.externalBan?.banned).toBe(true)
+    expect(snap.avatars?.count).toBe(1)
+  })
+
+  it('leaves the rest of a missing history exactly where the snapshot would', () => {
+    const enriched = buildUserSnapshot(makeSender(), withLiveFacts(null, {
+      avatars: null, externalBan: null
+    }), NOW)
+    const bare = buildUserSnapshot(makeSender(), null, NOW)
+    expect(enriched).toEqual(bare)
+  })
+
+  it('keeps what the stored history says and overwrites only the live fields', () => {
+    const snap = buildUserSnapshot(makeSender(), withLiveFacts(history, {
+      avatars: { count: 9, latestSetDaysAgo: 1 }, externalBan: banned
+    }), NOW)
+    expect(snap.messagesGlobal).toBe(300)
+    expect(snap.avatars?.count).toBe(9)
+    expect(snap.externalBan?.banned).toBe(true)
+  })
+
+  it('an explicit null ban is an answer, not a gap to fall through', () => {
+    // A chat with `externalBanEnabled` off passes null on purpose; falling back
+    // to the stored value would re-enable exactly what the chat switched off.
+    const snap = buildUserSnapshot(makeSender(), withLiveFacts(
+      { ...history, externalBan: banned },
+      { avatars: null, externalBan: null }
+    ), NOW)
+    expect(snap.externalBan).toBeNull()
   })
 })

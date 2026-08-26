@@ -22,7 +22,7 @@ import {
   type MediaCategory, type PipelinePorts, type UserSnapshot, type Verdict, type VoteBallot
 } from '@lyadmin/core'
 import {
-  TelegramGateway, applyVerdict, buildUserSnapshot, buildChannelSnapshot, normalizeMessage,
+  TelegramGateway, applyVerdict, buildUserSnapshot, buildChannelSnapshot, withLiveFacts, normalizeMessage,
   editBaselineOf,
   fetchUserProfile, downloadPhotoBase64, downloadAvatarBase64, downloadStoriesBase64, rawPhotoToBase64,
   fetchExternalBan, sourcesToQuery, resolveMentionKinds, shouldScanChannelSender,
@@ -1985,7 +1985,7 @@ const buildLiveFacts = async (chatId: number, target: User): Promise<UserFacts> 
 
   const user = buildUserSnapshot(
     target,
-    history === null ? null : { ...history, avatars: profile.avatars, externalBan },
+    withLiveFacts(history, { avatars: profile.avatars, externalBan }),
     undefined,
     { unofficialClientRisk: profile.unofficialClientRisk, joinedAgoSeconds }
   )
@@ -2558,7 +2558,7 @@ const screenAccount = async (params: {
 
   const snapshot = buildUserSnapshot(
     target,
-    history === null ? null : { ...history, avatars: profile.avatars, externalBan },
+    withLiveFacts(history, { avatars: profile.avatars, externalBan }),
     undefined,
     { unofficialClientRisk: profile.unofficialClientRisk }
   )
@@ -3436,7 +3436,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
   const user = userSender
     ? buildUserSnapshot(
         userSender,
-        history === null ? null : { ...history, avatars: profile.avatars, externalBan },
+        withLiveFacts(history, { avatars: profile.avatars, externalBan }),
         undefined,
         {
           unofficialClientRisk: profile.unofficialClientRisk,
