@@ -808,19 +808,50 @@ export class MongoStore {
 
   // ── VelocityBackend / SessionBackend (persistent-ports.ts) ───────────
 
-  /** One velocity sighting of `hash`; the doc TTL-expires to define the window. */
-  async bumpVelocity(hash: string, chatId: number, userId: number): Promise<{ count: number; chatCount: number; userCount: number }> {
+  /**
+   * One velocity sighting of `hash`; the doc TTL-expires to define the window.
+   *
+   * The count is the size of a SET of message ids, not an `$inc`. It was an
+   * `$inc` until 2026-08-26, which counted how many times the pipeline looked
+   * at a text rather than how many times the text was sent — and a message is
+   * looked at again whenever it is edited, and again when gap recovery replays
+   * it, because mtcute does not de-duplicate supergroup updates.
+   *
+   * Production 2026-08-24, with the solo bar at 3: a neighbourhood outage notice
+   * was posted twice and edited three times, the counter reached five, and
+   * `velocity_repeats` deleted it at 0.908 — after the classifier had called
+   * that exact text `legit_share` on each of the four preceding passes.
+   *
+   * A set rather than a special case for edits, which is what this first tried.
+   * Skipping the bump on an edit fixes the false positive and opens an evasion:
+   * a message edited from something innocuous INTO an advert then lands on the
+   * advert's key having never been counted there at all, so three accounts
+   * editing their way to the same text would stay invisible. The set answers the
+   * only question that was ever being asked — how many distinct messages carry
+   * this text — and answers it the same way for an edit, a replay and an album.
+   *
+   * Ids are namespaced by chat because Telegram numbers messages per chat.
+   *
+   * Size is not a concern here and was measured before choosing: across the live
+   * collection the largest window held 7 sightings, the median 1, and the whole
+   * collection was 0.03 MB. `chats` and `users` beside it already grow the same
+   * way, and the TTL is six hours.
+   *
+   * A document written before this field existed has no `msgs`, so its `count`
+   * is read instead — for the rest of its TTL it keeps the old, inflated meaning,
+   * which is the milder of the two errors while both are in flight.
+   */
+  async bumpVelocity(hash: string, chatId: number, userId: number, messageId: number): Promise<{ count: number; chatCount: number; userCount: number }> {
     const doc = await this.velocityEvents.findOneAndUpdate(
       { _id: hash } as never,
       {
-        $inc: { count: 1 },
-        $addToSet: { chats: chatId, users: userId },
+        $addToSet: { chats: chatId, users: userId, msgs: `${chatId}:${messageId}` },
         $setOnInsert: { firstSeenAt: new Date() }
       } as never,
       { upsert: true, returnDocument: 'after' }
-    ) as { count?: number; chats?: number[]; users?: number[] } | null
+    ) as { count?: number; chats?: number[]; users?: number[]; msgs?: string[] } | null
     return {
-      count: doc?.count ?? 1,
+      count: doc?.msgs?.length ?? doc?.count ?? 1,
       chatCount: doc?.chats?.length ?? 1,
       userCount: doc?.users?.length ?? 1
     }
@@ -865,24 +896,6 @@ export class MongoStore {
     return (doc?.entries ?? [])
       .map((e) => e?.text)
       .filter((t): t is string => typeof t === 'string' && t.length > 0)
-  }
-
-  /**
-   * The window's numbers without recording a sighting.
-   *
-   * A missing document reads as zeros rather than as one: this is asked only
-   * about a message the window should ALREADY hold, so nothing there means
-   * nothing was counted, and inventing a sighting is the error this method
-   * exists to avoid.
-   */
-  async readVelocity(hash: string): Promise<{ count: number; chatCount: number; userCount: number }> {
-    const doc = await this.velocityEvents.findOne({ _id: hash } as never) as
-      { count?: number; chats?: number[]; users?: number[] } | null
-    return {
-      count: doc?.count ?? 0,
-      chatCount: doc?.chats?.length ?? 0,
-      userCount: doc?.users?.length ?? 0
-    }
   }
 
   async resetSession(key: string): Promise<void> {

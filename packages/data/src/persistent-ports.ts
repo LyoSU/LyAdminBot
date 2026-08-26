@@ -52,13 +52,13 @@ export const BURST_WINDOW_MS = 10 * 60 * 1000
 
 export interface VelocityBackend {
   /** Record one sighting of `hash` and return the windowed aggregates. */
-  bumpVelocity(hash: string, chatId: number, userId: number):
-    Promise<{ count: number; chatCount: number; userCount: number }>
   /**
-   * The same numbers WITHOUT recording a sighting, for a message this window
-   * has already counted — see `PersistentVelocityPort.check`.
+   * Record that `messageId` in `chatId` carries this text, and return what the
+   * window now holds. Counting the same message again — an edit, a replay —
+   * must not move the count; see `MongoStore.bumpVelocity`.
    */
-  readVelocity(hash: string): Promise<{ count: number; chatCount: number; userCount: number }>
+  bumpVelocity(hash: string, chatId: number, userId: number, messageId: number):
+    Promise<{ count: number; chatCount: number; userCount: number }>
 }
 
 /** One buffered message: the text, and which message it was. */
@@ -144,29 +144,17 @@ export class PersistentVelocityPort implements VelocityPort {
 
     try {
       /**
-       * An edit is not a new sighting of the text.
+       * The message id goes in, and the backend counts DISTINCT messages.
        *
-       * This counter is keyed by the NORMALISED TEXT, which is what makes the
-       * distinction free: a message edited into something else lands on a
-       * different key and is counted once there, as it should be. A message
-       * edited without changing what it says lands on the same key — and
-       * counting it again is counting how often the pipeline looked, not how
-       * often the text was sent.
-       *
-       * Production 2026-08-24, with `soloThreshold` at 3: a neighbourhood
-       * outage notice was posted twice and edited three times, the counter
-       * reached five, and `velocity_repeats` deleted it at 0.908 — after the
-       * classifier had called that exact text `legit_share` on each of the four
-       * preceding passes. Same defect as the session window's bare append, in a
-       * different buffer.
-       *
-       * Reading zeros for a message that arrives first as an edit (gap
-       * recovery) is the conservative direction: no signal, rather than one
-       * built on a number nobody counted.
+       * Nothing here special-cases an edit, which is the point: the same
+       * message reaching this twice — edited, or replayed by gap recovery —
+       * is one message either way, and a message edited into a genuinely new
+       * text lands on a different key and is counted there, once. An earlier
+       * attempt to skip the bump for edits fixed the false positive and opened
+       * the mirror hole; see `MongoStore.bumpVelocity`.
        */
-      const { count, chatCount, userCount } = input.message.isEdit
-        ? await this.backend.readVelocity(key)
-        : await this.backend.bumpVelocity(key, input.message.chatId, input.user.id)
+      const { count, chatCount, userCount } = await this.backend.bumpVelocity(
+        key, input.message.chatId, input.user.id, input.message.messageId)
       // Computed since the counter existed and thrown away until 2026-08-01,
       // which left `singleAuthor` permanently absent — read conservatively as a
       // wave, so the one-account branch of the verdict had never once run.

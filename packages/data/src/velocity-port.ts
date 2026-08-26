@@ -11,7 +11,8 @@ import { VELOCITY_WINDOW_MS, velocityKey } from './persistent-ports.js'
 interface WindowEntry {
   chatIds: Set<number>
   userIds: Set<number>
-  count: number
+  /** `chatId:messageId` — distinct messages, not passes over them. */
+  messageIds: Set<string>
   firstSeenMs: number
 }
 
@@ -59,26 +60,24 @@ export class MemoryVelocityPort implements VelocityPort {
       entry = undefined
     }
     if (!entry) {
-      entry = { chatIds: new Set(), userIds: new Set(), count: 0, firstSeenMs: nowMs }
+      entry = { chatIds: new Set(), userIds: new Set(), messageIds: new Set(), firstSeenMs: nowMs }
       this.entries.set(key, entry)
       this.evictIfNeeded()
     }
 
     /**
-     * An edit is not a new sighting — see `PersistentVelocityPort.check` for
-     * the production case. Skipped rather than de-duplicated by id, because the
-     * key IS the normalised text: a message edited into something else lands on
-     * a different key and earns its first sighting there, correctly.
+     * Distinct MESSAGES, not passes over them — an edit and a gap-recovery
+     * replay are the same message arriving again. See `MongoStore.bumpVelocity`
+     * for the production case and for why this is a set rather than an
+     * exception carved out for edits.
      *
      * The comment above about sharing `velocityKey` is exactly why this is here
-     * too. Two implementations of "the same message" is two answers to one
-     * question, and for a while the id half of that answer was in neither.
+     * too: two implementations of "the same message" is two answers to one
+     * question, and the id half of that answer was missing from both.
      */
-    if (!input.message.isEdit) {
-      entry.chatIds.add(input.message.chatId)
-      entry.userIds.add(input.user.id)
-      entry.count += 1
-    }
+    entry.chatIds.add(input.message.chatId)
+    entry.userIds.add(input.user.id)
+    entry.messageIds.add(`${input.message.chatId}:${input.message.messageId}`)
 
     // `userIds` was tracked and then thrown away (2026-07-30 review). It is the
     // difference between the two things this window sees: ONE account repeating
@@ -88,16 +87,17 @@ export class MemoryVelocityPort implements VelocityPort {
     // copy-paste). Both stay detected; only the first is certain enough to act
     // on without asking anybody, and only the first gets the lower bar.
     const singleAuthor = entry.userIds.size === 1
+    const count = entry.messageIds.size
     const exceeded =
       entry.chatIds.size >= this.options.chatThreshold ||
-      entry.count >= (singleAuthor
+      count >= (singleAuthor
         ? Math.min(this.options.soloThreshold, this.options.countThreshold)
         : this.options.countThreshold)
     if (!exceeded) return { exceeded: false }
     return {
       exceeded: true,
       singleAuthor,
-      evidence: `${entry.count} copies in ${entry.chatIds.size} chats from ${entry.userIds.size} accounts within window`
+      evidence: `${count} copies in ${entry.chatIds.size} chats from ${entry.userIds.size} accounts within window`
     }
   }
 

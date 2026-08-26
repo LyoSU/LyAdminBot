@@ -3,9 +3,12 @@ import type { EvaluationInput } from '@lyadmin/core'
 import { MemoryVelocityPort } from './velocity-port.js'
 import { MemorySessionPort } from './session-port.js'
 
-const makeInput = (chatId: number, userId: number, text: string, isEdit = false): EvaluationInput => ({
+let nextMessageId = 1
+const makeInput = (
+  chatId: number, userId: number, text: string, messageId = nextMessageId++
+): EvaluationInput => ({
   message: {
-    chatId, messageId: 1, threadId: null, date: 0, isEdit, text,
+    chatId, messageId, threadId: null, date: 0, isEdit: false, text,
     urls: [], mentions: [], attachments: [], inlineButtons: [],
     forward: null, replyTo: null, channelComment: null, editDelta: null,
     customEmoji: [], guestBot: null
@@ -41,22 +44,25 @@ describe('MemoryVelocityPort', () => {
     expect(third?.evidence).toContain('3 chats')
   })
 
-  it('REGRESSION: editing a message is not another sighting of its text', async () => {
+  it('REGRESSION: one message seen twice is one copy, not two', async () => {
     // The same defect the Mongo-backed port carried, in the implementation whose
     // own comment says two answers to "what counts as the same message" is one
     // too many. For a while the id half of that answer was in neither.
     const port = new MemoryVelocityPort({ soloThreshold: 3 })
-    await port.check(makeInput(-1, 10, SPAM))
-    await port.check(makeInput(-1, 10, SPAM, true))
-    expect((await port.check(makeInput(-1, 10, SPAM, true)))?.exceeded).toBe(false)
+    for (let i = 0; i < 3; i += 1) await port.check(makeInput(-1, 10, SPAM, 7001))
+    expect((await port.check(makeInput(-1, 10, SPAM, 7001)))?.exceeded).toBe(false)
   })
 
-  it('an edit still sees a count the text genuinely earned elsewhere', async () => {
-    const port = new MemoryVelocityPort()
-    await port.check(makeInput(-1, 10, SPAM))
-    await port.check(makeInput(-2, 11, SPAM))
-    await port.check(makeInput(-3, 12, SPAM))
-    expect((await port.check(makeInput(-4, 13, SPAM, true)))?.exceeded).toBe(true)
+  it('the same text from two different messages is two copies', async () => {
+    const port = new MemoryVelocityPort({ soloThreshold: 2 })
+    await port.check(makeInput(-1, 10, SPAM, 8001))
+    expect((await port.check(makeInput(-1, 10, SPAM, 8002)))?.exceeded).toBe(true)
+  })
+
+  it('ids are namespaced by chat, because Telegram numbers messages per chat', async () => {
+    const port = new MemoryVelocityPort({ soloThreshold: 2, chatThreshold: 99 })
+    await port.check(makeInput(-1, 10, SPAM, 5000))
+    expect((await port.check(makeInput(-2, 10, SPAM, 5000)))?.exceeded).toBe(true)
   })
 
   it('templated variants (different numbers/usernames) match', async () => {

@@ -7,19 +7,16 @@ import {
 
 /** In-memory doubles for the Mongo-backed backends (real aggregation logic). */
 class FakeVelocityBackend implements VelocityBackend {
-  private byHash = new Map<string, { count: number; chats: Set<number>; users: Set<number> }>()
+  private byHash = new Map<string, { msgs: Set<string>; chats: Set<number>; users: Set<number> }>()
   fail = false
-  async bumpVelocity(hash: string, chatId: number, userId: number): Promise<{ count: number; chatCount: number; userCount: number }> {
+  // Counts DISTINCT messages, like the store. A fake that increments blindly is
+  // a fake of the defect, and this one has now been that twice.
+  async bumpVelocity(hash: string, chatId: number, userId: number, messageId: number): Promise<{ count: number; chatCount: number; userCount: number }> {
     if (this.fail) throw new Error('mongo down')
-    const e = this.byHash.get(hash) ?? { count: 0, chats: new Set(), users: new Set() }
-    e.count += 1; e.chats.add(chatId); e.users.add(userId)
+    const e = this.byHash.get(hash) ?? { msgs: new Set<string>(), chats: new Set<number>(), users: new Set<number>() }
+    e.msgs.add(`${chatId}:${messageId}`); e.chats.add(chatId); e.users.add(userId)
     this.byHash.set(hash, e)
-    return { count: e.count, chatCount: e.chats.size, userCount: e.users.size }
-  }
-  async readVelocity(hash: string): Promise<{ count: number; chatCount: number; userCount: number }> {
-    if (this.fail) throw new Error('mongo down')
-    const e = this.byHash.get(hash)
-    return { count: e?.count ?? 0, chatCount: e?.chats.size ?? 0, userCount: e?.users.size ?? 0 }
+    return { count: e.msgs.size, chatCount: e.chats.size, userCount: e.users.size }
   }
 }
 
@@ -39,8 +36,11 @@ class FakeSessionBackend implements SessionBackend {
   async resetSession(key: string): Promise<void> { this.byKey.delete(key) }
 }
 
-const makeInput = (text: string, chatId: number, userId: number, isEdit = false): EvaluationInput =>
-  ({ message: { text, chatId, isEdit }, user: { id: userId } } as unknown as EvaluationInput)
+let nextMessageId = 1
+const makeInput = (
+  text: string, chatId: number, userId: number, messageId = nextMessageId++
+): EvaluationInput =>
+  ({ message: { text, chatId, messageId }, user: { id: userId } } as unknown as EvaluationInput)
 
 describe('PersistentVelocityPort', () => {
   it('flags the same template across enough chats', async () => {
@@ -118,46 +118,43 @@ describe('PersistentVelocityPort', () => {
     expect(await port.check(makeInput('a long enough spam template here', 1, 10))).toBeNull()
   })
 
-  it('REGRESSION: editing a message is not another sighting of its text', async () => {
+  it('REGRESSION: one message seen twice is one copy, not two', async () => {
     // Production 2026-08-24, solo threshold 3: a neighbourhood outage notice was
     // posted twice and edited three times, the counter reached five, and
     // `velocity_repeats` deleted it at 0.908 — after the classifier had called
     // that exact text `legit_share` on each of the four preceding passes.
     const port = new PersistentVelocityPort(new FakeVelocityBackend(), { soloThreshold: 3 })
     const text = 'Район 3-ї школи: вул. Саксаганського, Кармелюка, Святкова'
-    await port.check(makeInput(text, 1, 10))
-    await port.check(makeInput(text, 1, 10, true))
-    await port.check(makeInput(text, 1, 10, true))
-    expect((await port.check(makeInput(text, 1, 10, true)))?.exceeded).toBe(false)
+    for (let i = 0; i < 4; i += 1) await port.check(makeInput(text, 1, 10, 7001))
+    expect((await port.check(makeInput(text, 1, 10, 7001)))?.exceeded).toBe(false)
   })
 
-  it('an edit still SEES a count the text genuinely earned', async () => {
-    // Not counting is not the same as not looking: real repetition by other
-    // senders must still be visible to a message that arrives as an edit.
-    const port = new PersistentVelocityPort(new FakeVelocityBackend(), { chatThreshold: 3 })
-    const text = 'buy cheap followers right here right now'
-    await port.check(makeInput(text, 1, 10))
-    await port.check(makeInput(text, 2, 11))
-    await port.check(makeInput(text, 3, 12))
-    expect((await port.check(makeInput(text, 4, 13, true)))?.exceeded).toBe(true)
+  it('the same text from two different messages is two copies', async () => {
+    const port = new PersistentVelocityPort(new FakeVelocityBackend(), { soloThreshold: 2 })
+    const text = 'Заробіток вдома, пиши в особисті просто зараз'
+    await port.check(makeInput(text, 1, 10, 8001))
+    expect((await port.check(makeInput(text, 1, 10, 8002)))?.exceeded).toBe(true)
   })
 
-  it('a message edited into something else is counted once, on its new text', async () => {
-    // The key IS the normalised text, which is what makes skipping the bump
-    // safe: an advert edited in has a different key and earns its own first
-    // sighting there. Without that, this fix would have hidden `edit_injected`.
-    const backend = new FakeVelocityBackend()
-    const port = new PersistentVelocityPort(backend, { soloThreshold: 1 })
-    await port.check(makeInput('доброго ранку всім у цьому чаті', 1, 10))
-    const after = await port.check(makeInput('заходьте у мій канал за заробітком', 1, 10, true))
-    expect(after?.exceeded).toBe(false)
-  })
-
-  it('a message that arrives first as an edit is not invented a sighting', async () => {
-    // Gap recovery can replay a message the window never saw. Zeros, not one.
+  it('REGRESSION: a message edited INTO a new text is counted on that text', async () => {
+    // The mirror hole, and one I opened myself before catching it: an earlier
+    // fix skipped the bump whenever `isEdit` was set, which meant a message
+    // edited from something innocuous into an advert reached the advert's key
+    // having never been counted there. Three accounts editing their way to the
+    // same text would have stayed invisible.
     const port = new PersistentVelocityPort(new FakeVelocityBackend(), { soloThreshold: 1 })
-    expect((await port.check(makeInput('a long enough spam template here', 1, 10, true)))?.exceeded)
-      .toBe(false)
+    await port.check(makeInput('доброго ранку всім у цьому чаті', 1, 10, 9001))
+    const after = await port.check(makeInput('заходьте у мій канал за заробітком', 1, 10, 9001))
+    expect(after?.exceeded).toBe(true)
+  })
+
+  it('a message replayed by gap recovery does not become a second copy', async () => {
+    // mtcute does not de-duplicate supergroup updates, so the same message can
+    // arrive twice without ever having been edited. Same answer, no special case.
+    const port = new PersistentVelocityPort(new FakeVelocityBackend(), { soloThreshold: 2 })
+    const text = 'a long enough spam template here to be keyed'
+    await port.check(makeInput(text, 1, 10, 9100))
+    expect((await port.check(makeInput(text, 1, 10, 9100)))?.exceeded).toBe(false)
   })
 })
 
