@@ -484,3 +484,45 @@ describe('the classifier vocabulary and the ceiling that filters it', () => {
     expect(new Set(LLM_REASON_CODES).size).toBe(LLM_REASON_CODES.length)
   })
 })
+
+
+/**
+ * A question that cannot be delivered is not a milder action, it is no action.
+ *
+ * Production 2026-08-26: three captchas in seventy minutes, all three issued,
+ * whispered, refused with `USER_NOT_PARTICIPANT` and lifted within 30ms. A
+ * commenter under a channel post is frequently not a member of the linked
+ * discussion group, and the whisper is the only delivery this branch is allowed
+ * — falling back to a visible card was removed on 2026-08-25 precisely because
+ * it turns a private tap into a public accusation.
+ *
+ * So the ask is now conditioned on the one fact that decides whether it can
+ * arrive. Telegram had already told us: `getChatMember` answers
+ * `USER_NOT_PARTICIPANT` by name, `MemberFactsCache` already sorted that from a
+ * failed RPC to decide what to cache, and then dropped the answer.
+ */
+describe('decideAction — do not ask a question that cannot be delivered', () => {
+  it('REGRESSION: no captcha for somebody Telegram says is not in the chat', () => {
+    const d = decideAction(makeInput({ pSpam: 0.45, senderIsParticipant: false }))
+    expect(d.action).toBe('observe')
+  })
+
+  it('asks when they are in the chat', () => {
+    expect(decideAction(makeInput({ pSpam: 0.45, senderIsParticipant: true })).action).toBe('captcha')
+  })
+
+  it('asks when Telegram did not say — a failed lookup is not a denial', () => {
+    // The same rule the cache follows: only a refusal that NAMES the person is
+    // an answer. Refusing to ask on a timeout would hand every captcha to the
+    // network.
+    expect(decideAction(makeInput({ pSpam: 0.45, senderIsParticipant: null })).action).toBe('captcha')
+    expect(decideAction(makeInput({ pSpam: 0.45 })).action).toBe('captcha')
+  })
+
+  it('changes nothing above the captcha band', () => {
+    // It withholds a question, never a removal: somebody who is not a
+    // participant can still be judged on what they posted.
+    const d = decideAction(makeInput({ pSpam: 0.99, senderIsParticipant: false }))
+    expect(d.action).toBe('ban')
+  })
+})

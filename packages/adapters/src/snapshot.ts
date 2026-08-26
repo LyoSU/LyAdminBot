@@ -26,6 +26,8 @@ export interface UserProfileFacts {
   unofficialClientRisk: boolean | null
   /** Seconds since the user joined this chat (channels.getParticipant.date). */
   joinedAgoSeconds?: number | null
+  /** Whether Telegram says they are in this chat — see `MemberFacts`. */
+  isParticipant?: boolean | null
   joinedDuringSurge?: boolean
 }
 
@@ -103,6 +105,7 @@ const snapshotOf = (
   // codes (e.g. 'spam') — empty for unrestricted users or when absent.
   restrictionReasons: sender.restrictionReason?.map((r) => r.reason) ?? [],
   joinedAgoSeconds: profile?.joinedAgoSeconds ?? null,
+  isParticipant: profile?.isParticipant ?? null,
   joinedDuringSurge: profile?.joinedDuringSurge ?? false,
   predictedAgeDays: predictAccountAgeDays(sender.id, nowUnix),
   predictedAgeBoundsDays: predictAccountAgeBoundsDays(sender.id, nowUnix),

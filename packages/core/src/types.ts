@@ -117,6 +117,11 @@ export interface UserSnapshot {
    * "joined and immediately posted".
    */
   joinedAgoSeconds: number | null
+  /**
+   * Whether Telegram says they are in this chat: false only when it said so by
+   * name, null when it did not say. See `MemberFacts.isParticipant`.
+   */
+  isParticipant?: boolean | null
   /** True while this member's recorded join belongs to a detected chat surge. */
   joinedDuringSurge?: boolean
 }

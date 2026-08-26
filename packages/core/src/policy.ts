@@ -55,6 +55,20 @@ export interface PolicyInput {
    */
   ephemeralCaptcha?: boolean
   /**
+   * Whether Telegram says the sender is in this chat.
+   *
+   * `false` only when it named them and said no; `null` or absent when it did
+   * not say. Read by `mayAskCaptcha` alone, because the captcha's only delivery
+   * is a whisper and a whisper requires membership — Telegram answers
+   * `USER_NOT_PARTICIPANT` otherwise, which is what a commenter under a channel
+   * post frequently is.
+   *
+   * Production 2026-08-26: three captchas in seventy minutes, every one issued,
+   * refused by Telegram and lifted 30ms later. The branch spent a profile
+   * screen and an avatar moderation call to produce a log line.
+   */
+  senderIsParticipant?: boolean | null
+  /**
    * Evidence that this account is known-bad rather than merely suspicious:
    * a Telegram scam/fake flag, an external ban listing, or a spam-labelled
    * restriction. Only these earn a permanent ban; everything else expires.
@@ -282,6 +296,9 @@ export const PRESET_THRESHOLDS: Record<StrictnessPreset, PresetThresholds> = {
  */
 export const mayAskCaptcha = (input: PolicyInput): boolean =>
   input.captchaEnabled && input.userIsNewish &&
+  // Only a refusal that names them counts. A timeout is not a denial, and
+  // treating it as one would hand every captcha in the system to the network.
+  input.senderIsParticipant !== false &&
   (input.chatKind !== 'discussion' || input.ephemeralCaptcha === true)
 
 export const decideAction = (input: PolicyInput): PolicyDecision => {

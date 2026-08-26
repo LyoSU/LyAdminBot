@@ -3370,12 +3370,25 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
   const tenureUncertain = localTenureDays === null ||
     localTenureDays < ESTABLISHED_MIN_TENURE_DAYS
   let joinedAgoSeconds: number | null = null
+  /**
+   * Whether Telegram says this sender is in the chat at all — false only when
+   * it named them and refused.
+   *
+   * Through `chatMemberFacts` rather than a private `getChatMember` with the
+   * error swallowed, which is what stood here. That call already runs for
+   * adminship and ballots and is cached per person per chat, and it already
+   * sorts "there is no such member" from a failed RPC; doing it separately
+   * spent a second lookup to throw the same answer away.
+   *
+   * Discarding it cost something specific: three captchas on 2026-08-26 were
+   * issued to commenters who are not members of the discussion group, refused
+   * by Telegram at the whisper, and lifted 30ms later.
+   */
+  let isParticipant: boolean | null = null
   if (newish || tenureUncertain) {
-    const joinedDate = await timed('joined', () =>
-      gateway.tg.getChatMember({ chatId: chat.id, userId: sender.id })
-        .then((m) => m?.joinedDate ?? null)
-        .catch(() => null))
-    if (joinedDate) joinedAgoSeconds = Math.max(0, (Date.now() - joinedDate.getTime()) / 1000)
+    const facts = await timed('joined', () => chatMemberFacts(chat.id, sender.id))
+    joinedAgoSeconds = facts.joinedAgoSeconds
+    isParticipant = facts.isParticipant
   }
 
   // External ban databases (lols/CAS): one cheap HTTP call, so it runs for
@@ -3441,6 +3454,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
         {
           unofficialClientRisk: profile.unofficialClientRisk,
           joinedAgoSeconds,
+          isParticipant,
           joinedDuringSurge: joinRate.joinedDuringSurge(chat.id, userSender.id)
         }
       )

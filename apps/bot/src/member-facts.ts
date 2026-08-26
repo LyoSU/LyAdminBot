@@ -42,12 +42,30 @@ export interface MemberFacts {
   isAdmin: boolean
   /** Seconds since Telegram says they joined; null when it did not say. */
   joinedAgoSeconds: number | null
+  /**
+   * Whether Telegram says this person is in the chat at all.
+   *
+   * `false` ONLY when it named them and said no — the refusals
+   * `NO_SUCH_MEMBER_REGEX` matches. `null` when it did not say: a timeout, a
+   * dropped connection, an empty answer. The distinction is the same one the
+   * cache already makes about what is worth writing down, and it was being
+   * computed and discarded.
+   *
+   * A commenter under a channel post is frequently not a member of the linked
+   * discussion group, and the captcha's only delivery — a whisper — requires
+   * membership. So this is what tells the pipeline not to ask a question it
+   * cannot deliver.
+   */
+  isParticipant: boolean | null
 }
 
 /** The shape we read out of `getChatMember`, as loosely as it is worth reading. */
 export type MemberAnswer = { status?: unknown; joinedDate?: unknown } | null | undefined
 
-const NOT_AN_ADMIN: MemberFacts = { isAdmin: false, joinedAgoSeconds: null }
+const NOT_AN_ADMIN: MemberFacts = { isAdmin: false, joinedAgoSeconds: null, isParticipant: null }
+
+/** Telegram named them and said they are not here. */
+const NOT_A_MEMBER: MemberFacts = { isAdmin: false, joinedAgoSeconds: null, isParticipant: false }
 
 const timestampMs = (at: unknown): number | null => {
   if (typeof at !== 'string' && typeof at !== 'number' && !(at instanceof Date)) return null
@@ -91,7 +109,7 @@ export class MemberFactsCache {
       const text = err instanceof Error ? err.message : String(err)
       // Not an answer about this person — do not write anything down.
       if (!NO_SUCH_MEMBER_REGEX.test(text)) return NOT_AN_ADMIN
-      facts = NOT_AN_ADMIN
+      facts = NOT_A_MEMBER
     }
 
     if (this.entries.size >= SWEEP_ABOVE) this.sweep()
@@ -104,6 +122,7 @@ export class MemberFactsCache {
     const joinedMs = timestampMs(member.joinedDate)
     return {
       isAdmin: member.status === 'admin' || member.status === 'creator',
+      isParticipant: true,
       // Clamped: a join date in the future is a clock disagreement, not
       // negative tenure, and negative tenure would read as "brand new".
       joinedAgoSeconds: joinedMs === null ? null : Math.max(0, (this.now() - joinedMs) / 1000)

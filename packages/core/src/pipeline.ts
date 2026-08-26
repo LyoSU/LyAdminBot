@@ -319,6 +319,7 @@ export const evaluateMessage = async (
     userIsTrusted: isTrusted(input),
     userHasHardVerdict: hasHardAccountVerdict(input.user),
     ephemeralCaptcha: input.policy.ephemeralCaptcha === true,
+    senderIsParticipant: input.user.isParticipant ?? null,
     // Grounds for a PERMANENT ban rather than a timed one: the account is
     // known-bad by someone else's verdict, not merely scored badly by us.
     // Everything else expires, so a mistake on our side heals without an

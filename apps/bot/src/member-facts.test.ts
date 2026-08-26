@@ -96,7 +96,7 @@ describe('MemberFactsCache', () => {
     const l = lookup([() => null])
 
     const facts = await cache.get(-100, 7, l.call)
-    expect(facts).toEqual({ isAdmin: false, joinedAgoSeconds: null })
+    expect(facts).toEqual({ isAdmin: false, joinedAgoSeconds: null, isParticipant: null })
     expect(l.calls).toBe(1)
   })
 
@@ -158,5 +158,50 @@ describe('MemberFactsCache', () => {
       const l = lookup([() => ({ status: 'member', joinedDate: junk })])
       expect((await cache.get(-100, 7, l.call)).joinedAgoSeconds).toBeNull()
     }
+  })
+})
+
+
+/**
+ * Telegram already told us, and we already read it.
+ *
+ * Production 2026-08-26, three captchas in seventy minutes: every one was
+ * issued, failed to whisper with `USER_NOT_PARTICIPANT`, and was lifted 30ms
+ * later. A commenter in a linked discussion group is frequently not a MEMBER of
+ * it, and the whisper is the only delivery this branch is allowed — so in those
+ * chats the captcha is a moderation call and a log line, never a question.
+ *
+ * The fact was in hand before the ask: `NO_SUCH_MEMBER_REGEX` already sorted
+ * "there is no such member here" from a failed RPC, and the answer was used to
+ * decide whether to CACHE and then thrown away. Now it is carried.
+ */
+describe('MemberFacts — is this person in the chat at all', () => {
+  it('a refusal that names the person is an answer: not a participant', async () => {
+    const cache = new MemberFactsCache()
+    const facts = await cache.get(1, 2, () => {
+      throw new Error('Telegram API error 400: USER_NOT_PARTICIPANT')
+    })
+    expect(facts.isParticipant).toBe(false)
+  })
+
+  it('any other failure says nothing about membership', async () => {
+    const cache = new MemberFactsCache()
+    const facts = await cache.get(1, 2, () => {
+      throw new Error('Telegram API error 500: TIMEOUT')
+    })
+    expect(facts.isParticipant).toBeNull()
+    expect(facts.isAdmin).toBe(false)
+  })
+
+  it('an answer about a member says they are one', async () => {
+    const cache = new MemberFactsCache()
+    const facts = await cache.get(1, 2, async () => ({ status: 'member', joinedDate: new Date() }))
+    expect(facts.isParticipant).toBe(true)
+  })
+
+  it('an empty answer is not a denial', async () => {
+    const cache = new MemberFactsCache()
+    const facts = await cache.get(1, 2, async () => null)
+    expect(facts.isParticipant).toBeNull()
   })
 })
