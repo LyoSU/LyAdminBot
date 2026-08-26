@@ -14,6 +14,9 @@ import {
   type VoterStanding,
   classifyUrl, strongestTelegramLink, removesSender, truncate, mediaCategoryOf,
   BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS, ESTABLISHED_MIN_MESSAGES,
+  accountVerdict, hasHardAccountVerdict, extractUserSignals, PROFILE_EVIDENCE_SIGNALS,
+  TIMED_BAN_SECONDS,
+  type AccountAction,
   type ChannelPreview, type EditBaseline, type EvaluationInput, type ForwardOrigin,
   type MediaCategory, type PipelinePorts, type UserSnapshot, type Verdict, type VoteBallot
 } from '@lyadmin/core'
@@ -2006,6 +2009,33 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
     return
   }
 
+  /**
+   * A report on Telegram's own arrival line, which is what people actually do
+   * when the thing they distrust is the ACCOUNT rather than anything it said.
+   *
+   * Observed 2026-08-25: seven of nine reports in one chat were made this way,
+   * against accounts that had posted nothing judgeable. Each opened a ballot
+   * with no content — and a contentless ballot is the one shape this codebase
+   * already refuses to learn from, so even a resolved one taught nothing.
+   *
+   * So no ballot here. The question "is this account a spammer" is not a
+   * question about a message, and it is answerable without one.
+   */
+  if (replied.action) {
+    // Answered before the command is removed: `sendView` replies to it, and a
+    // reply whose target we just deleted is a send that can fail outright.
+    await sendView(message, { text: locale.report.accepted, buttons: [] })
+    await dropCommand()
+    log.info('report', {
+      chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName,
+      by: reporter.id, byName: reporter.displayName, messageId: replied.id, on: 'arrival'
+    })
+    void screenAccount({
+      chat, target, reason: 'reported_arrival', replyToMessageId: replied.id
+    }).catch(() => { /* best-effort */ })
+    return
+  }
+
   const fullText = replied.text ?? ''
   const textPreview = truncate(fullText, 200)
   // Through the normalizer rather than reading `replied.media` here: it is the
@@ -2114,6 +2144,22 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
     }
     return
   }
+
+  /**
+   * The ballot is not the only thing a report can start.
+   *
+   * Measured 2026-08-25 in one comment section: 38 of 52 ballots there expired
+   * without an outcome, because 8 of 247 recorded members had enough standing
+   * to vote at all — so a member who spots spam is answered by a question
+   * nobody in the room is allowed to settle. The report still carries real
+   * information, and the part of it this bot can act on alone is the ACCOUNT.
+   *
+   * Fire-and-forget, after the prompt: the reporter should not wait on a
+   * profile fetch, and a screen that fails must not cost them their ballot.
+   */
+  void screenAccount({
+    chat, target, reason: 'reported', replyToMessageId: replied.id
+  }).catch(() => { /* best-effort */ })
 
   // Community path: post (or refresh) the vote prompt.
   // No `botUsername` here on purpose: a ballot opened by a person has no bot
@@ -2346,40 +2392,53 @@ const JOIN_GATE_MUTE_SECONDS = 10 * 60
  * explicit avatar; but somebody the CHAT already knows is exempted below,
  * because a returning regular has standing that a stranger does not.
  */
-const gateExplicitJoiner = async (
-  chat: Chat, joiner: User, hit: string, joinMessageId: number,
+const gateAccount = async (params: {
+  chat: Chat
+  user: User
+  /** Stored standing, when the caller already has it. */
   history: { messagesGlobal: number } | null
-): Promise<void> => {
+  /** Reason code recorded and logged. */
+  reason: string
+  /** What was seen, for the record and the "Why?" card. */
+  evidence: string | null
+  /** Message the prompt answers — a join line, or the reported message. */
+  replyToMessageId: number | null
+}): Promise<'gated' | 'skipped' | 'failed'> => {
+  const { chat, user, reason, evidence } = params
   const groupDoc = await store.getGroupDoc(chat.id).catch(() => null)
   const policy = groupDocToChatPolicy(groupDoc as never)
   // Both switches apply: the chat's own captcha setting, and its master spam
   // switch. A chat that turned the pipeline off did not ask to be policed at
   // the door instead.
-  if (!policy.enabled || !policy.captchaEnabled) return
+  if (!policy.enabled || !policy.captchaEnabled) return 'skipped'
+  if (policy.trustedUserIds.includes(user.id)) return 'skipped'
   // Standing earned elsewhere still counts — see `established_user`.
-  if ((history?.messagesGlobal ?? 0) >= ESTABLISHED_MIN_MESSAGES) return
-  if (await isChatAdmin(chat.id, joiner.id)) return
+  if ((params.history?.messagesGlobal ?? 0) >= ESTABLISHED_MIN_MESSAGES) return 'skipped'
+  if (await isChatAdmin(chat.id, user.id)) return 'skipped'
 
   const held = await gateway.moderationActions
-    .mute(chat.id, joiner.id, JOIN_GATE_MUTE_SECONDS)
+    .mute(chat.id, user.id, JOIN_GATE_MUTE_SECONDS)
     .then(() => true).catch(() => false)
   // No gate, no prompt: a question about a door that is not closed asks the
   // member to unlock something already open.
   if (!held) {
-    log.warn('join_gate_failed', { chatId: chat.id, userId: joiner.id, hit })
-    return
+    log.warn('account_gate_failed', { chatId: chat.id, userId: user.id, reason })
+    return 'failed'
   }
-  log.info('join_gate', { chatId: chat.id, chat: chat.title ?? undefined, userId: joiner.id, hit })
+  log.info('account_gate', {
+    chatId: chat.id, chat: chat.title ?? undefined, userId: user.id, reason,
+    ...(evidence !== null ? { evidence } : {})
+  })
 
   const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
-  // Replied to Telegram's own join line, so the prompt has a referent: a
-  // whisper with nothing attached reads like a phishing attempt.
-  await deliverCaptcha(chat.id, joiner.id, joiner.displayName, locale, joinMessageId)
+  // Replied to something real — Telegram's own join line, or the message that
+  // was reported. A whisper with nothing attached reads like a phishing attempt.
+  await deliverCaptcha(chat.id, user.id, user.displayName, locale, params.replyToMessageId)
 
   await store.recordDecision({
     chatId: chat.id,
-    userId: joiner.id,
-    messageId: joinMessageId,
+    userId: user.id,
+    messageId: params.replyToMessageId ?? 0,
     textPreview: '',
     verdict: {
       pSpam: 0,
@@ -2389,8 +2448,8 @@ const gateExplicitJoiner = async (
       decidedBy: 'join_screen',
       ruleId: null,
       signals: [],
-      reasonCode: 'nsfw_avatar_join',
-      reasonEvidence: hit,
+      reasonCode: reason,
+      reasonEvidence: evidence,
       meta: {}
     },
     execution: {
@@ -2399,6 +2458,114 @@ const gateExplicitJoiner = async (
     },
     latencyMs: 0
   }).catch(() => { /* telemetry must never break moderation */ })
+  return 'gated'
+}
+
+/**
+ * Look at an account, with no message to go on.
+ *
+ * A report is not evidence — it is a request to LOOK, and looking is the one
+ * thing this bot can do entirely by itself: bio, name, avatar, whether that
+ * photograph is already on other accounts, what the external lists say. That
+ * is why a report may trigger this whatever the reporter's standing. The
+ * reporter supplies no part of the case; the worst a Sybil ring achieves is
+ * making the bot look at somebody innocent, where it finds nothing.
+ *
+ * Read FRESH rather than through the profile cache. A report means "look
+ * again", and a twenty-four hour cache is exactly what would answer with the
+ * bio that was there yesterday — which is the bio a spammer edits.
+ *
+ * Rate-limited by `reportAllowed` at the only call site that is open to
+ * everybody, so the cost per chat is bounded by the report limit.
+ */
+const screenAccount = async (params: {
+  chat: Chat
+  target: User
+  reason: string
+  replyToMessageId: number | null
+}): Promise<AccountAction> => {
+  const { chat, target } = params
+  const userDoc = await store.getUserDoc(target.id).catch(() => null)
+  const history = userDocToHistory(userDoc as never, 0)
+  const profile = await fetchUserProfile(gateway.tg, target.id).catch(() => null)
+  if (profile === null) return 'none'
+
+  let externalBan = history?.externalBan ?? null
+  const fresh = await fetchExternalBan(target.id).catch(() => null)
+  if (fresh) externalBan = mergeExternalBan({ lols: fresh.lols as never, cas: fresh.cas as never })
+
+  const snapshot = buildUserSnapshot(
+    target,
+    history === null ? null : { ...history, avatars: profile.avatars, externalBan },
+    undefined,
+    { unofficialClientRisk: profile.unofficialClientRisk }
+  )
+  const signals = [
+    ...extractUserSignals(snapshot),
+    ...extractBioSignals(profile.bio, profile.businessTexts)
+  ]
+
+  // The avatar, on the same terms the message path reads it: bytes we may
+  // already hold, an explicit-only NSFW bar, and the shared-picture store.
+  const avatarBase64 = profile.latestAvatar
+    ? await rawPhotoToBase64(gateway.tg, profile.latestAvatar, AVATAR_MAX_BYTES).catch(() => null)
+    : null
+  let evidence: string | null = null
+  if (avatarBase64 !== null) {
+    if (ports.moderation) {
+      const hit = await ports.moderation.check('', avatarBase64)
+        .then(nsfwProfileHit).catch(() => null)
+      if (hit !== null) {
+        signals.push({ name: 'nsfw_avatar', evidence: hit })
+        evidence = hit
+      }
+    }
+    const hash = avatarDhashOf(avatarBase64)
+    if (hash !== null && ports.profileMedia) {
+      const reuse = await ports.profileMedia.seen(target.id, hash).catch(() => null)
+      if (reuse !== null && reuse.otherAccounts > 0) {
+        const name = reuse.otherAccounts > 1 ? 'avatar_shared_with_accounts' : 'avatar_shared_with_account'
+        const line = `same photo on ${reuse.otherAccounts} other account(s)`
+        signals.push({ name, evidence: line })
+        evidence ??= line
+      }
+    }
+  }
+
+  const verdict = accountVerdict(signals, { hardAccountVerdict: hasHardAccountVerdict(snapshot) })
+  const named = signals
+    .filter((s) => PROFILE_EVIDENCE_SIGNALS.has(s.name as never))
+    .map((s) => s.name)
+  log.info('account_screen', {
+    chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName,
+    reason: params.reason, verdict, signals: named.join(' ') || undefined
+  })
+  if (verdict === 'none') return 'none'
+
+  if (verdict === 'ban') {
+    const banned = await gateway.moderationActions.ban(chat.id, target.id, TIMED_BAN_SECONDS)
+      .then(() => true).catch(() => false)
+    log.info('account_screen_ban', { chatId: chat.id, userId: target.id, applied: banned })
+    return banned ? 'ban' : 'none'
+  }
+
+  const gated = await gateAccount({
+    chat, user: target, history,
+    reason: params.reason,
+    evidence,
+    replyToMessageId: params.replyToMessageId
+  })
+  return gated === 'gated' ? 'gate' : 'none'
+}
+
+const gateExplicitJoiner = async (
+  chat: Chat, joiner: User, hit: string, joinMessageId: number,
+  history: { messagesGlobal: number } | null
+): Promise<void> => {
+  await gateAccount({
+    chat, user: joiner, history,
+    reason: 'nsfw_avatar_join', evidence: hit, replyToMessageId: joinMessageId
+  })
 }
 
 const screenJoinerAvatars = async (
