@@ -21,6 +21,7 @@ import {
   extractUserSignals, tenureDays, hasHardAccountVerdict,
   ESTABLISHED_MIN_MESSAGES, ESTABLISHED_MIN_IN_CHAT, ESTABLISHED_MIN_TENURE_DAYS
 } from './signals/user.js'
+import { profileHasCase } from './signals/account-verdict.js'
 import { extractBioSignals } from './signals/bio.js'
 import { extractLinkedChannelSignals } from './signals/channel.js'
 import { applyDeterministicRules } from './rules.js'
@@ -960,6 +961,11 @@ export const evaluateMessage = async (
    * the ladder below runs normally — signatures, vectors, the classifier — and
    * whatever they conclude is reached with the message read, not guessed at.
    */
+  // `profileSpoke`, not `profileHasCase`, and the asymmetry is the point: this
+  // is a lookup, not a punishment. Deciding to LOOK at somebody costs an
+  // indexed read and can only ever add evidence; deciding to ask them to prove
+  // they are human costs them the benefit of the doubt. The same split the
+  // report path settled on 2026-08-26 — looking needs a lower bar than acting.
   const repetition = lowInformation && profileSpoke && ports.velocity
     ? await safe('velocity', () =>
         ports.velocity!.check(input, { countExactWhenTemplateUnusable: true }))
@@ -1064,8 +1070,16 @@ export const evaluateMessage = async (
      * `newness` is a correlated group by design — one fact about an account
      * counted three ways — and a group cap keeps it from reaching a verdict.
      * It must not reach a question either.
+     *
+     * The guard was `profileSpoke` — has the profile raised ANY signal — until
+     * 2026-08-26, when a nine-year-old account was asked to prove it was human
+     * because it had a link in its bio. `promo_in_bio` weighs 0.3 and 22% of
+     * bios carry one; a membership test cannot tell that from a private invite
+     * at 1.5. `profileHasCase` is the weighted answer, and it is the SAME one
+     * `accountVerdict` gives, so the two cannot come to disagree about whether
+     * a profile has said anything.
      */
-    if (deserved && profileSpoke && mayAskCaptcha(policyInputFor(shaped.pSpam, signals))) {
+    if (deserved && profileHasCase(signals) && mayAskCaptcha(policyInputFor(shaped.pSpam, signals))) {
       meta['scorePSpam'] = Number(shaped.pSpam.toFixed(4))
       // Which discount was withheld, so a captcha that turned on this rule can
       // be told apart from one the arithmetic reached on its own.

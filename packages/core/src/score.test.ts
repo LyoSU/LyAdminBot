@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import type { Signal } from './types.js'
+import { profileHasCase } from './signals/account-verdict.js'
 import {
   scoreSignals, hasDecisiveSignal, mayRemoveSender, hasSenderStanding, contentEvidence,
   BASE_RATE_BIAS, DECISIVE_MIN_WEIGHT, SENDER_REMOVAL_MIN_EVIDENCE
@@ -543,5 +544,61 @@ describe('hasSenderStanding (2026-08-08)', () => {
   it('duplicate signals do not change the answer', () => {
     const twice: Signal[] = [{ name: 'established_user' }, { name: 'established_user' }]
     expect(hasSenderStanding(twice)).toBe(true)
+  })
+})
+
+
+/**
+ * Whether the profile has enough of a case to ask somebody a question.
+ *
+ * Production 2026-08-26 16:01: an account 3308 days old — nine years — was
+ * handed a captcha for tagging two members. The case against it was
+ * `sleeper_awakened` 1.2, `new_globally` 0.8, `new_in_chat` 0.4: three ways of
+ * saying WE have not met them. The branch that asked exists precisely so that
+ * stack cannot ask anyone to prove they are human, and its guard was a
+ * membership test over the profile-evidence set — unlocked by `promo_in_bio` at
+ * 0.3, a link in the bio, which 22% of the 3797 bios measured on 2026-08-25
+ * have and which is BELOW the base rate for spam.
+ *
+ * `accountVerdict` had already answered the same question for accounts, and
+ * answered it differently: sub-threshold nudges dropped rather than stacked,
+ * correlated signals sharing a group ceiling, and 1.5 to ask. One codebase, one
+ * question, two answers — so this is now that same answer.
+ */
+describe('profileHasCase', () => {
+  it('REGRESSION: a link in the bio is not a case', () => {
+    expect(profileHasCase([
+      { name: 'sleeper_awakened' }, { name: 'new_globally' },
+      { name: 'new_in_chat' }, { name: 'promo_in_bio' }
+    ])).toBe(false)
+  })
+
+  it('nor is a personal channel, which Telegram offers everybody', () => {
+    expect(profileHasCase([{ name: 'personal_channel' }, { name: 'new_in_chat' }])).toBe(false)
+  })
+
+  it('a private invite in the bio is, on its own', () => {
+    expect(profileHasCase([{ name: 'private_invite_in_bio' }])).toBe(true)
+  })
+
+  it('so is a suggestive profile picture — deliberately, and by name', () => {
+    // 2026-08-24 measured a real promo account at sexual 0.373, under a bar
+    // written to ask "is this pornography". The weight (0.8) is calibrated for a
+    // message verdict where it is one input among many; as a reason to ASK it
+    // was decided sufficient, and that decision is kept rather than reverted by
+    // a threshold. Same shape as `DECISIVE_ALONE` in account-verdict.
+    expect(profileHasCase([{ name: 'suggestive_profile_media' }])).toBe(true)
+    expect(profileHasCase([{ name: 'nsfw_avatar' }])).toBe(true)
+  })
+
+  it('two weak profile facts do not add up to one real one', () => {
+    // The group ceiling: one profile advertised in two places is one finding.
+    expect(profileHasCase([
+      { name: 'promo_in_bio' }, { name: 'personal_channel' }
+    ])).toBe(false)
+  })
+
+  it('says nothing about signals that are not about the profile', () => {
+    expect(profileHasCase([{ name: 'external_ban' }, { name: 'velocity_repeats' }])).toBe(false)
   })
 })

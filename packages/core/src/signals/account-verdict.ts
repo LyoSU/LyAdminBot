@@ -83,6 +83,37 @@ const profileWeight = (signals: readonly Signal[]): number => {
 }
 
 /**
+ * Profile facts that may ask a question on their own, once a message has come
+ * up empty.
+ *
+ * A superset of `DECISIVE_ALONE`, and the difference is deliberate rather than
+ * an oversight. That set answers "may this account be gated on arrival, having
+ * said nothing at all"; this one answers "may this account be gated after
+ * saying something that turned out to carry nothing". The second has a message
+ * in hand and a person already in the room, so a suggestive picture — measured
+ * 2026-08-24 on a real promo account at sexual 0.373, and explicitly ruled
+ * "strong, not decisive" — may ask here and not at the door.
+ */
+const ASKS_ALONE = new Set<string>([...DECISIVE_ALONE, 'suggestive_profile_media'])
+
+/**
+ * Whether the profile has enough of a case to ask somebody a question.
+ *
+ * Shared with the message pipeline's `low_information_profile` branch, which
+ * used to guard itself with a membership test over the whole profile-evidence
+ * set. Production 2026-08-26 16:01: an account 3308 days old was handed a
+ * captcha for tagging two members, because `promo_in_bio` — 0.3, a link in the
+ * bio, present in 22% of the 3797 bios measured on 2026-08-25 and BELOW the
+ * base rate for spam — unlocked a branch whose whole purpose is to stop three
+ * newness signals asking a stranger to prove they are human.
+ *
+ * One question, one answer, in one place.
+ */
+export const profileHasCase = (signals: readonly Signal[]): boolean =>
+  signals.some((s) => ASKS_ALONE.has(s.name)) ||
+  profileWeight(signals) >= ACCOUNT_GATE_MIN_WEIGHT
+
+/**
  * Judge the account alone.
  *
  * `hardAccountVerdict` is `hasHardAccountVerdict(user)` at the call site — kept

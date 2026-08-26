@@ -1874,6 +1874,20 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
    * the shape of "strong, not decisive": nothing is removed, and the sender
    * settles it with one tap that a script cannot make.
    */
+  /**
+   * The branch still works where it should: one fact that is 1.5 on its own.
+   */
+  it('still asks when the bio holds a private invite', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { text: '💗' },
+      user: newcomer,
+      policy: { captchaEnabled: true },
+      enrichment: { bio: 'мій канал t.me/+AAAAAAAAAAAAAAAA' }
+    }), {})
+    expect(v.reasonCode).toBe('low_information_profile')
+    expect(v.action).toBe('captcha')
+  })
+
   it('asks a suggestive-profile newcomer to prove they are human', async () => {
     const v = await evaluateMessage(makeInput({
       msg: { text: 'вот так вот' },
