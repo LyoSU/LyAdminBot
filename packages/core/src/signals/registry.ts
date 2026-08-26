@@ -713,6 +713,17 @@ export const OVERRIDES_CHAT_TRUST_SIGNALS = namesWhere(
   (s) => s.platformVerdict === true || s.thirdPartyVerdict === true || s.accountIntegrity === true
 )
 
+/**
+ * Findings a THIRD party made — the external ban databases, lols and CAS.
+ *
+ * Split out from `OVERRIDES_CHAT_TRUST_SIGNALS` because it is the one family a
+ * chat may decline: `externalBanEnabled` says "we do not honour those lists".
+ * Telegram's own scam flag is not covered by that setting and neither is an
+ * integrity finding, so a set that lumped all three together would let one
+ * member's report overrule a chat's stated preference.
+ */
+export const THIRD_PARTY_VERDICT_SIGNALS = namesWhere((s) => s.thirdPartyVerdict === true)
+
 /** Correlated groups with their members, in declaration order. */
 export const SIGNAL_GROUP_CAPS: { name: SignalGroupName; cap: number; members: ReadonlySet<SignalName> }[] =
   (Object.keys(SIGNAL_GROUPS) as SignalGroupName[]).map((name) => ({

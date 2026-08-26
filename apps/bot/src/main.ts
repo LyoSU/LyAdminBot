@@ -15,6 +15,7 @@ import {
   classifyUrl, strongestTelegramLink, removesSender, truncate, mediaCategoryOf,
   BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS, ESTABLISHED_MIN_MESSAGES,
   accountVerdict, hasHardAccountVerdict, extractUserSignals, PROFILE_EVIDENCE_SIGNALS,
+  accountScreenAllowed, hardVerdictSourceOf,
   TIMED_BAN_SECONDS,
   type AccountAction,
   type ChannelPreview, type EditBaseline, type EvaluationInput, type ForwardOrigin,
@@ -2594,10 +2595,70 @@ const screenAccount = async (params: {
   if (verdict === 'none') return 'none'
 
   if (verdict === 'ban') {
+    /**
+     * The severe outcome, and until 2026-08-26 the only one with no chat-level
+     * guard on it at all — `gateAccount` below checked five things and wrote a
+     * decision row, while this branch returned three lines earlier having
+     * checked nothing and written two log lines.
+     *
+     * So any member's `/report` could ban an account for thirty days in a chat
+     * that had switched anti-spam off, or that does not honour lols/CAS. And
+     * because there was no decision row, the ban was invisible to everything
+     * built to correct one: no "Why?" card, no override button, nothing for
+     * `restoreFalsePositive` to find. The person simply disappeared for a month.
+     *
+     * Trust and standing are still not consulted — see `accountScreenAllowed`,
+     * where that asymmetry is now stated rather than implied.
+     */
+    const groupDoc = await store.getGroupDoc(chat.id).catch(() => null)
+    const policy = groupDocToChatPolicy(groupDoc as never)
+    const allowed = accountScreenAllowed('ban', policy, {
+      id: target.id, messagesGlobal: history?.messagesGlobal ?? 0
+    }, hardVerdictSourceOf(signals))
+    // Defence in depth. Both callers check the target's adminship before they
+    // get here, but `executor.ts` treats "never act on an admin" as absolute
+    // and this path does not go through the executor at all.
+    if (allowed !== 'allow' || await isChatAdmin(chat.id, target.id)) {
+      log.info('account_screen_ban_skipped', {
+        chatId: chat.id, userId: target.id, reason: allowed === 'allow' ? 'senderIsAdmin' : allowed
+      })
+      return 'none'
+    }
+
     const banned = await gateway.moderationActions.ban(chat.id, target.id, TIMED_BAN_SECONDS)
       .then(() => true).catch(() => false)
     log.info('account_screen_ban', { chatId: chat.id, userId: target.id, applied: banned })
-    return banned ? 'ban' : 'none'
+    if (!banned) return 'none'
+
+    const banVerdict: Verdict = {
+      pSpam: 1, action: 'ban', needsVote: false, banDurationSeconds: TIMED_BAN_SECONDS,
+      decidedBy: 'join_screen', ruleId: null, signals,
+      reasonCode: params.reason, reasonEvidence: evidence, meta: {}
+    }
+    const cardMessageId = params.replyToMessageId ?? 0
+    // Both halves, because both are how a correction finds this: the memory the
+    // override callback reads first, and the row it falls back to.
+    rememberVerdict(chat.id, cardMessageId, banVerdict)
+    await store.recordDecision({
+      chatId: chat.id, userId: target.id, messageId: cardMessageId,
+      textPreview: '',
+      verdict: banVerdict,
+      execution: {
+        applied: true, deleted: null, skippedReason: null,
+        failed: [], albumRemoved: 0, retroPurged: 0
+      },
+      latencyMs: 0
+    }).catch(() => { /* telemetry must never break moderation */ })
+
+    const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
+    const view = compactNotification(locale, banVerdict, {
+      chatId: chat.id, messageId: cardMessageId, userId: target.id, userLabel: target.displayName
+    }, { botUsername: selfUsername ?? undefined })
+    const sent = await tgSendText(chat.id, viewHtml(view.text), {
+      replyMarkup: toKeyboard(view.buttons), disableWebPreview: true
+    }).catch(() => null)
+    if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_COMPACT_MS, 'mod_event:account_screen')
+    return 'ban'
   }
 
   const gated = await gateAccount({
