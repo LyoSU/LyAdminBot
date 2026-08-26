@@ -210,13 +210,16 @@ describe('evaluateMessage — abstain & session', () => {
     // evidence of absence — the same reasoning that sends an unfamiliar script
     // to the LLM. It goes to the session buffer, which costs one call per five
     // messages instead of one per message.
-    const appended: string[] = []
+    // Keyed by message id, like both real ports: a fake that merely appends is
+    // a fake of the defect that made three messages read as five.
+    const appended = new Map<number, string>()
     let classified = 0
     const ports: PipelinePorts = {
       session: {
-        append: async (_c, _u, t) => {
-          appended.push(t)
-          return { combinedText: appended.join('\n'), count: appended.length }
+        append: async (_c, _u, messageId, t) => {
+          appended.delete(messageId)
+          appended.set(messageId, t)
+          return { combinedText: [...appended.values()].join('\n'), count: appended.size }
         },
         reset: async () => { /* noop */ }
       },
@@ -234,14 +237,22 @@ describe('evaluateMessage — abstain & session', () => {
       user: { messagesInChat: 4, messagesGlobal: 6, localAgeDays: 2, predictedAgeDays: 10 }
     }
 
+    // Distinct message ids, because these are five MESSAGES. This test used to
+    // send one id five times and pass anyway, on a buffer that could not tell
+    // the difference — the same blindness that let an edit double its own text
+    // in production and be read back as flood.
+    const nth = (i: number) => makeInput({
+      ...solicitation, msg: { ...solicitation.msg, messageId: 500 + i }
+    })
+
     // Nothing is found, so nothing is done — but the message is remembered.
-    const first = await evaluateMessage(makeInput(solicitation), ports)
+    const first = await evaluateMessage(nth(0), ports)
     expect(classified).toBe(0)
     expect(isEnforcementAction(first.action)).toBe(false)
-    expect(appended).toHaveLength(1)
+    expect(appended.size).toBe(1)
 
     let last = first
-    for (let i = 0; i < 4; i += 1) last = await evaluateMessage(makeInput(solicitation), ports)
+    for (let i = 1; i <= 4; i += 1) last = await evaluateMessage(nth(i), ports)
     expect(classified).toBeGreaterThan(0)
     expect(last.decidedBy).toBe('session')
     expect(last.pSpam).toBe(0.98)
@@ -261,7 +272,7 @@ describe('evaluateMessage — abstain & session', () => {
     let calls = 0
     const ports: PipelinePorts = {
       session: {
-        append: async (_c, _u, t) => ({ combinedText: t, count: 1 }),
+        append: async (_c, _u, _m, t) => ({ combinedText: t, count: 1 }),
         reset: async () => { /* noop */ }
       },
       llm: {
@@ -305,7 +316,7 @@ describe('evaluateMessage — abstain & session', () => {
     const buffer: string[] = []
     const ports: PipelinePorts = {
       session: {
-        append: async (_c, _u, t) => {
+        append: async (_c, _u, _m, t) => {
           buffer.push(t)
           return { combinedText: buffer.join('\n'), count: buffer.length }
         },
@@ -414,7 +425,7 @@ describe('evaluateMessage — abstain & session', () => {
     let judged = 0
     const ports: PipelinePorts = {
       session: {
-        append: async (_c, _u, t) => ({ combinedText: t, count: 1 }),
+        append: async (_c, _u, _m, t) => ({ combinedText: t, count: 1 }),
         reset: async () => { /* noop */ }
       },
       llm: {
@@ -453,7 +464,7 @@ describe('evaluateMessage — abstain & session', () => {
     let judged: string | null = null
     const ports: PipelinePorts = {
       session: {
-        append: async (_c, _u, t) => {
+        append: async (_c, _u, _m, t) => {
           buffer.push(t)
           return { combinedText: buffer.join('\n'), count: buffer.length }
         },

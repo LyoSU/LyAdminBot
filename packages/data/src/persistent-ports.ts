@@ -56,9 +56,20 @@ export interface VelocityBackend {
     Promise<{ count: number; chatCount: number; userCount: number }>
 }
 
+/** One buffered message: the text, and which message it was. */
+export interface SessionEntry {
+  id: number
+  text: string
+}
+
 export interface SessionBackend {
-  /** Append `text` (if any) to the window, trim to maxMessages, return it. */
-  appendSession(key: string, text: string, maxMessages: number): Promise<string[]>
+  /**
+   * Record one message in the window, trim to maxMessages, return the texts.
+   *
+   * An `id` already in the window replaces its entry rather than adding a
+   * second — see `SessionPort.append` for what the bare append cost.
+   */
+  appendSession(key: string, entry: SessionEntry, maxMessages: number): Promise<string[]>
   resetSession(key: string): Promise<void>
 }
 
@@ -164,9 +175,10 @@ export class PersistentSessionPort implements SessionPort {
     this.opts = { ...SESSION_DEFAULTS, ...options }
   }
 
-  async append(chatId: number, userId: number, text: string): Promise<SessionWindow> {
+  async append(chatId: number, userId: number, messageId: number, text: string): Promise<SessionWindow> {
     try {
-      const texts = await this.backend.appendSession(`${chatId}:${userId}`, text, this.opts.maxMessages)
+      const texts = await this.backend.appendSession(
+        `${chatId}:${userId}`, { id: messageId, text }, this.opts.maxMessages)
       return { combinedText: texts.join('\n'), count: texts.length }
     } catch {
       return { combinedText: text, count: text ? 1 : 0 }

@@ -9,7 +9,8 @@ import { MongoClient, ObjectId, type Collection, type Db, type Document } from '
 import type { BurstEntry, EditBaseline, ExecutionRecord, MediaCategory, Verdict, Signal } from '@lyadmin/core'
 import { truncate, VOTE_WINDOW_SECONDS } from '@lyadmin/core'
 import { normalizeExtra, type NormalizedExtra } from './extras.js'
-import { VELOCITY_WINDOW_MS, SESSION_WINDOW_MS, BURST_WINDOW_MS } from './persistent-ports.js'
+import { VELOCITY_WINDOW_MS, SESSION_WINDOW_MS, BURST_WINDOW_MS, type SessionEntry }
+  from './persistent-ports.js'
 import { PROFILE_MEDIA_TTL_DAYS } from './profile-media-port.js'
 import {
   addWelcomeItem, removeAt, type AddReason,
@@ -825,17 +826,45 @@ export class MongoStore {
     }
   }
 
-  /** Append to a session window (TTL-expired), trimmed to the last maxMessages. */
-  async appendSession(key: string, text: string, maxMessages: number): Promise<string[]> {
+  /**
+   * Record one message in a session window (TTL-expired), trimmed to the last
+   * maxMessages, and return the texts in order.
+   *
+   * A message already in the window replaces its entry and moves to the end.
+   * Two writes rather than one, because Mongo refuses `$pull` and `$push` on the
+   * same field in a single update — and the pull has to happen even when the
+   * caller thinks this is a new message, since "is this an edit" is exactly the
+   * thing the old bare append got wrong.
+   *
+   * The cost is one extra round trip on a path that only runs for messages the
+   * abstain gate declined to classify — roughly one message in fourteen — and it
+   * buys the difference between a buffer and a counter. See `SessionPort.append`.
+   *
+   * `entries` is a new field: windows written by the previous code hold `texts`
+   * of plain strings, which have no id and so cannot be replaced. They are left
+   * to the 30-minute TTL rather than migrated — for the few seconds of a rolling
+   * deploy a handful of windows restart, which costs one short window and no
+   * verdict, where reading both shapes would leave unreplaceable duplicates
+   * sitting in the window for half an hour.
+   */
+  async appendSession(key: string, entry: SessionEntry, maxMessages: number): Promise<string[]> {
+    if (entry.text) {
+      await this.sessionWindows.updateOne(
+        { _id: key } as never,
+        { $pull: { entries: { id: entry.id } } } as never
+      ).catch(() => { /* nothing to replace, or the window is gone */ })
+    }
     const doc = await this.sessionWindows.findOneAndUpdate(
       { _id: key } as never,
       {
-        $push: { texts: { $each: text ? [text] : [], $slice: -maxMessages } },
+        $push: { entries: { $each: entry.text ? [entry] : [], $slice: -maxMessages } },
         $setOnInsert: { startedAt: new Date() }
       } as never,
       { upsert: true, returnDocument: 'after' }
-    ) as { texts?: string[] } | null
-    return doc?.texts ?? []
+    ) as { entries?: { id?: number; text?: unknown }[] } | null
+    return (doc?.entries ?? [])
+      .map((e) => e?.text)
+      .filter((t): t is string => typeof t === 'string' && t.length > 0)
   }
 
   async resetSession(key: string): Promise<void> {

@@ -84,34 +84,59 @@ describe('MemoryVelocityPort', () => {
 describe('MemorySessionPort', () => {
   it('accumulates per chat:user and joins with newlines', async () => {
     const port = new MemorySessionPort()
-    await port.append(-1, 42, 'пиши мені')
-    await port.append(-1, 42, 'в особисті')
-    const window = await port.append(-1, 42, 'заробіток')
+    await port.append(-1, 42, 101, 'пиши мені')
+    await port.append(-1, 42, 102, 'в особисті')
+    const window = await port.append(-1, 42, 103, 'заробіток')
     expect(window.count).toBe(3)
     expect(window.combinedText).toBe('пиши мені\nв особисті\nзаробіток')
   })
 
   it('sessions are isolated between users and chats', async () => {
     const port = new MemorySessionPort()
-    await port.append(-1, 42, 'a')
-    const other = await port.append(-1, 43, 'b')
+    await port.append(-1, 42, 101, 'a')
+    const other = await port.append(-1, 43, 102, 'b')
     expect(other.count).toBe(1)
   })
 
   it('expires after the window', async () => {
     let now = 0
     const port = new MemorySessionPort({ windowMs: 1000 }, () => now)
-    await port.append(-1, 42, 'a')
+    await port.append(-1, 42, 101, 'a')
     now = 5000
-    const fresh = await port.append(-1, 42, 'b')
+    const fresh = await port.append(-1, 42, 102, 'b')
     expect(fresh.count).toBe(1)
   })
 
   it('reset clears the buffer', async () => {
     const port = new MemorySessionPort()
-    await port.append(-1, 42, 'a')
+    await port.append(-1, 42, 101, 'a')
     port.reset(-1, 42)
-    const fresh = await port.append(-1, 42, 'b')
+    const fresh = await port.append(-1, 42, 102, 'b')
     expect(fresh.count).toBe(1)
+  })
+
+  it('REGRESSION: an edit replaces its message instead of doubling it', async () => {
+    // The same defect the persistent port carried, in the same shape: this
+    // buffer was keyed by nothing, so a message that came back through the
+    // pipeline as an edit was stored a second time. See `SessionPort.append`.
+    const port = new MemorySessionPort()
+    await port.append(-1, 42, 101, 'посаджені квіти викопують собі')
+    const w = await port.append(-1, 42, 101, 'посаджені квіти викопують собі')
+    expect(w.count).toBe(1)
+  })
+
+  it('the replaced message moves to the end, carrying its new text', async () => {
+    const port = new MemorySessionPort()
+    await port.append(-1, 42, 101, 'привіт')
+    await port.append(-1, 42, 102, 'друге')
+    const w = await port.append(-1, 42, 101, 'заходь у мій канал')
+    expect(w.combinedText).toBe('друге\nзаходь у мій канал')
+  })
+
+  it('two different messages with the same words are still two messages', async () => {
+    const port = new MemorySessionPort()
+    await port.append(-1, 42, 101, 'заробіток')
+    const w = await port.append(-1, 42, 102, 'заробіток')
+    expect(w.count).toBe(2)
   })
 })

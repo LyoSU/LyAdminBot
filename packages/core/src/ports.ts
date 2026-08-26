@@ -154,8 +154,27 @@ export interface SessionWindow {
 }
 
 export interface SessionPort {
-  /** Append an abstained message and return the accumulated window. */
-  append(chatId: number, userId: number, text: string): Promise<SessionWindow>
+  /**
+   * Record an abstained message and return the accumulated window.
+   *
+   * `messageId` is what makes this a buffer rather than a counter. Without it
+   * the window was a bare append, and an edit — which re-enters the pipeline,
+   * abstains again, and arrives here a second time — added a SECOND copy of the
+   * same text. The model was then shown `A A B B C`, and answered the question
+   * it was asked: repeated identical phrases, mass posting.
+   *
+   * Measured 2026-08-26 across every session verdict ever recorded: 867 of 2172
+   * windows held a repeated line, the bot acted on 49 of those, and 42 of the 49
+   * had an edit from the same sender inside the same window. One was five lines
+   * of a single message, called flood at 0.995. Against 74 acted-on session
+   * verdicts in total, and `flood` was 58 of them — the verdict repetition makes.
+   *
+   * So an id that is already in the window REPLACES its entry and moves to the
+   * end. Replaces rather than ignores: a message edited from "hi" into an advert
+   * must be judged as the advert — that attack is why `edit_injected_link`
+   * exists — so the newest text is the one that counts.
+   */
+  append(chatId: number, userId: number, messageId: number, text: string): Promise<SessionWindow>
   /**
    * Discard the window. Required, not optional: a port without it silently
    * turns the session path into repeated re-judgements of the same accumulated

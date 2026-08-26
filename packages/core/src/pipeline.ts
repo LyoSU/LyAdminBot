@@ -815,7 +815,8 @@ export const evaluateMessage = async (
     // gate exists to prevent, reintroduced one level down (2026-08-01).
     if (!ports.session || text.trim().length === 0) return null
     const window = await safe('session', () =>
-      ports.session!.append(input.message.chatId, input.user.id, text))
+      ports.session!.append(
+        input.message.chatId, input.user.id, input.message.messageId, text))
     if (!window || window.count < minMessages || !ports.llm) return null
     // Defence in depth: a window can still be blank if a port implementation
     // stored something we would not have sent.

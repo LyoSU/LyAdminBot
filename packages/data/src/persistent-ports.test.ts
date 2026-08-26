@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { EvaluationInput } from '@lyadmin/core'
 import {
   PersistentVelocityPort, PersistentSessionPort,
-  type VelocityBackend, type SessionBackend
+  type VelocityBackend, type SessionBackend, type SessionEntry
 } from './persistent-ports.js'
 
 /** In-memory doubles for the Mongo-backed backends (real aggregation logic). */
@@ -19,15 +19,17 @@ class FakeVelocityBackend implements VelocityBackend {
 }
 
 class FakeSessionBackend implements SessionBackend {
-  private byKey = new Map<string, string[]>()
+  private byKey = new Map<string, SessionEntry[]>()
   fail = false
-  async appendSession(key: string, text: string, maxMessages: number): Promise<string[]> {
+  // Models the store's replace-by-id, because a fake that merely appends is a
+  // fake of the bug: the real backend pulls the id before pushing.
+  async appendSession(key: string, entry: SessionEntry, maxMessages: number): Promise<string[]> {
     if (this.fail) throw new Error('mongo down')
-    const list = this.byKey.get(key) ?? []
-    if (text) list.push(text)
+    const list = (this.byKey.get(key) ?? []).filter((e) => e.id !== entry.id)
+    if (entry.text) list.push(entry)
     while (list.length > maxMessages) list.shift()
     this.byKey.set(key, list)
-    return [...list]
+    return list.map((e) => e.text)
   }
   async resetSession(key: string): Promise<void> { this.byKey.delete(key) }
 }
@@ -115,30 +117,72 @@ describe('PersistentVelocityPort', () => {
 describe('PersistentSessionPort', () => {
   it('accumulates the window across calls', async () => {
     const port = new PersistentSessionPort(new FakeSessionBackend())
-    await port.append(1, 10, 'пиши мені')
-    const w = await port.append(1, 10, 'в особисті')
+    await port.append(1, 10, 101, 'пиши мені')
+    const w = await port.append(1, 10, 102, 'в особисті')
     expect(w).toEqual({ combinedText: 'пиши мені\nв особисті', count: 2 })
   })
 
   it('caps the window at maxMessages', async () => {
     const port = new PersistentSessionPort(new FakeSessionBackend(), { maxMessages: 2 })
-    await port.append(1, 10, 'a')
-    await port.append(1, 10, 'b')
-    const w = await port.append(1, 10, 'c')
+    await port.append(1, 10, 101, 'a')
+    await port.append(1, 10, 102, 'b')
+    const w = await port.append(1, 10, 103, 'c')
     expect(w.combinedText).toBe('b\nc')
   })
 
   it('reset clears the window', async () => {
     const backend = new FakeSessionBackend()
     const port = new PersistentSessionPort(backend)
-    await port.append(1, 10, 'x')
+    await port.append(1, 10, 101, 'x')
     await port.reset(1, 10)
-    expect((await port.append(1, 10, 'y')).count).toBe(1)
+    expect((await port.append(1, 10, 102, 'y')).count).toBe(1)
   })
 
   it('degrades to a single-message window when the backend is unavailable', async () => {
     const backend = new FakeSessionBackend(); backend.fail = true
     const port = new PersistentSessionPort(backend)
-    expect(await port.append(1, 10, 'solo')).toEqual({ combinedText: 'solo', count: 1 })
+    expect(await port.append(1, 10, 101, 'solo')).toEqual({ combinedText: 'solo', count: 1 })
+  })
+
+  it('REGRESSION: editing a buffered message replaces it, never doubles it', async () => {
+    // Production 2026-08-26, a nine-year-old account in an ordinary chat: three
+    // conversational messages, each edited once, became a window of five lines
+    // — A A B B C. The model was asked about that and answered what it saw,
+    // "repeated identical phrases": flood, 0.89, message deleted.
+    //
+    // Across every session verdict ever recorded, 867 of 2172 windows held a
+    // repeated line; the bot acted on 49 of those, and 42 of the 49 had an edit
+    // from the same sender inside the same window.
+    const port = new PersistentSessionPort(new FakeSessionBackend())
+    await port.append(1, 10, 101, 'вони ще іноді посаджені квіти викопують собі')
+    const w = await port.append(1, 10, 101, 'вони ще іноді посаджені квіти викопують собі')
+    expect(w.count).toBe(1)
+    expect(w.combinedText).toBe('вони ще іноді посаджені квіти викопують собі')
+  })
+
+  it('an edit is judged on its NEW text, not the one it replaced', async () => {
+    // Replaces rather than ignores: "hi" edited into an advert is an attack this
+    // codebase already names (`edit_injected_link`), so the newest text counts.
+    const port = new PersistentSessionPort(new FakeSessionBackend())
+    await port.append(1, 10, 101, 'привіт')
+    const w = await port.append(1, 10, 101, 'заходь у мій канал')
+    expect(w.combinedText).toBe('заходь у мій канал')
+  })
+
+  it('an edited message moves to the end, because that is when it was said', async () => {
+    const port = new PersistentSessionPort(new FakeSessionBackend())
+    await port.append(1, 10, 101, 'перше')
+    await port.append(1, 10, 102, 'друге')
+    const w = await port.append(1, 10, 101, 'перше, виправлене')
+    expect(w.combinedText).toBe('друге\nперше, виправлене')
+  })
+
+  it('two different messages with the same words still count twice', async () => {
+    // The point is not to dedupe text. Somebody genuinely posting one line
+    // twice IS repetition, and 7 of the 49 acted-on windows were exactly that.
+    const port = new PersistentSessionPort(new FakeSessionBackend())
+    await port.append(1, 10, 101, 'заробіток')
+    const w = await port.append(1, 10, 102, 'заробіток')
+    expect(w.count).toBe(2)
   })
 })
