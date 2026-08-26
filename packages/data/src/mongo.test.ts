@@ -15,7 +15,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Verdict } from '@lyadmin/core'
 import { VOTE_WINDOW_SECONDS } from '@lyadmin/core'
-import { MongoStore, ensureTtlIndex, ensureUniqueIndex } from './mongo.js'
+import { MongoStore, ensureTtlIndex, ensureUniqueIndex, toRightsBlockRecord } from './mongo.js'
 
 interface Captured {
   doc: Record<string, unknown> | null
@@ -1220,5 +1220,57 @@ describe('ensureUniqueIndex', () => {
     await ensureUniqueIndex(collection, 'chatId')
     expect(dropped).toEqual([])
     expect(created).toHaveLength(1)
+  })
+})
+
+
+/**
+ * The read side of `pipeline_rights`, which is a migration boundary twice over:
+ * `strikes`/`probeAt`/`warnedUntil` arrived on 2026-08-07 and
+ * `lastRefusalAt`/`blockedAccounts` on 2026-08-26, both into a collection whose
+ * documents outlive the release that wrote them. On the second of those days
+ * every one of the 52 live documents lacked the newer pair — and the code that
+ * adopts them pushes into `blockedAccounts` on the next refusal.
+ */
+describe('toRightsBlockRecord', () => {
+  it('reads a document written before the newest fields existed', () => {
+    expect(toRightsBlockRecord({
+      chatId: -1001163856087, deleteRefused: false, senderRefused: true,
+      strikes: 1, probeAt: 1_787_000_000_000, warnedUntil: 1_787_100_000_000
+    })).toEqual({
+      chatId: -1001163856087, deleteRefused: false, senderRefused: true,
+      strikes: 1, probeAt: 1_787_000_000_000, warnedUntil: 1_787_100_000_000,
+      // Never a guess at "now": an unknown last refusal must read as no opinion,
+      // so the episode carries on rather than being broken by our own gap.
+      lastRefusalAt: 0,
+      // An array, not undefined — this one gets pushed into.
+      blockedAccounts: []
+    })
+  })
+
+  it('round-trips a document written by the current code', () => {
+    const record = {
+      chatId: -100, deleteRefused: true, senderRefused: true,
+      strikes: 7, probeAt: 42, warnedUntil: 99,
+      lastRefusalAt: 1_787_200_000_000, blockedAccounts: [111, 222]
+    }
+    expect(toRightsBlockRecord({ ...record, _id: 'x', updatedAt: new Date() })).toEqual(record)
+  })
+
+  it('a blockedAccounts that is not a list is dropped, not trusted', () => {
+    expect(toRightsBlockRecord({ chatId: -100, blockedAccounts: 'everyone' }).blockedAccounts)
+      .toEqual([])
+  })
+
+  it('unreadable ids inside the list go, and the readable ones stay', () => {
+    expect(toRightsBlockRecord({ chatId: -100, blockedAccounts: [111, null, 'x', 222] }).blockedAccounts)
+      .toEqual([111, 222])
+  })
+
+  it('a missing count is zero, never NaN', () => {
+    // `Number(undefined)` is NaN, and a NaN strike count silently disables the
+    // whole backoff ladder: every comparison against it is false.
+    const r = toRightsBlockRecord({ chatId: -100 })
+    expect([r.strikes, r.probeAt, r.warnedUntil, r.lastRefusalAt]).toEqual([0, 0, 0, 0])
   })
 })

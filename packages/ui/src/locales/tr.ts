@@ -83,7 +83,18 @@ export const tr: Locale = {
     overridePartial: 'Geri aldım, ama her şey uygulanamadı. Tekrar dene veya yetkilerimi kontrol et.',
     overrideAlreadyDone: 'Zaten geri alınmış.',
     adminOnly: 'Yalnızca sohbet yöneticileri.',
-    missingRights: '⚠️ Spam yakaladım ama temizlemek için yetkim yok. Lütfen bana mesaj silme ve kullanıcı yasaklama yetkisi ver.'
+    missingRights: ({ deleteBlocked, senderBlocked, accounts }) => {
+      const left = accounts > 0
+        ? ` Bu yüzden bugün ${accounts} hesap sohbette kaldı.`
+        : ''
+      if (senderBlocked && !deleteBlocked) {
+        return `⚠️ Spam mesajları siliyorum ama spam gönderenleri çıkaramıyorum — "Kullanıcıları engelle" yetkim yok.${left}`
+      }
+      if (deleteBlocked && !senderBlocked) {
+        return '⚠️ Spam gönderenleri engelleyebiliyorum ama mesajlarını silemiyorum — "Mesajları sil" yetkim yok.'
+      }
+      return `⚠️ Spam yakaladım ama hiçbir şey yapmaya yetkim yok. Lütfen bana "Mesajları sil" ve "Kullanıcıları engelle" yetkilerini ver.${left}`
+    }
   },
 
   reasons: {

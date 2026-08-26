@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   RightsMemory, RIGHTS_PROBE_MS, RIGHTS_PROBE_MAX_MS, RIGHTS_WARN_MS, RIGHTS_WARN_MAX_MS,
+  RIGHTS_EPISODE_MS,
   failureKind, failureLabels,
   type RightsRecord
 } from './rights.js'
@@ -193,9 +194,120 @@ describe('RightsMemory — the refusal does not lapse, only the probe does', () 
     const t = { ms: 1_000 }
     const rights = at(t)
     rights.noteOutcome(-830, bothRefused)
-    t.ms += RIGHTS_PROBE_MAX_MS * 3
+    t.ms += RIGHTS_EPISODE_MS + 1
     rights.noteOutcome(-830, bothRefused)
     expect(rights.strikes(-830)).toBe(1)
+  })
+
+  it('REGRESSION: a quiet stretch inside a standing refusal is the same episode', () => {
+    // This test used to assert the opposite, with `RIGHTS_PROBE_MAX_MS * 3`,
+    // because the staleness test read `now - probeAt` and `probeAt` is pinned
+    // to that same ceiling by `backoffMs`. Any two refusals more than about
+    // half an hour apart counted as separate episodes.
+    //
+    // Production 2026-08-26, the chat this cost the most: 291 refusals over
+    // eight days with a median gap of 6.9 minutes — but 46 gaps over sixteen
+    // minutes, so the counter reset roughly every six refusals and read 1 after
+    // all 291. A chat is not less blocked because nobody posted for an hour.
+    const t = { ms: 1_000 }
+    const rights = at(t)
+    for (let i = 0; i < 6; i += 1) {
+      rights.noteOutcome(-831, bothRefused)
+      t.ms += RIGHTS_PROBE_MAX_MS * 2 + 1
+    }
+    expect(rights.strikes(-831)).toBe(6)
+  })
+
+  it('an episode ends when the chat comes good, not when it goes quiet', () => {
+    const t = { ms: 1_000 }
+    const rights = at(t)
+    for (let i = 0; i < 4; i += 1) rights.noteOutcome(-832, bothRefused)
+    rights.noteOutcome(-832, [])
+    rights.noteOutcome(-832, bothRefused)
+    expect(rights.strikes(-832)).toBe(1)
+  })
+})
+
+/**
+ * The number the public notice carries. "267 refusals" reads as a broken bot;
+ * "66 accounts still here" reads as the problem it is.
+ */
+describe('RightsMemory — the accounts left in place', () => {
+  it('counts each account once, however many of its messages were refused', () => {
+    const t = { ms: 1_000 }
+    const rights = at(t)
+    for (let i = 0; i < 5; i += 1) rights.noteOutcome(-840, bothRefused, 111)
+    rights.noteOutcome(-840, bothRefused, 222)
+    expect(rights.gap(-840).accounts).toBe(2)
+  })
+
+  it('a refusal with no account named still counts as a refusal', () => {
+    // The manual command paths warn without a sender to blame.
+    const t = { ms: 1_000 }
+    const rights = at(t)
+    rights.noteOutcome(-841, bothRefused)
+    expect(rights.strikes(-841)).toBe(1)
+    expect(rights.gap(-841).accounts).toBe(0)
+  })
+
+  it('the roll is bounded, and understates rather than growing forever', () => {
+    const t = { ms: 1_000 }
+    const rights = at(t)
+    for (let i = 0; i < 700; i += 1) rights.noteOutcome(-842, bothRefused, i)
+    expect(rights.gap(-842).accounts).toBe(500)
+  })
+
+  it('a new episode starts the roll over, so the number is about now', () => {
+    const t = { ms: 1_000 }
+    const rights = at(t)
+    rights.noteOutcome(-843, bothRefused, 111)
+    rights.noteOutcome(-843, bothRefused, 222)
+    t.ms += RIGHTS_EPISODE_MS + 1
+    rights.noteOutcome(-843, bothRefused, 333)
+    expect(rights.gap(-843).accounts).toBe(1)
+  })
+
+  it('rights coming back clears the roll with everything else', () => {
+    const t = { ms: 1_000 }
+    const rights = at(t)
+    rights.noteOutcome(-844, bothRefused, 111)
+    rights.noteOutcome(-844, [])
+    expect(rights.gap(-844).accounts).toBe(0)
+  })
+})
+
+/**
+ * What the notice asks for. Asking for both rights in a chat that grants one is
+ * how the group with 267 refused bans was told the bot could not delete spam,
+ * which it had been doing all along.
+ */
+describe('RightsMemory — what to ask for', () => {
+  it('names only the capability that was refused', () => {
+    const t = { ms: 1_000 }
+    const rights = at(t)
+    rights.noteOutcome(-850, ['ban: CHAT_ADMIN_REQUIRED'], 111)
+    expect(rights.gap(-850)).toEqual({ deleteBlocked: false, senderBlocked: true, accounts: 1 })
+  })
+
+  it('names both when both were refused', () => {
+    const t = { ms: 1_000 }
+    const rights = at(t)
+    rights.noteOutcome(-851, bothRefused, 111)
+    expect(rights.gap(-851)).toMatchObject({ deleteBlocked: true, senderBlocked: true })
+  })
+
+  it('a chat we know nothing about is asked for both', () => {
+    // The manual paths reach here with no record at all. "We do not know" must
+    // read as the full ask, never as "nothing is missing".
+    const t = { ms: 1_000 }
+    expect(at(t).gap(-852)).toEqual({ deleteBlocked: true, senderBlocked: true, accounts: 0 })
+  })
+
+  it('a record that only holds a nag quota is not a statement about rights', () => {
+    const t = { ms: 1_000 }
+    const rights = at(t)
+    rights.shouldWarn(-853)
+    expect(rights.gap(-853)).toEqual({ deleteBlocked: true, senderBlocked: true, accounts: 0 })
   })
 })
 
@@ -292,6 +404,46 @@ describe('RightsMemory — persistence', () => {
     expect(rights.mayProbe(-700)).toBe(false)
     expect(rights.shouldWarn(-700), 'already asked before the restart').toBe(false)
     expect(rights.strikes(-700)).toBe(4)
+  })
+
+  it('a record written before the newest fields existed is safe to work with', () => {
+    // `pipeline_rights` held 52 such documents the day `lastRefusalAt` and
+    // `blockedAccounts` were added. A restore that passed them through as-is
+    // would hand `undefined` to `push` on the very next refusal.
+    const t = { ms: 1_000_000 }
+    const rights = at(t)
+    rights.restore([{
+      chatId: -720, deleteRefused: false, senderRefused: true, strikes: 5,
+      probeAt: 0, warnedUntil: 0
+    }])
+    rights.noteOutcome(-720, ['ban: CHAT_ADMIN_REQUIRED'], 111)
+    // An unknown last refusal is not evidence of a gap: the episode carries on
+    // rather than being reset by our own missing record.
+    expect(rights.strikes(-720)).toBe(6)
+    expect(rights.gap(-720)).toEqual({ deleteBlocked: false, senderBlocked: true, accounts: 1 })
+  })
+
+  it('the store never sees a record aliased to the live one', () => {
+    // `blockedAccounts` is the first mutable field on this record, and
+    // `noteOutcome` pushes into it in place.
+    const t = { ms: 1_000 }
+    const { rights, saved } = persisting(t)
+    rights.noteOutcome(-730, bothRefused, 111)
+    const first = saved.get(-730)?.blockedAccounts
+    rights.noteOutcome(-730, bothRefused, 222)
+    expect(first).toEqual([111])
+  })
+
+  it('a restored record is not aliased to the array the caller handed in', () => {
+    const t = { ms: 1_000 }
+    const rights = at(t)
+    const mine = [111]
+    rights.restore([{
+      chatId: -740, deleteRefused: false, senderRefused: true, strikes: 1,
+      probeAt: 0, warnedUntil: 0, lastRefusalAt: t.ms, blockedAccounts: mine
+    }])
+    rights.noteOutcome(-740, ['ban: FORBIDDEN'], 222)
+    expect(mine).toEqual([111])
   })
 
   it('a restored refusal survives a restart that a lapsed expiry would not have', () => {

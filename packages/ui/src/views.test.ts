@@ -395,6 +395,67 @@ describe('locales', () => {
     }
   })
 
+  /**
+   * Production 2026-08-26: one group had 267 spam messages deleted whose
+   * senders the bot was not allowed to touch, and the notice it kept posting
+   * there said it could not remove spam and asked for both rights. The chat
+   * that needed this notice most was the one it was wrong about.
+   */
+  it('every locale asks only for the right that is actually missing', () => {
+    for (const [code, locale] of Object.entries(LOCALES)) {
+      const senderOnly = locale.notification.missingRights({
+        deleteBlocked: false, senderBlocked: true, accounts: 0
+      })
+      const deleteOnly = locale.notification.missingRights({
+        deleteBlocked: true, senderBlocked: false, accounts: 0
+      })
+      const both = locale.notification.missingRights({
+        deleteBlocked: true, senderBlocked: true, accounts: 0
+      })
+      // Three distinct asks, because they are three distinct situations.
+      expect(new Set([senderOnly, deleteOnly, both]).size, `locale ${code}`).toBe(3)
+      for (const line of [senderOnly, deleteOnly, both]) {
+        expect(line, `locale ${code}`).toContain('⚠️')
+        // Nothing to report is a shorter sentence, not a zero in the text.
+        expect(line, `locale ${code}`).not.toMatch(/\d/)
+      }
+    }
+  })
+
+  it('every locale carries the count of accounts left in place', () => {
+    for (const [code, locale] of Object.entries(LOCALES)) {
+      const line = locale.notification.missingRights({
+        deleteBlocked: false, senderBlocked: true, accounts: 66
+      })
+      expect(line, `locale ${code}`).toContain('66')
+    }
+  })
+
+  it('the count is dropped rather than shown as a zero', () => {
+    for (const [code, locale] of Object.entries(LOCALES)) {
+      const none = locale.notification.missingRights({
+        deleteBlocked: false, senderBlocked: true, accounts: 0
+      })
+      const some = locale.notification.missingRights({
+        deleteBlocked: false, senderBlocked: true, accounts: 1
+      })
+      expect(none, `locale ${code}`).not.toContain('0')
+      expect(some.length, `locale ${code}`).toBeGreaterThan(none.length)
+    }
+  })
+
+  it('a lone account reads as one account in the Slavic locales', () => {
+    // 1 акаунт / 2 акаунти / 5 акаунтів — the picker already in these files.
+    for (const code of ['uk', 'ru', 'by']) {
+      const locale = LOCALES[code]!
+      const say = (n: number): string => locale.notification.missingRights({
+        deleteBlocked: false, senderBlocked: true, accounts: n
+      })
+      expect(new Set([say(1), say(2), say(5)].map((l) => l.replace(/\d+/, 'N'))).size,
+        `locale ${code}`).toBe(3)
+    }
+  })
+
   it('every locale can show the banana, and it says nothing about muting', () => {
     // The oldest joke in this bot: an admin types a bare `/banan` and holds the
     // banana up, punishing nobody. Restored 2026-08-07 after v2 shipped without

@@ -113,8 +113,21 @@ export interface Locale {
     overridePartial: string
     overrideAlreadyDone: string
     adminOnly: string
-    /** Posted when the bot caught spam but lacks the rights to act. */
-    missingRights: string
+    /**
+     * Posted when the bot caught spam but lacks the rights to act.
+     *
+     * Takes what is actually missing rather than asking for everything. The
+     * flat version asked for both rights in every chat, which is wrong wherever
+     * one of them works — and the chat that needed this most is exactly that
+     * case: production 2026-08-26 had one group where the bot deleted 267 spam
+     * messages it was not allowed to act on the senders of, and was telling its
+     * admins it could not remove spam at all.
+     *
+     * `accounts` is how many distinct senders were left in place this episode;
+     * zero means nothing is recorded and the sentence is dropped. It is the
+     * half that persuades — the count of attempts reads as a broken bot.
+     */
+    missingRights: (gap: { deleteBlocked: boolean; senderBlocked: boolean; accounts: number }) => string
   }
 
   reasons: Record<string, string>

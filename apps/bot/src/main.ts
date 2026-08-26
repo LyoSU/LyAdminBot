@@ -1184,6 +1184,17 @@ const shouldWarnMissingRights = (chatId: number, errors: string[]): boolean =>
   errors.some((e) => RIGHTS_ERROR_REGEX.test(e)) && rights.shouldWarn(chatId)
 
 /**
+ * The notice itself, asking for what is actually missing here.
+ *
+ * One helper for all four callers so the wording cannot drift between the
+ * pipeline's refusal and a manual command's, and so `rights.gap` is read at the
+ * moment of posting rather than passed around: the record it reads was written
+ * by the very refusal that triggered this.
+ */
+const missingRightsText = (chatId: number, locale: Locale): ReturnType<typeof html> =>
+  viewHtml(locale.notification.missingRights(rights.gap(chatId)))
+
+/**
  * The cheap half of the rights question: are we an admin in this chat at all?
  *
  * Allowed to LIFT a block and never to create one, which is what makes reading
@@ -1925,7 +1936,7 @@ const handleKick = async (message: Message, chat: Chat, caller: User): Promise<v
   await dropCommand()
   if (!ok) {
     if (shouldWarnMissingRights(chat.id, ['CHAT_ADMIN_REQUIRED'])) {
-      const sent = await tgSendText(chat.id, viewHtml(locale.notification.missingRights)).catch(() => null)
+      const sent = await tgSendText(chat.id, missingRightsText(chat.id, locale)).catch(() => null)
       if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'missing_rights')
     }
     return
@@ -2170,7 +2181,7 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
     }
     rememberVerdict(chat.id, replied.id, verdict)
     if (action === 'observe') {
-      const warned = await tgSendText(chat.id, viewHtml(locale.notification.missingRights))
+      const warned = await tgSendText(chat.id, missingRightsText(chat.id, locale))
         .catch(() => null)
       if (warned) scheduleDelete(chat.id, warned.id, NOTIFY_TTL_COMPACT_MS, 'missing_rights:admin_report')
     } else {
@@ -3264,7 +3275,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     log.debug('enforcement_blocked', { chatId: chat.id, chat: chat.title ?? undefined })
     if (shouldWarnMissingRights(chat.id, ['CHAT_ADMIN_REQUIRED'])) {
       const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
-      const sent = await tgSendText(chat.id, viewHtml(locale.notification.missingRights))
+      const sent = await tgSendText(chat.id, missingRightsText(chat.id, locale))
         .catch(() => null)
       if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'missing_rights')
       log.warn('missing_rights', {
@@ -3928,7 +3939,9 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     // A refusal is the authoritative statement of what we may do here; remember
     // it per capability so the next messages are not evaluated at full price
     // for nothing.
-    rights.noteOutcome(chat.id, result.errors)
+    // With the sender, so the notice can say how many accounts this chat has
+    // been left with rather than how many times we tried.
+    rights.noteOutcome(chat.id, result.errors, sender.id)
     // Spam caught but we couldn't act → tell admins to grant rights (once/hr).
     //
     // Either half being refused counts. `!applied` alone missed the mirror case:
@@ -3938,9 +3951,12 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     const partlyRefused = !result.applied || result.deleted === false
     if (partlyRefused && shouldWarnMissingRights(chat.id, result.errors)) {
       const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
-      const sent = await tgSendText(chat.id, viewHtml(locale.notification.missingRights)).catch(() => null)
+      const sent = await tgSendText(chat.id, missingRightsText(chat.id, locale)).catch(() => null)
       if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'missing_rights')
-      log.warn('missing_rights', { chatId: chat.id, chat: chat.title ?? undefined, action: verdict.action })
+      log.warn('missing_rights', {
+        chatId: chat.id, chat: chat.title ?? undefined, action: verdict.action,
+        ...rights.gap(chat.id)
+      })
     }
   } else if (verdict.action === 'observe') {
     log.debug('observe', {

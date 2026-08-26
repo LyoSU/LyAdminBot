@@ -111,6 +111,44 @@ export const RIGHTS_WARN_MS = 60 * 60 * 1000
 /** Ceiling on the nag quiet period: once a day into a chat that ignores it. */
 export const RIGHTS_WARN_MAX_MS = 24 * 60 * 60 * 1000
 
+/**
+ * How long a standing refusal stays the SAME episode.
+ *
+ * This used to have no constant of its own. The staleness test read
+ * `now - probeAt > RIGHTS_PROBE_MAX_MS`, and `probeAt` is not when we last saw
+ * a refusal — it is when the next probe becomes due, which `backoffMs` pins to
+ * that very same ceiling. Two values derived from one constant, compared
+ * against each other: the condition degenerated into "more than about half an
+ * hour since the last refusal", which is nothing like the year-old-hiccup case
+ * the comment above it described.
+ *
+ * Measured 2026-08-26 against production. In the worst chat — 291 refusals over
+ * eight days, 66 accounts it could not remove — the median gap between refusals
+ * is 6.9 minutes, but 46 of 290 gaps exceed sixteen. The counter reset roughly
+ * every six refusals and read `1` after all 291, so the nag quiet period swung
+ * between an hour and a day at random: the record showed a 24-hour period set
+ * at 16:46 and a one-hour period an hour later, for the same unbroken refusal.
+ * A quieter chat is worse, not better — one with a median gap of 152 minutes
+ * broke the episode on eight of its nine gaps and never left strike one.
+ *
+ * A day, because what actually ends an episode is a SUCCESS (`forget`) or a
+ * granted probe, and neither is a matter of timing. This horizon exists only so
+ * a record nobody has touched in a very long time does not resume mid-ladder.
+ *
+ * Deliberately its own constant even though it currently equals
+ * `RIGHTS_WARN_MAX_MS`. Sharing one would restage the bug being fixed here:
+ * these answer different questions and are free to move apart.
+ */
+export const RIGHTS_EPISODE_MS = 24 * 60 * 60 * 1000
+
+/**
+ * Ceiling on the accounts remembered per chat, so one record cannot grow
+ * without bound. Reached only by a chat refusing hundreds of distinct senders
+ * inside a day, where the notice's number is long past the point of persuading
+ * anybody — it understates from here, and understating is the safe direction.
+ */
+const MAX_BLOCKED_ACCOUNTS = 500
+
 export interface RightsRecord {
   chatId: number
   /** Telegram refused to remove a MESSAGE here. A fact, not a deadline. */
@@ -123,6 +161,41 @@ export interface RightsRecord {
   probeAt: number
   /** Not before this (ms epoch): when the admins may be asked again. */
   warnedUntil: number
+  /**
+   * When we last saw a refusal here (ms epoch); 0 for records written before
+   * this field existed, which is read as "no opinion" rather than as "long ago".
+   *
+   * Separate from `probeAt` on purpose — see `RIGHTS_EPISODE_MS`. `probeAt` is a
+   * deadline in the future, this is an observation in the past, and the episode
+   * test needs the second one.
+   */
+  lastRefusalAt: number
+  /**
+   * Distinct accounts this chat told us to act on and would not let us, within
+   * the current episode. The one number that makes the public notice land:
+   * "267 refusals" reads as the bot being broken, "66 accounts" reads as the
+   * problem it actually is.
+   */
+  blockedAccounts: number[]
+}
+
+/**
+ * A record as it comes back from storage, where the two newest fields may not
+ * be there yet. Spelled out in the type rather than defended only at runtime:
+ * every persisted shape outlives the release that introduced it, and a `restore`
+ * that silently accepted a half-record would leave `blockedAccounts` undefined
+ * for `push` to trip over on the next refusal.
+ */
+export type RestoredRights =
+  Omit<RightsRecord, 'lastRefusalAt' | 'blockedAccounts'> &
+  Partial<Pick<RightsRecord, 'lastRefusalAt' | 'blockedAccounts'>>
+
+/** What a chat is currently missing, for the notice that asks for it. */
+export interface RightsGap {
+  deleteBlocked: boolean
+  senderBlocked: boolean
+  /** Distinct accounts left in place this episode; 0 when nothing is recorded. */
+  accounts: number
 }
 
 const MAX_TRACKED_CHATS = 2000
@@ -142,7 +215,8 @@ export class RightsMemory {
     private readonly now: () => number = Date.now,
     private readonly persist: (chatId: number, record: RightsRecord | null) => void = () => { /* memory only */ },
     private readonly probeMs: number = RIGHTS_PROBE_MS,
-    private readonly maxProbeMs: number = RIGHTS_PROBE_MAX_MS
+    private readonly maxProbeMs: number = RIGHTS_PROBE_MAX_MS,
+    private readonly episodeMs: number = RIGHTS_EPISODE_MS
   ) {}
 
   /**
@@ -154,8 +228,16 @@ export class RightsMemory {
    * the cheap lookup already re-checks within fifteen minutes at worst. Trimming
    * it would only reintroduce the cost this persistence exists to remove.
    */
-  restore(records: RightsRecord[]): void {
-    for (const record of records) this.records.set(record.chatId, record)
+  restore(records: readonly RestoredRights[]): void {
+    for (const record of records) {
+      // Records written before `lastRefusalAt` and `blockedAccounts` existed
+      // arrive without them, and every write path below mutates in place.
+      this.records.set(record.chatId, {
+        ...record,
+        lastRefusalAt: Number.isFinite(record.lastRefusalAt) ? record.lastRefusalAt as number : 0,
+        blockedAccounts: Array.isArray(record.blockedAccounts) ? [...record.blockedAccounts] : []
+      })
+    }
   }
 
   /**
@@ -170,7 +252,7 @@ export class RightsMemory {
    * `noteSuccess` would fail silently and only in production, which is the
    * failure mode this file exists to avoid.
    */
-  noteOutcome(chatId: number, errors: string[]): void {
+  noteOutcome(chatId: number, errors: string[], userId?: number): void {
     const refusals = errors.filter((e) => RIGHTS_ERROR_REGEX.test(e))
     if (refusals.length === 0) {
       // Whatever we attempted went through. Forget everything, including blocks
@@ -180,21 +262,57 @@ export class RightsMemory {
       this.forget(chatId)
       return
     }
+    const now = this.now()
     const record = this.records.get(chatId) ?? this.blank(chatId)
-    // A refusal long after the last probe was due is a new episode, not the
+    // A refusal a whole day after the last one is a new episode, not the
     // continuation of an old one. Without this, a chat that briefly demoted the
     // bot a year ago would jump straight to the ceiling on its next hiccup.
-    if (this.now() - record.probeAt > this.maxProbeMs) record.strikes = 0
+    //
+    // Measured from the last REFUSAL, never from `probeAt`: see
+    // `RIGHTS_EPISODE_MS` for what reading the deadline instead did to this.
+    // A zero means the record predates the field, and an unknown last refusal
+    // is not evidence of a gap — carry the episode rather than invent a break.
+    if (record.lastRefusalAt !== 0 && now - record.lastRefusalAt > this.episodeMs) {
+      record.strikes = 0
+      record.blockedAccounts = []
+    }
+    record.lastRefusalAt = now
     record.strikes += 1
-    record.probeAt = this.now() + this.backoffMs(record.strikes)
+    record.probeAt = now + this.backoffMs(record.strikes)
     for (const error of refusals) {
       // Everything that is not message removal acts on the sender: kick, mute,
       // ban, and the captcha's restriction.
       if (error.startsWith('delete:')) record.deleteRefused = true
       else record.senderRefused = true
     }
+    if (typeof userId === 'number' && Number.isFinite(userId) &&
+      record.blockedAccounts.length < MAX_BLOCKED_ACCOUNTS &&
+      !record.blockedAccounts.includes(userId)) {
+      record.blockedAccounts.push(userId)
+    }
     this.save(record)
     this.prune()
+  }
+
+  /**
+   * What this chat is currently refusing, and how many accounts that has left
+   * in place — everything the notice needs to ask for the right thing.
+   *
+   * A chat with no record answers "both blocked", which is what the manual
+   * command paths need: they warn from their own failed attempt without an
+   * execution ever reaching `noteOutcome`, so absence of a record there means
+   * "we do not know", and the honest ask is for both rights.
+   */
+  gap(chatId: number): RightsGap {
+    const record = this.records.get(chatId)
+    if (!record || (!record.deleteRefused && !record.senderRefused)) {
+      return { deleteBlocked: true, senderBlocked: true, accounts: 0 }
+    }
+    return {
+      deleteBlocked: record.deleteRefused,
+      senderBlocked: record.senderRefused,
+      accounts: record.blockedAccounts.length
+    }
   }
 
   /**
@@ -283,12 +401,21 @@ export class RightsMemory {
   }
 
   private blank(chatId: number): RightsRecord {
-    return { chatId, deleteRefused: false, senderRefused: false, strikes: 0, probeAt: 0, warnedUntil: 0 }
+    return {
+      chatId, deleteRefused: false, senderRefused: false,
+      strikes: 0, probeAt: 0, warnedUntil: 0, lastRefusalAt: 0, blockedAccounts: []
+    }
   }
 
   private save(record: RightsRecord): void {
     this.records.set(record.chatId, record)
-    this.persist(record.chatId, record)
+    // A snapshot, not the live record. `blockedAccounts` is the first mutable
+    // field here and `noteOutcome` pushes into it in place; the store's write
+    // is fire-and-forget by contract, so between handing it over and it being
+    // serialised this record can change underneath it. Costs one small array
+    // copy per refusal, which is a few hundred a day at the worst this has
+    // ever seen.
+    this.persist(record.chatId, { ...record, blockedAccounts: [...record.blockedAccounts] })
   }
 
   private forget(chatId: number): void {

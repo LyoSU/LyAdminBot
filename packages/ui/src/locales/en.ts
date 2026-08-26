@@ -83,7 +83,18 @@ export const en: Locale = {
     overridePartial: 'Reverted, but not everything went through. Try again, or check my rights.',
     overrideAlreadyDone: 'Already reverted.',
     adminOnly: 'Chat admins only.',
-    missingRights: '⚠️ Caught spam but I lack the rights to remove it. Please grant me delete-messages and ban-users rights.'
+    missingRights: ({ deleteBlocked, senderBlocked, accounts }) => {
+      const left = accounts > 0
+        ? ` ${accounts} account${accounts === 1 ? '' : 's'} stayed in the chat because of it today.`
+        : ''
+      if (senderBlocked && !deleteBlocked) {
+        return `⚠️ I delete the spam, but I cannot remove the spammers — I am missing the "Ban users" right.${left}`
+      }
+      if (deleteBlocked && !senderBlocked) {
+        return '⚠️ I can ban the spammers, but I cannot delete their messages — I am missing the "Delete messages" right.'
+      }
+      return `⚠️ Caught spam and I am allowed to do nothing about it. Please grant me the "Delete messages" and "Ban users" rights.${left}`
+    }
   },
 
   reasons: {

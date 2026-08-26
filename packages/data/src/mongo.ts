@@ -108,7 +108,39 @@ export interface RightsBlockRecord {
   strikes: number
   probeAt: number
   warnedUntil: number
+  /** When a refusal was last seen (ms epoch); 0 on records predating the field. */
+  lastRefusalAt: number
+  /** Distinct accounts this chat would not let us act on, this episode. */
+  blockedAccounts: number[]
 }
+
+/**
+ * One stored document, read as a record.
+ *
+ * Exported and pure because this is a MIGRATION boundary: every field here has
+ * outlived at least one release without it, and the defaults are the only thing
+ * standing between a five-week-old document and the code that mutates it.
+ */
+export const toRightsBlockRecord = (d: Document): RightsBlockRecord => ({
+  chatId: Number(d['chatId']),
+  deleteRefused: d['deleteRefused'] === true,
+  senderRefused: d['senderRefused'] === true,
+  strikes: Number(d['strikes'] ?? 0),
+  probeAt: Number(d['probeAt'] ?? 0),
+  warnedUntil: Number(d['warnedUntil'] ?? 0),
+  // Zero, not `Date.now()`: a document written before this field existed says
+  // nothing about when its refusal happened, and the episode test reads a zero
+  // as "no opinion". Guessing either freezes every restored episode or breaks
+  // every one of them, and both are wrong about a chat we can still see.
+  lastRefusalAt: Number(d['lastRefusalAt'] ?? 0),
+  // Filtered, not coerced. `Number(null)` is 0 — a finite number, and a
+  // perfectly good-looking account id that no Telegram account has ever had.
+  // Anything that was not stored as a number is not an account we recorded.
+  blockedAccounts: Array.isArray(d['blockedAccounts'])
+    ? (d['blockedAccounts'] as unknown[]).filter((n): n is number =>
+      typeof n === 'number' && Number.isFinite(n))
+    : []
+})
 
 /**
  * MongoDB's error code for a namespace that does not exist. `listIndexes` on a
@@ -722,14 +754,7 @@ export class MongoStore {
     }
     await this.rightsBlocks.deleteMany(spent).catch(() => { /* tidiness is not correctness */ })
     const docs = await this.rightsBlocks.find({}).toArray()
-    return docs.map((d) => ({
-      chatId: Number(d['chatId']),
-      deleteRefused: d['deleteRefused'] === true,
-      senderRefused: d['senderRefused'] === true,
-      strikes: Number(d['strikes'] ?? 0),
-      probeAt: Number(d['probeAt'] ?? 0),
-      warnedUntil: Number(d['warnedUntil'] ?? 0)
-    })).filter((r) => Number.isFinite(r.chatId))
+    return docs.map(toRightsBlockRecord).filter((r) => Number.isFinite(r.chatId))
   }
 
   /** Write one chat's refusal record, or remove it when the chat came good. */
