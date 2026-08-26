@@ -1054,8 +1054,48 @@ export class MongoStore {
     )
   }
 
+  /**
+   * Take back this chat's detection against the account.
+   *
+   * The mirror of `recordSpamDetection`, and it has to be a mirror rather than
+   * a bare decrement for two reasons that only became visible once the
+   * automatic path started sharing the set (2026-08-26).
+   *
+   * A bare `$inc: -1` spends whatever is in the counter, and the counter is
+   * global. So an admin restoring a message in one chat could erase a finding
+   * earned in a DIFFERENT chat — the account's record then said one detection
+   * while `detectionChats` still named two rooms, and the next correction had
+   * nothing left to give back. Removing the chat and decrementing in one
+   * operation keeps the count and the set describing the same thing.
+   *
+   * The floor is the membership test itself: a chat not in the set never
+   * contributed, so there is nothing here to undo.
+   */
+  async clearSpamDetection(chatId: number, telegramId: number): Promise<void> {
+    await this.users.updateOne(
+      { telegram_id: telegramId, 'globalStats.detectionChats': chatId },
+      {
+        $inc: { 'globalStats.spamDetections': -1 },
+        $pull: { 'globalStats.detectionChats': chatId }
+      } as never
+    )
+  }
+
+  /**
+   * The MESSAGE counters — standing debited by spam, credited back by a
+   * correction. Detections are not among them: they are a statement about the
+   * account, they are counted once per chat, and they are `recordSpamDetection`
+   * and `clearSpamDetection`.
+   *
+   * They used to ride along here on a `detection` flag that did a plain `$inc`,
+   * so the automatic path could raise the same account's detection count
+   * without limit in a single chat — while the vote path, three lines up, went
+   * to some trouble to guarantee it could not, and `voterStandingFor` states
+   * that guarantee as a fact it relies on. One message evaluated twice charged
+   * twice for the same reason.
+   */
   async adjustSpamMessages(
-    chatId: number, telegramId: number, delta: 1 | -1, detection = false
+    chatId: number, telegramId: number, delta: 1 | -1
   ): Promise<void> {
     const floor = delta < 0 ? { $gt: 0 } : null
     const group = await this.groups.findOne({ group_id: chatId }, { projection: { _id: 1 } })
@@ -1064,15 +1104,6 @@ export class MongoStore {
         { telegram_id: telegramId, ...(floor ? { 'globalStats.spamMessages': floor } : {}) },
         { $inc: { 'globalStats.spamMessages': delta } }
       ),
-      // Its own update, not another `$inc` on the one above: the decrement's
-      // floor lives in the filter, so sharing a filter would let an
-      // already-zero counter veto the other one's decrement.
-      detection
-        ? this.users.updateOne(
-          { telegram_id: telegramId, ...(floor ? { 'globalStats.spamDetections': floor } : {}) },
-          { $inc: { 'globalStats.spamDetections': delta } }
-        )
-        : Promise.resolve(),
       group
         ? this.groupMembers.updateOne(
           { group: group['_id'], telegram_id: telegramId, ...(floor ? { 'stats.spamMessages': floor } : {}) },

@@ -257,33 +257,18 @@ describe('adjustSpamMessages', () => {
     expect(JSON.stringify(updates)).not.toContain('spamDetections')
   })
 
-  it('records the detection globally — it is about the account, not the chat', async () => {
-    // Nothing in v2 wrote this field until 2026-08-01, so three mechanisms that
-    // read it could only ever see what v1 had left behind.
+  /**
+   * The detection counter is not reachable from here AT ALL any more, in either
+   * direction. It used to be, on a `detection` flag that did a plain `$inc`,
+   * and that made the automatic path able to file any number of detections
+   * against one account in one chat — the exact thing `recordSpamDetection`
+   * exists to prevent and `voterStandingFor` relies on being impossible.
+   */
+  it('cannot touch the detection counter in either direction', async () => {
     const { store, updates } = captureUpdates()
-    await store.adjustSpamMessages(-100, 42, 1, true)
-
-    const users = updates.filter((u) => u.collection === 'users')
-    expect(users.map((u) => u.update)).toEqual([
-      { $inc: { 'globalStats.spamMessages': 1 } },
-      { $inc: { 'globalStats.spamDetections': 1 } }
-    ])
-    expect(JSON.stringify(updates.filter((u) => u.collection === 'groupMembers')))
-      .not.toContain('spamDetections')
-  })
-
-  it('the two counters cannot veto each other on the way down', async () => {
-    // The floor lives in the filter, so a shared filter would let an
-    // already-zero counter block the other one's decrement.
-    const { store, updates } = captureUpdates()
-    await store.adjustSpamMessages(-100, 42, -1, true)
-
-    const users = updates.filter((u) => u.collection === 'users')
-    expect(users).toHaveLength(2)
-    expect(users[0]?.filter).toMatchObject({ 'globalStats.spamMessages': { $gt: 0 } })
-    expect(users[0]?.filter).not.toHaveProperty('globalStats.spamDetections')
-    expect(users[1]?.filter).toMatchObject({ 'globalStats.spamDetections': { $gt: 0 } })
-    expect(users[1]?.filter).not.toHaveProperty('globalStats.spamMessages')
+    await store.adjustSpamMessages(-100, 42, 1)
+    await store.adjustSpamMessages(-100, 42, -1)
+    expect(JSON.stringify(updates)).not.toContain('spamDetections')
   })
 })
 
@@ -694,7 +679,10 @@ describe('recordSpamDetection', () => {
       }
     } as unknown as MongoStore
     return {
-      store: Object.assign(store, { recordSpamDetection: MongoStore.prototype.recordSpamDetection }),
+      store: Object.assign(store, {
+        recordSpamDetection: MongoStore.prototype.recordSpamDetection,
+        clearSpamDetection: MongoStore.prototype.clearSpamDetection
+      }),
       updates
     }
   }
@@ -722,6 +710,34 @@ describe('recordSpamDetection', () => {
     const { store, updates } = detectionStore()
     await store.recordSpamDetection(-100, 42)
     expect(JSON.stringify(updates)).not.toContain('spamMessages')
+  })
+
+  /**
+   * The count and the set have to keep describing the same thing. A bare
+   * decrement — which is what a correction did until 2026-08-26 — spends
+   * whatever the global counter holds, so restoring a message in one chat could
+   * erase a finding another chat earned, leaving a record that said one
+   * detection while still naming two rooms.
+   */
+  it('a correction takes back only the detection its own chat filed', async () => {
+    const { store, updates } = detectionStore()
+    await store.clearSpamDetection(-100, 42)
+
+    expect(updates[0]?.filter).toEqual({
+      telegram_id: 42, 'globalStats.detectionChats': -100
+    })
+    expect(updates[0]?.update).toEqual({
+      $inc: { 'globalStats.spamDetections': -1 },
+      $pull: { 'globalStats.detectionChats': -100 }
+    })
+  })
+
+  it('the membership test is the floor — no chat, nothing to give back', async () => {
+    // A chat in the set contributed exactly one, and a chat not in it matches
+    // nothing, so a `$gt: 0` guard would be answering a question nobody asks.
+    const { store, updates } = detectionStore()
+    await store.clearSpamDetection(-100, 42)
+    expect(JSON.stringify(updates[0]?.filter)).not.toContain('$gt')
   })
 })
 

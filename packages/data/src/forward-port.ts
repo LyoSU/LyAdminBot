@@ -43,18 +43,53 @@ export const computeForwardHash = (forward: ForwardOrigin): ForwardHashInfo | nu
   return { type, hash, identifier }
 }
 
-/** v1 status math: clean reports counteract spam reports at 2:1. */
+/**
+ * How many separate chats must have seen a source before the network-wide tier
+ * is available to it.
+ *
+ * The reputation this file keeps is global: a blacklisted origin is refused in
+ * every chat the bot moderates, for 180 days. Until 2026-08-26 the only input
+ * to that was a report count, and a report count is something one account in
+ * one room can produce by itself — production held a channel blacklisted on 48
+ * reports that all came from a single chat, while the set of chats that had
+ * reported it was being written on every report and read by nobody.
+ *
+ * The bar is the rule this system already applies to its other network-wide
+ * act: a spam signature may be FILED by one chat and PROMOTED only by a second
+ * independent one (2026-08-23). Same reasoning, same number — one room, however
+ * loud, is not the network agreeing.
+ *
+ * `suspicious` is deliberately left alone. It weighs rather than convicts, and
+ * it is the tier that lets a wave be noticed in the chat it starts in.
+ */
+const BLACKLIST_MIN_CHATS = 2
+
+/**
+ * v1 status math: clean reports counteract spam reports at 2:1, and the
+ * blacklist tier additionally needs {@link BLACKLIST_MIN_CHATS} chats.
+ *
+ * `chatsSeen` is a count rather than the array, so the two callers can pass
+ * whatever they hold; a source recorded before the set existed reads as 0 and
+ * therefore cannot reach the blacklist on old evidence alone. That is the
+ * conservative direction: it takes one more report from one more chat to
+ * restore a status this used to grant on a single chat's word.
+ */
 export const forwardStatusFor = (
   type: string,
   spamReports: number,
-  cleanReports: number
+  cleanReports: number,
+  chatsSeen = 0
 ): ForwardReputation => {
   const thresholds = THRESHOLDS[type] ?? THRESHOLDS['user']!
   const effectiveSpam = Math.max(0, spamReports - Math.floor(cleanReports / 2))
-  if (effectiveSpam >= thresholds.blacklisted) return 'blacklisted'
+  if (effectiveSpam >= thresholds.blacklisted && chatsSeen >= BLACKLIST_MIN_CHATS) return 'blacklisted'
   if (effectiveSpam >= thresholds.suspicious) return 'suspicious'
   return 'clean'
 }
+
+/** How many distinct chats a stored record names. Absent field reads as none. */
+const chatsSeenIn = (doc: Document): number =>
+  Array.isArray(doc['uniqueGroups']) ? new Set(doc['uniqueGroups']).size : 0
 
 export class MongoForwardPort implements ForwardPort {
   constructor(private readonly store: MongoStore) {}
@@ -68,15 +103,17 @@ export class MongoForwardPort implements ForwardPort {
     if (!info) return null
     const doc = await this.collection.findOne(
       { forwardHash: info.hash },
-      { projection: { status: 1, spamReports: 1, cleanReports: 1, forwardType: 1 } }
+      { projection: { status: 1, spamReports: 1, cleanReports: 1, forwardType: 1, uniqueGroups: 1 } }
     ) as Document | null
     if (!doc) return null
     // Recompute instead of trusting the stored status — older v1 records
-    // may predate clean-report adjustments.
+    // may predate clean-report adjustments, and every record predates the
+    // two-chat bar on the blacklist tier.
     return forwardStatusFor(
       String(doc['forwardType'] ?? info.type),
       Number(doc['spamReports'] ?? 0),
-      Number(doc['cleanReports'] ?? 0)
+      Number(doc['cleanReports'] ?? 0),
+      chatsSeenIn(doc)
     )
   }
 
@@ -118,7 +155,8 @@ export class MongoForwardPort implements ForwardPort {
     const status = forwardStatusFor(
       String(doc['forwardType'] ?? fallbackType),
       Number(doc['spamReports'] ?? 0),
-      Number(doc['cleanReports'] ?? 0)
+      Number(doc['cleanReports'] ?? 0),
+      chatsSeenIn(doc)
     )
     if (doc['status'] === status) return
     await this.collection.updateOne(

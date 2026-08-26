@@ -28,21 +28,47 @@ describe('computeForwardHash (byte-compatible with v1 getForwardHash)', () => {
 })
 
 describe('forwardStatusFor (v1 thresholds, clean counter-reports 2:1)', () => {
+  /** Two chats, so the blacklist tier is reachable and the thresholds are what is tested. */
+  const spread = 2
+
   it('hidden sources blacklist faster than user sources', () => {
-    expect(forwardStatusFor('hidden', 3, 0)).toBe('suspicious')
-    expect(forwardStatusFor('hidden', 6, 0)).toBe('blacklisted')
-    expect(forwardStatusFor('user', 6, 0)).toBe('clean')
-    expect(forwardStatusFor('user', 8, 0)).toBe('suspicious')
-    expect(forwardStatusFor('user', 15, 0)).toBe('blacklisted')
+    expect(forwardStatusFor('hidden', 3, 0, spread)).toBe('suspicious')
+    expect(forwardStatusFor('hidden', 6, 0, spread)).toBe('blacklisted')
+    expect(forwardStatusFor('user', 6, 0, spread)).toBe('clean')
+    expect(forwardStatusFor('user', 8, 0, spread)).toBe('suspicious')
+    expect(forwardStatusFor('user', 15, 0, spread)).toBe('blacklisted')
   })
 
   it('clean reports counteract spam reports at 2:1', () => {
-    expect(forwardStatusFor('hidden', 6, 0)).toBe('blacklisted')
-    expect(forwardStatusFor('hidden', 6, 2)).toBe('suspicious')
-    expect(forwardStatusFor('hidden', 6, 8)).toBe('clean')
+    expect(forwardStatusFor('hidden', 6, 0, spread)).toBe('blacklisted')
+    expect(forwardStatusFor('hidden', 6, 2, spread)).toBe('suspicious')
+    expect(forwardStatusFor('hidden', 6, 8, spread)).toBe('clean')
   })
 
   it('unknown types fall back to the strictest user thresholds', () => {
-    expect(forwardStatusFor('nonsense', 14, 0)).toBe('suspicious')
+    expect(forwardStatusFor('nonsense', 14, 0, spread)).toBe('suspicious')
+  })
+
+  /**
+   * A blacklist is enforced in every chat for 180 days, and one room — however
+   * loud — is not the network agreeing. Production 2026-08-26 held a channel
+   * blacklisted on 48 reports that all came from one chat.
+   */
+  it('one chat alone cannot blacklist a source anywhere', () => {
+    expect(forwardStatusFor('hidden', 48, 0, 1)).toBe('suspicious')
+    expect(forwardStatusFor('hidden', 48, 0, 2)).toBe('blacklisted')
+  })
+
+  it('suspicious still needs only one chat — it weighs, it does not convict', () => {
+    expect(forwardStatusFor('hidden', 3, 0, 1)).toBe('suspicious')
+  })
+
+  /**
+   * Records written before the set was read say nothing about spread, and the
+   * conservative reading of silence is "we do not know" — one more report from
+   * one more chat restores what a single chat's word used to buy.
+   */
+  it('a record that names no chats cannot reach the blacklist', () => {
+    expect(forwardStatusFor('hidden', 100, 0)).toBe('suspicious')
   })
 })

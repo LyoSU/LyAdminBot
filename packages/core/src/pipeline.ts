@@ -124,8 +124,30 @@ export const nsfwProfileHit = (result: { scores: Record<string, number> } | null
   return null
 }
 
-/** The sexual-category confidence, whatever it is. Null when nothing answered. */
-const sexualScore = (result: { scores: Record<string, number> } | null): number | null => {
+/**
+ * Suggestive but not explicit — the evidence line, or null when the score is
+ * outside the band.
+ *
+ * Raised only when nothing crossed the explicit bar, so the two tiers never
+ * charge for the same picture twice. Shared with the account screen so both
+ * readers of a profile picture answer to one pair of thresholds.
+ */
+export const suggestiveProfileEvidence = (topSexual: number): string | null =>
+  topSexual >= NSFW_SUGGESTIVE_MIN_SCORE && topSexual < NSFW_PROFILE_MIN_SCORE
+    ? `profile media, sexual ${topSexual.toFixed(2)}`
+    : null
+
+/**
+ * The sexual-category confidence, whatever it is. Null when nothing answered.
+ *
+ * Exported for the same reason `nsfwProfileHit` is: the join/report screen in
+ * the app layer asks about the same picture and must not invent a second bar.
+ * Until 2026-08-26 it read only the explicit one, so an account the message
+ * path had just described as `suggestive_profile_media` came back from a
+ * reported-account screen as `clean` thirty-one seconds later, with the screen
+ * unable to record even that it had looked at the band.
+ */
+export const sexualScore = (result: { scores: Record<string, number> } | null): number | null => {
   if (!result) return null
   let top = 0
   for (const category of NSFW_PROFILE_CATEGORIES) {
@@ -691,15 +713,9 @@ export const evaluateMessage = async (
     }
 
     if (topSexual > 0) meta['profileSexual'] = Number(topSexual.toFixed(3))
-    /**
-     * Suggestive but not explicit — raised only when no surface crossed the
-     * explicit bar, so the two tiers never charge for the same picture twice.
-     */
-    if (topSexual >= NSFW_SUGGESTIVE_MIN_SCORE && topSexual < NSFW_PROFILE_MIN_SCORE) {
-      signals.push({
-        name: 'suggestive_profile_media',
-        evidence: `profile media, sexual ${topSexual.toFixed(2)}`
-      })
+    const suggestive = suggestiveProfileEvidence(topSexual)
+    if (suggestive !== null) {
+      signals.push({ name: 'suggestive_profile_media', evidence: suggestive })
     }
   }
 

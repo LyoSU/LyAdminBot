@@ -10,6 +10,7 @@ import {
   isEnforcementAction, countsAsDetection,
   countsAgainstSender,
   shouldAutoLearn, autoLearnSource, VOTE_LEARN_STATUS, conversationLineFor, nsfwProfileHit,
+  sexualScore, suggestiveProfileEvidence, profileHasCase,
   voterRoster, voteEligibility, voteMayRecordDetection, needsRestitution, restitutionLiftsRestrictions,
   type VoterStanding,
   classifyUrl, strongestTelegramLink, removesSender, truncate, mediaCategoryOf,
@@ -58,6 +59,7 @@ import { MemberFactsCache, type MemberFacts } from './member-facts.js'
 import { JOIN_WINDOW_MS, JoinRateTracker } from './join-rate.js'
 import { IncidentTracker, SenderMessageLog, incidentPowerFor, correctionOwns, type Incident } from './incident.js'
 import { ArrivalLog, arrivalMessageIds } from './arrival-log.js'
+import { DuplicateTally } from './duplicate-tally.js'
 
 const config = loadConfig()
 
@@ -840,6 +842,14 @@ const passCaptcha = async (
  * See `member-facts.ts` for why a failed lookup is not written down.
  */
 const memberFacts = new MemberFactsCache()
+
+/**
+ * Redeliveries the gateway dropped, summarised on a timer rather than one line
+ * each. See `duplicate-tally.ts` for why the per-event line was not enough.
+ */
+const duplicates = new DuplicateTally()
+/** How often the tally is said out loud, when it has anything to say. */
+const DUPLICATE_REPORT_MS = 60 * 60 * 1000
 const chatMemberFacts = (chatId: number, userId: number): Promise<MemberFacts> =>
   memberFacts.get(chatId, userId, () => gateway.tg.getChatMember({ chatId, userId }))
 
@@ -1506,7 +1516,13 @@ const restoreFalsePositive = async (params: {
   // had earned one. A deliberate asymmetry: this is the strongest
   // counter-evidence the system ever receives, the counter has a floor at zero,
   // and two detections strip an account of every benefit of the doubt at once.
-  await store.adjustSpamMessages(params.chatId, params.userId, -1, true)
+  await store.adjustSpamMessages(params.chatId, params.userId, -1)
+    .catch(() => { /* counters are best-effort */ })
+  // Unconditional, and now accurate about WHICH detection it takes back: the
+  // set says whether this chat ever filed one, so a correction here can no
+  // longer spend a finding another chat earned. A chat that never filed one
+  // has nothing to give back and this is a no-op.
+  await store.clearSpamDetection(params.chatId, params.userId)
     .catch(() => { /* counters are best-effort */ })
   /**
    * Retire what matched, so the same mistake is not made about the next person.
@@ -2705,12 +2721,27 @@ const screenAccount = async (params: {
   let evidence: string | null = null
   if (avatarBase64 !== null) {
     if (ports.moderation) {
-      const hit = await ports.moderation.check('', avatarBase64)
-        .then(nsfwProfileHit).catch(() => null)
-      saw['nsfw'] = hit === null ? 'clean_or_failed' : 'hit'
+      const result = await ports.moderation.check('', avatarBase64).catch(() => null)
+      const hit = nsfwProfileHit(result)
+      /**
+       * Both tiers, because until 2026-08-26 this read only the explicit one
+       * and was therefore blinder than the message path about the very same
+       * picture. Production that day: an account the pipeline had described as
+       * `suggestive_profile_media` at 16:26 came back from a reported-account
+       * screen as `clean` thirty-one seconds later, and the coverage line could
+       * only say `nsfw=clean_or_failed` — the band had not been looked at, and
+       * nothing said so.
+       */
+      const suggestive = suggestiveProfileEvidence(sexualScore(result) ?? 0)
+      saw['nsfw'] = result === null
+        ? 'failed'
+        : hit !== null ? 'hit' : suggestive !== null ? 'suggestive' : 'clean'
       if (hit !== null) {
         signals.push({ name: 'nsfw_avatar', evidence: hit })
         evidence = hit
+      } else if (suggestive !== null) {
+        signals.push({ name: 'suggestive_profile_media', evidence: suggestive })
+        evidence ??= suggestive
       }
     } else saw['nsfw'] = 'off'
     const hash = avatarDhashOf(avatarBase64)
@@ -2726,7 +2757,23 @@ const screenAccount = async (params: {
     }
   }
 
-  const verdict = accountVerdict(signals, { hardAccountVerdict: hasHardAccountVerdict(snapshot) })
+  const doorway = accountVerdict(signals, { hardAccountVerdict: hasHardAccountVerdict(snapshot) })
+  /**
+   * The gate bar this screen answers to, and why it is not the doorway's.
+   *
+   * `accountVerdict` answers "may this account be gated on ARRIVAL, having said
+   * nothing at all". Every caller of this screen is a human report — `reported`
+   * or `reported_arrival` — so the situation is the other one `account-verdict`
+   * already names: somebody is in the room, somebody has objected, and the
+   * profile is what there is to read. That is `profileHasCase`, whose
+   * `ASKS_ALONE` set differs from the doorway's by exactly the tier this screen
+   * could not see at all until today.
+   *
+   * It can only ever turn `none` into a question. Nothing here reaches `ban`
+   * that did not reach it before.
+   */
+  const verdict: AccountAction =
+    doorway === 'none' && profileHasCase(signals) ? 'gate' : doorway
   const named = signals
     .filter((s) => PROFILE_EVIDENCE_SIGNALS.has(s.name as never))
     .map((s) => s.name)
@@ -4125,8 +4172,18 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
   // carries the distinction between "Telegram would not let us" (still counts)
   // and "we decided not to" (does not).
   if (isEnforcementAction(verdict.action) && countsAgainstSender(result.skippedReason)) {
-    await store.adjustSpamMessages(chat.id, sender.id, 1, countsAsDetection(verdict))
+    await store.adjustSpamMessages(chat.id, sender.id, 1)
       .catch(() => { /* counters are best-effort */ })
+    // One chat, one detection — the same rule the vote path has always kept,
+    // and which this path did not. Until 2026-08-26 it raised the counter once
+    // per firm verdict, so a sender working a single room reached the two
+    // detections that strip the vote, the established-regular exempt and the
+    // ban shield, without any second chat ever agreeing. A message evaluated
+    // twice charged twice on top of that.
+    if (countsAsDetection(verdict)) {
+      await store.recordSpamDetection(chat.id, sender.id)
+        .catch(() => { /* counters are best-effort */ })
+    }
   }
 
   // The message joins the chat context only if it stayed in the chat —
@@ -4741,9 +4798,31 @@ const wireCallbacks = (): void => {
         chatId, query.user.id, Number(existing['targetUserId'] ?? 0))
       const refusal = ballotRefusal(locale, standing)
       if (refusal !== null) {
+        /**
+         * The numbers, not just the verdict.
+         *
+         * A refusal is the one moderation outcome the person on the other end
+         * argues with, and "you have not settled in" is a claim about four
+         * quantities none of which were written down. Production 2026-08-26: a
+         * member with 64 messages in a chat the bot itself had only known for
+         * four days was refused, and answering "which half of the bar did they
+         * miss, and did Telegram's clock even answer" took a database
+         * excavation that still could not distinguish "they joined recently"
+         * from "the lookup failed" — because a failed `getChatMember` and a
+         * genuinely new member both arrive here as `joinedAgoSeconds: null`.
+         *
+         * Rounded to whole days: this is for reading, and the bar is in days.
+         */
+        const days = (value: number | null): number | null =>
+          value === null ? null : Math.round(value)
         log.info('vote_refused', {
           chatId, userId: query.user.id, messageId,
-          reason: voteEligibility(standing)
+          reason: voteEligibility(standing),
+          inChat: standing.messagesInChat,
+          global: standing.messagesGlobal,
+          ourDays: days(standing.localAgeDays),
+          joinedDays: days(standing.joinedAgoSeconds === null ? null : standing.joinedAgoSeconds / 86400),
+          detections: standing.spamDetections
         })
         await query.answer({ text: refusal, alert: true })
         return
@@ -5041,7 +5120,15 @@ const main = async (): Promise<void> => {
   // Debug, not warn: a redelivery is the transport working as specified, and
   // the pipeline now absorbs it. It becomes interesting only in bulk, which
   // `total` makes visible without a line per occurrence being worth reading.
-  gateway.onDuplicate((info) => log.debug('duplicate_delivery', { ...info }))
+  //
+  // The bulk reading is the tally below, at `info`. This line alone was the
+  // whole record until 2026-08-26, and `LOG_LEVEL` defaults to `info`, so
+  // production emitted none of it — the count was handed over and dropped one
+  // step past where it was computed.
+  gateway.onDuplicate((info) => {
+    duplicates.note(info.chatId)
+    log.debug('duplicate_delivery', { ...info })
+  })
   wireCallbacks()
   const self = await gateway.start()
   selfId = self.id
@@ -5060,6 +5147,15 @@ const main = async (): Promise<void> => {
     void expireStaleVotes()
   }, 60 * 1000)
   sweepTimer.unref?.()
+
+  // Hourly, and only when there is something to say. A rate this coarse is
+  // enough for the question it answers — whether redeliveries are evenly spread
+  // or concentrated in a few chats — and a quiet bot logs nothing at all.
+  const duplicateTimer = setInterval(() => {
+    if (duplicates.pending === 0) return
+    log.info('duplicate_deliveries', { ...duplicates.drain() })
+  }, DUPLICATE_REPORT_MS)
+  duplicateTimer.unref?.()
 
   /**
    * Housekeeping the database cannot do for itself.
