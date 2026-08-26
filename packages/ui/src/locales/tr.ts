@@ -170,6 +170,7 @@ export const tr: Locale = {
       long_text: 'alışılmadık derecede uzun bir gönderi',
       invisible_in_word: 'kelimelerin içinde gizli görünmez karakterler',
       mixed_script_word: 'bir kelimenin içinde karışık alfabeler',
+      greek_homoglyph_word: 'bir kelimede benzerlerinin yerine geçen Yunan harfleri',
       foreign_script: 'bu sohbette kullanılmayan bir yazı sistemi',
       custom_emoji_heavy: 'çok sayıda özel emoji',
       paid_media: 'ücretli medya içeriği',

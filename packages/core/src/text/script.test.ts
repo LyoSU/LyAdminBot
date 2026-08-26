@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chatScriptProfile, dominantScript, informativeLength } from './script.js'
+import { chatScriptProfile, confusableScriptMix, dominantScript, informativeLength } from './script.js'
 
 describe('dominantScript', () => {
   it('names the script the text is actually written in', () => {
@@ -122,5 +122,30 @@ describe('chatScriptProfile — the chat description as a language sample', () =
     const profile = chatScriptProfile({ topLanguage: 'uk', title: 'Чат', description: null }, [])
     expect(profile.has('cyrillic')).toBe(true)
     expect(profile.has('han')).toBe(false)
+  })
+})
+
+
+/**
+ * Which look-alike alphabets a word borrows from, not merely whether it borrows.
+ *
+ * Measured 2026-08-26 over 3680 unacted decisions and 1182 acted ones: a word
+ * mixing GREEK into Cyrillic appeared twice among the unacted (both adverts),
+ * eleven times among the acted, and zero times among the 1293 unacted whose
+ * sender carried standing or trust. A word mixing LATIN into Cyrillic appeared
+ * nine times among the unacted and most of those are people typing — `пiдкрутка`,
+ * `Цитата обрiзана`, `interessно`. One signal charged both at the same weight.
+ */
+describe('confusableScriptMix', () => {
+  it('names the alphabets, so the caller can tell a habit from an evasion', () => {
+    expect(confusableScriptMix('πеρеписке').sort()).toEqual(['cyrillic', 'greek'])
+    expect(confusableScriptMix('пiдкрутка').sort()).toEqual(['cyrillic', 'latin'])
+  })
+
+  it('is empty when one alphabet does all the work', () => {
+    expect(confusableScriptMix('переписке')).toEqual([])
+    expect(confusableScriptMix('correspondence')).toEqual([])
+    // Greek written as Greek is a language, not a disguise.
+    expect(confusableScriptMix('παραλία')).toEqual([])
   })
 })

@@ -16,6 +16,7 @@ const msg = (overrides: Partial<AbstainInput> = {}): AbstainInput => ({
 
 /** A sender this chat has never seen — the `new_in_chat` signal. */
 const stranger = { stranger: true }
+const obfuscated = { obfuscated: true }
 
 describe('shouldAbstain — the "bare @username" class of messages', () => {
   test('abstains on a bare mention', () => {
@@ -282,5 +283,30 @@ describe('shouldAbstain — a message that is nothing but bot handles', () => {
   test('a member the chat knows may post whatever handles they like', () => {
     expect(shouldAbstain(msg({ text: '@nictiobot @gtqo0bfxbot 🧧', mentions: ['nictiobot', 'gtqo0bfxbot'] })))
       .toBe(true)
+  })
+})
+
+
+/**
+ * A word built out of two alphabets is not "too little to judge" — building it
+ * took effort, and the effort is the message.
+ *
+ * Production 2026-08-26: `ρаздаю деньги сейчас` (Greek rho, "giving away money
+ * now") measured 18 informative characters against a bar of 20 and was buffered
+ * at pSpam 0, so the `greek_homoglyph_word` the pipeline had already raised
+ * never reached anything that reads it.
+ */
+describe('shouldAbstain — obfuscation is content', () => {
+  test('REGRESSION: a homoglyph word is judged however short the message', () => {
+    expect(shouldAbstain(msg({ text: 'ρаздаю деньги сейчас' }), obfuscated)).toBe(false)
+  })
+
+  test('and it does not depend on who sent it', () => {
+    // Zero of the 1293 messages from senders the chat trusted carried one.
+    expect(shouldAbstain(msg({ text: 'κοροткий' }), obfuscated)).toBe(false)
+  })
+
+  test('without the finding, the same text is still too short', () => {
+    expect(shouldAbstain(msg({ text: 'ρаздаю деньги сейчас' }))).toBe(true)
   })
 })

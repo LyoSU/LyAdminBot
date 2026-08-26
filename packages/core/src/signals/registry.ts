@@ -322,6 +322,27 @@ export const SIGNALS = {
   invisible_in_word: { weight: 2.0, kind: 'evidence', highRisk: true },
   mixed_script_word: { weight: 1.5, kind: 'evidence' },
   /**
+   * The same act, with the donor alphabet named — and at the weight the act
+   * deserves when nobody can claim their keyboard did it.
+   *
+   * `mixed_script_word` charges 1.5 whether the borrowed letter is a Latin `i`
+   * in a Ukrainian word or a Greek rho in a Russian one. Those are not the same
+   * event. Measured 2026-08-26 across 3680 unacted decisions and 1182 acted
+   * ones: Latin inside Cyrillic appears nine times among the unacted and most
+   * are people typing (`пiдкрутка`, `Цитата обрiзана`, `interessно`), while
+   * Greek inside Cyrillic appears eleven times among the ACTED, twice among the
+   * unacted — both adverts — and zero times among the 1293 unacted messages
+   * whose sender the chat already trusted.
+   *
+   * 2.0 is `SENDER_REMOVAL_MIN_EVIDENCE` exactly, the same number
+   * `invisible_in_word` carries, and for the same reason: both are a word built
+   * to defeat the layers below rather than to be read, and neither has an
+   * innocent version. On the one advert this was measured against it moves the
+   * score from 0.7503 to 0.8320 — from the grey band to a deletion in the
+   * mildest preset, without reaching the bar for removing the person on its own.
+   */
+  greek_homoglyph_word: { weight: 2.0, kind: 'evidence' },
+  /**
    * Written in a script this chat does not use. Deliberately a nudge: being
    * foreign is not being spam, and the signal's whole job is routing — it says
    * that every heuristic stage here is calibrated on another language and its

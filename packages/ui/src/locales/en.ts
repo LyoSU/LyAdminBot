@@ -170,6 +170,7 @@ export const en: Locale = {
       long_text: 'an unusually long post',
       invisible_in_word: 'invisible characters hidden inside words',
       mixed_script_word: 'mixed alphabets inside a word',
+      greek_homoglyph_word: 'Greek letters standing in for look-alikes inside a word',
       foreign_script: 'written in a script this chat does not use',
       custom_emoji_heavy: 'lots of custom emoji',
       paid_media: 'paid media content',

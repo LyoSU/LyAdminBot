@@ -225,14 +225,27 @@ describe('signal catalogue', () => {
 
   /**
    * Signals heavy enough to remove the *person* on their own. Four are somebody
-   * else's verdict on the account; three are structural evasion that has no
+   * else's verdict on the account; four are structural evasion that has no
    * innocent reading. Pinned by hand because "this one signal is enough to take
    * the chat away from you" is the heaviest claim in the catalogue, and the
    * 2026-07-30 kick happened by a weight crossing a bar nobody was watching.
+   *
+   * `greek_homoglyph_word` joined on 2026-08-26, deliberately and with the
+   * numbers: across 3680 unacted decisions and 1182 acted ones, a Greek letter
+   * inside a Cyrillic word appeared eleven times among the ACTED, twice among
+   * the unacted — both adverts — and not once among the 1293 unacted messages
+   * whose sender the chat already trusted. Its Latin sibling stays at 1.5 and
+   * outside this list, because a Latin letter inside a Cyrillic word is usually
+   * a keyboard.
+   *
+   * Clearing this bar is not a ban. It removes the evidence objection; the
+   * score still has to reach the chat's own threshold, and on the advert this
+   * was calibrated against it reaches deletion, not removal, in the mildest
+   * preset.
    */
   const REMOVES_SENDER_ALONE: SignalName[] = [
     'scam_flag', 'fake_flag', 'unofficial_client_risk', 'edit_injected_invisibles',
-    'many_url_buttons', 'hidden_url', 'invisible_in_word'
+    'many_url_buttons', 'hidden_url', 'invisible_in_word', 'greek_homoglyph_word'
   ]
 
   it('the signals that alone justify removing the sender are exactly the intended ones', () => {

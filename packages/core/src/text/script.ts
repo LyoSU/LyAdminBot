@@ -75,22 +75,29 @@ const scriptOf = (ch: string): ScriptName | null => {
 const CONFUSABLE_SCRIPTS: readonly ScriptName[] = ['latin', 'cyrillic', 'greek']
 
 /**
- * Whether one word borrows letters from two look-alike alphabets. Character
+ * WHICH look-alike alphabets one word borrows from, empty when only one does
+ * the work. Naming them rather than counting them, because the donor decides
+ * how much the borrowing means: measured 2026-08-26, a Greek letter inside a
+ * Cyrillic word appeared in eleven enforced verdicts and in zero of the 1293
+ * unacted messages whose sender the chat knew, while a Latin letter inside a
+ * Cyrillic word is most often somebody's keyboard — `пiдкрутка`, `Цитата
+ * обрiзана`. Nobody reaches for Greek by accident.
+ *
+ * Character
  * classes cannot express this: the check used to be `[Ѐ-ӿ]` against `[a-zA-Z]`,
  * which saw only Latin donors (production 2026-07-31: an advert substituting
  * Greek omicron, kappa and rho raised nothing at all) and missed every donor
  * outside those two ranges besides — Cyrillic Supplement, fullwidth and
  * extended Latin all sit past their ends.
  */
-export const mixesConfusableScripts = (word: string): boolean => {
+export const confusableScriptMix = (word: string): ScriptName[] => {
   const seen = new Set<ScriptName>()
   for (const ch of word) {
     const script = scriptOf(ch)
     if (script === null || !CONFUSABLE_SCRIPTS.includes(script)) continue
     seen.add(script)
-    if (seen.size > 1) return true
   }
-  return false
+  return seen.size > 1 ? [...seen] : []
 }
 
 /**

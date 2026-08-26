@@ -184,6 +184,7 @@ export const by: Locale = {
       long_text: 'незвычайна доўгі тэкст',
       invisible_in_word: 'нябачныя сімвалы ўнутры слоў',
       mixed_script_word: 'мешаніна алфавітаў у слове',
+      greek_homoglyph_word: 'грэчаскія літары замест падобных на іх у слове',
       foreign_script: 'напісана незвычным для чату пісьмом',
       custom_emoji_heavy: 'шмат кастамных эмодзі',
       paid_media: 'платны медыякантэнт',

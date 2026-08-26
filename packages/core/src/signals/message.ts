@@ -8,7 +8,7 @@
  */
 import type { NormalizedMessage, Signal } from '../types.js'
 import { isEmojiOnly, truncate } from '../text/normalize.js'
-import { mixesConfusableScripts } from '../text/script.js'
+import { confusableScriptMix } from '../text/script.js'
 import { classifyUrl, sameDestination } from './urls.js'
 
 const LONG_TEXT_THRESHOLD = 200
@@ -118,10 +118,11 @@ const looksUrlLike = (s: string): boolean => /^(https?:\/\/|www\.|t\.me\/)/i.tes
 // ("Зaрaбoтoк" with Latin a/o). Which alphabets count as look-alike is
 // `mixesConfusableScripts`. Per-word so bilingual sentences are not flagged;
 // minimum length 4 to skip abbreviations.
-const firstMixedScriptWord = (text: string): string | null => {
+const firstMixedScriptWord = (text: string): { word: string; greek: boolean } | null => {
   for (const word of text.split(/[\s\p{P}]+/u)) {
     if (word.length < 4) continue
-    if (mixesConfusableScripts(word)) return word
+    const mix = confusableScriptMix(word)
+    if (mix.length > 0) return { word, greek: mix.includes('greek') }
   }
   return null
 }
@@ -184,7 +185,14 @@ export const extractMessageSignals = (msg: NormalizedMessage): Signal[] => {
   // words it objected to.
   const mixedWord = firstMixedScriptWord(text)
   if (mixedWord !== null) {
-    signals.push({ name: 'mixed_script_word', evidence: `«${truncate(mixedWord, 40)}»` })
+    // One or the other, never both: it is one word and one act, and the two
+    // names differ only in how much the donor alphabet says about intent.
+    // Spelled out rather than chosen with a ternary, because the catalogue test
+    // proves every weight can be raised by scanning for `name: '…'` and a
+    // ternary hides both names from it.
+    const evidence = `«${truncate(mixedWord.word, 40)}»`
+    if (mixedWord.greek) signals.push({ name: 'greek_homoglyph_word', evidence })
+    else signals.push({ name: 'mixed_script_word', evidence })
   }
 
   if (msg.customEmoji.length >= CUSTOM_EMOJI_HEAVY_MIN) {

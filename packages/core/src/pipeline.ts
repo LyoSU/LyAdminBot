@@ -712,7 +712,10 @@ export const evaluateMessage = async (
    * so "there is nothing to read" is not a reason to stop looking, it is the
    * shape of the thing.
    */
-  const lowInformation = shouldAbstain(input.message, { stranger: isStrangerHere(signals) })
+  const lowInformation = shouldAbstain(input.message, {
+    stranger: isStrangerHere(signals),
+    obfuscated: signals.some((signal) => signal.name === 'greek_homoglyph_word')
+  })
 
   /**
    * Twice, and the order is the whole point: rules that cost nothing first, the

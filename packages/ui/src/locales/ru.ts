@@ -184,6 +184,7 @@ export const ru: Locale = {
       long_text: 'необычно длинный текст',
       invisible_in_word: 'невидимые символы внутри слов',
       mixed_script_word: 'смесь алфавитов в слове',
+      greek_homoglyph_word: 'греческие буквы вместо похожих на них в слове',
       foreign_script: 'написано непривычной для чата письменностью',
       custom_emoji_heavy: 'много кастомных эмодзи',
       paid_media: 'платный медиаконтент',

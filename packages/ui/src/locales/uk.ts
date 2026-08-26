@@ -184,6 +184,7 @@ export const uk: Locale = {
       long_text: 'незвично довгий текст',
       invisible_in_word: 'невидимі символи всередині слів',
       mixed_script_word: 'мішанина алфавітів у слові',
+      greek_homoglyph_word: 'грецькі літери замість схожих на них у слові',
       foreign_script: 'написано незвичним для чату письмом',
       custom_emoji_heavy: 'багато кастомних емодзі',
       paid_media: 'платний медіаконтент',

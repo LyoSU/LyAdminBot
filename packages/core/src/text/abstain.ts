@@ -18,8 +18,17 @@ export type AbstainInput = Pick<
   | 'guestBot' | 'replyTo'
 >
 
-/** What the pipeline already knows about the sender by the time it asks. */
-export interface AbstainSender {
+/** What the pipeline has already worked out by the time it asks this. */
+export interface AbstainContext {
+  /**
+   * A word in this message borrows letters from a look-alike alphabet in the
+   * way that has no innocent reading — `greek_homoglyph_word`, raised by
+   * `extractMessageSignals` well before this gate is consulted.
+   *
+   * Passed in rather than re-derived here, because a second scan for the same
+   * thing is a second definition of it, and the two would eventually disagree.
+   */
+  obfuscated?: boolean
   /**
    * Nobody here knows them: inside their first few messages in this chat AND
    * carrying no standing anywhere — see `isStrangerHere`.
@@ -29,7 +38,7 @@ export interface AbstainSender {
    * elsewhere walking into a chat it has not posted in before; that person
    * naming somebody is a person naming somebody.
    */
-  stranger: boolean
+  stranger?: boolean
 }
 
 /**
@@ -139,7 +148,7 @@ const nothingButBots = (text: string): boolean => {
 
 export const shouldAbstain = (
   input: AbstainInput,
-  sender: AbstainSender = { stranger: false }
+  context: AbstainContext = {}
 ): boolean => {
   // Rich content is always classifiable regardless of text length:
   // URLs, buttons, forwards, and media carry signal on their own.
@@ -151,6 +160,17 @@ export const shouldAbstain = (
   if (input.guestBot !== null) return false
   // Custom-emoji-heavy messages may render text the raw string hides.
   if (input.customEmoji.length >= CUSTOM_EMOJI_MASKING_MIN) return false
+  /**
+   * A word built out of two alphabets belongs in the list above: somebody took
+   * trouble over it, and the trouble is itself the thing worth reading. Not
+   * conditioned on the sender, unlike the two rules below — across 1293
+   * messages from senders the chat trusted, not one carried such a word.
+   *
+   * Production 2026-08-26: `ρаздаю деньги сейчас` measured 18 informative
+   * characters against a bar of 20, so the finding the pipeline had already
+   * made about it reached nothing that could act on it.
+   */
+  if (context.obfuscated === true) return false
 
   /**
    * A pointer to another account, from somebody this chat has never met, in a
@@ -171,8 +191,8 @@ export const shouldAbstain = (
    * a message that no longer exists. A comment under a channel post is likewise
    * not a reply: it answers a POST, and a handle in it names nobody present.
    */
-  if (sender.stranger && input.replyTo === null && pointsOutward(input.text)) return false
-  if (sender.stranger && nothingButBots(input.text)) return false
+  if (context.stranger === true && input.replyTo === null && pointsOutward(input.text)) return false
+  if (context.stranger === true && nothingButBots(input.text)) return false
 
   // Mentions are addressing, not content — a bare "@user" tells us nothing.
   const withoutMentions = input.text.replace(/@\w+/g, ' ')

@@ -242,13 +242,19 @@ describe('extractMessageSignals — suspicious signals', () => {
     expect(names(makeMsg({ text: 'дивись відео на YouTube українською' }))).not.toContain('mixed_script_word')
   })
 
-  it('flags a GREEK homoglyph inside a Cyrillic word', () => {
+  it('flags a GREEK homoglyph inside a Cyrillic word, and names it apart', () => {
     // Production 2026-07-31 10:11: an advert whose every substitution came from
     // Greek (omicron, kappa, rho) raised nothing, while a second advert from the
     // same campaign an hour later happened to include one Latin letter and was
     // flagged. The evasion is identical; only the donor alphabet differed.
-    expect(names(makeMsg({ text: 'Ищем οтветственнοго менеджера' }))).toContain('mixed_script_word')
-    expect(names(makeMsg({ text: 'обработκа тρафика' }))).toContain('mixed_script_word')
+    //
+    // Since 2026-08-26 the donor is named, because it is not the same event:
+    // nobody reaches for Greek by accident, while a Latin letter inside a
+    // Cyrillic word is most often somebody's keyboard.
+    expect(names(makeMsg({ text: 'Ищем οтветственнοго менеджера' }))).toContain('greek_homoglyph_word')
+    expect(names(makeMsg({ text: 'обработκа тρафика' }))).toContain('greek_homoglyph_word')
+    expect(names(makeMsg({ text: 'Зaрaбoтoк для всіх' }))).not.toContain('greek_homoglyph_word')
+    expect(names(makeMsg({ text: 'Ищем οтветственнοго менеджера' }))).not.toContain('mixed_script_word')
   })
 
   it('names the word it objected to', () => {
