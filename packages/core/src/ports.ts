@@ -143,8 +143,37 @@ export interface LlmVerdict {
  * model answered. `mayRemoveSender` / `capUnearnedRemoval` are where that
  * belongs, and they apply to every other stage already.
  */
+/**
+ * Firsthand observations about THIS message that cannot be read out of its text.
+ *
+ * The classifier decides — its verdict replaces the score outright — and it was
+ * being asked to decide without the one class of evidence the rest of the
+ * pipeline had actually WATCHED happen. The velocity stage's own comment says
+ * repetition "is a reason to look harder" and that "the stages that can READ
+ * the message decide what it means"; the stage that can read the message was
+ * never told.
+ *
+ * Production 2026-08-26 20:20–20:24: an account with three confirmed spam
+ * detections and a 30-day ban a week old posted one text into three chats in
+ * four minutes. The score reached 0.94. The classifier, shown the text alone,
+ * called it `legit_share` all three times, and `legit_share` is what the chats
+ * got — because the classifier's number is the verdict.
+ *
+ * Deliberately NOT the sender's history. That belongs to the account and this
+ * codebase's recurring failure is profile evidence leaking into a verdict about
+ * a sentence; repetition is different in kind — it is the message, arriving
+ * again, observed by us.
+ */
+export interface MessageObservations {
+  /**
+   * What the cross-chat window watched arrive, verbatim from the velocity
+   * stage: copies, chats, distinct accounts, inside its window.
+   */
+  repetition?: string
+}
+
 export interface LlmPort {
-  classify(input: EvaluationInput): Promise<LlmVerdict | null>
+  classify(input: EvaluationInput, observed?: MessageObservations): Promise<LlmVerdict | null>
 }
 
 export interface SessionWindow {

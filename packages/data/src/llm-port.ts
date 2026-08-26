@@ -59,7 +59,7 @@
  * so the model always knows what is circulating THIS week.
  */
 import { randomBytes, createHash } from 'node:crypto'
-import type { EvaluationInput, LlmPort, LlmVerdict } from '@lyadmin/core'
+import type { EvaluationInput, LlmPort, LlmVerdict, MessageObservations } from '@lyadmin/core'
 import { isDistinctive, LLM_REASON_CODES, toWellFormed, truncate } from '@lyadmin/core'
 import { foldConfusables, normalizeLight } from './hashing.js'
 import type { MongoStore } from './mongo.js'
@@ -337,7 +337,9 @@ export const promptFingerprint = (): string =>
  * told to do, the context around the message, and the message itself. Leaving
  * any of them out means serving an answer to a question nobody asked.
  */
-export const cacheKeyFor = (model: string, input: EvaluationInput): string | null => {
+export const cacheKeyFor = (
+  model: string, input: EvaluationInput, observed?: MessageObservations
+): string | null => {
   // Photo bytes are not part of the key, so a verdict that looked at an image
   // cannot be reused for anything.
   if (input.enrichment.photoBase64 !== null) return null
@@ -351,7 +353,17 @@ export const cacheKeyFor = (model: string, input: EvaluationInput): string | nul
     ? foldConfusables(normalizeLight(input.message.text))
     : input.message.text
 
-  return sha(`${model}:${promptFingerprint()}:${contextDigest(input)}:${keyText}`)
+  /**
+   * Presence, not the count. A message asked about while nothing had repeated
+   * and the same message asked about once copies are arriving are two different
+   * questions, and serving the first answer for the second is what let a clean
+   * `legit_share` stand for every copy of a blast. But "3 copies in 3 chats" and
+   * "9 copies in 7 chats" are the same question — folding them keeps a wave from
+   * paying for a fresh call per copy, which is the same buckets-not-counts
+   * reasoning `contextDigest` already applies to standing.
+   */
+  const repeated = observed?.repetition ? 'rep' : '-'
+  return sha(`${model}:${promptFingerprint()}:${contextDigest(input)}:${repeated}:${keyText}`)
 }
 
 export class OpenRouterLlmPort implements LlmPort {
@@ -365,9 +377,11 @@ export class OpenRouterLlmPort implements LlmPort {
     this.timeoutMs = config.timeoutMs ?? 30_000
   }
 
-  async classify(input: EvaluationInput): Promise<LlmVerdict | null> {
+  async classify(
+    input: EvaluationInput, observed?: MessageObservations
+  ): Promise<LlmVerdict | null> {
     const model = this.config.model
-    const cacheKey = cacheKeyFor(model, input)
+    const cacheKey = cacheKeyFor(model, input, observed)
     if (cacheKey && this.store) {
       const hit = await this.store.llmCache.findOne({ key: cacheKey }).catch(() => null)
       if (hit) {
@@ -388,7 +402,7 @@ export class OpenRouterLlmPort implements LlmPort {
     // A fence, not an attestation: it delimits the untrusted text and is never
     // asked for back. See the note at the top of this file.
     const fence = randomBytes(8).toString('hex')
-    const answer = await this.callModel(model, fence, input)
+    const answer = await this.callModel(model, fence, input, observed)
     if (!answer) return null // callModel already reported why
 
     /**
@@ -466,7 +480,8 @@ export class OpenRouterLlmPort implements LlmPort {
   private async callModel(
     model: string,
     fence: string,
-    input: EvaluationInput
+    input: EvaluationInput,
+    observed?: MessageObservations
   ): Promise<ModelAnswer | null> {
     const ids = { chatId: input.message.chatId, messageId: input.message.messageId }
     const briefing = this.config.briefingProvider
@@ -474,7 +489,7 @@ export class OpenRouterLlmPort implements LlmPort {
       : null
 
     const system = buildSystemPrompt(fence, briefing)
-    const userContent = buildUserContent(input, fence)
+    const userContent = buildUserContent(input, fence, observed)
 
     try {
       const controller = new AbortController()
@@ -619,6 +634,14 @@ export const buildSystemPrompt = (fence: string, briefing: string | null): strin
     'message spam. Somebody who runs a shop may also ask an ordinary question.',
     'Judge the fenced text; let the profile inform how carefully you read it.',
     '',
+    'MESSAGE FACTS may report that the same text has been seen in other chats',
+    'recently. Repetition is a reason to read the message harder, never a verdict',
+    'on its own: cross-posting one message to several chats is something ordinary',
+    'members do — a news link, a fundraiser, a university notice. Ask what is',
+    'being repeated. A message whose payload is a link or an offer, repeated into',
+    'unrelated chats by someone with no history in them, is a campaign; the same',
+    'shape from someone sharing news in chats they belong to is not.',
+    '',
     'CHAT PURPOSE tells you whether being an advertisement is itself out of place',
     'here. A post that matches what the chat says it exists for is not spam merely',
     'for being promotional — judge such a post on the offer itself: who is hiring,',
@@ -741,7 +764,8 @@ const makeAuthorLabels = (senderId: number): { labelFor: (authorId: number | nul
 
 export const buildUserContent = (
   input: EvaluationInput,
-  fence: string
+  fence: string,
+  observed?: MessageObservations
 ): string | { type: string; text?: string; image_url?: { url: string } }[] => {
   const msg = input.message
   const user = input.user
@@ -865,6 +889,12 @@ export const buildUserContent = (
   }
   if (msg.attachments.length > 0) {
     facts.push(`attachments: ${msg.attachments.map((a) => a.kind).join(', ')}`)
+  }
+  // System-computed and therefore unquoted: it is a count of what we watched
+  // arrive, with no user-authored text in it. See `MessageObservations` for why
+  // the stage that decides was not being told.
+  if (observed?.repetition) {
+    facts.push(`this same text has been seen elsewhere recently — ${observed.repetition}`)
   }
   const mentions = input.enrichment.resolvedMentions
   if (mentions.length > 0) {

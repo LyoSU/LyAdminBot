@@ -15,7 +15,7 @@
  * the outcome MORE cautious (observe), never clean.
  */
 import type { EvaluationInput, Signal, Verdict, VerdictAction, DecidedBy } from './types.js'
-import type { BurstEntry, LlmVerdict, PipelinePorts } from './ports.js'
+import type { BurstEntry, LlmVerdict, MessageObservations, PipelinePorts } from './ports.js'
 import { extractMessageSignals } from './signals/message.js'
 import {
   extractUserSignals, tenureDays, hasHardAccountVerdict,
@@ -984,6 +984,12 @@ export const evaluateMessage = async (
   // indexed read and can only ever add evidence; deciding to ask them to prove
   // they are human costs them the benefit of the doubt. The same split the
   // report path settled on 2026-08-26 — looking needs a lower bar than acting.
+  /**
+   * What this run watched happen to this message, for the stage that decides.
+   * See `MessageObservations` — filled by the velocity stage, read by the LLM.
+   */
+  const observed: MessageObservations = {}
+
   const repetition = lowInformation && profileSpoke && ports.velocity
     ? await safe('velocity', () =>
         ports.velocity!.check(input, { countExactWhenTemplateUnusable: true }))
@@ -994,6 +1000,7 @@ export const evaluateMessage = async (
       name: 'velocity_repeats',
       evidence: repetition?.evidence ?? 'the same message repeated by this account'
     })
+    if (repetition?.evidence) observed.repetition = repetition.evidence
   }
 
   // A message in an unfamiliar script is never "too little to judge": whatever
@@ -1187,6 +1194,10 @@ export const evaluateMessage = async (
       // and a variable is invisible to it.
       const solo = velocity.singleAuthor === true
       const evidence = velocity.evidence
+      // Handed to the classifier as well as weighed here. It decides — its
+      // number replaces this score outright — and until 2026-08-26 it decided
+      // without ever being told that we had watched the copies arrive.
+      if (evidence) observed.repetition = evidence
       if (solo) {
         signals.push(evidence ? { name: 'velocity_repeats', evidence } : { name: 'velocity_repeats' })
       } else {
@@ -1351,7 +1362,7 @@ export const evaluateMessage = async (
   let llmNeededButUnavailable = false
 
   if (needsLlm && ports.llm) {
-    const llmVerdict: LlmVerdict | null = await safe('llm', () => ports.llm!.classify(input))
+    const llmVerdict: LlmVerdict | null = await safe('llm', () => ports.llm!.classify(input, observed))
 
     if (llmVerdict) {
       // Recorded whether or not it was a hit: a hit alone proves nothing, and it

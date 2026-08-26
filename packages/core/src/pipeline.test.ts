@@ -796,6 +796,46 @@ describe('evaluateMessage — knowledge ports', () => {
     expect(v.signals.map((s) => s.name)).toContain('velocity_wave')
   })
 
+  /**
+   * The stage that DECIDES has to be told what the stage that only counts saw.
+   *
+   * `velocity`'s own retirement note says repetition "is a reason to look
+   * harder" and that "the stages that can READ the message decide what it
+   * means" — but the classifier's number replaces the score outright, and until
+   * 2026-08-26 it was produced without this fact ever reaching the prompt.
+   * Production that day: one text into three chats in four minutes by an account
+   * with three confirmed detections, score 0.94, `legit_share` every time.
+   */
+  it('hands the classifier what the window watched arrive', async () => {
+    let seen: string | undefined = 'not called'
+    await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
+      velocity: { check: async () => ({ exceeded: true, evidence: '6 copies in 4 chats' }) },
+      llm: {
+        classify: async (_input, observed) => {
+          seen = observed?.repetition
+          return null
+        }
+      }
+    })
+    expect(seen).toBe('6 copies in 4 chats')
+  })
+
+  it('says nothing to the classifier when nothing repeated', async () => {
+    // An empty observation, not a claim that the window was clean: the window
+    // may simply not have been consulted.
+    let observedAtAll: unknown = 'not called'
+    await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
+      velocity: { check: async () => ({ exceeded: false }) },
+      llm: {
+        classify: async (_input, observed) => {
+          observedAtAll = observed?.repetition
+          return null
+        }
+      }
+    })
+    expect(observedAtAll).toBeUndefined()
+  })
+
   it('both branches raise their own signal and neither concludes', async () => {
     // One account repeating itself and several accounts repeating each other are
     // different facts and stay different signals — `velocity_repeats` is

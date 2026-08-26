@@ -136,6 +136,57 @@ describe('buildUserContent — fence', () => {
   })
 })
 
+describe('buildUserContent — what this run watched happen', () => {
+  /**
+   * The classifier's number REPLACES the score, so anything it is not told is
+   * not weighed at all. Production 2026-08-26 20:20–20:24: one text into three
+   * chats in four minutes, score 0.94, `legit_share` all three times — the
+   * velocity stage had watched the copies arrive and its own comment says "the
+   * stages that can READ the message decide what it means", while the stage
+   * that can read the message was never told.
+   */
+  it('tells the classifier that the same text is arriving elsewhere', () => {
+    const text = asText(buildUserContent(
+      makeInput(), 'C', { repetition: '3 copies in 3 chats from 1 accounts within window' }))
+    expect(text).toContain('MESSAGE FACTS')
+    expect(text).toContain('this same text has been seen elsewhere recently')
+    expect(text).toContain('3 copies in 3 chats from 1 accounts within window')
+  })
+
+  it('says nothing when nothing repeated', () => {
+    // A "no repetition observed" line would read as a clean bill of health the
+    // window never issued — the same reason `reputation neutral` is omitted.
+    const text = asText(buildUserContent(makeInput(), 'C'))
+    expect(text).not.toContain('seen elsewhere')
+  })
+
+  /**
+   * It is a count of what we watched, not text anybody wrote, so it is the one
+   * value in this section that must NOT be quoted as untrusted — quoting it
+   * would tell the model to discount the only firsthand observation it gets.
+   */
+  it('is stated plainly, not quoted as somebody\'s words', () => {
+    const text = asText(buildUserContent(
+      makeInput(), 'C', { repetition: '3 copies in 3 chats' }))
+    expect(text).not.toContain('«3 copies in 3 chats»')
+  })
+})
+
+describe('buildSystemPrompt — how repetition may be read', () => {
+  /**
+   * Without the guidance this fact would be a false-positive engine: velocity
+   * was retired as a decider on 2026-08-07 precisely because it punished
+   * repetition, and 10 of 52 known false positives came from it — cross-posting
+   * one message to several chats is something ordinary members do.
+   */
+  it('says repetition is a reason to read harder, never a verdict', () => {
+    const prompt = buildSystemPrompt('FENCE', null)
+    expect(prompt).toContain('Repetition is a reason to read the message harder')
+    expect(prompt).toContain('never a verdict')
+    expect(prompt).toContain('ordinary')
+  })
+})
+
 describe('buildUserContent — message facts', () => {
   it('exposes hidden link destinations', () => {
     const text = asText(buildUserContent(makeInput({
@@ -272,9 +323,28 @@ describe('llm cache identity', () => {
     // reaches anybody because the old answers keep being served.
     const digest = contextDigest(makeInput())
     const expected = createHash('sha256')
-      .update(`cheap:${promptFingerprint()}:${digest}:звичайне повідомлення`)
+      .update(`cheap:${promptFingerprint()}:${digest}:-:звичайне повідомлення`)
       .digest('hex').slice(0, 32)
     expect(keyFor(makeInput())).toBe(expected)
+  })
+
+  /**
+   * A message asked about while nothing had repeated, and the same message
+   * asked about once copies are arriving, are two different questions. Serving
+   * the first answer for the second is what let one `legit_share` stand for
+   * every copy of a blast (production 2026-08-26, three chats, four minutes).
+   */
+  it('repetition makes it a different question', () => {
+    const clean = cacheKeyFor('cheap', makeInput())
+    const repeating = cacheKeyFor('cheap', makeInput(), { repetition: '3 copies in 3 chats' })
+    expect(repeating).not.toBe(clean)
+  })
+
+  it('but a bigger wave is the same question — presence, not the count', () => {
+    // Otherwise every copy of a spreading text pays for its own call, and the
+    // answer to "has this repeated" does not change between three and nine.
+    expect(cacheKeyFor('cheap', makeInput(), { repetition: '3 copies in 3 chats from 1 accounts' }))
+      .toBe(cacheKeyFor('cheap', makeInput(), { repetition: '9 copies in 7 chats from 2 accounts' }))
   })
 
   it('the fingerprint is stable — it must not shatter the cache per call', () => {
