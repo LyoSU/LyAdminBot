@@ -405,6 +405,47 @@ export const evaluateMessage = async (
    */
   const capUnearnedRemoval = (verdict: Verdict): Verdict => {
     meta['cappedFrom'] = verdict.action
+    /**
+     * And when the message was an ANSWER to somebody, do not spend the message
+     * either. 2026-08-27, an experiment.
+     *
+     * This ceiling already concedes that the evidence did not reach the bar for
+     * taking the person away. On a reply it did not reach the bar for taking
+     * the message away either, and deleting is the one act a correction cannot
+     * undo. The fortnight to 2026-08-27 splits this bucket almost perfectly:
+     * of 73 deletions it produced, the 4 that were replies were reversed 3
+     * times — 75%, and 3 of 3 where the reply was also recent — against 2 of
+     * the other 69, at 2.9%. Nothing else in the bucket separates: every one of
+     * the 73 carries `new_globally`, 65 carry `sleeper_awakened`, and the
+     * profile-side signals leave the rate where they found it.
+     *
+     * n is 4. That is not a policy, it is a first reading, and it is recorded
+     * here so the next reading can contradict it. What makes it worth acting on
+     * early is that the same shape has now been measured on three separate
+     * paths — the window stages twice and this bucket once — and points the
+     * same way each time: across every stage, a punishment landing on a reply
+     * from an account with no prior findings is reversed at 14.9% against the
+     * system's 0.93%.
+     *
+     * A captcha rather than plain `observe` wherever one can actually be asked.
+     * The point of this branch is that the message survives, not that nothing
+     * happens: a bot cannot answer the gate, the person we were wrong about
+     * taps once and carries on, and the chat still gets its vote. Routed
+     * through `mayAskCaptcha` rather than `captchaEnabled` alone, because a
+     * prompt nobody can receive is a gate that never closes — the comment-group
+     * case that made that helper exist.
+     */
+    if (isInExchange(verdict.signals)) {
+      meta['cappedReplyReason'] = verdict.reasonCode
+      const gate = mayAskCaptcha(policyInputFor(verdict.pSpam, verdict.signals))
+      return {
+        ...verdict,
+        action: (gate ? 'captcha' : 'observe') as VerdictAction,
+        needsVote: input.policy.votingEnabled,
+        banDurationSeconds: null,
+        reasonCode: 'content_unconfirmed'
+      }
+    }
     return {
       ...verdict,
       action: 'delete' as VerdictAction,

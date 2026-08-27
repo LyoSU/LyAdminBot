@@ -1910,6 +1910,74 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
     expect(v.requireCaptcha).toBe(true)
   })
 
+  /**
+   * 2026-08-27, an experiment with a first reading.
+   *
+   * This ceiling already concedes the evidence did not reach the bar for taking
+   * the PERSON away. On a reply it did not reach the bar for taking the MESSAGE
+   * away either, and deleting is the one act a correction cannot undo. Of the
+   * 73 deletions the bucket produced over the fortnight, the 4 that were
+   * replies were reversed 3 times — 75%, against 2 of the other 69 at 2.9% —
+   * and nothing else in it separates: all 73 carry `new_globally`, 65 carry
+   * `sleeper_awakened`, and the profile signals leave the rate where they are.
+   *
+   * The fixture is the production shape: a bare invite link and nothing else,
+   * posted in answer to somebody, from an account old enough to have woken up.
+   */
+  const inviteInAnswer = {
+    msg: {
+      text: 'https://t.me/+GTNaTfZj9eUwN2Fi',
+      urls: [{ visible: 't.me/+GTN', target: 'https://t.me/+GTNaTfZj9eUwN2Fi', hidden: false }],
+      replyTo: { authorId: 9, isSelf: false, ageSeconds: 60, textPreview: 'де група?' }
+    },
+    user: { predictedAgeDays: 1500, localAgeDays: 3, messagesGlobal: 3, messagesInChat: 2 }
+  }
+
+  it('an answer to somebody is gated instead of deleted', async () => {
+    const v = await evaluateMessage(makeInput(inviteInAnswer), {})
+    expect(v.reasonCode).toBe('content_unconfirmed')
+    expect(removesSender(v.meta['cappedFrom'] as VerdictAction) ||
+      v.meta['cappedFrom'] === 'mute').toBe(true)
+    // The message survives. The sender still answers for themselves, and the
+    // chat is still asked — the branch withholds the one act nothing can undo,
+    // not the consequence.
+    expect(v.action).toBe('captcha')
+    expect(v.needsVote).toBe(true)
+    expect(v.meta['cappedReplyReason']).toBe('private_invite_new')
+  })
+
+  it('and is only observed where no gate could actually reach them', async () => {
+    // A prompt nobody can receive is a gate that never closes, so the branch
+    // asks `mayAskCaptcha` rather than reading the chat's setting alone.
+    const v = await evaluateMessage(
+      makeInput({ ...inviteInAnswer, policy: { captchaEnabled: false } }), {})
+    expect(v.action).toBe('observe')
+    expect(v.needsVote).toBe(true)
+    expect(v.reasonCode).toBe('content_unconfirmed')
+  })
+
+  it('being caught before spends the answer, as everywhere else', async () => {
+    const v = await evaluateMessage(makeInput({
+      ...inviteInAnswer,
+      user: { ...inviteInAnswer.user, spamDetections: 2 }
+    }), {})
+    expect(v.signals.some((sig) => sig.name === 'prior_spam_detections')).toBe(true)
+    expect(v.action).not.toBe('captcha')
+    expect(v.meta['cappedReplyReason']).toBeUndefined()
+  })
+
+  it('the same message with nobody to answer is still deleted', async () => {
+    // The branch turns on the reply and nothing else: strip it and the bucket
+    // behaves exactly as it did before.
+    const v = await evaluateMessage(makeInput({
+      ...inviteInAnswer,
+      msg: { text: inviteInAnswer.msg.text, urls: inviteInAnswer.msg.urls }
+    }), {})
+    expect(v.signals.some((sig) => sig.name === 'is_reply')).toBe(false)
+    expect(v.reasonCode).toBe('content_unconfirmed')
+    expect(v.action).toBe('delete')
+  })
+
   it('no captcha is demanded where the chat turned it off', async () => {
     const v = await evaluateMessage(
       makeInput({ ...thinEvidence, policy: { captchaEnabled: false } }), weakVector)
