@@ -2348,6 +2348,30 @@ describe('evaluateMessage — enforcement ladder end to end', () => {
     expect(v.banDurationSeconds).toBeGreaterThan(0)
   })
 
+  it('records the evidence figure on a verdict that returns before the score', async () => {
+    /**
+     * `contentEvidence` is what the log line calls "the quantity that licenses
+     * enforcing without reading the message", and it was written at stage 6 —
+     * so every stage that concludes earlier recorded no value for it at all.
+     *
+     * Production, 2026-08-27: of roughly 400 punitive decisions that day, 184
+     * carried no figure — 142 deterministic, 29 signature, 5 forward, 6 at the
+     * join screen, 2 on an ignored captcha. Nearly half the enforcement of a
+     * day could not be priced against the number that is supposed to price it,
+     * and this rule is the extreme case: the one that bans on zero evidence by
+     * design, which is exactly the claim a reader would want to check.
+     *
+     * `finalize` is where it belongs for the reason `portErrors` and `portMs`
+     * are already there — every verdict in the file passes through it, `none`
+     * included, so a stage cannot be added later that forgets to say.
+     */
+    const v = await evaluateMessage(makeInput({
+      user: { ...newcomer, externalBan: { banned: true, bannedAt: null, offenses: 3, sources: ['lols'] } }
+    }), {})
+    expect(v.ruleId).toBe('external_ban_new')
+    expect(v.meta['contentEvidence']).toBe(contentEvidence(v.signals).total)
+  })
+
   it('a scam flag alongside an external listing is still permanent', async () => {
     // The platform verdict is what grants permanence; a third-party listing
     // neither grants nor removes it.

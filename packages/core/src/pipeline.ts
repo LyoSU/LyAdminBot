@@ -356,6 +356,22 @@ export const evaluateMessage = async (
     const policyDecision = decision ?? policyFor(draft.pSpam, signals)
     meta['portErrors'] = portErrors
     if (portMs.length > 0) meta['portMs'] = portMs.join(',')
+    /**
+     * How much of the case the MESSAGE carried — recorded here, with the other
+     * two facts every verdict owes its reader, and for the same reason.
+     *
+     * It used to be written at stage 6, next to the score that consumes it, and
+     * so it existed only on verdicts that reached stage 6. Production
+     * 2026-08-27: 184 of about 400 punitive decisions that day recorded no
+     * figure, because a deterministic rule, a signature match, a forward-list
+     * hit and the join screen all conclude earlier. The number the log line
+     * calls the one that diagnoses a surprising action was absent from nearly
+     * half the actions worth being surprised by.
+     *
+     * Every verdict in this file is built by this function, `none` included, so
+     * a stage added later cannot quietly stop answering.
+     */
+    meta['contentEvidence'] = contentEvidence(signals).total
     return {
       pSpam: draft.pSpam,
       action: policyDecision.action,
@@ -1286,11 +1302,11 @@ export const evaluateMessage = async (
 
   const { pSpam: scorePSpam, topContributors, cappedGroups } = scoreSignals(signals)
   meta['scorePSpam'] = Number(scorePSpam.toFixed(4))
-  // Calibration telemetry: how much of the score was earned by the message
-  // itself, and which correlated groups hit their ceiling. Both are needed to
-  // reconstruct a verdict from a log line alone — the 2026-07-30 FP could not
-  // be diagnosed from the logs because only the top contributor was recorded.
-  meta['contentEvidence'] = contentEvidence(signals).total
+  // Calibration telemetry: which correlated groups hit their ceiling. Needed,
+  // with `contentEvidence`, to reconstruct a verdict from a log line alone —
+  // the 2026-07-30 FP could not be diagnosed from the logs because only the top
+  // contributor was recorded. `contentEvidence` itself moved to `finalize` on
+  // 2026-08-27, so that the stages concluding before this line record it too.
   if (cappedGroups.length > 0) meta['cappedGroups'] = cappedGroups.join(',')
 
   // A score resting only on account/profile *shape* (no message-content
