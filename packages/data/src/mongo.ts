@@ -1532,9 +1532,15 @@ export class MongoStore {
    * One entry per person per question — the first refusal, kept. Somebody who
    * taps five times has not been refused five times, and the `$ne` and the
    * `$push` are one operation, so two taps racing cannot both slip through.
-   * The slice is the same belt and braces `appendIncidentMessage` wears: the
-   * filter already bounds the array by the size of the chat, and an array is
-   * still not where a chat should discover it has ten thousand members.
+   *
+   * That invariant holds up to `MAX_REFUSALS` and not past it, which is worth
+   * stating rather than implying: the slice drops the oldest entry, so on a
+   * question that turned away more than fifty distinct people the fifty-first
+   * can displace the first, and the first can then be admitted again. Beyond
+   * the cap this is a bounded sample of who was refused, not a census. The cap
+   * stays anyway — a question refusing fifty people has already made its point,
+   * and an array is not where a chat should discover it has ten thousand
+   * members.
    *
    * The four quantities are the ones the bar is made of. WHICH half somebody
    * missed decides whether a chat that cannot answer its own questions needs a
@@ -1563,6 +1569,12 @@ export class MongoStore {
     await this.votes.updateOne(
       {
         chatId: params.chatId, messageId: params.messageId, status: 'open',
+        // `expiresAt` as well as `status`, for the reason `castBallot` gives:
+        // the sweep that flips the status runs once a minute, so the status
+        // alone leaves a window in which a question whose time is up still
+        // takes answers. A refusal recorded past the deadline would be counted
+        // as participation the question never had.
+        expiresAt: { $gt: new Date() },
         'refusals.userId': { $ne: params.userId }
       },
       { $push: { refusals: { $each: [refusal], $slice: -MongoStore.MAX_REFUSALS } } } as never
@@ -1583,8 +1595,16 @@ export class MongoStore {
    * them would report a chat with one attentive admin as a broad electorate.
    */
   async voterDiversity(chatId: number): Promise<{
-    votes: number
+    /** Questions asked here, not ballots cast — the two differ by an order. */
+    questions: number
+    /** Distinct non-admin voters whose ballots counted. */
     voters: number
+    /**
+     * Distinct people turned away. A different population from `voters` by
+     * construction: these are the ones who did NOT get a ballot, and unlike
+     * `voters` the set can include an admin, who is refused only on their own
+     * case.
+     */
     refused: number
     /** Share of all counted ballots cast by the two busiest voters, 0-1. */
     topTwoShare: number
@@ -1607,7 +1627,7 @@ export class MongoStore {
     const total = counts.reduce((sum, n) => sum + n, 0)
     const topTwo = counts.slice(0, 2).reduce((sum, n) => sum + n, 0)
     return {
-      votes: docs.length,
+      questions: docs.length,
       voters: cast.size,
       refused: refused.size,
       topTwoShare: total === 0 ? 0 : Math.round((topTwo / total) * 100) / 100
@@ -1649,14 +1669,21 @@ export class MongoStore {
       .limit(limit)
       .toArray()
     const claimed: Awaited<ReturnType<MongoStore['claimExpiredVotes']>> = []
-    for (const doc of due) {
-      const chatId = Number(doc['chatId'])
-      const messageId = Number(doc['messageId'])
-      const result = await this.votes.updateOne(
+    for (const candidate of due) {
+      const chatId = Number(candidate['chatId'])
+      const messageId = Number(candidate['messageId'])
+      // Read and flip in ONE operation, and report the document as it stood at
+      // that instant. The find above is only a search: between it and the write
+      // a ballot or a refusal can still land, and a separate `updateOne` would
+      // have left the sweep logging the tally it read a moment earlier while
+      // the stored question carried a different one. `before` is deliberate —
+      // it is the state the question expired IN.
+      const doc = await this.votes.findOneAndUpdate(
         { chatId, messageId, status: 'open' },
-        { $set: { status: 'expired', closedAt: new Date() } }
+        { $set: { status: 'expired', closedAt: new Date() } },
+        { returnDocument: 'before' }
       )
-      if (result.modifiedCount !== 1) continue
+      if (!doc) continue
       const prompt = doc['promptMessageId']
       claimed.push({
         chatId,

@@ -1093,6 +1093,21 @@ const scheduleDelete = (chatId: number, messageId: number, delayMs: number, sour
  */
 const expireStaleVotes = async (): Promise<void> => {
   const expired = await store.claimExpiredVotes().catch(() => [])
+  /**
+   * One diversity read per CHAT per sweep, not one per question.
+   *
+   * `voterDiversity` walks everything the collection still holds for a chat,
+   * and a sweep takes up to fifty questions at once — which in the rooms that
+   * expire questions in bulk are fifty questions from the SAME room. Asking
+   * per question re-ran one seven-day scan fifty times, in front of the prompt
+   * deletions the same loop is holding up.
+   */
+  const pools = new Map<number, Awaited<ReturnType<typeof store.voterDiversity>> | null>()
+  const poolFor = async (chatId: number) => {
+    if (!pools.has(chatId))
+      pools.set(chatId, await store.voterDiversity(chatId).catch(() => null))
+    return pools.get(chatId) ?? null
+  }
   for (const vote of expired) {
     /**
      * Everything needed to read the expiry, not just the fact of it.
@@ -1110,7 +1125,7 @@ const expireStaleVotes = async (): Promise<void> => {
     const refusedBy = new Map<string, number>()
     for (const refusal of vote.refusals)
       refusedBy.set(refusal.reason, (refusedBy.get(refusal.reason) ?? 0) + 1)
-    const pool = await store.voterDiversity(vote.chatId).catch(() => null)
+    const pool = await poolFor(vote.chatId)
     log.info('vote_expired', {
       chatId: vote.chatId, userId: vote.targetUserId, messageId: vote.messageId,
       net: tally.spam - tally.ham, spam: tally.spam, ham: tally.ham,
@@ -4909,6 +4924,7 @@ const wireCallbacks = (): void => {
           joinedDays: days(standing.joinedAgoSeconds === null ? null : standing.joinedAgoSeconds / 86400),
           detections: standing.spamDetections
         })
+        await query.answer({ text: refusal, alert: true })
         /**
          * And beside the question, because stdout is not a denominator.
          *
@@ -4920,10 +4936,14 @@ const wireCallbacks = (): void => {
          * purpose — once for whoever is arguing with the refusal, once for
          * whoever is arguing with the threshold.
          *
-         * Best-effort, like the counters: a refusal that failed to record is
-         * worth less than the toast this member is waiting for.
+         * AFTER the toast, and not awaited. Telegram gives a callback query a
+         * few seconds to be answered and then shows the tap as failed, so a slow
+         * write in front of the answer spends the member's patience on our
+         * telemetry. Catching the error made this best-effort in outcome only;
+         * ordering makes it best-effort in latency too, which is the half that
+         * the person tapping can actually feel.
          */
-        await store.noteBallotRefusal({
+        void store.noteBallotRefusal({
           chatId, messageId, userId: query.user.id, reason,
           messagesInChat: standing.messagesInChat,
           messagesGlobal: standing.messagesGlobal,
@@ -4932,7 +4952,6 @@ const wireCallbacks = (): void => {
           tenureDays: days(mergeTenureDays(standing.localAgeDays, standing.joinedAgoSeconds)),
           detections: standing.spamDetections
         }).catch(() => { /* telemetry is best-effort */ })
-        await query.answer({ text: refusal, alert: true })
         return
       }
       const written = await store.castBallot({

@@ -552,6 +552,14 @@ describe('vote lifetime', () => {
         updateOne: async (filter: Record<string, unknown>, update: Record<string, unknown>) => {
           updates.push({ filter, update })
           return { modifiedCount: modified }
+        },
+        // The claim reads and flips in one operation, so a question cannot gain
+        // a ballot between the sweep seeing it and the sweep taking it.
+        findOneAndUpdate: async (filter: Record<string, unknown>, update: Record<string, unknown>) => {
+          updates.push({ filter, update })
+          if (modified !== 1) return null
+          return rows.find((r) =>
+            r['chatId'] === filter['chatId'] && r['messageId'] === filter['messageId']) ?? null
         }
       }
     } as unknown as MongoStore
@@ -645,6 +653,20 @@ describe('vote lifetime', () => {
     })
   })
 
+  it('will not record a refusal on a question whose time is up', async () => {
+    // The same guard `castBallot` carries, and for the same reason: the sweep
+    // that flips the status runs once a minute, so the status alone leaves a
+    // window in which a closed question still takes answers. A refusal past the
+    // deadline would be counted as participation the question never had.
+    const { store, updates } = voteStore()
+    await store.noteBallotRefusal({
+      chatId: -100, messageId: 5, userId: 7, reason: 'no_standing',
+      messagesInChat: 4, messagesGlobal: 11, tenureDays: 2, detections: 0
+    })
+    const filter = updates[0]?.filter as { expiresAt?: { $gt: Date } }
+    expect(filter.expiresAt?.$gt).toBeInstanceOf(Date)
+  })
+
   it('keeps the refusal array from becoming a membership list', async () => {
     const { store, updates } = voteStore()
     await store.noteBallotRefusal({
@@ -665,7 +687,7 @@ describe('vote lifetime', () => {
       { ballots: [], refusals: [{ userId: 9 }, { userId: 9 }] }
     ])
     const pool = await store.voterDiversity(-100)
-    expect(pool).toEqual({ votes: 4, voters: 3, refused: 1, topTwoShare: 0.83 })
+    expect(pool).toEqual({ questions: 4, voters: 3, refused: 1, topTwoShare: 0.83 })
   })
 
   it('does not count an admin as an electorate', async () => {
@@ -675,7 +697,7 @@ describe('vote lifetime', () => {
       { ballots: [{ userId: 1, isAdmin: true }, { userId: 1, isAdmin: true }] }
     ])
     expect(await store.voterDiversity(-100)).toEqual({
-      votes: 1, voters: 0, refused: 0, topTwoShare: 0
+      questions: 1, voters: 0, refused: 0, topTwoShare: 0
     })
   })
 
