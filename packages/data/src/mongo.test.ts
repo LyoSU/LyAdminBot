@@ -1376,3 +1376,67 @@ describe('toRightsBlockRecord', () => {
     expect([r.strikes, r.probeAt, r.warnedUntil, r.lastRefusalAt]).toEqual([0, 0, 0, 0])
   })
 })
+
+/**
+ * The captcha funnel, which had no record at all until 2026-08-28.
+ *
+ * Measured over the 47.6 hours to 2026-08-27: 65 gates, of which exactly four
+ * were legible afterwards — the ones nobody answered. Their timing (165s, four
+ * times, which is 45 + 120) proves the public fallback fires as designed, but
+ * the 61 remaining gates were invisible: a tap wrote nothing anywhere, so
+ * "answered at 20s, chat saw nothing" and "answered at 90s, publicly accused
+ * first" were the same non-event. `ageMs` and `wentPublic` are the two fields
+ * that separate them, and `event` is what finally distinguishes a gate that
+ * reached somebody from one that was never delivered.
+ */
+describe('recordCaptchaEvent — the funnel a tap used to leave no trace of', () => {
+  const captureCaptcha = (): { store: MongoStore; docs: Record<string, unknown>[] } => {
+    const docs: Record<string, unknown>[] = []
+    const store = {
+      captchaEvents: { insertOne: async (doc: Record<string, unknown>) => { docs.push(doc); return {} } }
+    } as unknown as MongoStore
+    return {
+      store: Object.assign(store, { recordCaptchaEvent: MongoStore.prototype.recordCaptchaEvent }),
+      docs
+    }
+  }
+
+  it('a pass records how long it took and whether the chat had already seen a card', async () => {
+    const { store, docs } = captureCaptcha()
+    await store.recordCaptchaEvent({
+      chatId: -100, userId: 7, event: 'passed', via: 'whisper', ageMs: 20_400, wentPublic: false
+    })
+    expect(docs).toHaveLength(1)
+    expect(docs[0]).toMatchObject({
+      chatId: -100, userId: 7, event: 'passed', via: 'whisper', ageMs: 20_400, wentPublic: false
+    })
+    expect(docs[0]?.['createdAt']).toBeInstanceOf(Date)
+  })
+
+  it('a tap after the fallback is the case the 45-second window is about', async () => {
+    const { store, docs } = captureCaptcha()
+    await store.recordCaptchaEvent({
+      chatId: -100, userId: 7, event: 'passed', via: 'visible', ageMs: 91_000, wentPublic: true
+    })
+    expect(docs[0]).toMatchObject({ ageMs: 91_000, wentPublic: true })
+  })
+
+  it('a gate nobody could be asked is recorded, not merely logged', async () => {
+    const { store, docs } = captureCaptcha()
+    await store.recordCaptchaEvent({ chatId: -100, userId: 7, event: 'undeliverable' })
+    expect(docs[0]).toMatchObject({ event: 'undeliverable' })
+    // Absent rather than zero: nobody answered, so there is no duration to
+    // report, and a 0 here would sink the median of every answered gate.
+    expect(docs[0]).not.toHaveProperty('ageMs')
+    expect(docs[0]).not.toHaveProperty('via')
+  })
+
+  it('telemetry never throws at the caller', async () => {
+    const store = Object.assign(
+      { captchaEvents: { insertOne: async () => { throw new Error('mongo is down') } } } as unknown as MongoStore,
+      { recordCaptchaEvent: MongoStore.prototype.recordCaptchaEvent }
+    )
+    await expect(store.recordCaptchaEvent({ chatId: -1, userId: 1, event: 'delivered' }))
+      .resolves.toBeUndefined()
+  })
+})

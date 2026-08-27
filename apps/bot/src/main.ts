@@ -536,6 +536,12 @@ const applyIgnoredCaptcha = async (
       .then(() => true).catch(() => false)
   }
   log.info('captcha_ignored', { chatId, userId, held, removed })
+  // The unanswered end of the funnel. `wentPublic` is what says whether the
+  // silence was measured against a prompt the member could actually see.
+  void store.recordCaptchaEvent({
+    chatId, userId, event: 'ignored',
+    ageMs: captchas.ageMs(gate), wentPublic: gate.publicMessageId !== null
+  })
 
   /**
    * Written down, because it happened.
@@ -663,6 +669,7 @@ const deliverCaptcha = async (
     const lifted = await gateway.tg.restrictChatMember({ chatId, userId, restrictions: {} })
       .then(() => true).catch(() => false)
     log.warn('captcha_undeliverable', { chatId, userId, lifted })
+    void store.recordCaptchaEvent({ chatId, userId, event: 'undeliverable' })
     return 'undeliverable'
   }
 
@@ -723,6 +730,7 @@ const deliverCaptcha = async (
 
   if (!config.ephemeralCaptcha) {
     if (!(await postVisible())) return await abandonUndeliverable()
+    void store.recordCaptchaEvent({ chatId, userId, event: 'delivered', via: 'visible' })
     armConsequence()
     return 'visible'
   }
@@ -734,6 +742,7 @@ const deliverCaptcha = async (
       gate.triggerMessageId ?? undefined
     )
     log.info('captcha_whispered', { chatId, userId })
+    void store.recordCaptchaEvent({ chatId, userId, event: 'delivered', via: 'whisper' })
     armConsequence()
 
     const timer = setTimeout(() => {
@@ -788,6 +797,15 @@ const passCaptcha = async (
   chatId: number,
   userId: number,
   locale: Locale,
+  /**
+   * Which prompt was tapped, from the handler that received the tap.
+   *
+   * Not inferred here any more. It used to read `ephemeralMessageId !== null`,
+   * which is exactly wrong for the case worth counting: a gate whose whisper
+   * went unanswered has BOTH ids, so every tap on the public card was filed as
+   * a whisper — the one population the 45-second question is about.
+   */
+  via: 'whisper' | 'visible',
   answer: (text?: string) => Promise<void>
 ): Promise<boolean> => {
   // Forgeable payload: lift the gate only if WE issued it.
@@ -820,9 +838,16 @@ const passCaptcha = async (
   // Spent only now that it worked, and only if this is still the gate in force:
   // a re-issue during the round trip belongs to whoever issued it.
   captchas.forget(gate)
-  log.info('captcha_passed', {
-    chatId, userId, via: gate.ephemeralMessageId !== null ? 'whisper' : 'visible'
-  })
+  /**
+   * The two fields the review of 2026-08-27 could not obtain from anything we
+   * store: how long the member took, and whether the chat had already been
+   * shown a card about them by the time they answered. `wentPublic` is read
+   * before the cleanup below removes the card.
+   */
+  const ageMs = captchas.ageMs(gate)
+  const wentPublic = gate.publicMessageId !== null
+  log.info('captcha_passed', { chatId, userId, via, ageMs, wentPublic })
+  void store.recordCaptchaEvent({ chatId, userId, event: 'passed', via, ageMs, wentPublic })
   await answer(locale.captcha.passed)
 
   // Clean up whichever channels actually announced this gate — a gate whose
@@ -5170,7 +5195,7 @@ const wireCallbacks = (): void => {
         await query.answer({ text: locale.captcha.notForYou })
         return
       }
-      await passCaptcha(chatId, userId, locale, async (text) => {
+      await passCaptcha(chatId, userId, locale, 'visible', async (text) => {
         await query.answer(text === undefined ? {} : { text })
       })
       return
@@ -5277,7 +5302,7 @@ const wireCallbacks = (): void => {
       return
     }
     const locale = await localeFor(query.user.id, query.user.language)
-    await passCaptcha(chatId, userId, locale, async (text) => {
+    await passCaptcha(chatId, userId, locale, 'whisper', async (text) => {
       await gateway.tg.answerCallbackQuery(query.id, text === undefined ? {} : { text })
     })
   })

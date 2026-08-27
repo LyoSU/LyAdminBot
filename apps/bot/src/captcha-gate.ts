@@ -27,6 +27,8 @@
 export interface CaptchaGate {
   readonly chatId: number
   readonly userId: number
+  /** When the gate was opened; the origin `ageMs` measures a tap against. */
+  readonly issuedMs: number
   /** When the button stops working; see CAPTCHA_TTL_MS at the call site. */
   readonly expiresMs: number
   /** Set once the whisper lands; addressed via `deleteEphemeralMessage`. */
@@ -88,6 +90,7 @@ export class CaptchaGates {
     const gate: CaptchaGate = {
       chatId,
       userId,
+      issuedMs: this.now(),
       expiresMs: this.now() + ttlMs,
       ephemeralMessageId: null,
       publicMessageId: null,
@@ -98,6 +101,18 @@ export class CaptchaGates {
     }
     this.gates.set(key, gate)
     return gate
+  }
+
+  /**
+   * How long this gate has been open.
+   *
+   * The number the whole 45-second question turns on: a tap at 20s means the
+   * whisper did its work and the chat saw nothing, a tap at 90s means the same
+   * member was publicly accused first and answered anyway. Until this was
+   * recorded the two were the same event in every record we keep.
+   */
+  ageMs(gate: CaptchaGate): number {
+    return this.now() - gate.issuedMs
   }
 
   /** The gate in force for this person, or null if there is none or it lapsed. */

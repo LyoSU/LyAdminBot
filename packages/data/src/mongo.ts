@@ -381,6 +381,11 @@ export class MongoStore {
   get feedback(): Collection<Document> { return this.collection('pipeline_feedback') }
   get llmCache(): Collection<Document> { return this.collection('llm_cache') }
   get votes(): Collection<Document> { return this.collection('pipeline_votes') }
+  /**
+   * The captcha funnel: one row per gate outcome. Cheap by construction — at
+   * the observed rate (33 gates/day) a fortnight holds a few hundred rows.
+   */
+  get captchaEvents(): Collection<Document> { return this.collection('pipeline_captcha') }
   /** Resume cursor for the offline CAS signature harvester (tools/cas-harvest). */
   get harvestState(): Collection<Document> { return this.collection('cas_harvest_state') }
   // Persistent moderation state (survives restarts; TTL-expired).
@@ -406,8 +411,60 @@ export class MongoStore {
    */
   profileMedia(): Collection<Document> { return this.collection('profile_media_hashes') }
 
+  /**
+   * What became of one captcha gate.
+   *
+   * Written because nothing else was. A tap only ever produced a log line, and
+   * container logs begin at the last boot — so the question the whisper-first
+   * design turns on ("does the member answer before the 45-second fallback
+   * posts a card the whole chat reads?") had no data and could never acquire
+   * any. Measured over the 47.6h to 2026-08-27: 65 gates, 4 of them legible,
+   * all four unanswered, all four at 165s = 45 + 120. The other 61 were
+   * invisible.
+   *
+   * `ageMs` is the age of the gate when the event happened, and `wentPublic`
+   * says whether the visible card had already gone up by then. Those two
+   * separate "the whisper worked" from "we accused them in public and they
+   * answered anyway", which is the whole question.
+   *
+   * Best-effort, like every other write on this path: a member must never be
+   * left restricted because telemetry could not be stored.
+   */
+  async recordCaptchaEvent(params: {
+    chatId: number
+    userId: number
+    event: 'delivered' | 'undeliverable' | 'passed' | 'ignored'
+    /** Which prompt the tap came from; absent when nothing was answered. */
+    via?: 'whisper' | 'visible'
+    /**
+     * Absent rather than zero when there is no duration to report: a 0 would
+     * sink the median of every gate that WAS answered.
+     */
+    ageMs?: number
+    wentPublic?: boolean
+  }): Promise<void> {
+    try {
+      await this.captchaEvents.insertOne({
+        chatId: params.chatId,
+        userId: params.userId,
+        event: params.event,
+        ...(params.via === undefined ? {} : { via: params.via }),
+        ...(params.ageMs === undefined ? {} : { ageMs: Math.round(params.ageMs) }),
+        ...(params.wentPublic === undefined ? {} : { wentPublic: params.wentPublic }),
+        createdAt: new Date()
+      })
+    } catch {
+      // Deliberately silent: the caller is mid-gate and has nothing to do with
+      // this failure. The gap shows up as a funnel that does not add up, which
+      // is the honest way for missing telemetry to present itself.
+    }
+  }
+
   private async ensureIndexes(): Promise<void> {
     await ensureTtlIndex(this.decisions, { createdAt: 1 }, DECISIONS_TTL_DAYS * 86400)
+    // The same fortnight as the decisions these rows are analysed against —
+    // a funnel outliving the verdicts it explains could not be sliced by path.
+    await ensureTtlIndex(this.captchaEvents, { createdAt: 1 }, DECISIONS_TTL_DAYS * 86400)
     await this.decisions.createIndex({ chatId: 1, userId: 1, createdAt: -1 })
     // Why?/override lookup (getDecision) filters by chat+message.
     await this.decisions.createIndex({ chatId: 1, messageId: 1, createdAt: -1 })

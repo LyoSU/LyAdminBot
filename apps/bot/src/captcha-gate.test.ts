@@ -82,6 +82,33 @@ describe('CaptchaGates — a caller may only act on the gate it is holding', () 
   })
 })
 
+/**
+ * The measurement the 2026-08-27 review could not make.
+ *
+ * A tap wrote nothing anywhere, so "answered before the 45s fallback" and
+ * "answered after it, having been publicly accused for nothing" were the same
+ * event in every record we keep. Of 65 gates over 47.6 hours, 61 fell into that
+ * blind spot; the only four that were legible were the ones nobody answered,
+ * and their timing (165s = 45 + 120) says the fallback fires exactly as
+ * designed — which is not the question. The age of the gate at the moment of
+ * the tap IS the question.
+ */
+describe('CaptchaGates — how long the answer took', () => {
+  it('reports the age of a gate against its own clock', () => {
+    const c = clock()
+    const gates = new CaptchaGates(c.now)
+    const gate = gates.issue(-100, 7, TTL)
+
+    c.ms += 5_000
+    expect(gates.ageMs(gate)).toBe(5_000)
+  })
+
+  it('is zero at the moment of issue', () => {
+    const gates = new CaptchaGates(clock().now)
+    expect(gates.ageMs(gates.issue(-100, 7, TTL))).toBe(0)
+  })
+})
+
 describe('CaptchaGates — the unanswered-gate consequence', () => {
   it('is claimable exactly once', () => {
     const gates = new CaptchaGates()

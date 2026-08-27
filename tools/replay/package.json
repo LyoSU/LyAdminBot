@@ -9,6 +9,7 @@
     "mongodb": "^6.10.0"
   },
   "scripts": {
-    "replay": "tsx src/replay.ts"
+    "replay": "tsx src/replay.ts",
+    "captcha-funnel": "tsx src/captcha-funnel.ts"
   }
 }
