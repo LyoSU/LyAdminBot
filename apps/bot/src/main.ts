@@ -785,6 +785,52 @@ const deliverCaptcha = async (
   }
 }
 
+/** Take down whichever prompts actually announced a gate. */
+const removeGatePrompts = async (gate: CaptchaGate): Promise<void> => {
+  if (gate.publicMessageId !== null) {
+    await gateway.tg.deleteMessagesById(gate.chatId, [gate.publicMessageId])
+      .catch(() => { /* already gone */ })
+  }
+  if (gate.ephemeralMessageId !== null) {
+    await gateway.removeEphemeralPrompt(gate.chatId, gate.userId, gate.ephemeralMessageId)
+      .catch(() => { /* expires on its own anyway */ })
+  }
+}
+
+/**
+ * Close a gate because the question stopped being a question.
+ *
+ * A gate is a request to somebody who is still in the chat and still able to
+ * answer. Remove that person — or settle their case another way — and every
+ * part of the gate becomes wrong at once, which production showed on
+ * 2026-08-27 in one sequence: an account was gated at 21:44:37, its whisper
+ * went unanswered, the public card went up at 21:45:22, a moderator reported
+ * it and the account was BANNED at 21:47:16 — and then the gate carried on
+ * alone. Six seconds after the ban its consequence muted the banned account
+ * for an hour and filed a `captcha_ignored` decision saying it had been asked
+ * and had ignored us; the card itself, addressed to somebody no longer in the
+ * chat and quoting a message that had just been deleted, was scheduled to stay
+ * until 22:56 — sixty-nine minutes of "press the button to keep writing" over
+ * a hole where the account used to be.
+ *
+ * The vote path is the sharper case and is not cosmetic at all. A community
+ * `spam` outcome mutes; a pending gate's button calls `restrictChatMember`
+ * with empty restrictions, which clears EVERY restriction on the account. So
+ * one tap on a stale captcha lifted a mute the chat had just voted for.
+ */
+const dropGate = async (chatId: number, userId: number, reason: string): Promise<void> => {
+  const gate = captchas.peek(chatId, userId)
+  if (gate === null) return
+  const ageMs = captchas.ageMs(gate)
+  const wentPublic = gate.publicMessageId !== null
+  // Identity-checked: a gate issued after this removal belongs to whatever
+  // issued it, and taking its prompts down would be the same class of bug.
+  if (!captchas.forget(gate)) return
+  log.info('captcha_gate_dropped', { chatId, userId, reason, ageMs, wentPublic })
+  void store.recordCaptchaEvent({ chatId, userId, event: 'dropped', ageMs, wentPublic })
+  await removeGatePrompts(gate)
+}
+
 /**
  * One tap proved liveness. Shared by both tap paths — a visible prompt arrives
  * as an ordinary callback query, a whispered one as an ephemeral callback query
@@ -852,14 +898,7 @@ const passCaptcha = async (
 
   // Clean up whichever channels actually announced this gate — a gate whose
   // whisper went unanswered has both.
-  if (gate.publicMessageId !== null) {
-    await gateway.tg.deleteMessagesById(chatId, [gate.publicMessageId])
-      .catch(() => { /* already gone */ })
-  }
-  if (gate.ephemeralMessageId !== null) {
-    await gateway.removeEphemeralPrompt(chatId, userId, gate.ephemeralMessageId)
-      .catch(() => { /* expires on its own anyway */ })
-  }
+  await removeGatePrompts(gate)
   return true
 }
 
@@ -1385,6 +1424,13 @@ const enforceVoteSpam = async (vote: {
       deleted, muted, source: learnSource
     })
   }
+  /**
+   * Not tidiness here: `passCaptcha` lifts restrictions with an EMPTY
+   * `restrictChatMember`, which clears every restriction on the account. A
+   * pending gate left standing next to a mute the chat has just voted for is a
+   * one-tap undo of that vote, available to the person it was cast against.
+   */
+  if (muted) await dropGate(vote.chatId, vote.targetUserId, 'vote_spam')
   /**
    * The chat confirmed it, so it is now a fact about the account and not only
    * about the message.
@@ -2972,6 +3018,10 @@ const screenAccount = async (params: {
       chatId: chat.id, userId: target.id, applied: banned,
       ...(removed !== null ? { deleted: removed, messageId: removeId } : {})
     })
+    // The gate this screen may have opened minutes ago is now about somebody
+    // who is not here. Production 2026-08-27 21:47: banned, and the gate went
+    // on to mute the banned account and leave its card up for 69 minutes.
+    if (banned) await dropGate(chat.id, target.id, 'account_screen_ban')
     if (!banned) {
       note('ban_failed', signals)
       return 'none'
@@ -4104,6 +4154,15 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       user: sender.displayName, parts: albumIds.length, applied: purged,
       action: verdict.action
     })
+  }
+
+  /**
+   * Same rule as the arrival purge below: once the PERSON has gone, everything
+   * addressed to them is wrong. `applied`, not `deleted` — the question is
+   * whether they were removed, not whether the message was.
+   */
+  if (result.applied && removesSender(verdict.action)) {
+    await dropGate(chat.id, sender.id, `enforced:${verdict.action}`)
   }
 
   let retroPurged = 0

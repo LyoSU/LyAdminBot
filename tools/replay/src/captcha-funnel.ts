@@ -27,7 +27,7 @@ import { MongoClient } from 'mongodb'
 interface CaptchaEvent {
   chatId: number
   userId: number
-  event: 'delivered' | 'undeliverable' | 'passed' | 'ignored'
+  event: 'delivered' | 'undeliverable' | 'passed' | 'ignored' | 'dropped'
   via?: 'whisper' | 'visible'
   ageMs?: number
   wentPublic?: boolean
@@ -68,6 +68,8 @@ const main = async (): Promise<void> => {
     const undeliverable = of('undeliverable')
     const passed = of('passed')
     const ignored = of('ignored')
+    /** Banned, kicked or settled by a vote before the gate resolved itself. */
+    const dropped = of('dropped')
     const asked = delivered.length + undeliverable.length
 
     console.log(`window: ${rows[0]?.createdAt.toISOString()} → ${rows.at(-1)?.createdAt.toISOString()}`)
@@ -79,7 +81,10 @@ const main = async (): Promise<void> => {
     console.log(`\nof the delivered:`)
     console.log(`  answered              ${passed.length}  (${pct(passed.length, delivered.length)})`)
     console.log(`  ignored               ${ignored.length}  (${pct(ignored.length, delivered.length)})`)
-    console.log(`  neither yet           ${delivered.length - passed.length - ignored.length}`)
+    console.log(`  dropped (removed)     ${dropped.length}  (${pct(dropped.length, delivered.length)})`)
+    console.log(`  still open            ${delivered.length - passed.length - ignored.length - dropped.length}`)
+    console.log(`  of those dropped, left a public card up: ` +
+      `${dropped.filter((r) => r.wentPublic === true).length}`)
 
     /**
      * The question itself. A pass with `wentPublic` is a member who was shown
@@ -110,7 +115,7 @@ const main = async (): Promise<void> => {
 
     const byChat = new Map<number, { gates: number; public: number }>()
     for (const r of rows) {
-      if (r.event !== 'passed' && r.event !== 'ignored') continue
+      if (r.event !== 'passed' && r.event !== 'ignored' && r.event !== 'dropped') continue
       const seen = byChat.get(r.chatId) ?? { gates: 0, public: 0 }
       seen.gates += 1
       if (r.wentPublic === true) seen.public += 1

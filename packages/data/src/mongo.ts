@@ -433,7 +433,13 @@ export class MongoStore {
   async recordCaptchaEvent(params: {
     chatId: number
     userId: number
-    event: 'delivered' | 'undeliverable' | 'passed' | 'ignored'
+    /**
+     * `dropped` is a gate closed without an answer because the question
+     * stopped applying — the account was banned, kicked, or settled by a vote.
+     * It exists so the funnel adds up: without it those gates are `delivered`
+     * and then nothing, which reads as "still waiting" forever.
+     */
+    event: 'delivered' | 'undeliverable' | 'passed' | 'ignored' | 'dropped'
     /** Which prompt the tap came from; absent when nothing was answered. */
     via?: 'whisper' | 'visible'
     /**
