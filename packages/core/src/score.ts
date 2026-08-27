@@ -201,6 +201,39 @@ export const hasSenderStanding = (signals: Signal[]): boolean => {
 }
 
 /**
+ * Whether this message is somebody answering somebody else.
+ *
+ * The third discount the window ceiling was written to restore, and the one it
+ * did not take. Its own docstring names all three — `established_user` (-1.5),
+ * `trusted_reputation` (-2.5) and `is_reply` (-1) — as arithmetic the session
+ * stage computes, logs, and then does not consult, and then asks a predicate
+ * that knows about the first two.
+ *
+ * This is deliberately NOT standing, and it does not belong in
+ * `hasSenderStanding`: a reply costs a spammer one tap, where the vouched kinds
+ * cost fifty messages and a week, or an admin's deliberate act. It is evidence
+ * about the MESSAGE — that it arrived inside an exchange rather than at one —
+ * which is exactly the kind of evidence a session verdict lacks by
+ * construction. So the caller pairs it with a second condition rather than
+ * letting it stand alone; see `capVouchedWindow`.
+ *
+ * Measured over the fortnight to 2026-08-27, on the 229 window enforcements:
+ * of the 23 an admin later reversed, 10 carried this and an imitable reason
+ * code, against 12 of the 206 nobody disputed — the sharpest separator in the
+ * data, and better on both counts than the same rule keyed to a RECENT reply
+ * (7 and 11). The rate table that says otherwise (33% of punishments carrying
+ * `recent_reply` reversed, against 19% for `is_reply`) is computed across every
+ * stage; inside the population this ceiling governs, the ordering flips.
+ *
+ * The revoker is the shared one, and it is free here: 15 of those 229 carried
+ * `prior_spam_detections` and not one of them was reversed.
+ */
+export const isInExchange = (signals: Signal[]): boolean => {
+  const names = new Set(signals.map((s) => s.name))
+  return names.has('is_reply') && !names.has('prior_spam_detections')
+}
+
+/**
  * Nobody here knows them.
  *
  * `new_in_chat` alone does not say that. It fires while `messagesInChat` is at

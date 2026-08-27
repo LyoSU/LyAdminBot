@@ -27,7 +27,8 @@ import { extractLinkedChannelSignals } from './signals/channel.js'
 import { applyDeterministicRules } from './rules.js'
 import { parseCustomRule, customRuleMatches } from './custom-rules.js'
 import {
-  scoreSignals, hasDecisiveSignal, mayRemoveSender, hasSenderStanding, isStrangerHere, contentEvidence
+  scoreSignals, hasDecisiveSignal, mayRemoveSender, hasSenderStanding, isInExchange,
+  isStrangerHere, contentEvidence
 } from './score.js'
 import {
   PERMANENT_BAN_SIGNALS, PROFILE_EVIDENCE_SIGNALS, isTrustSignal
@@ -479,8 +480,10 @@ export const evaluateMessage = async (
    * spam-resolved vote deletes and mutes through `enforceVoteSpam` exactly as
    * before.
    *
-   * Deliberately NOT limited to `IMITABLE_REASON_CODES`: that ceiling is about
-   * acts ordinary members also perform, and this is about a stage with no bar.
+   * For a VOUCHED sender, deliberately not limited to `IMITABLE_REASON_CODES`:
+   * that ceiling is about acts ordinary members also perform, and this is about
+   * a stage with no bar. The reply branch added below is limited to them, and
+   * for the opposite reason — see it.
    * The revoker is the shared one — an account carrying `prior_spam_detections`,
    * a Telegram scam/fake flag or an external listing never earns
    * `established_user` in the first place (`extractUserSignals`), so a
@@ -488,9 +491,43 @@ export const evaluateMessage = async (
    */
   const capVouchedWindow = (verdict: Verdict): Verdict => {
     if (!isEnforcementAction(verdict.action)) return verdict
-    if (!hasSenderStanding(verdict.signals)) return verdict
+    const vouched = hasSenderStanding(verdict.signals)
+    /**
+     * The third discount, taken 2026-08-27, and taken narrowly.
+     *
+     * `is_reply (-1)` is named in the paragraph above as arithmetic this stage
+     * discards, and was then left out of the predicate that acts on it — the
+     * same half-application `trusted_reputation` got, found the same morning.
+     * Production over the fortnight to 2026-08-27: 229 window enforcements, 23
+     * of them reversed by an admin, and the reversals are not scattered. They
+     * are 6 to 10 chats, 10 to 16 senders, 7 to 10 separate days, and the
+     * single largest producer is this stage on `flood` — somebody talking in a
+     * conversation, judged as a flood of it. The arithmetic knew: 0.0003,
+     * 0.016, 0.018, 0.057 against the model's 0.89 to 0.98 on the same rows.
+     *
+     * Paired with the imitable list rather than standing alone, because a
+     * reply costs one tap. The pairing is the consequence boundary the other
+     * ceiling already draws — could an ordinary member plausibly have done
+     * this — and it holds the categories where an ordinary member plainly
+     * could. A hard finding on the same window still enforces: talking fast is
+     * imitable, offering an escort service is not.
+     *
+     * Rejected on the way: keying this on the DISAGREEMENT between our score
+     * and the model's, which those four numbers make tempting. The two are not
+     * independent judges — the arithmetic is built from signals a sender can
+     * manufacture, and wide disagreement is the defining property of the
+     * messages that reach this stage rather than a fault in either. Measured,
+     * it is also simply worse: a floor at 0.05 holds 3 of the 23 reversals and
+     * 3 innocent bystanders with it, where this holds 10 against 12.
+     */
+    const answering = isInExchange(verdict.signals) &&
+      IMITABLE_REASON_CODES.has(verdict.reasonCode)
+    if (!vouched && !answering) return verdict
     meta['cappedFrom'] = verdict.action
-    meta['cappedVouched'] = true
+    // Which of the two reasons capped it, never both collapsed into one flag:
+    // they carry different risks and the next audit has to price them apart.
+    if (vouched) meta['cappedVouched'] = true
+    else meta['cappedReply'] = verdict.reasonCode
     return {
       ...verdict,
       action: 'observe' as VerdictAction,

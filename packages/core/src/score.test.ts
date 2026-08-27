@@ -3,7 +3,8 @@ import fc from 'fast-check'
 import type { Signal } from './types.js'
 import { profileHasCase } from './signals/account-verdict.js'
 import {
-  scoreSignals, hasDecisiveSignal, mayRemoveSender, hasSenderStanding, contentEvidence,
+  scoreSignals, hasDecisiveSignal, mayRemoveSender, hasSenderStanding, isInExchange,
+  contentEvidence,
   BASE_RATE_BIAS, DECISIVE_MIN_WEIGHT, SENDER_REMOVAL_MIN_EVIDENCE
 } from './score.js'
 import {
@@ -125,6 +126,32 @@ describe('scoreSignals — NSFW calibration (2026-07-27)', () => {
     for (const name of BIO_PROMO_SIGNALS) {
       expect(SIGNAL_WEIGHTS['promo_in_name'] ?? 0, name).toBeGreaterThan(SIGNAL_WEIGHTS[name] ?? 0)
     }
+  })
+})
+
+describe('isInExchange', () => {
+  const sig = (...names: SignalName[]) => names.map((name) => ({ name }))
+
+  it('a reply from somebody with a clean record is an exchange', () => {
+    expect(isInExchange(sig('is_reply', 'short_message'))).toBe(true)
+  })
+
+  it('a message that answers nobody is not', () => {
+    expect(isInExchange(sig('recent_reply', 'short_message'))).toBe(false)
+    expect(isInExchange(sig('established_user'))).toBe(false)
+  })
+
+  // The shared revoker, and it costs nothing: of 229 window enforcements in the
+  // fortnight to 2026-08-27, 15 carried this and not one was reversed.
+  it('being caught before takes the exchange back', () => {
+    expect(isInExchange(sig('is_reply', 'prior_spam_detections'))).toBe(false)
+  })
+
+  // Standing is earned; this is not. Keeping them apart is the whole design:
+  // one costs fifty messages and a week, the other costs a tap.
+  it('is not standing, and does not pretend to be', () => {
+    expect(hasSenderStanding(sig('is_reply'))).toBe(false)
+    expect(isInExchange(sig('established_user'))).toBe(false)
   })
 })
 

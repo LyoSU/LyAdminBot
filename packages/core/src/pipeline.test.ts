@@ -682,6 +682,75 @@ describe('evaluateMessage — abstain & session', () => {
     expect(v.meta['cappedVouched']).toBe(true)
   })
 
+  /**
+   * 2026-08-27: the third discount the window ceiling was written to restore.
+   *
+   * `is_reply (-1)` is named in that ceiling's own docstring as arithmetic this
+   * stage discards, and was left out of the predicate acting on it. Over the
+   * fortnight to that date the stage produced 229 enforcements, 23 reversed by
+   * an admin, and its largest single producer of them was `flood` — a person
+   * answering somebody, judged as a flood of it, while the arithmetic on the
+   * same rows read between 0.0003 and 0.06 against the model's 0.89 to 0.98.
+   *
+   * The sender here has nothing else: no volume, no tenure, no admin's word.
+   * A reply and an imitable finding is the whole of it.
+   */
+  it('a stranger answering somebody is asked about, not deleted', async () => {
+    const ports: PipelinePorts = {
+      session: {
+        append: async () => ({ combinedText: 'ага\nтак\nну\nбуло таке\nі шо', count: 5 }),
+        reset: async () => { /* noop */ }
+      },
+      llm: {
+        classify: async () => ({ pSpam: 0.96, reasonCode: 'flood', evidence: null, cached: false })
+      }
+    }
+    const v = await evaluateMessage(makeInput({
+      msg: {
+        text: 'і шо',
+        replyTo: { authorId: 9, isSelf: false, ageSeconds: 60, textPreview: 'а ти як думаєш' }
+      },
+      user: newcomer
+    }), ports)
+    expect(v.decidedBy).toBe('session')
+    expect(v.signals.some((s) => s.name === 'is_reply')).toBe(true)
+    // Nothing else vouched for them — this is the reply branch and only it.
+    expect(v.signals.some((s) => s.name === 'established_user')).toBe(false)
+    expect(v.signals.some((s) => s.name === 'trusted_reputation')).toBe(false)
+    expect(v.action).toBe('observe')
+    expect(v.needsVote).toBe(true)
+    expect(v.meta['cappedReply']).toBe('flood')
+    // The two reasons are never collapsed: they carry different risks.
+    expect(v.meta['cappedVouched']).toBeUndefined()
+  })
+
+  /**
+   * A reply costs one tap, so it buys the ceiling only where an ordinary member
+   * could plausibly have done the thing. Talking fast is imitable; this is not,
+   * and the same window with the same reply still enforces.
+   */
+  it('a reply does not cover a finding an ordinary member would not produce', async () => {
+    const ports: PipelinePorts = {
+      session: {
+        append: async () => ({ combinedText: 'привіт\nяк ти\nпиши мені\nось сюди\nтут', count: 5 }),
+        reset: async () => { /* noop */ }
+      },
+      llm: {
+        classify: async () => ({ pSpam: 0.97, reasonCode: 'adult_promo', evidence: null, cached: false })
+      }
+    }
+    const v = await evaluateMessage(makeInput({
+      msg: {
+        text: 'тут',
+        replyTo: { authorId: 9, isSelf: false, ageSeconds: 60, textPreview: 'а ти як думаєш' }
+      },
+      user: newcomer
+    }), ports)
+    expect(v.signals.some((s) => s.name === 'is_reply')).toBe(true)
+    expect(v.action).not.toBe('observe')
+    expect(v.meta['cappedReply']).toBeUndefined()
+  })
+
   it('...and still removes it for a stranger, who has no standing to read', async () => {
     const ports: PipelinePorts = {
       session: {
