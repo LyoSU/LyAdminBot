@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { accountScreenAllowed, hardVerdictSourceOf } from './account-screen-policy.js'
+import { accountScreenAllowed, accountScreenRemoves, hardVerdictSourceOf } from './account-screen-policy.js'
 
 const chat = (over: Partial<Parameters<typeof accountScreenAllowed>[1]> = {}) => ({
   enabled: true, captchaEnabled: true, externalBanEnabled: true, trustedUserIds: [], ...over
@@ -95,5 +95,48 @@ describe('hardVerdictSourceOf', () => {
   it('falls back to our own reading of the account', () => {
     expect(hardVerdictSourceOf(sig('unofficial_client_risk'))).toBe('integrity')
     expect(hardVerdictSourceOf([])).toBe('integrity')
+  })
+})
+
+/**
+ * The half of an account-screen ban that did not exist until 2026-08-27.
+ *
+ * Production, one comment section: a message scored 0.92 and was answered with
+ * a captcha (the `low_information_profile` ceiling), the captcha was
+ * undeliverable to a commenter who is not a member of the discussion group, and
+ * the gate came off. Five reports later the screen reached `ban` twice and
+ * banned the account for a month — and the message it had been reported about
+ * stayed in the chat, because this branch never goes through `executor.ts`,
+ * where every removal action deletes the message as its first line.
+ *
+ * `screenAccount` was written for a report on an ARRIVAL, where there is no
+ * message by definition, and grew the message case later. So the rule is stated
+ * here rather than inferred at the call site:
+ *
+ *  - a gate removes nothing — it is a question, and a question that deletes the
+ *    thing it is asking about has already answered itself;
+ *  - a ban removes the message the screen was asked about, and only a message
+ *    the TARGET sent: the arrival screen is handed Telegram's join line, which
+ *    belongs to nobody and is not what anyone reported;
+ *  - `0` is not a message id. It is this file's neighbour's sentinel for "no
+ *    message" (`replyToMessageId ?? 0`, the card key), and a delete call built
+ *    from a sentinel is a delete call aimed at whatever id 0 resolves to.
+ */
+describe('accountScreenRemoves', () => {
+  it('a ban removes the message it was asked about', () => {
+    expect(accountScreenRemoves('ban', 382656)).toBe(382656)
+  })
+
+  it('a gate removes nothing, however the screen got there', () => {
+    expect(accountScreenRemoves('gate', 382656)).toBe(null)
+  })
+
+  it('a screen with no message of the target’s removes nothing', () => {
+    // The `reported_arrival` path: the id it carries is Telegram's join line.
+    expect(accountScreenRemoves('ban', null)).toBe(null)
+  })
+
+  it('REGRESSION: the no-message sentinel is not a message id', () => {
+    expect(accountScreenRemoves('ban', 0)).toBe(null)
   })
 })

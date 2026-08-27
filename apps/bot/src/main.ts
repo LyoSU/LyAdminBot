@@ -16,7 +16,7 @@ import {
   classifyUrl, strongestTelegramLink, removesSender, truncate, mediaCategoryOf,
   BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS, ESTABLISHED_MIN_MESSAGES,
   accountVerdict, hasHardAccountVerdict, extractUserSignals, PROFILE_EVIDENCE_SIGNALS,
-  accountScreenAllowed, hardVerdictSourceOf,
+  accountScreenAllowed, accountScreenRemoves, hardVerdictSourceOf,
   TIMED_BAN_SECONDS,
   type AccountAction,
   type ChannelPreview, type EditBaseline, type EvaluationInput, type ForwardOrigin,
@@ -2175,7 +2175,9 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
       by: reporter.id, byName: reporter.displayName, messageId: replied.id, on: 'arrival'
     })
     void screenAccount({
-      chat, target, reason: 'reported_arrival', replyToMessageId: replied.id
+      chat, target, reason: 'reported_arrival', replyToMessageId: replied.id,
+      // A join line is not a message this account wrote.
+      subjectMessageId: null
     }).catch(() => { /* best-effort */ })
     return
   }
@@ -2312,7 +2314,8 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
    * screen that fails must not cost them their ballot.
    */
   void screenAccount({
-    chat, target, reason: 'reported', replyToMessageId: replied.id
+    chat, target, reason: 'reported', replyToMessageId: replied.id,
+    subjectMessageId: replied.id
   }).catch(() => { /* best-effort */ })
 
   if (!open || vote === null) return
@@ -2639,6 +2642,15 @@ const screenAccount = async (params: {
   target: User
   reason: string
   replyToMessageId: number | null
+  /**
+   * A message the TARGET sent, which this screen is answering about.
+   *
+   * Deliberately not the same field as `replyToMessageId`. That one is "what to
+   * attach the prompt to", and on the arrival path it is Telegram's join line —
+   * which belongs to nobody, and which a ban must not mistake for the thing
+   * somebody reported. See `accountScreenRemoves`.
+   */
+  subjectMessageId: number | null
 }): Promise<AccountAction> => {
   const { chat, target } = params
   /**
@@ -2818,9 +2830,39 @@ const screenAccount = async (params: {
       return 'none'
     }
 
+    /**
+     * The message goes with the person.
+     *
+     * This branch does not go through `executor.ts`, where every removal action
+     * deletes the message as its first line — so the invariant the rest of the
+     * codebase holds was simply absent here, and the reported message outlived
+     * the account by design of nothing at all.
+     *
+     * Production 2026-08-27, one comment section: a message scored 0.92 and was
+     * answered with a captcha (the `low_information_profile` ceiling), the
+     * captcha was undeliverable to a commenter who is not a member of the
+     * discussion group, and the gate lifted itself. Five reports later this
+     * branch banned the account for a month, twice — and the message stayed.
+     *
+     * Attempted BEFORE the ban and independently of it, exactly as the executor
+     * does, because deleting and banning are separate rights: a chat that grants
+     * one and not the other is not hypothetical (2026-08-26: 269 deletions and 0
+     * bans across 67 accounts in one chat). Tying the delete to the ban's
+     * success would hand that chat the worst of both.
+     */
+    const removeId = accountScreenRemoves('ban', params.subjectMessageId)
+    const removed = removeId === null
+      ? null
+      : await gateway.tg.deleteMessagesById(chat.id, [removeId])
+        .then(() => true).catch(() => false)
+    if (removed !== null) saw['deleted'] = removed ? 'yes' : 'failed'
+
     const banned = await gateway.moderationActions.ban(chat.id, target.id, TIMED_BAN_SECONDS)
       .then(() => true).catch(() => false)
-    log.info('account_screen_ban', { chatId: chat.id, userId: target.id, applied: banned })
+    log.info('account_screen_ban', {
+      chatId: chat.id, userId: target.id, applied: banned,
+      ...(removed !== null ? { deleted: removed, messageId: removeId } : {})
+    })
     if (!banned) {
       note('ban_failed', signals)
       return 'none'
@@ -2840,7 +2882,7 @@ const screenAccount = async (params: {
       textPreview: '',
       verdict: banVerdict,
       execution: {
-        applied: true, deleted: null, skippedReason: null,
+        applied: true, deleted: removed, skippedReason: null,
         failed: [], albumRemoved: 0, retroPurged: 0
       },
       latencyMs: 0

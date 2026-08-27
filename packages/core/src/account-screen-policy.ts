@@ -101,3 +101,32 @@ export const hardVerdictSourceOf = (
   for (const name of names) if (THIRD_PARTY_VERDICT_SIGNALS.has(name as never)) return 'third_party'
   return 'integrity'
 }
+
+/**
+ * Which message an account-screen outcome takes with it, if any.
+ *
+ * The same problem as `accountScreenAllowed`, one branch over: `screenAccount`'s
+ * ban was written inline and never went through `executor.ts`, where every
+ * removal action deletes the message as its first line. So the invariant the
+ * whole rest of the codebase holds — the person goes, what they posted goes —
+ * simply was not there, and a report answered by a thirty-day ban left the
+ * reported message standing.
+ *
+ * `subjectMessageId` is a message the TARGET sent. It is not the same thing as
+ * the id the screen replies to: the `reported_arrival` path is handed Telegram's
+ * own join line, which belongs to nobody and is not what anyone reported.
+ *
+ * A gate returns null on purpose. It is a question, and a question that deletes
+ * the thing it is asking about has answered itself — the same line the message
+ * path draws when it caps profile-only evidence at a captcha.
+ */
+export const accountScreenRemoves = (
+  action: 'ban' | 'gate',
+  subjectMessageId: number | null,
+): number | null => {
+  if (action !== 'ban') return null
+  // Not `!= null`: `0` is the neighbouring sentinel for "no message" (see the
+  // card key, `replyToMessageId ?? 0`), and a delete built from a sentinel is a
+  // delete aimed at whatever id 0 resolves to.
+  return typeof subjectMessageId === 'number' && subjectMessageId > 0 ? subjectMessageId : null
+}
