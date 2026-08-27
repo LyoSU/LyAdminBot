@@ -702,7 +702,10 @@ describe('evaluateMessage — abstain & session', () => {
         reset: async () => { /* noop */ }
       },
       llm: {
-        classify: async () => ({ pSpam: 0.96, reasonCode: 'flood', evidence: null, cached: false })
+        // `channel_promo`, not `flood`: flood is never enforced from a window
+        // at all (see `capWindowFlood`), so it could not tell this ceiling from
+        // that one.
+        classify: async () => ({ pSpam: 0.96, reasonCode: 'channel_promo', evidence: null, cached: false })
       }
     }
     const v = await evaluateMessage(makeInput({
@@ -719,7 +722,7 @@ describe('evaluateMessage — abstain & session', () => {
     expect(v.signals.some((s) => s.name === 'trusted_reputation')).toBe(false)
     expect(v.action).toBe('observe')
     expect(v.needsVote).toBe(true)
-    expect(v.meta['cappedReply']).toBe('flood')
+    expect(v.meta['cappedReply']).toBe('channel_promo')
     // The two reasons are never collapsed: they carry different risks.
     expect(v.meta['cappedVouched']).toBeUndefined()
   })
@@ -758,12 +761,81 @@ describe('evaluateMessage — abstain & session', () => {
         reset: async () => { /* noop */ }
       },
       llm: {
-        classify: async () => ({ pSpam: 0.96, reasonCode: 'flood', evidence: null, cached: false })
+        // A content finding, deliberately: `flood` is never enforced from a
+        // window whoever sent it, so it cannot show what standing does here.
+        classify: async () => ({ pSpam: 0.96, reasonCode: 'channel_promo', evidence: null, cached: false })
       }
     }
     const v = await evaluateMessage(makeInput({ msg: { text: 'ну от' }, user: newcomer }), ports)
     expect(v.decidedBy).toBe('session')
     expect(v.action).toBe('delete')
+  })
+
+  /**
+   * 2026-08-27. `flood` describes this stage's INPUT, not a finding about it —
+   * the pile exists because somebody sent several short messages nothing could
+   * read one at a time, so the word hands the premise back as the conclusion.
+   *
+   * The fortnight to that date: window enforcement on `flood` reversed by an
+   * admin 18 times in 66, at 27.3%, against 3.1% for every other reason the
+   * same stage gives, and 6.8% for the same word from the per-message
+   * classifier. This sender is a stranger with nothing to vouch for them —
+   * standing is not what holds it.
+   */
+  it('a window never enforces on a word that describes its own input', async () => {
+    const ports: PipelinePorts = {
+      session: {
+        append: async () => ({ combinedText: 'ок\nда\nугу\n+\nну от', count: 5 }),
+        reset: async () => { /* noop */ }
+      },
+      llm: {
+        classify: async () => ({ pSpam: 0.96, reasonCode: 'flood', evidence: null, cached: false })
+      }
+    }
+    const v = await evaluateMessage(makeInput({ msg: { text: 'ну от' }, user: newcomer }), ports)
+    expect(v.decidedBy).toBe('session')
+    expect(v.action).toBe('observe')
+    expect(v.needsVote).toBe(true)
+    expect(v.meta['cappedRestated']).toBe(true)
+    // The word stays sayable. Taken out of the vocabulary, a forced choice
+    // would relabel the same weak evidence as a content finding and hide the
+    // failure inside a code that holds up — so it is kept, and made inert.
+    expect(v.reasonCode).toBe('flood')
+  })
+
+  it('and being caught before does not make that word actionable either', async () => {
+    // Unlike every other ceiling here, this one has no revoker: the objection
+    // is to the finding, not to the sender, and a bad account does not make a
+    // restated premise into evidence.
+    const ports: PipelinePorts = {
+      session: {
+        append: async () => ({ combinedText: 'ок\nда\nугу\n+\nну от', count: 5 }),
+        reset: async () => { /* noop */ }
+      },
+      llm: {
+        classify: async () => ({ pSpam: 0.99, reasonCode: 'flood', evidence: null, cached: false })
+      }
+    }
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'ну от' },
+      user: { ...newcomer, spamDetections: 3 }
+    }), ports)
+    expect(v.signals.some((s) => s.name === 'prior_spam_detections')).toBe(true)
+    expect(isEnforcementAction(v.action)).toBe(false)
+  })
+
+  it('leaves the same word alone when a stage that read the message says it', async () => {
+    // The objection is to this stage answering with this word, not to the word.
+    // The per-message classifier read one message and reversed at 6.8%.
+    const ports: PipelinePorts = {
+      llm: {
+        classify: async () => ({ pSpam: 0.96, reasonCode: 'flood', evidence: null, cached: false })
+      }
+    }
+    const v = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), ports)
+    expect(v.decidedBy).toBe('llm')
+    expect(isEnforcementAction(v.action)).toBe(true)
+    expect(v.meta['cappedRestated']).toBeUndefined()
   })
 
   it('a session verdict on a NON-imitable code is capped by standing too', async () => {
@@ -796,7 +868,9 @@ describe('evaluateMessage — abstain & session', () => {
         reset: async () => { /* noop */ }
       },
       llm: {
-        classify: async () => ({ pSpam: 0.96, reasonCode: 'flood', evidence: null, cached: false })
+        // Not `flood`: that one is held from a window regardless of standing,
+        // which would hide whether the revoker did anything.
+        classify: async () => ({ pSpam: 0.96, reasonCode: 'channel_promo', evidence: null, cached: false })
       }
     }
     const v = await evaluateMessage(makeInput({

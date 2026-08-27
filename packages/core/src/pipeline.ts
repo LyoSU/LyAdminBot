@@ -536,6 +536,56 @@ export const evaluateMessage = async (
     }
   }
 
+  /**
+   * A window stage may never enforce on `flood`, whoever sent it.
+   *
+   * This one is not calibration. `flood` is a description of this stage's
+   * INPUT, not a finding about it: the pile exists precisely because a sender
+   * produced several short messages that nothing could classify one at a time,
+   * so answering "flood" hands the premise back as the conclusion. Every other
+   * answer the stage gives is a claim about CONTENT — a fake vacancy, a flirt
+   * bait, a gambling pitch — and those are the ones that hold up.
+   *
+   * The fortnight to 2026-08-27 separates them cleanly. Window enforcement on
+   * `flood`: 66 punishments, 18 reversed by an admin — 27.3%. Window
+   * enforcement on every other reason: 163 punishments, 5 reversed — 3.1%. It
+   * is not the stage, then, and it is not the code either: the same code
+   * decided by the ordinary per-message classifier runs at 6.8%, four times
+   * better. It is this stage answering with this word.
+   *
+   * Three narrower rules were measured first and none of them separates the
+   * sound verdicts from the reversed ones. Blob size does not: the median is 5
+   * messages on both sides, because 5 is what makes the window fire. Requiring
+   * the sender to be new to the chat is worse than useless — that cohort
+   * reverses at 36% against 26% for everyone else, i.e. inverted. Trust
+   * signals narrow it to 20.5%, still an order above the system's 0.92%.
+   * Nothing available tells the two apart, and a class of enforcement that
+   * cannot be told apart from its own mistakes at better than one in four does
+   * not get to make the irreversible choice.
+   *
+   * The word is deliberately NOT taken out of the vocabulary offered to the
+   * model. Forced to choose, it would relabel the same weak evidence as
+   * `other_spam` — hiding the failure rather than fixing it, and inside a code
+   * that currently reverses at 0 of 48. `flood` stays sayable and stops being
+   * actionable, which also leaves the label to measure the change by.
+   *
+   * `cappedFrom` is only claimed if nothing set it already: `capImitableAct`
+   * runs before this and its answer — what the ladder ORIGINALLY reached — is
+   * the more informative of the two.
+   */
+  const capWindowFlood = (verdict: Verdict): Verdict => {
+    if (verdict.reasonCode !== 'flood') return verdict
+    if (!isEnforcementAction(verdict.action)) return verdict
+    if (meta['cappedFrom'] === undefined) meta['cappedFrom'] = verdict.action
+    meta['cappedRestated'] = true
+    return {
+      ...verdict,
+      action: 'observe' as VerdictAction,
+      needsVote: input.policy.votingEnabled,
+      banDurationSeconds: null
+    }
+  }
+
   const none = (decidedBy: DecidedBy, reasonCode: string, signals: Signal[] = []): Verdict =>
     finalize(
       { pSpam: 0, decidedBy, ruleId: null, reasonCode, reasonEvidence: null },
@@ -933,7 +983,7 @@ export const evaluateMessage = async (
          * a translation of this guard. What the band should be is a calibration
          * decision; see `docs/calibration.md`.
          */
-        return capVouchedWindow(capImitableAct(finalize(
+        return capVouchedWindow(capWindowFlood(capImitableAct(finalize(
           {
             pSpam: llmVerdict.pSpam,
             decidedBy: 'session',
@@ -942,7 +992,7 @@ export const evaluateMessage = async (
             reasonEvidence: llmVerdict.evidence
           },
           signals
-        )))
+        ))))
       }
     }
     return null
@@ -986,7 +1036,7 @@ export const evaluateMessage = async (
     meta['judgedText'] = truncate(blob.text, 1000)
     meta['judgedCount'] = blob.count
     if (llmVerdict.model !== undefined) meta['llmModel'] = llmVerdict.model
-    const judged = capVouchedWindow(capImitableAct(finalize(
+    const judged = capVouchedWindow(capWindowFlood(capImitableAct(finalize(
       {
         pSpam: llmVerdict.pSpam,
         decidedBy: 'burst',
@@ -995,7 +1045,7 @@ export const evaluateMessage = async (
         reasonEvidence: llmVerdict.evidence
       },
       signals
-    )))
+    ))))
     if (removesSender(judged.action) && !mayRemoveSender(signals)) {
       return capUnearnedRemoval(judged)
     }
