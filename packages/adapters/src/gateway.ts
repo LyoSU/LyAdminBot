@@ -16,6 +16,7 @@ import {
 } from '@mtcute/node'
 import { Dispatcher, type CallbackQueryContext } from '@mtcute/dispatcher'
 import type { ModerationActions } from './executor.js'
+import { moderationActionsOver } from './moderation-actions.js'
 import { createUpdateDedup, deliveryKey } from './update-dedup.js'
 import { isContentEdit } from './edit-updates.js'
 import {
@@ -236,35 +237,15 @@ export class TelegramGateway {
     this.enqueue(msg.chat.id, () => this.handler!({ message: msg, isEdit, albumSiblings: [] }))
   }
 
-  /** ModerationActions over MTProto for the executor. */
+  /**
+   * ModerationActions over MTProto for the executor.
+   *
+   * The implementation lives in moderation-actions.ts: which encoding of a
+   * sentence Telegram honours for which kind of sender is a fact worth a test,
+   * and nothing here can be tested without a live client.
+   */
   get moderationActions(): ModerationActions {
-    return {
-      deleteMessage: async (chatId, messageId) => {
-        await this.tg.deleteMessagesById(chatId, [messageId])
-      },
-      mute: async (chatId, userId, untilSeconds) => {
-        await this.tg.restrictChatMember({
-          chatId,
-          userId,
-          restrictions: { sendMessages: true, sendMedia: true, sendStickers: true, sendGifs: true, sendGames: true, sendInline: true, embedLinks: true, sendPolls: true, sendPhotos: true, sendVideos: true, sendRoundvideos: true, sendAudios: true, sendVoices: true, sendDocs: true, sendPlain: true },
-          until: new Date(Date.now() + untilSeconds * 1000)
-        })
-      },
-      // Kick = ban then immediately unban: Telegram has no "remove without
-      // blocking", and leaving the ban in place would make it a silent
-      // permaban. Matches what the manual /kick command already does.
-      kick: async (chatId, userId) => {
-        await this.tg.banChatMember({ chatId, participantId: userId })
-        await this.tg.unbanChatMember({ chatId, participantId: userId })
-      },
-      ban: async (chatId, userId, untilSeconds) => {
-        await this.tg.banChatMember({
-          chatId,
-          participantId: userId,
-          ...(untilSeconds === null ? {} : { untilDate: new Date(Date.now() + untilSeconds * 1000) })
-        })
-      }
-    }
+    return moderationActionsOver(this.tg)
   }
 
   /**
