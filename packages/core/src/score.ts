@@ -225,6 +225,15 @@ export const hasSenderStanding = (signals: Signal[]): boolean => {
  * `recent_reply` reversed, against 19% for `is_reply`) is computed across every
  * stage; inside the population this ceiling governs, the ordering flips.
  *
+ * That 10-against-12 is what the predicate separates, not what shipping it
+ * changed: `capWindowFlood` takes 18 of those 23 before this is consulted. See
+ * that caller for the incremental figure, which is the honest one.
+ *
+ * What it actually establishes is Telegram reply structure, minus a reply to
+ * one's own message — the cheap way to fake it, and already excluded where the
+ * signal is produced. A reply to a bot or to something said last week still
+ * counts here; `recent_reply` is the one that reads the clock.
+ *
  * The revoker is the shared one, and it is free here: 15 of those 229 carried
  * `prior_spam_detections` and not one of them was reversed.
  */

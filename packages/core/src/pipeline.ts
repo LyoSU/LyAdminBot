@@ -518,7 +518,16 @@ export const evaluateMessage = async (
      * manufacture, and wide disagreement is the defining property of the
      * messages that reach this stage rather than a fault in either. Measured,
      * it is also simply worse: a floor at 0.05 holds 3 of the 23 reversals and
-     * 3 innocent bystanders with it, where this holds 10 against 12.
+     * 3 innocent bystanders with it.
+     *
+     * WHAT THIS RULE ITSELF IS WORTH, which is not the same number. Measured
+     * alone it holds 10 of the 23 reversals against 12 undisputed removals —
+     * but `capWindowFlood` runs before it and takes 18 of those 23 first, so
+     * what reaches this branch is only the imitable codes that are not `flood`.
+     * Incrementally, on the same fortnight, that is 3 rows: all 3 reversed, no
+     * correct removal lost. Perfect on a sample far too small to call it
+     * settled — this is an experiment with a clean first reading, and the thing
+     * to watch is whether the next fifty keep that shape.
      */
     const answering = isInExchange(verdict.signals) &&
       IMITABLE_REASON_CODES.has(verdict.reasonCode)
@@ -527,7 +536,7 @@ export const evaluateMessage = async (
     // Which of the two reasons capped it, never both collapsed into one flag:
     // they carry different risks and the next audit has to price them apart.
     if (vouched) meta['cappedVouched'] = true
-    else meta['cappedReply'] = verdict.reasonCode
+    else meta['cappedReplyReason'] = verdict.reasonCode
     return {
       ...verdict,
       action: 'observe' as VerdictAction,

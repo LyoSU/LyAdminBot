@@ -722,7 +722,7 @@ describe('evaluateMessage — abstain & session', () => {
     expect(v.signals.some((s) => s.name === 'trusted_reputation')).toBe(false)
     expect(v.action).toBe('observe')
     expect(v.needsVote).toBe(true)
-    expect(v.meta['cappedReply']).toBe('channel_promo')
+    expect(v.meta['cappedReplyReason']).toBe('channel_promo')
     // The two reasons are never collapsed: they carry different risks.
     expect(v.meta['cappedVouched']).toBeUndefined()
   })
@@ -751,7 +751,7 @@ describe('evaluateMessage — abstain & session', () => {
     }), ports)
     expect(v.signals.some((s) => s.name === 'is_reply')).toBe(true)
     expect(v.action).not.toBe('observe')
-    expect(v.meta['cappedReply']).toBeUndefined()
+    expect(v.meta['cappedReplyReason']).toBeUndefined()
   })
 
   it('...and still removes it for a stranger, who has no standing to read', async () => {
@@ -2973,6 +2973,25 @@ describe('evaluateMessage — a sender mid-burst', () => {
     expect(v.signals.map((sig) => sig.name)).toEqual(
       expect.arrayContaining(['sender_burst', 'burst_grey_repeat']))
     expect(isEnforcementAction(v.action)).toBe(false)
+  })
+
+  it('holds it at the OTHER window stage too, not just the one it was found at', async () => {
+    // The rule is about accumulated text, and two stages produce it. Asserted
+    // separately because nothing structural forces a third one to remember:
+    // the ceiling is applied per call site, so each call site is the test.
+    const burst = fakeBurst([
+      burstEntry({ text: 'є робота для всіх', template: 'є робота', pSpam: 0.5 }),
+      burstEntry({ text: 'умови дуже прості', template: 'умови прості', pSpam: 0.2 })
+    ])
+    const v = await evaluateMessage(makeInput({ msg: { text: 'пиши мені в особисті' } }), {
+      burst: burst.port,
+      llm: {
+        classify: async () => ({ pSpam: 0.96, reasonCode: 'flood', evidence: null, cached: false })
+      }
+    })
+    expect(v.decidedBy).toBe('burst')
+    expect(v.action).toBe('observe')
+    expect(v.meta['cappedRestated']).toBe(true)
   })
 
   it('reads the run together when nothing could be said about the message', async () => {
