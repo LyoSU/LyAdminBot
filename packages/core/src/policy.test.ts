@@ -78,6 +78,23 @@ describe('decideAction — standard preset', () => {
     expect(d.action).toBe('observe')
   })
 
+  /**
+   * A captcha addressed to a channel identity is a question nobody can answer:
+   * the button carries the sender id, and no tapper's user id can ever equal a
+   * channel's. See `mayAskCaptcha`.
+   */
+  it('never captchas a message sent as a channel', () => {
+    const d = decideAction(makeInput({ pSpam: 0.5, senderIsChannel: true }))
+    expect(d.action).toBe('observe')
+  })
+
+  it('never captchas a channel even where whispering is available', () => {
+    const d = decideAction(makeInput({
+      pSpam: 0.5, chatKind: 'discussion', ephemeralCaptcha: true, senderIsChannel: true
+    }))
+    expect(d.action).toBe('observe')
+  })
+
   it('never captchas established users', () => {
     expect(decideAction(makeInput({ pSpam: 0.5, userIsNewish: false })).action).toBe('observe')
   })

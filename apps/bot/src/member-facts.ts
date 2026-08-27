@@ -45,9 +45,16 @@ export interface MemberFacts {
   /**
    * Whether Telegram says this person is in the chat at all.
    *
-   * `false` ONLY when it named them and said no — the refusals
-   * `NO_SUCH_MEMBER_REGEX` matches. `null` when it did not say: a timeout, a
-   * dropped connection, an empty answer. The distinction is the same one the
+   * `false` when it ANSWERED and the answer names nobody. That is two shapes,
+   * not one: the refusals `NO_SUCH_MEMBER_REGEX` matches, and — the shape
+   * production actually produces — an empty answer, because mtcute 0.31 catches
+   * `USER_NOT_PARTICIPANT` inside `getChatMember` and returns `null` for it.
+   * Read as "unknown" until 2026-08-27, that null made the whole guard
+   * unreachable: `mayAskCaptcha` permits null, so every non-member commenter was
+   * still asked a question that can only be delivered to a member.
+   *
+   * `null` is reserved for a lookup that did not answer at all: a timeout, a
+   * dropped connection. The distinction is the same one the
    * cache already makes about what is worth writing down, and it was being
    * computed and discarded.
    *
@@ -64,7 +71,7 @@ export type MemberAnswer = { status?: unknown; joinedDate?: unknown } | null | u
 
 const NOT_AN_ADMIN: MemberFacts = { isAdmin: false, joinedAgoSeconds: null, isParticipant: null }
 
-/** Telegram named them and said they are not here. */
+/** Telegram answered, and the answer names nobody. */
 const NOT_A_MEMBER: MemberFacts = { isAdmin: false, joinedAgoSeconds: null, isParticipant: false }
 
 const timestampMs = (at: unknown): number | null => {
@@ -118,7 +125,10 @@ export class MemberFactsCache {
   }
 
   private read(member: MemberAnswer): MemberFacts {
-    if (!member) return NOT_AN_ADMIN
+    // An empty answer IS an answer here — see `isParticipant`. It is the shape
+    // mtcute hands back for `USER_NOT_PARTICIPANT`, and the shape a basic group
+    // gives for somebody absent from its participant list.
+    if (!member) return NOT_A_MEMBER
     const joinedMs = timestampMs(member.joinedDate)
     return {
       isAdmin: member.status === 'admin' || member.status === 'creator',

@@ -7,6 +7,7 @@
  * for which kind of sender. That belongs somewhere it can be tested without a
  * live client, next to the other pieces the gateway delegates to.
  */
+import { isChannelSenderId } from '@lyadmin/core'
 import type { TelegramClient } from '@mtcute/node'
 import type { ModerationActions } from './executor.js'
 
@@ -29,14 +30,10 @@ const SILENCE_ALL = {
 } as const
 
 /**
- * A sender that is a channel rather than a person — Telegram's "send as",
- * which any member who owns a channel may use.
- *
- * The sign is the kind: marked ids are positive for users and negative for
- * chats and channels, and the pipeline already carries the sender's marked id
- * from intake through to the executor.
+ * A sender that is a channel rather than a person — re-exported from core so
+ * the executor and `mayAskCaptcha` cannot drift apart on what one is.
  */
-export const isChannelSender = (senderId: number): boolean => senderId < 0
+export const isChannelSender = isChannelSenderId
 
 export const moderationActionsOver = (tg: ModerationTransport): ModerationActions => ({
   deleteMessage: async (chatId, messageId) => {

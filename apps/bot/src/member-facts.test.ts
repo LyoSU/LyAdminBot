@@ -96,7 +96,7 @@ describe('MemberFactsCache', () => {
     const l = lookup([() => null])
 
     const facts = await cache.get(-100, 7, l.call)
-    expect(facts).toEqual({ isAdmin: false, joinedAgoSeconds: null, isParticipant: null })
+    expect(facts).toEqual({ isAdmin: false, joinedAgoSeconds: null, isParticipant: false })
     expect(l.calls).toBe(1)
   })
 
@@ -199,9 +199,28 @@ describe('MemberFacts — is this person in the chat at all', () => {
     expect(facts.isParticipant).toBe(true)
   })
 
-  it('an empty answer is not a denial', async () => {
+  /**
+   * The real contract of `getChatMember`, which is not what the mock above
+   * describes: mtcute 0.31 CATCHES `USER_NOT_PARTICIPANT` itself and returns
+   * `null` (highlevel/methods/chats/get-chat-member.js). So the ordinary
+   * non-member — a commenter under a channel post who never joined the linked
+   * group — arrives here as an empty answer, never as a throw.
+   *
+   * Read as "unknown", it made the `senderIsParticipant` guard in
+   * `mayAskCaptcha` unreachable in production: every such commenter was still
+   * asked a captcha that can only be delivered to a member.
+   */
+  it('the null mtcute returns for a non-member is a denial, not a shrug', async () => {
     const cache = new MemberFactsCache()
     const facts = await cache.get(1, 2, async () => null)
-    expect(facts.isParticipant).toBeNull()
+    expect(facts.isParticipant).toBe(false)
+  })
+
+  it('and that denial is remembered, like any other answer', async () => {
+    const cache = new MemberFactsCache()
+    const l = lookup([async () => null])
+    await cache.get(1, 2, l.call)
+    await cache.get(1, 2, l.call)
+    expect(l.calls).toBe(1)
   })
 })

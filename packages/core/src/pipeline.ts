@@ -34,7 +34,8 @@ import {
   PERMANENT_BAN_SIGNALS, PROFILE_EVIDENCE_SIGNALS, isTrustSignal
 } from './signals/registry.js'
 import {
-  decideAction, isEnforcementAction, removesSender, mayAskCaptcha, IMITABLE_REASON_CODES,
+  decideAction, isEnforcementAction, removesSender, mayAskCaptcha, isChannelSenderId,
+  IMITABLE_REASON_CODES,
   type PolicyDecision, type PolicyInput
 } from './policy.js'
 import { burstBlob, burstSignals } from './signals/burst.js'
@@ -343,6 +344,11 @@ export const evaluateMessage = async (
     userHasHardVerdict: hasHardAccountVerdict(input.user),
     ephemeralCaptcha: input.policy.ephemeralCaptcha === true,
     senderIsParticipant: input.user.isParticipant ?? null,
+    // A channel identity cannot answer a captcha: the button carries the
+    // sender id and a tap carries the tapper's USER id, so the two can never
+    // match. And `mute` on a channel is a BAN by construction, so the
+    // unanswerable question closed with an hour-long ban of a posting identity.
+    senderIsChannel: isChannelSenderId(input.user.id),
     // Grounds for a PERMANENT ban rather than a timed one: the account is
     // known-bad by someone else's verdict, not merely scored badly by us.
     // Everything else expires, so a mistake on our side heals without an

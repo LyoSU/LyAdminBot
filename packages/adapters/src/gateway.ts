@@ -11,7 +11,7 @@
  * tested offline. Integration breakage here is caught by the test group.
  */
 import {
-  BotKeyboard, TelegramClient, html,
+  BotKeyboard, TelegramClient, html, type InputText,
   type EphemeralCallbackQuery, type Message
 } from '@mtcute/node'
 import { Dispatcher, type CallbackQueryContext } from '@mtcute/dispatcher'
@@ -147,13 +147,18 @@ export class TelegramGateway {
    * what makes asking a suspect "are you human?" cheap enough to prefer over
    * punishing them.
    *
-   * `text` is view text with real newlines; the HTML parser collapses those, so
-   * it gets the same `<br>` treatment as every other outgoing view.
+   * `text` arrives ALREADY RENDERED, as `InputText`, and that is deliberate.
+   * This method used to take a plain string and do its own
+   * `\n` → `<br>` pass, which is a second, dumber copy of the app's `viewHtml`:
+   * that one knows a `<br>` inside a `<pre>` block is dropped by the parser
+   * while real newlines survive, and this one did not. Two renderers for one
+   * kind of text is how a quoted message eventually arrives welded into a
+   * single run-on line. The caller renders; this only sends.
    */
   async sendEphemeralPrompt(
     chatId: number,
     receiverId: number,
-    text: string,
+    text: InputText,
     buttons: { text: string; data: string }[][],
     /**
      * Message this prompt answers. A whisper is invisible to everyone else, so
@@ -167,7 +172,7 @@ export class TelegramGateway {
     const sent = await this.tg.sendEphemeralMessage(
       chatId,
       receiverId,
-      html(text.replace(/\n/g, '<br>')),
+      text,
       {
         ...(buttons.length > 0
           ? {

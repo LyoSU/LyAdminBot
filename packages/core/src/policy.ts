@@ -69,6 +69,19 @@ export interface PolicyInput {
    */
   senderIsParticipant?: boolean | null
   /**
+   * The message was sent AS a channel (Telegram's "send as"), so the sender is
+   * a channel identity rather than a person.
+   *
+   * Read by `mayAskCaptcha`, and only there. A captcha addressed to a channel
+   * cannot be answered by anybody: the prompt's button carries the sender id,
+   * the tap carries the tapper's USER id, and the two can never be equal. What
+   * happened instead was worse than a no-op — `mute` on a channel identity is a
+   * BAN by construction (`channels.editBanned` without `viewMessages` is
+   * ignored for sender chats), so an unanswerable question closed with an
+   * hour-long ban of a posting identity and the deletion of its message.
+   */
+  senderIsChannel?: boolean
+  /**
    * Evidence that this account is known-bad rather than merely suspicious:
    * a Telegram scam/fake flag, an external ban listing, or a spam-labelled
    * restriction. Only these earn a permanent ban; everything else expires.
@@ -294,8 +307,29 @@ export const PRESET_THRESHOLDS: Record<StrictnessPreset, PresetThresholds> = {
  * is its ceiling however high the score climbs. Written twice, the second copy
  * would eventually grant a captcha where the first refused one.
  */
+/**
+ * A sender that is a channel rather than a person — Telegram's "send as",
+ * which any member who owns a channel may use.
+ *
+ * Strictly, the sign says NOT-A-USER: marked ids are positive for users and
+ * negative for every kind of chat, so a basic group or a supergroup id would
+ * answer true here as well. That is the right reading for both callers — a
+ * captcha and a `restrictChatMember` both need a person — and in production it
+ * is only ever a channel: over the fortnight to 2026-08-27 every negative
+ * sender id in `pipeline_decisions` was a sender chat. The name says channel
+ * because that is the case that exists; the predicate is deliberately the
+ * wider one, because the narrower one has no safe failure.
+ *
+ * Defined here, in the package both readers import, after the executor and the
+ * policy came within one line of each holding a copy of the rule — the way
+ * `established_user`'s thresholds once did, and disagreed.
+ */
+export const isChannelSenderId = (senderId: number): boolean => senderId < 0
+
 export const mayAskCaptcha = (input: PolicyInput): boolean =>
   input.captchaEnabled && input.userIsNewish &&
+  // A question only a person can answer may only be put to a person.
+  input.senderIsChannel !== true &&
   // Only a refusal that names them counts. A timeout is not a denial, and
   // treating it as one would hand every captcha in the system to the network.
   input.senderIsParticipant !== false &&

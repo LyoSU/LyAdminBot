@@ -1737,6 +1737,20 @@ describe('evaluateMessage — an advertised profile behind an empty message (202
     expect(v.signals.map((s) => s.name)).not.toContain('short_message')
   })
 
+  /**
+   * Production shape: the same advertised profile posting AS a channel, which
+   * is the delivery method that advertises a channel by construction. The
+   * captcha's button carries the sender id and a tap carries a user id, so the
+   * question is unanswerable — and the executor's `mute` on a channel is a ban.
+   */
+  it('does not ask a channel identity to prove it is human', async () => {
+    const v = await evaluateMessage(makeInput({
+      ...advertisedProfile,
+      user: { ...advertisedProfile.user, id: -1001234567890 }
+    }), {})
+    expect(v.action).toBe('observe')
+  })
+
   it('never removes anyone on a profile alone', async () => {
     const v = await evaluateMessage(makeInput(advertisedProfile), {})
     expect(removesSender(v.action)).toBe(false)
