@@ -98,3 +98,7 @@ dist/
 .spike-session*
 *-session*
 .env.local
+
+# CodeGraph index and the editor rule file it generates — both machine-local
+.codegraph/
+.cursor/
