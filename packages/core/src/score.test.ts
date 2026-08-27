@@ -534,11 +534,39 @@ describe('hasSenderStanding (2026-08-08)', () => {
 
   it('trust signals other than standing do not stand in for it', () => {
     // `verified_account` is Telegram vouching for an identity and `is_reply` is
-    // a shape; neither is a history in this chat. Keeping the set at one signal
-    // is what keeps the measured blast radius the measured one.
-    for (const name of ['verified_account', 'trusted_reputation', 'is_reply'] satisfies SignalName[]) {
+    // a shape; neither is a history in this chat.
+    //
+    // `trusted_reputation` left this list on 2026-08-27 — see below. It was
+    // never the same kind of thing as these two.
+    for (const name of ['verified_account', 'is_reply'] satisfies SignalName[]) {
       expect(hasSenderStanding([{ name }]), name).toBe(false)
     }
+  })
+
+  it('an admin naming somebody is standing in that chat', () => {
+    /**
+     * The chat's trusted list is where `trusted_reputation` mostly comes from —
+     * 28 of the 39 accounts that have ever carried it, against 11 from the v1
+     * reputation field. Being on it is a statement about this chat by the people
+     * who run it, which is what this predicate asks about; `established_user`
+     * merely infers the same thing from message volume, and `rules.ts` has read
+     * the two as one condition all along.
+     *
+     * 2026-08-27, the case: an admin cleared a message at 14:35:18, which also
+     * put its sender on that list. At 14:38:15 the session stage judged the same
+     * text, asked this predicate, was told the sender was nobody, and deleted it.
+     */
+    expect(hasSenderStanding([{ name: 'trusted_reputation' }])).toBe(true)
+  })
+
+  it('being caught before revokes the vouched kind too', () => {
+    // The revoker is shared because chat trust is a policy cap and not a blind
+    // pass — `addTrustedUser` says so itself. Standing is earned and spent the
+    // same way whichever fact granted it.
+    expect(hasSenderStanding([
+      { name: 'trusted_reputation' },
+      { name: 'prior_spam_detections', evidence: '2 prior detections' }
+    ])).toBe(false)
   })
 
   it('duplicate signals do not change the answer', () => {

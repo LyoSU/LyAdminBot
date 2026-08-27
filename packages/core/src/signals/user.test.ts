@@ -336,6 +336,59 @@ describe('extractUserSignals — trust (negative)', () => {
     expect(trust(makeUser({ reputationStatus: 'trusted', reputationScore: 85 }))).toContain('trusted_reputation')
   })
 
+  /**
+   * The one trust signal that consulted no verdict.
+   *
+   * `established_user` is withheld from an account carrying a hard verdict and
+   * has been since 2026-08-24: standing is earned by volume and spent by being
+   * caught. This signal weighs more — 2.5 against 1.5 — and is the only one that
+   * opens `trusted_clean`, the rule that returns before any heuristic or paid
+   * port runs, and it read no verdict at all.
+   *
+   * Preventive rather than corrective, and the measurement says so plainly: over
+   * 228k stored decisions this changes no outcome. What makes it worth having is
+   * that the field cannot be downgraded — nothing has written
+   * `reputation.status` since 2026-06, so the 1690 accounts holding a frozen
+   * "trusted" cannot learn that a ban list picked them up two months later.
+   *
+   * The admin-vouched half of the signal is added later in the pipeline from
+   * `policy.trustedUserIds` and is deliberately left alone: an admin naming
+   * somebody outranks a third-party listing about them.
+   */
+  it('a hard account verdict revokes trusted reputation', () => {
+    const listed = makeUser({
+      reputationStatus: 'trusted',
+      reputationScore: 85,
+      externalBan: { banned: true, bannedAt: null, offenses: 1, sources: ['lols'] }
+    })
+    expect(trust(listed)).not.toContain('trusted_reputation')
+    // The accusing half still fires: revoking trust is not the same as saying
+    // nothing about the account.
+    expect(names(listed)).toContain('external_ban')
+
+    // Telegram's own flags and our own repeat detections revoke it on the same
+    // terms `hasHardAccountVerdict` already states for standing.
+    expect(trust(makeUser({
+      reputationStatus: 'trusted',
+      flags: { scam: true, fake: false, restricted: false, verified: false, premium: false, bot: false }
+    }))).not.toContain('trusted_reputation')
+    expect(trust(makeUser({ reputationStatus: 'trusted', spamDetections: 2 })))
+      .not.toContain('trusted_reputation')
+  })
+
+  it('a clean trusted account keeps the signal', () => {
+    // The guard must not cost the population it exists to protect. One prior
+    // detection is below `PRIOR_DETECTIONS_MIN`, which is the bar every other
+    // reader of that counter uses — a single past detection may itself have
+    // been the false positive.
+    expect(trust(makeUser({ reputationStatus: 'trusted', spamDetections: 1 })))
+      .toContain('trusted_reputation')
+    expect(trust(makeUser({
+      reputationStatus: 'trusted',
+      externalBan: { banned: false, bannedAt: null, offenses: 0, sources: [] }
+    }))).toContain('trusted_reputation')
+  })
+
   it('trusts established users', () => {
     expect(trust(makeUser({ messagesGlobal: 200, reputationScore: 70 }))).toContain('established_user')
     // Nothing anywhere: too quiet globally AND locally, and no tenure.

@@ -167,7 +167,37 @@ export const mayRemoveSender = (signals: Signal[]): boolean =>
  */
 export const hasSenderStanding = (signals: Signal[]): boolean => {
   const names = new Set(signals.map((s) => s.name))
-  return names.has('established_user') && !names.has('prior_spam_detections')
+  /**
+   * `trusted_reputation` counts, and until 2026-08-27 it did not.
+   *
+   * It was excluded alongside `verified_account` and `is_reply` on the ground
+   * that none of the three is a history in this chat. True of those two —
+   * Telegram vouching for an identity, and the shape of a message — and exactly
+   * backwards for this one: its main producer is `policy.trustedUserIds`, the
+   * list an ADMIN OF THIS CHAT puts somebody on, which is the most direct
+   * statement of standing here that exists. `established_user` only infers the
+   * same thing from fifty messages, and `rules.ts` has always read the two as
+   * one condition. One signal carried two different facts and was filed under
+   * the weaker of them.
+   *
+   * What that cost, 2026-08-27: an admin cleared a message at 14:35:18 and, by
+   * the same tap, added its sender to the chat's trusted list. At 14:38:15 the
+   * session stage judged the same text again, `capVouchedWindow` asked this
+   * predicate whether the sender was vouched for, was told no, and deleted it.
+   * The docstring on that ceiling names `trusted_reputation (-2.5)` as one of
+   * the trust signals it exists to stop being ignored — so the fix it announced
+   * was only ever half applied.
+   *
+   * Two decisions in 228k change: that one, and a `flood` delete on 2026-08-19
+   * over a vouched sender — talking quickly being the most imitable act there
+   * is. Neither carried the revoker.
+   *
+   * The revoker is shared, and for the reason `addTrustedUser` gives itself:
+   * chat trust is a policy CAP, not a blind pass. Standing is earned and spent
+   * the same way whichever of the two facts granted it.
+   */
+  const vouched = names.has('established_user') || names.has('trusted_reputation')
+  return vouched && !names.has('prior_spam_detections')
 }
 
 /**

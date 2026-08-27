@@ -536,7 +536,37 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
   // Premium is deliberately NOT here: spammers buy premium for visibility.
 
   if (user.flags.verified) signals.push({ name: 'verified_account' })
-  if (user.reputationStatus === 'trusted') signals.push({ name: 'trusted_reputation' })
+
+  /**
+   * Trust, and the verdict that revokes it — the pairing `established` below has
+   * carried since 2026-08-24, applied to the heavier of the two.
+   *
+   * PREVENTIVE, and measured as such: over the 228k stored decisions this
+   * changes no outcome. Of the 39 accounts ever granted this signal, 28 hold it
+   * because an admin of the chat vouched for them (`policy.trustedUserIds`,
+   * added further down the pipeline and deliberately NOT gated here) and 11
+   * because of the v1 `reputation.status` field this line reads. Exactly one of
+   * the 11 also carries a hard verdict, and that one is admin-vouched too, so
+   * the pipeline re-adds the signal for it.
+   *
+   * The hole it closes is that nothing can ever downgrade the field. No code has
+   * written `reputation.status` since 2026-06, so 1690 accounts hold a frozen
+   * "trusted" that cannot learn what August found out about them — while the
+   * signal it grants weighs 2.5, more than `established_user`'s 1.5, and is the
+   * only one that opens `trusted_clean`, the rule returning before any heuristic
+   * or paid port runs. That is the sold-or-compromised account the exempt above
+   * already states the case against, reached through the one trust signal that
+   * consulted no verdict.
+   *
+   * Asked HERE rather than at a call site so it is answered against the same
+   * snapshot the signal is extracted from: the two cannot come apart. And
+   * `hasHardAccountVerdict` rather than a narrower test, because it is the
+   * question already asked of standing, and asking one question in two shapes is
+   * how the two age signals came to contradict each other.
+   */
+  if (user.reputationStatus === 'trusted' && !hasHardAccountVerdict(user)) {
+    signals.push({ name: 'trusted_reputation' })
+  }
 
   // Standing is earned by volume. The old form also required
   // `reputationScore >= 60`, but v2 never WRITES reputation.score (it defaults

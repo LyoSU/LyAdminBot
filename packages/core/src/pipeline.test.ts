@@ -645,6 +645,43 @@ describe('evaluateMessage — abstain & session', () => {
     expect(v.needsVote).toBe(true)
   })
 
+  it('an admin naming the sender vouches for them as much as volume does', async () => {
+    /**
+     * The same ceiling, reached by the other half of the standing question — and
+     * the half it could not see until 2026-08-27.
+     *
+     * `hasSenderStanding` read `established_user` only, so a sender with no
+     * volume at all but named on the chat's own trusted list was a stranger to
+     * it. Production that day: an admin cleared a message at 14:35:18, which by
+     * the same tap added its sender to that list; at 14:38:15 the session stage
+     * judged the same text, asked the ceiling, and deleted it. The admin undid
+     * the first one and the second stood.
+     *
+     * The user here is a newcomer on purpose — no volume, no tenure, nothing but
+     * the admin's word. That is the whole population this asserts about.
+     */
+    const ports: PipelinePorts = {
+      session: {
+        append: async () => ({ combinedText: 'ага\nтак\nну\nбуло таке\nі шо', count: 5 }),
+        reset: async () => { /* noop */ }
+      },
+      llm: {
+        classify: async () => ({ pSpam: 0.96, reasonCode: 'other_spam', evidence: null, cached: false })
+      }
+    }
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'і шо' },
+      user: newcomer,
+      policy: { trustedUserIds: [makeUser().id] }
+    }), ports)
+    expect(v.decidedBy).toBe('session')
+    expect(v.signals.some((s) => s.name === 'trusted_reputation')).toBe(true)
+    expect(v.signals.some((s) => s.name === 'established_user')).toBe(false)
+    expect(v.action).toBe('observe')
+    expect(v.needsVote).toBe(true)
+    expect(v.meta['cappedVouched']).toBe(true)
+  })
+
   it('...and still removes it for a stranger, who has no standing to read', async () => {
     const ports: PipelinePorts = {
       session: {
