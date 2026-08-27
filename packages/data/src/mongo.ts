@@ -6,7 +6,9 @@
  *   llm_cache          — LLM verdict cache, TTL 7d
  */
 import { MongoClient, ObjectId, type Collection, type Db, type Document } from 'mongodb'
-import type { BurstEntry, EditBaseline, ExecutionRecord, MediaCategory, Verdict, Signal } from '@lyadmin/core'
+import type {
+  BurstEntry, EditBaseline, ExecutionRecord, MediaCategory, Verdict, Signal, VoteBallot, VoteEligibility
+} from '@lyadmin/core'
 import { truncate, VOTE_WINDOW_SECONDS } from '@lyadmin/core'
 import { normalizeExtra, type NormalizedExtra } from './extras.js'
 import { VELOCITY_WINDOW_MS, SESSION_WINDOW_MS, BURST_WINDOW_MS, type SessionEntry }
@@ -1378,6 +1380,8 @@ export class MongoStore {
   private static readonly MAX_LEARN_TEXT = 4096
   /** Message ids kept on one incident's decision record — see appendIncidentMessage. */
   private static readonly MAX_INCIDENT_IDS = 50
+  /** Refused taps kept on one question — see noteBallotRefusal. */
+  private static readonly MAX_REFUSALS = 50
 
   /** Open a vote. Returns false when one already exists for this message. */
   async openVote(params: {
@@ -1510,6 +1514,107 @@ export class MongoStore {
   }
 
   /**
+   * Write down a tap that was refused, and why.
+   *
+   * The counted ballots alone cannot say whether a question went unanswered. A
+   * vote that expires with one ballot, and a vote that expires with one ballot
+   * after four other members tapped and were each told they had not settled in,
+   * are the same document — and every reading of the quorum threshold taken
+   * from this collection has silently treated them as the same event. Over the
+   * week to 2026-08-27 that was 39 of 140 community questions closing with no
+   * ballots at all, not one of which could be interpreted.
+   *
+   * Beside the ballots rather than in a collection of its own: a refusal is
+   * part of one question's story, it is worthless once that question is gone,
+   * and here it inherits the vote's 7-day TTL instead of needing a policy.
+   * Ballots plus refusals is everyone who tried.
+   *
+   * One entry per person per question — the first refusal, kept. Somebody who
+   * taps five times has not been refused five times, and the `$ne` and the
+   * `$push` are one operation, so two taps racing cannot both slip through.
+   * The slice is the same belt and braces `appendIncidentMessage` wears: the
+   * filter already bounds the array by the size of the chat, and an array is
+   * still not where a chat should discover it has ten thousand members.
+   *
+   * The four quantities are the ones the bar is made of. WHICH half somebody
+   * missed decides whether a chat that cannot answer its own questions needs a
+   * lower quorum or a reachable eligibility bar, and those are opposite fixes.
+   */
+  async noteBallotRefusal(params: {
+    chatId: number
+    messageId: number
+    userId: number
+    reason: VoteEligibility
+    messagesInChat: number
+    messagesGlobal: number
+    /** Longer of the two clocks, whole days; null when neither answered. */
+    tenureDays: number | null
+    detections: number
+  }): Promise<void> {
+    const refusal = {
+      userId: params.userId,
+      reason: params.reason,
+      at: new Date(),
+      inChat: params.messagesInChat,
+      global: params.messagesGlobal,
+      tenureDays: params.tenureDays,
+      detections: params.detections
+    }
+    await this.votes.updateOne(
+      {
+        chatId: params.chatId, messageId: params.messageId, status: 'open',
+        'refusals.userId': { $ne: params.userId }
+      },
+      { $push: { refusals: { $each: [refusal], $slice: -MongoStore.MAX_REFUSALS } } } as never
+    )
+  }
+
+  /**
+   * How wide the pool that answers this chat's questions actually is, across
+   * whatever the collection still holds — which is seven days.
+   *
+   * The number a per-chat quorum would have to read. Measured 2026-08-27: one
+   * chat produced 83 questions off 6 distinct non-admin voters, two of whom
+   * cast 61% of every ballot in it, while another drew 18 voters across 10
+   * questions. One global threshold means opposite things in those two rooms,
+   * and nothing in the system could tell them apart.
+   *
+   * Admin ballots are left out: an admin decides alone by design, so counting
+   * them would report a chat with one attentive admin as a broad electorate.
+   */
+  async voterDiversity(chatId: number): Promise<{
+    votes: number
+    voters: number
+    refused: number
+    /** Share of all counted ballots cast by the two busiest voters, 0-1. */
+    topTwoShare: number
+  }> {
+    const docs = await this.votes.find({ chatId })
+      .project({ ballots: 1, refusals: 1 }).toArray()
+    const cast = new Map<number, number>()
+    const refused = new Set<number>()
+    for (const doc of docs) {
+      for (const ballot of (doc['ballots'] ?? []) as { userId?: number; isAdmin?: boolean }[]) {
+        const id = ballot?.userId
+        if (ballot?.isAdmin === true || !Number.isFinite(id)) continue
+        cast.set(id!, (cast.get(id!) ?? 0) + 1)
+      }
+      for (const refusal of (doc['refusals'] ?? []) as { userId?: number }[]) {
+        if (Number.isFinite(refusal?.userId)) refused.add(refusal.userId!)
+      }
+    }
+    const counts = [...cast.values()].sort((a, b) => b - a)
+    const total = counts.reduce((sum, n) => sum + n, 0)
+    const topTwo = counts.slice(0, 2).reduce((sum, n) => sum + n, 0)
+    return {
+      votes: docs.length,
+      voters: cast.size,
+      refused: refused.size,
+      topTwoShare: total === 0 ? 0 : Math.round((topTwo / total) * 100) / 100
+    }
+  }
+
+  /**
    * Take every vote whose window has passed, marking each expired.
    *
    * Claimed one at a time through the same `status: 'open'` guard `closeVote`
@@ -1518,7 +1623,19 @@ export class MongoStore {
    * actually flipped come back.
    */
   async claimExpiredVotes(limit = 50): Promise<{
-    chatId: number; messageId: number; targetUserId: number; promptMessageId: number | null
+    chatId: number
+    messageId: number
+    targetUserId: number
+    promptMessageId: number | null
+    /**
+     * What the question had collected when its time ran out. Carried out of the
+     * store because expiry is the one outcome with nothing to show for itself:
+     * until 2026-08-27 the line recording it held three ids, so the log could
+     * count lapsed corrections but could never say whether any of them lapsed
+     * for want of an answer or for want of anyone allowed to give one.
+     */
+    ballots: VoteBallot[]
+    refusals: { userId: number; reason: VoteEligibility }[]
   }[]> {
     const due = await this.votes
       // The `$or` carries rows written before votes had a window: they match
@@ -1531,9 +1648,7 @@ export class MongoStore {
       })
       .limit(limit)
       .toArray()
-    const claimed: {
-      chatId: number; messageId: number; targetUserId: number; promptMessageId: number | null
-    }[] = []
+    const claimed: Awaited<ReturnType<MongoStore['claimExpiredVotes']>> = []
     for (const doc of due) {
       const chatId = Number(doc['chatId'])
       const messageId = Number(doc['messageId'])
@@ -1547,7 +1662,9 @@ export class MongoStore {
         chatId,
         messageId,
         targetUserId: Number(doc['targetUserId'] ?? 0),
-        promptMessageId: typeof prompt === 'number' ? prompt : null
+        promptMessageId: typeof prompt === 'number' ? prompt : null,
+        ballots: (doc['ballots'] ?? []) as VoteBallot[],
+        refusals: (doc['refusals'] ?? []) as { userId: number; reason: VoteEligibility }[]
       })
     }
     return claimed

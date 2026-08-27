@@ -544,7 +544,10 @@ describe('vote lifetime', () => {
         insertOne: async (doc: Record<string, unknown>) => { inserted.push(doc); return {} },
         find: (filter: Record<string, unknown>) => {
           finds.push(filter)
-          return { limit: () => ({ toArray: async () => rows }) }
+          return {
+            limit: () => ({ toArray: async () => rows }),
+            project: () => ({ toArray: async () => rows })
+          }
         },
         updateOne: async (filter: Record<string, unknown>, update: Record<string, unknown>) => {
           updates.push({ filter, update })
@@ -556,6 +559,8 @@ describe('vote lifetime', () => {
       store: Object.assign(store, {
         openVote: MongoStore.prototype.openVote,
         castBallot: MongoStore.prototype.castBallot,
+        noteBallotRefusal: MongoStore.prototype.noteBallotRefusal,
+        voterDiversity: MongoStore.prototype.voterDiversity,
         claimExpiredVotes: MongoStore.prototype.claimExpiredVotes
       }),
       inserted,
@@ -621,6 +626,59 @@ describe('vote lifetime', () => {
     })).toBe(false)
   })
 
+  it('records a refused tap against the question it was refused on', async () => {
+    const { store, updates } = voteStore()
+    await store.noteBallotRefusal({
+      chatId: -100, messageId: 5, userId: 7, reason: 'no_standing',
+      messagesInChat: 4, messagesGlobal: 11, tenureDays: 2, detections: 0
+    })
+    const pushed = (updates[0]?.update as { $push: { refusals: { $each: Record<string, unknown>[] } } })
+      .$push.refusals.$each[0]!
+    expect(pushed).toMatchObject({
+      userId: 7, reason: 'no_standing', inChat: 4, global: 11, tenureDays: 2, detections: 0
+    })
+    // Only while the question is still askable, and only once per person: five
+    // taps are one refusal, and the filter and the push are one operation so
+    // two of them racing cannot both land.
+    expect(updates[0]?.filter).toMatchObject({
+      chatId: -100, messageId: 5, status: 'open', 'refusals.userId': { $ne: 7 }
+    })
+  })
+
+  it('keeps the refusal array from becoming a membership list', async () => {
+    const { store, updates } = voteStore()
+    await store.noteBallotRefusal({
+      chatId: -100, messageId: 5, userId: 7, reason: 'known_bad',
+      messagesInChat: 0, messagesGlobal: 0, tenureDays: null, detections: 3
+    })
+    const push = (updates[0]?.update as { $push: { refusals: { $slice: number } } }).$push.refusals
+    expect(push.$slice).toBeLessThan(0)
+  })
+
+  it('measures how wide a chat\'s voting pool actually is', async () => {
+    // Two people carrying a room is the shape a per-chat quorum has to see:
+    // 2026-08-27 found one chat running 83 questions off six voters.
+    const { store } = voteStore([
+      { ballots: [{ userId: 1, isAdmin: false }, { userId: 2, isAdmin: false }] },
+      { ballots: [{ userId: 1, isAdmin: false }, { userId: 3, isAdmin: false }] },
+      { ballots: [{ userId: 1, isAdmin: false }, { userId: 2, isAdmin: false }] },
+      { ballots: [], refusals: [{ userId: 9 }, { userId: 9 }] }
+    ])
+    const pool = await store.voterDiversity(-100)
+    expect(pool).toEqual({ votes: 4, voters: 3, refused: 1, topTwoShare: 0.83 })
+  })
+
+  it('does not count an admin as an electorate', async () => {
+    // An admin decides alone by design, so counting their ballots would report
+    // a chat with one attentive admin as a broad community.
+    const { store } = voteStore([
+      { ballots: [{ userId: 1, isAdmin: true }, { userId: 1, isAdmin: true }] }
+    ])
+    expect(await store.voterDiversity(-100)).toEqual({
+      votes: 1, voters: 0, refused: 0, topTwoShare: 0
+    })
+  })
+
   it('also claims a vote written before votes had a window at all', async () => {
     // Rows from before this field existed matched neither the ballot filter
     // (`expiresAt > now`) nor a plain `expiresAt <= now` sweep, so they stayed
@@ -638,7 +696,13 @@ describe('vote lifetime', () => {
     ])
     const claimed = await store.claimExpiredVotes()
     expect(claimed).toEqual([
-      { chatId: -100, messageId: 5, targetUserId: 42, promptMessageId: 900 }
+      {
+        chatId: -100, messageId: 5, targetUserId: 42, promptMessageId: 900,
+        // Carried out with the claim, because expiry is the one outcome with
+        // nothing to show for itself: without these the log can count the
+        // questions that lapsed but never say whether anybody tried to answer.
+        ballots: [], refusals: []
+      }
     ])
     expect(updates[0]?.update).toMatchObject({ $set: { status: 'expired' } })
     // The claim must only take a vote that is still open, or two sweeps racing

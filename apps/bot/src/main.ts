@@ -12,6 +12,7 @@ import {
   shouldAutoLearn, autoLearnSource, VOTE_LEARN_STATUS, conversationLineFor, nsfwProfileHit,
   sexualScore, suggestiveProfileEvidence, profileHasCase,
   voterRoster, voteEligibility, voteMayRecordDetection, needsRestitution, restitutionLiftsRestrictions,
+  mergeTenureDays,
   type VoterStanding,
   classifyUrl, strongestTelegramLink, removesSender, truncate, mediaCategoryOf,
   BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS, ESTABLISHED_MIN_MESSAGES,
@@ -1093,8 +1094,31 @@ const scheduleDelete = (chatId: number, messageId: number, delayMs: number, sour
 const expireStaleVotes = async (): Promise<void> => {
   const expired = await store.claimExpiredVotes().catch(() => [])
   for (const vote of expired) {
+    /**
+     * Everything needed to read the expiry, not just the fact of it.
+     *
+     * `net` says how close the chat came; `ballots` and `refused` say whether
+     * anybody tried; `voters` and `topTwo` say how big the pool that failed
+     * actually is. A question that died one tap short in a room of eighteen
+     * voters and one that died in a room where two people cast most of the
+     * ballots are opposite problems, and until this line carried the numbers
+     * they were the same log entry — which is what made every reading of the
+     * quorum threshold, including the week measured on 2026-08-27, an argument
+     * about a denominator nobody had.
+     */
+    const tally = tallyVotes(vote.ballots)
+    const refusedBy = new Map<string, number>()
+    for (const refusal of vote.refusals)
+      refusedBy.set(refusal.reason, (refusedBy.get(refusal.reason) ?? 0) + 1)
+    const pool = await store.voterDiversity(vote.chatId).catch(() => null)
     log.info('vote_expired', {
-      chatId: vote.chatId, userId: vote.targetUserId, messageId: vote.messageId
+      chatId: vote.chatId, userId: vote.targetUserId, messageId: vote.messageId,
+      net: tally.spam - tally.ham, spam: tally.spam, ham: tally.ham,
+      refused: vote.refusals.length,
+      // Spelled out per reason: "not settled in" is a bar we chose and can
+      // move, "known bad" and "it is your own case" are not.
+      ...Object.fromEntries([...refusedBy].map(([reason, n]) => [`refused_${reason}`, n])),
+      voters: pool?.voters, topTwo: pool?.topTwoShare
     })
     if (vote.promptMessageId !== null) {
       await gateway.tg.deleteMessagesById(vote.chatId, [vote.promptMessageId])
@@ -4875,15 +4899,39 @@ const wireCallbacks = (): void => {
          */
         const days = (value: number | null): number | null =>
           value === null ? null : Math.round(value)
+        const reason = voteEligibility(standing)
         log.info('vote_refused', {
           chatId, userId: query.user.id, messageId,
-          reason: voteEligibility(standing),
+          reason,
           inChat: standing.messagesInChat,
           global: standing.messagesGlobal,
           ourDays: days(standing.localAgeDays),
           joinedDays: days(standing.joinedAgoSeconds === null ? null : standing.joinedAgoSeconds / 86400),
           detections: standing.spamDetections
         })
+        /**
+         * And beside the question, because stdout is not a denominator.
+         *
+         * The line above has carried these numbers since 2026-08-26 and answers
+         * "why was this person refused" perfectly. It cannot answer "did anyone
+         * try", because nothing joins it back to the vote: the log lives for as
+         * long as the log lives, and the analysis that has to weigh a quorum
+         * threshold reads the collection. So the same fact is written twice, on
+         * purpose — once for whoever is arguing with the refusal, once for
+         * whoever is arguing with the threshold.
+         *
+         * Best-effort, like the counters: a refusal that failed to record is
+         * worth less than the toast this member is waiting for.
+         */
+        await store.noteBallotRefusal({
+          chatId, messageId, userId: query.user.id, reason,
+          messagesInChat: standing.messagesInChat,
+          messagesGlobal: standing.messagesGlobal,
+          // The pipeline's own rule for which clock to believe, not a second
+          // one — see mergeTenureDays.
+          tenureDays: days(mergeTenureDays(standing.localAgeDays, standing.joinedAgoSeconds)),
+          detections: standing.spamDetections
+        }).catch(() => { /* telemetry is best-effort */ })
         await query.answer({ text: refusal, alert: true })
         return
       }
