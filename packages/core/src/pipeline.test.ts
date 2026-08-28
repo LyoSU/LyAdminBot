@@ -3174,3 +3174,101 @@ describe('evaluateMessage — a sender mid-burst', () => {
     expect(v.meta['portError_burst']).toBe(true)
   })
 })
+
+/**
+ * Production 2026-08-27 16:46 (measured in the 2026-08-28 audit): a municipal
+ * announcements account — 23 consecutive clean rows — posted an aid-distribution
+ * notice with a formatted link and a phone number. The content stack
+ * (hidden_url + external_url + phone_number + long_text + mixed_script_word)
+ * cleared the sender-removal evidence bar, so the established-regular exempt
+ * stood down, and the score muted an `established_user` at 0.90. Nothing capped
+ * it: `capImitableAct` covers three reason codes this is not, and
+ * `capVouchedWindow` covers two stages this did not come from.
+ *
+ * The rule under test: standing caps a SCORE-decided sender-removal at
+ * delete + vote. The message evidence is not in dispute — only whether the
+ * arithmetic alone may take a vouched member away.
+ */
+describe('evaluateMessage — standing caps score-decided sender-removal', () => {
+  /** The production message shape: heavy content stack from a vouched regular. */
+  const announcementFromRegular = () => makeInput({
+    msg: {
+      text: '📢 До уваги мешканців міста та навколишніх сіл, у тому числі ВПО! ' +
+        'Продовжується видача продуктових наборів для зареєстрованих отримувачів. ' +
+        'Видача відбувається щодня, крім вихідних, з 10:00 до 16:00. ' +
+        'Реєстрація обовʼязкова, кількість наборів обмежена. ' +
+        'Довідки за телефоном +380671234567 або за посиланням нижче (проєкт SpivDiя-хаб). ' +
+        'Просимо мати при собі документ, що посвідчує особу, та номер справи UNHCR-2026.',
+      // The production shape: the visible text is itself a URL that leads
+      // somewhere else — which is what `hidden_url` actually measures.
+      urls: [{ visible: 'https://bohodukhiv-rada.gov.ua/dopomoga', target: 'https://forms.example.com/aid', hidden: true }]
+    },
+    user: { messagesInChat: 200, messagesGlobal: 900, localAgeDays: 400 }
+  })
+
+  it('an established sender is not muted by arithmetic alone: delete + vote', async () => {
+    const v = await evaluateMessage(announcementFromRegular(), {})
+    expect(v.signals.map((s) => s.name)).toContain('established_user')
+    expect(v.decidedBy).toBe('score')
+    expect(removesSender(v.action)).toBe(false)
+    if (v.action === 'delete') expect(v.needsVote).toBe(true)
+    expect(v.meta['cappedStanding']).toBe(true)
+  })
+
+  it('the same stack from a stranger keeps its full reach', async () => {
+    // For a newcomer the very same stack is deterministic-rule territory
+    // (hidden_url_new); the point is that only standing softens it.
+    const v = await evaluateMessage(makeInput({
+      msg: announcementFromRegular().message,
+      user: newcomer
+    }), {})
+    expect(removesSender(v.action)).toBe(true)
+  })
+})
+
+/**
+ * The per-chat circuit breaker for a deterministic rule the chat's own admins
+ * keep overturning. Production for the fortnight to 2026-08-28: one vacancy
+ * chat had 5 `external_ban_new` bans and its admin reversed 4 — all different
+ * users, so the per-user trust the override grants never engaged once.
+ *
+ * `wornRuleIds` is that chat's list of worn-out rules (computed from permanent
+ * `pipeline_feedback` by the store): the rule still fires, still deletes, still
+ * asks the chat — it just stops removing the sender on its own authority.
+ */
+describe('evaluateMessage — a worn deterministic rule stops removing senders', () => {
+  const listedNewcomer = {
+    ...newcomer,
+    externalBan: { banned: true, bannedAt: null, offenses: 3, sources: ['lols' as const] }
+  }
+
+  it('a worn rule is capped to delete + vote, keeping its attribution', async () => {
+    const v = await evaluateMessage(makeInput({
+      user: listedNewcomer,
+      policy: { wornRuleIds: ['external_ban_new'] }
+    }), {})
+    expect(v.ruleId).toBe('external_ban_new')
+    expect(v.action).toBe('delete')
+    expect(v.needsVote).toBe(true)
+    expect(v.banDurationSeconds).toBeNull()
+    expect(v.meta['cappedWornRule']).toBe(true)
+  })
+
+  it('the same listing in a chat that never objected still bans', async () => {
+    const v = await evaluateMessage(makeInput({ user: listedNewcomer }), {})
+    expect(v.ruleId).toBe('external_ban_new')
+    expect(v.action).toBe('ban')
+  })
+
+  it('wearing one rule does not soften any other', async () => {
+    const v = await evaluateMessage(makeInput({
+      user: {
+        ...newcomer,
+        flags: { scam: true, fake: false, restricted: false, verified: false, premium: false, bot: false }
+      },
+      policy: { wornRuleIds: ['external_ban_new'] }
+    }), {})
+    expect(v.ruleId).toBe('scam_flag_new')
+    expect(v.action).toBe('ban')
+  })
+})

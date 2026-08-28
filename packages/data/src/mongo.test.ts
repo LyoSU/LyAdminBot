@@ -1440,3 +1440,106 @@ describe('recordCaptchaEvent — the funnel a tap used to leave no trace of', ()
       .resolves.toBeUndefined()
   })
 })
+
+/**
+ * Which deterministic rules this chat's admins have worn out.
+ *
+ * The measurement that motivated it (2026-08-28 audit): one vacancy chat, 5
+ * `external_ban_new` bans in a week, 4 reversed by the admin — each reversal a
+ * DIFFERENT sender, so the per-user trust an override grants never engaged.
+ * The distinct-sender bar is what separates "this rule is wrong for this chat"
+ * from one repeatedly-appealed account wearing a rule down alone.
+ */
+describe('wornRuleIds', () => {
+  const over = (userId: number, ruleId: string | null, daysAgo = 1, source = 'admin') => ({
+    userId, ruleId, source,
+    createdAt: new Date(Date.now() - daysAgo * 86_400_000)
+  })
+  const feedbackStore = (rows: Record<string, unknown>[]): MongoStore => {
+    const filters: Record<string, unknown>[] = []
+    const store = {
+      feedback: {
+        find: (filter: Record<string, unknown>) => {
+          filters.push(filter)
+          const since = (filter['createdAt'] as { $gte: Date })['$gte']
+          return { toArray: async () => rows.filter((r) => (r['createdAt'] as Date) >= since) }
+        }
+      }
+    } as unknown as MongoStore
+    return Object.assign(store, { wornRuleIds: MongoStore.prototype.wornRuleIds, filters })
+  }
+
+  it('three distinct overridden senders wear a rule out', async () => {
+    const store = feedbackStore([
+      over(1, 'external_ban_new'), over(2, 'external_ban_new'), over(3, 'external_ban_new')
+    ])
+    await expect(store.wornRuleIds(-100)).resolves.toEqual(['external_ban_new'])
+  })
+
+  it('one sender overridden three times is not three senders', async () => {
+    const store = feedbackStore([
+      over(1, 'external_ban_new'), over(1, 'external_ban_new'), over(1, 'external_ban_new')
+    ])
+    await expect(store.wornRuleIds(-100)).resolves.toEqual([])
+  })
+
+  it('overrides older than the window do not count', async () => {
+    const store = feedbackStore([
+      over(1, 'external_ban_new'), over(2, 'external_ban_new'), over(3, 'external_ban_new', 120)
+    ])
+    await expect(store.wornRuleIds(-100)).resolves.toEqual([])
+  })
+
+  it('a verdict without a rule cannot wear one out', async () => {
+    const store = feedbackStore([over(1, null), over(2, null), over(3, null)])
+    await expect(store.wornRuleIds(-100)).resolves.toEqual([])
+  })
+
+  it('asks only for this chat and only for admin corrections', async () => {
+    const store = feedbackStore([]) as MongoStore & { filters: Record<string, unknown>[] }
+    await store.wornRuleIds(-100)
+    expect(store.filters[0]).toMatchObject({
+      chatId: -100, kind: 'override_not_spam', source: 'admin'
+    })
+  })
+})
+
+/**
+ * Has this sender already been firmly removed in this chat?
+ *
+ * The question `escalateChannelRecidivism` (core) turns on. Asked of the
+ * decisions record rather than memory so a restart does not grant a spamming
+ * channel a fresh first offense; the 14-day TTL bounds the lookback, which is
+ * plenty against the measured 20–60 minute posting cadence.
+ */
+describe('hasPriorSenderRemoval', () => {
+  const removalStore = (doc: Record<string, unknown> | null): MongoStore & { filters: Record<string, unknown>[] } => {
+    const filters: Record<string, unknown>[] = []
+    const store = {
+      decisions: {
+        findOne: async (filter: Record<string, unknown>) => { filters.push(filter); return doc }
+      }
+    } as unknown as MongoStore
+    return Object.assign(store, { hasPriorSenderRemoval: MongoStore.prototype.hasPriorSenderRemoval, filters }) as never
+  }
+
+  it('a stored applied removal answers yes', async () => {
+    await expect(removalStore({ _id: 1 }).hasPriorSenderRemoval(-100, -1004, 55)).resolves.toBe(true)
+  })
+
+  it('no record answers no', async () => {
+    await expect(removalStore(null).hasPriorSenderRemoval(-100, -1004, 55)).resolves.toBe(false)
+  })
+
+  it('asks for an APPLIED sender-removal, excluding the verdict being executed', async () => {
+    const store = removalStore(null)
+    await store.hasPriorSenderRemoval(-100, -1004, 55)
+    expect(store.filters[0]).toMatchObject({
+      chatId: -100,
+      userId: -1004,
+      action: { $in: ['kick', 'mute', 'ban'] },
+      'execution.applied': true,
+      messageId: { $ne: 55 }
+    })
+  })
+})

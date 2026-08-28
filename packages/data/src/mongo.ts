@@ -1897,6 +1897,65 @@ export class MongoStore {
       ).catch(() => { /* a missing signature is fine */ })
     }
   }
+
+  /**
+   * Deterministic rules this chat's admins have worn out: three or more admin
+   * corrections of the same rule, by three or more DIFFERENT senders, within
+   * the window. The pipeline caps a worn rule to delete + vote in that chat
+   * (`ChatPolicy.wornRuleIds`) — it keeps firing, it just stops removing
+   * senders on its own authority where the chat keeps saying it is wrong.
+   *
+   * Distinct senders, not corrections: one account overridden three times is a
+   * dispute about that account, which the override already settled by trusting
+   * them; three different senders is a dispute about the RULE. Grouped by
+   * `ruleId` because that is what the pipeline's deterministic branch checks —
+   * LLM corrections carry no ruleId and are naturally outside.
+   *
+   * Read from `pipeline_feedback` because it is the one permanent record: a
+   * 90-day window here is honest where one over the 14-day decisions TTL would
+   * not be. The read is a plain find-and-count over a chat's own corrections —
+   * at most dozens of documents — and the caller caches it per chat.
+   */
+  async wornRuleIds(chatId: number, sinceDays = 90): Promise<string[]> {
+    const since = new Date(Date.now() - sinceDays * 86_400_000)
+    const rows = await this.feedback.find({
+      chatId, kind: 'override_not_spam', source: 'admin', createdAt: { $gte: since }
+    }).toArray()
+    const senders = new Map<string, Set<number>>()
+    for (const row of rows) {
+      const ruleId = row['ruleId']
+      if (typeof ruleId !== 'string' || ruleId.length === 0) continue
+      const set = senders.get(ruleId) ?? new Set<number>()
+      set.add(Number(row['userId']))
+      senders.set(ruleId, set)
+    }
+    return [...senders].filter(([, users]) => users.size >= 3).map(([ruleId]) => ruleId)
+  }
+
+  /**
+   * Has this sender already been firmly removed in this chat?
+   *
+   * The question `escalateChannelRecidivism` (core) turns on, asked of the
+   * decisions record rather than memory so a restart does not hand a spamming
+   * channel a fresh first offense. `execution.applied` and not the verdict
+   * alone: a removal the bot lacked the right to perform contained nobody, and
+   * treating it as a prior would escalate on top of a failure. The current
+   * verdict's own message is excluded — a re-judged edit of it is one offense,
+   * not two. The 14-day decisions TTL bounds the lookback, which is plenty
+   * against the measured 20–60 minute posting cadence of a spam channel.
+   */
+  async hasPriorSenderRemoval(
+    chatId: number, userId: number, exceptMessageId: number
+  ): Promise<boolean> {
+    const prior = await this.decisions.findOne({
+      chatId,
+      userId,
+      action: { $in: ['kick', 'mute', 'ban'] },
+      'execution.applied': true,
+      messageId: { $ne: exceptMessageId }
+    }, { projection: { _id: 1 } })
+    return prior !== null
+  }
 }
 
 /** Signature ruleIds are stringified Mongo _ids. */

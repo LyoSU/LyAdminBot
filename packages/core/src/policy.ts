@@ -326,6 +326,39 @@ export const PRESET_THRESHOLDS: Record<StrictnessPreset, PresetThresholds> = {
  */
 export const isChannelSenderId = (senderId: number): boolean => senderId < 0
 
+/**
+ * A repeat offense by a sender CHANNEL turns any sender-removal into a
+ * permanent ban.
+ *
+ * Timed measures exist to give a person room to come back changed; a channel
+ * is a broadcasting tool, and it comes back unchanged by construction. The
+ * week to 2026-08-28 measured what a rolling restriction is worth against
+ * one: 18 mute verdicts on a single channel across 3 chats, a 20–60 minute
+ * posting cadence, nothing containing it (see the moderation adapter for what
+ * a channel "mute" even is). One firm removal is a verdict about a message;
+ * the second in the SAME chat is a verdict about the channel, and from there
+ * the ban is permanent. An admin override remains the way back — that path
+ * lifts bans regardless of how they were imposed.
+ *
+ * Pure on purpose: the caller supplies `hadPriorRemoval` (a store lookup),
+ * this decides. Non-removal verdicts pass through untouched, and so does
+ * every human sender — recidivism by a person is already priced by
+ * `prior_spam_detections` in the score.
+ */
+export const escalateChannelRecidivism = (
+  verdict: Verdict, senderId: number, hadPriorRemoval: boolean
+): Verdict => {
+  if (!hadPriorRemoval) return verdict
+  if (!isChannelSenderId(senderId)) return verdict
+  if (!removesSender(verdict.action)) return verdict
+  return {
+    ...verdict,
+    action: 'ban',
+    banDurationSeconds: null,
+    meta: { ...verdict.meta, channelRecidivist: true }
+  }
+}
+
 export const mayAskCaptcha = (input: PolicyInput): boolean =>
   input.captchaEnabled && input.userIsNewish &&
   // A question only a person can answer may only be put to a person.

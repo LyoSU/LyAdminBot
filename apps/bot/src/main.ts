@@ -15,6 +15,7 @@ import {
   mergeTenureDays,
   type VoterStanding,
   classifyUrl, strongestTelegramLink, removesSender, truncate, mediaCategoryOf,
+  escalateChannelRecidivism, isChannelSenderId,
   BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS, ESTABLISHED_MIN_MESSAGES,
   accountVerdict, hasHardAccountVerdict, extractUserSignals, PROFILE_EVIDENCE_SIGNALS,
   accountScreenAllowed, accountScreenRemoves, hardVerdictSourceOf,
@@ -3420,6 +3421,31 @@ const silenceUnderIncident = async (params: {
   await refreshIncidentCard(chat.id, senderId, updated, params.senderLabel, params.locale)
 }
 
+/**
+ * Which deterministic rules this chat's admins have worn out — cached, because
+ * the answer changes on the timescale of admins pressing "not spam", not of
+ * messages arriving. Ten minutes is the longest a fresh third override can go
+ * unheeded; a read failure keeps the previous answer rather than un-wearing a
+ * rule mid-outage.
+ */
+const wornRulesCache = new Map<number, { value: string[]; expiresMs: number }>()
+const WORN_RULES_TTL_MS = 10 * 60_000
+const wornRulesFor = async (chatId: number): Promise<string[]> => {
+  const hit = wornRulesCache.get(chatId)
+  if (hit !== undefined && hit.expiresMs > Date.now()) return hit.value
+  const value = await store.wornRuleIds(chatId).catch(() => hit?.value ?? [])
+  // Delete-then-set moves a refreshed chat to the back, so the size sweep
+  // below evicts the chat that has been quiet longest, not merely the one
+  // that happened to ask first.
+  wornRulesCache.delete(chatId)
+  wornRulesCache.set(chatId, { value, expiresMs: Date.now() + WORN_RULES_TTL_MS })
+  if (wornRulesCache.size > 2000) {
+    const oldest = wornRulesCache.keys().next()
+    if (oldest.done !== true) wornRulesCache.delete(oldest.value)
+  }
+  return value
+}
+
 const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage): Promise<void> => {
   const chat = message.chat
   if (!(chat instanceof Chat)) {
@@ -4048,7 +4074,11 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     // The chat's stored settings plus one capability of the running bot: the
     // policy may offer a captcha under a channel post only if it can be
     // whispered to the commenter rather than posted into the thread.
-    policy: { ...policy, ephemeralCaptcha: config.ephemeralCaptcha },
+    policy: {
+      ...policy,
+      ephemeralCaptcha: config.ephemeralCaptcha,
+      wornRuleIds: await wornRulesFor(chat.id)
+    },
     enrichment: {
       bio: profile.bio,
       businessTexts: profile.businessTexts,
@@ -4089,7 +4119,26 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
   }
 
   // ── evaluate ────────────────────────────────────────────────────────
-  const verdict = await evaluateMessage(input, ports)
+  const judged = await evaluateMessage(input, ports)
+  /**
+   * A sender channel already firmly removed from this chat once gets no second
+   * timed measure — see `escalateChannelRecidivism` for why a channel has no
+   * cooling-off story. The prior is read from the decisions record, so a
+   * restart does not hand the channel a fresh first offense.
+   */
+  const verdict = escalateChannelRecidivism(
+    judged,
+    sender.id,
+    isChannelSenderId(sender.id) && removesSender(judged.action)
+      ? await store.hasPriorSenderRemoval(chat.id, sender.id, message.id).catch(() => false)
+      : false
+  )
+  if (verdict !== judged) {
+    log.info('channel_recidivist', {
+      chatId: chat.id, chat: chat.title ?? undefined, userId: sender.id,
+      user: sender.displayName, from: judged.action, reason: judged.reasonCode
+    })
+  }
 
   // ── execute ─────────────────────────────────────────────────────────
   const senderIsAdmin = verdict.action !== 'none' && verdict.action !== 'observe'

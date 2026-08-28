@@ -354,6 +354,13 @@ export interface ChatPolicy {
   externalBanEnabled: boolean
   customRules: string[] // "ALLOW: ..." / "DENY: ..."
   trustedUserIds: number[]
+  /**
+   * Deterministic rules this chat's admins keep overturning (three or more
+   * overrides by DIFFERENT senders — see the store's `wornRuleIds`). A worn
+   * rule still fires and still deletes, but loses the authority to remove a
+   * sender in this chat. Optional: absent means nothing is worn.
+   */
+  wornRuleIds?: string[]
 }
 
 // ───────────────────────── signals ─────────────────────────

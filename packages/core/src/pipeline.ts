@@ -943,6 +943,31 @@ export const evaluateMessage = async (
         removesSender(verdict.action) && !mayRemoveSender(signals)) {
       return capUnearnedRemoval(verdict)
     }
+    /**
+     * The chat's own circuit breaker for this rule.
+     *
+     * A deterministic rule is a statement about the population the bot serves,
+     * and one chat can sit outside that population. Production for the
+     * fortnight to 2026-08-28: a vacancy chat where `external_ban_new` fired 5
+     * times and the admin reversed 4 — every reversal a DIFFERENT user, so the
+     * per-user trust an override grants never engaged once, and the next
+     * listed vacancy poster met the same ban. `wornRuleIds` is computed from
+     * those permanent reversals (see the store): the rule keeps firing, keeps
+     * deleting, keeps asking the chat — it has only lost the authority to
+     * remove a sender in a chat whose admins keep saying it is wrong here.
+     */
+    if (removesSender(verdict.action) &&
+        verdict.ruleId !== null &&
+        (input.policy.wornRuleIds ?? []).includes(verdict.ruleId)) {
+      meta['cappedFrom'] = verdict.action
+      meta['cappedWornRule'] = true
+      return {
+        ...verdict,
+        action: 'delete' as VerdictAction,
+        needsVote: input.policy.votingEnabled,
+        banDurationSeconds: null
+      }
+    }
     return verdict
   }
 
@@ -1591,6 +1616,35 @@ export const evaluateMessage = async (
   // always means the escalation above found no LLM, since every
   // sender-removing threshold sits inside or above the grey zone.
   if (unearnedRemoval && removesSender(verdict.action)) return capUnearnedRemoval(verdict)
+
+  /**
+   * Standing caps a score-decided sender-removal at delete + vote.
+   *
+   * The two ceilings above this one each cover a slice: `capImitableAct` three
+   * reason codes, `capVouchedWindow` two stages. A score verdict on any OTHER
+   * reason code had neither, so arithmetic alone could take a vouched member
+   * away. Production 2026-08-27 16:46 (found by the 2026-08-28 audit): a
+   * municipal-announcements account with 23 consecutive clean rows posted an
+   * aid-distribution notice — formatted link, phone number, one loanword — and
+   * the stack muted an `established_user` at 0.90. The message evidence was
+   * real; the disputed thing was never whether a link is a link, but whether a
+   * sum of imitable facts may remove somebody the chat's own history vouches
+   * for. Same answer as the other two ceilings: it may delete and ask, not
+   * remove. `hasSenderStanding` carries the revoker — an account already caught
+   * spamming keeps no standing to spend here — and the LLM path is deliberately
+   * not behind this cap: a stage that read the text may still find the thing
+   * that standing does not excuse.
+   */
+  if (removesSender(verdict.action) && hasSenderStanding(signals)) {
+    meta['cappedFrom'] = verdict.action
+    meta['cappedStanding'] = true
+    return {
+      ...verdict,
+      action: 'delete' as VerdictAction,
+      needsVote: input.policy.votingEnabled,
+      banDurationSeconds: null
+    }
+  }
 
   // Fail-safe: when the LLM was needed but unavailable (rate limit, outage),
   // a grey-zone message must never silently pass as clean.

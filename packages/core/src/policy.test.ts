@@ -4,7 +4,7 @@ import type { StrictnessPreset, Verdict, VerdictAction } from './types.js'
 import {
   decideAction, isEnforcementAction, countsAsDetection, countsAgainstSender, ENFORCEMENT_ACTIONS,
   PRESET_THRESHOLDS, TIMED_BAN_SECONDS, needsRestitution, restitutionLiftsRestrictions,
-  IMITABLE_REASON_CODES, LLM_REASON_CODES,
+  IMITABLE_REASON_CODES, LLM_REASON_CODES, escalateChannelRecidivism,
   type PolicyInput
 } from './policy.js'
 
@@ -541,5 +541,55 @@ describe('decideAction — do not ask a question that cannot be delivered', () =
     // participant can still be judged on what they posted.
     const d = decideAction(makeInput({ pSpam: 0.99, senderIsParticipant: false }))
     expect(d.action).toBe('ban')
+  })
+})
+
+/**
+ * A channel identity has no rehabilitation story a temporary restriction can
+ * tell: "the member who cooled off" is a person, and a sender channel is a
+ * broadcasting tool. Production for the week to 2026-08-28: one channel was
+ * "muted" 18 times across 3 chats — under the pre-2026-08-27 silent no-op it
+ * simply kept posting, and under the 24h-ban translation it would come back
+ * every day, forever. The second firm verdict in the same chat is the point
+ * where a timed measure has demonstrably failed; from there the ban is
+ * permanent, and the admin override remains the way back.
+ */
+describe('escalateChannelRecidivism', () => {
+  const muted: Verdict = {
+    pSpam: 0.93, action: 'mute', needsVote: false, banDurationSeconds: null,
+    decidedBy: 'deterministic', ruleId: 'private_invite_new', signals: [],
+    requireCaptcha: false, reasonCode: 'private_invite_new', reasonEvidence: null, meta: {}
+  }
+
+  it('a repeat channel offender is banned permanently', () => {
+    const v = escalateChannelRecidivism(muted, -1004497662524, true)
+    expect(v.action).toBe('ban')
+    expect(v.banDurationSeconds).toBeNull()
+    expect(v.meta['channelRecidivist']).toBe(true)
+  })
+
+  it('keeps the attribution of the verdict it escalates', () => {
+    const v = escalateChannelRecidivism(muted, -1004497662524, true)
+    expect(v.reasonCode).toBe('private_invite_new')
+    expect(v.decidedBy).toBe('deterministic')
+  })
+
+  it('a first offense is not escalated', () => {
+    expect(escalateChannelRecidivism(muted, -1004497662524, false)).toBe(muted)
+  })
+
+  it('a human sender is never escalated by this rule', () => {
+    expect(escalateChannelRecidivism(muted, 42, true)).toBe(muted)
+  })
+
+  it('a verdict that does not remove the sender is left alone', () => {
+    const observe = { ...muted, action: 'observe' as VerdictAction }
+    expect(escalateChannelRecidivism(observe, -1004497662524, true)).toBe(observe)
+  })
+
+  it('a timed ban on a repeat channel offender becomes permanent', () => {
+    const timed = { ...muted, action: 'ban' as VerdictAction, banDurationSeconds: 3600 }
+    const v = escalateChannelRecidivism(timed, -1004497662524, true)
+    expect(v.banDurationSeconds).toBeNull()
   })
 })
