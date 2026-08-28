@@ -448,6 +448,55 @@ describe('normalizeMessage — guest bots & edits', () => {
   })
 })
 
+/**
+ * The baseline has to identify the VERSION it was taken from, not just count
+ * its links: a later delivery is judged against it by stamp (is this version
+ * new?) and by content key (did the text or media actually change?). Both
+ * exist because of production 2026-08-28, where a delivery with a moved stamp
+ * and unchanged content was re-scored as a fresh edit and deleted.
+ */
+describe('editBaselineOf — version identity', () => {
+  it('stamps an un-edited version with 0, never with an absent field', () => {
+    const n = normalizeMessage(makeMessage({ message: 'звичайний текст' }))
+    expect(editBaselineOf(n).editDate).toBe(0)
+  })
+
+  it('carries the edit stamp of an edited version, in ms', () => {
+    const n = normalizeMessage(
+      makeMessage({ message: 'звичайний текст', editDate: 1_780_000_100 }),
+      { isEdit: true }
+    )
+    expect(editBaselineOf(n).editDate).toBe(1_780_000_100_000)
+  })
+
+  it('gives identical content an identical key', () => {
+    const a = normalizeMessage(makeMessage({ message: 'той самий текст' }))
+    const b = normalizeMessage(makeMessage({ message: 'той самий текст', editDate: 1_780_000_100 }, ), { isEdit: true })
+    expect(editBaselineOf(a).contentKey).toBe(editBaselineOf(b).contentKey)
+  })
+
+  it('changes the key when the text changes', () => {
+    const a = normalizeMessage(makeMessage({ message: 'один текст' }))
+    const b = normalizeMessage(makeMessage({ message: 'інший текст' }))
+    expect(editBaselineOf(a).contentKey).not.toBe(editBaselineOf(b).contentKey)
+  })
+
+  it('changes the key when media is swapped under an unchanged caption', () => {
+    // Post an innocuous photo, then edit the photo itself: the caption-only
+    // reading would call that "nothing changed".
+    const photo = (id: number): tl.TypeMessageMedia => ({
+      _: 'messageMediaPhoto',
+      photo: {
+        _: 'photo', id: long(id), accessHash: long(id), fileReference: new Uint8Array(),
+        date: 1_780_000_000, sizes: [{ _: 'photoSize', type: 'x', w: 100, h: 100, size: 1000 }], dcId: 2
+      }
+    } as unknown as tl.TypeMessageMedia)
+    const a = normalizeMessage(makeMessage({ message: 'підпис', media: photo(1) }))
+    const b = normalizeMessage(makeMessage({ message: 'підпис', media: photo(2) }))
+    expect(editBaselineOf(a).contentKey).not.toBe(editBaselineOf(b).contentKey)
+  })
+})
+
 // ── channel senders ───────────────────────────────────────────────────
 
 describe('normalizeMessage — albums', () => {

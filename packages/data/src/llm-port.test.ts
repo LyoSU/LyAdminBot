@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto'
 
 const makeMsg = (o: Partial<NormalizedMessage> = {}): NormalizedMessage => ({
   chatId: -100, messageId: 1, threadId: null, date: 1_780_000_000,
-  isEdit: false, text: 'звичайне повідомлення',
+  isEdit: false, editDate: 0, text: 'звичайне повідомлення',
   urls: [], mentions: [], attachments: [], inlineButtons: [],
   forward: null, replyTo: null, channelComment: null, editDelta: null,
   customEmoji: [], guestBot: null, ...o

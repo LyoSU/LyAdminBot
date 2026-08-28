@@ -26,7 +26,7 @@ import {
 } from '@lyadmin/core'
 import {
   TelegramGateway, applyVerdict, buildUserSnapshot, buildChannelSnapshot, withLiveFacts, normalizeMessage,
-  editBaselineOf,
+  editBaselineOf, classifyEditDelivery,
   fetchUserProfile, downloadPhotoBase64, downloadAvatarBase64, downloadStoriesBase64, rawPhotoToBase64,
   fetchExternalBan, sourcesToQuery, resolveMentionKinds, shouldScanChannelSender,
   createChatDescriptionCache, fetchChatDescription, createTmePreviewResolver,
@@ -3743,10 +3743,40 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     // part of this post rather than never at all.
     albumSiblings
   })
+  const baselineNow = editBaselineOf(normalized)
+
+  /**
+   * An edit-class delivery must carry a version the pipeline has not judged —
+   * otherwise it is the same message asking to be judged twice, and the second
+   * judgement is worse than redundant: it runs with the `edited_message`
+   * signal attached and against a signature/velocity corpus that kept growing
+   * since the first one. Production 2026-08-28: a reaction on a stamped
+   * message re-entered here two hours after the identical text was judged
+   * clean, and the re-run flipped `legit_share` into a delete.
+   *
+   * Before the ports and before `touchMember`, so a replay costs no budget and
+   * inflates no counters. Order around `rememberEditBaseline` is load-bearing:
+   * a stale echo repeats an OLD stamp and must not lower the remembered
+   * high-water mark, while a no-op version bump must raise it — or the next
+   * echo of the bumped version would read as new again.
+   */
+  if (isEdit) {
+    const delivery = classifyEditDelivery(previousBaseline, baselineNow)
+    if (delivery === 'stale_echo') {
+      log.info('edit_replay_skipped', { chatId: chat.id, messageId: message.id, kind: delivery })
+      return
+    }
+    if (delivery === 'noop_edit') {
+      rememberEditBaseline(chat.id, message.id, baselineNow)
+      log.info('edit_replay_skipped', { chatId: chat.id, messageId: message.id, kind: delivery })
+      return
+    }
+  }
+
   // Remembered for the NEXT edit, including when this delivery was itself an
   // edit: the honest question is what a given edit injected, not what has
   // accumulated since the original.
-  rememberEditBaseline(chat.id, message.id, editBaselineOf(normalized))
+  rememberEditBaseline(chat.id, message.id, baselineNow)
 
   // ── user snapshot ───────────────────────────────────────────────────
   const memberCount = await timed('mongo', async () => {
@@ -4511,7 +4541,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     // Rides along so an edit arriving after a restart still has something to be
     // measured against, and so a replay can recompute the delta this verdict
     // was — or was not — given.
-    editBaseline: editBaselineOf(normalized),
+    editBaseline: baselineNow,
     /**
      * What actually happened, as opposed to what was decided.
      *

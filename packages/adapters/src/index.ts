@@ -1,4 +1,5 @@
 export * from './normalize.js'
+export * from './edit-updates.js'
 export * from './executor.js'
 export * from './gateway.js'
 export * from './snapshot.js'

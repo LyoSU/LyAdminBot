@@ -74,7 +74,7 @@ const toInput = (event: ModEvent): EvaluationInput => {
     message: {
       chatId: event.chatId ?? 0, messageId: 0, threadId: null,
       date: Math.floor((event.createdAt?.getTime() ?? Date.now()) / 1000),
-      isEdit: false, text, urls: extractUrls(text), mentions: [],
+      isEdit: false, editDate: 0, text, urls: extractUrls(text), mentions: [],
       attachments: [], inlineButtons: [], forward: null, replyTo: null,
       channelComment: null, editDelta: null, customEmoji: [], guestBot: null
     },

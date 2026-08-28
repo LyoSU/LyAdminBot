@@ -29,5 +29,46 @@
  * arrival-only guards in the app, no action.
  */
 
+import type { EditBaseline } from '@lyadmin/core'
+
 /** Whether an `edit_message` delivery is about the message's content. */
 export const isContentEdit = (msg: { editDate: Date | null }): boolean => msg.editDate !== null
+
+/**
+ * What an edit-class delivery is, judged against the version already judged.
+ *
+ * `isContentEdit` above answers a weaker question — "was this message EVER
+ * edited" — and that gap convicted somebody (production 2026-08-28). A
+ * reaction on a message that carried an edit stamp is an edit-class delivery
+ * whose stamp is non-null, so it walked through the gate the moment the
+ * one-hour in-memory dedup forgot the original edit. The pipeline then judged
+ * the SAME text a second time, two hours later, with the `edited_message`
+ * signal attached and a signature/velocity corpus that had kept growing — and
+ * flipped `legit_share` into a delete.
+ *
+ * The baseline of the last judged version carries the two facts that settle
+ * it:
+ *
+ * - `stale_echo` — the stamp has not moved past the judged version's. Every
+ *   non-content delivery repeats the stamp verbatim (reactions, pins,
+ *   gap-recovery replays), so there is no new version here at all.
+ * - `noop_edit` — the stamp moved but the content key did not: a version bump
+ *   the sender never typed. Nothing new to judge either, but worth telling
+ *   apart in the log: a burst of these is Telegram stamping non-content
+ *   changes, not replay traffic.
+ * - `run` — a version the pipeline has not seen. Also the answer whenever the
+ *   remembered baseline predates these fields, because under-blocking is the
+ *   direction that never deletes somebody over a missing field.
+ */
+export type EditDeliveryClass = 'run' | 'stale_echo' | 'noop_edit'
+
+export const classifyEditDelivery = (
+  judged: EditBaseline | null,
+  current: Pick<EditBaseline, 'editDate' | 'contentKey'>
+): EditDeliveryClass => {
+  if (!judged) return 'run'
+  const stamp = current.editDate ?? 0
+  if (typeof judged.editDate === 'number' && stamp <= judged.editDate) return 'stale_echo'
+  if (judged.contentKey !== undefined && judged.contentKey === current.contentKey) return 'noop_edit'
+  return 'run'
+}

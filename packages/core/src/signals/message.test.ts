@@ -10,6 +10,7 @@ const makeMsg = (overrides: Partial<NormalizedMessage> = {}): NormalizedMessage 
   threadId: null,
   date: 1_780_000_000,
   isEdit: false,
+  editDate: 0,
   text: '',
   urls: [],
   mentions: [],

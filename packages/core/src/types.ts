@@ -171,6 +171,13 @@ export interface NormalizedMessage {
   /** unix seconds (Telegram server time) */
   date: number
   isEdit: boolean
+  /**
+   * Edit stamp of THIS version in unix ms; 0 when it has never been edited.
+   * Telegram moves it when the content changes and repeats it verbatim on
+   * every other delivery of the message — which makes it the version number
+   * an edit-class delivery is judged by (see `EditBaseline.editDate`).
+   */
+  editDate: number
   text: string
   /** Raw URLs from text and entities (including hidden text_link). */
   urls: { visible: string; target: string; hidden: boolean }[]
@@ -245,6 +252,28 @@ export interface EditBaseline {
   urls: number
   mentions: number
   invisibles: number
+  /**
+   * Edit stamp of the version these counters were taken from, in unix ms;
+   * 0 when that version had never been edited. Absent only on records written
+   * before the field existed.
+   *
+   * This is what tells a NEW version from a re-delivery of a judged one. An
+   * edit-class update repeats the stamp of the version it is about — a
+   * reaction, a pin, a gap-recovery replay all carry the stamp unchanged — so
+   * a delivery whose stamp has not moved past this value brings nothing the
+   * pipeline has not already judged (production 2026-08-28: one such replay
+   * was re-scored as a fresh edit two hours later and flipped to delete).
+   */
+  editDate?: number
+  /**
+   * Digest of what this version SAYS: normalized text, link destinations,
+   * media identity. Two versions with one key are the same message content —
+   * a moved stamp over an unchanged key is a version bump the sender never
+   * typed (Telegram stamps some non-content changes), and judging it again
+   * against a corpus that kept growing is how a clean verdict flips with no
+   * act by the sender.
+   */
+  contentKey?: string
   /**
    * Identity of the links the earlier version carried — short digests, capped.
    *

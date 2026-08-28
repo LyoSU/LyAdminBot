@@ -920,6 +920,33 @@ describe('getEditBaseline', () => {
     await expect(store.getEditBaseline(-100, 10)).resolves.toBeNull()
   })
 
+  // The baseline's other job (2026-08-28): identify the VERSION it was taken
+  // from, so a delivery repeating an already-judged version is recognized after
+  // a restart — the in-process cache is gone precisely then. A read that drops
+  // these fields silently reopens the replay hole it exists to close.
+  it('returns the version identity alongside the counters', async () => {
+    const store = baselineStore({
+      editBaseline: {
+        urls: 1, mentions: 0, invisibles: 0,
+        urlKeys: ['5db1f486f81c'], editDate: 1_780_000_100_000, contentKey: 'aabbccddeeff'
+      }
+    })
+    await expect(store.getEditBaseline(-100, 10)).resolves.toEqual({
+      urls: 1, mentions: 0, invisibles: 0,
+      urlKeys: ['5db1f486f81c'], editDate: 1_780_000_100_000, contentKey: 'aabbccddeeff'
+    })
+  })
+
+  it('drops identity fields of the wrong type rather than the whole baseline', async () => {
+    const store = baselineStore({
+      editBaseline: {
+        urls: 1, mentions: 0, invisibles: 0,
+        urlKeys: 'not-an-array', editDate: 'yesterday', contentKey: 7
+      }
+    })
+    await expect(store.getEditBaseline(-100, 10)).resolves.toEqual({ urls: 1, mentions: 0, invisibles: 0 })
+  })
+
   it('asks for the newest version of the message', async () => {
     const calls: Record<string, unknown>[] = []
     const store = Object.assign(

@@ -12,7 +12,7 @@ import { contentEvidence, mayRemoveSender } from './score.js'
 
 const makeMsg = (overrides: Partial<NormalizedMessage> = {}): NormalizedMessage => ({
   chatId: -100123, messageId: 1, threadId: null, date: 1_780_000_000,
-  isEdit: false, text: 'Звичайне повідомлення в чаті, нічого особливого тут немає',
+  isEdit: false, editDate: 0, text: 'Звичайне повідомлення в чаті, нічого особливого тут немає',
   urls: [], mentions: [], attachments: [], inlineButtons: [],
   forward: null, replyTo: null, channelComment: null, editDelta: null,
   customEmoji: [], guestBot: null,

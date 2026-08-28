@@ -112,14 +112,25 @@ const urlKeyOf = (target: string): string =>
     .slice(0, 12)
 
 export const editBaselineOf = (
-  msg: Pick<NormalizedMessage, 'urls' | 'mentions' | 'text'>
+  msg: Pick<NormalizedMessage, 'urls' | 'mentions' | 'text' | 'attachments' | 'editDate'>
 ): EditBaseline => {
   const keys = [...new Set(msg.urls.map((u) => urlKeyOf(u.target)))]
+  // Sorted, NUL-joined: the key identifies WHAT the version says, not the
+  // order entities were parsed in, and no section can impersonate another.
+  const media = msg.attachments
+    .map((a) => `${a.kind}:${a.fileUniqueId ?? ''}`)
+    .sort()
+  const contentKey = createHash('sha256')
+    .update([msg.text, [...keys].sort().join(','), media.join(',')].join('\0'))
+    .digest('hex')
+    .slice(0, 12)
   return {
     urls: msg.urls.length,
     mentions: msg.mentions.length,
     invisibles: countInvisibles(msg.text),
-    ...(keys.length <= BASELINE_MAX_URL_KEYS ? { urlKeys: keys } : {})
+    ...(keys.length <= BASELINE_MAX_URL_KEYS ? { urlKeys: keys } : {}),
+    editDate: msg.editDate,
+    contentKey
   }
 }
 
@@ -477,6 +488,7 @@ export const normalizeMessage = (msg: Message, ctx: NormalizeContext = {}): Norm
     threadId: rawReply && rawReply._ === 'messageReplyHeader' ? rawReply.replyToTopId ?? null : null,
     date: raw?.date ?? Math.floor(msg.date.getTime() / 1000),
     isEdit,
+    editDate: msg.editDate ? msg.editDate.getTime() : 0,
     text,
     urls,
     mentions,

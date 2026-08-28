@@ -1320,14 +1320,24 @@ export class MongoStore {
     )
     const baseline = doc?.['editBaseline'] as Partial<EditBaseline> | undefined
     if (!baseline) return null
-    const { urls, mentions, invisibles } = baseline
+    const { urls, mentions, invisibles, urlKeys, editDate, contentKey } = baseline
     // A record written by an older build, or a partial one, is not a baseline:
     // reading a missing count as zero would report the whole message as freshly
     // injected — which on the invisibles half is a 0.93 mute for an ordinary edit.
     if (typeof urls !== 'number' || typeof mentions !== 'number' || typeof invisibles !== 'number') {
       return null
     }
-    return { urls, mentions, invisibles }
+    // The rest travels only when well-typed, and its absence costs a run, not a
+    // verdict: no `urlKeys` falls back to counts (under-detects a swap), no
+    // version identity classifies the delivery as `run` (an extra evaluation,
+    // never a suppressed one). Until 2026-08-28 this read silently dropped
+    // `urlKeys` it had stored — the swap-detection restart gap in miniature.
+    return {
+      urls, mentions, invisibles,
+      ...(Array.isArray(urlKeys) && urlKeys.every((k) => typeof k === 'string') ? { urlKeys } : {}),
+      ...(typeof editDate === 'number' ? { editDate } : {}),
+      ...(typeof contentKey === 'string' ? { contentKey } : {})
+    }
   }
 
   /**

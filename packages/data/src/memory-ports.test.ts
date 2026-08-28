@@ -8,7 +8,7 @@ const makeInput = (
   chatId: number, userId: number, text: string, messageId = nextMessageId++
 ): EvaluationInput => ({
   message: {
-    chatId, messageId, threadId: null, date: 0, isEdit: false, text,
+    chatId, messageId, threadId: null, date: 0, isEdit: false, editDate: 0, text,
     urls: [], mentions: [], attachments: [], inlineButtons: [],
     forward: null, replyTo: null, channelComment: null, editDelta: null,
     customEmoji: [], guestBot: null
