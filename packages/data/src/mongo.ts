@@ -7,7 +7,7 @@
  */
 import { MongoClient, ObjectId, type Collection, type Db, type Document } from 'mongodb'
 import type {
-  BurstEntry, EditBaseline, ExecutionRecord, MediaCategory, Verdict, Signal, VoteBallot, VoteEligibility
+  BotStats, BurstEntry, ChatStats, EditBaseline, ExecutionRecord, MediaCategory, Verdict, Signal, VoteBallot, VoteEligibility
 } from '@lyadmin/core'
 import { truncate, VOTE_WINDOW_SECONDS } from '@lyadmin/core'
 import { normalizeExtra, type NormalizedExtra } from './extras.js'
@@ -344,6 +344,14 @@ export const ensureUniqueIndex = async (
     )
   }
 }
+
+/** Sender-removing actions — the ones that take the account out of the room. */
+const REMOVAL_ACTIONS = ['kick', 'mute', 'ban']
+/** Everything that touched a message or its sender at all. */
+const PUNISHING_ACTIONS = [...REMOVAL_ACTIONS, 'delete']
+
+/** An aggregation cell as a count: absent or non-numeric means none happened. */
+const countOf = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) ? value : 0)
 
 export class MongoStore {
   private client: MongoClient | null = null
@@ -1940,6 +1948,130 @@ export class MongoStore {
       senders.set(ruleId, set)
     }
     return [...senders].filter(([, users]) => users.size >= 3).map(([ruleId]) => ruleId)
+  }
+
+  /**
+   * What the bot has done lately, network-wide — the figures behind `/stats`.
+   *
+   * One `$facet` over one `$match`, so the whole card costs a single pass of the
+   * TTL-indexed window rather than a query per line. `$percentile` gives the
+   * median directly (Mongo 7+); the average would be the wrong figure to print,
+   * since a handful of LLM round-trips drag it four times above what a typical
+   * message actually waits.
+   *
+   * Two small counts ride alongside: signatures are all-time by nature, and the
+   * corrections come from `pipeline_feedback`, the permanent record. Everything
+   * else expires with the decisions, which is exactly why the window is printed
+   * on the card instead of being implied.
+   */
+  async botStats(windowDays = 14): Promise<BotStats> {
+    const since = new Date(Date.now() - windowDays * 86_400_000)
+    const [row] = await this.decisions.aggregate([
+      { $match: { createdAt: { $gte: since } } },
+      {
+        $facet: {
+          totals: [
+            {
+              $group: {
+                _id: null,
+                checked: { $sum: 1 },
+                removals: { $sum: { $cond: [{ $in: ['$action', REMOVAL_ACTIONS] }, 1, 0] } },
+                deletes: { $sum: { $cond: [{ $eq: ['$action', 'delete'] }, 1, 0] } },
+                // The count of accounts, not of punishments: spam repeats, and
+                // "2 684 spammers" is a claim about people.
+                senders: { $addToSet: { $cond: [{ $in: ['$action', REMOVAL_ACTIONS] }, '$userId', '$$REMOVE'] } },
+                rooms: { $addToSet: '$chatId' },
+                latency: { $percentile: { input: '$latencyMs', p: [0.5], method: 'approximate' } }
+              }
+            },
+            {
+              $project: {
+                checked: 1, removals: 1, deletes: 1,
+                spammers: { $size: '$senders' },
+                chats: { $size: '$rooms' },
+                latencyP50Ms: { $arrayElemAt: ['$latency', 0] }
+              }
+            }
+          ],
+          reasons: [
+            { $match: { action: { $in: PUNISHING_ACTIONS } } },
+            { $group: { _id: '$reasonCode', n: { $sum: 1 } } },
+            { $sort: { n: -1 } },
+            { $limit: 5 }
+          ]
+        }
+      }
+    ]).toArray()
+
+    const totals = (row?.['totals'] as Document[] | undefined)?.[0] ?? {}
+    const reasons = (row?.['reasons'] as Document[] | undefined) ?? []
+    const [signatures, overrides] = await Promise.all([
+      this.spamSignatures.countDocuments({}),
+      this.feedback.countDocuments({ kind: 'override_not_spam', createdAt: { $gte: since } })
+    ])
+    return {
+      windowDays,
+      checked: countOf(totals['checked']),
+      removals: countOf(totals['removals']),
+      deletes: countOf(totals['deletes']),
+      spammers: countOf(totals['spammers']),
+      chats: countOf(totals['chats']),
+      latencyP50Ms: typeof totals['latencyP50Ms'] === 'number' ? Math.round(totals['latencyP50Ms']) : null,
+      signatures,
+      overrides,
+      topReasons: reasons
+        .filter((r) => typeof r['_id'] === 'string')
+        .map((r) => ({ reasonCode: String(r['_id']), count: countOf(r['n']) }))
+    }
+  }
+
+  /**
+   * The same question about one chat, for the card asked from inside a group.
+   *
+   * `lastActionAt` is what makes the block worth reading: a count without a
+   * recency is a claim about the past, and an admin weighing whether the bot
+   * still earns its place is asking about now.
+   */
+  async chatStats(chatId: number, windowDays = 14): Promise<ChatStats> {
+    const since = new Date(Date.now() - windowDays * 86_400_000)
+    const [row] = await this.decisions.aggregate([
+      { $match: { chatId, createdAt: { $gte: since } } },
+      {
+        $facet: {
+          totals: [
+            {
+              $group: {
+                _id: null,
+                checked: { $sum: 1 },
+                removals: { $sum: { $cond: [{ $in: ['$action', REMOVAL_ACTIONS] }, 1, 0] } },
+                deletes: { $sum: { $cond: [{ $eq: ['$action', 'delete'] }, 1, 0] } },
+                senders: { $addToSet: { $cond: [{ $in: ['$action', REMOVAL_ACTIONS] }, '$userId', '$$REMOVE'] } },
+                lastActionAt: {
+                  $max: { $cond: [{ $in: ['$action', PUNISHING_ACTIONS] }, '$createdAt', null] }
+                }
+              }
+            },
+            {
+              $project: {
+                checked: 1, removals: 1, deletes: 1, lastActionAt: 1,
+                spammers: { $size: '$senders' }
+              }
+            }
+          ]
+        }
+      }
+    ]).toArray()
+
+    const totals = (row?.['totals'] as Document[] | undefined)?.[0] ?? {}
+    const last = totals['lastActionAt']
+    return {
+      windowDays,
+      checked: countOf(totals['checked']),
+      removals: countOf(totals['removals']),
+      deletes: countOf(totals['deletes']),
+      spammers: countOf(totals['spammers']),
+      lastActionAt: last instanceof Date ? last : null
+    }
   }
 
   /**

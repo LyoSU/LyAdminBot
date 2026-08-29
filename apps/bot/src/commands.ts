@@ -24,7 +24,7 @@ type CommandKey = keyof Locale['commands']
 
 /** Locale-key → actual slash name (most match; top_banan is the exception). */
 const SLASH_NAME: Record<CommandKey, string> = {
-  start: 'start', help: 'help', lang: 'lang', mystats: 'mystats',
+  start: 'start', help: 'help', lang: 'lang', mystats: 'mystats', stats: 'stats',
   report: 'report', settings: 'settings', banan: 'banan', kick: 'kick',
   del: 'del', untrust: 'untrust', check: 'check', top: 'top',
   topBanan: 'top_banan', extras: 'extras', welcome: 'welcome', ping: 'ping'
@@ -33,7 +33,7 @@ const SLASH_NAME: Record<CommandKey, string> = {
 /** Command sets per Telegram scope. List order = menu order. */
 const SCOPES: { scope: tl.TypeBotCommandScope; keys: CommandKey[] }[] = [
   { scope: { _: 'botCommandScopeDefault' }, keys: ['start', 'help'] },
-  { scope: { _: 'botCommandScopeUsers' }, keys: ['start', 'help', 'lang', 'mystats'] },
+  { scope: { _: 'botCommandScopeUsers' }, keys: ['start', 'help', 'stats', 'lang', 'mystats'] },
   /**
    * Regular group members used to get NO menu, deliberately — an empty list
    * overrides the wider `Default` scope Telegram would otherwise resolve them
@@ -45,7 +45,7 @@ const SCOPES: { scope: tl.TypeBotCommandScope; keys: CommandKey[] }[] = [
    * Kept short on purpose. These are the four a member can actually use; the
    * leaderboards stay out because they are for fun and the menu is not.
    */
-  { scope: { _: 'botCommandScopeChats' }, keys: ['report', 'help', 'mystats', 'top'] },
+  { scope: { _: 'botCommandScopeChats' }, keys: ['report', 'help', 'stats', 'mystats', 'top'] },
   // Admins: the moderation actions they act through, plus settings. `del`,
   // `untrust`, `check` and `welcome` were implemented and unlisted.
   {

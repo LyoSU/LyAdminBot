@@ -21,7 +21,7 @@ import {
   accountScreenAllowed, accountScreenRemoves, hardVerdictSourceOf,
   TIMED_BAN_SECONDS,
   type AccountAction,
-  type ChannelPreview, type EditBaseline, type EvaluationInput, type ForwardOrigin,
+  type BotStats, type ChannelPreview, type ChatStats, type EditBaseline, type EvaluationInput, type ForwardOrigin,
   type MediaCategory, type PipelinePorts, type Signal, type UserSnapshot, type Verdict, type VoteBallot
 } from '@lyadmin/core'
 import {
@@ -45,13 +45,14 @@ import {
 import {
   captchaPrompt, compactNotification, escapeHtml as escapeName, helpView,
   langPanel, langPicker, parseCallback, resolveLocale, settingsDeepLink, settingsPanel,
-  nameIsPromo, startCard, startGroupHint, topList, userMention, userProfileCard, votePrompt, voteResult,
+  nameIsPromo, startCard, startGroupHint, statsCard, topList, userMention, userProfileCard, votePrompt, voteResult,
   voterListView, whyCard, whyView,
   welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor,
   LOCALES, type Locale, type UserFacts, type ViewMessage
 } from '@lyadmin/ui'
 import { loadConfig } from './config.js'
 import { registerBotCommands } from './commands.js'
+import { createStatsCache } from './stats-cache.js'
 import { formatDuration, parseBananDuration } from './duration.js'
 import { formatSignals, log } from './logger.js'
 import { RightsMemory, RIGHTS_ERROR_REGEX, failureLabels } from './rights.js'
@@ -1914,6 +1915,10 @@ const handlePrivateMessage = async (message: Message): Promise<void> => {
     await sendView(message, { text: await renderMyStats(locale, sender.id, null), buttons: [] })
     return
   }
+  if (/^\/stats/.test(text)) {
+    await sendView(message, await renderStatsCard(locale, null))
+    return
+  }
   if (!text.startsWith('/start')) return
 
   const payload = text.split(/\s+/)[1] ?? ''
@@ -1984,7 +1989,14 @@ const handlePrivateMessage = async (message: Message): Promise<void> => {
     }
   }
 
-  await sendView(message, startCard(locale, sender.displayName, selfUsername ?? ''))
+  if (payload === 'stats') {
+    await sendView(message, await renderStatsCard(locale, null))
+    return
+  }
+
+  await sendView(message, startCard(
+    locale, sender.displayName, selfUsername ?? '', await statsCache.get('network')
+  ))
 }
 
 /** Target labels for undo notifications (memory, bounded like recentVerdicts). */
@@ -3446,6 +3458,48 @@ const wornRulesFor = async (chatId: number): Promise<string[]> => {
   return value
 }
 
+/**
+ * The figures behind `/stats` and the welcome card's proof line.
+ *
+ * Counting them is a scan of a fortnight of decisions, so they are read through
+ * a cache: the card is an advert, and nobody reading it can tell ten-minute-old
+ * counts from live ones. A failed read serves the last good answer and, failing
+ * that, null — which the card renders as "numbers unavailable" rather than as a
+ * bot that has never caught anything.
+ */
+const STATS_WINDOW_DAYS = 14
+const statsCache = createStatsCache<BotStats>({
+  ttlMs: 10 * 60_000,
+  maxEntries: 1,
+  load: () => store.botStats(STATS_WINDOW_DAYS)
+})
+const chatStatsCache = createStatsCache<ChatStats>({
+  ttlMs: 10 * 60_000,
+  load: (key) => store.chatStats(Number(key), STATS_WINDOW_DAYS)
+})
+
+/** The effectiveness card, for a PM (no chat) or for the group that asked. */
+const renderStatsCard = async (
+  locale: Locale, chatId: number | null
+): Promise<ViewMessage> => {
+  const stats = await statsCache.get('network')
+  if (chatId === null) return statsCard(locale, stats, { botUsername: selfUsername })
+  const [here, title] = await Promise.all([
+    chatStatsCache.get(String(chatId)),
+    chatTitleFor(chatId)
+  ])
+  return statsCard(locale, stats, {
+    botUsername: selfUsername,
+    chat: here === null ? null : {
+      title: title ?? String(chatId),
+      stats: here,
+      ago: here.lastActionAt === null
+        ? null
+        : formatDuration((Date.now() - here.lastActionAt.getTime()) / 1000, locale.banan.units)
+    }
+  })
+}
+
 const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage): Promise<void> => {
   const chat = message.chat
   if (!(chat instanceof Chat)) {
@@ -3608,6 +3662,23 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
         text: locale.stats.openInPm,
         buttons: [[{ text: locale.stats.openButton, url: `https://t.me/${selfUsername}?start=mystats_${chat.id}` }]]
       })
+      return
+    }
+    /**
+     * `/stats` in a group answers about that group first, then the network.
+     *
+     * Open to any member on purpose: the numbers are about the room they are
+     * standing in, and the person most likely to ask "does this bot even do
+     * anything" is not the admin. It is a wall of text in a chat, so it cleans
+     * itself up on the same timer `/help` and `/top` use.
+     */
+    if (/^\/stats(@\w+)?$/.test(commandText)) {
+      const locale = await groupLocale(chat.id)
+      const card = await renderStatsCard(locale, chat.id)
+      const sent = await tgReplyText(message, viewHtml(card.text), {
+        disableWebPreview: true
+      }).catch(() => null)
+      if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'cmd_stats')
       return
     }
     if (/^\/top[-_]banan(@\w+)?$/.test(commandText)) {
@@ -4816,6 +4887,17 @@ const wireCallbacks = (): void => {
       await query.answer({})
       await tgSendText(query.user.id, viewHtml(helpView(locale).text))
         .catch(() => { /* PM closed */ })
+      return
+    }
+
+    // Tapped on the welcome card, which only exists in a PM — so the card goes
+    // back to the same PM, buttons and all.
+    if (kind === 'stats') {
+      await query.answer({})
+      const card = await renderStatsCard(locale, null)
+      await tgSendText(query.user.id, viewHtml(card.text), {
+        ...(card.buttons.length > 0 ? { replyMarkup: toKeyboard(card.buttons) } : {})
+      }).catch(() => { /* PM closed */ })
       return
     }
 

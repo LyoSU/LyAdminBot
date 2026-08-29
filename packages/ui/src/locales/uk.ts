@@ -1,4 +1,5 @@
 import type { Locale } from '../locale.js'
+import { decimal1, groupDigits } from '../format.js'
 
 /**
  * Slavic plural picker: one / few (2-4) / many (5+, and the whole 11-19 teens).
@@ -26,7 +27,10 @@ export const uk: Locale = {
       '',
       'Додай у групу → дай права адміна → готово.'
     ].join('\n'),
-    groupHint: '🛡 Ловлю спам, баню шахраїв.\n<code>/settings</code> для адмінів · <code>/help</code> команди',
+    liveProof: (chats, spammers, days) =>
+      `📊 Зараз тримаю <b>${groupDigits(chats)}</b> ${plural(chats, 'чат', 'чати', 'чатів')}: ` +
+      `<b>${groupDigits(spammers)}</b> ${plural(spammers, 'спамер заблокований', 'спамери заблоковані', 'спамерів заблоковано')} за ${days} ${plural(days, 'день', 'дні', 'днів')}.`,
+    groupHint: '🛡 Ловлю спам, баню шахраїв.\n<code>/settings</code> для адмінів · <code>/stats</code> цифри · <code>/help</code> команди',
     addToGroupButton: '➕ Додати в групу',
     helpButton: '❓ Команди',
     langButton: '🌐 Мова'
@@ -38,6 +42,7 @@ export const uk: Locale = {
     '',
     '<b>Усім:</b>',
     '/report — скарга на спам (у відповідь)',
+    '/stats — скільки спаму я вже зловив',
     '/mystats — моя статистика · /top, /top_banan — рейтинги',
     '/lang — мова',
     '',
@@ -66,6 +71,7 @@ export const uk: Locale = {
     help: 'Допомога і команди',
     lang: 'Вибрати мову',
     mystats: 'Моя статистика',
+    stats: 'Скільки спаму я вже зловив',
     report: 'Поскаржитись на спам (у відповідь)',
     settings: 'Налаштування антиспаму (адміни)',
     banan: 'Мут у відповідь (/banan 5m)',
@@ -333,6 +339,27 @@ export const uk: Locale = {
     bananCaught: (count) => `Бананів зловлено: ${count} 🍌`,
     openInPm: 'Статистика прийде в особисті.',
     openButton: '📊 Моя статистика'
+  },
+
+  botStats: {
+    title: '🛡 <b>Що я вже зробив</b>',
+    window: (days) => `За останні ${days} ${plural(days, 'день', 'дні', 'днів')}:`,
+    checked: (count) => `📬 <b>${groupDigits(count)}</b> ${plural(count, 'перевірене повідомлення', 'перевірені повідомлення', 'перевірених повідомлень')}`,
+    spammers: (count) => `🚫 <b>${groupDigits(count)}</b> ${plural(count, 'спамер заблокований', 'спамери заблоковані', 'спамерів заблоковано')}`,
+    chats: (count) => `💬 <b>${groupDigits(count)}</b> ${plural(count, 'чат під захистом', 'чати під захистом', 'чатів під захистом')}`,
+    speed: (ms) => `⚡ рішення за <b>${groupDigits(ms)} мс</b>`,
+    quiet: (percent) => `<b>${decimal1(percent)}%</b> повідомлень не торкнувся. Поки спаму немає, мене не чути.`,
+    reasonsTitle: '<b>Найчастіше ловлю:</b>',
+    reasonLine: (name, count) => `• ${name} — ${groupDigits(count)}`,
+    memory: (signatures) => `🧠 У пам'яті ${groupDigits(signatures)} ${plural(signatures, 'сигнатура', 'сигнатури', 'сигнатур')} спаму`,
+    corrections: (percent) => `✅ Адміни скасували ${decimal1(percent)}% моїх рішень`,
+    chatHeader: (title, days) => `🛡 <b>${title}</b> за ${days} ${plural(days, 'день', 'дні', 'днів')}`,
+    chatLine: (checked, spammers, deletes) =>
+      `📬 ${groupDigits(checked)} перевірено · 🚫 ${groupDigits(spammers)} ${plural(spammers, 'спамер', 'спамери', 'спамерів')} · 🧹 ${groupDigits(deletes)} видалено`,
+    chatLastSpam: (ago) => `Останній спам: ${ago} тому`,
+    chatClean: '✨ За цей час — жодного спаму.',
+    unavailable: '📊 Цифри зараз недоступні, спробуй трохи пізніше.',
+    button: '📊 Мої цифри'
   },
 
   top: {

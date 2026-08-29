@@ -1,4 +1,8 @@
 import type { Locale } from '../locale.js'
+import { decimal1, groupDigits } from '../format.js'
+
+/** Turkish number typography: thousands by point, decimals by comma. */
+const n = (v: number): string => groupDigits(v, '.')
 
 export const tr: Locale = {
   languageName: 'Türkçe',
@@ -12,6 +16,8 @@ export const tr: Locale = {
       '',
       'Beni bir gruba ekle → yönetici yetkisi ver → tamamdır.'
     ].join('\n'),
+    liveProof: (chats, spammers, days) =>
+      `📊 Şu anda <b>${n(chats)}</b> sohbeti koruyorum: ${days} günde <b>${n(spammers)}</b> spam hesabını engelledim.`,
     groupHint: '🛡 Spam yakalarım ve dolandırıcıları yasaklarım.\n<code>/settings</code> yöneticiler için · <code>/help</code> komutlar',
     addToGroupButton: '➕ Gruba ekle',
     helpButton: '❓ Komutlar',
@@ -24,6 +30,7 @@ export const tr: Locale = {
     '',
     '<b>Herkes:</b>',
     '/report — spam bildir (yanıt olarak)',
+    '/stats — ne kadar spam engelledim',
     '/mystats — istatistiğim · /top, /top_banan — sıralamalar',
     '/lang — dil',
     '',
@@ -52,6 +59,7 @@ export const tr: Locale = {
     help: 'Yardım ve komutlar',
     lang: 'Dil seç',
     mystats: 'İstatistiklerim',
+    stats: 'Ne kadar spam engelledim',
     report: 'Spam bildir (yanıt)',
     settings: 'Anti-spam ayarları (yöneticiler)',
     banan: 'Yanıtla sustur (/banan 5m)',
@@ -307,6 +315,27 @@ export const tr: Locale = {
     rateLimited: 'Çok fazla bildirim. Birkaç dakika bekle.',
     accepted: 'Anlaşıldı, teşekkürler.',
     oneAtATime: 'O satırda birden fazla kişi katıldı. Kastettiğin kişinin mesajına yanıt ver.'
+  },
+
+  botStats: {
+    title: '🛡 <b>Şimdiye kadar ne yaptım</b>',
+    window: (days) => `Son ${days} günde:`,
+    checked: (count) => `📬 <b>${n(count)}</b> mesaj kontrol edildi`,
+    spammers: (count) => `🚫 <b>${n(count)}</b> spam hesabı engellendi`,
+    chats: (count) => `💬 <b>${n(count)}</b> sohbet koruma altında`,
+    speed: (ms) => `⚡ karar <b>${n(ms)} ms</b> içinde`,
+    quiet: (percent) => `Mesajların <b>%${decimal1(percent)}</b> kadarına hiç dokunmadım. Spam yoksa sesim çıkmaz.`,
+    reasonsTitle: '<b>En çok yakaladıklarım:</b>',
+    reasonLine: (name, count) => `• ${name} — ${n(count)}`,
+    memory: (signatures) => `🧠 Hafızamda ${n(signatures)} spam imzası var`,
+    corrections: (percent) => `✅ Yöneticiler kararlarımın %${decimal1(percent)} kadarını geri aldı`,
+    chatHeader: (title, days) => `🛡 <b>${title}</b> · son ${days} gün`,
+    chatLine: (checked, spammers, deletes) =>
+      `📬 ${n(checked)} kontrol · 🚫 ${n(spammers)} spam hesabı · 🧹 ${n(deletes)} silindi`,
+    chatLastSpam: (ago) => `Son spam: ${ago} önce`,
+    chatClean: '✨ Bu süre boyunca tek bir spam yok.',
+    unavailable: '📊 Sayılara şu an ulaşamıyorum, biraz sonra tekrar dene.',
+    button: '📊 Rakamlarım'
   },
 
   stats: {

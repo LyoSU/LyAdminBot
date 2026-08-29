@@ -1,4 +1,9 @@
 import type { Locale } from '../locale.js'
+import { decimal1, groupDigits } from '../format.js'
+
+/** English number typography: thousands by comma, decimals by point. */
+const n = (v: number): string => groupDigits(v, ',')
+const s = (v: number): string => (v === 1 ? '' : 's')
 
 export const en: Locale = {
   languageName: 'English',
@@ -12,6 +17,8 @@ export const en: Locale = {
       '',
       'Add me to a group → grant admin rights → done.'
     ].join('\n'),
+    liveProof: (chats, spammers, days) =>
+      `📊 Right now I guard <b>${n(chats)}</b> chat${s(chats)}: <b>${n(spammers)}</b> spammer${s(spammers)} blocked in ${days} days.`,
     groupHint: '🛡 I catch spam and ban scammers.\n<code>/settings</code> for admins · <code>/help</code> commands',
     addToGroupButton: '➕ Add to group',
     helpButton: '❓ Commands',
@@ -24,6 +31,7 @@ export const en: Locale = {
     '',
     '<b>Everyone:</b>',
     '/report — report spam (as a reply)',
+    '/stats — how much spam I have caught',
     '/mystats — my stats · /top, /top_banan — leaderboards',
     '/lang — language',
     '',
@@ -52,6 +60,7 @@ export const en: Locale = {
     help: 'Help and commands',
     lang: 'Choose language',
     mystats: 'My stats',
+    stats: 'How much spam I have caught',
     report: 'Report spam (reply)',
     settings: 'Anti-spam settings (admins)',
     banan: 'Mute via reply (/banan 5m)',
@@ -308,6 +317,27 @@ export const en: Locale = {
     rateLimited: 'Too many reports. Wait a few minutes.',
     accepted: 'Got it, thanks.',
     oneAtATime: 'Several people joined on that line. Reply to a message from the one you mean.'
+  },
+
+  botStats: {
+    title: '🛡 <b>What I have done so far</b>',
+    window: (days) => `Over the last ${days} days:`,
+    checked: (count) => `📬 <b>${n(count)}</b> message${s(count)} checked`,
+    spammers: (count) => `🚫 <b>${n(count)}</b> spammer${s(count)} blocked`,
+    chats: (count) => `💬 <b>${n(count)}</b> chat${s(count)} under guard`,
+    speed: (ms) => `⚡ a verdict in <b>${n(ms)} ms</b>`,
+    quiet: (percent) => `<b>${decimal1(percent, '.')}%</b> of messages I never touched. No spam, no noise from me.`,
+    reasonsTitle: '<b>What I catch most:</b>',
+    reasonLine: (name, count) => `• ${name} — ${n(count)}`,
+    memory: (signatures) => `🧠 ${n(signatures)} spam signature${s(signatures)} in memory`,
+    corrections: (percent) => `✅ Admins overturned ${decimal1(percent, '.')}% of my calls`,
+    chatHeader: (title, days) => `🛡 <b>${title}</b> over ${days} days`,
+    chatLine: (checked, spammers, deletes) =>
+      `📬 ${n(checked)} checked · 🚫 ${n(spammers)} spammer${s(spammers)} · 🧹 ${n(deletes)} removed`,
+    chatLastSpam: (ago) => `Last spam: ${ago} ago`,
+    chatClean: '✨ Not a single spam message in that time.',
+    unavailable: '📊 The numbers are out of reach right now, try again a bit later.',
+    button: '📊 My numbers'
   },
 
   stats: {

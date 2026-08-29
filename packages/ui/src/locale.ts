@@ -15,6 +15,14 @@ export interface Locale {
   start: {
     /** PM welcome card (HTML). `name` arrives pre-escaped. */
     privateCard: (name: string) => string
+    /**
+     * The live proof line inside the welcome card.
+     *
+     * A first-time reader has no reason to believe any of the claims above it;
+     * this is the sentence that is checkable. Omitted entirely when the counts
+     * could not be read — an unproven claim beats a fabricated one.
+     */
+    liveProof: (chats: number, spammers: number, days: number) => string
     /** One-line hint when /start is used inside a group (HTML). */
     groupHint: string
     addToGroupButton: string
@@ -76,6 +84,7 @@ export interface Locale {
     help: string
     lang: string
     mystats: string
+    stats: string
     report: string
     settings: string
     banan: string
@@ -323,6 +332,49 @@ export interface Locale {
     bananCaught: (count: number) => string
     openInPm: string
     openButton: string
+  }
+
+  /**
+   * `/stats` — what the bot has done lately, in its own words.
+   *
+   * The one card where the bot is the subject, so it is written to the standard
+   * the moderation notices are held to: counted figures over a named window, no
+   * cumulative-since-launch claim nobody can recompute. Counts arrive raw and
+   * each locale groups its own digits, because separators are a property of the
+   * language.
+   */
+  botStats: {
+    title: string
+    /** "over the last N days" — the window is stated, never assumed. */
+    window: (days: number) => string
+    checked: (count: number) => string
+    spammers: (count: number) => string
+    chats: (count: number) => string
+    speed: (ms: number) => string
+    /**
+     * The share of messages nothing happened to.
+     *
+     * The figure a chat owner is actually deciding on: "it bans a lot" reads as
+     * a threat to their own members until the card says how rarely it acts.
+     */
+    quiet: (percent: number) => string
+    reasonsTitle: string
+    reasonLine: (name: string, count: number) => string
+    memory: (signatures: number) => string
+    /** Share of punishments an admin took back — our own error rate, published. */
+    corrections: (percent: number) => string
+    /** Per-chat block, shown when the card is asked for from inside a group. */
+    chatHeader: (title: string, days: number) => string
+    chatLine: (checked: number, spammers: number, deletes: number) => string
+    chatLastSpam: (ago: string) => string
+    /** A chat with nothing to report is told so, not shown a row of zeros. */
+    chatClean: string
+    /**
+     * Said when the counts could not be read. A card of zeros would claim the
+     * bot has done nothing, which is a worse answer than admitting the gap.
+     */
+    unavailable: string
+    button: string
   }
 
   /** /top and /top-banan group leaderboards. */

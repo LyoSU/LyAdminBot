@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { Verdict, SignalName } from '@lyadmin/core'
-import { callbackData, captchaPrompt, compactNotification, startGroupHint, langPanel, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, userProfileCard, userProfileLines, votePrompt, voterListView, voteResult, VOTERS_SHOWN_MAX, whyCard, whyDeepLink, whyView, welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor, LOCALES, type UserFacts } from './views.js'
+import type { Verdict, SignalName, BotStats, ChatStats } from '@lyadmin/core'
+import { callbackData, captchaPrompt, startCard, statsCard, compactNotification, startGroupHint, langPanel, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, userProfileCard, userProfileLines, votePrompt, voterListView, voteResult, VOTERS_SHOWN_MAX, whyCard, whyDeepLink, whyView, welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor, LOCALES, type UserFacts } from './views.js'
 import { uk } from './locales/uk.js'
 
 const makeVerdict = (overrides: Partial<Verdict> = {}): Verdict => ({
@@ -984,3 +984,141 @@ describe('audit follow-ups', () => {
   })
 })
 
+
+describe('statsCard', () => {
+  const stats = (over: Partial<BotStats> = {}): BotStats => ({
+    windowDays: 14,
+    checked: 220509,
+    removals: 4970,
+    deletes: 340,
+    spammers: 2684,
+    chats: 252,
+    latencyP50Ms: 59,
+    signatures: 2415,
+    overrides: 53,
+    topReasons: [
+      { reasonCode: 'external_ban_new', count: 2303 },
+      { reasonCode: 'job_scam', count: 910 },
+      { reasonCode: 'adult_promo', count: 269 }
+    ],
+    ...over
+  })
+
+  const forChat = (over: Partial<ChatStats> = {}): ChatStats => ({
+    windowDays: 14, checked: 3481, removals: 27, deletes: 31, spammers: 24,
+    lastActionAt: new Date('2026-08-29T09:41:00Z'), ...over
+  })
+
+  it('prints big counts grouped, because 220509 is not a number anyone reads', () => {
+    const view = statsCard(uk, stats())
+    expect(view.text).toContain('220 509')
+    expect(view.text).toContain('2 684')
+    expect(view.text).not.toContain('220509')
+  })
+
+  it('names the window instead of leaving the reader to assume one', () => {
+    expect(statsCard(uk, stats({ windowDays: 14 })).text).toContain('14')
+    expect(statsCard(uk, stats({ windowDays: 7 })).text).toContain('7')
+  })
+
+  /**
+   * The number a chat owner is actually deciding on. "It bans a lot" reads as a
+   * threat to their own members unless the card also says how rarely it acts.
+   */
+  it('says how much it left alone, not only what it punished', () => {
+    const view = statsCard(uk, stats())
+    expect(view.text).toMatch(/97,6/)
+  })
+
+  it('translates reason codes; a raw code never reaches a reader', () => {
+    const view = statsCard(uk, stats())
+    expect(view.text).toContain(uk.reasons['external_ban_new'])
+    expect(view.text).not.toContain('external_ban_new')
+  })
+
+  it('an unknown reason falls back rather than printing the code', () => {
+    const view = statsCard(uk, stats({ topReasons: [{ reasonCode: 'brand_new_thing', count: 5 }] }))
+    expect(view.text).not.toContain('brand_new_thing')
+    expect(view.text).toContain(uk.reasonFallback)
+  })
+
+  it('carries the add-to-group link when we know our own username', () => {
+    const view = statsCard(uk, stats(), { botUsername: 'LyAdminBot' })
+    expect(view.buttons.flat().some((b) => (b.url ?? '').includes('startgroup='))).toBe(true)
+  })
+
+  it('drops the link rather than building a broken one when we do not', () => {
+    const view = statsCard(uk, stats(), {})
+    expect(view.buttons.flat().every((b) => !(b.url ?? '').includes('t.me/undefined'))).toBe(true)
+  })
+
+  /**
+   * Mongo being unreachable must not turn the advert into a claim that the bot
+   * has done nothing. A card of zeros is worse than no card.
+   */
+  it('says the numbers are unavailable rather than printing zeros', () => {
+    const view = statsCard(uk, null)
+    expect(view.text).toContain(uk.botStats.unavailable)
+    expect(view.text).not.toMatch(/\d/)
+  })
+
+  it('treats an empty window as unavailable, not as a bot that never acted', () => {
+    const view = statsCard(uk, stats({ checked: 0, removals: 0, deletes: 0, spammers: 0 }))
+    expect(view.text).toContain(uk.botStats.unavailable)
+  })
+
+  it('leads with this chat when it is asked inside one', () => {
+    const view = statsCard(uk, stats(), { chat: { title: 'Наш чат', stats: forChat(), ago: '2 год' } })
+    expect(view.text.indexOf('Наш чат')).toBeLessThan(view.text.indexOf(uk.botStats.reasonsTitle))
+    expect(view.text).toContain('3 481')
+    expect(view.text).toContain('2 год')
+  })
+
+  it('tells a clean chat it is clean instead of showing it a row of zeros', () => {
+    const view = statsCard(uk, stats(), {
+      chat: { title: 'Тихий чат', stats: forChat({ removals: 0, deletes: 0, spammers: 0, lastActionAt: null }), ago: null }
+    })
+    expect(view.text).toContain(uk.botStats.chatClean)
+    expect(view.text).not.toContain(uk.botStats.chatLine(0, 0, 0))
+  })
+
+  it('escapes a chat title that carries markup', () => {
+    const view = statsCard(uk, stats(), {
+      chat: { title: '<b>Чат</b>', stats: forChat(), ago: '1 год' }
+    })
+    expect(view.text).toContain('&lt;b&gt;Чат&lt;/b&gt;')
+  })
+
+  it('every locale renders a full card with no placeholder left behind', () => {
+    for (const [code, locale] of Object.entries(LOCALES)) {
+      const view = statsCard(locale, stats(), { botUsername: 'LyAdminBot' })
+      expect(view.text, `locale ${code}`).not.toMatch(/undefined|NaN|\$\{/)
+      expect(view.text.length, `locale ${code}`).toBeGreaterThan(80)
+      expect(view.text, `locale ${code}`).toMatch(/2[\s.,\u00a0]415/)
+    }
+  })
+})
+
+describe('startCard proof line', () => {
+  const stats: BotStats = {
+    windowDays: 14, checked: 220509, removals: 4970, deletes: 340, spammers: 2684,
+    chats: 252, latencyP50Ms: 59, signatures: 2415, overrides: 53, topReasons: []
+  }
+
+  it('carries live proof when we have numbers', () => {
+    const view = startCard(uk, 'Юра', 'LyAdminBot', stats)
+    expect(view.text).toContain('252')
+    expect(view.text).toContain('2 684')
+  })
+
+  it('is a working card when we have none', () => {
+    const view = startCard(uk, 'Юра', 'LyAdminBot', null)
+    expect(view.text).toContain('Юра')
+    expect(view.text).not.toMatch(/undefined|NaN/)
+  })
+
+  it('offers a way to see the full numbers', () => {
+    const view = startCard(uk, 'Юра', 'LyAdminBot', stats)
+    expect(view.buttons.flat().some((b) => b.data === callbackData.stats())).toBe(true)
+  })
+})

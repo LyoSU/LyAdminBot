@@ -7,7 +7,7 @@
  *  - details live behind [Why?]; raw LLM prose never shown
  *  - settings panel only in PM; group /settings replies with a deep link
  */
-import type { MediaCategory, Verdict, VoterEntry, VoterRoster } from '@lyadmin/core'
+import type { BotStats, ChatStats, MediaCategory, Verdict, VoterEntry, VoterRoster } from '@lyadmin/core'
 import { isSuspicionSignal, redactLinks, truncate, ESTABLISHED_MIN_TENURE_DAYS } from '@lyadmin/core'
 import type { Locale } from './locale.js'
 import { uk } from './locales/uk.js'
@@ -58,6 +58,8 @@ export const callbackData = {
   /** Live profile card for a user, opened from the "Why?" card. Admins only. */
   profile: (chatId: number, userId: number): string => `prof:${chatId}:${userId}`,
   help: (): string => 'help',
+  /** The effectiveness card, opened from the welcome card. */
+  stats: (): string => 'stats',
   langPicker: (): string => 'lang',
   langSet: (code: string): string => `lang:${code}`,
   // PM welcome/extras editor. Content (text) never travels in callback data —
@@ -127,19 +129,108 @@ export const subjectMention = (
  * PM welcome card. The add-to-group link pre-requests exactly the admin
  * rights the bot needs — one tap instead of a manual rights dance.
  */
-export const startCard = (locale: Locale, name: string, botUsername: string): ViewMessage => ({
-  text: locale.start.privateCard(escapeHtml(name)),
+export const startCard = (
+  locale: Locale, name: string, botUsername: string, stats: BotStats | null = null
+): ViewMessage => ({
+  text: [
+    locale.start.privateCard(escapeHtml(name)),
+    // The one checkable sentence on the card. Dropped whole when the counts
+    // could not be read: a claim we cannot back beats one we invent.
+    ...(hasCountableWork(stats) ? ['', locale.start.liveProof(stats.chats, stats.spammers, stats.windowDays)] : [])
+  ].join('\n'),
   buttons: [
     [{
       text: locale.start.addToGroupButton,
       url: `https://t.me/${botUsername}?startgroup=add&admin=delete_messages+restrict_members+ban_users`
     }],
+    [{ text: locale.botStats.button, data: callbackData.stats() }],
     [
       { text: locale.start.helpButton, data: callbackData.help() },
       { text: locale.start.langButton, data: callbackData.langPicker() }
     ]
   ]
 })
+
+/** Whether there is anything to boast about — and anything to divide by. */
+const hasCountableWork = (stats: BotStats | null): stats is BotStats =>
+  stats !== null && stats.checked > 0
+
+export interface StatsCardOptions {
+  /** Enables the add-to-group link. Omitted before `getMe` lands. */
+  botUsername?: string | null
+  /**
+   * The chat the card was asked from. Its own numbers lead, because an admin
+   * deciding whether this bot earns its place cares about their room first and
+   * the network second.
+   */
+  chat?: { title: string; stats: ChatStats; ago: string | null } | null
+}
+
+/**
+ * `/stats` — the effectiveness card.
+ *
+ * The only place the bot advertises itself, so it is held to the standard its
+ * moderation notices are: every figure is counted over a window it names, and
+ * the share of messages it did NOT touch is printed beside what it punished.
+ * That last line is the one a chat owner is actually deciding on — "it bans a
+ * lot" reads as a threat to their own members until they see how rarely it acts.
+ */
+export const statsCard = (
+  locale: Locale, stats: BotStats | null, options: StatsCardOptions = {}
+): ViewMessage => {
+  const buttons: ButtonSpec[][] = options.botUsername
+    ? [[{
+      text: locale.start.addToGroupButton,
+      url: `https://t.me/${options.botUsername}?startgroup=add&admin=delete_messages+restrict_members+ban_users`
+    }]]
+    : []
+  // A card of zeros would claim the bot has done nothing, which is a worse
+  // answer than admitting the counts are out of reach.
+  if (!hasCountableWork(stats)) return { text: locale.botStats.unavailable, buttons }
+
+  const punished = stats.removals + stats.deletes
+  const lines: string[] = []
+
+  const here = options.chat
+  if (here) {
+    lines.push(locale.botStats.chatHeader(escapeHtml(here.title), here.stats.windowDays))
+    if (here.stats.removals + here.stats.deletes > 0) {
+      lines.push(locale.botStats.chatLine(here.stats.checked, here.stats.spammers, here.stats.deletes))
+      if (here.ago !== null) lines.push(locale.botStats.chatLastSpam(here.ago))
+    } else {
+      lines.push(locale.botStats.chatClean)
+    }
+    lines.push('')
+  }
+
+  lines.push(locale.botStats.title, locale.botStats.window(stats.windowDays), '')
+  lines.push(locale.botStats.checked(stats.checked))
+  lines.push(locale.botStats.spammers(stats.spammers))
+  lines.push(locale.botStats.chats(stats.chats))
+  if (stats.latencyP50Ms !== null) lines.push(locale.botStats.speed(stats.latencyP50Ms))
+  lines.push('', locale.botStats.quiet(((stats.checked - punished) / stats.checked) * 100))
+
+  if (stats.topReasons.length > 0) {
+    lines.push('', locale.botStats.reasonsTitle)
+    for (const reason of stats.topReasons.slice(0, STATS_REASONS_SHOWN)) {
+      lines.push(locale.botStats.reasonLine(locale.reasons[reason.reasonCode] ?? locale.reasonFallback, reason.count))
+    }
+  }
+
+  const footer: string[] = []
+  if (stats.signatures > 0) footer.push(locale.botStats.memory(stats.signatures))
+  // Our own error rate, published. Meaningless without a denominator, so it is
+  // shown only where something was actually punished.
+  if (punished > 0 && stats.overrides > 0) {
+    footer.push(locale.botStats.corrections((stats.overrides / punished) * 100))
+  }
+  if (footer.length > 0) lines.push('', ...footer)
+
+  return { text: lines.join('\n'), buttons }
+}
+
+/** Three is what fits before the card stops being read. */
+const STATS_REASONS_SHOWN = 3
 
 /** /start inside a group: one-line hint, no panel. */
 /**

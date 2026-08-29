@@ -1570,3 +1570,127 @@ describe('hasPriorSenderRemoval', () => {
     })
   })
 })
+
+/**
+ * The counts behind `/stats`.
+ *
+ * The card is the only place the bot talks about itself, so what it says has to
+ * come from one pass over the window it names — not from a number somebody
+ * remembered. These tests pin the query, not the driver.
+ */
+const statsStore = (
+  decisionRows: unknown[],
+  extras: { signatures?: number; overrides?: number } = {}
+): { store: MongoStore; pipelines: Record<string, unknown>[][] } => {
+  const pipelines: Record<string, unknown>[][] = []
+  const store = {
+    decisions: {
+      aggregate: (pipeline: Record<string, unknown>[]) => {
+        pipelines.push(pipeline)
+        return { toArray: async () => decisionRows }
+      }
+    },
+    spamSignatures: { countDocuments: async () => extras.signatures ?? 0 },
+    feedback: { countDocuments: async () => extras.overrides ?? 0 }
+  } as unknown as MongoStore
+  return {
+    store: Object.assign(store, {
+      botStats: MongoStore.prototype.botStats,
+      chatStats: MongoStore.prototype.chatStats
+    }),
+    pipelines
+  }
+}
+
+describe('botStats', () => {
+  const facet = (over: Record<string, unknown> = {}): unknown[] => [{
+    totals: [{
+      checked: 220509, removals: 4970, deletes: 340,
+      spammers: 2684, chats: 252, latencyP50Ms: 59.14, ...over
+    }],
+    reasons: [
+      { _id: 'external_ban_new', n: 2303 },
+      { _id: 'job_scam', n: 910 }
+    ]
+  }]
+
+  it('reports one pass over the named window', async () => {
+    const { store, pipelines } = statsStore(facet(), { signatures: 2415, overrides: 53 })
+    const stats = await store.botStats(14)
+    expect(stats.windowDays).toBe(14)
+    expect(stats.checked).toBe(220509)
+    expect(stats.spammers).toBe(2684)
+    expect(stats.chats).toBe(252)
+    expect(stats.signatures).toBe(2415)
+    expect(stats.overrides).toBe(53)
+    // One scan of the decisions, not one per figure.
+    expect(pipelines).toHaveLength(1)
+  })
+
+  it('rounds the median rather than printing a float at a reader', async () => {
+    const { store } = statsStore(facet())
+    expect((await store.botStats(14)).latencyP50Ms).toBe(59)
+  })
+
+  it('reports no median rather than NaN when nothing was timed', async () => {
+    const { store } = statsStore(facet({ latencyP50Ms: null }))
+    expect((await store.botStats(14)).latencyP50Ms).toBeNull()
+  })
+
+  it('ranks reasons by how often they actually fired', async () => {
+    const { store } = statsStore(facet())
+    const stats = await store.botStats(14)
+    expect(stats.topReasons).toEqual([
+      { reasonCode: 'external_ban_new', count: 2303 },
+      { reasonCode: 'job_scam', count: 910 }
+    ])
+  })
+
+  /**
+   * An empty window is a fact about the window, not a crash. The card turns
+   * this into "numbers unavailable" rather than a row of zeros.
+   */
+  it('answers an empty collection with zeros instead of throwing', async () => {
+    const { store } = statsStore([{ totals: [], reasons: [] }])
+    const stats = await store.botStats(14)
+    expect(stats.checked).toBe(0)
+    expect(stats.topReasons).toEqual([])
+    expect(stats.latencyP50Ms).toBeNull()
+  })
+
+  it('asks only for the window, so the TTL index carries the query', async () => {
+    const { store, pipelines } = statsStore(facet())
+    await store.botStats(7)
+    const match = pipelines[0]?.[0]?.['$match'] as { createdAt: { $gte: Date } }
+    const days = (Date.now() - match.createdAt.$gte.getTime()) / 86_400_000
+    expect(days).toBeCloseTo(7, 1)
+  })
+})
+
+describe('chatStats', () => {
+  it('scopes every count to the chat it was asked about', async () => {
+    const { store, pipelines } = statsStore([{
+      totals: [{ checked: 3481, removals: 27, deletes: 31, spammers: 24, lastActionAt: new Date('2026-08-29T09:41:00Z') }]
+    }])
+    const stats = await store.chatStats(-100777, 14)
+    expect(stats.checked).toBe(3481)
+    expect(stats.spammers).toBe(24)
+    expect(stats.lastActionAt?.toISOString()).toBe('2026-08-29T09:41:00.000Z')
+    const match = pipelines[0]?.[0]?.['$match'] as Record<string, unknown>
+    expect(match['chatId']).toBe(-100777)
+  })
+
+  it('reports a quiet chat as quiet, with no last-spam moment to show', async () => {
+    const { store } = statsStore([{ totals: [{ checked: 900, removals: 0, deletes: 0, spammers: 0, lastActionAt: null }] }])
+    const stats = await store.chatStats(-100777, 14)
+    expect(stats.removals + stats.deletes).toBe(0)
+    expect(stats.lastActionAt).toBeNull()
+  })
+
+  it('answers a chat we have never judged with zeros', async () => {
+    const { store } = statsStore([{ totals: [] }])
+    const stats = await store.chatStats(-100777, 14)
+    expect(stats.checked).toBe(0)
+    expect(stats.lastActionAt).toBeNull()
+  })
+})

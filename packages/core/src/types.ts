@@ -490,3 +490,48 @@ export interface EvaluationInput {
   policy: ChatPolicy
   enrichment: Enrichment
 }
+
+// ─────────────────── proof-of-work numbers ───────────────────
+
+/**
+ * What the bot has actually done lately, network-wide.
+ *
+ * This is the only place the bot talks about itself, so it is held to the
+ * standard the moderation notices are: every figure is something we counted,
+ * over a window we name. Nothing here is cumulative-since-launch, because
+ * `pipeline_decisions` expires after a fortnight and a number nobody can
+ * recompute is a number nobody can check.
+ */
+export interface BotStats {
+  /** Days the counts cover — printed, never assumed by the reader. */
+  windowDays: number
+  /** Messages the pipeline judged, clean ones included. */
+  checked: number
+  /** kick | mute | ban — the sender was taken out of the room. */
+  removals: number
+  /** Messages taken down without touching the sender. */
+  deletes: number
+  /** Distinct accounts removed. Not the same as `removals`: spam repeats. */
+  spammers: number
+  /** Chats that produced at least one decision in the window. */
+  chats: number
+  /** Median end-to-end verdict latency, ms. Null when nothing was timed. */
+  latencyP50Ms: number | null
+  /** Learned spam signatures currently held. All-time, not windowed. */
+  signatures: number
+  /** Admin "not spam" corrections inside the window. */
+  overrides: number
+  /** Most frequent punished reasons, biggest first. */
+  topReasons: { reasonCode: string; count: number }[]
+}
+
+/** The same question asked about one chat. */
+export interface ChatStats {
+  windowDays: number
+  checked: number
+  removals: number
+  deletes: number
+  spammers: number
+  /** When the last punished message landed; null when the window was clean. */
+  lastActionAt: Date | null
+}
