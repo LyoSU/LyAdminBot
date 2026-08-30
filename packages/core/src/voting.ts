@@ -51,14 +51,36 @@ const DEFAULT_THRESHOLD = 3
  * seven days underneath it — buttons that answered "already closed" about
  * something that never closed.
  *
- * Fifteen minutes is chosen against the feed, not against the chat's patience:
- * a question that has scrolled out of sight is not going to be answered at hour
- * six either, and leaving it up only keeps a dead prompt on screen. The cost is
- * real and worth naming — a quiet chat at 03:00 will let corrections expire
- * unseen — so expiry is logged (`vote_expired`) rather than silent, and the
- * number is meant to be retuned from that log rather than from taste.
+ * Fifteen minutes was the answer to that, chosen against the feed and offered
+ * to be retuned from the expiry log rather than from taste. Retuned here, from
+ * that log, 2026-08-30.
+ *
+ * 147 of 202 questions expired — 72.8%. The reasoning for the short window was
+ * that a question scrolled out of sight is not going to be answered at hour six
+ * either, and the ballots say otherwise: of 181 votes cast into questions that
+ * expired anyway, 114 arrived in the first two minutes but 30 more came at
+ * minutes 5 to 10 and another 21 at minutes 10 to 15. Arrival was still flat
+ * when the window shut. Six of the 55 that DID close closed in that last third,
+ * so the cut was not trimming a dead tail, it was interrupting a live one.
+ *
+ * And the stated cost was backwards. Nothing deletes the prompt — only the
+ * vote-RESULT notice carries a timer — so a short window never took a dead
+ * prompt off the screen. It left the prompt there and switched the buttons off
+ * underneath it, which is the exact failure this constant was introduced to
+ * stop, arriving by the other road.
+ *
+ * Six hours, because everything this window governs is a CORRECTION: the action
+ * has already been applied by the time the question is posted, so a later
+ * answer is a later chance to undo something, never a later punishment. Long
+ * enough that anybody who reads the chat that day can still answer, short
+ * enough that they are answering about a message they remember. The eligibility
+ * bar (`voteEligibility`) is what keeps the extra hours from being farmable —
+ * standing takes a week, and no burst of arrivals can buy it inside one.
+ *
+ * Where the tail actually decays is still unmeasured; this window is the first
+ * one wide enough to show it. Same log, same instruction: retune from it.
  */
-export const VOTE_WINDOW_SECONDS = 15 * 60
+export const VOTE_WINDOW_SECONDS = 6 * 60 * 60
 
 /**
  * Ballots that count, in arrival order. Shared so the tally and the roster can
