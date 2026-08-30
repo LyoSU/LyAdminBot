@@ -153,7 +153,7 @@ export const en: Locale = {
     noticedTitle: 'What I noticed:',
     externalBanEvidence: (sources, ago) => [
       'in spam databases',
-      ...(sources > 1 ? [`${sources} independent source${s(sources)}`] : []),
+      ...(sources > 1 ? [`${sources} sources`] : []),
       ...(ago ? [`${ago} ago`] : [])
     ].join(' · '),
     signalLabels: {

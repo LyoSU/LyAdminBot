@@ -143,7 +143,7 @@ describe('whyCard', () => {
       signals: [{ name: 'external_ban' }],
       reasonEvidence: 'external_ban:2:4'
     }), target, { canOverride: true })
-    expect(view.text).toContain('<blockquote>у спам-базах · 2 незалежні джерела · 4д тому</blockquote>')
+    expect(view.text).toContain('<blockquote>у спам-базах · 2 джерела · 4д тому</blockquote>')
     expect(view.text).not.toMatch(/lols|cas/i)
   })
 

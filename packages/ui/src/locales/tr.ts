@@ -152,7 +152,7 @@ export const tr: Locale = {
     noticedTitle: 'Fark ettiklerim:',
     externalBanEvidence: (sources, ago) => [
       'spam veritabanlarında',
-      ...(sources > 1 ? [`${sources} bağımsız kaynak`] : []),
+      ...(sources > 1 ? [`${sources} kaynak`] : []),
       ...(ago ? [`${ago} önce`] : [])
     ].join(' · '),
     signalLabels: {

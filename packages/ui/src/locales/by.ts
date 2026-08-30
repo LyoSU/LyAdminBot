@@ -164,7 +164,7 @@ export const by: Locale = {
     noticedTitle: 'Што я заўважыў:',
     externalBanEvidence: (sources, ago) => [
       'у спам-базах',
-      ...(sources > 1 ? [`${sources} ${plural(sources, 'незалежная крыніца', 'незалежныя крыніцы', 'незалежных крыніц')}`] : []),
+      ...(sources > 1 ? [`${sources} ${plural(sources, 'крыніца', 'крыніцы', 'крыніц')}`] : []),
       ...(ago ? [`${ago} таму`] : [])
     ].join(' · '),
     signalLabels: {

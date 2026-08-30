@@ -182,6 +182,15 @@ export interface Locale {
      * surface. `sources` is the number of lists that agree (rendered only when
      * more than one says so, the way `profile.externalBan` renders `offenses`),
      * `ago` an already-formatted span, or null when the listing has no date.
+     *
+     * It COUNTS them and does not call them independent, which the first
+     * version did. Measured 2026-08-30 against the store: of 7616 accounts both
+     * lists answered for, 1155 are on both while 5734 are listed by one and
+     * called clean by the other. That rules out one feed mirrored twice; it
+     * does not establish independence, which would need to know whether either
+     * imports from the other. A count is a fact we hold. Independence was a
+     * claim we had not checked, made in the sentence a member reads to
+     * understand why somebody was banned.
      */
     externalBanEvidence: (sources: number, ago: string | null) => string
     /** Technical footer (admins only): how the verdict was reached. */
