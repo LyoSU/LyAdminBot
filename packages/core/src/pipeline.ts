@@ -1103,6 +1103,7 @@ export const evaluateMessage = async (
         meta['judgedText'] = window.combinedText
         meta['judgedCount'] = window.count
         if (llmVerdict.model !== undefined) meta['llmModel'] = llmVerdict.model
+        if (llmVerdict.promptId !== undefined) meta['llmPrompt'] = llmVerdict.promptId
         /**
          * NOTE — the safeguard that used to sit here is gone with the tier split.
          *
@@ -1174,6 +1175,7 @@ export const evaluateMessage = async (
     meta['judgedText'] = truncate(blob.text, 1000)
     meta['judgedCount'] = blob.count
     if (llmVerdict.model !== undefined) meta['llmModel'] = llmVerdict.model
+    if (llmVerdict.promptId !== undefined) meta['llmPrompt'] = llmVerdict.promptId
     const judged = capVouchedWindow(capWindowFlood(capImitableAct(finalize(
       {
         pSpam: llmVerdict.pSpam,
@@ -1649,6 +1651,7 @@ export const evaluateMessage = async (
       // Which model judged it. The one verdict input that changes without a
       // deploy, and until now the one nothing recorded — see `LlmVerdict.model`.
       if (llmVerdict.model !== undefined) meta['llmModel'] = llmVerdict.model
+      if (llmVerdict.promptId !== undefined) meta['llmPrompt'] = llmVerdict.promptId
       /**
        * NOTE — as in the session path, this returns without passing any evidence
        * bar, and the escalation that used to stand in for one is gone.

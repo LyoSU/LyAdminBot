@@ -736,6 +736,27 @@ describe('OpenRouterLlmPort.classify (2026-07-30 review)', () => {
   })
 })
 
+describe('OpenRouterLlmPort — which instructions judged it', () => {
+  /**
+   * The same gap `model` was added for, in the other input that decides what a
+   * verdict means. The fingerprint existed and lived only in the cache key,
+   * hashed with everything else and unreadable — so "which prompt judged these
+   * 202 157 stored decisions" could not be asked of the store at all, and a
+   * prompt change could not be told from a model change when reading the
+   * numbers afterwards.
+   */
+  it('reports the prompt fingerprint on the verdict', async () => {
+    const port = new OpenRouterLlmPort({
+      apiKey: 'k',
+      model: 'cheap',
+      fetchImpl: modelReplies([{ is_spam: true, reason_code: 'job_scam', confidence: 90 }])
+    })
+    const verdict = await port.classify(makeInput())
+    expect(verdict?.promptId).toBe(promptFingerprint())
+    expect(verdict?.promptId).toHaveLength(8)
+  })
+})
+
 describe('OpenRouterLlmPort — cache key (2026-07-30 review)', () => {
   // The key was `model:text`, so a verdict earned in one context was served in
   // every other one: get a text cleared once as an established member with no

@@ -124,6 +124,20 @@ export interface LlmVerdict {
    * between. One field turns that into a `$group`.
    */
   model?: string
+  /**
+   * Which instructions produced this answer — `promptFingerprint()`, eight hex
+   * characters of the system prompt.
+   *
+   * The same defect `model` was added for, in the other input that changes what
+   * a verdict means. The fingerprint existed already and lived only in the
+   * cache key, where it is hashed with everything else and cannot be read back:
+   * so "which prompt judged these 202 157 decisions" could not be asked of the
+   * store at all, and a prompt change could not be told apart from a model
+   * change, a calibration drift or chance when reading the numbers afterwards.
+   *
+   * Cheap to keep honest: it is a constant per process, computed once.
+   */
+  promptId?: string
 }
 
 /**

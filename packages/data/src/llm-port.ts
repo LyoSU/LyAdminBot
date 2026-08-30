@@ -472,9 +472,10 @@ export class OpenRouterLlmPort implements LlmPort {
     // the answer holds up. The only place that fact is knowable first-hand.
     this.config.onLiveAnswer?.()
 
+    const promptId = promptFingerprint()
     return cacheKey === null
-      ? { pSpam, reasonCode, evidence, cached: false, model }
-      : { pSpam, reasonCode, evidence, cached: false, cacheKey: cacheKey.slice(0, 8), model }
+      ? { pSpam, reasonCode, evidence, cached: false, model, promptId }
+      : { pSpam, reasonCode, evidence, cached: false, cacheKey: cacheKey.slice(0, 8), model, promptId }
   }
 
   private async callModel(
