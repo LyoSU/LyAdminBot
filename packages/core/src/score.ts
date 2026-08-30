@@ -13,6 +13,27 @@ import {
   SIGNAL_GROUP_CAPS, SOFT_SHAPE_SIGNALS, weightOf
 } from './signals/registry.js'
 
+/**
+ * What `pSpam` is, and what it is not.
+ *
+ * It is a risk score on a logistic scale, not a calibrated probability. The
+ * weights are set by hand against production reversals, not fitted; the bias
+ * below is chosen so a signal-less message lands near a ham prior, not measured
+ * from a labelled sample. So 0.95 means "over the threshold the policy calls
+ * ban", never "95 of a hundred such messages are spam", and the 0.90 to 0.97
+ * the deterministic rules assert are policy constants picked to sit on the
+ * right side of those thresholds — a different kind of number entirely, wearing
+ * the same field.
+ *
+ * Written down here because the name invites the other reading, and because the
+ * store cannot settle the question either way: 202 157 decisions in the
+ * fortnight to 2026-08-30 against 185 corrections, which is far too sparse to
+ * fit a reliability curve to. Calibrating it means building a labelled control
+ * set first; renaming it means migrating a persisted field on a database that
+ * is at 400 of its 512 MB. Both are their own work, and until one of them is
+ * done this comment is the honest version.
+ */
+
 /** z-offset so that a signal-less message scores ≈ 0.10 (ham prior). */
 export const BASE_RATE_BIAS = -2.2
 
