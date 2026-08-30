@@ -202,6 +202,49 @@ describe('evaluateMessage — a clean reading does not unfind a farm', () => {
   })
 })
 
+describe('evaluateMessage — a forwarded advert is not the forwarder\'s', () => {
+  /**
+   * The forward port was the one knowledge stage returning its verdict with no
+   * ceiling on it — the vector port beside it has carried one since 2026-08-02,
+   * for the same reason and after the same kind of reversal.
+   *
+   * It matters more here than anywhere else in the file. Every other stage
+   * judges something the sender did; a blacklisted origin is a fact about a
+   * channel somebody else runs, and forwarding a scam into a chat to ask "is
+   * this real?" is the most ordinary thing a member can do with one. `0.95`
+   * lands exactly on the standard ban threshold, so that reading used to hand a
+   * newish account a 30-day ban for quoting an advert it did not write.
+   */
+  it('takes the message down but not the person', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'це справжнє?', forward: { kind: 'channel', title: 'Легкий заробіток', sourceId: -100777 } },
+      user: newcomer
+    }), { forwards: { check: async () => 'blacklisted' as const } })
+    expect(v.ruleId).toBe('forward_blacklist')
+    expect(removesSender(v.action)).toBe(false)
+    expect(v.action).toBe('delete')
+    // The reason stands — the origin really is blacklisted. Only the punishment
+    // was too much, so unlike `capUnearnedRemoval` this ceiling keeps the label.
+    expect(v.reasonCode).toBe('forward_blacklist')
+    expect(v.meta['cappedFrom']).toBe('ban')
+  })
+
+  it('still removes the sender when the message itself earned it', async () => {
+    // Two independent facts about the message: a private invite (1.8) and a
+    // phone number (1.2), which is what `SENDER_REMOVAL_MIN_EVIDENCE` means.
+    const v = await evaluateMessage(makeInput({
+      msg: {
+        text: 'пишіть +380671234567',
+        urls: [{ visible: 't.me/+AbCd', target: 'https://t.me/+AbCd123', hidden: false }],
+        forward: { kind: 'channel', title: 'Легкий заробіток', sourceId: -100777 }
+      },
+      user: newcomer
+    }), { forwards: { check: async () => 'blacklisted' as const } })
+    expect(mayRemoveSender(v.signals)).toBe(true)
+    expect(removesSender(v.action)).toBe(true)
+  })
+})
+
 describe('evaluateMessage — gates', () => {
   it('disabled policy short-circuits to none', async () => {
     const v = await evaluateMessage(makeInput({ policy: { enabled: false } }), {})

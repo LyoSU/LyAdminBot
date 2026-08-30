@@ -1382,7 +1382,7 @@ export const evaluateMessage = async (
   if (ports.forwards && input.message.forward) {
     const reputation = await safe('forwards', () => ports.forwards!.check(input.message.forward!))
     if (reputation === 'blacklisted') {
-      return finalize(
+      const verdict = finalize(
         {
           pSpam: 0.95,
           decidedBy: 'forward',
@@ -1392,6 +1392,43 @@ export const evaluateMessage = async (
         },
         signals
       )
+      /**
+       * The one knowledge stage that returned without a ceiling, until
+       * 2026-08-30. The vector port below has carried the same guard since
+       * 2026-08-02, after a campaign whose seventh variant was answered with a
+       * removal on resemblance alone.
+       *
+       * It matters more here than anywhere else in this file. Every other stage
+       * judges something the sender DID; a blacklisted origin is a fact about a
+       * channel somebody else runs, and forwarding a scam into a chat to ask
+       * "is this real?" is the most ordinary thing a member can do with one.
+       * `0.95` lands exactly on the standard ban threshold, so this branch
+       * would hand a newish account thirty days for quoting an advert it did
+       * not write — with `contentEvidence` at zero and no stage having found
+       * anything in the message at all.
+       *
+       * The message still goes: where the forward came from is ample reason to
+       * take it down, which is what `strongest` licenses and `total` does not.
+       * 45 sender removals came out of this branch in the fortnight to
+       * 2026-08-30; of the 8 whose evidence was recorded, one falls under this
+       * ceiling, so the change is close to a no-op today and the hole it closes
+       * is the one that has no floor.
+       */
+      if (!removesSender(verdict.action) || mayRemoveSender(signals)) return verdict
+      meta['cappedFrom'] = verdict.action
+      // The reason is KEPT, unlike `capUnearnedRemoval`, and the difference is
+      // real: there the pipeline stopped believing its own reason, here it still
+      // believes the origin is blacklisted and only declines to punish a person
+      // for somebody else's channel. `capImitableAct` made the same choice and
+      // its note carries the price of the other one — of six reversals still
+      // called spam on replay, three read `content_unconfirmed` and no longer
+      // said which stage had produced them.
+      return {
+        ...verdict,
+        action: 'delete' as VerdictAction,
+        needsVote: input.policy.votingEnabled,
+        banDurationSeconds: null
+      }
     }
     if (reputation === 'suspicious') {
       const title = input.message.forward.title
