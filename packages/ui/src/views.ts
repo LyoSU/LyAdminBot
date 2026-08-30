@@ -521,16 +521,31 @@ export const whyView = (locale: Locale, verdict: Verdict, options: WhyOptions = 
     lines.push('', asHtml ? quoteBlock(quote) : `"${quote}"`)
   }
 
-  const pct = Math.round(verdict.pSpam * 100)
-  const confidence = verdict.pSpam >= 0.85
-    ? locale.why.confidence.high
-    : verdict.pSpam >= 0.6
-      ? locale.why.confidence.medium
-      : locale.why.confidence.low
-  lines.push('', b(esc(confidence(pct))))
+  /**
+   * How much this looked like spam — printed only when that is what decided it.
+   *
+   * `floorNetworkFact` acts on a verdict the classifier CLEARED: the sentence
+   * really was ordinary and pSpam is 0.02, while the grounds are that the
+   * profile photo dresses a crowd — something the number says nothing about.
+   * Rendering the band anyway put «🟡 Можливо спам · 2%» at the top of a card
+   * asking somebody to prove they are human, and a reader cannot reconcile
+   * those two lines. The reason below can stand alone; a number contradicting
+   * it cannot.
+   */
+  const showsBand = verdict.meta['flooredNetworkFact'] !== true
+  if (showsBand) {
+    const pct = Math.round(verdict.pSpam * 100)
+    const confidence = verdict.pSpam >= 0.85
+      ? locale.why.confidence.high
+      : verdict.pSpam >= 0.6
+        ? locale.why.confidence.medium
+        : locale.why.confidence.low
+    lines.push('', b(esc(confidence(pct))))
+  }
 
   const reason = locale.reasons[verdict.reasonCode] ?? locale.reasonFallback
-  lines.push(esc(reason))
+  // Bold and given its own break when it carries the card alone.
+  lines.push(...(showsBand ? [esc(reason)] : ['', b(esc(reason))]))
 
   // Trust signals are never listed: nobody needs telling that their message was
   // a reply. Which signals those are comes from the catalogue, not from a flag

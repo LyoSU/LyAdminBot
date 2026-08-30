@@ -129,6 +129,32 @@ describe('whyCard', () => {
     expect(view.text).toContain('зовнішнє посилання') // humanized instead
   })
 
+  it('does not print a spam percentage when the number was not the grounds', () => {
+    /**
+     * `floorNetworkFact` acts on a verdict the classifier CLEARED — pSpam 0.02,
+     * because the sentence really was ordinary. The grounds are that the photo
+     * dresses a crowd, which the number says nothing about, so rendering the
+     * band produced «🟡 Можливо спам · 2%» above a card asking somebody to prove
+     * they are human. A reader cannot reconcile those two lines, and the honest
+     * one is the reason.
+     */
+    const view = whyCard(uk, makeVerdict({
+      pSpam: 0.02, action: 'captcha', decidedBy: 'llm',
+      reasonCode: 'shared_profile_photo',
+      signals: [{ name: 'avatar_shared_with_accounts' }],
+      meta: { flooredNetworkFact: true }
+    }), target, { canOverride: true })
+    expect(view.text).not.toContain('2%')
+    expect(view.text).not.toContain(uk.why.confidence.low(2))
+    // The reason still stands on its own, and says what is being asked.
+    expect(view.text).toContain(uk.reasons['shared_profile_photo'] as string)
+  })
+
+  it('still prints it for an ordinary verdict', () => {
+    const view = whyCard(uk, makeVerdict({ pSpam: 0.93 }), target, { canOverride: true })
+    expect(view.text).toContain('93%')
+  })
+
   it('wraps the offending message in a blockquote', () => {
     const view = whyCard(uk, makeVerdict(), target, { canOverride: false })
     expect(view.text).toContain('<blockquote>оплата щодня</blockquote>')

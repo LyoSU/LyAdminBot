@@ -136,7 +136,7 @@ export const ru: Locale = {
     custom_deny: 'запрещено правилом чата',
     scam_flag_new: 'Telegram пометил аккаунт как мошеннический',
     external_ban_new: 'аккаунт в базах спамеров',
-    shared_profile_photo: 'то же фото профиля ещё на нескольких аккаунтах',
+    shared_profile_photo: 'фото профиля ещё на нескольких аккаунтах — просим подтвердить',
     external_high_factor_new: 'аккаунт в базах спамеров',
     edit_injected_promo: 'в сообщение отредактирована реклама',
     edit_injected_invisibles: 'невидимые символы вставлены редактированием',
