@@ -150,6 +150,11 @@ export const en: Locale = {
       low: (percent) => `🟡 Possibly spam · ${percent}%`
     },
     noticedTitle: 'What I noticed:',
+    externalBanEvidence: (sources, ago) => [
+      'in spam databases',
+      ...(sources > 1 ? [`${sources} independent source${s(sources)}`] : []),
+      ...(ago ? [`${ago} ago`] : [])
+    ].join(' · '),
     signalLabels: {
       external_ban: 'the account is in spam databases',
       external_repeat_offender: 'listed in spam databases more than once',

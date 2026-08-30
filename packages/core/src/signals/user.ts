@@ -249,15 +249,26 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
   // ── external ban databases ─────────────────────────────────────────
 
   if (user.externalBan?.banned) {
-    // Name the accuser and date the accusation. This signal alone carries a
-    // 30-day ban through `external_ban_new`, without any stage having read the
-    // message, so arriving bare made the one action least able to justify
-    // itself also the one hardest to review (2026-07-31).
-    const who = user.externalBan.sources.join('+') || 'external'
-    const age = user.externalBan.bannedAt !== null
-      ? `, ${Math.round((now - user.externalBan.bannedAt.getTime()) / MS_PER_DAY)}d ago`
-      : ', date unknown'
-    signals.push({ name: 'external_ban', evidence: `listed by ${who}${age}` })
+    /*
+     * How many lists accuse, and how old the accusation is. This signal alone
+     * carries a 30-day ban through `external_ban_new`, without any stage having
+     * read the message, so arriving bare made the one action least able to
+     * justify itself also the one hardest to review (2026-07-31).
+     *
+     * A token rather than prose (2026-08-30), for two reasons. It is the ui
+     * that speaks the reader's language, and this is the one evidence quote we
+     * mint ourselves rather than quote from a stranger, so it is the one that
+     * can be translated at all. And the lists are named nowhere a member can
+     * read: the count is the part that carries weight — two independent lists
+     * agreeing is a different claim from one — while the names only tell an
+     * operator which service to buy their way off. The names stay in the log
+     * line (`externalBan`), which is where a reviewer looks for them.
+     */
+    const sourceCount = user.externalBan.sources.length || 1
+    const daysAgo = user.externalBan.bannedAt !== null
+      ? Math.round((now - user.externalBan.bannedAt.getTime()) / MS_PER_DAY)
+      : null
+    signals.push({ name: 'external_ban', evidence: `external_ban:${sourceCount}:${daysAgo ?? '?'}` })
 
     /*
      * Repeat offender: CAS counts prior offences across its network, and a

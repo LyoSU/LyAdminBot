@@ -51,20 +51,24 @@ describe('extractUserSignals — suspicious', () => {
     expect(names(makeUser({ externalBan: { banned: false, bannedAt: null, offenses: 0, sources: [] } }))).not.toContain('external_ban')
   })
 
-  it('says who did the accusing and how old the listing is', () => {
+  it('says how many lists accuse and how old the listing is — never which lists', () => {
     // The signal that alone carries a 30-day ban used to arrive bare. When an
     // account was banned in three chats for three unremarkable remarks
-    // (2026-07-31), nothing recorded which database had listed it — and the two
-    // are not interchangeable.
+    // (2026-07-31), nothing recorded how strong the accusation was.
+    //
+    // It then said too much: it named the databases, in English, inside a card
+    // members read (2026-08-30). The count is what a reviewer weighs; the names
+    // only tell an operator which service to buy their way off, and they live
+    // in the log line instead.
     const now = Date.parse('2026-06-19T12:00:00Z')
     const listed = makeUser({
       externalBan: {
-        banned: true, bannedAt: new Date('2026-06-16T12:00:00Z'), offenses: 1, sources: ['cas']
+        banned: true, bannedAt: new Date('2026-06-16T12:00:00Z'), offenses: 1, sources: ['cas', 'lols']
       }
     })
     const signal = extractUserSignals(listed, now).find((s) => s.name === 'external_ban')
-    expect(signal?.evidence).toContain('cas')
-    expect(signal?.evidence).toContain('3d')
+    expect(signal?.evidence).toBe('external_ban:2:3')
+    expect(signal?.evidence).not.toMatch(/cas|lols/i)
   })
 
   it('an accusation with no date says so rather than inventing one', () => {
@@ -72,7 +76,7 @@ describe('extractUserSignals — suspicious', () => {
       externalBan: { banned: true, bannedAt: null, offenses: 1, sources: ['lols'] }
     })
     const signal = extractUserSignals(listed, Date.now()).find((s) => s.name === 'external_ban')
-    expect(signal?.evidence).toContain('lols')
+    expect(signal?.evidence).toBe('external_ban:1:?')
     expect(signal?.evidence).not.toMatch(/NaN|Invalid|undefined/)
   })
 

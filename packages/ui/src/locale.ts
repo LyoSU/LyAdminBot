@@ -172,6 +172,18 @@ export interface Locale {
      * Trust signals are deliberately absent: they are never shown to anyone.
      */
     signalLabels: Record<SuspicionSignalName, string>
+    /**
+     * The `external_ban` evidence quote, in words.
+     *
+     * The one evidence line the bot writes itself — every other quote is a
+     * stranger's text, reprinted verbatim. So it is the only one that can be
+     * translated, and the only one where we choose what it does not say: which
+     * lists accused the account is deliberately absent from every member-facing
+     * surface. `sources` is the number of lists that agree (rendered only when
+     * more than one says so, the way `profile.externalBan` renders `offenses`),
+     * `ago` an already-formatted span, or null when the listing has no date.
+     */
+    externalBanEvidence: (sources: number, ago: string | null) => string
     /** Technical footer (admins only): how the verdict was reached. */
     decidedBy: Record<string, string>
     expired: string

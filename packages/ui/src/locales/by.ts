@@ -161,6 +161,11 @@ export const by: Locale = {
       low: (percent) => `🟡 Магчыма спам · ${percent}%`
     },
     noticedTitle: 'Што я заўважыў:',
+    externalBanEvidence: (sources, ago) => [
+      'у спам-базах',
+      ...(sources > 1 ? [`${sources} ${plural(sources, 'незалежная крыніца', 'незалежныя крыніцы', 'незалежных крыніц')}`] : []),
+      ...(ago ? [`${ago} таму`] : [])
+    ].join(' · '),
     signalLabels: {
       external_ban: 'акаўнт у спам-базах',
       external_repeat_offender: 'некалькі разоў у спам-базах',

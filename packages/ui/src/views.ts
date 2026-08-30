@@ -392,6 +392,34 @@ const humanSpan = (locale: Locale, totalSeconds: number): string => {
 }
 
 /**
+ * The `external_ban` evidence quote, rendered in the reader's language.
+ *
+ * Every other quote on this card is a stranger's own text, reprinted as it was
+ * written; this one the bot writes itself, so it is the only one that can be
+ * translated — and the only one where what it leaves out is a decision. Core
+ * emits `external_ban:<sources>:<days|?>` and the names of the lists stay in
+ * the log line: the count is the part a reviewer weighs (two lists agreeing is
+ * a stronger claim than one), the names only tell an operator which service to
+ * buy their way off (2026-08-30).
+ *
+ * Gated on the signal being present, not on the token matching. A decision
+ * rebuilt from storage carries the message text in `reasonEvidence` — mongo
+ * maps `textPreview` back into that field — so pattern alone would let a
+ * stranger type the token and be quoted by the card as a ban database.
+ */
+const externalBanEvidence = (locale: Locale, verdict: Verdict): string | null => {
+  if (verdict.reasonEvidence === null) return null
+  if (!verdict.signals.some((signal) => signal.name === 'external_ban')) return null
+  const parsed = /^external_ban:(\d+):(\d+|\?)$/.exec(verdict.reasonEvidence)
+  if (!parsed) return null
+  const days = parsed[2] === '?' ? null : Number(parsed[2])
+  return locale.why.externalBanEvidence(
+    Number(parsed[1]),
+    days === null ? null : humanSpan(locale, days * 86400)
+  )
+}
+
+/**
  * The headline: what was done, and for how long. An enforcement card is headed
  * by its own action — the duration included, because "muted" and "muted for a
  * month" are different decisions to review. A verdict that took no action (a
@@ -485,9 +513,10 @@ export const whyView = (locale: Locale, verdict: Verdict, options: WhyOptions = 
      * because the message it came from is deleted by the time they are asked to
      * weigh it. Everybody else is being informed, not consulted.
      */
-    const evidence = showRawEvidence
-      ? verdict.reasonEvidence
-      : redactLinks(verdict.reasonEvidence, locale.vote.redacted)
+    const evidence = externalBanEvidence(locale, verdict)
+      ?? (showRawEvidence
+        ? verdict.reasonEvidence
+        : redactLinks(verdict.reasonEvidence, locale.vote.redacted))
     const quote = esc(truncate(evidence, 300))
     lines.push('', asHtml ? quoteBlock(quote) : `"${quote}"`)
   }

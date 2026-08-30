@@ -149,6 +149,11 @@ export const tr: Locale = {
       low: (percent) => `🟡 Spam olabilir · ${percent}%`
     },
     noticedTitle: 'Fark ettiklerim:',
+    externalBanEvidence: (sources, ago) => [
+      'spam veritabanlarında',
+      ...(sources > 1 ? [`${sources} bağımsız kaynak`] : []),
+      ...(ago ? [`${ago} önce`] : [])
+    ].join(' · '),
     signalLabels: {
       external_ban: 'hesap spam veritabanlarında',
       external_repeat_offender: 'spam veritabanlarında birden fazla kez listelenmiş',

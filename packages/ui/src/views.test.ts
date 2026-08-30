@@ -134,6 +134,38 @@ describe('whyCard', () => {
     expect(view.text).toContain('<blockquote>оплата щодня</blockquote>')
   })
 
+  it('renders the external-ban quote in the reader\'s language, naming no database', () => {
+    // The quote used to arrive as `listed by lols+cas, 4d ago`: English, in a
+    // Ukrainian card, naming the lists to everyone who tapped through from a
+    // notice the whole chat reads (2026-08-30). The count survives — two lists
+    // agreeing is a stronger claim than one — the names do not.
+    const view = whyCard(uk, makeVerdict({
+      signals: [{ name: 'external_ban' }],
+      reasonEvidence: 'external_ban:2:4'
+    }), target, { canOverride: true })
+    expect(view.text).toContain('<blockquote>у спам-базах · 2 незалежні джерела · 4д тому</blockquote>')
+    expect(view.text).not.toMatch(/lols|cas/i)
+  })
+
+  it('drops the age when the listing carries no date, rather than inventing one', () => {
+    const view = whyCard(uk, makeVerdict({
+      signals: [{ name: 'external_ban' }],
+      reasonEvidence: 'external_ban:1:?'
+    }), target, { canOverride: true })
+    expect(view.text).toContain('<blockquote>у спам-базах</blockquote>')
+  })
+
+  it('will not let a stranger\'s text pass itself off as a ban-database quote', () => {
+    // A decision rebuilt from storage carries the MESSAGE in `reasonEvidence`
+    // (mongo maps `textPreview` back into that field), so matching the token by
+    // pattern alone would let anyone who types it be quoted as a spam database.
+    const view = whyCard(uk, makeVerdict({
+      signals: [{ name: 'external_url' }],
+      reasonEvidence: 'external_ban:2:4'
+    }), target, { canOverride: true })
+    expect(view.text).toContain('<blockquote>external_ban:2:4</blockquote>')
+  })
+
   it('does not hand a member the invite it removed', () => {
     // The card is reached from a link in a notice the whole chat reads. A
     // non-admin tapping it used to get the destination, in a PM from the bot.
