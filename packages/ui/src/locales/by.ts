@@ -136,6 +136,7 @@ export const by: Locale = {
     custom_deny: 'забаронена правілам чата',
     scam_flag_new: 'Telegram пазначыў акаўнт як махлярскі',
     external_ban_new: 'акаўнт у базах спамераў',
+    shared_profile_photo: 'тое самае фота профілю яшчэ на некалькіх акаўнтах',
     external_high_factor_new: 'акаўнт у базах спамераў',
     edit_injected_promo: 'у паведамленне адрэдагавана рэклама',
     edit_injected_invisibles: 'нябачныя сімвалы ўстаўлены рэдагаваннем',

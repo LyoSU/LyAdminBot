@@ -136,6 +136,7 @@ export const uk: Locale = {
     custom_deny: 'заборонено правилом чату',
     scam_flag_new: 'Telegram позначив акаунт як шахрайський',
     external_ban_new: 'акаунт у базах спамерів',
+    shared_profile_photo: 'те саме фото профілю ще на кількох акаунтах',
     external_high_factor_new: 'акаунт у базах спамерів',
     edit_injected_promo: 'у повідомлення відредаговано рекламу',
     edit_injected_invisibles: 'невидимі символи вставлено редагуванням',

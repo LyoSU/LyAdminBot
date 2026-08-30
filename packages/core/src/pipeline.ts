@@ -483,6 +483,56 @@ export const evaluateMessage = async (
    *    `promo_in_message_link` = 3.0, over the 2.0 bar, and an admin undid it
    *    31 seconds later.
    */
+  /**
+   * A clean reading of the sentence does not unfind an account farm.
+   *
+   * The classifier's number replaces the score outright. That is right where
+   * the two disagree about the MESSAGE — the model read it and the arithmetic
+   * did not — and wrong for the one finding the model cannot read at any
+   * length: that this account's profile photo is also on seventeen others.
+   *
+   * Measured over the fortnight to 2026-08-30. 96 decisions where the model
+   * cleared a message whose whole case was that photo, found on 4 to 25 other
+   * accounts; `contentEvidence` was 1.8 in every single one — the photo and
+   * nothing else — and the score ran 0.909 to 0.994. 48 accounts, of which 34
+   * nothing ever caught. The texts were about twenty Ukrainian phrases of
+   * ordinary outrage, rotated between accounts and paced 28 to 33 hours apart:
+   * unreadable as spam by anybody judging the sentence, and too slow for the
+   * velocity window at six hours to ever see two copies together.
+   *
+   * A floor and not a verdict. The message stays — the one stage that can read
+   * it has read it and said it is fine, and deleting would punish the sentence
+   * rather than the operator. What is left is the question a farm cannot
+   * answer and a person answers with one tap, plus the chat's own vote.
+   * `contentEvidence` 1.8 sits one notch under `SENDER_REMOVAL_MIN_EVIDENCE` by
+   * the catalogue's deliberate choice, and nothing here lifts it.
+   *
+   * Deliberately NOT done by putting the fact in the prompt, which is where
+   * this went first. Replayed A/B against the live model on the same 96 texts,
+   * 2026-08-30: telling it moved 44 of 95 above the grey band, but the answers
+   * stopped being answers — 14 of the 26 texts asked more than once came back
+   * with readings differing by 0.4 or more (one ranged 0.05 to 0.90 across five
+   * asks), and 20 of the raised verdicts carried a CLEAN reason code with a
+   * spam-level number, `legit_conversation` at 0.85 among them. The model
+   * cannot weigh a fact it cannot check; it can only be nudged by it, and a
+   * nudge that lands on `guest_bot_promo` for a sentence about air raids is a
+   * worse outcome than the silence it replaced. Deterministic here, so the card
+   * says the true reason and the action is the same one every time.
+   */
+  const floorNetworkFact = (verdict: Verdict): Verdict => {
+    if (isEnforcementAction(verdict.action) || verdict.action === 'captcha') return verdict
+    if (!verdict.signals.some((s) => s.name === 'avatar_shared_with_accounts')) return verdict
+    meta['flooredNetworkFact'] = true
+    const gate = mayAskCaptcha(policyInputFor(verdict.pSpam, verdict.signals))
+    return {
+      ...verdict,
+      action: (gate ? 'captcha' : 'observe') as VerdictAction,
+      needsVote: input.policy.votingEnabled,
+      banDurationSeconds: null,
+      reasonCode: 'shared_profile_photo'
+    }
+  }
+
   const capImitableAct = (verdict: Verdict): Verdict => {
     if (!IMITABLE_REASON_CODES.has(verdict.reasonCode)) return verdict
     if (!removesSender(verdict.action)) return verdict
@@ -1575,7 +1625,7 @@ export const evaluateMessage = async (
        *
        * `capUnearnedRemoval` is the wrong instrument here — see the session path.
        */
-      return capImitableAct(finalize(
+      return floorNetworkFact(capImitableAct(finalize(
         {
           pSpam: llmVerdict.pSpam,
           decidedBy: llmVerdict.cached ? 'llm_cached' : 'llm',
@@ -1584,7 +1634,7 @@ export const evaluateMessage = async (
           reasonEvidence: llmVerdict.evidence
         },
         signals
-      ))
+      )))
     }
     llmNeededButUnavailable = true
   }

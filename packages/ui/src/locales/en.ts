@@ -125,6 +125,7 @@ export const en: Locale = {
     custom_deny: 'blocked by a chat rule',
     scam_flag_new: 'Telegram flagged the account as scam',
     external_ban_new: 'account is in spammer databases',
+    shared_profile_photo: 'the same profile photo is on several other accounts',
     external_high_factor_new: 'account is in spammer databases',
     edit_injected_promo: 'message was edited to insert promo',
     edit_injected_invisibles: 'invisible characters inserted by an edit',

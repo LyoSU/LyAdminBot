@@ -125,6 +125,83 @@ describe('evaluateMessage — the account farm', () => {
   })
 })
 
+describe('evaluateMessage — a clean reading does not unfind a farm', () => {
+  const farm: PipelinePorts['profileMedia'] = {
+    seen: async () => ({ otherAccounts: 17, sampleUserIds: [11, 22] })
+  }
+  const cleared = {
+    classify: async () => ({
+      pSpam: 0.02, reasonCode: 'legit_conversation', evidence: null, cached: false
+    })
+  }
+
+  /**
+   * Measured over the fortnight to 2026-08-30: 96 decisions where the
+   * classifier cleared a message whose entire case was a profile photo found on
+   * 4 to 25 other accounts. `contentEvidence` was 1.8 in every one — the photo
+   * and nothing else — while the score ran 0.909 to 0.994. 48 accounts, 34 of
+   * them never caught by anything. The corpus was about twenty Ukrainian
+   * phrases of ordinary outrage, rotated between accounts and paced 28 to 33
+   * hours apart: no reader of the sentence could call it spam, and the velocity
+   * window at six hours never saw two copies together.
+   *
+   * The classifier reads text. It cannot read a photograph off seventeen other
+   * accounts, so its verdict is not a refutation of that finding — and its
+   * number replaces the score outright, which is how the finding came to be
+   * worth nothing at all.
+   */
+  it('asks the sender to prove they are human instead of falling silent', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'Увімкніть людність під час війни' },
+      user: newcomer,
+      enrichment: { avatarDhash: 'ff00ff00ff00ff00' }
+    }), { profileMedia: farm, llm: cleared })
+    expect(v.action).toBe('captcha')
+    expect(v.reasonCode).toBe('shared_profile_photo')
+    expect(v.meta['flooredNetworkFact']).toBe(true)
+  })
+
+  it('never enforces on it — the message itself was read and cleared', async () => {
+    // `contentEvidence` here is 1.8, one notch under `SENDER_REMOVAL_MIN_EVIDENCE`,
+    // and that is deliberate in the catalogue: a shared photo says the accounts
+    // are operated together, not that this sentence is an advert. A ceiling that
+    // deleted the message would be punishing the text the model just read.
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'Увімкніть людність під час війни' },
+      user: newcomer,
+      policy: { captchaEnabled: false },
+      enrichment: { avatarDhash: 'ff00ff00ff00ff00' }
+    }), { profileMedia: farm, llm: cleared })
+    expect(isEnforcementAction(v.action)).toBe(false)
+    expect(v.action).toBe('observe')
+    expect(v.needsVote).toBe(true)
+  })
+
+  it('leaves a verdict that already acted alone', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: spamText, user: newcomer, enrichment: { avatarDhash: 'ff00ff00ff00ff00' }
+    }), {
+      profileMedia: farm,
+      llm: { classify: async () => ({ pSpam: 0.97, reasonCode: 'job_scam', evidence: null, cached: false }) }
+    })
+    expect(isEnforcementAction(v.action)).toBe(true)
+    expect(v.meta['flooredNetworkFact']).toBeUndefined()
+  })
+
+  it('does not fire on one shared photo', async () => {
+    // The singular signal is a meme or a holiday photo two people both like.
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'Увімкніть людність під час війни' },
+      user: newcomer,
+      enrichment: { avatarDhash: 'ff00ff00ff00ff00' }
+    }), {
+      profileMedia: { seen: async () => ({ otherAccounts: 1, sampleUserIds: [11] }) },
+      llm: cleared
+    })
+    expect(v.action).toBe('none')
+  })
+})
+
 describe('evaluateMessage — gates', () => {
   it('disabled policy short-circuits to none', async () => {
     const v = await evaluateMessage(makeInput({ policy: { enabled: false } }), {})

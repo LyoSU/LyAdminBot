@@ -124,6 +124,7 @@ export const tr: Locale = {
     custom_deny: 'bir sohbet kuralıyla engellendi',
     scam_flag_new: 'Telegram hesabı dolandırıcı olarak işaretledi',
     external_ban_new: 'hesap spam veritabanlarında',
+    shared_profile_photo: 'aynı profil fotoğrafı başka hesaplarda da var',
     external_high_factor_new: 'hesap spam veritabanlarında',
     edit_injected_promo: 'mesaj, reklam eklemek için düzenlendi',
     edit_injected_invisibles: 'düzenlemeyle görünmez karakter eklendi',
