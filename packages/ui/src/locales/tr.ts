@@ -179,7 +179,6 @@ export const tr: Locale = {
       identity_churn_24h: 'sık ad / fotoğraf değişikliği',
       avatar_recently_set: 'avatar yeni ayarlandı',
       prior_spam_detections: 'daha önce spam yaparken yakalandı',
-      low_reputation: 'düşük itibar',
       unofficial_client_risk: 'resmi olmayan bir uygulamadan gönderildi',
       forward_hidden_user: 'gizli bir hesaptan iletildi',
       forward_source_suspicious: 'şüpheli bir kaynaktan iletildi',

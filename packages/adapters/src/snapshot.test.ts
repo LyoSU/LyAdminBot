@@ -15,7 +15,7 @@ const makeSender = (overrides: Partial<tl.RawUser> = {}): User =>
 const history: UserHistory = {
   firstSeenUnix: NOW - 100 * 86400,
   messagesInChat: 50, messagesGlobal: 300, groupsActive: 3,
-  spamDetections: 0, reputationScore: 70, reputationStatus: 'neutral',
+  spamDetections: 0, reputationStatus: 'neutral',
   externalBan: null, nameChurn24h: 0, usernameChurn24h: 0,
   avatars: { count: 2, latestSetDaysAgo: 30 }
 }
@@ -43,7 +43,6 @@ describe('buildUserSnapshot', () => {
     expect(snap.localAgeDays).toBeNull()
     expect(snap.messagesInChat).toBe(0)
     expect(snap.reputationStatus).toBe('neutral')
-    expect(snap.reputationScore).toBe(50)
     expect(snap.avatars).toBeNull()
   })
 

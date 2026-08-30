@@ -104,8 +104,6 @@ export const hasHardAccountVerdict = (user: UserSnapshot): boolean =>
   user.flags.fake ||
   user.externalBan?.banned === true ||
   user.spamDetections >= PRIOR_DETECTIONS_MIN ||
-  user.reputationStatus === 'suspicious' ||
-  user.reputationStatus === 'restricted' ||
   user.restrictionReasons.some((r) => /spam|scam/i.test(r))
 
 /**
@@ -539,9 +537,6 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
   if (user.spamDetections >= PRIOR_DETECTIONS_MIN) {
     signals.push({ name: 'prior_spam_detections', evidence: `${user.spamDetections} prior detections` })
   }
-  if (user.reputationStatus === 'suspicious' || user.reputationStatus === 'restricted') {
-    signals.push({ name: 'low_reputation' })
-  }
 
   // ── trust signals ──────────────────────────────────────────────────
   // Premium is deliberately NOT here: spammers buy premium for visibility.
@@ -575,15 +570,30 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
    * question already asked of standing, and asking one question in two shapes is
    * how the two age signals came to contradict each other.
    */
+  /**
+   * The one direction a frozen computation may still speak in.
+   *
+   * `reputation.status` is v1's, and v1 stopped running. Against the store
+   * 2026-08-30: 1690 accounts labelled trusted, 1279 suspicious, 5488
+   * restricted — and the newest `lastCalculated` anywhere in the collection is
+   * 2026-06-12, the day of the v2 restructure. Nothing has recomputed one
+   * since, and nothing in v2 can.
+   *
+   * So it excuses and no longer accuses. The excuse fails gentle and is revoked
+   * by anything current (`hasHardAccountVerdict`, one line down); the
+   * accusation could be revised by no path that still exists, and it was
+   * cancelling the established-regular exempt and the ban shield for 6767
+   * accounts on arithmetic nobody can re-run. The same asymmetry promotion and
+   * demotion keep on the retirement side, for the same reason.
+   */
   if (user.reputationStatus === 'trusted' && !hasHardAccountVerdict(user)) {
     signals.push({ name: 'trusted_reputation' })
   }
 
-  // Standing is earned by volume. The old form also required
-  // `reputationScore >= 60`, but v2 never WRITES reputation.score (it defaults
-  // to 50 and only v1 documents carry anything else) — so this signal, and
-  // with it every clean rule and trust weight that depends on it, was
-  // unreachable in practice. That silently deleted the whole negative half of
+  // Standing is earned by volume. The old form also required a reputation
+  // SCORE of 60 or more, which v2 never wrote — so this signal, and with it
+  // every clean rule and trust weight depending on it, was unreachable in
+  // practice. That silently deleted the whole negative half of
   // the model and biased the pipeline toward enforcement.
   //
   // Volume now suffices, but ONLY absent a hard verdict. The deterministic

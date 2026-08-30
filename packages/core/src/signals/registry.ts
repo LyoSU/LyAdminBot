@@ -601,7 +601,6 @@ export const SIGNALS = {
    * posted.
    */
   prior_spam_detections: { weight: 1.5, kind: 'shape' },
-  low_reputation: { weight: 1.2, kind: 'shape' },
 
   // ───────────────────── trust ─────────────────────
   // Premium is deliberately absent: spammers buy premium for visibility.

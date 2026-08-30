@@ -13,7 +13,6 @@ export interface UserHistory {
   messagesGlobal: number
   groupsActive: number
   spamDetections: number
-  reputationScore: number
   reputationStatus: UserSnapshot['reputationStatus']
   externalBan: ExternalBanFacts | null
   nameChurn24h: number
@@ -45,7 +44,6 @@ const EMPTY_HISTORY: UserHistory = {
   messagesGlobal: 0,
   groupsActive: 0,
   spamDetections: 0,
-  reputationScore: 50,
   reputationStatus: 'neutral',
   externalBan: null,
   nameChurn24h: 0,
@@ -116,7 +114,6 @@ const snapshotOf = (
   messagesGlobal: history.messagesGlobal,
   groupsActive: history.groupsActive,
   spamDetections: history.spamDetections,
-  reputationScore: history.reputationScore,
   reputationStatus: history.reputationStatus,
   externalBan: history.externalBan,
   unofficialClientRisk: profile?.unofficialClientRisk ?? null,
@@ -169,7 +166,6 @@ export const buildChannelSnapshot = (
   messagesGlobal: history?.messagesGlobal ?? 0,
   groupsActive: history?.groupsActive ?? 0,
   spamDetections: history?.spamDetections ?? 0,
-  reputationScore: history?.reputationScore ?? 50,
   reputationStatus: history?.reputationStatus ?? 'neutral',
   externalBan: null,
   unofficialClientRisk: null,

@@ -180,7 +180,6 @@ export const en: Locale = {
       identity_churn_24h: 'frequent name / photo changes',
       avatar_recently_set: 'the avatar was just set',
       prior_spam_detections: 'caught spamming before',
-      low_reputation: 'a low reputation',
       unofficial_client_risk: 'posted from an unofficial app',
       forward_hidden_user: 'forwarded from a hidden account',
       forward_source_suspicious: 'forwarded from a suspicious source',

@@ -87,7 +87,6 @@ export interface UserSnapshot {
   messagesGlobal: number
   groupsActive: number
   spamDetections: number
-  reputationScore: number // 0..100
   reputationStatus: 'restricted' | 'suspicious' | 'neutral' | 'trusted'
   /**
    * External ban databases (lols/cas), null — not checked. `bannedAt` is when

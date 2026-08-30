@@ -191,7 +191,6 @@ export const uk: Locale = {
       identity_churn_24h: 'часта зміна імені / фото',
       avatar_recently_set: 'аватар поставлено щойно',
       prior_spam_detections: 'раніше вже ловили на спамі',
-      low_reputation: 'низька репутація',
       unofficial_client_risk: 'надіслано з неофіційного застосунку',
       forward_hidden_user: 'переслано від прихованого акаунта',
       forward_source_suspicious: 'переслано з підозрілого джерела',

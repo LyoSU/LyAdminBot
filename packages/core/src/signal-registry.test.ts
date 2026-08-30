@@ -288,7 +288,7 @@ describe('tiers of authority', () => {
       expect(OVERRIDES_CHAT_TRUST_SIGNALS.has(name), name).toBe(true)
     }
     // Our own conclusions never override a grant a human made by hand.
-    for (const name of ['prior_spam_detections', 'low_reputation', 'vector_similar_spam'] as const) {
+    for (const name of ['prior_spam_detections', 'signature_candidate_match', 'vector_similar_spam'] as const) {
       expect(OVERRIDES_CHAT_TRUST_SIGNALS.has(name), name).toBe(false)
     }
   })

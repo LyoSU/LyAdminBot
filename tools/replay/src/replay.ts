@@ -58,7 +58,7 @@ const unknownUser = (userId: number): UserSnapshot => ({
   predictedAgeDays: null, predictedAgeBoundsDays: null, localAgeDays: null,
   // v1 acted mostly on newcomers; replay assumes the conservative case.
   messagesInChat: 1, messagesGlobal: 1, groupsActive: 1,
-  spamDetections: 0, reputationScore: 50, reputationStatus: 'neutral',
+  spamDetections: 0, reputationStatus: 'neutral',
   externalBan: null, unofficialClientRisk: null, avatars: null,
   nameChurn24h: 0, usernameChurn24h: 0, restrictionReasons: [], joinedAgoSeconds: null
 })

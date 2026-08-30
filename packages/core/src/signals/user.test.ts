@@ -3,7 +3,8 @@ import fc from 'fast-check'
 import type { UserSnapshot } from '../types.js'
 import { contentEvidence, mayRemoveSender } from '../score.js'
 import { isTrustSignal } from './registry.js'
-import { extractUserSignals } from './user.js'
+import { extractUserSignals, hasHardAccountVerdict
+} from './user.js'
 
 const makeUser = (overrides: Partial<UserSnapshot> = {}): UserSnapshot => ({
   id: 42,
@@ -18,7 +19,6 @@ const makeUser = (overrides: Partial<UserSnapshot> = {}): UserSnapshot => ({
   messagesGlobal: 120,
   groupsActive: 2,
   spamDetections: 0,
-  reputationScore: 65,
   reputationStatus: 'neutral',
   externalBan: null,
   unofficialClientRisk: null,
@@ -234,9 +234,37 @@ describe('extractUserSignals — suspicious', () => {
     expect(names(makeUser({ spamDetections: 2 }))).toContain('prior_spam_detections')
   })
 
-  it('flags low reputation', () => {
-    expect(names(makeUser({ reputationStatus: 'suspicious' }))).toContain('low_reputation')
-    expect(names(makeUser({ reputationStatus: 'restricted' }))).toContain('low_reputation')
+  it('a frozen v1 label no longer accuses anybody', () => {
+    /**
+     * `reputation.status` is v1's, and v1 stopped running. Measured against the
+     * store 2026-08-30: 1690 accounts still labelled trusted, 1279 suspicious,
+     * 5488 restricted — and the newest `lastCalculated` in the entire
+     * collection is 2026-06-12, the day of the v2 restructure. Nothing has
+     * recomputed one since, and nothing in v2 can.
+     *
+     * A frozen computation may keep EXCUSING and must stop ACCUSING, which is
+     * the same asymmetry promotion and demotion already keep elsewhere in this
+     * codebase. The excuse fails gentle and is revoked the moment anything
+     * current condemns the account. The accusation cannot be revised by any
+     * path that still exists: it cancelled the established-regular exempt and
+     * the ban shield for 6767 accounts on the strength of arithmetic nobody can
+     * re-run, and there is no appeal from a system that no longer runs.
+     *
+     * Costs nothing measurable. `low_reputation` stood on 99 decisions in the
+     * fortnight to 2026-08-30 and decided none of them: all 9 that enforced
+     * were reached by a stage that had read the message or by `external_ban_new`.
+     * v2 writes its own accuser for the same claim, `prior_spam_detections`.
+     */
+    expect(names(makeUser({ reputationStatus: 'suspicious' }))).not.toContain('low_reputation')
+    expect(names(makeUser({ reputationStatus: 'restricted' }))).not.toContain('low_reputation')
+    expect(hasHardAccountVerdict(makeUser({ reputationStatus: 'suspicious' }))).toBe(false)
+    expect(hasHardAccountVerdict(makeUser({ reputationStatus: 'restricted' }))).toBe(false)
+  })
+
+  it('but the same frozen label may still vouch', () => {
+    // Trust fails gentle, and `hasHardAccountVerdict` still revokes it the
+    // moment anything current says otherwise — see the pairing below.
+    expect(names(makeUser({ reputationStatus: 'trusted' }))).toContain('trusted_reputation')
   })
 
   it('flags promo carried in the display name', () => {
@@ -337,7 +365,7 @@ describe('extractUserSignals — suspicious', () => {
 describe('extractUserSignals — trust (negative)', () => {
   it('trusts verified accounts and trusted reputation', () => {
     expect(trust(makeUser({ flags: { scam: false, fake: false, restricted: false, verified: true, premium: false, bot: false } }))).toContain('verified_account')
-    expect(trust(makeUser({ reputationStatus: 'trusted', reputationScore: 85 }))).toContain('trusted_reputation')
+    expect(trust(makeUser({ reputationStatus: 'trusted' }))).toContain('trusted_reputation')
   })
 
   /**
@@ -362,7 +390,6 @@ describe('extractUserSignals — trust (negative)', () => {
   it('a hard account verdict revokes trusted reputation', () => {
     const listed = makeUser({
       reputationStatus: 'trusted',
-      reputationScore: 85,
       externalBan: { banned: true, bannedAt: null, offenses: 1, sources: ['lols'] }
     })
     expect(trust(listed)).not.toContain('trusted_reputation')
@@ -394,7 +421,7 @@ describe('extractUserSignals — trust (negative)', () => {
   })
 
   it('trusts established users', () => {
-    expect(trust(makeUser({ messagesGlobal: 200, reputationScore: 70 }))).toContain('established_user')
+    expect(trust(makeUser({ messagesGlobal: 200 }))).toContain('established_user')
     // Nothing anywhere: too quiet globally AND locally, and no tenure.
     expect(trust(makeUser({ messagesGlobal: 10, messagesInChat: 4, localAgeDays: 1 })))
       .not.toContain('established_user')
@@ -443,7 +470,7 @@ describe('extractUserSignals — trust (negative)', () => {
     // v2 never writes reputation.score, so it is always the default 50. The
     // old `>= 60` condition therefore made this signal — and every clean rule
     // and trust weight built on it — unreachable for every real user.
-    expect(trust(makeUser({ messagesGlobal: 200, reputationScore: 50 })))
+    expect(trust(makeUser({ messagesGlobal: 200 })))
       .toContain('established_user')
   })
 
@@ -453,8 +480,6 @@ describe('extractUserSignals — trust (negative)', () => {
       { flags: { scam: true, fake: false, restricted: false, verified: false, premium: false, bot: false } },
       { flags: { scam: false, fake: true, restricted: false, verified: false, premium: false, bot: false } },
       { externalBan: { banned: true, bannedAt: null, offenses: 1, sources: ['lols'] } },
-      { reputationStatus: 'suspicious' },
-      { reputationStatus: 'restricted' },
       { restrictionReasons: ['spam'] },
       // Ours, and it joined the list on 2026-08-24 when the two definitions of
       // "hard verdict" were merged. The pipeline had always denied the exempt

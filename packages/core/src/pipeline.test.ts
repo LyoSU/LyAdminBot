@@ -27,7 +27,7 @@ const makeUser = (overrides: Partial<UserSnapshot> = {}): UserSnapshot => ({
   // purpose: the default user must still run the full pipeline so port tests
   // exercise the ports. Established users are tested explicitly below.
   messagesInChat: 8, messagesGlobal: 40, groupsActive: 2,
-  spamDetections: 0, reputationScore: 65, reputationStatus: 'neutral',
+  spamDetections: 0, reputationStatus: 'neutral',
   externalBan: null, unofficialClientRisk: null, avatars: { count: 2, latestSetDaysAgo: 200 },
   nameChurn24h: 0, usernameChurn24h: 0, restrictionReasons: [], joinedAgoSeconds: null,
   ...overrides
@@ -308,7 +308,7 @@ describe('evaluateMessage — deterministic stage', () => {
         text: 'так, погоджуюсь',
         replyTo: { authorId: 9, isSelf: false, ageSeconds: 60, textPreview: 'а ти як думаєш?' }
       },
-      user: { messagesGlobal: 500, reputationScore: 80 }
+      user: { messagesGlobal: 500 }
     })
     const v = await evaluateMessage(input, ports)
     expect(v.action).toBe('none')
@@ -2884,7 +2884,6 @@ describe('evaluateMessage — established-regular exempt', () => {
       { externalBan: { banned: true, bannedAt: null, offenses: 2, sources: ['lols'] } },
       { flags: { scam: true, fake: false, restricted: false, verified: false, premium: false, bot: false } },
       { spamDetections: 2 },
-      { reputationStatus: 'suspicious' },
       { restrictionReasons: ['spam'] }
     ]
     for (const guard of guards) {

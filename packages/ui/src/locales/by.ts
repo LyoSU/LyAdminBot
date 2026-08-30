@@ -191,7 +191,6 @@ export const by: Locale = {
       identity_churn_24h: 'частая змена імя / фота',
       avatar_recently_set: 'аватар пастаўлены толькі што',
       prior_spam_detections: 'раней ужо лавілі на спаме',
-      low_reputation: 'нізкая рэпутацыя',
       unofficial_client_risk: 'дасланае з неафіцыйнага дадатку',
       forward_hidden_user: 'пераслана ад схаванага акаўнта',
       forward_source_suspicious: 'пераслана з падазронай крыніцы',

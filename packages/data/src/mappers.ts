@@ -141,7 +141,6 @@ export interface UserHistoryView {
   messagesGlobal: number
   groupsActive: number
   spamDetections: number
-  reputationScore: number
   reputationStatus: 'trusted' | 'neutral' | 'suspicious' | 'restricted'
   externalBan: ExternalBanFacts | null
   nameChurn24h: number
@@ -240,7 +239,6 @@ export const userDocToHistory = (
     messagesGlobal: Math.max(0, (stats.totalMessages ?? 0) - (stats.spamMessages ?? 0)),
     groupsActive: stats.groupsActive ?? 0,
     spamDetections: stats.spamDetections ?? 0,
-    reputationScore: doc.reputation?.score ?? 50,
     reputationStatus: doc.reputation?.status ?? 'neutral',
     externalBan: mergeExternalBan(doc.externalBan),
     nameChurn24h: countRecentChanges(doc.nameHistory, nowMs),
