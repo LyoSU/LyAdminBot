@@ -782,34 +782,6 @@ export const evaluateMessage = async (
       if (hit !== null) signals.push({ name: 'nsfw_avatar', evidence: hit })
     }
 
-    /**
-     * Is this photograph already on another account?
-     *
-     * Asked here, alongside the NSFW check, because both read the same picture —
-     * and the hash is computed once in the adapter from bytes that were
-     * downloaded for that check anyway, so this costs one indexed lookup.
-     *
-     * Deliberately independent of what the picture DEPICTS. A perfectly ordinary
-     * photograph shared across a batch of accounts says the same thing as an
-     * explicit one shared across a batch: the accounts are dressed from one
-     * folder. This is the only observation in the pipeline that concerns a
-     * different account than the sender, so it is also the only one that can
-     * see a farm rather than a member.
-     */
-    if (ports.profileMedia && typeof input.enrichment.avatarDhash === 'string') {
-      const reuse = await safe('profile_media', () =>
-        ports.profileMedia!.seen(input.user.id, input.enrichment.avatarDhash!))
-      if (reuse !== null && reuse.otherAccounts > 0) {
-        const shared = reuse.sampleUserIds.join(', ')
-        signals.push(reuse.otherAccounts >= 2
-          ? {
-              name: 'avatar_shared_with_accounts',
-              evidence: `same profile photo on ${reuse.otherAccounts} other accounts: ${shared}`
-            }
-          : { name: 'avatar_shared_with_account', evidence: `same profile photo as ${shared}` })
-        meta['avatarSharedWith'] = reuse.otherAccounts
-      }
-    }
     if (input.enrichment.storyBase64.length > 0) {
       const hits = new Set<string>()
       for (const story of input.enrichment.storyBase64) {
@@ -878,6 +850,41 @@ export const evaluateMessage = async (
     }
   }
 
+  /**
+   * Is this photograph already on another account?
+   *
+   * Deliberately independent of what the picture DEPICTS. A perfectly ordinary
+   * photograph shared across a batch of accounts says the same thing as an
+   * explicit one shared across a batch: the accounts are dressed from one
+   * folder. This is the only observation in the pipeline that concerns a
+   * different account than the sender, so it is also the only one that can see
+   * a farm rather than a member.
+   *
+   * Its own function, and NOT part of `screenProfileMedia`, since 2026-08-30.
+   * It lived inside that one because both read the same picture, and so it
+   * inherited that function's first line — `if (!ports.moderation) return`.
+   * Nothing here needs the moderation port: the hash is computed by the app
+   * layer from the avatar bytes, and the lookup is one indexed read against our
+   * own store. So a moderation outage, or a deployment with no moderation key,
+   * silently switched off the one detector that can see an account farm — and
+   * switched it off invisibly, because a signal that never fires looks exactly
+   * like a signal with nothing to report.
+   */
+  const screenProfileReuse = async (): Promise<void> => {
+    if (!ports.profileMedia || typeof input.enrichment.avatarDhash !== 'string') return
+    const reuse = await safe('profile_media', () =>
+      ports.profileMedia!.seen(input.user.id, input.enrichment.avatarDhash!))
+    if (reuse === null || reuse.otherAccounts <= 0) return
+    const shared = reuse.sampleUserIds.join(', ')
+    signals.push(reuse.otherAccounts >= 2
+      ? {
+          name: 'avatar_shared_with_accounts',
+          evidence: `same profile photo on ${reuse.otherAccounts} other accounts: ${shared}`
+        }
+      : { name: 'avatar_shared_with_account', evidence: `same profile photo as ${shared}` })
+    meta['avatarSharedWith'] = reuse.otherAccounts
+  }
+
   // ── 3. deterministic rules ──────────────────────────────────────────
 
   /**
@@ -911,7 +918,7 @@ export const evaluateMessage = async (
    */
   let deterministic = applyDeterministicRules(signals, { lowInformation })
   if (!deterministic) {
-    await screenProfileMedia()
+    await Promise.all([screenProfileReuse(), screenProfileMedia()])
     deterministic = applyDeterministicRules(signals, { lowInformation })
   }
   if (deterministic) {

@@ -87,6 +87,44 @@ const spamText = {
 
 // ── tests ─────────────────────────────────────────────────────────────
 
+describe('evaluateMessage — the account farm', () => {
+  /**
+   * The reuse lookup used to live inside `screenProfileMedia` and inherited its
+   * first line, `if (!ports.moderation) return`. Nothing about finding one
+   * photograph on many accounts needs the moderation port — the hash comes from
+   * the app layer and the lookup hits our own store — so a moderation outage
+   * silently disabled the only detector in this pipeline that can see an
+   * operator rather than a member, and disabled it invisibly.
+   */
+  it('finds a shared profile photo with no moderation port configured', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'Увімкніть людність під час війни' },
+      user: newcomer,
+      enrichment: { avatarDhash: 'ff00ff00ff00ff00' }
+    }), {
+      profileMedia: { seen: async () => ({ otherAccounts: 17, sampleUserIds: [11, 22] }) }
+    })
+    expect(v.signals.map((s) => s.name)).toContain('avatar_shared_with_accounts')
+    expect(v.meta['avatarSharedWith']).toBe(17)
+  })
+
+  it('one other account is the singular signal, not the network one', async () => {
+    // A meme, a film still, two partners with the same holiday photo. The
+    // catalogue weighs the two apart (0.8 shape vs 1.8 evidence) precisely
+    // because one match is ordinary and a crowd is not.
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'Увімкніть людність під час війни' },
+      user: newcomer,
+      enrichment: { avatarDhash: 'ff00ff00ff00ff00' }
+    }), {
+      profileMedia: { seen: async () => ({ otherAccounts: 1, sampleUserIds: [11] }) }
+    })
+    const names = v.signals.map((s) => s.name)
+    expect(names).toContain('avatar_shared_with_account')
+    expect(names).not.toContain('avatar_shared_with_accounts')
+  })
+})
+
 describe('evaluateMessage — gates', () => {
   it('disabled policy short-circuits to none', async () => {
     const v = await evaluateMessage(makeInput({ policy: { enabled: false } }), {})
