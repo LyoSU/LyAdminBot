@@ -3839,7 +3839,25 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     }
     if (delivery === 'noop_edit') {
       rememberEditBaseline(chat.id, message.id, baselineNow)
-      log.info('edit_replay_skipped', { chatId: chat.id, messageId: message.id, kind: delivery })
+      /**
+       * `debug`, unlike the stale echo above, and the asymmetry is what the two
+       * words mean rather than how often they happen.
+       *
+       * A stale echo repeats a stamp we have already judged — replay traffic,
+       * gap recovery, a dedup that failed — and each one is worth a line
+       * because something in the delivery path produced it. A no-op edit is
+       * somebody tapping an emoji: Telegram delivers a reaction as an
+       * edit-class update, the stamp moves, the text does not. It carries no
+       * user, no verdict and no action, and in a chat where people react it
+       * arrives seconds after every message. Measured 2026-08-30 in one such
+       * chat: nine lines in seventy-one seconds, all of them naming messages
+       * this pipeline had judged normally a moment earlier.
+       *
+       * Kept at debug rather than dropped, because the line does say something
+       * once: this is a pipeline run that did NOT happen, and running it is
+       * what flipped `legit_share` into a delete on 2026-08-28.
+       */
+      log.debug('edit_replay_skipped', { chatId: chat.id, messageId: message.id, kind: delivery })
       return
     }
   }
