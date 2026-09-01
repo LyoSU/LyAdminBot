@@ -359,14 +359,59 @@ export const escalateChannelRecidivism = (
   }
 }
 
-export const mayAskCaptcha = (input: PolicyInput): boolean =>
-  input.captchaEnabled && input.userIsNewish &&
+/** Why a captcha may not be asked — empty when it may. */
+export type CaptchaBlocker =
+  | 'captcha_disabled'
+  | 'not_newish'
+  | 'sender_is_channel'
+  | 'sender_not_participant'
+  | 'discussion_without_ephemeral'
+
+/**
+ * Every reason this question cannot be put, not just the first one.
+ *
+ * `mayAskCaptcha` was a boolean, and a boolean cannot be audited. Production
+ * 2026-09-01: an account with a `sexual 0.78` avatar, a linked channel and four
+ * minutes of age scored 0.711 and cleared `profileHasCase`, so the
+ * low-information branch owed it a question. The branch returned `pSpam: 0`,
+ * `low_information` and `observe`, and recorded nothing about which of these
+ * five conditions had refused. The right diagnosis — a commenter under a
+ * channel post is not a member of the discussion group, so the whisper had
+ * nowhere to go — was reachable only by eliminating the other four by hand,
+ * and could not be proven from the stored decision at all.
+ *
+ * Measured the same day: in that one chat, 15 captchas were undeliverable
+ * against 14 delivered and 0 passed, and 28 of 74 issued network-wide never
+ * arrived. Two different populations hide behind that: `senderIsParticipant`
+ * `false` means Telegram named them and said no, so nothing is issued and no
+ * row is written; `null` means the lookup itself failed, so a captcha IS issued
+ * and dies at delivery. Only the second one leaves a trace today, which is
+ * exactly backwards — the invisible half is the one a chat never hears about.
+ *
+ * Returned in a fixed order so a `captchaBlockedBy` string groups in a query
+ * rather than permuting.
+ */
+export const captchaBlockers = (input: PolicyInput): CaptchaBlocker[] => {
+  const blockers: CaptchaBlocker[] = []
+  if (!input.captchaEnabled) blockers.push('captcha_disabled')
+  if (!input.userIsNewish) blockers.push('not_newish')
   // A question only a person can answer may only be put to a person.
-  input.senderIsChannel !== true &&
+  if (input.senderIsChannel === true) blockers.push('sender_is_channel')
   // Only a refusal that names them counts. A timeout is not a denial, and
   // treating it as one would hand every captcha in the system to the network.
-  input.senderIsParticipant !== false &&
-  (input.chatKind !== 'discussion' || input.ephemeralCaptcha === true)
+  if (input.senderIsParticipant === false) blockers.push('sender_not_participant')
+  if (input.chatKind === 'discussion' && input.ephemeralCaptcha !== true) {
+    blockers.push('discussion_without_ephemeral')
+  }
+  return blockers
+}
+
+/**
+ * Defined as "nothing blocks it", so policy and telemetry cannot come to
+ * disagree about what the gate did.
+ */
+export const mayAskCaptcha = (input: PolicyInput): boolean =>
+  captchaBlockers(input).length === 0
 
 export const decideAction = (input: PolicyInput): PolicyDecision => {
   const t = PRESET_THRESHOLDS[input.preset] ?? PRESET_THRESHOLDS.standard

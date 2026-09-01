@@ -5,6 +5,7 @@ import {
   decideAction, isEnforcementAction, countsAsDetection, countsAgainstSender, ENFORCEMENT_ACTIONS,
   PRESET_THRESHOLDS, TIMED_BAN_SECONDS, needsRestitution, restitutionLiftsRestrictions,
   IMITABLE_REASON_CODES, LLM_REASON_CODES, escalateChannelRecidivism,
+  captchaBlockers, mayAskCaptcha,
   type PolicyInput
 } from './policy.js'
 
@@ -591,5 +592,55 @@ describe('escalateChannelRecidivism', () => {
     const timed = { ...muted, action: 'ban' as VerdictAction, banDurationSeconds: 3600 }
     const v = escalateChannelRecidivism(timed, -1004497662524, true)
     expect(v.banDurationSeconds).toBeNull()
+  })
+})
+
+/**
+ * The captcha gate has to be able to say WHY it refused.
+ *
+ * Production 2026-09-01: an account with a `sexual 0.78` avatar, a linked
+ * channel and four minutes of age posted three harmless lines into a discussion
+ * group. Arithmetic put it at 0.711 and `profileHasCase` was true, so the
+ * low-information branch should have asked it a question — and returned
+ * `pSpam: 0` / `low_information` / `observe` instead, writing nothing about
+ * which of five conditions had gone against it. The diagnosis (the sender was
+ * a commenter, not a member) could only be reached by elimination, because the
+ * inputs that decided it were never persisted.
+ *
+ * So the boolean grows a witness. `mayAskCaptcha` stays the only thing policy
+ * asks, and it is DEFINED as "no blockers" — one source of truth, so telemetry
+ * and policy cannot drift.
+ */
+describe('captchaBlockers', () => {
+  it('names nothing when the question can be asked', () => {
+    expect(captchaBlockers(makeInput({ senderIsParticipant: true }))).toEqual([])
+  })
+
+  it('names the refusal when Telegram says the sender is not in the chat', () => {
+    expect(captchaBlockers(makeInput({ senderIsParticipant: false })))
+      .toEqual(['sender_not_participant'])
+  })
+
+  it('an unanswered membership lookup is not a refusal', () => {
+    expect(captchaBlockers(makeInput({ senderIsParticipant: null }))).toEqual([])
+  })
+
+  it('names every applicable blocker, not just the first', () => {
+    const blockers = captchaBlockers(makeInput({
+      captchaEnabled: false, userIsNewish: false, senderIsChannel: true
+    }))
+    expect(blockers).toEqual(['captcha_disabled', 'not_newish', 'sender_is_channel'])
+  })
+
+  it('names the discussion group that has no ephemeral delivery', () => {
+    expect(captchaBlockers(makeInput({ chatKind: 'discussion', ephemeralCaptcha: false })))
+      .toEqual(['discussion_without_ephemeral'])
+  })
+
+  it('agrees with mayAskCaptcha on every input', () => {
+    fc.assert(fc.property(inputArb, fc.double({ min: 0, max: 1, noNaN: true }), (rest, pSpam) => {
+      const input = { ...rest, pSpam } as PolicyInput
+      expect(mayAskCaptcha(input)).toBe(captchaBlockers(input).length === 0)
+    }))
   })
 })
