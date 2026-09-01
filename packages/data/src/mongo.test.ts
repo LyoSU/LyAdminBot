@@ -165,16 +165,23 @@ describe('getMemberStats — traffic and standing are different questions', () =
     expect((await store.getMemberStats(-100, 42)).standingInChat).toBe(0)
   })
 
-  it('a member we have no record of has neither', async () => {
+  /**
+   * The two halves answer to different readers, so a missing row resolves them
+   * differently. /stats reports traffic and has always shown a member we never
+   * counted as zero, which is true. Standing is read by the ballot bar and by
+   * every newness signal, and there a zero is an accusation — so the absent row
+   * returns no answer at all rather than the worst one.
+   */
+  it('a member we have no record of has no traffic and no answer on standing', async () => {
     const store = statsStore(null)
     expect(await store.getMemberStats(-100, 42))
-      .toEqual({ messagesCount: 0, standingInChat: 0, bananCount: 0 })
+      .toEqual({ messagesCount: 0, standingInChat: null, bananCount: 0 })
   })
 
-  it('a chat we have no record of has neither', async () => {
+  it('a chat we have no record of says nothing about standing either', async () => {
     const store = statsStore({ stats: { messagesCount: 99 } }, null)
     expect(await store.getMemberStats(-100, 42))
-      .toEqual({ messagesCount: 0, standingInChat: 0, bananCount: 0 })
+      .toEqual({ messagesCount: 0, standingInChat: null, bananCount: 0 })
   })
 })
 

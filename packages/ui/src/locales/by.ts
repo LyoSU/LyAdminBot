@@ -260,7 +260,10 @@ export const by: Locale = {
     accountAge: (age) => `акаўнт ${age}`,
     firstSeen: (seen) => `у нас ${seen}`,
     activity: (messages, chats) =>
-      `${messages} ${plural(messages, 'паведамленне', 'паведамленні', 'паведамленняў')} · ${chats} ${plural(chats, 'чат', 'чаты', 'чатаў')}`,
+      [
+        ...(messages === null ? [] : [`${messages} ${plural(messages, 'паведамленне', 'паведамленні', 'паведамленняў')}`]),
+        `${chats} ${plural(chats, 'чат', 'чаты', 'чатаў')}`
+      ].join(' · '),
     reputation: (status) => `статус: ${status}`,
     premium: 'Premium',
     externalBan: (ago, offenses) => [

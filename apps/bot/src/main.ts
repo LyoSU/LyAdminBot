@@ -2709,7 +2709,7 @@ const gateAccount = async (params: {
   chat: Chat
   user: User
   /** Stored standing, when the caller already has it. */
-  history: { messagesGlobal: number } | null
+  history: { messagesGlobal: number | null } | null
   /** Reason code recorded and logged. */
   reason: string
   /** What was seen, for the record and the "Why?" card. */
@@ -3086,7 +3086,7 @@ const screenAccount = async (params: {
 
 const gateExplicitJoiner = async (
   chat: Chat, joiner: User, hit: string, joinMessageId: number,
-  history: { messagesGlobal: number } | null
+  history: { messagesGlobal: number | null } | null
 ): Promise<void> => {
   await gateAccount({
     chat, user: joiner, history,
@@ -3872,12 +3872,32 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     await store.touchUser(sender.id).catch(() => { /* counters are best-effort */ })
     // Increments the per-chat counters and returns the pre-increment standing —
     // exactly what the "new in chat" signal must see.
-    return store.touchMember(chat.id, sender.id, normalized.text.length).catch(() => 0)
+    // `null`, not `0`. A Mongo failure used to be indistinguishable from a
+    // sender's first ever message, which made every newness signal in the
+    // pipeline fire for everybody at once for as long as the outage lasted —
+    // silently, since nothing here logs. Same rule as `tenureDays`: losing our
+    // record of somebody is not an observation about them.
+    return store.touchMember(chat.id, sender.id, normalized.text.length).catch((err: unknown) => {
+      /**
+       * And said out loud, because the other half of this defect was that it
+       * was invisible. A swallowed counter left no line anywhere — only
+       * `enrichMs` creeping up — so an outage that made every sender look new
+       * could run for hours and read, in the logs, as a wave of newcomers.
+       * Same remedy as `external_ban_source_down` after the seven-hour one.
+       */
+      log.warn('member_counter_unread', {
+        chatId: chat.id, userId: sender.id,
+        error: err instanceof Error ? err.message : String(err)
+      })
+      return null
+    })
   })
   const userDoc = await timed('userdoc', () => store.getUserDoc(sender.id).catch(() => null))
   const history = userDocToHistory(userDoc as never, memberCount)
 
-  const newish = (history?.messagesGlobal ?? 0) <= 5 || memberCount <= 3
+  // A budget gate, not a verdict, so the unknown counter leans the generous way
+  // here — an unreadable row buys the sender MORE enrichment, never a signal.
+  const newish = (history?.messagesGlobal ?? 0) <= 5 || memberCount === null || memberCount <= 3
 
   /**
    * Whether the sender will be waved through by the core's established-regular
@@ -3888,7 +3908,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
   const localTenureDays = history?.firstSeenUnix != null
     ? (Date.now() / 1000 - history.firstSeenUnix) / 86_400
     : null
-  const exemptish = (memberCount >= 10 || (history?.messagesGlobal ?? 0) >= 50) &&
+  const exemptish = ((memberCount !== null && memberCount >= 10) || (history?.messagesGlobal ?? 0) >= 50) &&
     localTenureDays !== null && localTenureDays >= ESTABLISHED_MIN_TENURE_DAYS
 
   /**

@@ -34,6 +34,45 @@ const names = (u: UserSnapshot): string[] => extractUserSignals(u).map((s) => s.
 const trust = (u: UserSnapshot): string[] =>
   extractUserSignals(u).filter((s) => isTrustSignal(s.name)).map((s) => s.name)
 
+describe('extractUserSignals — counters we could not read', () => {
+  /**
+   * Production 2026-09-01: a sender with 102 messages in one group, findable by
+   * Telegram's own search, carried `new_in_chat`. Three separate roads lead to
+   * a standing of nothing — a genuine newcomer, a sender whose posts were
+   * judged (the debit is charged on the verdict, not on the delete landing),
+   * and a counter that never reached us because Mongo was unreachable. Only the
+   * first is a fact about the person.
+   *
+   * `null` is the third road, and it is the one this describe block is for.
+   * Same rule as `tenureDays` has kept since 2026-08-20 — losing our record of
+   * somebody is not an observation about them — arriving late at the two
+   * counters that sit beside it.
+   */
+  it('accuses nobody of newness when the counters are unknown', () => {
+    const unknown = names(makeUser({ messagesInChat: null, messagesGlobal: null }))
+    expect(unknown).not.toContain('new_in_chat')
+    expect(unknown).not.toContain('new_globally')
+  })
+
+  it('does not hand out standing on an unreadable counter either', () => {
+    // Abstain means abstain. An outage must not accuse, and it must not excuse:
+    // a free `established_user` for every sender is the same failure wearing
+    // the other coat, and it is the coat that lets a campaign through.
+    const unknown = trust(makeUser({
+      messagesInChat: null, messagesGlobal: null, localAgeDays: 400
+    }))
+    expect(unknown).not.toContain('established_user')
+  })
+
+  it('still reads the half it does have', () => {
+    // One counter missing is not both missing. A sender we cannot count here
+    // but know to be quiet across every chat we watch is still new globally.
+    const halfKnown = names(makeUser({ messagesInChat: null, messagesGlobal: 2 }))
+    expect(halfKnown).toContain('new_globally')
+    expect(halfKnown).not.toContain('new_in_chat')
+  })
+})
+
 describe('extractUserSignals — suspicious', () => {
   it('flags Telegram scam/fake flags', () => {
     expect(names(makeUser({ flags: { scam: true, fake: false, restricted: false, verified: false, premium: false, bot: false } }))).toContain('scam_flag')

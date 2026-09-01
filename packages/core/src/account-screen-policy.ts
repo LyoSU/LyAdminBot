@@ -41,8 +41,11 @@ export interface AccountScreenChat {
 
 export interface AccountScreenUser {
   id: number
-  /** Standing earned anywhere, the same counter `established_user` reads. */
-  messagesGlobal: number
+  /**
+   * Standing earned anywhere, the same counter `established_user` reads.
+   * `null` when it could not be read, which excuses nobody from the gate.
+   */
+  messagesGlobal: number | null
 }
 
 /**
@@ -79,7 +82,11 @@ export const accountScreenAllowed = (
 
   if (!chat.captchaEnabled) return 'captcha_off'
   if (chat.trustedUserIds.includes(user.id)) return 'trusted'
-  if (user.messagesGlobal >= ESTABLISHED_MIN_MESSAGES) return 'established'
+  // Explicit, because the exemption is the generous branch: a counter we could
+  // not read must not spend a standing the account may not have.
+  if (user.messagesGlobal !== null && user.messagesGlobal >= ESTABLISHED_MIN_MESSAGES) {
+    return 'established'
+  }
   return 'allow'
 }
 

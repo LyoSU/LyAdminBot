@@ -247,7 +247,11 @@ export const tr: Locale = {
     openButton: '👤 Profil',
     accountAge: (age) => `hesap ${age}`,
     firstSeen: (seen) => `burada ${seen}`,
-    activity: (messages, chats) => `${messages} mesaj · sohbetlerimizin ${chats} tanesinde`,
+    activity: (messages, chats) =>
+      [
+        ...(messages === null ? [] : [`${messages} mesaj`]),
+        `sohbetlerimizin ${chats} tanesinde`
+      ].join(' · '),
     reputation: (status) => `itibar: ${status}`,
     premium: 'Premium',
     externalBan: (ago, offenses) => [

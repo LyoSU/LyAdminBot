@@ -206,8 +206,9 @@ export interface VoterStanding {
   isAdmin: boolean
   /** They are the person this question is about. */
   isTarget: boolean
-  messagesInChat: number
-  messagesGlobal: number
+  /** Both `null` when the counters could not be read — see `atLeast`. */
+  messagesInChat: number | null
+  messagesGlobal: number | null
   /**
    * Days since we first saw the account anywhere; null when nothing says.
    *
@@ -226,8 +227,8 @@ export interface VoterStanding {
 
 export type VoteEligibility = 'eligible' | 'is_target' | 'known_bad' | 'no_standing'
 
-const atLeast = (value: number, bar: number): boolean =>
-  Number.isFinite(value) && value >= bar
+const atLeast = (value: number | null, bar: number): boolean =>
+  value !== null && Number.isFinite(value) && value >= bar
 
 /**
  * Whether this person's ballot counts, and if not, why.

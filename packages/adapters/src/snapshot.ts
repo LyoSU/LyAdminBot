@@ -9,8 +9,9 @@ import { predictAccountAgeBoundsDays, predictAccountAgeDays } from './account-ag
 /** Persisted history the data layer provides (all fields best-effort). */
 export interface UserHistory {
   firstSeenUnix: number | null
-  messagesInChat: number
-  messagesGlobal: number
+  /** Both `null` when the counter could not be read — see `UserSnapshot`. */
+  messagesInChat: number | null
+  messagesGlobal: number | null
   groupsActive: number
   spamDetections: number
   reputationStatus: UserSnapshot['reputationStatus']
@@ -40,8 +41,16 @@ export interface UserProfileFacts {
  */
 const EMPTY_HISTORY: UserHistory = {
   firstSeenUnix: null,
-  messagesInChat: 0,
-  messagesGlobal: 0,
+  /**
+   * Null, like every other field on this object, and it took until 2026-09-01
+   * for the two counters to join them. This constant is reached when the data
+   * layer said nothing — a Mongo failure, a document we could not read — and
+   * zero is not what it means. `firstSeenUnix` has always been honest here; the
+   * counters said "wrote nothing, anywhere", which is the most incriminating
+   * pair of numbers in the snapshot and was being asserted on an outage.
+   */
+  messagesInChat: null,
+  messagesGlobal: null,
   groupsActive: 0,
   spamDetections: 0,
   reputationStatus: 'neutral',

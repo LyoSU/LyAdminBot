@@ -137,8 +137,9 @@ export const countRecentChanges = (
 
 export interface UserHistoryView {
   firstSeenUnix: number | null
-  messagesInChat: number
-  messagesGlobal: number
+  /** Both `null` when the counter could not be read — never 0. */
+  messagesInChat: number | null
+  messagesGlobal: number | null
   groupsActive: number
   spamDetections: number
   reputationStatus: 'trusted' | 'neutral' | 'suspicious' | 'restricted'
@@ -224,7 +225,7 @@ const firstSeenUnixOf = (doc: UserDoc): number | null => {
 
 export const userDocToHistory = (
   doc: UserDoc | null,
-  messagesInChat: number,
+  messagesInChat: number | null,
   nowMs = Date.now()
 ): UserHistoryView | null => {
   if (!doc) return null

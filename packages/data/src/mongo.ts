@@ -582,10 +582,15 @@ export class MongoStore {
    */
   async getMemberStats(chatId: number, telegramId: number): Promise<{
     messagesCount: number
-    standingInChat: number
+    standingInChat: number | null
     bananCount: number
   }> {
-    const empty = { messagesCount: 0, standingInChat: 0, bananCount: 0 }
+    // `standingInChat` is null in the empty case for the same reason
+    // `touchMember` returns null: a chat we have no row for is a chat we know
+    // nothing about, and the ballot bar must not read that as no standing
+    // earned. `messagesCount` stays 0 — it feeds /stats, which is reporting
+    // traffic and has always shown a member we have never counted as zero.
+    const empty = { messagesCount: 0, standingInChat: null, bananCount: 0 }
     const group = await this.groups.findOne({ group_id: chatId }, { projection: { _id: 1 } })
     if (!group) return empty
     const member = await this.groupMembers.findOne(
@@ -1030,13 +1035,16 @@ export class MongoStore {
    * produced — which the /stats view reports. Standing is a reading of it, not
    * a redefinition.
    */
-  async touchMember(chatId: number, telegramId: number, textLength: number): Promise<number> {
+  async touchMember(chatId: number, telegramId: number, textLength: number): Promise<number | null> {
     const group = await this.groups.findOneAndUpdate(
       { group_id: chatId },
       { $setOnInsert: { group_id: chatId } },
       { upsert: true, returnDocument: 'after', projection: { _id: 1 } }
     )
-    if (!group) return 0
+    // `null`, not `0`. Every caller of this method feeds a signal that reads
+    // low numbers as newness, and a group row we failed to upsert says nothing
+    // whatever about the sender — see `UserSnapshot.messagesInChat`.
+    if (!group) return null
     const now = new Date()
     const before = await this.groupMembers.findOneAndUpdate(
       { group: group['_id'], telegram_id: telegramId },
@@ -1632,8 +1640,14 @@ export class MongoStore {
     messageId: number
     userId: number
     reason: VoteEligibility
-    messagesInChat: number
-    messagesGlobal: number
+    /**
+     * Null when the counter could not be read, and recorded that way on
+     * purpose: a refusal analysis asking whether the eligibility bar is
+     * reachable must be able to tell "nobody here has standing" from "we could
+     * not look", because those are opposite fixes too.
+     */
+    messagesInChat: number | null
+    messagesGlobal: number | null
     /** Longer of the two clocks, whole days; null when neither answered. */
     tenureDays: number | null
     detections: number

@@ -89,15 +89,23 @@ export interface UserSnapshot {
    * posts were removed reads as unknown here however much they wrote — correct
    * for scoring, and the reason no card may restate this number as "their first
    * message". `new_in_chat` fires at 3 or fewer, standing needs 10.
+   *
+   * `null` when we could not find out — Mongo unreachable, the row unread. Not
+   * zero: the same rule `tenureDays` has kept since 2026-08-20, arriving late.
+   * Losing our record of somebody is not an observation about them, and the
+   * distinction is not decorative here — `null <= 3` is `true` in JavaScript,
+   * so an unknown counter accuses by default unless every reader says so.
    */
-  messagesInChat: number
+  messagesInChat: number | null
   /**
    * The same subtraction across every chat the bot is in — which is not the
    * same as across Telegram. An account with thousands of messages in rooms we
    * do not watch arrives here at zero, so this bounds what we have SEEN and
    * never what the account has done.
+   *
+   * `null` for the same reason and with the same force as above.
    */
-  messagesGlobal: number
+  messagesGlobal: number | null
   groupsActive: number
   spamDetections: number
   reputationStatus: 'restricted' | 'suspicious' | 'neutral' | 'trusted'

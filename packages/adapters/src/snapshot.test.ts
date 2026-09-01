@@ -38,10 +38,18 @@ describe('buildUserSnapshot', () => {
     expect(Math.round(snap.localAgeDays ?? 0)).toBe(100)
   })
 
-  it('handles a never-seen user (no history)', () => {
+  /**
+   * A null history is TWO situations wearing one shape: a sender nobody has
+   * ever recorded, and a sender whose record we failed to fetch. Nothing here
+   * can tell them apart, which is exactly why the counters may not answer.
+   * `localAgeDays` has always been null in this test for the same reason; the
+   * counters used to say zero, and zero is the reading that convicts.
+   */
+  it('answers nothing about counters when no history reached us', () => {
     const snap = buildUserSnapshot(makeSender(), null, NOW)
     expect(snap.localAgeDays).toBeNull()
-    expect(snap.messagesInChat).toBe(0)
+    expect(snap.messagesInChat).toBeNull()
+    expect(snap.messagesGlobal).toBeNull()
     expect(snap.reputationStatus).toBe('neutral')
     expect(snap.avatars).toBeNull()
   })

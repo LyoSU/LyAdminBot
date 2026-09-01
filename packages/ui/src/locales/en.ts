@@ -249,7 +249,10 @@ export const en: Locale = {
     accountAge: (age) => `account ${age}`,
     firstSeen: (seen) => `here ${seen}`,
     activity: (messages, chats) =>
-      `${messages} message${messages === 1 ? '' : 's'} · ${chats} chat${chats === 1 ? '' : 's'}`,
+      [
+        ...(messages === null ? [] : [`${messages} message${messages === 1 ? '' : 's'}`]),
+        `${chats} chat${chats === 1 ? '' : 's'}`
+      ].join(' · '),
     reputation: (status) => `reputation: ${status}`,
     premium: 'Premium',
     externalBan: (ago, offenses) => [

@@ -206,7 +206,12 @@ export interface Locale {
     openButton: string
     accountAge: (age: string) => string
     firstSeen: (seen: string) => string
-    activity: (messages: number, chats: number) => string
+    /**
+     * `messages` is `null` when the counter could not be read. Every locale
+     * drops that half rather than printing a zero — an outage must not be
+     * rendered as a fact about the member whose profile this is.
+     */
+    activity: (messages: number | null, chats: number) => string
     reputation: (status: string) => string
     premium: string
     externalBan: (ago: string, offenses: number) => string

@@ -157,7 +157,7 @@ export const mergeTenureDays = (
  */
 const hasLocalStanding = (user: UserSnapshot): boolean => {
   const tenure = tenureDays(user)
-  return user.messagesInChat >= ESTABLISHED_MIN_IN_CHAT &&
+  return user.messagesInChat !== null && user.messagesInChat >= ESTABLISHED_MIN_IN_CHAT &&
     tenure !== null && tenure >= ESTABLISHED_MIN_TENURE_DAYS
 }
 
@@ -167,7 +167,8 @@ const hasLocalStanding = (user: UserSnapshot): boolean => {
  * person have standing?" without re-deriving the answer a few lines later.
  */
 const hasVolumeForStanding = (user: UserSnapshot): boolean =>
-  user.messagesGlobal >= ESTABLISHED_MIN_MESSAGES || hasLocalStanding(user)
+  (user.messagesGlobal !== null && user.messagesGlobal >= ESTABLISHED_MIN_MESSAGES) ||
+  hasLocalStanding(user)
 
 /**
  * Invisible characters with no legitimate use in a display name. Deliberately
@@ -348,7 +349,7 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
 
   const isLocallyNew =
     (tenure !== null && tenure <= SLEEPER_LOCAL_MAX_DAYS) ||
-    user.messagesGlobal <= NEW_GLOBALLY_MAX
+    (user.messagesGlobal !== null && user.messagesGlobal <= NEW_GLOBALLY_MAX)
 
   // The age prediction carries an uncertainty interval, and the two signals
   // want OPPOSITE ends of it — see each one below. (2026-08 audit: the tail of
@@ -510,8 +511,16 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
 
   // ── local history ──────────────────────────────────────────────────
 
-  if (user.messagesInChat <= NEW_IN_CHAT_MAX) signals.push({ name: 'new_in_chat' })
-  if (user.messagesGlobal <= NEW_GLOBALLY_MAX) signals.push({ name: 'new_globally' })
+  // `!== null` before every comparison, and not `?? 0`, because the counter we
+  // could not read is the one that must stay silent. `null <= 3` is `true` in
+  // JavaScript, so the shortest spelling of each of these lines is also the one
+  // that turns an outage into an accusation against everybody at once.
+  if (user.messagesInChat !== null && user.messagesInChat <= NEW_IN_CHAT_MAX) {
+    signals.push({ name: 'new_in_chat' })
+  }
+  if (user.messagesGlobal !== null && user.messagesGlobal <= NEW_GLOBALLY_MAX) {
+    signals.push({ name: 'new_globally' })
+  }
 
   // Joined the chat moments before posting — a throwaway fanning into a group
   // to drop one message. Authoritative join time from channels.getParticipant.
@@ -523,7 +532,8 @@ export const extractUserSignals = (user: UserSnapshot, now = Date.now()): Signal
   // Spreader pattern: present in many chats we watch yet barely posting —
   // a freshly-joined account fanning out before a campaign. Guarded by
   // newness so long-time members in many shared groups don't trip it.
-  if (user.groupsActive >= MANY_SHARED_CHATS_MIN && user.messagesGlobal <= NEW_GLOBALLY_MAX) {
+  if (user.groupsActive >= MANY_SHARED_CHATS_MIN &&
+      user.messagesGlobal !== null && user.messagesGlobal <= NEW_GLOBALLY_MAX) {
     signals.push({ name: 'many_shared_chats', evidence: `${user.groupsActive} shared chats` })
   }
   // Two, not one, and for the reason the exempt already gives: a single past

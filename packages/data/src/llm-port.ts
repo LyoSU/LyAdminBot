@@ -280,9 +280,18 @@ export const contextDigest = (input: EvaluationInput): string => {
   // Buckets, not counts: "brand new" vs "some history" vs "a regular" is the
   // granularity the verdict turns on, and finer buckets would just shatter the
   // cache without changing an answer.
-  const standing = input.user.messagesGlobal <= 5
-    ? 'new'
-    : input.user.messagesInChat >= 10 || input.user.messagesGlobal >= 50 ? 'regular' : 'some'
+  // A bucket of its own rather than a lean either way. Folding the unreadable
+  // counter into `new` would cache an outage as a finding about the sender, and
+  // folding it into `regular` would cache the bypass; `unknown` keys those runs
+  // apart so neither answer is served back later as though we had known.
+  const standing = input.user.messagesGlobal === null && input.user.messagesInChat === null
+    ? 'unknown'
+    : (input.user.messagesGlobal !== null && input.user.messagesGlobal <= 5)
+      ? 'new'
+      : (input.user.messagesInChat !== null && input.user.messagesInChat >= 10) ||
+        (input.user.messagesGlobal !== null && input.user.messagesGlobal >= 50)
+        ? 'regular'
+        : 'some'
   return [
     links,
     buttons,
@@ -790,7 +799,17 @@ export const buildUserContent = (
   // in a prompt does not read as "we have no data", it reads as a clean bill of
   // health this system never issued. Absence is said by silence.
   const reputation = user.reputationStatus === 'neutral' ? '' : `, reputation ${user.reputationStatus}`
-  parts.push(`SENDER: ${age}${joined}, ${user.messagesInChat} msgs in this chat, ${user.messagesGlobal} msgs globally${reputation}`)
+  /**
+   * Absence is said by silence here too — the same rule the reputation line
+   * above keeps, and for a sharper reason. `null msgs in this chat` would not
+   * read to a model as "we could not count"; it would read as zero, which is
+   * the single most incriminating number this clause can carry.
+   */
+  const counts = [
+    user.messagesInChat === null ? null : `${user.messagesInChat} msgs in this chat`,
+    user.messagesGlobal === null ? null : `${user.messagesGlobal} msgs globally`
+  ].filter((part): part is string => part !== null)
+  parts.push(`SENDER: ${age}${joined}${counts.length > 0 ? `, ${counts.join(', ')}` : ''}${reputation}`)
   parts.push(`SENDER NAME (untrusted): ${untrusted(user.displayName, 60)}${user.username ? ` @${user.username}` : ''}`)
   if (input.enrichment.bio) parts.push(`SENDER BIO (untrusted): ${untrusted(input.enrichment.bio, 200)}`)
   for (const text of input.enrichment.businessTexts.slice(0, 2)) {

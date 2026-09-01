@@ -211,8 +211,11 @@ const spamModerationHit = (
  */
 const isNewish = (input: EvaluationInput): boolean => {
   const tenure = tenureDays(input.user)
-  return input.user.messagesInChat <= 3 ||
-    input.user.messagesGlobal <= 5 ||
+  // Each term guarded on its own, and for the reason the doc above gives: this
+  // predicate strips the ban shield, so a counter we failed to read must not be
+  // allowed to answer it. An unknown number is not a small one.
+  return (input.user.messagesInChat !== null && input.user.messagesInChat <= 3) ||
+    (input.user.messagesGlobal !== null && input.user.messagesGlobal <= 5) ||
     (tenure !== null && tenure <= ESTABLISHED_MIN_TENURE_DAYS)
 }
 
@@ -243,8 +246,12 @@ const isTrusted = (input: EvaluationInput): boolean =>
  * down for exactly the messages where the difference decides something.
  */
 const isEstablishedRegular = (input: EvaluationInput): boolean => {
-  const volume = input.user.messagesInChat >= ESTABLISHED_MIN_IN_CHAT ||
-    input.user.messagesGlobal >= ESTABLISHED_MIN_MESSAGES
+  // The other direction of the same rule: an unreadable counter buys no bypass
+  // either. Abstain means abstain — an outage that waved every sender past the
+  // whole pipeline would be the same defect wearing the more expensive coat.
+  const volume =
+    (input.user.messagesInChat !== null && input.user.messagesInChat >= ESTABLISHED_MIN_IN_CHAT) ||
+    (input.user.messagesGlobal !== null && input.user.messagesGlobal >= ESTABLISHED_MIN_MESSAGES)
   // Neither clock saying anything is not evidence of tenure.
   const tenure = tenureDays(input.user)
   const tenured = tenure !== null && tenure >= ESTABLISHED_MIN_TENURE_DAYS
@@ -743,8 +750,8 @@ export const evaluateMessage = async (
   // declining to wave through structural evasion that has no innocent reading.
   if (isEstablishedRegular(input) && !mayRemoveSender(messageSignals)) {
     meta['established_regular'] = true
-    meta['messagesInChat'] = input.user.messagesInChat
-    meta['messagesGlobal'] = input.user.messagesGlobal
+    meta['messagesInChat'] = input.user.messagesInChat ?? 'unknown'
+    meta['messagesGlobal'] = input.user.messagesGlobal ?? 'unknown'
     return none('deterministic', 'established_regular')
   }
 
@@ -1784,7 +1791,12 @@ export const evaluateMessage = async (
   // by the join rate.
   if (verdict.action === 'none' && contentEvidence(signals).strongest === 0) {
     const judged = await judgeAccumulated(
-      input.user.messagesInChat <= SESSION_SOLO_MAX_INCHAT ? 1 : SESSION_EVAL_MIN_MESSAGES)
+      // Not knowing how much somebody has written here is not the same as
+      // knowing they have written nothing, and only the second earns the
+      // lowered pile. Unknown takes the patient branch.
+      input.user.messagesInChat !== null && input.user.messagesInChat <= SESSION_SOLO_MAX_INCHAT
+        ? 1
+        : SESSION_EVAL_MIN_MESSAGES)
     if (judged) return judged
   }
 

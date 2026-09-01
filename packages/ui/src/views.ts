@@ -611,7 +611,8 @@ export interface UserFacts {
   predictedAgeDays: number | null
   /** Days since we first saw the account locally. Null — never seen. */
   localAgeDays: number | null
-  messagesGlobal: number
+  /** `null` when the counter could not be read — see the locale contract. */
+  messagesGlobal: number | null
   groupsActive: number
   reputationStatus: 'restricted' | 'suspicious' | 'neutral' | 'trusted'
   premium: boolean
