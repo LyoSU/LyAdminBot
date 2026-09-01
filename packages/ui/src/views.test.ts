@@ -1314,3 +1314,79 @@ describe('whyView — the field marker goes with the name that replaced it', () 
     expect(whyView(uk, makeVerdict({ reasonEvidence: 'bio: щось', meta: {} }))).toContain('bio: щось')
   })
 })
+
+/**
+ * A verdict named after the signal that reached it.
+ *
+ * `reasonCode` is `signals:<name>` whenever no rule and no classifier named the
+ * finding — the score simply crossed on one signal's weight. `locale.reasons`
+ * has no entry for any of them, so the last line of the card, the one that
+ * explains, said «підозріла активність» while the line above it had already
+ * spelled the whole thing out. Production 2026-09-01: 145 punishments across 11
+ * such codes, every one of them rendered as the fallback.
+ *
+ * Read from the signal catalogue rather than given entries of their own: the
+ * catalogue is already complete and already maintained beside the signals, so a
+ * new signal cannot ship a verdict nobody can read. An explicit entry in
+ * `reasons` still wins, for a code that deserves a sentence of its own.
+ */
+describe('the reason line for a signal-named verdict', () => {
+  it('reads the signal’s own name instead of the fallback', () => {
+    const text = whyView(uk, makeVerdict({
+      reasonCode: 'signals:greek_homoglyph_word', reasonEvidence: '«Заπрошуємо»', meta: {}
+    }))
+    expect(text).toContain(uk.why.signalLabels.greek_homoglyph_word)
+    expect(text).not.toContain(uk.reasonFallback)
+  })
+
+  it('a signal the catalogue no longer has still falls back rather than break', () => {
+    const text = whyView(uk, makeVerdict({ reasonCode: 'signals:gone_from_catalogue', meta: {} }))
+    expect(text).toContain(uk.reasonFallback)
+  })
+
+  it('an explicit reason still wins over the catalogue', () => {
+    expect(whyView(uk, makeVerdict({ reasonCode: 'job_scam' }))).toContain(uk.reasons.job_scam)
+  })
+
+  it('the stats card reads them too, not eleven lines of "підозріла активність"', () => {
+    const card = statsCard(uk, {
+      checked: 100, removals: 8, deletes: 2, latencyP50Ms: 40,
+      topReasons: [{ reasonCode: 'signals:greek_homoglyph_word', count: 47 }]
+    } as never)
+    expect(card.text).toContain(uk.why.signalLabels.greek_homoglyph_word)
+  })
+})
+
+/**
+ * The same fact must not be stated twice on one card.
+ *
+ * The evidence line prefixes the localised signal name so the specifics under it
+ * can be read; the last line explains the verdict. When both resolve to the same
+ * signal the card said it once in the quote and again underneath — «запрошення
+ * до закритого каналу в біо · […]» over «закрите запрошення від нового акаунта»
+ * was the mild version, and a `signals:*` verdict the literal one.
+ */
+describe('whyView — the signal name is stated once', () => {
+  it('drops the evidence prefix when the reason line already says it', () => {
+    const text = whyView(uk, makeVerdict({
+      reasonCode: 'signals:greek_homoglyph_word',
+      reasonEvidence: '«Заπрошуємо»',
+      meta: { reasonSignal: 'greek_homoglyph_word' }
+    }))
+    const label = uk.why.signalLabels.greek_homoglyph_word
+    expect(text.split(label)).toHaveLength(2)
+    expect(text).toContain('«Заπрошуємо»')
+  })
+
+  it('keeps the prefix when the reason is about something else', () => {
+    // A listed account whose heaviest signal is its bio: two different facts,
+    // and the reader needs both.
+    const text = whyView(uk, makeVerdict({
+      reasonCode: 'external_ban_new',
+      reasonEvidence: 'bio: https://t.me/+abc',
+      meta: { reasonSignal: 'private_invite_in_bio' }
+    }))
+    expect(text).toContain(uk.why.signalLabels.private_invite_in_bio)
+    expect(text).toContain(uk.reasons.external_ban_new)
+  })
+})

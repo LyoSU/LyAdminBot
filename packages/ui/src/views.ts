@@ -213,7 +213,7 @@ export const statsCard = (
   if (stats.topReasons.length > 0) {
     lines.push('', locale.botStats.reasonsTitle)
     for (const reason of stats.topReasons.slice(0, STATS_REASONS_SHOWN)) {
-      lines.push(locale.botStats.reasonLine(locale.reasons[reason.reasonCode] ?? locale.reasonFallback, reason.count))
+      lines.push(locale.botStats.reasonLine(reasonText(locale, reason.reasonCode), reason.count))
     }
   }
 
@@ -449,14 +449,51 @@ const externalBanEvidence = (locale: Locale, verdict: Verdict): string | null =>
  * something the reader can see. An unknown name is skipped rather than printed:
  * a stored verdict may name a signal the catalogue has since dropped.
  */
+/**
+ * What a verdict is called, in the reader's language.
+ *
+ * `reasonCode` is `signals:<name>` whenever nothing else named the finding — no
+ * rule matched and no classifier spoke, the score simply crossed on one signal's
+ * weight. `locale.reasons` has an entry for every rule and every classifier
+ * verdict and none for those, so the line that explains the card fell through to
+ * «підозріла активність». Production 2026-09-01: 145 punishments across 11 such
+ * codes, all of them the fallback.
+ *
+ * Read from the signal catalogue rather than given entries of their own. That
+ * catalogue is already complete and is maintained beside the signals themselves,
+ * so a signal added tomorrow cannot ship a verdict nobody can read; a code that
+ * deserves a sentence of its own still gets one by being listed in `reasons`,
+ * which is consulted first.
+ */
+const signalLabelOf = (locale: Locale, name: string): string | null => {
+  // Indexed by a plain string on purpose: this value comes off a stored verdict,
+  // which may name a signal the catalogue has since renamed or dropped.
+  const labels: Record<string, string | undefined> = locale.why.signalLabels
+  return labels[name] ?? null
+}
+
+export const reasonText = (locale: Locale, reasonCode: string): string =>
+  locale.reasons[reasonCode]
+    ?? (reasonCode.startsWith('signals:')
+      ? signalLabelOf(locale, reasonCode.slice('signals:'.length))
+      : null)
+    ?? locale.reasonFallback
+
 const namedSignalEvidence = (locale: Locale, verdict: Verdict): string | null => {
   const name = verdict.meta['reasonSignal']
   if (typeof name !== 'string') return null
-  // Indexed by a plain string on purpose: this value comes off a stored verdict,
-  // which may name a signal the catalogue has since renamed or dropped. Asserting
-  // the union here would only move that fact out of sight.
-  const labels: Record<string, string | undefined> = locale.why.signalLabels
-  return labels[name] ?? null
+  const label = signalLabelOf(locale, name)
+  /**
+   * Once per card, not twice.
+   *
+   * The prefix exists so the specifics under it can be read; the last line
+   * explains the verdict. When both resolve to the same signal — which is
+   * exactly what a `signals:<name>` verdict is — the card stated the same fact
+   * in the quote and again underneath it. The reason line is the one that keeps
+   * it: that is its slot, and it reads as a sentence rather than as a label
+   * glued to a fragment.
+   */
+  return label === null || label === reasonText(locale, verdict.reasonCode) ? null : label
 }
 
 const profileEvidence = (locale: Locale, verdict: Verdict): string | null => {
@@ -625,7 +662,7 @@ export const whyView = (locale: Locale, verdict: Verdict, options: WhyOptions = 
     lines.push('', b(esc(confidence(pct))))
   }
 
-  const reason = locale.reasons[verdict.reasonCode] ?? locale.reasonFallback
+  const reason = reasonText(locale, verdict.reasonCode)
   // Bold and given its own break when it carries the card alone.
   lines.push(...(showsBand ? [esc(reason)] : ['', b(esc(reason))]))
 
