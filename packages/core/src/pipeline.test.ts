@@ -2372,6 +2372,88 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
   })
 
   /**
+   * A question we cannot deliver is not an answer.
+   *
+   * Production 2026-09-01: the same shape as the test above — `sexual 0.781`
+   * avatar, a linked channel, four minutes old — posting three harmless lines
+   * into a discussion group under a channel post. Arithmetic said 0.711 and
+   * `profileHasCase` was true, so the branch owed it a question. It could not
+   * be delivered: a commenter is frequently not a member of the discussion
+   * group and the whisper is the captcha's only delivery, so `mayAskCaptcha`
+   * refused. The branch then fell through to `pSpam: 0` / `low_information` /
+   * `observe` — the same row a message nobody found anything in produces.
+   *
+   * Undeliverability changes neither the evidence nor its authority. It cannot
+   * turn suspicion into innocence, and it must not turn it into a conviction
+   * either: `observe` remains the ceiling. What changes is the record. Measured
+   * over the 7 days to 2026-09-01: 20 accounts carrying
+   * `suggestive_profile_media` fell into the silent path, 7 of them were later
+   * reported BY PEOPLE and 4 eventually banned — not one of them caught by this
+   * branch, and none of the 20 distinguishable in the store from a genuinely
+   * empty message.
+   */
+  it('says why it went quiet when the question cannot be delivered', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'вот так вот' },
+      user: { ...newcomer, isParticipant: false },
+      policy: { captchaEnabled: true },
+      enrichment: { avatarBase64: 'AAAA', personalChannelId: 42 }
+    }), { moderation: { check: async () => modResult({ sexual: 0.42 }, false) } })
+
+    expect(v.action).toBe('observe')
+    expect(v.reasonCode).toBe('low_information_profile_unreachable')
+    expect(v.meta['captchaBlockedBy']).toBe('sender_not_participant')
+    // The score the profile actually earned, not the zero that says "nobody
+    // found anything". A pSpam of 0 here is a false statement about evidence.
+    expect(v.pSpam).toBeGreaterThan(PRESET_THRESHOLDS.standard.grey)
+  })
+
+  /**
+   * Deserving a question and being able to ask one are two facts, and they were
+   * being read off one variable.
+   *
+   * `deserved` came from `policyFor(...).action`, and `decideAction` already
+   * folds deliverability in: at a grey-band score it returns `captcha` when the
+   * gate is open and `observe` when it is shut. So for every profile case that
+   * landed IN the band — not above it — an undeliverable captcha silently
+   * unmade the finding that the score deserved one. The two questions are now
+   * asked separately, and the answer to the first is recorded either way.
+   */
+  it('a grey-band profile case still deserves the question it cannot be asked', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'вот так вот' },
+      user: { ...newcomer, isParticipant: false },
+      policy: { captchaEnabled: true },
+      enrichment: { avatarBase64: 'AAAA' }
+    }), { moderation: { check: async () => modResult({ sexual: 0.42 }, false) } })
+
+    expect(v.meta['profileQuestionDeserved']).toBe(true)
+    expect(v.meta['captchaAllowed']).toBe(false)
+    expect(v.action).toBe('observe')
+  })
+
+  /**
+   * A lookup that failed and a refusal that named the person are different
+   * facts, and the audit has to be able to tell them apart: `false` issues
+   * nothing and leaves no row anywhere, while an unanswered lookup issues a
+   * captcha that dies at delivery and DOES leave one (`undeliverable`, 28 of
+   * 74 issued network-wide in the week to 2026-09-01). Recorded as a word
+   * rather than as an absent key, because a missing field reads as "we did not
+   * look".
+   */
+  it('records an unanswered membership lookup as unknown, not as a refusal', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'вот так вот' },
+      user: { ...newcomer, isParticipant: null },
+      policy: { captchaEnabled: true },
+      enrichment: { avatarBase64: 'AAAA', personalChannelId: 42 }
+    }), { moderation: { check: async () => modResult({ sexual: 0.42 }, false) } })
+
+    expect(v.action).toBe('captcha')
+    expect(v.meta['senderIsParticipant']).toBe('unknown')
+  })
+
+  /**
    * The same nothing, six times, is not nothing.
    *
    * Production, 2026-08-25: an account whose bio held a private invite posted

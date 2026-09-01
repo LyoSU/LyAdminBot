@@ -135,6 +135,7 @@ export const en: Locale = {
     hidden_url_new: 'deceptive link from a newcomer',
     low_information: 'not enough information, observing',
     low_information_profile: 'too little to judge, suspicious profile — asked to confirm',
+    low_information_profile_unreachable: 'profile deserved a question we could not deliver — observing',
     content_unconfirmed: 'suspicious profile, message content unconfirmed',
     admin_report: 'an admin reported this as spam',
     community_vote: 'the community voted: spam',

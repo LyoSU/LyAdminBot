@@ -146,6 +146,7 @@ export const uk: Locale = {
     hidden_url_new: 'приховане посилання від новачка',
     low_information: 'недостатньо інформації, спостерігаємо',
     low_information_profile: 'мало інформації, але профіль підозрілий — просимо підтвердити',
+    low_information_profile_unreachable: 'профіль заслуговував питання, яке не вдалося доставити — спостерігаємо',
     content_unconfirmed: 'підозрілий профіль, але зміст не підтверджено',
     admin_report: 'адмін репортнув як спам',
     community_vote: 'спільнота проголосувала: спам',

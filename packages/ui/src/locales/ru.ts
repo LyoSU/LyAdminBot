@@ -146,6 +146,7 @@ export const ru: Locale = {
     hidden_url_new: 'скрытая ссылка от новичка',
     low_information: 'мало информации, наблюдаем',
     low_information_profile: 'мало информации, но профиль подозрительный — просим подтвердить',
+    low_information_profile_unreachable: 'профиль заслуживал вопроса, который не удалось доставить — наблюдаем',
     content_unconfirmed: 'подозрительный профиль, но содержание не подтверждено',
     admin_report: 'админ зарепортил как спам',
     community_vote: 'сообщество проголосовало: спам',

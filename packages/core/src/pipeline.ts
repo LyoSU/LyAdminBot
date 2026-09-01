@@ -35,7 +35,7 @@ import {
 } from './signals/registry.js'
 import {
   decideAction, isEnforcementAction, removesSender, mayAskCaptcha, isChannelSenderId,
-  IMITABLE_REASON_CODES,
+  IMITABLE_REASON_CODES, PRESET_THRESHOLDS, captchaBlockers,
   type PolicyDecision, type PolicyInput
 } from './policy.js'
 import { burstBlob, burstSignals } from './signals/burst.js'
@@ -1330,7 +1330,23 @@ export const evaluateMessage = async (
      * anything from the grey band upward becomes the same question, asked only
      * where a question is permitted.
      */
-    const deserved = asked.action !== 'observe' && asked.action !== 'none'
+    /**
+     * Deserving a question is a fact about the evidence. Being able to ask one
+     * is a fact about the network. They were read off the same variable.
+     *
+     * `asked.action` comes from `decideAction`, which at a grey-band score
+     * already consults the captcha gate — `captcha` when it is open, `observe`
+     * when it is shut. So an undeliverable captcha did not merely go unasked,
+     * it unmade the finding that one was owed, and the row that came out said
+     * `pSpam: 0` and `low_information`: the same thing a message nobody found
+     * anything in produces. Measured over the 7 days to 2026-09-01, 20 accounts
+     * carrying `suggestive_profile_media` left that way; 7 were later reported
+     * by people and 4 banned, none of them by this branch.
+     *
+     * The threshold directly, then, and the gate asked separately below.
+     */
+    const grey = (PRESET_THRESHOLDS[input.policy.preset] ?? PRESET_THRESHOLDS.standard).grey
+    const deserved = shaped.pSpam >= grey
     /**
      * The profile has to have SAID something. Measured, 2026-08-25.
      *
@@ -1354,7 +1370,54 @@ export const evaluateMessage = async (
      * `accountVerdict` gives, so the two cannot come to disagree about whether
      * a profile has said anything.
      */
-    if (deserved && profileHasCase(signals) && mayAskCaptcha(policyInputFor(shaped.pSpam, signals))) {
+    const hasCase = profileHasCase(signals)
+    const blockers = captchaBlockers(policyInputFor(shaped.pSpam, signals))
+
+    /**
+     * The three gates, recorded before the branching rather than after it, so
+     * an audit can price this branch without re-deriving which one went quiet.
+     * `senderIsParticipant` keeps its tri-state: `false` is Telegram naming the
+     * person and saying no, `null` is a lookup that failed, and the two are
+     * different populations (see `captchaBlockers`).
+     */
+    if (hasCase) {
+      meta['profileQuestionDeserved'] = deserved
+      meta['profileScorePSpam'] = Number(shaped.pSpam.toFixed(4))
+      meta['captchaAllowed'] = blockers.length === 0
+      if (blockers.length > 0) meta['captchaBlockedBy'] = blockers.join(',')
+      meta['senderIsParticipant'] = input.user.isParticipant ?? 'unknown'
+    }
+
+    /**
+     * The question is owed and cannot be delivered.
+     *
+     * `observe` stays the ceiling — undeliverability is not evidence, and this
+     * branch has read nothing but a profile, so nothing here may punish. What
+     * changes is that the verdict stops asserting `pSpam: 0`, which is a false
+     * statement about the evidence: the profile did earn a score, and the only
+     * thing that failed was the delivery of the question it bought. The reason
+     * code says exactly that, so these rows group in a query instead of hiding
+     * among the genuinely empty ones.
+     *
+     * Deliberately no vote: a chat ballot is an action, and the profile did not
+     * buy one. Of the 20 accounts measured on this path, 13 were never reported
+     * by anybody.
+     */
+    if (deserved && hasCase && blockers.length > 0) {
+      return finalize(
+        {
+          pSpam: shaped.pSpam,
+          decidedBy: 'score',
+          ruleId: null,
+          reasonCode: 'low_information_profile_unreachable',
+          reasonEvidence: null
+        },
+        signals,
+        { action: 'observe', needsVote: false, banDurationSeconds: null }
+      )
+    }
+
+    if (deserved && hasCase && blockers.length === 0) {
       meta['scorePSpam'] = Number(shaped.pSpam.toFixed(4))
       // Which discount was withheld, so a captcha that turned on this rule can
       // be told apart from one the arithmetic reached on its own.

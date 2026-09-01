@@ -146,6 +146,7 @@ export const by: Locale = {
     hidden_url_new: 'схаваная спасылка ад навічка',
     low_information: 'недастаткова інфармацыі, назіраем',
     low_information_profile: 'мала інфармацыі, але профіль падазроны — просім пацвердзіць',
+    low_information_profile_unreachable: 'профіль заслугоўваў пытання, якое не ўдалося даставіць — назіраем',
     content_unconfirmed: 'падазроны профіль, але змест не пацверджаны',
     admin_report: 'адмін зарэпорціў як спам',
     community_vote: 'супольнасць прагаласавала: спам',
