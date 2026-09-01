@@ -3,7 +3,7 @@
  * (free with the update) with what we remember about them (data layer).
  */
 import type { Chat, User } from '@mtcute/node'
-import type { ExternalBanFacts, UserSnapshot } from '@lyadmin/core'
+import type { AccountTelemetry, ExternalBanFacts, UserSnapshot } from '@lyadmin/core'
 import { predictAccountAgeBoundsDays, predictAccountAgeDays } from './account-age.js'
 
 /** Persisted history the data layer provides (all fields best-effort). */
@@ -29,7 +29,34 @@ export interface UserProfileFacts {
   /** Whether Telegram says they are in this chat — see `MemberFacts`. */
   isParticipant?: boolean | null
   joinedDuringSurge?: boolean
+  /** Recorded, not weighed — see `AccountTelemetry`. */
+  commonChatsCount?: number | null
+  peerFacts?: {
+    registrationMonth: string | null
+    phoneCountry: string | null
+    nameChangeUnix: number | null
+    photoChangeUnix: number | null
+  } | null
 }
+
+const daysSince = (unix: number | null | undefined, nowUnix: number): number | null =>
+  typeof unix === 'number' && Number.isFinite(unix) ? Math.max(0, (nowUnix - unix) / 86400) : null
+
+/**
+ * The free facts, folded for the record. `photo.dcId` rides on every user
+ * object Telegram sends; the rest arrive with `users.getFullUser` when the
+ * profile was enriched at all.
+ */
+const telemetryOf = (
+  sender: User, profile: UserProfileFacts | null, nowUnix: number
+): AccountTelemetry => ({
+  photoDcId: sender.photo?.raw.dcId ?? null,
+  commonChatsCount: profile?.commonChatsCount ?? null,
+  registrationMonth: profile?.peerFacts?.registrationMonth ?? null,
+  phoneCountry: profile?.peerFacts?.phoneCountry ?? null,
+  nameChangedDaysAgo: daysSince(profile?.peerFacts?.nameChangeUnix, nowUnix),
+  photoChangedDaysAgo: daysSince(profile?.peerFacts?.photoChangeUnix, nowUnix)
+})
 
 /**
  * What we know about an account before anybody has told us anything.
@@ -128,7 +155,8 @@ const snapshotOf = (
   unofficialClientRisk: profile?.unofficialClientRisk ?? null,
   avatars: history.avatars,
   nameChurn24h: history.nameChurn24h,
-  usernameChurn24h: history.usernameChurn24h
+  usernameChurn24h: history.usernameChurn24h,
+  telemetry: telemetryOf(sender, profile, nowUnix)
 })
 
 /**

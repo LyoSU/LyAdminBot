@@ -536,4 +536,21 @@ describe('failureLabels — what the decision row stores', () => {
     expect(failureLabels([''])).toEqual(['unknown:other'])
     expect(failureLabels([])).toEqual([])
   })
+
+  /**
+   * A refusal of no known kind used to store `ban:other` and nothing else —
+   * 138 such rows in the week to 2026-09-01, and no way to tell a vanished
+   * peer from an account Telegram had already deleted from them.
+   */
+  it('names the wire error for a refusal of no known kind', () => {
+    // `INPUT_USER_DEACTIVATED` is what Telegram answers for an account it has
+    // itself deleted since the message arrived — the likeliest reading of the
+    // 124 rows in that one chat, and now a distinguishable one.
+    expect(failureLabels(['ban: INPUT_USER_DEACTIVATED'])).toEqual(['ban:INPUT_USER_DEACTIVATED'])
+    expect(failureLabels(['delete: CHAT_RESTRICTED'])).toEqual(['delete:CHAT_RESTRICTED'])
+  })
+
+  it('never stores free text from the error', () => {
+    expect(failureLabels(['ban: something went badly wrong with Ivan'])).toEqual(['ban:other'])
+  })
 })

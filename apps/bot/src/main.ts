@@ -19,7 +19,7 @@ import {
   BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS, ESTABLISHED_MIN_MESSAGES,
   accountVerdict, hasHardAccountVerdict, extractUserSignals, PROFILE_EVIDENCE_SIGNALS,
   accountScreenAllowed, accountScreenRemoves, accountScreenUnasked, hardVerdictSourceOf,
-  captchaBlockers, TIMED_BAN_SECONDS, VOTE_WINDOW_SECONDS,
+  captchaBlockers, TIMED_BAN_SECONDS, VOTE_WINDOW_SECONDS, LLM_CLEARANCE_TTL_MS, expiryOutcome,
   type AccountAction, type CaptchaBlocker,
   type BotStats, type ChannelPreview, type ChatStats, type EditBaseline, type EvaluationInput, type ForwardOrigin,
   type MediaCategory, type PipelinePorts, type Signal, type UserSnapshot, type Verdict, type VoteBallot
@@ -212,6 +212,38 @@ const senderLog = new SenderMessageLog()
 const arrivals = new ArrivalLog()
 
 /** Verdicts kept for the [Why?] button (memory, bounded). */
+/**
+ * When the classifier last CLEARED a sender in a chat — see
+ * `Enrichment.llmClearedAgoMs` for what the pipeline does with it and why.
+ *
+ * Any enforcement on the pair forgets the clearance: a sender caught since is
+ * not somebody the model's earlier reading still vouches for.
+ */
+const llmClearances = new Map<string, number>()
+const LLM_CLEARANCES_MAX = 5000
+const clearanceKey = (chatId: number, userId: number): string => `${chatId}:${userId}`
+const noteClearance = (chatId: number, userId: number, verdict: Verdict): void => {
+  const key = clearanceKey(chatId, userId)
+  if (isEnforcementAction(verdict.action)) { llmClearances.delete(key); return }
+  if ((verdict.decidedBy !== 'llm' && verdict.decidedBy !== 'llm_cached') || verdict.action !== 'none') return
+  if (llmClearances.size >= LLM_CLEARANCES_MAX) {
+    const cutoff = Date.now() - LLM_CLEARANCE_TTL_MS
+    for (const [k, at] of llmClearances) if (at < cutoff) llmClearances.delete(k)
+    if (llmClearances.size >= LLM_CLEARANCES_MAX) {
+      const oldest = llmClearances.keys().next().value
+      if (oldest !== undefined) llmClearances.delete(oldest)
+    }
+  }
+  llmClearances.set(key, Date.now())
+}
+const clearanceAgoMs = (chatId: number, userId: number): number | null => {
+  const at = llmClearances.get(clearanceKey(chatId, userId))
+  if (at === undefined) return null
+  const ago = Date.now() - at
+  if (ago > LLM_CLEARANCE_TTL_MS) { llmClearances.delete(clearanceKey(chatId, userId)); return null }
+  return ago
+}
+
 const recentVerdicts = new Map<string, Verdict>()
 const rememberVerdict = (chatId: number, messageId: number, verdict: Verdict): void => {
   recentVerdicts.set(`${chatId}:${messageId}`, verdict)
@@ -1222,6 +1254,18 @@ const expireStaleVotes = async (): Promise<void> => {
     if (vote.promptMessageId !== null) {
       await gateway.tg.deleteMessagesById(vote.chatId, [vote.promptMessageId])
         .catch(() => { /* already gone */ })
+    }
+    if (expiryOutcome(tally) === 'delete') {
+      // The message only — see `expiryOutcome`. The sender is not touched, the
+      // vote does not learn, and the row says what the sweep did and why not.
+      const error = await gateway.moderationActions.deleteMessage(vote.chatId, vote.messageId)
+        .then(() => null).catch((err: unknown) => telegramErrorName(err))
+      log.info('vote_expired_unopposed', {
+        chatId: vote.chatId, userId: vote.targetUserId, messageId: vote.messageId,
+        spam: tally.spam, deleted: error === null, ...(error === null ? {} : { deleteError: error })
+      })
+      await store.noteExpiredOutcome(vote.chatId, vote.messageId, 'delete', error)
+        .catch(() => { /* the log line above is the fallback record */ })
     }
   }
 }
@@ -2568,7 +2612,8 @@ type UserProfile = Awaited<ReturnType<typeof fetchUserProfile>>
 
 const EMPTY_PROFILE: UserProfile = {
   bio: null, businessTexts: [], avatars: null, unofficialClientRisk: null,
-  personalChannelId: null, linkedChannel: null, latestAvatar: null
+  personalChannelId: null, linkedChannel: null, latestAvatar: null,
+  commonChatsCount: null, peerFacts: null
 }
 
 /**
@@ -4168,7 +4213,9 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
           unofficialClientRisk: profile.unofficialClientRisk,
           joinedAgoSeconds,
           isParticipant,
-          joinedDuringSurge: joinRate.joinedDuringSurge(chat.id, userSender.id)
+          joinedDuringSurge: joinRate.joinedDuringSurge(chat.id, userSender.id),
+          commonChatsCount: profile.commonChatsCount,
+          peerFacts: profile.peerFacts
         }
       )
     : buildChannelSnapshot(channelSender!, history)
@@ -4392,7 +4439,8 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
        * belong to the person it was taken from.
        */
       avatarDhash: avatarBase64 === null ? null : avatarDhashOf(avatarBase64),
-      storyBase64
+      storyBase64,
+      llmClearedAgoMs: userSender ? clearanceAgoMs(chat.id, userSender.id) : null
     }
   }
 
@@ -4846,6 +4894,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
   }
 
   const enforced = verdict.action !== 'none' && verdict.action !== 'observe' && verdict.action !== 'captcha'
+  noteClearance(chat.id, sender.id, verdict)
 
   /**
    * Knowledge outlives the attempt. Whether the bot holds a right in this chat
@@ -4908,6 +4957,60 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     ? verdict
     : { ...verdict, action: 'delete', banDurationSeconds: null }
 
+  const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
+  const askingChat = verdict.needsVote && policy.votingEnabled
+
+  /**
+   * Put the question to the chat. True when a ballot is up for this sender —
+   * just opened, or already open — so the caller has nothing more to say.
+   */
+  const openBallot = async (
+    live: ReturnType<typeof incidents.live>, power: ReturnType<typeof incidentPowerFor>
+  ): Promise<boolean> => {
+    // One question per person at a time. Inside an incident this is what
+    // `hasOpenVote` already guards; outside one — an unacted verdict asking —
+    // nothing else does, and the farm accounts that reach here post every
+    // few hours.
+    if (await store.hasOpenVoteFor(chat.id, sender.id).catch(() => false)) {
+      log.info('vote_already_open', { chatId: chat.id, userId: sender.id, messageId: message.id })
+      return true
+    }
+    const opened = await store.openVote({
+      chatId: chat.id, messageId: message.id, targetUserId: sender.id,
+      targetLabel: sender.displayName, textPreview: normalized.text,
+      media: mediaCategoryOf(normalized.attachments), openedBy: selfId
+    }).catch(() => false)
+    if (opened) {
+      log.info('vote_opened', { chatId: chat.id, userId: sender.id, messageId: message.id, ...logContext, pSpam: Math.round(verdict.pSpam * 100) / 100, reason: verdict.reasonCode })
+      // `rememberVerdict` ran above for this exact message, so the "why?"
+      // anchor on the ballot resolves to the card that explains why the bot
+      // was unsure — which is the question a voter is actually being asked.
+      const view = votePrompt(locale, {
+        chatId: chat.id, messageId: message.id,
+        userId: sender.id, userLabel: sender.displayName, textPreview: normalized.text,
+        media: mediaCategoryOf(normalized.attachments),
+        // A name that is itself an advert must not be reprinted on a ballot
+        // the whole chat reads, least of all as a link to its owner.
+        promoName: nameIsPromo(verdict)
+      }, { spam: 0, ham: 0, outcome: 'pending' }, { botUsername: selfUsername ?? undefined })
+      const prompt = await tgSendText(chat.id, viewHtml(view.text), {
+        replyMarkup: toKeyboard(view.buttons),
+        disableWebPreview: true
+      }).catch(() => null)
+      if (prompt) await store.setVotePrompt(chat.id, message.id, prompt.id).catch(() => { /* ok */ })
+      if (live) incidents.markVoteOpen(chat.id, sender.id)
+      else if (power) {
+        incidents.open(chat.id, sender.id, {
+          power, action: executed.action, reasonCode: verdict.reasonCode,
+          triggerMessageId: message.id, cardMessageId: null,
+          hasOpenVote: true, removedCount: 1 + retroPurged + albumRemoved
+        })
+      }
+      return true
+    }
+    return false
+  }
+
   if (actedVisibly && enforced) {
     void sessionPort.reset(chat.id, sender.id).catch(() => { /* best-effort */ })
     rememberVerdict(chat.id, message.id, executed)
@@ -4920,7 +5023,6 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     // report above, and an override is only offered on a message something
     // actually happened to.
     if (normalized.forward) rememberForward(chat.id, message.id, normalized.forward)
-    const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
 
     // Both arguments describe what happened, not what was decided. A run whose
     // bans keep failing still deserves ONE card rather than one per message, and
@@ -4928,7 +5030,6 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     // never enough to silence somebody the bot could not remove.
     const power = incidentPowerFor(executed, actedVisibly)
     const live = incidents.live(chat.id, sender.id)
-    const askingChat = verdict.needsVote && policy.votingEnabled
 
     /**
      * One notice per run, not per message — with one exception, which is the
@@ -4983,41 +5084,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     // Grey-zone verdicts ask the community: the vote prompt (with the quoted
     // text) replaces the compact line. An admin's 👌 resolves it instantly,
     // which doubles as the override path for voted decisions.
-    if (verdict.needsVote && policy.votingEnabled) {
-      const opened = await store.openVote({
-        chatId: chat.id, messageId: message.id, targetUserId: sender.id,
-        targetLabel: sender.displayName, textPreview: normalized.text,
-        media: mediaCategoryOf(normalized.attachments), openedBy: selfId
-      }).catch(() => false)
-      if (opened) {
-        log.info('vote_opened', { chatId: chat.id, userId: sender.id, messageId: message.id, ...logContext, pSpam: Math.round(verdict.pSpam * 100) / 100, reason: verdict.reasonCode })
-        // `rememberVerdict` ran above for this exact message, so the "why?"
-        // anchor on the ballot resolves to the card that explains why the bot
-        // was unsure — which is the question a voter is actually being asked.
-        const view = votePrompt(locale, {
-          chatId: chat.id, messageId: message.id,
-          userId: sender.id, userLabel: sender.displayName, textPreview: normalized.text,
-          media: mediaCategoryOf(normalized.attachments),
-          // A name that is itself an advert must not be reprinted on a ballot
-          // the whole chat reads, least of all as a link to its owner.
-          promoName: nameIsPromo(verdict)
-        }, { spam: 0, ham: 0, outcome: 'pending' }, { botUsername: selfUsername ?? undefined })
-        const prompt = await tgSendText(chat.id, viewHtml(view.text), {
-          replyMarkup: toKeyboard(view.buttons),
-          disableWebPreview: true
-        }).catch(() => null)
-        if (prompt) await store.setVotePrompt(chat.id, message.id, prompt.id).catch(() => { /* ok */ })
-        if (live) incidents.markVoteOpen(chat.id, sender.id)
-        else if (power) {
-          incidents.open(chat.id, sender.id, {
-            power, action: executed.action, reasonCode: verdict.reasonCode,
-            triggerMessageId: message.id, cardMessageId: null,
-            hasOpenVote: true, removedCount: 1 + retroPurged + albumRemoved
-          })
-        }
-        return
-      }
-    }
+    if (askingChat && await openBallot(live, power)) return
 
     const view = compactNotification(locale, executed, {
       chatId: chat.id, messageId: message.id, userId: sender.id, userLabel: sender.displayName
@@ -5040,6 +5107,25 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
         removedCount: 1 + retroPurged + albumRemoved
       })
     }
+  } else if (askingChat && result.skippedReason === null) {
+    /**
+     * Nothing was done, and the chat is asked anyway.
+     *
+     * `floorNetworkFact` and `capVouchedSession` both answer "observe, and put
+     * it to the chat" — and until 2026-09-01 the second half never happened:
+     * the ballot lived inside the branch above, which an unacted verdict never
+     * enters. 64 of the 71 shared-photo verdicts in the week before had no
+     * ballot; 11 vouched-session ones the same. The verdict is remembered
+     * first, so the ballot's "why?" resolves and a `not spam` outcome finds
+     * what it is undoing.
+     */
+    rememberVerdict(chat.id, message.id, verdict)
+    rememberText(chat.id, message.id, normalized.text ?? '')
+    log.info('vote_on_unacted', {
+      chatId: chat.id, userId: sender.id, messageId: message.id, ...logContext,
+      action: verdict.action, reason: verdict.reasonCode
+    })
+    await openBallot(incidents.live(chat.id, sender.id), null)
   }
 }
 

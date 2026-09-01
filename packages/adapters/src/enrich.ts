@@ -51,6 +51,23 @@ export interface UserProfileEnrichment {
    */
   linkedChannel: LinkedChannelInfo | null
   /**
+   * Telegram's own count of chats shared with the bot (`userFull.common_chats_count`).
+   * Telemetry for now — see `AccountTelemetry` in core.
+   */
+  commonChatsCount: number | null
+  /**
+   * What layer 228 puts in `userFull.settings` about the account itself:
+   * registration month, phone country, the dates of the last name and photo
+   * change. Clients show the first two on a stranger's profile; whether a bot
+   * is handed them is what recording them will tell. Null when absent.
+   */
+  peerFacts: {
+    registrationMonth: string | null
+    phoneCountry: string | null
+    nameChangeUnix: number | null
+    photoChangeUnix: number | null
+  } | null
+  /**
    * The newest avatar, already fetched by the photos.getUserPhotos call below.
    *
    * Handing it back matters: the caller used to follow this function with
@@ -69,7 +86,8 @@ export const fetchUserProfile = async (
 ): Promise<UserProfileEnrichment> => {
   const result: UserProfileEnrichment = {
     bio: null, businessTexts: [], avatars: null, unofficialClientRisk: null,
-    personalChannelId: null, linkedChannel: null, latestAvatar: null
+    personalChannelId: null, linkedChannel: null, latestAvatar: null,
+    commonChatsCount: null, peerFacts: null
   }
 
   let inputUser: tl.RawInputUser | null = null
@@ -91,6 +109,14 @@ export const fetchUserProfile = async (
     result.bio = full.fullUser.about ?? null
     result.unofficialClientRisk = full.fullUser.unofficialSecurityRisk ?? false
     result.personalChannelId = full.fullUser.personalChannelId ?? null
+    result.commonChatsCount = full.fullUser.commonChatsCount ?? null
+    const settings = full.fullUser.settings
+    result.peerFacts = {
+      registrationMonth: settings.registrationMonth ?? null,
+      phoneCountry: settings.phoneCountry ?? null,
+      nameChangeUnix: settings.nameChangeDate ?? null,
+      photoChangeUnix: settings.photoChangeDate ?? null
+    }
 
     const intro = full.fullUser.businessIntro
     if (intro) {

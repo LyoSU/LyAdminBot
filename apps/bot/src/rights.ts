@@ -1,3 +1,5 @@
+import { telegramErrorName } from './telegram-error.js'
+
 /**
  * What Telegram has recently refused us, per chat.
  *
@@ -88,8 +90,26 @@ export const failureKind = (error: string): FailureKind => {
  * The step stays FIRST so every query written against the old shape keeps
  * working: `execution.failed` starting with `ban` still means the ban failed.
  */
+/**
+ * `step:kind`, and for a refusal of no known kind, `step:WIRE_NAME`.
+ *
+ * `ban:other` was the whole record for 138 refused bans in the week to
+ * 2026-09-01, 124 of them in one chat that was not short of rights — and
+ * nothing stored could say what Telegram had actually answered: a peer the
+ * session no longer holds, an account Telegram had already deleted, an
+ * outage. The wire name (`PEER_ID_INVALID`, `USER_ID_INVALID`) is bounded and
+ * carries no text of anybody's, which is the same bar `telegramErrorName`
+ * already holds for the vote log. The kinds stay first so `ban:rights` keeps
+ * meaning what it meant.
+ */
 export const failureLabels = (errors: readonly string[]): string[] =>
-  errors.map((e) => `${e.split(':')[0]?.trim() || 'unknown'}:${failureKind(e)}`)
+  errors.map((e) => {
+    const step = e.split(':')[0]?.trim() || 'unknown'
+    const kind = failureKind(e)
+    if (kind !== 'other') return `${step}:${kind}`
+    const name = telegramErrorName(e.slice(e.indexOf(':') + 1))
+    return `${step}:${name === 'unknown' ? 'other' : name}`
+  })
 
 /** How soon after a refusal the cheap capability lookup may run. */
 export const RIGHTS_PROBE_MS = 60 * 1000
