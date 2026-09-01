@@ -2946,6 +2946,12 @@ const screenAccount = async (params: {
     : null
   saw['avatar'] = profile.latestAvatar === null ? 'none' : avatarBase64 === null ? 'failed' : 'bytes'
   let evidence: string | null = null
+  /**
+   * Which signal supplied `evidence`, for the card's sake — see
+   * `namedSignalEvidence`. Set beside every assignment to `evidence` below,
+   * because a name that drifts from the line under it is worse than no name.
+   */
+  let evidenceSignal: string | null = null
   if (avatarBase64 !== null) {
     if (ports.moderation) {
       const result = await ports.moderation.check('', avatarBase64).catch(() => null)
@@ -2966,9 +2972,10 @@ const screenAccount = async (params: {
       if (hit !== null) {
         signals.push({ name: 'nsfw_avatar', evidence: hit })
         evidence = hit
+        evidenceSignal = 'nsfw_avatar'
       } else if (suggestive !== null) {
         signals.push({ name: 'suggestive_profile_media', evidence: suggestive })
-        evidence ??= suggestive
+        if (evidence === null) { evidence = suggestive; evidenceSignal = 'suggestive_profile_media' }
       }
     } else saw['nsfw'] = 'off'
     const hash = avatarDhashOf(avatarBase64)
@@ -2979,7 +2986,7 @@ const screenAccount = async (params: {
         const name = reuse.otherAccounts > 1 ? 'avatar_shared_with_accounts' : 'avatar_shared_with_account'
         const line = `same photo on ${reuse.otherAccounts} other account(s)`
         signals.push({ name, evidence: line })
-        evidence ??= line
+        if (evidence === null) { evidence = line; evidenceSignal = name }
       }
     }
   }
@@ -3090,7 +3097,8 @@ const screenAccount = async (params: {
     const banVerdict: Verdict = {
       pSpam: 1, action: 'ban', needsVote: false, banDurationSeconds: TIMED_BAN_SECONDS,
       decidedBy: 'join_screen', ruleId: null, signals,
-      reasonCode: params.reason, reasonEvidence: evidence, meta: {}
+      reasonCode: params.reason, reasonEvidence: evidence,
+      meta: evidenceSignal === null ? {} : { reasonSignal: evidenceSignal }
     }
     const cardMessageId = params.replyToMessageId ?? 0
     // Both halves, because both are how a correction finds this: the memory the
@@ -3173,7 +3181,10 @@ const screenAccount = async (params: {
     banDurationSeconds: CAPTCHA_IGNORED_MUTE_SECONDS,
     decidedBy: 'join_screen', ruleId: null, signals,
     reasonCode: 'reported_unreachable', reasonEvidence: evidence,
-    meta: { screen: 'hold', blockedBy: gated.blockers.join(','), saw: sawLine() }
+    meta: {
+      screen: 'hold', blockedBy: gated.blockers.join(','), saw: sawLine(),
+      ...(evidenceSignal === null ? {} : { reasonSignal: evidenceSignal })
+    }
   }
   const cardMessageId = params.replyToMessageId ?? 0
   rememberVerdict(chat.id, cardMessageId, holdVerdict)

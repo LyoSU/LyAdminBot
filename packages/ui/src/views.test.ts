@@ -1241,3 +1241,76 @@ describe('whyView on an account-screen verdict', () => {
     expect(whyView(uk, screened())).toContain('1год')
   })
 })
+
+/**
+ * The evidence line names its signal, in the reader's language.
+ *
+ * `reasonEvidence` is written by whichever signal carried the verdict, and it is
+ * written for the record: `bio: https://t.me/+…`, `~788d old account, locally
+ * active 0d`, `id issued in the current allocation block`. A Ukrainian chat read
+ * those in English under a Ukrainian verdict.
+ *
+ * Translating the strings themselves would mean a table of regexes in the UI
+ * matching text produced in three other modules — reword a producer and the
+ * translation stops silently. The catalogue of localised signal names already
+ * exists and is already complete, so the verdict records WHICH signal spoke and
+ * the card puts that name in front of the specifics it kept.
+ */
+describe('whyView — the evidence names its signal', () => {
+  it('puts the localised signal name in front of the raw specifics', () => {
+    const text = whyView(uk, makeVerdict({
+      reasonEvidence: '~788d old account, locally active 0d',
+      meta: { reasonSignal: 'sleeper_awakened' }
+    }))
+    expect(text).toContain(uk.why.signalLabels.sleeper_awakened)
+    expect(text).toContain('788d')
+  })
+
+  it('a signal the catalogue has since dropped leaves the evidence alone', () => {
+    const text = whyView(uk, makeVerdict({
+      reasonEvidence: 'щось конкретне',
+      meta: { reasonSignal: 'a_signal_that_no_longer_exists' }
+    }))
+    expect(text).toContain('щось конкретне')
+    expect(text).not.toContain('undefined')
+  })
+
+  it('no named signal, no prefix — the LLM quotes the message, not a signal', () => {
+    const text = whyView(uk, makeVerdict({ reasonEvidence: 'оплата щодня', meta: {} }))
+    expect(text).toContain('оплата щодня')
+  })
+
+  it('a fully translated line does not get a name pinned to it as well', () => {
+    // `profileEvidence` already renders the whole fact; prefixing it would say
+    // the same thing twice.
+    const text = whyView(uk, makeVerdict({
+      reasonEvidence: 'same photo on 35 other account(s)',
+      meta: { reasonSignal: 'avatar_shared_with_accounts' }
+    }))
+    expect(text).toContain('та сама аватарка ще на 35 акаунтах')
+    expect(text).not.toContain('same photo')
+  })
+})
+
+describe('whyView — the field marker goes with the name that replaced it', () => {
+  it('drops a producer’s own "bio:" once the signal is named', () => {
+    const text = whyView(uk, makeVerdict({
+      reasonEvidence: 'bio: https://t.me/+abc',
+      meta: { reasonSignal: 'private_invite_in_bio' }
+    }), { showRawEvidence: true })
+    expect(text).toContain(uk.why.signalLabels.private_invite_in_bio)
+    expect(text).not.toContain('bio:')
+    expect(text).toContain('https://t.me/+abc')
+  })
+
+  it('keeps a quoted fragment whole — it is not a field marker', () => {
+    const text = whyView(uk, makeVerdict({
+      reasonEvidence: '«Заπрошуємо»', meta: { reasonSignal: 'greek_homoglyph_word' }
+    }))
+    expect(text).toContain('«Заπрошуємо»')
+  })
+
+  it('leaves the line alone when no signal was named', () => {
+    expect(whyView(uk, makeVerdict({ reasonEvidence: 'bio: щось', meta: {} }))).toContain('bio: щось')
+  })
+})

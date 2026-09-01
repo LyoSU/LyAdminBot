@@ -1303,6 +1303,27 @@ export class MongoStore {
       // stored subtly wrong forever. Same defect that shouted on the LLM path
       // 2026-08-07; on this path it never says a word.
       textPreview: truncate(params.textPreview, 200),
+      /**
+       * The grounds, kept apart from the text they may or may not be about.
+       *
+       * Persisted for the reason `requireCaptcha` below is: the "Why?" card and
+       * the admin's undo read the in-process verdict cache first and this row
+       * second, and that cache holds 2000 entries — at production's rate it
+       * turns over in hours, so the row is what a member who taps the link
+       * actually gets. It carried no grounds at all: measured 2026-09-01,
+       * `reasonEvidence` appears on 0 rows of the whole collection, and
+       * `getDecision` was filling it from `textPreview` instead — showing a
+       * spammer's own sentence where the card promises our reasons, and showing
+       * nothing for the profile-only verdicts, whose preview is empty and whose
+       * entire case lives here.
+       *
+       * 300 to match what `whyView` will render, so nothing is stored that
+       * cannot be shown and nothing shown is cut twice. `truncate`, not
+       * `.slice`, for the reason stated above `textPreview`.
+       */
+      reasonEvidence: params.verdict.reasonEvidence === null
+        ? null
+        : truncate(params.verdict.reasonEvidence, 300),
       pSpam: params.verdict.pSpam,
       action: params.verdict.action,
       decidedBy: params.verdict.decidedBy,
@@ -1409,8 +1430,9 @@ export class MongoStore {
   /**
    * Rebuild a best-effort Verdict from the persisted decision, so the Why?
    * card and admin override survive a restart (the in-process verdict cache
-   * is lost, but pipeline_decisions keeps the record for 90d). Signal
-   * evidence is not persisted, so only signal names come back.
+   * is lost, but pipeline_decisions keeps the record for 90d). PER-SIGNAL
+   * evidence is not persisted, so only signal names come back; the verdict's
+   * own `reasonEvidence` — the line the card quotes — is.
    */
   async getDecision(chatId: number, messageId: number): Promise<Verdict | null> {
     const doc = await this.decisions.findOne({ chatId, messageId }, { sort: { createdAt: -1 } })
@@ -1438,7 +1460,13 @@ export class MongoStore {
       // This value is display-and-override only; it is never re-scored.
       signals: signalNames.map((n) => ({ name: String(n) as Signal['name'] })),
       reasonCode: String(doc['reasonCode'] ?? 'unknown'),
-      reasonEvidence: (doc['textPreview'] as string | null) ?? null,
+      // Absent on records written before 2026-09-01, and absent is `null`: the
+      // preview used to stand in here, which said a different thing than it
+      // appeared to say. A card with no grounds prints no quote, which is the
+      // honest rendering of a row that never stored any.
+      reasonEvidence: typeof doc['reasonEvidence'] === 'string'
+        ? (doc['reasonEvidence'] as string)
+        : null,
       meta: (doc['meta'] as Record<string, string | number | boolean>) ?? {}
     }
   }

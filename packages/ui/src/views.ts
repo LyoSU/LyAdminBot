@@ -434,6 +434,31 @@ const externalBanEvidence = (locale: Locale, verdict: Verdict): string | null =>
  * matches neither falls through to the raw text, which is the honest default —
  * an unrecognised evidence string is still evidence.
  */
+/**
+ * The signal that carried the verdict, named in the reader's language.
+ *
+ * `reasonEvidence` is the specifics — a count, a span, a link, a quoted word —
+ * written by whichever signal spoke, and written in English because it is a
+ * record first. The catalogue of localised signal names is already complete and
+ * already maintained alongside the signals themselves, so the cheapest correct
+ * translation is not to translate the line at all: put the name in front of it.
+ *
+ * `reasonSignal` is absent whenever the evidence did not come from a signal —
+ * the LLM quoting the message, a custom rule's own pattern, a forwarded
+ * channel's title — and those need no name, because they are already about
+ * something the reader can see. An unknown name is skipped rather than printed:
+ * a stored verdict may name a signal the catalogue has since dropped.
+ */
+const namedSignalEvidence = (locale: Locale, verdict: Verdict): string | null => {
+  const name = verdict.meta['reasonSignal']
+  if (typeof name !== 'string') return null
+  // Indexed by a plain string on purpose: this value comes off a stored verdict,
+  // which may name a signal the catalogue has since renamed or dropped. Asserting
+  // the union here would only move that fact out of sight.
+  const labels: Record<string, string | undefined> = locale.why.signalLabels
+  return labels[name] ?? null
+}
+
 const profileEvidence = (locale: Locale, verdict: Verdict): string | null => {
   const raw = verdict.reasonEvidence
   if (raw === null) return null
@@ -538,11 +563,29 @@ export const whyView = (locale: Locale, verdict: Verdict, options: WhyOptions = 
      * because the message it came from is deleted by the time they are asked to
      * weigh it. Everybody else is being informed, not consulted.
      */
-    const evidence = externalBanEvidence(locale, verdict)
-      ?? profileEvidence(locale, verdict)
-      ?? (showRawEvidence
-        ? verdict.reasonEvidence
-        : redactLinks(verdict.reasonEvidence, locale.vote.redacted))
+    /**
+     * Order matters: a line rendered in full has nothing to gain from a name in
+     * front of it — `profileEvidence` already says "the same avatar on 35
+     * accounts", and prefixing the signal's name would say it twice.
+     */
+    const whole = externalBanEvidence(locale, verdict) ?? profileEvidence(locale, verdict)
+    const raw = showRawEvidence
+      ? verdict.reasonEvidence
+      : redactLinks(verdict.reasonEvidence, locale.vote.redacted)
+    const named = namedSignalEvidence(locale, verdict)
+    /**
+     * The producer's own field marker goes with the name that replaced it.
+     *
+     * `private_invite_in_bio` writes `bio: <url>` and `custom_emoji_heavy`
+     * writes `alt: <run>` — a one-word label saying which field this came out
+     * of, which is exactly what the localised signal name now says at more
+     * length. Left in, the line read «запрошення до закритого каналу в біо ·
+     * bio: …».
+     *
+     * Only a lowercase ASCII marker at the very start, so it cannot reach a
+     * quoted fragment, a URL, or anything anybody typed.
+     */
+    const evidence = whole ?? (named === null ? raw : `${named} · ${raw.replace(/^[a-z]+:\s+/, '')}`)
     const quote = esc(truncate(evidence, 300))
     lines.push('', asHtml ? quoteBlock(quote) : `"${quote}"`)
   }

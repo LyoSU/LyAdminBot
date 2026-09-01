@@ -1701,3 +1701,91 @@ describe('chatStats', () => {
     expect(stats.lastActionAt).toBeNull()
   })
 })
+
+/**
+ * What survives the trip to the database and back.
+ *
+ * The "Why?" card and the admin's undo both read `recallVerdict`, which tries an
+ * in-process map of the last 2000 verdicts and then falls back to this row. At
+ * production's rate that map turns over in hours, so the row is what a member
+ * actually sees when they tap the link — and the row dropped the grounds.
+ *
+ * Worse than dropping them: `getDecision` filled `reasonEvidence` from
+ * `textPreview`. Those are different facts. The evidence is what convicted
+ * somebody — a bio link, a shared avatar, a matched fragment — and the preview
+ * is what they wrote. Substituting one for the other showed a spammer's own
+ * sentence in the slot the card presents as our reasons, and for a verdict read
+ * off a profile (`textPreview: ''`) it showed nothing at all. Measured
+ * 2026-09-01: `reasonEvidence` appears on 0 rows of the entire collection.
+ *
+ * Same defect `requireCaptcha` had, one field over, and the same fix.
+ */
+describe('recordDecision → getDecision — the grounds survive', () => {
+  const roundTrip = (): { store: MongoStore; stored: Record<string, unknown>[] } => {
+    const stored: Record<string, unknown>[] = []
+    const store = {
+      decisions: {
+        insertOne: async (doc: Record<string, unknown>) => { stored.push(doc); return {} },
+        findOne: async () => stored[stored.length - 1] ?? null
+      }
+    } as unknown as MongoStore
+    return {
+      store: Object.assign(store, {
+        recordDecision: MongoStore.prototype.recordDecision,
+        getDecision: MongoStore.prototype.getDecision
+      }),
+      stored
+    }
+  }
+
+  const held: Verdict = {
+    pSpam: 0, action: 'mute', needsVote: false, banDurationSeconds: 3600,
+    decidedBy: 'join_screen', ruleId: null,
+    signals: [{ name: 'avatar_shared_with_accounts' }],
+    reasonCode: 'reported_unreachable',
+    reasonEvidence: 'same photo on 35 other account(s)',
+    meta: {}
+  }
+
+  it('reads back the grounds it was given, not the message text', async () => {
+    const { store } = roundTrip()
+    await store.recordDecision({
+      chatId: -100, userId: 42, messageId: 7,
+      textPreview: 'бывает и такое', verdict: held, latencyMs: 1
+    })
+    const back = await store.getDecision(-100, 7)
+    expect(back?.reasonEvidence).toBe('same photo on 35 other account(s)')
+  })
+
+  it('a verdict with no grounds reads back as none, not as what they wrote', async () => {
+    const { store } = roundTrip()
+    await store.recordDecision({
+      chatId: -100, userId: 42, messageId: 7,
+      textPreview: 'Ищем людей на просеивание зерна',
+      verdict: { ...held, reasonEvidence: null }, latencyMs: 1
+    })
+    const back = await store.getDecision(-100, 7)
+    expect(back?.reasonEvidence).toBe(null)
+  })
+
+  it('REGRESSION: rows written before this stored nothing, and say so', async () => {
+    const { store, stored } = roundTrip()
+    stored.push({ chatId: -100, messageId: 7, reasonCode: 'job_scam', textPreview: 'пиши в лс' })
+    const back = await store.getDecision(-100, 7)
+    expect(back?.reasonEvidence).toBe(null)
+  })
+
+  it('the grounds are truncated on a codepoint boundary, like the preview', async () => {
+    const { store, stored } = roundTrip()
+    await store.recordDecision({
+      chatId: -100, userId: 42, messageId: 7, textPreview: '',
+      verdict: { ...held, reasonEvidence: `bio: ${'🙂'.repeat(400)}` }, latencyMs: 1
+    })
+    const written = String(stored[0]?.['reasonEvidence'])
+    expect(written.length).toBeLessThanOrEqual(300)
+    // A cut through a surrogate pair encodes as U+FFFD and is stored wrong
+    // forever — the 2026-08-07 lesson, which is silent on this path.
+    expect(written).not.toContain('�')
+    expect([...written].every((c) => c.codePointAt(0) !== 0xfffd)).toBe(true)
+  })
+})

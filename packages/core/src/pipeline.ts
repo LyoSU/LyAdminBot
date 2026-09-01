@@ -982,13 +982,27 @@ export const evaluateMessage = async (
     if (deterministic.kind === 'clean') {
       return none('deterministic', deterministic.ruleId, signals)
     }
+    /**
+     * The evidence and the signal it came from, recorded together.
+     *
+     * The line is written for the record — `~788d old account, locally active
+     * 0d`, `bio: https://t.me/+…` — and the card that shows it is read in the
+     * chat's own language. Rather than translate strings produced here from
+     * inside the UI, the verdict says which signal spoke and the card puts that
+     * signal's localised name in front of the specifics. See
+     * `namedSignalEvidence`.
+     */
+    const spoke = signals.find((s) => !isTrustSignal(s.name))
+    // Recorded only when it actually supplied the line, so the name and the
+    // specifics under it can never be about two different signals.
+    if (spoke?.evidence !== undefined) meta['reasonSignal'] = spoke.name
     const verdict = finalize(
       {
         pSpam: deterministic.pSpam,
         decidedBy: 'deterministic',
         ruleId: deterministic.ruleId,
         reasonCode: deterministic.ruleId,
-        reasonEvidence: signals.find((s) => !isTrustSignal(s.name))?.evidence ?? null
+        reasonEvidence: spoke?.evidence ?? null
       },
       signals
     )
