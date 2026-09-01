@@ -31,7 +31,7 @@ import {
   isStrangerHere, contentEvidence
 } from './score.js'
 import {
-  PERMANENT_BAN_SIGNALS, PROFILE_EVIDENCE_SIGNALS, isTrustSignal
+  PERMANENT_BAN_SIGNALS, PROFILE_EVIDENCE_SIGNALS, SOFT_SHAPE_SIGNALS, isTrustSignal, weightOf
 } from './signals/registry.js'
 import {
   decideAction, isEnforcementAction, removesSender, mayAskCaptcha, isChannelSenderId,
@@ -54,6 +54,60 @@ import { isDistinctive } from './learning.js'
  */
 export const LLM_GREY_LOW = 0.35
 const LLM_GREY_HIGH = 0.75
+/**
+ * How long a clean reading by the classifier stands in for the next one.
+ *
+ * A day is the window the 24 % repeat rate was measured in (see
+ * `Enrichment.llmClearedAgoMs`), long against a spam run and short against a
+ * sleeper that wakes up next week. It only ever skips a call on a message with
+ * NO content evidence: a link, a repeat, a signature hit or a moderation flag
+ * is something new to read, and the model is asked again.
+ */
+export const LLM_CLEARANCE_TTL_MS = 24 * 60 * 60 * 1000
+/**
+ * The lightest message signal that counts as something new to read after a
+ * clearance. `external_url` (0.8), `story_share` (0.8) or `foreign_script`
+ * (0.6) change what the message IS; `long_text` (0.4) and `edited_message`
+ * (0.2) only describe how it was typed, and `contentEvidence` already refuses
+ * to count them for the same reason.
+ */
+const NEW_TO_READ_MIN_WEIGHT = 0.5
+const somethingNewToRead = (signals: readonly Signal[]): boolean =>
+  signals.some((s) =>
+    !SOFT_SHAPE_SIGNALS.has(s.name) && !isTrustSignal(s.name) && weightOf(s.name) >= NEW_TO_READ_MIN_WEIGHT)
+/**
+ * Below the grey ceiling the classifier is the sole witness.
+ *
+ * Measured over the week to 2026-09-01, false-positive rate of enforcement on
+ * the classifier's word by the score the arithmetic had reached first:
+ *
+ *   score ≥ 0.9        852 enforced   0.12 %
+ *   0.75 – 0.9         217            0.9 %
+ *   0.65 – 0.75         63            3.2 %
+ *   0.5  – 0.65         74            5.4 %
+ *   0.35 – 0.5         119            2.5 %
+ *   < 0.35              11            9 %
+ *
+ * An order of magnitude between the two sides of 0.75 (3.1 % against 0.28 %),
+ * and the grey zone is precisely where the model contradicts everything else
+ * that read the message. It may still be right — a scam with no link and no
+ * repeat looks exactly like that — so the message goes and the chat is asked;
+ * what the model may not do alone there is remove the person. The last such
+ * removal before this line (2026-09-01 17:45) was an established member,
+ * score 0.168, banned as `adult_promo` at 0.995 and un-banned by an admin nine
+ * minutes later.
+ *
+ * The same number as `LLM_GREY_HIGH` on purpose: "the arithmetic could not
+ * decide" and "the model may not remove alone" are one boundary, not two.
+ */
+export const LLM_SOLE_WITNESS_SCORE = LLM_GREY_HIGH
+/**
+ * Content evidence that lets the model's word stand even at a low score:
+ * `moderation_flagged` or `promo_in_message_link` (1.5) is another stage
+ * pointing at the same message. A single 1.2 (`velocity_wave`, `url_shortener`)
+ * is not — enforcement resting on 1.2 ran at 4.5 % in the same week.
+ */
+const LLM_SOLE_WITNESS_MIN_EVIDENCE = 1.5
 const SESSION_EVAL_MIN_MESSAGES = 5
 /**
  * Up to this many messages into a chat, a sender's unreadable message is worth
@@ -311,6 +365,22 @@ export const evaluateMessage = async (
   const meta: Record<string, string | number | boolean> = {}
   let portErrors = 0
 
+  // Recorded before any stage can return, so the deterministic exits — which
+  // are 85 % of rows — carry them too; a fact measured only on the messages
+  // that reached scoring would be measured on the wrong population. Only
+  // present values are written: the record is the largest collection in a
+  // database with a quota, and `null` six times per row is not information.
+  if (input.user.flags.premium) meta['premium'] = true
+  const telemetry = input.user.telemetry
+  if (telemetry) {
+    if (telemetry.photoDcId !== null) meta['photoDc'] = telemetry.photoDcId
+    if (telemetry.commonChatsCount !== null) meta['commonChats'] = telemetry.commonChatsCount
+    if (telemetry.registrationMonth !== null) meta['registeredMonth'] = telemetry.registrationMonth
+    if (telemetry.phoneCountry !== null) meta['phoneCountry'] = telemetry.phoneCountry
+    if (telemetry.nameChangedDaysAgo !== null) meta['nameChangedDaysAgo'] = Math.round(telemetry.nameChangedDaysAgo)
+    if (telemetry.photoChangedDaysAgo !== null) meta['photoChangedDaysAgo'] = Math.round(telemetry.photoChangedDaysAgo)
+  }
+
   /**
    * Which paid stages actually ran, and how long each took. A single pipeline
    * total answers neither question: an eleven-second verdict could have been
@@ -537,6 +607,38 @@ export const evaluateMessage = async (
       needsVote: input.policy.votingEnabled,
       banDurationSeconds: null,
       reasonCode: 'shared_profile_photo'
+    }
+  }
+
+  /**
+   * Keep a removal the classifier is the sole witness for down to a deletion
+   * plus a question — see `LLM_SOLE_WITNESS_SCORE`.
+   *
+   * The reason code is KEPT: the card says what the model saw, the cap only
+   * changes what is done about it. Applied AFTER `capImitableAct`, so an
+   * imitable act keeps its own mark and its own rule about the captcha (the
+   * question cannot separate anybody there); this cap then finds a verdict
+   * that already stopped removing anybody and only records that it looked.
+   */
+  const capSoleWitness = (verdict: Verdict, score: number): Verdict => {
+    if (!isEnforcementAction(verdict.action)) return verdict
+    if (score >= LLM_SOLE_WITNESS_SCORE) return verdict
+    if (contentEvidence(verdict.signals).total >= LLM_SOLE_WITNESS_MIN_EVIDENCE) return verdict
+    if (!removesSender(verdict.action)) {
+      // A deletion on the model's word alone still gets the question, but the
+      // mark belongs to whichever cap took the removal away, if any did.
+      if (verdict.needsVote) return verdict
+      meta['cappedSoleWitness'] = true
+      return { ...verdict, needsVote: input.policy.votingEnabled }
+    }
+    meta['cappedSoleWitness'] = true
+    meta['cappedFrom'] = verdict.action
+    return {
+      ...verdict,
+      action: 'delete' as VerdictAction,
+      needsVote: input.policy.votingEnabled,
+      banDurationSeconds: null,
+      requireCaptcha: input.policy.captchaEnabled && isNewish(input)
     }
   }
 
@@ -1725,6 +1827,30 @@ export const evaluateMessage = async (
     foreignScript !== null
   let llmNeededButUnavailable = false
 
+  /**
+   * Nothing new to read: the model cleared this sender here within the day,
+   * and once again every stage that reads content found nothing — the case
+   * for asking is the same newness shape it already answered. The verdict
+   * carries the arithmetic's number and its own reason code, so the row says
+   * why no call was made rather than pretending one was.
+   */
+  const clearedAgo = input.enrichment.llmClearedAgoMs ?? null
+  const nothingNewToRead = inGreyZone && !silencedByStanding && !decisive &&
+    foreignScript === null &&
+    !somethingNewToRead(signals) &&
+    clearedAgo !== null && clearedAgo >= 0 && clearedAgo <= LLM_CLEARANCE_TTL_MS
+  if (nothingNewToRead) {
+    meta['llmClearedAgoMs'] = Math.round(clearedAgo)
+    return finalize(
+      {
+        pSpam: scorePSpam, decidedBy: 'score', ruleId: null,
+        reasonCode: 'llm_cleared_recently', reasonEvidence: null
+      },
+      signals,
+      { action: 'none', needsVote: false, banDurationSeconds: null }
+    )
+  }
+
   if (needsLlm && ports.llm) {
     const llmVerdict: LlmVerdict | null = await safe('llm', () => ports.llm!.classify(input, observed))
 
@@ -1749,7 +1875,7 @@ export const evaluateMessage = async (
        *
        * `capUnearnedRemoval` is the wrong instrument here — see the session path.
        */
-      return floorNetworkFact(capImitableAct(finalize(
+      return floorNetworkFact(capSoleWitness(capImitableAct(finalize(
         {
           pSpam: llmVerdict.pSpam,
           decidedBy: llmVerdict.cached ? 'llm_cached' : 'llm',
@@ -1758,7 +1884,7 @@ export const evaluateMessage = async (
           reasonEvidence: llmVerdict.evidence
         },
         signals
-      )))
+      )), scorePSpam))
     }
     llmNeededButUnavailable = true
   }

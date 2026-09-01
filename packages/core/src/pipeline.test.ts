@@ -4,7 +4,7 @@ import type {
   UserSnapshot, VerdictAction
 } from './types.js'
 import type { BurstEntry, BurstPort, ModerationResult, PipelinePorts, SessionPort } from './ports.js'
-import { evaluateMessage } from './pipeline.js'
+import { evaluateMessage, LLM_SOLE_WITNESS_SCORE } from './pipeline.js'
 import { isEnforcementAction, removesSender, PRESET_THRESHOLDS } from './policy.js'
 import { contentEvidence, mayRemoveSender } from './score.js'
 
@@ -563,7 +563,11 @@ describe('evaluateMessage — abstain & session', () => {
     }), ports(0.97))
     expect(calls).toBe(1)
     expect(contentEvidence(uncorroborated.signals).strongest).toBe(0)
-    expect(removesSender(uncorroborated.action)).toBe(true)
+    // Since 2026-09-01 the model alone does not remove anybody inside the grey
+    // zone (`LLM_SOLE_WITNESS_SCORE`): the message goes, the chat is asked.
+    expect(isEnforcementAction(uncorroborated.action)).toBe(true)
+    expect(removesSender(uncorroborated.action)).toBe(false)
+    expect(uncorroborated.meta['cappedSoleWitness']).toBe(true)
 
     calls = 0
     const corroborated = await evaluateMessage(makeInput({
@@ -571,7 +575,11 @@ describe('evaluateMessage — abstain & session', () => {
       user: newcomer
     }), ports(0.97))
     expect(calls).toBe(1)
-    expect(removesSender(corroborated.action)).toBe(true)
+    // A phone number (1.2) is one crumb short of corroboration — the 1.2 band
+    // ran at 4.5 % false positives in the same week — so this too is a
+    // deletion with a question, not a removal.
+    expect(isEnforcementAction(corroborated.action)).toBe(true)
+    expect(removesSender(corroborated.action)).toBe(false)
   })
 
   it('the first few messages in a chat are each worth reading on their own', async () => {
@@ -1225,7 +1233,11 @@ describe('evaluateMessage — knowledge ports', () => {
     const repeated = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
       llm, velocity: { check: async () => ({ exceeded: true, singleAuthor: true }) }
     })
-    expect(first.action).toBe('ban')
+    // The first copy is the model's word alone (score under the grey ceiling,
+    // no content evidence): deleted, with a question. The repeat we watched
+    // arrive is evidence, and evidence is what lets the model remove.
+    expect(first.action).toBe('delete')
+    expect(first.meta['cappedSoleWitness']).toBe(true)
     expect(repeated.action).toBe('ban')
     expect(repeated.needsVote, 'nobody should be asked twice about a settled text').toBe(false)
   })
@@ -1460,7 +1472,13 @@ describe('evaluateMessage — profile NSFW', () => {
     })
     expect(calls).toBeGreaterThan(0)
     expect(v.decidedBy).toBe('llm')
-    expect(['kick', 'mute', 'ban']).toContain(v.action)
+    // Convicted on the text — and, since the avatar is profile shape rather
+    // than content evidence, the model is the sole witness to the message:
+    // deleted, gated, and put to the chat rather than removed outright.
+    expect(v.action).toBe('delete')
+    expect(v.requireCaptcha).toBe(true)
+    expect(v.needsVote).toBe(true)
+    expect(v.meta['cappedSoleWitness']).toBe(true)
   })
 
   it('any pornographic story raises nsfw_stories exactly once', async () => {
@@ -1520,7 +1538,20 @@ describe('evaluateMessage — LLM escalation', () => {
     expect(calls).toBe(1)
     expect(v.decidedBy).toBe('llm')
     expect(v.reasonCode).toBe('crypto_promo')
-    expect(['mute', 'ban']).toContain(v.action)
+    // Grey means nothing but the model read it as spam: the message is
+    // removed and the chat asked, the sender stays until somebody corroborates.
+    expect(v.action).toBe('delete')
+    expect(v.needsVote).toBe(true)
+    expect(v.meta['cappedFrom']).toBeDefined()
+  })
+
+  it('a grey-zone conviction the moderation port corroborates does remove', async () => {
+    const v = await evaluateMessage(greyZoneInput(), {
+      llm: { classify: async () => ({ pSpam: 0.92, reasonCode: 'crypto_promo', evidence: null, cached: false }) },
+      moderation: { check: async () => modResult({ sexual: 0.9 }) }
+    })
+    expect(removesSender(v.action)).toBe(true)
+    expect(v.meta['cappedSoleWitness']).toBeUndefined()
   })
 
   it('an "unsure" verdict is not enforcement: 0.5 lands in the grey band', async () => {
@@ -1628,10 +1659,15 @@ describe('evaluateMessage — an act members also perform (2026-08-07 audit)', (
     expect(removesSender(v.action)).toBe(false)
   })
 
-  it('a job scam is NOT held back — the act itself is the finding', async () => {
+  it('a job scam is not an imitable act — but alone, the model still only deletes', async () => {
     const v = await evaluateMessage(promoInput(), llmSaying('job_scam'))
-    expect(removesSender(v.action)).toBe(true)
     expect(v.meta['cappedImitable']).toBeUndefined()
+    // Not this ceiling: the sole-witness one (`LLM_SOLE_WITNESS_SCORE`).
+    expect(v.action).toBe('delete')
+    expect(v.meta['cappedSoleWitness']).toBe(true)
+    // Which, unlike the imitable ceiling, DOES ask the captcha question: a
+    // stranger advertising jobs is exactly who a gate can separate.
+    expect(v.requireCaptcha).toBe(true)
   })
 
   it('corroborating message evidence lifts the ceiling', async () => {
@@ -2873,9 +2909,12 @@ describe('evaluateMessage — enforcement ladder end to end', () => {
 
   it('kick is reachable for a newcomer whose score lands between delete and mute', async () => {
     // Driven through the LLM so the score is pinned exactly, independent of
-    // future weight tuning.
+    // future weight tuning. Corroborated by the moderation port: without it
+    // the model would be the sole witness, and the kick band is closed to it
+    // (`LLM_SOLE_WITNESS_SCORE`).
     const v = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
-      llm: { classify: async () => ({ pSpam: 0.8, reasonCode: 'promo', evidence: null, cached: false }) }
+      llm: { classify: async () => ({ pSpam: 0.8, reasonCode: 'promo', evidence: null, cached: false }) },
+      moderation: { check: async () => modResult({ sexual: 0.9 }) }
     })
     expect(v.action).toBe('kick')
   })
@@ -3509,5 +3548,95 @@ describe('evaluateMessage — a worn deterministic rule stops removing senders',
     }), {})
     expect(v.ruleId).toBe('scam_flag_new')
     expect(v.action).toBe('ban')
+  })
+})
+
+describe('evaluateMessage — the classifier as sole witness', () => {
+  // Newness only, no link, no repeat: every content-reading stage finds
+  // nothing, so the arithmetic stays under `LLM_SOLE_WITNESS_SCORE` and the
+  // model's word is the entire case.
+  const plain = { text: 'Потрібні люди на склад, оплата щодня, пишіть в особисті' }
+  const accusing = {
+    classify: async () => ({ pSpam: 0.97, reasonCode: 'job_scam', evidence: null, cached: false })
+  }
+
+  it('keeps a removal on the model alone down to delete plus a question', async () => {
+    const v = await evaluateMessage(makeInput({ msg: plain, user: newcomer }), { llm: accusing })
+    expect(v.meta['scorePSpam']).toBeLessThan(LLM_SOLE_WITNESS_SCORE)
+    expect(v.decidedBy).toBe('llm')
+    expect(v.action).toBe('delete')
+    expect(v.needsVote).toBe(true)
+    expect(v.reasonCode).toBe('job_scam')
+    expect(v.meta['cappedSoleWitness']).toBe(true)
+    expect(v.meta['cappedFrom']).toBe('ban')
+  })
+
+  it('lets the model remove the sender when another stage points at the message', async () => {
+    const v = await evaluateMessage(makeInput({ msg: plain, user: newcomer }), {
+      llm: accusing,
+      moderation: { check: async () => modResult({ sexual: 0.9 }) }
+    })
+    expect(v.signals.map((s) => s.name)).toContain('moderation_flagged')
+    expect(removesSender(v.action)).toBe(true)
+    expect(v.meta['cappedSoleWitness']).toBeUndefined()
+  })
+
+  it('does not touch a verdict the arithmetic had already reached', async () => {
+    const v = await evaluateMessage(makeInput({ msg: spamText, user: newcomer }), {
+      llm: accusing,
+      moderation: { check: async () => modResult({ sexual: 0.9 }) }
+    })
+    expect(v.meta['scorePSpam']).toBeGreaterThanOrEqual(LLM_SOLE_WITNESS_SCORE)
+    expect(v.meta['cappedSoleWitness']).toBeUndefined()
+  })
+})
+
+describe('evaluateMessage — a clean reading stands for a day', () => {
+  // Long enough to escape the brevity discount: newness alone lands it in the
+  // grey zone with nothing for any content stage to point at.
+  const plain = { text: 'Гарного дня всім, підкажіть будь ласка, як тут заведено ставити запитання?' }
+  const called = () => {
+    let n = 0
+    return {
+      port: { classify: async () => { n += 1; return { pSpam: 0.02, reasonCode: 'legit_conversation', evidence: null, cached: false } } },
+      count: () => n
+    }
+  }
+
+  it('skips the model on a sender it cleared an hour ago with nothing new to read', async () => {
+    const llm = called()
+    const v = await evaluateMessage(makeInput({
+      msg: plain, user: newcomer, enrichment: { llmClearedAgoMs: 60 * 60 * 1000 }
+    }), { llm: llm.port })
+    expect(v.meta['scorePSpam']).toBeGreaterThanOrEqual(0.35)
+    expect(llm.count()).toBe(0)
+    expect(v.action).toBe('none')
+    expect(v.decidedBy).toBe('score')
+    expect(v.reasonCode).toBe('llm_cleared_recently')
+    expect(v.meta['llmClearedAgoMs']).toBe(60 * 60 * 1000)
+  })
+
+  it('asks again once the day is over', async () => {
+    const llm = called()
+    await evaluateMessage(makeInput({
+      msg: plain, user: newcomer, enrichment: { llmClearedAgoMs: 25 * 60 * 60 * 1000 }
+    }), { llm: llm.port })
+    expect(llm.count()).toBe(1)
+  })
+
+  it('asks again when the message carries something to read', async () => {
+    const llm = called()
+    const v = await evaluateMessage(makeInput({
+      msg: { ...plain, urls: [{ visible: 'https://x.example', target: 'https://x.example', hidden: false }] },
+      user: newcomer, enrichment: { llmClearedAgoMs: 1000 }
+    }), { llm: llm.port })
+    expect(v.signals.map((s) => s.name)).toContain('external_url')
+    expect(llm.count()).toBe(1)
+  })
+
+  it('never cleared means asked', async () => {
+    const llm = called()
+    await evaluateMessage(makeInput({ msg: plain, user: newcomer, enrichment: { llmClearedAgoMs: null } }), { llm: llm.port })
+    expect(llm.count()).toBe(1)
   })
 })

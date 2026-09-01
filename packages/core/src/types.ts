@@ -144,6 +144,48 @@ export interface UserSnapshot {
   isParticipant?: boolean | null
   /** True while this member's recorded join belongs to a detected chat surge. */
   joinedDuringSurge?: boolean
+  /**
+   * Facts recorded, not weighed — see `AccountTelemetry`. Absent when the
+   * adapter had nothing to record.
+   */
+  telemetry?: AccountTelemetry
+}
+
+/**
+ * What Telegram hands us about an account for free and nothing here reads yet.
+ *
+ * Written into the decision record so that a week of production can say what
+ * each is worth BEFORE it is given a weight — the discipline every signal in
+ * the catalogue was supposed to pass and `fresh_account` did not (dead for a
+ * month, 2026-08-24). Candidates, and why each is here:
+ *
+ *  - `photoDcId`: the data centre a profile photo lives in follows the region
+ *    the account was registered from. Free on every update.
+ *  - `commonChatsCount`: Telegram's own count of chats this account shares
+ *    with the bot. `groupsActive` only sees the chats where the account has
+ *    WRITTEN; this sees the ones it merely sits in.
+ *  - `registrationMonth` / `phoneCountry`: since 2025 clients show these on a
+ *    stranger's profile, and layer 228 carries them in `peerSettings`. Whether
+ *    a bot account receives them is exactly what this field will show. If it
+ *    does, the id-based age model has an official answer to calibrate against
+ *    and the phone country is the cheapest farm separator there is.
+ *  - `nameChangedDaysAgo` / `photoChangedDaysAgo`: the same object dates the
+ *    last identity change — what `identity_churn_24h` reconstructs from our own
+ *    history, and `avatar_recently_set` from a second call.
+ *
+ * `flags.premium` is the same kind of fact and is already on the snapshot; it
+ * is written to the record alongside these. Measured on the accounts we knew
+ * to be premium (v1 records), 455 judged in the month to 2026-09-01 and 5
+ * enforced — 1.1 % against 26.6 % overall, and all five were forwards or
+ * invites by people. A live week decides whether that survives selection.
+ */
+export interface AccountTelemetry {
+  photoDcId: number | null
+  commonChatsCount: number | null
+  registrationMonth: string | null
+  phoneCountry: string | null
+  nameChangedDaysAgo: number | null
+  photoChangedDaysAgo: number | null
 }
 
 /** A mention from the message after resolution (adapters/enrich). */
@@ -382,6 +424,18 @@ export interface Enrichment {
    * core stays free of both IO and dependencies.
    */
   avatarDhash?: string | null
+  /**
+   * How long ago the classifier last CLEARED this sender in this chat on a
+   * message that carried no content evidence — null when it never did, or not
+   * recently enough for the app layer to still remember.
+   *
+   * Measured over the week to 2026-09-01: 716 of 3 009 model calls (24 %) were
+   * a repeat question about a sender the model had already answered for inside
+   * a day, on a message where every other stage had again found nothing to
+   * point at. Nine of those repeats were enforced. The pipeline reads this to
+   * skip the call when there is nothing new to read — see `LLM_CLEARANCE_TTL_MS`.
+   */
+  llmClearedAgoMs?: number | null
 }
 
 // ─────────────────────── chat policy ───────────────────────
