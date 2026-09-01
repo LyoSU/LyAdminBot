@@ -81,9 +81,22 @@ export interface UserSnapshot {
   predictedAgeBoundsDays: { lo: number; hi: number } | null
   /** Local history: how many days ago we first saw this account. */
   localAgeDays: number | null
-  /** Messages in THIS chat (including the current one). */
+  /**
+   * Standing in THIS chat, not traffic: messages written here minus the ones
+   * this pipeline judged to be spam, and it counts the message being judged.
+   *
+   * The subtraction is the point and the trap. It is why a sender whose earlier
+   * posts were removed reads as unknown here however much they wrote — correct
+   * for scoring, and the reason no card may restate this number as "their first
+   * message". `new_in_chat` fires at 3 or fewer, standing needs 10.
+   */
   messagesInChat: number
-  /** Messages globally across all chats the bot sees. */
+  /**
+   * The same subtraction across every chat the bot is in — which is not the
+   * same as across Telegram. An account with thousands of messages in rooms we
+   * do not watch arrives here at zero, so this bounds what we have SEEN and
+   * never what the account has done.
+   */
   messagesGlobal: number
   groupsActive: number
   spamDetections: number
