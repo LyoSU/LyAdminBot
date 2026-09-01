@@ -734,6 +734,31 @@ describe('OpenRouterLlmPort.classify (2026-07-30 review)', () => {
     const fetchImpl = vi.fn(async () => { throw new Error('offline') }) as unknown as typeof fetch
     expect(await portWith(fetchImpl).classify(makeInput())).toBeNull()
   })
+
+  /**
+   * The abort timer outlived the call it was guarding.
+   *
+   * `clearTimeout` sat on the success path only, so a request that failed before
+   * the timeout — a reset, a DNS miss, a refused connection, all of which land
+   * in milliseconds — left a live timer armed for the full budget, holding its
+   * closure and an event-loop handle, to finally abort a controller nobody was
+   * listening to any more. Ordinarily invisible; during a provider outage,
+   * where every call fails fast, it is one such timer per message for as long
+   * as the outage lasts.
+   *
+   * Asserted as "no timer is pending once the call has returned", which is the
+   * property that matters and the one a `finally` guarantees on every path.
+   */
+  it('leaves no timer armed when the request fails before the timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      const fetchImpl = vi.fn(async () => { throw new Error('ECONNRESET') }) as unknown as typeof fetch
+      expect(await portWith(fetchImpl).classify(makeInput())).toBeNull()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe('OpenRouterLlmPort — which instructions judged it', () => {

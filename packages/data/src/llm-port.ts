@@ -501,9 +501,25 @@ export class OpenRouterLlmPort implements LlmPort {
     const system = buildSystemPrompt(fence, briefing)
     const userContent = buildUserContent(input, fence, observed)
 
+    const controller = new AbortController()
+    /**
+     * Cleared in `finally`, on every path, and that placement is the fix.
+     *
+     * It used to be cleared where the fetch resolves — inside the `try`, past
+     * the point a throw could reach. So a request that failed before the
+     * timeout (a reset, a DNS miss, a refused connection: all of them land in
+     * milliseconds) left this armed for the full budget, holding its closure
+     * and an event-loop handle, to eventually abort a controller nobody was
+     * listening to. One stray timer is nothing; a provider outage, where every
+     * call fails fast, is one per message for as long as it lasts.
+     *
+     * Moving it also ends the budget where the call ends rather than where the
+     * headers arrive: reading the body used to be untimed, so the ceiling was
+     * never the ceiling. Measured over seven days, the slowest `llm` port was
+     * 40.8s against a 30s timeout.
+     */
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs)
     try {
-      const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), this.timeoutMs)
       const doFetch = this.config.fetchImpl ?? fetch
       const response = await doFetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
@@ -547,7 +563,6 @@ export class OpenRouterLlmPort implements LlmPort {
          */
         (_key, value: unknown) => typeof value === 'string' ? toWellFormed(value) : value)
       })
-      clearTimeout(timer)
       if (!response.ok) {
         // The status alone cost hours on 2026-08-07: `404` reads as "wrong model
         // slug", and the slug was right — the body said "no endpoints ... for the
@@ -587,6 +602,8 @@ export class OpenRouterLlmPort implements LlmPort {
     } catch {
       this.config.onFailure?.({ model, reason: 'transport', status: null, ...ids })
       return null
+    } finally {
+      clearTimeout(timer)
     }
   }
 }
