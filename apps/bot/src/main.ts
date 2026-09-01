@@ -58,6 +58,7 @@ import { formatSignals, log } from './logger.js'
 import { RightsMemory, RIGHTS_ERROR_REGEX, failureLabels } from './rights.js'
 import { joinerSource } from './join-action.js'
 import { LlmHealth } from './llm-health.js'
+import { telegramErrorName } from './telegram-error.js'
 import { MemberFactsCache, type MemberFacts } from './member-facts.js'
 import { JOIN_WINDOW_MS, JoinRateTracker } from './join-rate.js'
 import { IncidentTracker, SenderMessageLog, incidentPowerFor, correctionOwns, type Incident } from './incident.js'
@@ -592,21 +593,6 @@ const applyIgnoredCaptcha = async (
  * treated as non-delivery, not as refusal — the cost of being wrong about that
  * is one extra visible prompt, which is what every captcha did until now.
  */
-/**
- * The API's own name for a refusal, and nothing else.
- *
- * `USER_NOT_PARTICIPANT` out of `Telegram API error 400: USER_NOT_PARTICIPANT`.
- * Deliberately a whitelist of shape rather than a slice of the message: an
- * error string is the one place a user's own text can end up in an exception,
- * and this value is stored. Anything that does not look like a wire error name
- * becomes `unknown`, which is honest and safe.
- */
-const telegramErrorName = (err: unknown): string => {
-  const text = err instanceof Error ? err.message : String(err)
-  const match = /\b([A-Z][A-Z0-9_]{3,63})\b/.exec(text)
-  return match?.[1] ?? 'unknown'
-}
-
 const deliverCaptcha = async (
   chatId: number,
   userId: number,
@@ -1418,14 +1404,33 @@ const enforceVoteSpam = async (vote: {
   // announce "Прибрав" for both. A chat that loses the bot's rights mid-ballot
   // got a settled-looking result over a message still on screen, written by an
   // author still posting — and moderators stop checking a settled result.
+  /**
+   * Why each half failed, not just that it did.
+   *
+   * Production 2026-09-01 17:47, twice within three seconds: a chat resolved
+   * `spam` 3:0 on two accounts, the message went and the account did not —
+   * `deleted: true, muted: false` — and the record could not say what Telegram
+   * refused, because this caught the error and returned a boolean. The chat was
+   * not short of rights (110 bans and 30 mutes applied there), which is the
+   * first thing anyone would check and the only thing the row could rule out.
+   *
+   * The tempting answer was sitting in the log 400ms later — an unrelated
+   * `MtPeerNotFoundError` raised while rendering a mention of the same user —
+   * and that is a different call. Reading a cause off a neighbouring failure is
+   * how this codebase already mistook `getChatMember` for `ephemeral.
+   * sendMessage`; the honest fix is to write down what this call said.
+   */
+  const failure = { deleted: null as string | null, muted: null as string | null }
   const deleted = await gateway.moderationActions.deleteMessage(vote.chatId, vote.messageId)
-    .then(() => true).catch(() => false)
+    .then(() => true).catch((err: unknown) => { failure.deleted = telegramErrorName(err); return false })
   const muted = await gateway.moderationActions.mute(vote.chatId, vote.targetUserId, MUTE_AFTER_VOTE_SECONDS)
-    .then(() => true).catch(() => false)
+    .then(() => true).catch((err: unknown) => { failure.muted = telegramErrorName(err); return false })
   if (!deleted || !muted) {
     log.warn('vote_enforce_incomplete', {
       chatId: vote.chatId, userId: vote.targetUserId, messageId: vote.messageId,
-      deleted, muted, source: learnSource
+      deleted, muted, source: learnSource,
+      ...(failure.deleted === null ? {} : { deleteError: failure.deleted }),
+      ...(failure.muted === null ? {} : { muteError: failure.muted })
     })
   }
   /**
@@ -3164,14 +3169,20 @@ const screenAccount = async (params: {
    * it gets for every other action, and `rememberVerdict` plus the stored row
    * are what let a ham ballot or an admin undo it through the ordinary path.
    */
+  // Named, for the reason `vote_enforce_incomplete` above states at length: a
+  // hold that did not go on is the one outcome of this branch nobody can act on
+  // without knowing what refused.
+  let holdError: string | null = null
   const held = await gateway.moderationActions
     .mute(chat.id, target.id, CAPTCHA_IGNORED_MUTE_SECONDS)
-    .then(() => true).catch(() => false)
+    .then(() => true).catch((err: unknown) => { holdError = telegramErrorName(err); return false })
   log.info('account_screen_hold', {
     chatId: chat.id, chat: chat.title ?? undefined, userId: target.id,
-    reason: params.reason, blockers: gated.blockers.join(','), applied: held
+    reason: params.reason, blockers: gated.blockers.join(','), applied: held,
+    ...(holdError === null ? {} : { error: holdError as string })
   })
   if (!held) {
+    if (holdError !== null) saw['holdError'] = holdError
     note('hold_failed', signals)
     return 'none'
   }
