@@ -456,6 +456,20 @@ export class MongoStore {
      */
     ageMs?: number
     wentPublic?: boolean
+    /**
+     * Why the send failed, for `undeliverable` only.
+     *
+     * The event was a name and nothing else, which made it the same kind of
+     * unauditable answer `captchaBlockers` was written to replace: 32 of these
+     * in the 7 days to 2026-09-01 against 47 deliveries, and not one of them
+     * says what Telegram refused. The membership case is now caught before a
+     * send is attempted at all, so what lands here is the residue — and the
+     * residue is the part nobody has ever seen.
+     *
+     * A normalised error name, never a message body: this is a record of what
+     * the API said, not a copy of anything a person wrote.
+     */
+    reason?: string
   }): Promise<void> {
     try {
       await this.captchaEvents.insertOne({
@@ -465,6 +479,7 @@ export class MongoStore {
         ...(params.via === undefined ? {} : { via: params.via }),
         ...(params.ageMs === undefined ? {} : { ageMs: Math.round(params.ageMs) }),
         ...(params.wentPublic === undefined ? {} : { wentPublic: params.wentPublic }),
+        ...(params.reason === undefined ? {} : { reason: params.reason }),
         createdAt: new Date()
       })
     } catch {

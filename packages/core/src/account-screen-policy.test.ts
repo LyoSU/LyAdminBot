@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { accountScreenAllowed, accountScreenRemoves, hardVerdictSourceOf } from './account-screen-policy.js'
+import {
+  accountScreenAllowed, accountScreenRemoves, accountScreenUnasked, hardVerdictSourceOf
+} from './account-screen-policy.js'
 
 const chat = (over: Partial<Parameters<typeof accountScreenAllowed>[1]> = {}) => ({
   enabled: true, captchaEnabled: true, externalBanEnabled: true, trustedUserIds: [], ...over
@@ -138,5 +140,43 @@ describe('accountScreenRemoves', () => {
 
   it('REGRESSION: the no-message sentinel is not a message id', () => {
     expect(accountScreenRemoves('ban', 0)).toBe(null)
+  })
+})
+
+/**
+ * The hold a report used to lose along with the question.
+ *
+ * Production 2026-09-01: 19 accounts reported by people, gated by the screen,
+ * and released because `ephemeral.sendMessage` answered USER_NOT_PARTICIPANT —
+ * a commenter under a channel post is not a member of the discussion group.
+ * Sixteen were never punished by anything; the three that were needed a second
+ * human report. Every one of the nineteen already had a ballot open, which is
+ * why the fallback is a hold and not another ballot.
+ */
+describe('accountScreenUnasked', () => {
+  it('a question nobody could be asked still leaves the hold it was asked in', () => {
+    expect(accountScreenUnasked(['sender_not_participant'], true)).toBe('hold')
+  })
+
+  it('a chat that cannot be asked either has no way to end a hold', () => {
+    // The hold's whole justification is that the room is answering instead.
+    expect(accountScreenUnasked(['sender_not_participant'], false)).toBe('none')
+  })
+
+  it('a chat that switched the captcha off did not ask for a mute instead', () => {
+    // Deliberately distinct from undeliverability: the chat made a choice here,
+    // and routing around it would overrule the setting rather than route past a
+    // network fact.
+    expect(accountScreenUnasked(['captcha_disabled'], true)).toBe('none')
+    expect(accountScreenUnasked(['captcha_disabled', 'sender_not_participant'], true)).toBe('none')
+  })
+
+  it('an identity that cannot answer anything is not held either', () => {
+    // `mute` on a channel sender is a ban by construction — see mayAskCaptcha.
+    expect(accountScreenUnasked(['sender_is_channel'], true)).toBe('none')
+  })
+
+  it('nothing blocked it, so the gate is live and holds them itself', () => {
+    expect(accountScreenUnasked([], true)).toBe('none')
   })
 })

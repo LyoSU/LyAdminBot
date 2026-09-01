@@ -136,6 +136,7 @@ export const en: Locale = {
     low_information: 'not enough information, observing',
     low_information_profile: 'too little to judge, suspicious profile — asked to confirm',
     low_information_profile_unreachable: 'profile deserved a question we could not deliver — observing',
+    reported_unreachable: 'reported profile we could not put a check to — paused for an hour',
     content_unconfirmed: 'suspicious profile, message content unconfirmed',
     admin_report: 'an admin reported this as spam',
     community_vote: 'the community voted: spam',
@@ -152,6 +153,9 @@ export const en: Locale = {
       low: (percent) => `🟡 Possibly spam · ${percent}%`
     },
     noticedTitle: 'What I noticed:',
+    profileReuseEvidence: (accounts) =>
+      `same avatar on ${accounts} other ${accounts === 1 ? 'account' : 'accounts'}`,
+    profileMediaEvidence: (score) => `explicit profile photo · score ${score}`,
     externalBanEvidence: (sources, ago) => [
       'in spam databases',
       ...(sources > 1 ? [`${sources} sources`] : []),

@@ -391,7 +391,26 @@ export type CaptchaBlocker =
  * Returned in a fixed order so a `captchaBlockedBy` string groups in a query
  * rather than permuting.
  */
-export const captchaBlockers = (input: PolicyInput): CaptchaBlocker[] => {
+/**
+ * The facts a captcha gate turns on, named apart from `PolicyInput`.
+ *
+ * `PolicyInput` is the message path's whole world — a score, a preset, a
+ * permanent-ban finding — and the account screen has none of it: it is looking
+ * at a profile nobody has a message from. Asking it to fabricate a `pSpam` in
+ * order to reuse this function is how the two paths came to disagree about the
+ * gate in the first place. `PolicyInput` satisfies this structurally, so the
+ * message path passes itself unchanged.
+ */
+export interface CaptchaGateFacts {
+  captchaEnabled: boolean
+  userIsNewish: boolean
+  senderIsChannel?: boolean | undefined
+  senderIsParticipant?: boolean | null | undefined
+  chatKind?: ChatKind | undefined
+  ephemeralCaptcha?: boolean | undefined
+}
+
+export const captchaBlockers = (input: CaptchaGateFacts): CaptchaBlocker[] => {
   const blockers: CaptchaBlocker[] = []
   if (!input.captchaEnabled) blockers.push('captcha_disabled')
   if (!input.userIsNewish) blockers.push('not_newish')

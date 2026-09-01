@@ -420,6 +420,31 @@ const externalBanEvidence = (locale: Locale, verdict: Verdict): string | null =>
 }
 
 /**
+ * The two profile facts a card is most often built on, in the reader's language.
+ *
+ * Same shape as `externalBanEvidence` above and for the same reason: the
+ * producer writes `reasonEvidence` for the record, and the record is English.
+ * Measured 2026-09-01 over the account screen's own population — 20 rows — 14
+ * carried a shared avatar and 14 a suggestive one, so between them they are
+ * almost the whole of what these cards quote.
+ *
+ * Both producers of the reuse line are matched, because there are two and they
+ * word it differently: the screen says `same photo on N other account(s)` and
+ * the pipeline `same profile photo on N other accounts: <ids>`. A line that
+ * matches neither falls through to the raw text, which is the honest default —
+ * an unrecognised evidence string is still evidence.
+ */
+const profileEvidence = (locale: Locale, verdict: Verdict): string | null => {
+  const raw = verdict.reasonEvidence
+  if (raw === null) return null
+  const reuse = /^same (?:profile )?photo on (\d+) other accounts?/.exec(raw)
+  if (reuse?.[1]) return locale.why.profileReuseEvidence(Number(reuse[1]))
+  const media = /^profile media, sexual (\d+(?:\.\d+)?)$/.exec(raw)
+  if (media?.[1]) return locale.why.profileMediaEvidence(media[1])
+  return null
+}
+
+/**
  * The headline: what was done, and for how long. An enforcement card is headed
  * by its own action — the duration included, because "muted" and "muted for a
  * month" are different decisions to review. A verdict that took no action (a
@@ -514,6 +539,7 @@ export const whyView = (locale: Locale, verdict: Verdict, options: WhyOptions = 
      * weigh it. Everybody else is being informed, not consulted.
      */
     const evidence = externalBanEvidence(locale, verdict)
+      ?? profileEvidence(locale, verdict)
       ?? (showRawEvidence
         ? verdict.reasonEvidence
         : redactLinks(verdict.reasonEvidence, locale.vote.redacted))
@@ -532,7 +558,20 @@ export const whyView = (locale: Locale, verdict: Verdict, options: WhyOptions = 
    * those two lines. The reason below can stand alone; a number contradicting
    * it cannot.
    */
-  const showsBand = verdict.meta['flooredNetworkFact'] !== true
+  /**
+   * The account screen is the second reader with no number to print.
+   *
+   * It judges a profile nobody has a message from, so there is no score: the
+   * ban branch writes `pSpam: 1` and the hold branch `pSpam: 0`, both of them
+   * placeholders standing where a probability would go. Rendered, the hold card
+   * read «🔇 мут» over «🟡 Можливо спам · 0%» — a contradiction on two adjacent
+   * lines — and the ban card claimed a 100% certainty nothing measured.
+   *
+   * Same rule as `flooredNetworkFact` above, one source further: print the band
+   * when a score decided, and otherwise let the reason speak for itself.
+   */
+  const showsBand =
+    verdict.meta['flooredNetworkFact'] !== true && verdict.decidedBy !== 'join_screen'
   if (showsBand) {
     const pct = Math.round(verdict.pSpam * 100)
     const confidence = verdict.pSpam >= 0.85

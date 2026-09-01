@@ -192,6 +192,17 @@ export interface Locale {
      * claim we had not checked, made in the sentence a member reads to
      * understand why somebody was banned.
      */
+    /**
+     * Evidence lines the reader would otherwise get in English.
+     *
+     * `reasonEvidence` is written by the producer for the record, not for a
+     * card — `same photo on 35 other account(s)` is what a Ukrainian chat was
+     * shown under a Ukrainian verdict. Two facts carry most of the profile-only
+     * population, so those two get a sentence in the reader's language and the
+     * rest still fall through to the raw line.
+     */
+    profileReuseEvidence: (accounts: number) => string
+    profileMediaEvidence: (score: string) => string
     externalBanEvidence: (sources: number, ago: string | null) => string
     /** Technical footer (admins only): how the verdict was reached. */
     decidedBy: Record<string, string>

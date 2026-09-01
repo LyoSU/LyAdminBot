@@ -147,6 +147,7 @@ export const ru: Locale = {
     low_information: 'мало информации, наблюдаем',
     low_information_profile: 'мало информации, но профиль подозрительный — просим подтвердить',
     low_information_profile_unreachable: 'профиль заслуживал вопроса, который не удалось доставить — наблюдаем',
+    reported_unreachable: 'на профиль пожаловались, а проверку не доставить — пауза на час',
     content_unconfirmed: 'подозрительный профиль, но содержание не подтверждено',
     admin_report: 'админ зарепортил как спам',
     community_vote: 'сообщество проголосовало: спам',
@@ -163,6 +164,9 @@ export const ru: Locale = {
       low: (percent) => `🟡 Возможно спам · ${percent}%`
     },
     noticedTitle: 'Что я заметил:',
+    profileReuseEvidence: (accounts) =>
+      `та же аватарка ещё на ${accounts} ${plural(accounts, 'аккаунте', 'аккаунтах', 'аккаунтах')}`,
+    profileMediaEvidence: (score) => `откровенное фото в профиле · оценка ${score}`,
     externalBanEvidence: (sources, ago) => [
       'в спам-базах',
       ...(sources > 1 ? [`${sources} ${plural(sources, 'источник', 'источника', 'источников')}`] : []),

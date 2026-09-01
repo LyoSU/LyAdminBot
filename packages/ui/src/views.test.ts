@@ -1180,3 +1180,64 @@ describe('startCard proof line', () => {
     expect(view.buttons.flat().some((b) => b.data === callbackData.stats())).toBe(true)
   })
 })
+
+/**
+ * What the two profile-only branches of the account screen actually render.
+ *
+ * Both fabricate a probability — the ban writes 1, the hold writes 0 — because
+ * neither has one: they judge a profile nobody has a message from. Printed as a
+ * confidence band, the hold card read «🔇 мут» over «🟡 Можливо спам · 0%», two
+ * adjacent lines contradicting each other, and the ban card claimed a certainty
+ * nothing measured.
+ */
+describe('whyView on an account-screen verdict', () => {
+  const screened = (over: Partial<Verdict> = {}): Verdict => makeVerdict({
+    decidedBy: 'join_screen', pSpam: 0, action: 'mute', banDurationSeconds: 3600,
+    reasonCode: 'reported_unreachable',
+    reasonEvidence: 'same photo on 35 other account(s)',
+    ...over
+  })
+
+  it('prints no confidence band, because no score decided it', () => {
+    const text = whyView(uk, screened())
+    expect(text).not.toContain('%')
+    expect(text).not.toContain('🟡')
+  })
+
+  it('a ban from the same screen does not claim 100% either', () => {
+    const text = whyView(uk, screened({ pSpam: 1, action: 'ban' }))
+    expect(text).not.toContain('100%')
+  })
+
+  it('a scored verdict still shows its band', () => {
+    expect(whyView(uk, makeVerdict({ pSpam: 0.93 }))).toContain('%')
+  })
+
+  it('reads the shared-avatar evidence in the reader’s language', () => {
+    // The producer writes it for the record; the record is English.
+    expect(whyView(uk, screened())).toContain('та сама аватарка ще на 35 акаунтах')
+    expect(whyView(uk, screened())).not.toContain('same photo')
+  })
+
+  it('matches the pipeline’s wording of the same fact, not just the screen’s', () => {
+    // Two producers, worded differently — see `profileEvidence`.
+    const text = whyView(uk, screened({
+      reasonEvidence: 'same profile photo on 3 other accounts: 81291815'
+    }))
+    expect(text).toContain('ще на 3 акаунтах')
+  })
+
+  it('reads the profile-media evidence in the reader’s language', () => {
+    const text = whyView(uk, screened({ reasonEvidence: 'profile media, sexual 0.57' }))
+    expect(text).toContain('оцінка 0.57')
+    expect(text).not.toContain('sexual')
+  })
+
+  it('an evidence line it does not recognise is still shown, not swallowed', () => {
+    expect(whyView(uk, screened({ reasonEvidence: 'щось інше' }))).toContain('щось інше')
+  })
+
+  it('the hold headline carries its duration, so the review knows the cost', () => {
+    expect(whyView(uk, screened())).toContain('1год')
+  })
+})

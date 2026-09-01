@@ -137,3 +137,73 @@ export const accountScreenRemoves = (
   // delete aimed at whatever id 0 resolves to.
   return typeof subjectMessageId === 'number' && subjectMessageId > 0 ? subjectMessageId : null
 }
+
+/**
+ * What is left of a report when the question it bought cannot be put.
+ *
+ * `screenAccount` ends in `gateAccount`, and a gate is two things: a hold, and
+ * a question asked inside it. Until now, when the question could not be
+ * delivered the hold came off with it — `deliverCaptcha` lifts the restriction
+ * and drops the gate, on the reasoning that a mute for a question nobody was
+ * asked is a punishment for silence that was never anyone's fault.
+ *
+ * That reasoning is sound about the QUESTION and wrong about the hold, because
+ * the hold was not bought by the question. It was bought by a person in the
+ * room pressing report, and by a profile the screen then found a case in.
+ * Neither of those stops being true because a whisper had nowhere to land.
+ *
+ * ── the measurement, 2026-09-01 ──
+ *
+ * 20 rows, 19 accounts, every one of them reported by a human and gated by the
+ * screen. Every single one carries `avatar_recently_set` with `new_in_chat` and
+ * `new_globally`, and every one carries `private_invite_in_bio`,
+ * `suggestive_profile_media`, or both. Fourteen carry `avatar_shared_with_
+ * accounts` — the same profile photo on 1, 3, 4, 11, 14, 15, 18, 19 and 35
+ * other accounts. Sixteen of the nineteen were never punished by anything, and
+ * the three that were needed a SECOND human report to get there.
+ *
+ * The delivery failure is one line, four times over in one afternoon:
+ * `Telegram API error 400: USER_NOT_PARTICIPANT` — a commenter under a channel
+ * post is not a member of the discussion group, and an ephemeral message can
+ * only be shown to a member.
+ *
+ * ── why a hold and not a ballot ──
+ *
+ * A ballot was the obvious answer and the data refuses it: all 19 of these
+ * accounts ALREADY had one. `/report` opens a vote 0.3s before the screen even
+ * runs, so a fallback ballot would be a second prompt about a target the room
+ * is already being asked about. Network-wide those ballots stand at 145 expired
+ * against 73 resolved, and the two accounts this was written for still sat at
+ * two voters each, hours later.
+ *
+ * So the hold is not a verdict and not a substitute for one. It is the room's
+ * open question given somewhere to be answered from — the account cannot post
+ * while it runs, and a ham ballot lifts it early through the ordinary
+ * restitution path.
+ *
+ * ── which blockers reach here ──
+ *
+ * `sender_not_participant` alone: Telegram naming the person and saying they
+ * are not a member. It is a fact about the network, and no chat chose it.
+ *
+ * `captcha_disabled` is a chat that switched this off, and answering a setting
+ * with a mute overrules it. `sender_is_channel` cannot be muted without being
+ * banned outright (see `mayAskCaptcha`), and is the message path's business.
+ * `discussion_without_ephemeral` is the privacy promise the ask was granted on.
+ * None of them hold anybody.
+ *
+ * `votingEnabled` gates the whole thing, because the hold's justification is
+ * that the room is being asked instead. A chat with no ballot has no way to
+ * answer, and a six-hour mute nobody can lift is a punishment on profile
+ * evidence alone — the line the message path draws and this must not cross.
+ */
+export const accountScreenUnasked = (
+  blockers: readonly string[],
+  votingEnabled: boolean,
+): 'hold' | 'none' => {
+  if (!votingEnabled) return 'none'
+  if (blockers.length === 0) return 'none'
+  // Every blocker must be one the network imposed. A chat's own setting sitting
+  // anywhere in the list is the chat's answer, and it stands.
+  return blockers.every((b) => b === 'sender_not_participant') ? 'hold' : 'none'
+}

@@ -18,9 +18,9 @@ import {
   escalateChannelRecidivism, isChannelSenderId,
   BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS, ESTABLISHED_MIN_MESSAGES,
   accountVerdict, hasHardAccountVerdict, extractUserSignals, PROFILE_EVIDENCE_SIGNALS,
-  accountScreenAllowed, accountScreenRemoves, hardVerdictSourceOf,
-  TIMED_BAN_SECONDS,
-  type AccountAction,
+  accountScreenAllowed, accountScreenRemoves, accountScreenUnasked, hardVerdictSourceOf,
+  captchaBlockers, TIMED_BAN_SECONDS, VOTE_WINDOW_SECONDS,
+  type AccountAction, type CaptchaBlocker,
   type BotStats, type ChannelPreview, type ChatStats, type EditBaseline, type EvaluationInput, type ForwardOrigin,
   type MediaCategory, type PipelinePorts, type Signal, type UserSnapshot, type Verdict, type VoteBallot
 } from '@lyadmin/core'
@@ -414,9 +414,12 @@ const rememberForward = (chatId: number, messageId: number, forward: ForwardOrig
  * the chat nothing over plain `observe` — which is the complaint that started
  * this work. Two minutes is generous for the population being asked: they sent
  * a message seconds ago, so they are holding the phone, and the whisper arrives
- * instantly. It also sits after `CAPTCHA_WHISPER_GRACE_MS` (45s) with room to
- * spare, so a member who never received the whisper still gets the visible
- * prompt and time to tap it.
+ * instantly.
+ *
+ * It used to be described as sitting after a 45-second whisper grace, with the
+ * visible prompt as the net. That net is gone (see `deliverCaptcha`): a whisper
+ * that arrived and went unanswered is not asked again, so this window is now
+ * the whole of the time a gated member has, counted from delivery.
  */
 const CAPTCHA_ANSWER_GRACE_MS = 2 * 60 * 1000
 
@@ -437,20 +440,6 @@ const CAPTCHA_ANSWER_GRACE_MS = 2 * 60 * 1000
  */
 const CAPTCHA_IGNORED_MUTE_SECONDS = 60 * 60
 
-/**
- * How long a whispered prompt gets on its own before the visible one goes up
- * as well.
- *
- * Ephemeral delivery cannot be verified end to end from this side. The
- * transport is no longer the reason: since mtcute 0.31 both halves are native
- * MTProto — `ephemeral.sendMessage` out, `updateEphemeralBotCallbackQuery`
- * back — and the HTTP fallback this used to describe is gone. What remains
- * true is that a successful send is not a rendered prompt: nothing tells us the
- * recipient's client drew it, and a member sitting restricted with nothing to
- * press is the one failure mode this design may not have. So silence is treated
- * as a delivery failure rather than a refusal.
- */
-const CAPTCHA_WHISPER_GRACE_MS = 45 * 1000
 
 /**
  * How long after a gate expires its visible prompt is removed. Small, and only
@@ -603,6 +592,21 @@ const applyIgnoredCaptcha = async (
  * treated as non-delivery, not as refusal — the cost of being wrong about that
  * is one extra visible prompt, which is what every captcha did until now.
  */
+/**
+ * The API's own name for a refusal, and nothing else.
+ *
+ * `USER_NOT_PARTICIPANT` out of `Telegram API error 400: USER_NOT_PARTICIPANT`.
+ * Deliberately a whitelist of shape rather than a slice of the message: an
+ * error string is the one place a user's own text can end up in an exception,
+ * and this value is stored. Anything that does not look like a wire error name
+ * becomes `unknown`, which is honest and safe.
+ */
+const telegramErrorName = (err: unknown): string => {
+  const text = err instanceof Error ? err.message : String(err)
+  const match = /\b([A-Z][A-Z0-9_]{3,63})\b/.exec(text)
+  return match?.[1] ?? 'unknown'
+}
+
 const deliverCaptcha = async (
   chatId: number,
   userId: number,
@@ -622,21 +626,16 @@ const deliverCaptcha = async (
    * silence and non-delivery the same event. The first captcha ever issued in
    * production went to an account Telegram would not accept a whisper for
    * (`USER_NOT_PARTICIPANT`); two minutes later it was muted for an hour and
-   * its message was deleted, for failing to answer a question. Whether it ever
-   * arrived is not visible from here — so the only defensible rule is that a
-   * send we did not manage to make cannot cost the member anything.
+   * its message was deleted, for failing to answer a question. So a send we did
+   * not manage to make cannot cost the member anything.
    *
-   * `restart` exists because the clock belongs to the prompt the member can
-   * SEE. A whisper that goes unanswered posts a visible prompt at 45s, and
-   * without restarting, that prompt would carry only the 75s left of the
-   * original two minutes.
+   * It took a `restart` flag while an unanswered whisper was followed by a
+   * public card that deserved its own full window. There is one prompt now, so
+   * there is one clock.
    */
   let consequenceTimer: ReturnType<typeof setTimeout> | null = null
-  const armConsequence = (restart = false): void => {
-    if (consequenceTimer !== null) {
-      if (!restart) return
-      clearTimeout(consequenceTimer)
-    }
+  const armConsequence = (): void => {
+    if (consequenceTimer !== null) return
     const consequence = setTimeout(() => {
       // `claimConsequence`, not a read of the map: it refuses a gate that was
       // answered, replaced, expired, or already punished, and it takes the
@@ -658,7 +657,7 @@ const deliverCaptcha = async (
    * question deliverable it is a ten-minute mute for a message nothing read, so
    * it comes off and the gate is dropped rather than left to lapse.
    */
-  const abandonUndeliverable = async (): Promise<CaptchaDelivery> => {
+  const abandonUndeliverable = async (reason: string): Promise<CaptchaDelivery> => {
     // Dropped FIRST, and only if this gate is still the one in force. A send
     // can fail long after a second gate was opened for the same person and
     // delivered — lifting the restriction then would free them from a gate
@@ -670,8 +669,8 @@ const deliverCaptcha = async (
     }
     const lifted = await gateway.tg.restrictChatMember({ chatId, userId, restrictions: {} })
       .then(() => true).catch(() => false)
-    log.warn('captcha_undeliverable', { chatId, userId, lifted })
-    void store.recordCaptchaEvent({ chatId, userId, event: 'undeliverable' })
+    log.warn('captcha_undeliverable', { chatId, userId, lifted, reason })
+    void store.recordCaptchaEvent({ chatId, userId, event: 'undeliverable', reason })
     return 'undeliverable'
   }
 
@@ -731,7 +730,7 @@ const deliverCaptcha = async (
   }
 
   if (!config.ephemeralCaptcha) {
-    if (!(await postVisible())) return await abandonUndeliverable()
+    if (!(await postVisible())) return await abandonUndeliverable('visible_prompt_failed')
     void store.recordCaptchaEvent({ chatId, userId, event: 'delivered', via: 'visible' })
     armConsequence()
     return 'visible'
@@ -745,20 +744,23 @@ const deliverCaptcha = async (
     )
     log.info('captcha_whispered', { chatId, userId })
     void store.recordCaptchaEvent({ chatId, userId, event: 'delivered', via: 'whisper' })
-    armConsequence()
-
-    const timer = setTimeout(() => {
-      // Still the same open gate? A tap (or a re-issue) already replaced it.
-      if (!captchas.isCurrent(gate)) return
-      log.warn('captcha_whisper_unanswered', { chatId, userId })
-      // The visible prompt is the one the member can be sure of seeing, so it
-      // gets the full answering window rather than the remainder of the
-      // whisper's.
-      void postVisible().then((ok) => { if (ok) armConsequence(true) })
-    }, CAPTCHA_WHISPER_GRACE_MS)
-    // A pending fallback must not keep the process alive on shutdown.
-    timer.unref?.()
-    gate.cancels.push(() => clearTimeout(timer))
+    /**
+     * A whisper that ARRIVED and went unanswered is answered, and the answer is
+     * silence.
+     *
+     * This posted a second, public copy of the same question at 45 seconds and
+     * restarted the clock, which is how every consequence in production landed
+     * at Δ=165s = 45 + 120. Measured to 2026-09-01: of 47 whispers delivered
+     * network-wide, 33 were ignored and 13 answered — and in the one comment
+     * chat carrying most of the traffic, 14 delivered and 0 ever passed. Not one
+     * of those 33 was rescued by seeing the question a second time.
+     *
+     * The remaining case the second copy was for — the member did not see the
+     * whisper, an old client, a missed notification — is real and rare, and it
+     * is priced by the consequence being an hour's mute rather than a removal.
+     * Asking twice to insure against it cost every gate 45 extra seconds of an
+     * account posting, and put a card about a member in front of the chat.
+     */
     return 'whispered'
   } catch (err) {
     /**
@@ -783,7 +785,7 @@ const deliverCaptcha = async (
      * only the answer is missing.
      */
     log.warn('captcha_whisper_failed', { chatId, userId, err })
-    return await abandonUndeliverable()
+    return await abandonUndeliverable(telegramErrorName(err))
   }
 }
 
@@ -2705,6 +2707,17 @@ const JOIN_GATE_MUTE_SECONDS = 10 * 60
  * explicit avatar; but somebody the CHAT already knows is exempted below,
  * because a returning regular has standing that a stranger does not.
  */
+/**
+ * What became of an attempt to gate an account.
+ *
+ * `blocked` carries its reasons because the caller has a different answer for
+ * each: a chat that switched the captcha off has spoken, and a whisper with no
+ * member to reach has not.
+ */
+type GateOutcome =
+  | { outcome: 'gated' | 'skipped' | 'failed' }
+  | { outcome: 'blocked'; blockers: CaptchaBlocker[] }
+
 const gateAccount = async (params: {
   chat: Chat
   user: User
@@ -2716,18 +2729,51 @@ const gateAccount = async (params: {
   evidence: string | null
   /** Message the prompt answers — a join line, or the reported message. */
   replyToMessageId: number | null
-}): Promise<'gated' | 'skipped' | 'failed'> => {
+}): Promise<GateOutcome> => {
   const { chat, user, reason, evidence } = params
   const groupDoc = await store.getGroupDoc(chat.id).catch(() => null)
   const policy = groupDocToChatPolicy(groupDoc as never)
   // Both switches apply: the chat's own captcha setting, and its master spam
   // switch. A chat that turned the pipeline off did not ask to be policed at
   // the door instead.
-  if (!policy.enabled || !policy.captchaEnabled) return 'skipped'
-  if (policy.trustedUserIds.includes(user.id)) return 'skipped'
+  if (!policy.enabled || !policy.captchaEnabled) return { outcome: 'skipped' }
+  if (policy.trustedUserIds.includes(user.id)) return { outcome: 'skipped' }
   // Standing earned elsewhere still counts — see `established_user`.
-  if ((params.history?.messagesGlobal ?? 0) >= ESTABLISHED_MIN_MESSAGES) return 'skipped'
-  if (await isChatAdmin(chat.id, user.id)) return 'skipped'
+  if ((params.history?.messagesGlobal ?? 0) >= ESTABLISHED_MIN_MESSAGES) {
+    return { outcome: 'skipped' }
+  }
+  if (await isChatAdmin(chat.id, user.id)) return { outcome: 'skipped' }
+
+  /**
+   * Whether this question CAN be put, asked before anything is done about it.
+   *
+   * This function used to find out by trying: restrict the member, send, and
+   * discover from the exception that Telegram would never have delivered it.
+   * Production 2026-09-01, four times in one afternoon and in two different
+   * chats: `Telegram API error 400: USER_NOT_PARTICIPANT` — an ephemeral
+   * message is shown to a member of the chat and there is no such member here,
+   * because a commenter under a channel post never joined the discussion group.
+   * The mute went on and came straight back off, and the screen recorded
+   * `gate_failed` with nothing saying which of five conditions had refused.
+   *
+   * Read from `captchaBlockers`, the same function the message path consults,
+   * so the two can no longer come to different conclusions about one gate.
+   */
+  const blockers = captchaBlockers({
+    captchaEnabled: policy.captchaEnabled,
+    // Stated rather than computed, because this gate is deliberately not gated
+    // on newness (see above) and would only have to ignore the answer.
+    userIsNewish: true,
+    senderIsChannel: isChannelSenderId(user.id),
+    senderIsParticipant: memberFacts.peek(chat.id, user.id)?.isParticipant ?? null,
+    ephemeralCaptcha: config.ephemeralCaptcha
+  })
+  if (blockers.length > 0) {
+    log.warn('account_gate_blocked', {
+      chatId: chat.id, userId: user.id, reason, blockers: blockers.join(',')
+    })
+    return { outcome: 'blocked', blockers }
+  }
 
   const held = await gateway.moderationActions
     .mute(chat.id, user.id, JOIN_GATE_MUTE_SECONDS)
@@ -2736,7 +2782,7 @@ const gateAccount = async (params: {
   // member to unlock something already open.
   if (!held) {
     log.warn('account_gate_failed', { chatId: chat.id, userId: user.id, reason })
-    return 'failed'
+    return { outcome: 'failed' }
   }
   log.info('account_gate', {
     chatId: chat.id, chat: chat.title ?? undefined, userId: user.id, reason,
@@ -2759,7 +2805,7 @@ const gateAccount = async (params: {
    */
   if (delivery === 'undeliverable') {
     log.warn('account_gate_undeliverable', { chatId: chat.id, userId: user.id, reason })
-    return 'failed'
+    return { outcome: 'failed' }
   }
 
   await store.recordDecision({
@@ -2785,7 +2831,7 @@ const gateAccount = async (params: {
     },
     latencyMs: 0
   }).catch(() => { /* telemetry must never break moderation */ })
-  return 'gated'
+  return { outcome: 'gated' }
 }
 
 /**
@@ -2819,7 +2865,7 @@ const screenAccount = async (params: {
    * somebody reported. See `accountScreenRemoves`.
    */
   subjectMessageId: number | null
-}): Promise<AccountAction> => {
+}): Promise<AccountAction | 'hold'> => {
   const { chat, target } = params
   /**
    * What this screen actually managed to look at.
@@ -2843,6 +2889,7 @@ const screenAccount = async (params: {
    * "clean", "the chat forbids it", "Telegram refused" and "the profile never
    * arrived" are four different things to have to fix.
    */
+  const sawLine = (): string => Object.entries(saw).map(([k, v]) => `${k}=${v}`).join(' ')
   const note = (outcome: string, signals: Signal[] = []): void => {
     void store.recordDecision({
       chatId: chat.id, userId: target.id, messageId: params.replyToMessageId ?? 0,
@@ -2851,7 +2898,7 @@ const screenAccount = async (params: {
         pSpam: 0, action: 'none', needsVote: false, banDurationSeconds: null,
         decidedBy: 'join_screen', ruleId: null, signals,
         reasonCode: params.reason, reasonEvidence: null,
-        meta: { screen: outcome, saw: Object.entries(saw).map(([k, v]) => `${k}=${v}`).join(' ') }
+        meta: { screen: outcome, saw: sawLine() }
       },
       latencyMs: Date.now() - startedAt
     }).catch(() => { /* telemetry must never break moderation */ })
@@ -3077,11 +3124,81 @@ const screenAccount = async (params: {
     evidence,
     replyToMessageId: params.replyToMessageId
   })
-  // `gated` writes its own `captcha` row; the other two outcomes wrote nothing,
-  // and both are real answers — the chat has captcha off, or Telegram would not
-  // hold the person while we asked.
-  if (gated !== 'gated') note(gated === 'failed' ? 'gate_failed' : 'gate_skipped', signals)
-  return gated === 'gated' ? 'gate' : 'none'
+  if (gated.outcome === 'gated') return 'gate'
+  if (gated.outcome !== 'blocked') {
+    // `gated` writes its own `captcha` row; these two wrote nothing, and both
+    // are real answers — Telegram would not hold the person while we asked, or
+    // the send died after the hold was already on and lifted itself.
+    note(gated.outcome === 'failed' ? 'gate_failed' : 'gate_skipped', signals)
+    return 'none'
+  }
+
+  const groupDoc = await store.getGroupDoc(chat.id).catch(() => null)
+  const policy = groupDocToChatPolicy(groupDoc as never)
+  saw['blocked'] = gated.blockers.join(',')
+  if (accountScreenUnasked(gated.blockers, policy.votingEnabled) !== 'hold') {
+    note('gate_blocked', signals)
+    return 'none'
+  }
+
+  /**
+   * The hold the question was going to be asked inside, kept without it.
+   *
+   * See `accountScreenUnasked` for the population and the numbers. One hour,
+   * not the ballot's six: this member has no button — that is the entire
+   * situation — and `CAPTCHA_IGNORED_MUTE_SECONDS` already states the rule that
+   * a restriction nobody can lift may not outlast an hour.
+   *
+   * The notice replies to the reported message on purpose. A whisper could not
+   * reach this person, so the reply is the only notification they will get, and
+   * it puts the explanation in the thread they were already reading rather than
+   * loose in a busy comment section. The room gets the same one-tap "not spam"
+   * it gets for every other action, and `rememberVerdict` plus the stored row
+   * are what let a ham ballot or an admin undo it through the ordinary path.
+   */
+  const held = await gateway.moderationActions
+    .mute(chat.id, target.id, CAPTCHA_IGNORED_MUTE_SECONDS)
+    .then(() => true).catch(() => false)
+  log.info('account_screen_hold', {
+    chatId: chat.id, chat: chat.title ?? undefined, userId: target.id,
+    reason: params.reason, blockers: gated.blockers.join(','), applied: held
+  })
+  if (!held) {
+    note('hold_failed', signals)
+    return 'none'
+  }
+
+  const holdVerdict: Verdict = {
+    pSpam: 0, action: 'mute', needsVote: false,
+    banDurationSeconds: CAPTCHA_IGNORED_MUTE_SECONDS,
+    decidedBy: 'join_screen', ruleId: null, signals,
+    reasonCode: 'reported_unreachable', reasonEvidence: evidence,
+    meta: { screen: 'hold', blockedBy: gated.blockers.join(','), saw: sawLine() }
+  }
+  const cardMessageId = params.replyToMessageId ?? 0
+  rememberVerdict(chat.id, cardMessageId, holdVerdict)
+  await store.recordDecision({
+    chatId: chat.id, userId: target.id, messageId: cardMessageId,
+    textPreview: '',
+    verdict: holdVerdict,
+    execution: {
+      applied: true, deleted: null, skippedReason: null,
+      failed: [], albumRemoved: 0, retroPurged: 0
+    },
+    latencyMs: Date.now() - startedAt
+  }).catch(() => { /* telemetry must never break moderation */ })
+
+  const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
+  const view = compactNotification(locale, holdVerdict, {
+    chatId: chat.id, messageId: cardMessageId, userId: target.id, userLabel: target.displayName
+  }, { botUsername: selfUsername ?? undefined })
+  const sent = await tgSendText(chat.id, viewHtml(view.text), {
+    replyMarkup: toKeyboard(view.buttons),
+    disableWebPreview: true,
+    ...(cardMessageId > 0 ? { replyTo: cardMessageId } : {})
+  }).catch(() => null)
+  if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_COMPACT_MS, 'mod_event:account_screen')
+  return 'hold'
 }
 
 const gateExplicitJoiner = async (

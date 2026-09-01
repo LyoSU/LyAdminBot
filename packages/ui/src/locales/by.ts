@@ -147,6 +147,7 @@ export const by: Locale = {
     low_information: 'недастаткова інфармацыі, назіраем',
     low_information_profile: 'мала інфармацыі, але профіль падазроны — просім пацвердзіць',
     low_information_profile_unreachable: 'профіль заслугоўваў пытання, якое не ўдалося даставіць — назіраем',
+    reported_unreachable: 'на профіль паскардзіліся, а праверку не даставіць — паўза на гадзіну',
     content_unconfirmed: 'падазроны профіль, але змест не пацверджаны',
     admin_report: 'адмін зарэпорціў як спам',
     community_vote: 'супольнасць прагаласавала: спам',
@@ -163,6 +164,9 @@ export const by: Locale = {
       low: (percent) => `🟡 Магчыма спам · ${percent}%`
     },
     noticedTitle: 'Што я заўважыў:',
+    profileReuseEvidence: (accounts) =>
+      `тая ж аватарка яшчэ на ${accounts} ${plural(accounts, 'акаўнце', 'акаўнтах', 'акаўнтах')}`,
+    profileMediaEvidence: (score) => `адкрытае фота ў профілі · ацэнка ${score}`,
     externalBanEvidence: (sources, ago) => [
       'у спам-базах',
       ...(sources > 1 ? [`${sources} ${plural(sources, 'крыніца', 'крыніцы', 'крыніц')}`] : []),

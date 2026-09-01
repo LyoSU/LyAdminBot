@@ -135,6 +135,7 @@ export const tr: Locale = {
     low_information: 'yeterli bilgi yok, izleniyor',
     low_information_profile: 'yargılamak için az bilgi, şüpheli profil — doğrulama istendi',
     low_information_profile_unreachable: 'profil, iletemediğimiz bir doğrulamayı hak etti — izleniyor',
+    reported_unreachable: 'şikâyet edilen profile doğrulama iletilemedi — bir saat duraklatıldı',
     content_unconfirmed: 'şüpheli profil, mesaj içeriği doğrulanmadı',
     admin_report: 'bir yönetici bunu spam olarak bildirdi',
     community_vote: 'topluluk oyladı: spam',
@@ -151,6 +152,8 @@ export const tr: Locale = {
       low: (percent) => `🟡 Spam olabilir · ${percent}%`
     },
     noticedTitle: 'Fark ettiklerim:',
+    profileReuseEvidence: (accounts) => `aynı profil fotoğrafı ${accounts} hesapta daha`,
+    profileMediaEvidence: (score) => `müstehcen profil fotoğrafı · puan ${score}`,
     externalBanEvidence: (sources, ago) => [
       'spam veritabanlarında',
       ...(sources > 1 ? [`${sources} kaynak`] : []),
