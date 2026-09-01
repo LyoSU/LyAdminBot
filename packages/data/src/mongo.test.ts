@@ -541,6 +541,13 @@ describe('ensureTtlIndex', () => {
  * question the chat ignored dropped the correction channel on the floor.
  */
 describe('vote lifetime', () => {
+  /** The ballot a pipeline-style `castBallot` write appends after the filter. */
+  const writtenBallot = (update: unknown): Record<string, unknown> => {
+    const stage = (update as { $set: { ballots: { $concatArrays: unknown[] } } }[])[0]
+    const appended = stage?.$set.ballots.$concatArrays[1] as Record<string, unknown>[]
+    return appended[0] ?? {}
+  }
+
   const voteStore = (rows: Record<string, unknown>[] = []) => {
     const inserted: Record<string, unknown>[] = []
     const finds: Record<string, unknown>[] = []
@@ -605,16 +612,31 @@ describe('vote lifetime', () => {
     await store.castBallot({
       chatId: -100, messageId: 5, userId: 7, isAdmin: false, choice: 'spam', label: 'Олег'
     })
-    const pushed = (updates[0]?.update as Record<string, Record<string, unknown>>)['$push']
-    expect(pushed?.['ballots']).toMatchObject({ userId: 7, choice: 'spam', label: 'Олег' })
+    expect(writtenBallot(updates[0]?.update)).toMatchObject({ userId: 7, choice: 'spam', label: 'Олег' })
   })
 
   it('a ballot with no name still records the vote', async () => {
     const { store, updates } = voteStore()
     await store.castBallot({ chatId: -100, messageId: 5, userId: 7, isAdmin: false, choice: 'ham' })
-    const pushed = (updates[0]?.update as Record<string, Record<string, unknown>>)['$push']
-    expect(pushed?.['ballots']).toMatchObject({ userId: 7, choice: 'ham' })
-    expect(pushed?.['ballots']).not.toHaveProperty('label')
+    expect(writtenBallot(updates[0]?.update)).toMatchObject({ userId: 7, choice: 'ham' })
+    expect(writtenBallot(updates[0]?.update)).not.toHaveProperty('label')
+  })
+
+  /**
+   * One ballot per voter: the write replaces this voter's earlier ballot and
+   * keeps everybody else's. Twenty "expired at three spam ballots" rows in the
+   * week to 2026-09-01 were two people, one of them tapping twice.
+   */
+  it('replaces the voter\'s own earlier ballot rather than appending a second', async () => {
+    const { store, updates } = voteStore()
+    await store.castBallot({ chatId: -100, messageId: 5, userId: 7, isAdmin: false, choice: 'spam' })
+    const stage = (updates[0]?.update as unknown as Record<string, unknown>[])[0] as { $set: { ballots: { $concatArrays: unknown[] } } }
+    const [kept] = stage.$set.ballots.$concatArrays as [{ $filter: { cond: { $ne: unknown[] } } }]
+    // The kept part is everybody whose userId is not this voter's.
+    expect(kept.$filter.cond.$ne).toEqual(['$$b.userId', 7])
+    const written = writtenBallot(updates[0]?.update)
+    expect(written).toHaveProperty('taps')
+    expect(written).toHaveProperty('changedMind')
   })
 
   it('refuses a ballot for a window that has already passed', async () => {

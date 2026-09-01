@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import {
-  tallyVotes, voterRoster, voteEligibility, voteMayRecordDetection,
+  tallyVotes, voterRoster, voteEligibility, voteMayRecordDetection, VOTE_TENURE_ALONE_DAYS,
+  expiryOutcome, UNOPPOSED_EXPIRY_MIN_SPAM,
   type VoteBallot, type VoterStanding
 } from './voting.js'
 
@@ -281,9 +282,23 @@ describe('voteEligibility', () => {
     expect(voteEligibility(voter({ messagesInChat: 100, localAgeDays: 1 }))).toBe('no_standing')
   })
 
-  it('tenure without volume earns no vote either', () => {
-    expect(voteEligibility(voter({ messagesInChat: 1, messagesGlobal: 4, localAgeDays: 400 })))
+  it('months of tenure without volume earn no vote', () => {
+    expect(voteEligibility(voter({ messagesInChat: 1, messagesGlobal: 4, localAgeDays: 100 })))
       .toBe('no_standing')
+  })
+
+  it('a year in the chat is standing by itself', () => {
+    // Half of the refusals in the week to 2026-09-01 were members Telegram
+    // dates to one to four years ago with nothing in counters that only exist
+    // since June. Silence is not arrival.
+    expect(voteEligibility(voter({ messagesInChat: 0, messagesGlobal: 0, localAgeDays: null,
+      joinedAgoSeconds: VOTE_TENURE_ALONE_DAYS * 86400 }))).toBe('eligible')
+    expect(voteEligibility(voter({ messagesInChat: 1, messagesGlobal: 4, localAgeDays: 400 })))
+      .toBe('eligible')
+  })
+
+  it('a year of tenure does not restore a vote to a known-bad account', () => {
+    expect(voteEligibility(voter({ localAgeDays: 400, spamDetections: 2 }))).toBe('known_bad')
   })
 
   it('an unknown tenure is not evidence of tenure', () => {
@@ -377,5 +392,38 @@ describe('voteMayRecordDetection', () => {
     // LEARNED and fires globally. This governs one counter on one account, and
     // a single visible character is still something a voter read.
     expect(voteMayRecordDetection('?')).toBe(true)
+  })
+})
+
+describe('expiryOutcome', () => {
+  it('two unopposed spam voters take the message down at expiry', () => {
+    expect(expiryOutcome({ spam: UNOPPOSED_EXPIRY_MIN_SPAM, ham: 0 })).toBe('delete')
+    expect(expiryOutcome({ spam: 5, ham: 0 })).toBe('delete')
+  })
+
+  it('one voter is an opinion, not an outcome', () => {
+    expect(expiryOutcome({ spam: 1, ham: 0 })).toBeNull()
+    expect(expiryOutcome({ spam: 0, ham: 0 })).toBeNull()
+  })
+
+  it('a single dissent keeps the message', () => {
+    expect(expiryOutcome({ spam: 4, ham: 1 })).toBeNull()
+  })
+
+  it('the tally it reads is per voter, so a repeated tap is still one voter', () => {
+    const tally = tallyVotes([b(1, 'spam'), b(1, 'spam'), b(1, 'spam')])
+    expect(expiryOutcome(tally)).toBeNull()
+  })
+})
+
+describe('voterRoster — a deduplicated ballot carries its own change of mind', () => {
+  it('reads the stored flag', () => {
+    const roster = voterRoster([{ ...b(1, 'ham'), changedMind: true }])
+    expect(roster.ham[0]?.changedMind).toBe(true)
+  })
+
+  it('a plain ballot is not a change of mind', () => {
+    const roster = voterRoster([{ ...b(1, 'ham'), changedMind: false }])
+    expect(roster.ham[0]?.changedMind).toBe(false)
   })
 })

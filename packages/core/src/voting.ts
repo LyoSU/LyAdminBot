@@ -23,6 +23,14 @@ export interface VoteBallot {
   label?: string
   /** Mongo hands this back as a Date; older rows may have nothing. */
   at?: Date
+  /**
+   * Set by the store when this ballot REPLACED an earlier one by the same
+   * voter. One ballot per voter is kept (since 2026-09-01), so the roster can
+   * no longer see the change by counting entries and has to be told.
+   */
+  changedMind?: boolean
+  /** How many times this voter tapped, all told. */
+  taps?: number
 }
 
 export interface VoteTally {
@@ -170,7 +178,9 @@ export const voterRoster = (ballots: VoteBallot[]): VoterRoster => {
         : existing?.label ?? null,
       isAdmin: ballot.isAdmin === true,
       choice: ballot.choice,
-      changedMind: seen.size > 1
+      // Either shape: the stored flag on a deduplicated ballot, or two choices
+      // seen on a row written before ballots were deduplicated.
+      changedMind: ballot.changedMind === true || seen.size > 1
     }
     // Map.set keeps the original insertion position for an existing key.
     entries.set(ballot.userId, entry)
@@ -250,6 +260,15 @@ const atLeast = (value: number | null, bar: number): boolean =>
  *  - Volume alone is not standing. Three accounts can each post ten messages in
  *    five minutes; they cannot make themselves a week old. Tenure is the half
  *    of this bar that an attacker actually has to pay for.
+ *  - A YEAR of tenure is standing on its own. Measured over the week to
+ *    2026-09-01: 76 ballots refused for standing, and about half of them came
+ *    from members Telegram says joined one to four years ago, with no messages
+ *    in our counters — the counters only exist since 2026-06, and a quiet
+ *    member is not a newcomer. Meanwhile 35 questions expired at two "spam"
+ *    against zero, for want of a third voter. The year is the cost an attacker
+ *    cannot shortcut: a farm account that sat in this chat since last summer
+ *    without posting is a farm that gave up a year of the chat to cast one vote
+ *    among three.
  *
  * Tenure is read from BOTH clocks and the longer wins (`mergeTenureDays`) —
  * again the pipeline's rule rather than a second one. Our own first-seen date
@@ -263,14 +282,18 @@ const atLeast = (value: number | null, bar: number): boolean =>
  * once, and "may or may not vote" is a claim we can actually defend to somebody
  * who was refused.
  */
+export const VOTE_TENURE_ALONE_DAYS = 365
+
 export const voteEligibility = (voter: VoterStanding): VoteEligibility => {
   if (voter.isTarget) return 'is_target'
   if (voter.isAdmin) return 'eligible'
   if (atLeast(voter.spamDetections, PRIOR_DETECTIONS_MIN)) return 'known_bad'
 
+  const tenure = mergeTenureDays(voter.localAgeDays, voter.joinedAgoSeconds)
+  if (tenure !== null && atLeast(tenure, VOTE_TENURE_ALONE_DAYS)) return 'eligible'
+
   const volume = atLeast(voter.messagesInChat, ESTABLISHED_MIN_IN_CHAT) ||
     atLeast(voter.messagesGlobal, ESTABLISHED_MIN_MESSAGES)
-  const tenure = mergeTenureDays(voter.localAgeDays, voter.joinedAgoSeconds)
   const tenured = tenure !== null && atLeast(tenure, ESTABLISHED_MIN_TENURE_DAYS)
   return volume && tenured ? 'eligible' : 'no_standing'
 }
@@ -301,5 +324,23 @@ export const voteEligibility = (voter: VoterStanding): VoteEligibility => {
  * Takes the learn text, not the display preview: the preview is truncated for
  * a screen and could in principle be empty while the message was not.
  */
+/**
+ * Two voters saying spam, nobody saying otherwise, and the window ran out.
+ *
+ * Measured over the week to 2026-09-01: 146 of 244 questions expired, and 35
+ * of them stood at two distinct "spam" against zero "not spam" when they did
+ * — 24 in one chat that simply never has a third regular awake. The quorum
+ * (`DEFAULT_THRESHOLD`) stays where it is for the SENDER: a mute needs three.
+ * The message is a different question. Two members with standing called it
+ * spam, and over the whole window not one person disagreed; leaving the advert
+ * up on that record is the outcome nobody in the chat asked for. So the
+ * message goes, the account is untouched and nothing is learned from it —
+ * a deletion is the one act here a wrong call costs the least.
+ */
+export const UNOPPOSED_EXPIRY_MIN_SPAM = 2
+
+export const expiryOutcome = (tally: Pick<VoteTally, 'spam' | 'ham'>): 'delete' | null =>
+  tally.ham === 0 && tally.spam >= UNOPPOSED_EXPIRY_MIN_SPAM ? 'delete' : null
+
 export const voteMayRecordDetection = (learnText: string): boolean =>
   learnText.trim().length > 0

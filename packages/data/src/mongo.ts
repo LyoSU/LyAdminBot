@@ -512,6 +512,8 @@ export class MongoStore {
     await ensureTtlIndex(this.votes, { createdAt: 1 }, 7 * 86400)
     // Drives the expiry sweep; without it the scan grows with the whole week.
     await this.votes.createIndex({ status: 1, expiresAt: 1 })
+    // `hasOpenVoteFor`: one question per person at a time.
+    await this.votes.createIndex({ chatId: 1, targetUserId: 1, status: 1 })
     // Scheduled deletions: single deleteAt index doubles as the due-query
     // index and a 1h TTL backstop (3600s after deleteAt) if a sweep is missed.
     await ensureTtlIndex(this.scheduledDeletions, { deleteAt: 1 }, 3600)
@@ -1559,6 +1561,32 @@ export class MongoStore {
     }
   }
 
+  /**
+   * Whether this person is already the subject of an open question here.
+   *
+   * One ballot per target at a time: the same sender's third message in ten
+   * minutes must not put a third ballot under the chat — production 2026-08-02
+   * had one text voted on seven times — and since 2026-09-01 an unacted verdict
+   * may ask too, which made the check necessary outside an incident as well.
+   */
+  async hasOpenVoteFor(chatId: number, targetUserId: number): Promise<boolean> {
+    const doc = await this.votes.findOne(
+      { chatId, targetUserId, status: 'open', expiresAt: { $gt: new Date() } },
+      { projection: { _id: 1 } }
+    )
+    return doc !== null
+  }
+
+  /** What the sweep did with an expired question — see `expiryOutcome`. */
+  async noteExpiredOutcome(
+    chatId: number, messageId: number, outcome: 'delete', error: string | null
+  ): Promise<void> {
+    await this.votes.updateOne(
+      { chatId, messageId },
+      { $set: { expiredAction: outcome, ...(error === null ? {} : { expiredActionError: error }) } }
+    )
+  }
+
   async setVotePrompt(chatId: number, messageId: number, promptMessageId: number): Promise<void> {
     await this.votes.updateOne({ chatId, messageId }, { $set: { promptMessageId } })
   }
@@ -1585,6 +1613,21 @@ export class MongoStore {
       userId: params.userId, isAdmin: params.isAdmin, choice: params.choice, at: new Date(),
       ...(params.label !== undefined && params.label !== '' ? { label: truncate(params.label, 64) } : {})
     }
+    /**
+     * One ballot per voter, replaced in place — an aggregation-pipeline update
+     * so the replacement is one atomic write.
+     *
+     * Every tap used to be appended. Twenty questions in the week to 2026-09-01
+     * read as three or four "spam" ballots and had expired unresolved, because
+     * they were two people, one of them tapping again to see what would
+     * happen; the tally has always deduplicated, the stored row never did, and
+     * every analysis of the quorum written against the row was wrong by the
+     * same amount. What the roster needs from the history survives on the
+     * ballot itself: whether this voter changed their mind, and how often they
+     * tapped.
+     */
+    const mine = { $filter: { input: { $ifNull: ['$ballots', []] }, as: 'b', cond: { $eq: ['$$b.userId', params.userId] } } }
+    const previous = { $arrayElemAt: [mine, 0] }
     const result = await this.votes.updateOne(
       // `expiresAt` as well as `status`: the sweep that flips the status runs
       // once a minute, so the status alone leaves a window — a whole restart
@@ -1594,8 +1637,30 @@ export class MongoStore {
         chatId: params.chatId, messageId: params.messageId, status: 'open',
         expiresAt: { $gt: new Date() }
       },
-      // The driver's PushOperator<Document> rejects concrete array elements.
-      { $push: { ballots: ballot } } as never
+      [{
+        $set: {
+          ballots: {
+            $concatArrays: [
+              { $filter: { input: { $ifNull: ['$ballots', []] }, as: 'b', cond: { $ne: ['$$b.userId', params.userId] } } },
+              [{
+                ...ballot,
+                taps: { $add: [{ $ifNull: [{ $getField: { field: 'taps', input: previous } }, 0] }, 1] },
+                changedMind: {
+                  $or: [
+                    { $eq: [{ $getField: { field: 'changedMind', input: previous } }, true] },
+                    {
+                      $and: [
+                        { $ne: [previous, null] },
+                        { $ne: [{ $getField: { field: 'choice', input: previous } }, params.choice] }
+                      ]
+                    }
+                  ]
+                }
+              }]
+            ]
+          }
+        }
+      }]
     )
     // Reported, not swallowed: the filter can miss because the question closed
     // OR because its window ran out before the sweep noticed, and a caller that
