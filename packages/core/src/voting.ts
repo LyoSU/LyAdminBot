@@ -179,8 +179,11 @@ export const voterRoster = (ballots: VoteBallot[]): VoterRoster => {
       isAdmin: ballot.isAdmin === true,
       choice: ballot.choice,
       // Either shape: the stored flag on a deduplicated ballot, or two choices
-      // seen on a row written before ballots were deduplicated.
-      changedMind: ballot.changedMind === true || seen.size > 1
+      // seen on a row written before ballots were deduplicated. The flag is
+      // believed only where the tap count allows it — one tap cannot be a
+      // change of mind, and for a day the store wrote `true` on every first
+      // ballot (see castBallot). The count is the fact the flag derives from.
+      changedMind: (ballot.changedMind === true && ballot.taps !== 1) || seen.size > 1
     }
     // Map.set keeps the original insertion position for an existing key.
     entries.set(ballot.userId, entry)

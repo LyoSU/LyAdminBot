@@ -1627,7 +1627,16 @@ export class MongoStore {
      * tapped.
      */
     const mine = { $filter: { input: { $ifNull: ['$ballots', []] }, as: 'b', cond: { $eq: ['$$b.userId', params.userId] } } }
-    const previous = { $arrayElemAt: [mine, 0] }
+    /**
+     * Normalised to null on purpose. `$arrayElemAt` on an empty array yields
+     * *missing*, not null, and inside an aggregation expression missing is NOT
+     * equal to null: `{ $ne: [missing, null] }` is true, and `$getField` on a
+     * missing input is missing again, so `≠ choice` is true as well. Without
+     * the `$ifNull` every voter's FIRST ballot was recorded as a change of
+     * mind (2026-09-01 → 2026-09-02), and a roster of three first-time voters
+     * read "changed their vote" three times.
+     */
+    const previous = { $ifNull: [{ $arrayElemAt: [mine, 0] }, null] }
     const result = await this.votes.updateOne(
       // `expiresAt` as well as `status`: the sweep that flips the status runs
       // once a minute, so the status alone leaves a window — a whole restart
@@ -1667,6 +1676,46 @@ export class MongoStore {
     // cannot tell the difference between those and success answers "counted"
     // for a ballot it never wrote.
     return result.modifiedCount === 1
+  }
+
+  /**
+   * Take back the change-of-mind flags that were never earned.
+   *
+   * Between the deduplicated ballot (2026-09-01) and the `$ifNull` above
+   * (2026-09-02) `castBallot` wrote `changedMind: true` on every first ballot,
+   * and carried it forward on every re-tap; the flag on those rows says
+   * nothing about the voter. This puts the rows into the state the fixed write
+   * would have produced where that is knowable, and admits ignorance where it
+   * is not: a ballot tapped once becomes `false` (one tap cannot be a change of
+   * mind), a ballot tapped more than once loses the flag altogether, because
+   * whether those taps switched sides is exactly what the bug erased.
+   *
+   * Bounded by `before` so it can run once after the deploy without touching
+   * flags the fixed write has since set for real. Rows without a tap count
+   * predate deduplication and were never affected.
+   */
+  async forgetUnearnedChangeOfMind(before: Date): Promise<{ questions: number }> {
+    const result = await this.votes.updateMany(
+      { createdAt: { $lt: before }, 'ballots.taps': { $exists: true } },
+      [{
+        $set: {
+          ballots: {
+            $map: {
+              input: { $ifNull: ['$ballots', []] },
+              as: 'b',
+              in: {
+                $cond: [
+                  { $lte: [{ $ifNull: ['$$b.taps', 1] }, 1] },
+                  { $mergeObjects: ['$$b', { changedMind: false }] },
+                  { $unsetField: { field: 'changedMind', input: '$$b' } }
+                ]
+              }
+            }
+          }
+        }
+      }]
+    )
+    return { questions: result.modifiedCount }
   }
 
   // ── scheduled deletions (persistent, survives restarts) ──────────────

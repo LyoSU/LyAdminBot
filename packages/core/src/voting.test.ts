@@ -426,4 +426,26 @@ describe('voterRoster — a deduplicated ballot carries its own change of mind',
     const roster = voterRoster([{ ...b(1, 'ham'), changedMind: false }])
     expect(roster.ham[0]?.changedMind).toBe(false)
   })
+
+  /**
+   * One tap cannot be a change of mind, whatever the flag says. Every first
+   * ballot written between 2026-09-01 and 2026-09-02 carried `changedMind: true`
+   * (the store compared a missing value to null and found them different), and
+   * a three-voter roster read "changed their vote" three times. The tap count
+   * is the fact; the flag is derived from it, so the fact wins when they clash.
+   */
+  it('a single tap is never a change of mind, even when the stored flag says so', () => {
+    const roster = voterRoster([{ ...b(1, 'ham'), changedMind: true, taps: 1 }])
+    expect(roster.ham[0]?.changedMind).toBe(false)
+  })
+
+  it('a flag on a ballot that was tapped more than once is believed', () => {
+    const roster = voterRoster([{ ...b(1, 'ham'), changedMind: true, taps: 2 }])
+    expect(roster.ham[0]?.changedMind).toBe(true)
+  })
+
+  it('a flag on a ballot with no tap count is believed — nothing contradicts it', () => {
+    const roster = voterRoster([{ ...b(1, 'ham'), changedMind: true }])
+    expect(roster.ham[0]?.changedMind).toBe(true)
+  })
 })

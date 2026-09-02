@@ -639,6 +639,25 @@ describe('vote lifetime', () => {
     expect(written).toHaveProperty('changedMind')
   })
 
+  /**
+   * The previous ballot is read with `$arrayElemAt`, which yields *missing*
+   * (not null) when the voter has none — and in an aggregation expression
+   * `{ $ne: [missing, null] }` is TRUE. Every first ballot therefore came out
+   * as a change of mind. The comparison has to see null, so the element is
+   * normalised with `$ifNull` before anything looks at it. The semantics are
+   * pinned against a real server in mongo.integration.test.ts; this only
+   * guards the shape that makes them hold.
+   */
+  it('normalises a missing previous ballot to null before comparing it', async () => {
+    const { store, updates } = voteStore()
+    await store.castBallot({ chatId: -100, messageId: 5, userId: 7, isAdmin: false, choice: 'spam' })
+    const written = writtenBallot(updates[0]?.update)
+    const flag = written['changedMind'] as { $or: [unknown, { $and: [{ $ne: [unknown, null] }, unknown] }] }
+    const previous = flag.$or[1].$and[0].$ne[0] as Record<string, unknown>
+    expect(Object.keys(previous)).toEqual(['$ifNull'])
+    expect((previous['$ifNull'] as unknown[])[1]).toBeNull()
+  })
+
   it('refuses a ballot for a window that has already passed', async () => {
     // The sweep runs once a minute, so `status: 'open'` alone leaves up to a
     // minute — and the whole of a restart gap — in which a closed question
