@@ -1678,46 +1678,6 @@ export class MongoStore {
     return result.modifiedCount === 1
   }
 
-  /**
-   * Take back the change-of-mind flags that were never earned.
-   *
-   * Between the deduplicated ballot (2026-09-01) and the `$ifNull` above
-   * (2026-09-02) `castBallot` wrote `changedMind: true` on every first ballot,
-   * and carried it forward on every re-tap; the flag on those rows says
-   * nothing about the voter. This puts the rows into the state the fixed write
-   * would have produced where that is knowable, and admits ignorance where it
-   * is not: a ballot tapped once becomes `false` (one tap cannot be a change of
-   * mind), a ballot tapped more than once loses the flag altogether, because
-   * whether those taps switched sides is exactly what the bug erased.
-   *
-   * Bounded by `before` so it can run once after the deploy without touching
-   * flags the fixed write has since set for real. Rows without a tap count
-   * predate deduplication and were never affected.
-   */
-  async forgetUnearnedChangeOfMind(before: Date): Promise<{ questions: number }> {
-    const result = await this.votes.updateMany(
-      { createdAt: { $lt: before }, 'ballots.taps': { $exists: true } },
-      [{
-        $set: {
-          ballots: {
-            $map: {
-              input: { $ifNull: ['$ballots', []] },
-              as: 'b',
-              in: {
-                $cond: [
-                  { $lte: [{ $ifNull: ['$$b.taps', 1] }, 1] },
-                  { $mergeObjects: ['$$b', { changedMind: false }] },
-                  { $unsetField: { field: 'changedMind', input: '$$b' } }
-                ]
-              }
-            }
-          }
-        }
-      }]
-    )
-    return { questions: result.modifiedCount }
-  }
-
   // ── scheduled deletions (persistent, survives restarts) ──────────────
 
   /**

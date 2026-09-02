@@ -8,7 +8,6 @@
     { "path": "apps/bot" },
     { "path": "tools/replay" },
     { "path": "tools/cas-harvest" },
-    { "path": "tools/prune-dormant" },
-    { "path": "tools/vote-repair" }
+    { "path": "tools/prune-dormant" }
   ]
 }

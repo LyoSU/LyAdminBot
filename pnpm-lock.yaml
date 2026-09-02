@@ -128,12 +128,6 @@ importers:
         specifier: latest
         version: 0.31.0
 
-  tools/vote-repair:
-    dependencies:
-      '@lyadmin/data':
-        specifier: workspace:*
-        version: link:../../packages/data
-
 packages:
 
   '@emnapi/core@1.10.0':
