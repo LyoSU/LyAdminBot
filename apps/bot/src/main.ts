@@ -3214,6 +3214,18 @@ const screenAccount = async (params: {
    * it gets for every other action, and `rememberVerdict` plus the stored row
    * are what let a ham ballot or an admin undo it through the ordinary path.
    */
+  // The reported message goes first, and regardless of whether the hold then
+  // takes — the ban branch above says why (separate rights). A hold is shown
+  // and recorded as a mute, and this is what a mute does; the first hold ever
+  // applied (2026-09-02) left the message up for the hour because this line
+  // was missing. See `accountScreenRemoves`.
+  const holdRemoveId = accountScreenRemoves('hold', params.subjectMessageId)
+  const holdRemoved = holdRemoveId === null
+    ? null
+    : await gateway.tg.deleteMessagesById(chat.id, [holdRemoveId])
+      .then(() => true).catch(() => false)
+  if (holdRemoved !== null) saw['deleted'] = holdRemoved ? 'yes' : 'failed'
+
   // Named, for the reason `vote_enforce_incomplete` above states at length: a
   // hold that did not go on is the one outcome of this branch nobody can act on
   // without knowing what refused.
@@ -3224,6 +3236,7 @@ const screenAccount = async (params: {
   log.info('account_screen_hold', {
     chatId: chat.id, chat: chat.title ?? undefined, userId: target.id,
     reason: params.reason, blockers: gated.blockers.join(','), applied: held,
+    ...(holdRemoved !== null ? { deleted: holdRemoved, messageId: holdRemoveId } : {}),
     ...(holdError === null ? {} : { error: holdError as string })
   })
   if (!held) {
@@ -3249,7 +3262,7 @@ const screenAccount = async (params: {
     textPreview: '',
     verdict: holdVerdict,
     execution: {
-      applied: true, deleted: null, skippedReason: null,
+      applied: true, deleted: holdRemoved, skippedReason: null,
       failed: [], albumRemoved: 0, retroPurged: 0
     },
     latencyMs: Date.now() - startedAt

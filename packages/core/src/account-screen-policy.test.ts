@@ -133,6 +133,16 @@ describe('accountScreenRemoves', () => {
     expect(accountScreenRemoves('gate', 382656)).toBe(null)
   })
 
+  it('REGRESSION: a hold removes the message, the way every mute does', () => {
+    // Production 2026-09-02: a report answered by an hour-long hold left the
+    // reported message up, because the hold was written as a gate minus its
+    // question. It is recorded and shown as a mute, and a mute takes the
+    // message with it everywhere else in the codebase.
+    expect(accountScreenRemoves('hold', 384045)).toBe(384045)
+    expect(accountScreenRemoves('hold', 0)).toBe(null)
+    expect(accountScreenRemoves('hold', null)).toBe(null)
+  })
+
   it('a screen with no message of the target’s removes nothing', () => {
     // The `reported_arrival` path: the id it carries is Telegram's join line.
     expect(accountScreenRemoves('ban', null)).toBe(null)

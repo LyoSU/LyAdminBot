@@ -126,12 +126,22 @@ export const hardVerdictSourceOf = (
  * A gate returns null on purpose. It is a question, and a question that deletes
  * the thing it is asking about has answered itself — the same line the message
  * path draws when it caps profile-only evidence at a captcha.
+ *
+ * A hold is not a gate. It is what is left when the question cannot be put
+ * (see `accountScreenUnasked`), it is recorded and shown as a mute, and a mute
+ * takes the message with it — `executor.ts` deletes as the first line of every
+ * `mute`, and keeps the message only under `captcha`. Production 2026-09-02:
+ * the first hold this branch ever applied left the reported message standing
+ * for the hour, because the branch was written as the gate minus its whisper
+ * and inherited the gate's answer here. The message under profile spam is the
+ * bait — a harmless word that exists to get the profile opened — and the report
+ * was about the bait.
  */
 export const accountScreenRemoves = (
-  action: 'ban' | 'gate',
+  action: 'ban' | 'gate' | 'hold',
   subjectMessageId: number | null,
 ): number | null => {
-  if (action !== 'ban') return null
+  if (action === 'gate') return null
   // Not `!= null`: `0` is the neighbouring sentinel for "no message" (see the
   // card key, `replyToMessageId ?? 0`), and a delete built from a sentinel is a
   // delete aimed at whatever id 0 resolves to.
