@@ -764,7 +764,12 @@ const deliverCaptcha = async (
     void store.recordCaptchaEvent({ chatId, userId, event: 'delivered', via: 'whisper' })
     /**
      * A whisper that ARRIVED and went unanswered is answered, and the answer is
-     * silence.
+     * silence — and somebody has to be listening for it. This call went out
+     * with the 45-second public copy on 2026-09-01 (`4b47b38`) and took the
+     * whole consequence with it: in the first day after, 0 gates were marked
+     * ignored against 5–9 a day before, 16 delivered whispers sat open for up
+     * to twenty hours, and every standalone captcha's trigger message stayed
+     * in the chat once the executor's ten-minute hold lapsed.
      *
      * This posted a second, public copy of the same question at 45 seconds and
      * restarted the clock, which is how every consequence in production landed
@@ -779,6 +784,7 @@ const deliverCaptcha = async (
      * Asking twice to insure against it cost every gate 45 extra seconds of an
      * account posting, and put a card about a member in front of the chat.
      */
+    armConsequence()
     return 'whispered'
   } catch (err) {
     /**
