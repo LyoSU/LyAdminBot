@@ -345,7 +345,11 @@ describe('evaluateMessage — abstain & session', () => {
     const input = makeInput({ msg: { text: 'на день усім хто напише' }, user: newcomer })
     const v = await evaluateMessage(input, ports)
     expect(v.decidedBy).toBe('session')
-    expect(v.action).toBe('mute')
+    // Acted on — and, since 2026-09-02, capped like every other verdict the
+    // classifier is the sole witness for: the pile goes, the chat is asked.
+    expect(isEnforcementAction(v.action)).toBe(true)
+    expect(removesSender(v.action)).toBe(false)
+    expect(v.meta['cappedSoleWitness']).toBe(true)
     // One classifier, one call: the escalation that used to follow every session
     // removal is gone with the tier split.
     expect(calls).toBe(1)
@@ -739,7 +743,7 @@ describe('evaluateMessage — abstain & session', () => {
     expect(resets).toEqual([])
   })
 
-  it('DOCUMENTS THE GAP: one classifier removes the sender on a blob unaided', async () => {
+  it('one classifier no longer removes the sender on a blob unaided', async () => {
     // This test asserted the opposite until the tier split came out: the cheap
     // model alone could not exile somebody over concatenated one-liners, because
     // the strong model got a veto. Nothing replaced that veto, so the current
@@ -748,7 +752,10 @@ describe('evaluateMessage — abstain & session', () => {
     //
     // Production 2026-08-07 08:41: "Hey kisi ke pass adult sticker hai ...?" — a
     // question — banned for 30 days at pSpam 0.98, on scorePSpam 0.1192 and
-    // contentEvidence 0. Flip this expectation when the band is calibrated.
+    // contentEvidence 0. The band was calibrated on the week to 2026-09-01
+    // (`LLM_SOLE_WITNESS_SCORE`) and the pile answers to it since 2026-09-02:
+    // the blob still goes, the chat is asked, nobody is removed on one
+    // classifier's word.
     let calls = 0
     const ports: PipelinePorts = {
       session: {
@@ -770,7 +777,10 @@ describe('evaluateMessage — abstain & session', () => {
     expect(calls).toBe(1)
     expect(v.pSpam).toBe(0.98)
     expect(contentEvidence(v.signals).total).toBe(0)
-    expect(removesSender(v.action)).toBe(true)
+    expect(isEnforcementAction(v.action)).toBe(true)
+    expect(removesSender(v.action)).toBe(false)
+    expect(v.needsVote).toBe(true)
+    expect(v.meta['cappedSoleWitness']).toBe(true)
   })
 
   /**
@@ -809,6 +819,32 @@ describe('evaluateMessage — abstain & session', () => {
     expect(isEnforcementAction(v.action)).toBe(false)
     expect(v.action).toBe('observe')
     expect(v.needsVote).toBe(true)
+  })
+
+  it('a session verdict inside the grey zone deletes and asks, it does not remove', async () => {
+    // Production 2026-09-02, first day of the sole-witness ceiling: nine
+    // `session` bans at scorePSpam 0.27 and 0.12 with `contentEvidence` 0 and
+    // `judgedCount` 1 — the model alone, judging one message, removing the
+    // sender — because the ceiling stood only in the llm branch. The rule is
+    // about who the witness is, not which branch asked; the pile answers to it
+    // too. `flirt_bait` on purpose: not an imitable act, so nothing else caps.
+    const ports: PipelinePorts = {
+      session: {
+        append: async () => ({ combinedText: 'привіт\nяк справи\nнудно\nпоспілкуємось\nпиши', count: 5 }),
+        reset: async () => { /* noop */ }
+      },
+      llm: {
+        classify: async () => ({ pSpam: 0.99, reasonCode: 'flirt_bait', evidence: null, cached: false })
+      }
+    }
+    const v = await evaluateMessage(makeInput({ msg: { text: 'пиши' }, user: newcomer }), ports)
+    expect(v.decidedBy).toBe('session')
+    expect(contentEvidence(v.signals).strongest).toBe(0)
+    expect(Number(v.meta['scorePSpam'])).toBeLessThan(LLM_SOLE_WITNESS_SCORE)
+    expect(isEnforcementAction(v.action)).toBe(true)
+    expect(removesSender(v.action)).toBe(false)
+    expect(v.needsVote).toBe(true)
+    expect(v.meta['cappedSoleWitness']).toBe(true)
   })
 
   it('an admin naming the sender vouches for them as much as volume does', async () => {

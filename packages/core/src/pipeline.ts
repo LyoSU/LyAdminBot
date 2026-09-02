@@ -1245,7 +1245,19 @@ export const evaluateMessage = async (
          * a translation of this guard. What the band should be is a calibration
          * decision; see `docs/calibration.md`.
          */
-        return capVouchedWindow(capWindowFlood(capImitableAct(finalize(
+        /**
+         * The sole-witness ceiling answers to WHO the witness is, not which
+         * branch asked. Production 2026-09-02, the first day the ceiling stood
+         * in the llm branch: nine `session` removals at scorePSpam 0.27 and
+         * 0.12, `contentEvidence` 0, `judgedCount` 1 — one classifier, one
+         * message, the sender gone. The score is computed here because the
+         * abstain gate reaches this pile before stage 6 has run, which is also
+         * why session rows had no `scorePSpam` to audit by (252 in the week to
+         * 2026-09-01).
+         */
+        const { pSpam: sessionScore } = scoreSignals(signals)
+        if (meta['scorePSpam'] === undefined) meta['scorePSpam'] = Number(sessionScore.toFixed(4))
+        return capVouchedWindow(capWindowFlood(capSoleWitness(capImitableAct(finalize(
           {
             pSpam: llmVerdict.pSpam,
             decidedBy: 'session',
@@ -1254,7 +1266,7 @@ export const evaluateMessage = async (
             reasonEvidence: llmVerdict.evidence
           },
           signals
-        ))))
+        )), sessionScore)))
       }
     }
     return null
