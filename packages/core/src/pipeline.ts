@@ -126,7 +126,7 @@ const FARM_PICTURE_SIGNALS: ReadonlySet<string> = new Set([
   'suggestive_profile_media', 'nsfw_avatar',
   'avatar_shared_with_account', 'avatar_shared_with_accounts'
 ])
-const isFarmShapedProfile = (signals: readonly Signal[]): boolean =>
+export const isFarmShapedProfile = (signals: readonly Signal[]): boolean =>
   signals.some((s) => s.name === 'avatar_recently_set') &&
   signals.some((s) => FARM_PICTURE_SIGNALS.has(s.name))
 const SESSION_EVAL_MIN_MESSAGES = 5
@@ -582,6 +582,43 @@ export const evaluateMessage = async (
    *    31 seconds later.
    */
   /**
+   * The farm the floor below has no name for: the picture that is the advert,
+   * or one sitting on a single other account, on a profile dressed days ago.
+   *
+   * The abstain branch holds this shape for an hour when it cannot be asked;
+   * a sentence long enough to be read took the same account past that branch
+   * and into a clean reading. Measured over the 14 days to 2026-09-17, after
+   * that hold: 19 accounts still left alone on a message row, 16 of them on the
+   * classifier's word, none carrying the plural signal. 8 caught later by
+   * another stage, 8 reported by people, no mark of innocence on any; 11 of the
+   * 19 in one comment section. The reading was right about the sentence, and
+   * the advert is not in the sentence.
+   *
+   * The abstain branch's conditions, not looser ones: the arithmetic has to
+   * have reached the grey band and the profile has to have a case, so a score
+   * of 0.13 with the same picture stays where the model left it. Only the
+   * network's refusal holds (`accountScreenUnasked`) — a member is not asked
+   * over a reading that cleared them, and a chat's own setting is its answer.
+   * No ballot, for that branch's reason: the profile did not buy one.
+   */
+  const holdUnnamedFarm = (verdict: Verdict, score: number): Verdict => {
+    if (!isFarmShapedProfile(verdict.signals) || !profileHasCase(verdict.signals)) return verdict
+    const grey = (PRESET_THRESHOLDS[input.policy.preset] ?? PRESET_THRESHOLDS.standard).grey
+    if (score < grey) return verdict
+    const blockers = captchaBlockers(policyInputFor(score, verdict.signals))
+    if (accountScreenUnasked(blockers) !== 'hold') return verdict
+    meta['flooredFarmShape'] = true
+    meta['captchaBlockedBy'] = blockers.join(',')
+    return {
+      ...verdict,
+      action: 'mute' as VerdictAction,
+      needsVote: false,
+      banDurationSeconds: PROFILE_HOLD_SECONDS,
+      reasonCode: 'profile_farm_unreachable'
+    }
+  }
+
+  /**
    * A clean reading of the sentence does not unfind an account farm.
    *
    * The classifier's number replaces the score outright. That is right where
@@ -617,9 +654,11 @@ export const evaluateMessage = async (
    * worse outcome than the silence it replaced. Deterministic here, so the card
    * says the true reason and the action is the same one every time.
    */
-  const floorNetworkFact = (verdict: Verdict): Verdict => {
+  const floorNetworkFact = (verdict: Verdict, score: number): Verdict => {
     if (isEnforcementAction(verdict.action) || verdict.action === 'captcha') return verdict
-    if (!verdict.signals.some((s) => s.name === 'avatar_shared_with_accounts')) return verdict
+    if (!verdict.signals.some((s) => s.name === 'avatar_shared_with_accounts')) {
+      return holdUnnamedFarm(verdict, score)
+    }
     meta['flooredNetworkFact'] = true
     const blockers = captchaBlockers(policyInputFor(verdict.pSpam, verdict.signals))
     // Which gate shut, by name. 125 floored rows in the 14 days to 2026-09-17
@@ -1975,7 +2014,7 @@ export const evaluateMessage = async (
           reasonEvidence: llmVerdict.evidence
         },
         signals
-      )), scorePSpam))
+      )), scorePSpam), scorePSpam)
     }
     llmNeededButUnavailable = true
   }

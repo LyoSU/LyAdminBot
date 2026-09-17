@@ -217,6 +217,78 @@ describe('evaluateMessage — a clean reading does not unfind a farm', () => {
     expect(v.meta['captchaBlockedBy']).toBe('sender_not_participant')
   })
 
+  /**
+   * The floor knew one name for a farm, and the farm has four.
+   *
+   * After the holds of 2026-09-17 the same fortnight still let 19 farm-shaped
+   * accounts through on a message row: 16 of them on the classifier's clean
+   * reading of a sentence, none carrying the plural shared-photo signal — the
+   * picture was the advert itself, or sat on one other account. 8 caught later
+   * by something else, 8 reported by people, none with a mark of innocence; 11
+   * of the 19 in one comment section, where the question cannot be delivered.
+   * The model read the sentence correctly. The advert is not in the sentence.
+   *
+   * The abstain branch's hold, on its predicate and its conditions — the score
+   * has to have deserved the question — because it is the same account reached
+   * by a longer message. No ballot, for that branch's reason.
+   */
+  describe('a farm the floor had no name for', () => {
+    const farmShaped = {
+      ...newcomer, isParticipant: false, avatars: { count: 1, latestSetDaysAgo: 2 }
+    }
+    const suggestive = { check: async () => modResult({ sexual: 0.42 }, false) }
+    const sentence = { text: 'Дуже цікава думка, дякую авторові за такий розбір' }
+
+    it('holds it where the question cannot be delivered, whatever the sentence read as', async () => {
+      const v = await evaluateMessage(makeInput({
+        msg: sentence,
+        user: farmShaped,
+        policy: { captchaEnabled: true },
+        enrichment: { avatarBase64: 'AAAA', personalChannelId: 42 }
+      }), { moderation: suggestive, llm: cleared })
+
+      expect(v.signals.map((s) => s.name)).toEqual(
+        expect.arrayContaining(['avatar_recently_set', 'suggestive_profile_media']))
+      expect(v.signals.map((s) => s.name)).not.toContain('avatar_shared_with_accounts')
+      expect(v.action).toBe('mute')
+      expect(v.banDurationSeconds).toBe(PROFILE_HOLD_SECONDS)
+      expect(v.needsVote).toBe(false)
+      expect(v.reasonCode).toBe('profile_farm_unreachable')
+      expect(v.meta['captchaBlockedBy']).toBe('sender_not_participant')
+    })
+
+    it('leaves a member the model cleared alone', async () => {
+      const v = await evaluateMessage(makeInput({
+        msg: sentence,
+        user: { ...farmShaped, isParticipant: true },
+        policy: { captchaEnabled: true },
+        enrichment: { avatarBase64: 'AAAA', personalChannelId: 42 }
+      }), { moderation: suggestive, llm: cleared })
+      expect(v.action).toBe('none')
+    })
+
+    it('a chat that switched the captcha off did not ask for a mute instead', async () => {
+      const v = await evaluateMessage(makeInput({
+        msg: sentence,
+        user: farmShaped,
+        policy: { captchaEnabled: false },
+        enrichment: { avatarBase64: 'AAAA', personalChannelId: 42 }
+      }), { moderation: suggestive, llm: cleared })
+      expect(v.action).toBe('none')
+    })
+
+    it('a picture set long ago is not the shape', async () => {
+      const v = await evaluateMessage(makeInput({
+        msg: sentence,
+        user: { ...newcomer, isParticipant: false },
+        policy: { captchaEnabled: true },
+        enrichment: { avatarBase64: 'AAAA', personalChannelId: 42 }
+      }), { moderation: suggestive, llm: cleared })
+      expect(v.signals.map((s) => s.name)).not.toContain('avatar_recently_set')
+      expect(v.action).toBe('none')
+    })
+  })
+
   it('leaves a verdict that already acted alone', async () => {
     const v = await evaluateMessage(makeInput({
       msg: spamText, user: newcomer, enrichment: { avatarDhash: 'ff00ff00ff00ff00' }
