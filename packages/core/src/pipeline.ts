@@ -44,6 +44,7 @@ import { shouldAbstain } from './text/abstain.js'
 import { truncate } from './text/normalize.js'
 import { isForeignScript } from './text/script.js'
 import { isDistinctive } from './learning.js'
+import { nameShapeOf } from './name-shape.js'
 
 /**
  * Grey band: below the floor arithmetic decides alone, above the ceiling it may
@@ -401,6 +402,12 @@ export const evaluateMessage = async (
     if (telemetry.nameChangedDaysAgo !== null) meta['nameChangedDaysAgo'] = Math.round(telemetry.nameChangedDaysAgo)
     if (telemetry.photoChangedDaysAgo !== null) meta['photoChangedDaysAgo'] = Math.round(telemetry.photoChangedDaysAgo)
   }
+  // The shape, never the name — see `name-shape.ts`.
+  const nameShape = nameShapeOf(input.user.displayName, input.user.username)
+  if (nameShape.handle !== null) meta['handleShape'] = nameShape.handle
+  if (nameShape.digits !== null) meta['handleDigits'] = nameShape.digits
+  if (nameShape.camel) meta['nameCamel'] = true
+  if (nameShape.mixedWords) meta['nameMixedWords'] = true
 
   /**
    * Which paid stages actually ran, and how long each took. A single pipeline

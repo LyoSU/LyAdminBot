@@ -3870,3 +3870,37 @@ describe('evaluateMessage — a clean reading stands for a day', () => {
     expect(llm.count()).toBe(1)
   })
 })
+
+describe('evaluateMessage — the shape of a name is written down', () => {
+  it('records the shape and never the name', async () => {
+    const v = await evaluateMessage(makeInput({
+      user: { ...newcomer, displayName: 'NorthWing Рассвет', username: 'northwing54' }
+    }), {})
+    expect(v.meta['handleShape']).toBe('name_digits')
+    expect(v.meta['handleDigits']).toBe(2)
+    expect(v.meta['nameCamel']).toBe(true)
+    expect(v.meta['nameMixedWords']).toBe(true)
+    expect(JSON.stringify(v.meta)).not.toMatch(/northwing/i)
+  })
+
+  /**
+   * The regulars are the control this is measured against, and they leave
+   * through the first exit there is — so the shape has to be on the row before
+   * any stage can return, like the rest of the telemetry.
+   */
+  it('is on the row of a regular who never reaches scoring', async () => {
+    const v = await evaluateMessage(makeInput({
+      user: { messagesInChat: 500, messagesGlobal: 900, displayName: 'Marta', username: 'marta1987' }
+    }), {})
+    expect(v.reasonCode).toBe('established_regular')
+    expect(v.meta['handleShape']).toBe('name_digits')
+  })
+
+  it('writes nothing for a name with no shape', async () => {
+    const v = await evaluateMessage(makeInput({ user: newcomer }), {})
+    expect(v.meta).not.toHaveProperty('handleShape')
+    expect(v.meta).not.toHaveProperty('handleDigits')
+    expect(v.meta).not.toHaveProperty('nameCamel')
+    expect(v.meta).not.toHaveProperty('nameMixedWords')
+  })
+})
