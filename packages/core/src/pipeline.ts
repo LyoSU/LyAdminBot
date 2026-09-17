@@ -621,7 +621,32 @@ export const evaluateMessage = async (
     if (isEnforcementAction(verdict.action) || verdict.action === 'captcha') return verdict
     if (!verdict.signals.some((s) => s.name === 'avatar_shared_with_accounts')) return verdict
     meta['flooredNetworkFact'] = true
-    const gate = mayAskCaptcha(policyInputFor(verdict.pSpam, verdict.signals))
+    const blockers = captchaBlockers(policyInputFor(verdict.pSpam, verdict.signals))
+    // Which gate shut, by name. 125 floored rows in the 14 days to 2026-09-17
+    // came out `observe` and not one of them said why.
+    if (blockers.length > 0) meta['captchaBlockedBy'] = blockers.join(',')
+    /**
+     * The message stays where the account can be asked, and where a chat chose
+     * not to ask. Where the network is what refuses — a commenter who is not a
+     * member — and the account is farm-shaped, the floor was `observe` and
+     * nothing else: every one of those 125 rows carried `avatar_recently_set`
+     * beside the shared photo, the shape that held no innocent account in 672.
+     * So the hour the abstain branch holds the same shape for, on the same
+     * predicate. It does take the message, which the argument above forbids a
+     * VERDICT to do; this is the hold the undeliverable question was going to
+     * be asked inside, and the sentence goes with it the way it does under
+     * every mute. The ballot is kept: it is the only road to a lasting removal.
+     */
+    if (isFarmShapedProfile(verdict.signals) && accountScreenUnasked(blockers) === 'hold') {
+      return {
+        ...verdict,
+        action: 'mute' as VerdictAction,
+        needsVote: input.policy.votingEnabled,
+        banDurationSeconds: PROFILE_HOLD_SECONDS,
+        reasonCode: 'shared_profile_photo'
+      }
+    }
+    const gate = blockers.length === 0
     return {
       ...verdict,
       action: (gate ? 'captcha' : 'observe') as VerdictAction,

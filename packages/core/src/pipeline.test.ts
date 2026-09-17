@@ -177,6 +177,46 @@ describe('evaluateMessage — a clean reading does not unfind a farm', () => {
     expect(v.needsVote).toBe(true)
   })
 
+  /**
+   * Where the question cannot be put, the floor used to amount to watching.
+   *
+   * Measured over the 14 days to 2026-09-17: 125 floored rows answered with
+   * `observe`, about 107 accounts across nine chats, every one of them carrying
+   * `avatar_recently_set` beside the shared photo — the farm's shape, which held
+   * no innocent account in 672 (see the hold in the abstain branch). The chats
+   * are comment sections: their captcha events run `undeliverable`, and the one
+   * blocker ever recorded in them is `sender_not_participant`. Which blocker
+   * closed THIS gate was not recorded at all, so that is written down now.
+   *
+   * The ballot stays. It is the only road from here to a lasting removal, and
+   * where these were put to a chat the answers ran 9 spam, 7 expired, 0 ham.
+   */
+  it('holds a farm-shaped account it cannot ask, and still asks the chat', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'Увімкніть людність під час війни' },
+      user: { ...newcomer, isParticipant: false, avatars: { count: 1, latestSetDaysAgo: 2 } },
+      enrichment: { avatarDhash: 'ff00ff00ff00ff00' }
+    }), { profileMedia: farm, llm: cleared })
+    expect(v.signals.map((s) => s.name)).toContain('avatar_recently_set')
+    expect(v.action).toBe('mute')
+    expect(v.banDurationSeconds).toBe(PROFILE_HOLD_SECONDS)
+    expect(v.needsVote).toBe(true)
+    expect(v.reasonCode).toBe('shared_profile_photo')
+    expect(v.meta['captchaBlockedBy']).toBe('sender_not_participant')
+  })
+
+  it('an old picture shared by many is still only put to the chat, and says what shut the gate', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'Увімкніть людність під час війни' },
+      user: { ...newcomer, isParticipant: false },
+      enrichment: { avatarDhash: 'ff00ff00ff00ff00' }
+    }), { profileMedia: farm, llm: cleared })
+    expect(v.signals.map((s) => s.name)).not.toContain('avatar_recently_set')
+    expect(v.action).toBe('observe')
+    expect(v.needsVote).toBe(true)
+    expect(v.meta['captchaBlockedBy']).toBe('sender_not_participant')
+  })
+
   it('leaves a verdict that already acted alone', async () => {
     const v = await evaluateMessage(makeInput({
       msg: spamText, user: newcomer, enrichment: { avatarDhash: 'ff00ff00ff00ff00' }
