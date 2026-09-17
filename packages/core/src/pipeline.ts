@@ -22,6 +22,7 @@ import {
   ESTABLISHED_MIN_MESSAGES, ESTABLISHED_MIN_IN_CHAT, ESTABLISHED_MIN_TENURE_DAYS
 } from './signals/user.js'
 import { profileHasCase } from './signals/account-verdict.js'
+import { accountScreenUnasked } from './account-screen-policy.js'
 import { extractBioSignals } from './signals/bio.js'
 import { extractLinkedChannelSignals } from './signals/channel.js'
 import { applyDeterministicRules } from './rules.js'
@@ -108,6 +109,26 @@ export const LLM_SOLE_WITNESS_SCORE = LLM_GREY_HIGH
  * is not — enforcement resting on 1.2 ran at 4.5 % in the same week.
  */
 const LLM_SOLE_WITNESS_MIN_EVIDENCE = 1.5
+/**
+ * How long a farm-shaped profile is held when the captcha it earned cannot be
+ * delivered. The hour `/report` already holds for on the same blocker, for the
+ * reason stated there: a restriction the person has no button to lift may not
+ * outlast one.
+ */
+export const PROFILE_HOLD_SECONDS = 60 * 60
+/**
+ * A picture that is itself the advert. Together with `avatar_recently_set` —
+ * the account dressed for the campaign days ago — these are the farm's shape;
+ * see the hold in the abstain branch for the measurement. Each of the two
+ * halves alone is ordinary: fresh pictures belong to 28 regulars in 1516.
+ */
+const FARM_PICTURE_SIGNALS: ReadonlySet<string> = new Set([
+  'suggestive_profile_media', 'nsfw_avatar',
+  'avatar_shared_with_account', 'avatar_shared_with_accounts'
+])
+const isFarmShapedProfile = (signals: readonly Signal[]): boolean =>
+  signals.some((s) => s.name === 'avatar_recently_set') &&
+  signals.some((s) => FARM_PICTURE_SIGNALS.has(s.name))
 const SESSION_EVAL_MIN_MESSAGES = 5
 /**
  * Up to this many messages into a chat, a sender's unreadable message is worth
@@ -1531,6 +1552,39 @@ export const evaluateMessage = async (
      * buy one. Of the 20 accounts measured on this path, 13 were never reported
      * by anybody.
      */
+    /**
+     * The exception to "nothing here may punish", and why it is one shape wide.
+     *
+     * `observe` is right when the case is in the bio or the linked channel:
+     * that population held 3 regulars in 32, at the same 0.86 the farm scores.
+     * It is wrong for a picture that is the advert on an account dressed days
+     * ago — 672 accounts in the 14 days to 2026-09-17, 554 confirmed by stages
+     * that never read the profile, none with any mark of innocence, 0 of 65
+     * delivered captchas passed, against 3.3 % of ordinary newcomers becoming
+     * regulars. They post once or twice and leave, so watching them is the
+     * whole of their stay: 46 of the fortnight's 60 human reports were this.
+     *
+     * So the same hold a report already buys on the same blocker, and only on
+     * that blocker (`accountScreenUnasked`): a network fact holds, a chat's own
+     * setting is the chat's answer. An hour, the message with it, an admin's
+     * tap to undo, and no ballot — the argument above against one stands.
+     */
+    if (deserved && hasCase && isFarmShapedProfile(signals) &&
+      accountScreenUnasked(blockers) === 'hold') {
+      meta['scorePSpam'] = Number(shaped.pSpam.toFixed(4))
+      return finalize(
+        {
+          pSpam: shaped.pSpam,
+          decidedBy: 'score',
+          ruleId: null,
+          reasonCode: 'profile_farm_unreachable',
+          reasonEvidence: null
+        },
+        signals,
+        { action: 'mute', needsVote: false, banDurationSeconds: PROFILE_HOLD_SECONDS }
+      )
+    }
+
     if (deserved && hasCase && blockers.length > 0) {
       return finalize(
         {

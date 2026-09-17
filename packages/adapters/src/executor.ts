@@ -172,8 +172,11 @@ export const applyVerdict = async (
     }
     case 'mute': {
       result.deleted = await attempt('delete', () => actions.deleteMessage(target.chatId, target.messageId))
+      // A verdict that states its own length means it: the hour-long hold is an
+      // hour by argument, and applying the default day to it would punish past
+      // what the row and the notice both say.
       result.applied = await attempt('mute', () =>
-        actions.mute(target.chatId, target.userId, MUTE_DURATION_SECONDS))
+        actions.mute(target.chatId, target.userId, verdict.banDurationSeconds ?? MUTE_DURATION_SECONDS))
       return result
     }
     case 'ban': {

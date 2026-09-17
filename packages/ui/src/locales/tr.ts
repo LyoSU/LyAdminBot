@@ -136,6 +136,7 @@ export const tr: Locale = {
     low_information_profile: 'yargılamak için az bilgi, şüpheli profil — doğrulama istendi',
     low_information_profile_unreachable: 'profil, iletemediğimiz bir doğrulamayı hak etti — izleniyor',
     reported_unreachable: 'şikâyet edilen profile doğrulama iletilemedi — bir saat duraklatıldı',
+    profile_farm_unreachable: 'profil fotoğrafının kendisi reklam ve doğrulama iletilemedi — bir saat duraklatıldı',
     content_unconfirmed: 'şüpheli profil, mesaj içeriği doğrulanmadı',
     admin_report: 'bir yönetici bunu spam olarak bildirdi',
     community_vote: 'topluluk oyladı: spam',

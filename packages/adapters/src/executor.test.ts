@@ -46,6 +46,22 @@ describe('applyVerdict', () => {
     expect(actions.calls).toEqual(['delete', 'mute'])
   })
 
+  it('a mute with a stated length lasts that long, not the default day', async () => {
+    // The hold on a farm-shaped profile is an hour by its own argument — a
+    // restriction the person has no button to lift. The executor used to read
+    // the length for bans only, so the first such verdict would have been
+    // recorded and shown as an hour and applied as twenty-four.
+    const actions = makeActions()
+    await applyVerdict(makeVerdict({ action: 'mute', banDurationSeconds: 3600 }), target, noGuards, actions)
+    expect(actions.mute).toHaveBeenCalledWith(target.chatId, target.userId, 3600)
+  })
+
+  it('a mute with no stated length keeps the default day', async () => {
+    const actions = makeActions()
+    await applyVerdict(makeVerdict({ action: 'mute' }), target, noGuards, actions)
+    expect(actions.mute).toHaveBeenCalledWith(target.chatId, target.userId, 24 * 60 * 60)
+  })
+
   it('kick deletes and removes, leaving the door open', async () => {
     const actions = makeActions()
     const result = await applyVerdict(makeVerdict({ action: 'kick' }), target, noGuards, actions)

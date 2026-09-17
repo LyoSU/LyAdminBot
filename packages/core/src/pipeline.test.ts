@@ -4,7 +4,7 @@ import type {
   UserSnapshot, VerdictAction
 } from './types.js'
 import type { BurstEntry, BurstPort, ModerationResult, PipelinePorts, SessionPort } from './ports.js'
-import { evaluateMessage, LLM_SOLE_WITNESS_SCORE } from './pipeline.js'
+import { evaluateMessage, LLM_SOLE_WITNESS_SCORE, PROFILE_HOLD_SECONDS } from './pipeline.js'
 import { isEnforcementAction, removesSender, PRESET_THRESHOLDS } from './policy.js'
 import { contentEvidence, mayRemoveSender } from './score.js'
 
@@ -2478,6 +2478,88 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
     // The score the profile actually earned, not the zero that says "nobody
     // found anything". A pSpam of 0 here is a false statement about evidence.
     expect(v.pSpam).toBeGreaterThan(PRESET_THRESHOLDS.standard.grey)
+  })
+
+  /**
+   * The one shape the quiet path may act on, and the hold it may act with.
+   *
+   * Measured over the 14 days to 2026-09-17. A picture set days ago on an
+   * account this chat has never met, where the picture itself is the advert —
+   * suggestive, explicit, or worn by other accounts: 672 accounts network-wide,
+   * 554 later confirmed by something that did not read the profile (a signature,
+   * the classifier's reading of a text, an outside ban list, a spam ballot), and
+   * not one with any mark of innocence — none became a regular, none won a ham
+   * ballot or an override, and of 65 captchas delivered to them none was passed.
+   * Ordinary newcomers become regulars at 3.3 % (196 of 5959), which would have
+   * been some 22 of these.
+   *
+   * 60 accounts were reported by people in that fortnight; 46 in one comment
+   * section, where a commenter is not a member and the whisper has nowhere to
+   * land. They post one or two lines and leave, so `observe` there is the whole
+   * of their stay. The hold is the one `/report` already applies on the same
+   * blocker: the message goes, the account is quiet for an hour, an admin's tap
+   * undoes it.
+   *
+   * By kind of signal and not by score: the same reason code held a second
+   * population at 0.86 — a linked channel with promotion in it — of which 3 in
+   * 32 were regulars of the chat.
+   */
+  describe('a farm-shaped profile that cannot be asked', () => {
+    const farmShaped = {
+      ...newcomer, isParticipant: false, avatars: { count: 1, latestSetDaysAgo: 2 }
+    }
+    const suggestive = { moderation: { check: async () => modResult({ sexual: 0.42 }, false) } }
+
+    it('is held for an hour instead of watched', async () => {
+      const v = await evaluateMessage(makeInput({
+        msg: { text: 'вот так вот' },
+        user: farmShaped,
+        policy: { captchaEnabled: true },
+        enrichment: { avatarBase64: 'AAAA', personalChannelId: 42 }
+      }), suggestive)
+
+      expect(v.signals.map((s) => s.name)).toEqual(
+        expect.arrayContaining(['avatar_recently_set', 'suggestive_profile_media']))
+      expect(v.action).toBe('mute')
+      expect(v.banDurationSeconds).toBe(PROFILE_HOLD_SECONDS)
+      expect(v.needsVote).toBe(false)
+      expect(v.reasonCode).toBe('profile_farm_unreachable')
+      expect(v.meta['captchaBlockedBy']).toBe('sender_not_participant')
+    })
+
+    it('is asked, not held, wherever the question can be delivered', async () => {
+      const v = await evaluateMessage(makeInput({
+        msg: { text: 'вот так вот' },
+        user: { ...farmShaped, isParticipant: true },
+        policy: { captchaEnabled: true },
+        enrichment: { avatarBase64: 'AAAA', personalChannelId: 42 }
+      }), suggestive)
+      expect(v.action).toBe('captcha')
+    })
+
+    it('a chat that switched the captcha off did not ask for a mute instead', async () => {
+      const v = await evaluateMessage(makeInput({
+        msg: { text: 'вот так вот' },
+        user: farmShaped,
+        policy: { captchaEnabled: false },
+        enrichment: { avatarBase64: 'AAAA', personalChannelId: 42 }
+      }), suggestive)
+      expect(v.action).toBe('observe')
+    })
+
+    it('a fresh picture that advertises nothing is only watched', async () => {
+      // The second population under the old reason code: the case is in the
+      // bio or the linked channel, and the picture says nothing.
+      const v = await evaluateMessage(makeInput({
+        msg: { text: '💗' },
+        user: farmShaped,
+        policy: { captchaEnabled: true },
+        enrichment: { bio: 'мій канал t.me/+AAAAAAAAAAAAAAAA' }
+      }), {})
+      expect(v.signals.map((s) => s.name)).toContain('avatar_recently_set')
+      expect(v.reasonCode).toBe('low_information_profile_unreachable')
+      expect(v.action).toBe('observe')
+    })
   })
 
   /**
