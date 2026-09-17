@@ -202,16 +202,20 @@ export const accountScreenRemoves = (
  * `discussion_without_ephemeral` is the privacy promise the ask was granted on.
  * None of them hold anybody.
  *
- * `votingEnabled` gates the whole thing, because the hold's justification is
- * that the room is being asked instead. A chat with no ballot has no way to
- * answer, and a six-hour mute nobody can lift is a punishment on profile
- * evidence alone — the line the message path draws and this must not cross.
+ * ── not gated on the chat's ballots ──
+ *
+ * It was, until 2026-09-17, on the reasoning that a chat with no ballot has no
+ * way to answer. It has two: the person who pressed report already did, and the
+ * notice carries the admin's one-tap undo that every other mute carries. What
+ * the gate actually did was tie the answer to a report to a setting chats turn
+ * off for an unrelated reason — too many ballots. One chat did, 2026-09-14: 21
+ * holds in the eleven days before, 15 reports answered with nothing in the
+ * three days after, the same blocker on every row, and that chat is where 46 of
+ * the network's 60 human-reported accounts of the fortnight were.
  */
 export const accountScreenUnasked = (
   blockers: readonly string[],
-  votingEnabled: boolean,
 ): 'hold' | 'none' => {
-  if (!votingEnabled) return 'none'
   if (blockers.length === 0) return 'none'
   // Every blocker must be one the network imposed. A chat's own setting sitting
   // anywhere in the list is the chat's answer, and it stands.

@@ -165,28 +165,32 @@ describe('accountScreenRemoves', () => {
  */
 describe('accountScreenUnasked', () => {
   it('a question nobody could be asked still leaves the hold it was asked in', () => {
-    expect(accountScreenUnasked(['sender_not_participant'], true)).toBe('hold')
+    expect(accountScreenUnasked(['sender_not_participant'])).toBe('hold')
   })
 
-  it('a chat that cannot be asked either has no way to end a hold', () => {
-    // The hold's whole justification is that the room is answering instead.
-    expect(accountScreenUnasked(['sender_not_participant'], false)).toBe('none')
+  it('REGRESSION: a chat that switched its ballots off did not switch its reports off', () => {
+    // Production 2026-09-14: one chat set `voting.enabled` to false, and the
+    // hold went with it — 21 holds in the eleven days before, then 15 reports
+    // answered with nothing in the three days after, same blocker on every row.
+    // The person who pressed report is the room answering; an admin's one-tap
+    // undo on the notice is what ends a hold there.
+    expect(accountScreenUnasked(['sender_not_participant'])).toBe('hold')
   })
 
   it('a chat that switched the captcha off did not ask for a mute instead', () => {
     // Deliberately distinct from undeliverability: the chat made a choice here,
     // and routing around it would overrule the setting rather than route past a
     // network fact.
-    expect(accountScreenUnasked(['captcha_disabled'], true)).toBe('none')
-    expect(accountScreenUnasked(['captcha_disabled', 'sender_not_participant'], true)).toBe('none')
+    expect(accountScreenUnasked(['captcha_disabled'])).toBe('none')
+    expect(accountScreenUnasked(['captcha_disabled', 'sender_not_participant'])).toBe('none')
   })
 
   it('an identity that cannot answer anything is not held either', () => {
     // `mute` on a channel sender is a ban by construction — see mayAskCaptcha.
-    expect(accountScreenUnasked(['sender_is_channel'], true)).toBe('none')
+    expect(accountScreenUnasked(['sender_is_channel'])).toBe('none')
   })
 
   it('nothing blocked it, so the gate is live and holds them itself', () => {
-    expect(accountScreenUnasked([], true)).toBe('none')
+    expect(accountScreenUnasked([])).toBe('none')
   })
 })

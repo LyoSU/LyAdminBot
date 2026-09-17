@@ -3198,9 +3198,8 @@ const screenAccount = async (params: {
   }
 
   const groupDoc = await store.getGroupDoc(chat.id).catch(() => null)
-  const policy = groupDocToChatPolicy(groupDoc as never)
   saw['blocked'] = gated.blockers.join(',')
-  if (accountScreenUnasked(gated.blockers, policy.votingEnabled) !== 'hold') {
+  if (accountScreenUnasked(gated.blockers) !== 'hold') {
     note('gate_blocked', signals)
     return 'none'
   }
