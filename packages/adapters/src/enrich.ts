@@ -210,6 +210,34 @@ export const rawPhotoToBase64 = async (
  * moderation. Bot-accessible: photos.getUserPhotos + file download both work
  * for bots. Degrades to null on any failure or oversized image.
  */
+/**
+ * Whether the account wears a picture right now — and nothing more.
+ *
+ * One `users.getUsers`, which carries the picture as a flag on the user object.
+ * Deliberately not `photos.getUserPhotos`: that is the call whose flood waits
+ * have stalled moderation here before, and a look that mostly answers "still
+ * none" has no business spending it. Null is "no answer", kept apart from
+ * `false` because the caller counts both.
+ */
+export const userHasProfilePhoto = async (
+  tg: TelegramClient,
+  userId: number
+): Promise<boolean | null> => {
+  try {
+    const peer = await tg.resolvePeer(userId)
+    if (peer._ !== 'inputPeerUser') return null
+    const users = await tg.call({
+      _: 'users.getUsers',
+      id: [{ _: 'inputUser', userId: peer.userId, accessHash: peer.accessHash }]
+    })
+    const user = users[0]
+    if (user?._ !== 'user') return null
+    return user.photo?._ === 'userProfilePhoto'
+  } catch {
+    return null
+  }
+}
+
 export const downloadAvatarBase64 = async (
   tg: TelegramClient,
   userId: number,

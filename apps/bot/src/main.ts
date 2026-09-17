@@ -20,6 +20,8 @@ import {
   accountVerdict, hasHardAccountVerdict, extractUserSignals, PROFILE_EVIDENCE_SIGNALS,
   accountScreenAllowed, accountScreenRemoves, accountScreenUnasked, hardVerdictSourceOf,
   captchaBlockers, TIMED_BAN_SECONDS, VOTE_WINDOW_SECONDS, LLM_CLEARANCE_TTL_MS, expiryOutcome,
+  createProfileRecheckQueue, profileRecheckOutcome, wantsProfileRecheck,
+  PROFILE_RECHECK_DELAYS_MS, PROFILE_RECHECK_MAX_PENDING,
   type AccountAction, type CaptchaBlocker,
   type BotStats, type ChannelPreview, type ChatStats, type EditBaseline, type EvaluationInput, type ForwardOrigin,
   type MediaCategory, type PipelinePorts, type Signal, type UserSnapshot, type Verdict, type VoteBallot
@@ -27,7 +29,7 @@ import {
 import {
   TelegramGateway, applyVerdict, buildUserSnapshot, buildChannelSnapshot, withLiveFacts, normalizeMessage,
   editBaselineOf, classifyEditDelivery,
-  fetchUserProfile, downloadPhotoBase64, downloadAvatarBase64, downloadStoriesBase64, rawPhotoToBase64,
+  fetchUserProfile, userHasProfilePhoto, downloadPhotoBase64, downloadAvatarBase64, downloadStoriesBase64, rawPhotoToBase64,
   fetchExternalBan, sourcesToQuery, resolveMentionKinds, shouldScanChannelSender,
   createChatDescriptionCache, fetchChatDescription, createTmePreviewResolver,
   avatarDhashOf,
@@ -2891,6 +2893,133 @@ const gateAccount = async (params: {
 }
 
 /**
+ * What a profile picture says, on the terms both of its readers share: the
+ * NSFW check in two tiers, then the shared-picture store. `saw` is the coverage
+ * record of whoever is asking, and is written to — so "clean" and "never
+ * looked" stay two different rows.
+ */
+const avatarFindings = async (
+  userId: number,
+  avatarBase64: string,
+  saw: Record<string, string | number>
+): Promise<Signal[]> => {
+  const found: Signal[] = []
+  if (ports.moderation) {
+    const result = await ports.moderation.check('', avatarBase64).catch(() => null)
+    const hit = nsfwProfileHit(result)
+    /**
+     * Both tiers, because until 2026-08-26 this read only the explicit one
+     * and was therefore blinder than the message path about the very same
+     * picture. Production that day: an account the pipeline had described as
+     * `suggestive_profile_media` at 16:26 came back from a reported-account
+     * screen as `clean` thirty-one seconds later, and the coverage line could
+     * only say `nsfw=clean_or_failed` — the band had not been looked at, and
+     * nothing said so.
+     */
+    const suggestive = suggestiveProfileEvidence(sexualScore(result) ?? 0)
+    saw['nsfw'] = result === null
+      ? 'failed'
+      : hit !== null ? 'hit' : suggestive !== null ? 'suggestive' : 'clean'
+    if (hit !== null) found.push({ name: 'nsfw_avatar', evidence: hit })
+    else if (suggestive !== null) found.push({ name: 'suggestive_profile_media', evidence: suggestive })
+  } else saw['nsfw'] = 'off'
+  const hash = avatarDhashOf(avatarBase64)
+  if (hash !== null && ports.profileMedia) {
+    const reuse = await ports.profileMedia.seen(userId, hash).catch(() => null)
+    saw['phash'] = reuse === null ? 'no_answer' : String(reuse.otherAccounts)
+    if (reuse !== null && reuse.otherAccounts > 0) {
+      const name = reuse.otherAccounts > 1 ? 'avatar_shared_with_accounts' : 'avatar_shared_with_account'
+      found.push({ name, evidence: `same photo on ${reuse.otherAccounts} other account(s)` })
+    }
+  }
+  return found
+}
+
+/**
+ * A second look at a newcomer who wrote with a bare profile — SHADOW: it
+ * writes a row and touches nothing. See `profile-recheck.ts` for why the row
+ * is the whole point.
+ *
+ * Priced to be ignorable. The look is one `users.getUsers`; the profile and
+ * the picture are fetched only for an account that has put one on since, which
+ * the fortnight to 2026-09-17 puts at a handful a day against ~200 looks. The
+ * profile cache is deliberately left alone: refreshing it would change what
+ * the pipeline reads on the account's next message, and then this would be
+ * measuring its own effect.
+ *
+ * Rows go under `join_screen` with their own reason code, so the report
+ * screen's rows and these never have to be told apart by guessing. A bare
+ * profile is written once, at the last look, to keep the denominator without
+ * doubling it.
+ */
+const profileRechecks = createProfileRecheckQueue({
+  delaysMs: PROFILE_RECHECK_DELAYS_MS,
+  maxPending: PROFILE_RECHECK_MAX_PENDING,
+  setTimer: (fn, ms) => { setTimeout(fn, ms).unref?.() }
+})
+
+const scheduleProfileRecheck = (chat: Chat, target: User, messageId: number): void => {
+  const firstSeenAt = Date.now()
+  profileRechecks.schedule(String(target.id), async (attempt, last) => {
+    const startedAt = Date.now()
+    const saw: Record<string, string | number> = {}
+    const note = (outcome: string, signals: Signal[] = []): void => {
+      void store.recordDecision({
+        // Not the message's own id: `getDecision` answers with the NEWEST row
+        // for a (chat, message), so a row written here under that id would
+        // stand in for the real verdict on the card and on an admin's undo.
+        chatId: chat.id, userId: target.id, messageId: 0,
+        textPreview: '',
+        verdict: {
+          pSpam: 0, action: 'none', needsVote: false, banDurationSeconds: null,
+          decidedBy: 'join_screen', ruleId: null, signals,
+          reasonCode: 'profile_recheck', reasonEvidence: null,
+          meta: {
+            screen: outcome, shadow: true, attempt, subjectMessageId: messageId,
+            lagMin: Math.round((startedAt - firstSeenAt) / 60000),
+            saw: Object.entries(saw).map(([k, v]) => `${k}=${v}`).join(' ')
+          }
+        },
+        latencyMs: Date.now() - startedAt
+      }).catch(() => { /* telemetry must never break moderation */ })
+    }
+
+    const hasPhoto = await userHasProfilePhoto(gateway.tg, target.id)
+    if (hasPhoto !== true) {
+      if (last) note(hasPhoto === null ? 'no_answer' : 'still_bare')
+      return 'again'
+    }
+
+    const profile = await fetchUserProfile(gateway.tg, target.id).catch(() => null)
+    if (profile === null || profile.latestAvatar === null) {
+      saw['profile'] = profile === null ? 'failed' : 'no_photo_list'
+      if (last) note('no_answer')
+      return 'again'
+    }
+    const userDoc = await store.getUserDoc(target.id).catch(() => null)
+    const history = userDocToHistory(userDoc as never, 0)
+    const signals = extractUserSignals(buildUserSnapshot(
+      target,
+      withLiveFacts(history, { avatars: profile.avatars, externalBan: history?.externalBan ?? null }),
+      undefined,
+      { unofficialClientRisk: profile.unofficialClientRisk }
+    ))
+    const avatarBase64 = await rawPhotoToBase64(gateway.tg, profile.latestAvatar, AVATAR_MAX_BYTES)
+      .catch(() => null)
+    saw['avatar'] = avatarBase64 === null ? 'failed' : 'bytes'
+    if (avatarBase64 !== null) signals.push(...await avatarFindings(target.id, avatarBase64, saw))
+
+    const outcome = profileRecheckOutcome(true, signals)
+    log.info('profile_recheck', {
+      chatId: chat.id, chat: chat.title ?? undefined, userId: target.id,
+      outcome, attempt, lagMin: Math.round((startedAt - firstSeenAt) / 60000), shadow: true
+    })
+    note(outcome, signals)
+    return 'done'
+  })
+}
+
+/**
  * Look at an account, with no message to go on.
  *
  * A report is not evidence — it is a request to LOOK, and looking is the one
@@ -3009,41 +3138,11 @@ const screenAccount = async (params: {
    */
   let evidenceSignal: string | null = null
   if (avatarBase64 !== null) {
-    if (ports.moderation) {
-      const result = await ports.moderation.check('', avatarBase64).catch(() => null)
-      const hit = nsfwProfileHit(result)
-      /**
-       * Both tiers, because until 2026-08-26 this read only the explicit one
-       * and was therefore blinder than the message path about the very same
-       * picture. Production that day: an account the pipeline had described as
-       * `suggestive_profile_media` at 16:26 came back from a reported-account
-       * screen as `clean` thirty-one seconds later, and the coverage line could
-       * only say `nsfw=clean_or_failed` — the band had not been looked at, and
-       * nothing said so.
-       */
-      const suggestive = suggestiveProfileEvidence(sexualScore(result) ?? 0)
-      saw['nsfw'] = result === null
-        ? 'failed'
-        : hit !== null ? 'hit' : suggestive !== null ? 'suggestive' : 'clean'
-      if (hit !== null) {
-        signals.push({ name: 'nsfw_avatar', evidence: hit })
-        evidence = hit
-        evidenceSignal = 'nsfw_avatar'
-      } else if (suggestive !== null) {
-        signals.push({ name: 'suggestive_profile_media', evidence: suggestive })
-        if (evidence === null) { evidence = suggestive; evidenceSignal = 'suggestive_profile_media' }
-      }
-    } else saw['nsfw'] = 'off'
-    const hash = avatarDhashOf(avatarBase64)
-    if (hash !== null && ports.profileMedia) {
-      const reuse = await ports.profileMedia.seen(target.id, hash).catch(() => null)
-      saw['phash'] = reuse === null ? 'no_answer' : String(reuse.otherAccounts)
-      if (reuse !== null && reuse.otherAccounts > 0) {
-        const name = reuse.otherAccounts > 1 ? 'avatar_shared_with_accounts' : 'avatar_shared_with_account'
-        const line = `same photo on ${reuse.otherAccounts} other account(s)`
-        signals.push({ name, evidence: line })
-        if (evidence === null) { evidence = line; evidenceSignal = name }
-      }
+    // The first finding is the card's: explicit, then suggestive, then shared —
+    // the order `avatarFindings` returns them in.
+    for (const finding of await avatarFindings(target.id, avatarBase64, saw)) {
+      signals.push(finding)
+      if (evidence === null) { evidence = finding.evidence ?? null; evidenceSignal = finding.name }
     }
   }
 
@@ -4499,6 +4598,14 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     },
     gateway.moderationActions
   )
+
+  // Shadow only — see `scheduleProfileRecheck`. `avatars` is null when the
+  // photo list did not answer, and that is not the same as an empty one.
+  if (userSender && wantsProfileRecheck({
+    isUser: true, newish, avatarCount: profile.avatars?.count ?? null, action: verdict.action
+  })) {
+    scheduleProfileRecheck(chat, userSender, message.id)
+  }
 
   /**
    * The rest of the run goes with the sender.
