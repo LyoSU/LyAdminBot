@@ -68,6 +68,7 @@ import { ArrivalLog, arrivalMessageIds } from './arrival-log.js'
 import { CaptchaGates, type CaptchaGate } from './captcha-gate.js'
 import { DuplicateTally } from './duplicate-tally.js'
 import { getUsersEach } from './users-each.js'
+import { parseCommand } from './command.js'
 
 const config = loadConfig()
 
@@ -1940,6 +1941,7 @@ const handlePrivateMessage = async (message: Message): Promise<void> => {
   if (!(sender instanceof User) || sender.isBot) return
   const text = (message.text ?? '').trim()
   const locale = await localeFor(sender.id, sender.language)
+  const pmCmd = parseCommand(text, selfUsername)
 
   // In-progress editor flow: this message is the input the admin was asked for.
   const pending = pendingInput.peek(sender.id)
@@ -1952,7 +1954,7 @@ const handlePrivateMessage = async (message: Message): Promise<void> => {
     return
   }
   if (pending) {
-    if (/^\/cancel\b/i.test(text)) {
+    if (pmCmd?.name === 'cancel') {
       pendingInput.cancel(sender.id)
       await tgSendText(sender.id, viewHtml(locale.welcome.editor.cancelled)).catch(() => { /* PM closed */ })
       return
@@ -1963,25 +1965,25 @@ const handlePrivateMessage = async (message: Message): Promise<void> => {
     return
   }
 
-  if (/^\/help/.test(text)) {
+  if (pmCmd?.name === 'help') {
     await sendView(message, helpView(locale))
     return
   }
-  if (/^\/lang/.test(text)) {
+  if (pmCmd?.name === 'lang') {
     await sendView(message, langPicker(locale))
     return
   }
-  if (/^\/mystats/.test(text)) {
+  if (pmCmd?.name === 'mystats') {
     await sendView(message, { text: await renderMyStats(locale, sender.id, null), buttons: [] })
     return
   }
-  if (/^\/stats/.test(text)) {
+  if (pmCmd?.name === 'stats') {
     await sendView(message, await renderStatsCard(locale, null))
     return
   }
-  if (!text.startsWith('/start')) return
+  if (pmCmd?.name !== 'start') return
 
-  const payload = text.split(/\s+/)[1] ?? ''
+  const payload = pmCmd.args.split(/\s+/)[0] ?? ''
   if (payload.startsWith('mystats_')) {
     const chatId = Number(payload.slice('mystats_'.length))
     await sendView(message, {
@@ -3889,13 +3891,15 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
   if (userSender && !isEdit) {
     // Group service commands. /settings never renders a panel in the chat —
     // PM deep link only; /start and /help reply with the one-line hint.
-    const commandText = (message.text ?? '').trim()
-    if (/^\/settings(@\w+)?$/.test(commandText) && selfUsername) {
+    const cmd = parseCommand(message.text ?? '', selfUsername)
+    /** The command, addressed to us, with nothing after it. */
+    const bare = (name: string): boolean => cmd?.name === name && cmd.args === ''
+    if (bare('settings') && selfUsername) {
       const locale = await groupLocale(chat.id)
       await sendView(message, settingsDeepLink(locale, selfUsername, chat.id))
       return
     }
-    if (/^\/start(@\w+)?$/.test(commandText)) {
+    if (bare('start')) {
       const locale = await groupLocale(chat.id)
       await sendView(message, startGroupHint(locale, selfUsername ?? undefined))
       return
@@ -3911,7 +3915,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
      * It is a wall of text in a group, so it cleans itself up on the same timer
      * `/top` uses: long enough to read, short enough not to live there.
      */
-    if (/^\/help(@\w+)?$/.test(commandText)) {
+    if (bare('help')) {
       const locale = await groupLocale(chat.id)
       const sent = await tgReplyText(message, viewHtml(helpView(locale).text), {
         disableWebPreview: true
@@ -3929,7 +3933,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
      * in the settings panel. So the reply points at whichever the caller can
      * actually do.
      */
-    if (/^\/lang(@\w+)?$/.test(commandText) && selfUsername) {
+    if (bare('lang') && selfUsername) {
       const locale = await groupLocale(chat.id)
       const view = await isChatAdmin(chat.id, userSender.id)
         ? settingsDeepLink(locale, selfUsername, chat.id)
@@ -3940,31 +3944,31 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       await sendView(message, view)
       return
     }
-    if (/^\/report(@\w+)?$/.test(commandText)) {
+    if (bare('report')) {
       await handleReport(message, chat, userSender)
       return
     }
-    if (/^\/banan(@\w+)?(\s|$)/.test(commandText)) {
-      await handleBanan(message, chat, userSender, commandText.split(/\s+/)[1])
+    if (cmd?.name === 'banan') {
+      await handleBanan(message, chat, userSender, cmd.args.split(/\s+/)[0] || undefined)
       return
     }
-    if (/^\/kick(@\w+)?$/.test(commandText)) {
+    if (bare('kick')) {
       await handleKick(message, chat, userSender)
       return
     }
-    if (/^\/untrust(@\w+)?$/.test(commandText)) {
+    if (bare('untrust')) {
       await handleUntrust(message, chat, userSender)
       return
     }
-    if (/^\/check(@\w+)?$/.test(commandText)) {
+    if (bare('check')) {
       await handleCheck(message, chat, userSender)
       return
     }
-    if (/^\/del(@\w+)?$/.test(commandText)) {
+    if (bare('del')) {
       await handleDelete(message, chat, userSender)
       return
     }
-    if (/^\/mystats(@\w+)?$/.test(commandText) && selfUsername) {
+    if (bare('mystats') && selfUsername) {
       const locale = await groupLocale(chat.id)
       await sendView(message, {
         text: locale.stats.openInPm,
@@ -3980,7 +3984,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
      * anything" is not the admin. It is a wall of text in a chat, so it cleans
      * itself up on the same timer `/help` and `/top` use.
      */
-    if (/^\/stats(@\w+)?$/.test(commandText)) {
+    if (bare('stats')) {
       const locale = await groupLocale(chat.id)
       const card = await renderStatsCard(locale, chat.id)
       const sent = await tgReplyText(message, viewHtml(card.text), {
@@ -3989,15 +3993,15 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'cmd_stats')
       return
     }
-    if (/^\/top[-_]banan(@\w+)?$/.test(commandText)) {
+    if (bare('top-banan') || bare('top_banan')) {
       await handleTop(message, chat, userSender, 'banan')
       return
     }
-    if (/^\/top(@\w+)?$/.test(commandText)) {
+    if (bare('top')) {
       await handleTop(message, chat, userSender, 'messages')
       return
     }
-    if (/^\/ping(@\w+)?$/.test(commandText)) {
+    if (bare('ping')) {
       const sent = await tgReplyText(message, '🏓 pong').catch(() => null)
       if (sent) {
         scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'cmd_ping')
@@ -4005,16 +4009,16 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       }
       return
     }
-    if (/^\/extras(@\w+)?$/.test(commandText)) {
+    if (bare('extras')) {
       await handleExtraList(message, chat, userSender)
       return
     }
-    if (/^\/extra(@\w+)?(\s|$)/.test(commandText)) {
-      await handleExtraCommand(message, chat, userSender, commandText.split(/\s+/)[1])
+    if (cmd?.name === 'extra') {
+      await handleExtraCommand(message, chat, userSender, cmd.args.split(/\s+/)[0] || undefined)
       return
     }
-    if (/^\/welcome(@\w+)?(\s|$)/.test(commandText)) {
-      await handleWelcomeCommand(message, chat, userSender, commandText.replace(/^\/welcome(@\w+)?\s*/, ''))
+    if (cmd?.name === 'welcome') {
+      await handleWelcomeCommand(message, chat, userSender, cmd.args)
       return
     }
   }
