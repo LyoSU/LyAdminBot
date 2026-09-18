@@ -3612,20 +3612,28 @@ const fireExtras = async (message: Message, chat: Chat, text: string): Promise<v
   }
 }
 
+const TOP_SHOWN = 10
+
 /**
  * /top (by messages) and /top-banan (by banana count). One ephemeral
  * leaderboard message; names resolved live via MTProto so they never go stale.
  */
 const handleTop = async (message: Message, chat: Chat, caller: User, kind: 'messages' | 'banan'): Promise<void> => {
   const locale = await groupLocale(chat.id)
-  const rows = await store.getTopMembers(chat.id, kind, 10).catch(() => [])
+  // Read past the ten shown: a deleted account keeps its counters and would
+  // otherwise hold a place on the board as "Deleted Account" for ever.
+  const fetched = await store.getTopMembers(chat.id, kind, TOP_SHOWN * 2).catch(() => [])
   let entries: { name: string; value: number; username?: string | null }[] = []
-  if (rows.length > 0) {
-    const users = await getUsersEach(fetchUser, rows.map((r) => r.telegramId))
+  if (fetched.length > 0) {
+    const users = await getUsersEach(fetchUser, fetched.map((r) => r.telegramId))
     const byId = new Map<number, User>()
+    const deleted = new Set<number>()
     for (const u of users) {
-      if (u instanceof User) byId.set(u.id, u)
+      if (!(u instanceof User)) continue
+      if (u.isDeleted) deleted.add(u.id)
+      else byId.set(u.id, u)
     }
+    const rows = fetched.filter((r) => !deleted.has(r.telegramId)).slice(0, TOP_SHOWN)
     // A member the peer cache cannot resolve is still somebody we saw write.
     const unresolved = rows.map((r) => r.telegramId).filter((id) => !byId.has(id))
     const lastNames = await store.getLastNames(unresolved).catch(() => new Map<number, string>())
