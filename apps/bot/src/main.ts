@@ -3636,7 +3636,8 @@ const handleTop = async (message: Message, chat: Chat, caller: User, kind: 'mess
     }))
   }
   const view = topList(locale, kind, entries)
-  const sent = await tgReplyText(message, viewHtml(view.text)).catch(() => null)
+  // The rows link to t.me, and Telegram previews the first link it finds.
+  const sent = await tgReplyText(message, viewHtml(view.text), { disableWebPreview: true }).catch(() => null)
   if (sent) {
     scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'cmd_top')
     scheduleDelete(chat.id, message.id, NOTIFY_TTL_TOP_MS, 'cmd_top')
