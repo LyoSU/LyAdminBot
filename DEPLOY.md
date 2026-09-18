@@ -80,3 +80,26 @@ v1-колекції (groups/groupmembers/spamsignatures/forwardblacklists),
 - `pipeline_decisions` (TTL 90 днів) накопичує кожен вердикт — матеріал
   для перекалібрування ваг за реальним трафіком
 - v1-застосунок у Coolify не видаляти перші 2 тижні — це і є план відкату
+
+## Харвестер CAS (розклад)
+
+Патерни спаму з бази CAS (Combot) тягне окремий батч `tools/cas-harvest`,
+поза процесом бота. Він читає `export.csv` з хвоста (найновіші бани), вчить
+сигнатури (`source: 'cas'`) і, якщо є `QDRANT_URL` + `OPENAI_API_KEY`,
+вектори. Курсор у `cas_harvest_state`: `processedThrough` (найновіший
+`time_added`, до якого дійшли) і `exportModified` (`Last-Modified` файлу —
+незмінений файл не обходиться вдруге). Вікно `CAS_HARVEST_SINCE_DAYS`
+(типово 7) міряється від найновішого бану У ФАЙЛІ, не від «зараз», бо CAS
+регенерує експорт рідко (2026-09-18 файл датовано 2026-08-23).
+
+Coolify → застосунок → Scheduled Tasks, раз на добу (env застосунку вже
+містить `MONGODB_URI`, `QDRANT_URL`, `OPENAI_API_KEY`):
+
+```
+cd /app/tools/cas-harvest && CAS_HARVEST_MAX_USERS=20000 node --import tsx src/harvest.ts
+```
+
+Ціна: один `api.cas.chat/check` на бан, ~5–8 тис. банів на добу експорту,
+100 мс паузи між запитами → 10–15 хв на добу даних. Перший запуск обходить
+тиждень (≈60 тис., ~2 год); `SIGTERM` зупиняє після поточного акаунта й
+зберігає курсор.
