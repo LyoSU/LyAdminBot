@@ -14,7 +14,7 @@
  */
 import type { Signal } from '../types.js'
 import { truncate } from '../text/normalize.js'
-import { classifyUrl, URL_TOKEN_REGEX, PROMO_URL_KINDS } from './urls.js'
+import { classifyUrl, URL_TOKEN_REGEX, PROMO_URL_KINDS, withoutUrls } from './urls.js'
 import { PHONE_REGEX, CASHTAG_REGEX } from './message.js'
 
 /**
@@ -59,7 +59,9 @@ const promoIn = (text: string): BioPromo | null => {
   const promoUrl = urls.find((u) => PROMO_URL_KINDS.has(u.kind))
   if (promoUrl) return { name: 'promo_in_bio', what: promoUrl.token }
 
-  if (PHONE_REGEX.test(text)) return { name: 'contact_in_bio', what: 'phone number' }
+  // A link that is not promo (a `t.me/c/…` message link) still reaches here
+  // with its ids in the text — see `withoutUrls`.
+  if (PHONE_REGEX.test(withoutUrls(text))) return { name: 'contact_in_bio', what: 'phone number' }
   if (CASHTAG_REGEX.test(text)) return { name: 'contact_in_bio', what: 'cashtag' }
   return null
 }

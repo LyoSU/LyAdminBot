@@ -9,7 +9,7 @@
 import type { NormalizedMessage, Signal } from '../types.js'
 import { isEmojiOnly, truncate } from '../text/normalize.js'
 import { confusableScriptMix } from '../text/script.js'
-import { classifyUrl, sameDestination } from './urls.js'
+import { classifyUrl, sameDestination, withoutUrls } from './urls.js'
 
 const LONG_TEXT_THRESHOLD = 200
 const SHORT_TEXT_THRESHOLD = 50
@@ -162,7 +162,9 @@ export const extractMessageSignals = (msg: NormalizedMessage): Signal[] => {
 
   // ── suspicious: text content ───────────────────────────────────────
 
-  if (PHONE_REGEX.test(text)) signals.push({ name: 'phone_number' })
+  // Links out first: the ids they carry are the digit runs this reads —
+  // see `withoutUrls`.
+  if (PHONE_REGEX.test(withoutUrls(text))) signals.push({ name: 'phone_number' })
   if (CASHTAG_REGEX.test(text)) signals.push({ name: 'cashtag' })
   if (text.length > LONG_TEXT_THRESHOLD) signals.push({ name: 'long_text' })
   const separation = separationShare(text)

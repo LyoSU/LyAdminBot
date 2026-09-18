@@ -155,6 +155,40 @@ describe('extractMessageSignals — suspicious signals', () => {
     }
   })
 
+  it('REGRESSION: a long run of digits inside a link is an identifier, not a number to dial', () => {
+    // Measured over the 14 days to 2026-09-18: 11 rows carried `phone_number`
+    // with every long digit run sitting inside a URL — story and video ids,
+    // tweet ids, a message id under `t.me/c/`, a product id in a path, an IP
+    // with a port. Two of them were removed by the scoring stage on this
+    // signal alone (a shared story link, a shared video link), with no stage
+    // having read the text. The regex saw `/3988077506668871369` as a phone
+    // because `\b` holds between a slash and a digit.
+    for (const text of [
+      'https://www.instagram.com/stories/someone/3988077506668871369?utm_source=share',
+      'https://www.tiktok.com/@someone/video/7675312922821725461?_r=1&u_code=abc',
+      'https://x.com/someone/status/2095306984320815299 прочитай',
+      'дивись https://t.me/c/1722791407/1647536',
+      'і це було 600к: https://shop.example/ua/product/13726382899/',
+      'реєстрація (https://23.235.189.140:32011/#/link?join=abc)',
+      'www.example.com/watch?v=1234567890123'
+    ]) {
+      expect(names(makeMsg({ text })), text).not.toContain('phone_number')
+    }
+  })
+
+  it('still reads a number to dial that sits beside a link, or is written with dots', () => {
+    // Stripping links must not take the phone with them: the number next to a
+    // link is the classic contact line, and a dotted phone looks like a host
+    // to a naive tokenizer.
+    expect(names(makeMsg({ text: 'https://example.com/promo пиши +380 99 123 45 67' }))).toContain('phone_number')
+    expect(names(makeMsg({ text: 'тел 067.123.45.67' }))).toContain('phone_number')
+    // A messenger contact link IS the phone number: it is charged as a link,
+    // through its own signal, not as a phone.
+    const wa = makeMsg({ text: 'wa.me/380991234567', urls: [{ visible: 'wa.me/380991234567', target: 'https://wa.me/380991234567', hidden: false }] })
+    expect(names(wa)).toContain('messenger_contact_link')
+    expect(names(wa)).not.toContain('phone_number')
+  })
+
   it('flags long promotional text', () => {
     expect(names(makeMsg({ text: 'а'.repeat(250) }))).toContain('long_text')
     expect(names(makeMsg({ text: 'коротко' }))).not.toContain('long_text')

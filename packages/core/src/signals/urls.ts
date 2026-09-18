@@ -29,6 +29,27 @@ export interface ClassifiedUrl {
 export const URL_TOKEN_REGEX =
   /(?:https?:\/\/\S+|(?:t|telegram)\.me\/\S+|[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)+(?:\/\S*)?)/gi
 
+/**
+ * The text with its links taken out, for checks that read digits.
+ *
+ * Story, video and tweet ids run to 19 digits, `t.me/c/<chat>/<msg>` to ten,
+ * a product path or an IP with a port to nine or more — and `\b` holds
+ * between a slash and a digit, so a phone regex run over the raw text reads
+ * every one of them as a number to dial. Measured over the 14 days to
+ * 2026-09-18: 11 rows carried `phone_number` with every long run inside a
+ * link, and two of them were removed on that signal alone.
+ *
+ * A token is a link only when it looks like one: a letter in its host, or a
+ * path. A dotted run of digits (`067.123.45.67`) matches the token regex as a
+ * host, and it is the phone the caller is looking for, so it stays — which
+ * also keeps a bare IPv4 host, because four dotted groups of up to three
+ * digits are what both of them are; a link to an IP host carries a path. A
+ * messenger contact link (`wa.me/<phone>`) goes with the links — it is
+ * charged as a link, through `messenger_contact_link`, not as a phone.
+ */
+export const withoutUrls = (text: string): string =>
+  text.replace(URL_TOKEN_REGEX, (token) => (/[a-z]|\//i.test(token) ? ' ' : token))
+
 /** URL classes that carry promo intent (a plain telegram profile link does not). */
 export const PROMO_URL_KINDS = new Set<UrlKind>([
   'private_invite', 'bot_deeplink', 'shortener', 'messenger_contact', 'external'

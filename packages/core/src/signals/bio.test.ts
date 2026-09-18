@@ -36,6 +36,15 @@ describe('extractBioSignals', () => {
     expect(names('to the moon $BTC $ETH')).toEqual(['contact_in_bio'])
   })
 
+  it('does not read a long id inside a plain website link as a phone number', () => {
+    // A website is read as promo before the text reaches the phone check, so
+    // the gap shows on a link that is not promo: a message link under
+    // `t.me/c/` carries a ten-digit chat id and a message id, and the phone
+    // check read them as a number to dial.
+    expect(names('мій пост t.me/c/1722791407/1647536')).toEqual([])
+    expect(names('пост t.me/c/1722791407/1647536, тел +380 99 123 45 67')).toEqual(['contact_in_bio'])
+  })
+
   it('does not flag a plain telegram profile link (internal, not promo)', () => {
     expect(names('my profile t.me/durov')).toEqual([])
   })
