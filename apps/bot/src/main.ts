@@ -3626,8 +3626,11 @@ const handleTop = async (message: Message, chat: Chat, caller: User, kind: 'mess
     for (const u of users) {
       if (u instanceof User) byId.set(u.id, u)
     }
+    // A member the peer cache cannot resolve is still somebody we saw write.
+    const unresolved = rows.map((r) => r.telegramId).filter((id) => !byId.has(id))
+    const lastNames = await store.getLastNames(unresolved).catch(() => new Map<number, string>())
     entries = rows.map((r) => ({
-      name: byId.get(r.telegramId)?.displayName ?? `id${r.telegramId}`,
+      name: byId.get(r.telegramId)?.displayName ?? lastNames.get(r.telegramId) ?? `id${r.telegramId}`,
       value: r.value,
       username: byId.get(r.telegramId)?.username ?? null
     }))
@@ -4182,6 +4185,11 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
   // ── user snapshot ───────────────────────────────────────────────────
   const memberCount = await timed('mongo', async () => {
     await store.touchUser(sender.id).catch(() => { /* counters are best-effort */ })
+    if (userSender) {
+      const name = [userSender.firstName, userSender.lastName ?? ''].join(' ').trim()
+      await store.recordIdentity(sender.id, name, userSender.username ?? '')
+        .catch(() => { /* history is best-effort */ })
+    }
     // Increments the per-chat counters and returns the pre-increment standing —
     // exactly what the "new in chat" signal must see.
     // `null`, not `0`. A Mongo failure used to be indistinguishable from a

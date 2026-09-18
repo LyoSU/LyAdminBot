@@ -34,6 +34,8 @@ const LLM_CACHE_TTL_DAYS = 7
 const DORMANT_DAYS = 180
 /** Per-call ceiling: a sweep on a shared-tier cluster must never be a long one. */
 const PRUNE_BATCH = 5000
+/** Names and usernames kept per account, newest first; v1's cap. */
+const IDENTITY_HISTORY_LIMIT = 10
 
 /**
  * Who `pruneDormantRecords` may remove, as two filters.
@@ -1030,6 +1032,49 @@ export class MongoStore {
       },
       { upsert: true }
     )
+  }
+
+  /**
+   * The name and username this account wrote under, newest first, each kept
+   * only when it differs from the one before — v1's `trackIdentity`, which v2
+   * never ported. `nameHistory` has been read all along (`identity_churn_24h`)
+   * with nothing writing it, and without it a leaderboard row for a member the
+   * peer cache cannot resolve had nothing to print but the id.
+   *
+   * The `$ne` on element 0 is the whole "only on change" rule, and it holds for
+   * a document with no history too: a missing field is not equal to the name,
+   * so the first write seeds it. No upsert — `touchUser` made the document.
+   */
+  async recordIdentity(telegramId: number, name: string, username: string): Promise<void> {
+    const push = (field: 'nameHistory' | 'usernameHistory', value: string) => ({
+      updateOne: {
+        filter: { telegram_id: telegramId, [`${field}.0.value`]: { $ne: value } },
+        update: {
+          $push: {
+            [field]: { $each: [{ value, seenAt: new Date() }], $position: 0, $slice: IDENTITY_HISTORY_LIMIT }
+          }
+        } as never
+      }
+    })
+    await this.users.bulkWrite([push('nameHistory', name), push('usernameHistory', username)], { ordered: false })
+  }
+
+  /**
+   * The newest recorded name per id, for rows the live lookup could not name.
+   * Names only: a stored username may have passed to somebody else since, so a
+   * link built from it could point at a stranger.
+   */
+  async getLastNames(telegramIds: number[]): Promise<Map<number, string>> {
+    const out = new Map<number, string>()
+    if (telegramIds.length === 0) return out
+    const docs = await this.users
+      .find({ telegram_id: { $in: telegramIds } }, { projection: { telegram_id: 1, nameHistory: { $slice: 1 } } })
+      .toArray() as { telegram_id?: number; nameHistory?: { value?: unknown }[] }[]
+    for (const doc of docs) {
+      const value = doc.nameHistory?.[0]?.value
+      if (typeof value === 'string' && value.trim() !== '') out.set(Number(doc.telegram_id), value)
+    }
+    return out
   }
 
   /**

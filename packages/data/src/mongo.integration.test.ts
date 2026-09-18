@@ -66,3 +66,59 @@ describe.skipIf(!uri)('castBallot against a live server', () => {
     expect(await ballots()).toMatchObject([{ userId: 7, choice: 'spam', taps: 3, changedMind: true }])
   })
 })
+
+/**
+ * `recordIdentity` keeps a value only when it differs from the newest one, and
+ * that rule lives in a `$ne` on element 0 — whose meaning for a document with
+ * no history at all is the server's call, not the driver's.
+ */
+describe.skipIf(!uri)('recordIdentity against a live server', () => {
+  const store = new MongoStore()
+  const id = 990_000_001
+
+  beforeAll(async () => { await store.connect(uri as string) })
+  afterAll(async () => {
+    await store.users.deleteMany({ telegram_id: id })
+    await store.close()
+  })
+  beforeEach(async () => {
+    await store.users.deleteMany({ telegram_id: id })
+    await store.touchUser(id)
+  })
+
+  const history = async (): Promise<{ names: unknown[]; usernames: unknown[] }> => {
+    const doc = await store.users.findOne({ telegram_id: id }) as
+      { nameHistory?: { value: string }[]; usernameHistory?: { value: string }[] } | null
+    return {
+      names: (doc?.nameHistory ?? []).map((e) => e.value),
+      usernames: (doc?.usernameHistory ?? []).map((e) => e.value)
+    }
+  }
+
+  it('seeds an empty document, and the same name again adds nothing', async () => {
+    await store.recordIdentity(id, 'Anna K', 'anna')
+    await store.recordIdentity(id, 'Anna K', 'anna')
+    expect(await history()).toEqual({ names: ['Anna K'], usernames: ['anna'] })
+  })
+
+  it('puts a changed name first and leaves the unchanged username alone', async () => {
+    await store.recordIdentity(id, 'Anna K', 'anna')
+    await store.recordIdentity(id, 'Anna Kovalenko', 'anna')
+    expect(await history()).toEqual({ names: ['Anna Kovalenko', 'Anna K'], usernames: ['anna'] })
+  })
+
+  it('keeps ten, newest first', async () => {
+    for (let i = 0; i < 12; i += 1) await store.recordIdentity(id, `name ${i}`, '')
+    const { names } = await history()
+    expect(names).toHaveLength(10)
+    expect(names[0]).toBe('name 11')
+  })
+
+  it('reads back the newest name for the leaderboard', async () => {
+    await store.recordIdentity(id, 'Anna K', 'anna')
+    await store.recordIdentity(id, 'Anna Kovalenko', 'anna')
+    const names = await store.getLastNames([id, 990_000_002])
+    expect(names.get(id)).toBe('Anna Kovalenko')
+    expect(names.has(990_000_002)).toBe(false)
+  })
+})
