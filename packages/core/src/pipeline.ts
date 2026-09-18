@@ -1953,6 +1953,30 @@ export const evaluateMessage = async (
   if (silencedByStanding) meta['escalatedOnEvidence'] = true
 
   const inGreyZone = scorePSpam >= LLM_GREY_LOW && scorePSpam <= LLM_GREY_HIGH
+
+  /**
+   * A picture nobody has read.
+   *
+   * The same absence of findings as an alien script, from the other direction:
+   * every stage before this one reads words, and a photo with no caption — or
+   * a caption too short to say anything — gives them none. The arithmetic
+   * then holds only what it knows about the account, lands under the floor,
+   * and clears a message whose entire content is in the one place no stage
+   * looked. The classifier is the only stage that can see the picture, and it
+   * already receives it; it was simply never asked.
+   *
+   * Measured over the 14 days to 2026-09-18, newcomers' photos without words:
+   * 187 reached the classifier because something else about the account had
+   * lifted the score, and 37 of those (20 %) were removed as adverts; 407 did
+   * not, cleared by the arithmetic alone, and the only later word on them was
+   * a member's report. The photo is downloaded only for a newish sender
+   * (composition root), so its presence here is the whole gate: no second
+   * reading of newness, no call for a regular.
+   */
+  const unreadPicture = input.enrichment.photoBase64 !== null
+  const pictureUnderFloor = unreadPicture && scorePSpam < LLM_GREY_LOW
+  if (pictureUnderFloor) meta['unreadPicture'] = true
+
   const needsLlm = inGreyZone ||
     silencedByStanding ||
     (scorePSpam > LLM_GREY_HIGH && (!decisive || unearnedEnforcement)) ||
@@ -1961,7 +1985,8 @@ export const evaluateMessage = async (
     // reading a language they were not built for. Asking the one stage that
     // can read it is the difference between clearing a message and never
     // having looked at it (2026-07-31).
-    foreignScript !== null
+    foreignScript !== null ||
+    pictureUnderFloor
   let llmNeededButUnavailable = false
 
   /**
@@ -1973,7 +1998,7 @@ export const evaluateMessage = async (
    */
   const clearedAgo = input.enrichment.llmClearedAgoMs ?? null
   const nothingNewToRead = inGreyZone && !silencedByStanding && !decisive &&
-    foreignScript === null &&
+    foreignScript === null && !unreadPicture &&
     !somethingNewToRead(signals) &&
     clearedAgo !== null && clearedAgo >= 0 && clearedAgo <= LLM_CLEARANCE_TTL_MS
   if (nothingNewToRead) {

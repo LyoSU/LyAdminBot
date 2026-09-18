@@ -3489,6 +3489,62 @@ describe('evaluateMessage — a script the chat does not use', () => {
   })
 })
 
+describe('evaluateMessage — a picture nobody has read', () => {
+  // A newcomer's photo without words. Every stage before the classifier reads
+  // words; the arithmetic is left with newness alone, lands under the grey
+  // floor, and until 2026-09-18 cleared the message without any stage having
+  // seen the one thing it contained. 407 such rows in the fortnight before,
+  // against a 20 % advert rate where the classifier did get to look.
+  const photo = [{ kind: 'photo' as const, fileUniqueId: 'p1' }]
+  const advert = { pSpam: 0.97, reasonCode: 'channel_promo', evidence: null, cached: false }
+  // New here and new everywhere, nothing else: the shape the fortnight's 407
+  // rows had, scoring under the grey floor on newness alone.
+  const quietNewcomer = { messagesInChat: 2, messagesGlobal: 4, localAgeDays: 20, predictedAgeDays: 300 }
+
+  it('asks the one stage that can see it', async () => {
+    let calls = 0
+    const v = await evaluateMessage(
+      makeInput({ msg: { text: '', attachments: photo }, user: quietNewcomer, enrichment: { photoBase64: 'aGk=' } }),
+      { llm: { classify: async () => { calls += 1; return advert } } })
+    expect(calls).toBe(1)
+    expect(v.decidedBy).toBe('llm')
+    expect(v.meta?.['unreadPicture']).toBe(true)
+  })
+
+  it('a caption too short to judge does not stand in for the picture', async () => {
+    let calls = 0
+    await evaluateMessage(
+      makeInput({ msg: { text: 'дивіться 👇', attachments: photo }, user: quietNewcomer, enrichment: { photoBase64: 'aGk=' } }),
+      { llm: { classify: async () => { calls += 1; return advert } } })
+    expect(calls).toBe(1)
+  })
+
+  it('spends nothing when there is no picture to show', async () => {
+    // The composition root downloads the photo for newish senders only; with
+    // no bytes there is nothing the classifier could see that the arithmetic
+    // did not, and the verdict stays where it was.
+    let calls = 0
+    const v = await evaluateMessage(
+      makeInput({ msg: { text: '', attachments: photo }, user: quietNewcomer }),
+      { llm: { classify: async () => { calls += 1; return advert } } })
+    expect(calls).toBe(0)
+    expect(v.action).toBe('none')
+    expect(v.meta?.['unreadPicture']).toBeUndefined()
+  })
+
+  it('a recent clearance of this sender says nothing about a new picture', async () => {
+    let calls = 0
+    const v = await evaluateMessage(
+      makeInput({
+        msg: { text: '', attachments: photo }, user: quietNewcomer,
+        enrichment: { photoBase64: 'aGk=', llmClearedAgoMs: 60_000 }
+      }),
+      { llm: { classify: async () => { calls += 1; return advert } } })
+    expect(calls).toBe(1)
+    expect(v.reasonCode).not.toBe('llm_cleared_recently')
+  })
+})
+
 describe('evaluateMessage — an external listing is not evidence about the message', () => {
   const banned: Partial<UserSnapshot> = {
     externalBan: { banned: true, bannedAt: null, offenses: 1, sources: ['lols'] },
