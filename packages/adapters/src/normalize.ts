@@ -273,6 +273,93 @@ const mapMedia = (msg: Message): { attachments: MessageAttachmentInfo[]; extraTe
   }
 }
 
+// ── rich messages ─────────────────────────────────────────────────────
+
+/**
+ * What a rich message says, in the terms the pipeline already reads.
+ *
+ * Layer 228 added `message.richMessage`: a page of blocks — the Instant View
+ * vocabulary — with its own photos and documents, beside a `message` string
+ * that may be empty. Read through `msg.text` and `msg.media` alone, such a
+ * message is a blank with no attachment: the abstain gate waves it through
+ * and no text layer, no vision call, no signature ever sees it.
+ *
+ * The walk is deliberately generic — every rich-text node in document order,
+ * whatever block holds it — so a block kind this code has never heard of
+ * still yields its words rather than nothing. The same invariant the poll and
+ * todo branches of `mapMedia` keep: what a human reads, the pipeline reads.
+ *
+ * A link is recorded the way a `text_link` entity is: the visible words and
+ * the target apart, `hidden: true`, so `hidden_url` can compare them. A phone
+ * or email node contributes its value beside its words, so the phone regex
+ * sees the number even when the words are "call me".
+ */
+const richMessageContent = (
+  rich: tl.TypeRichMessage
+): { texts: string[]; urls: NormalizedMessage['urls']; attachments: MessageAttachmentInfo[] } => {
+  const texts: string[] = []
+  const urls: NormalizedMessage['urls'] = []
+
+  const plain = (node: tl.TypeRichText): string => {
+    switch (node._) {
+      case 'textPlain': return node.text
+      case 'textEmpty': return ''
+      case 'textConcat': return node.texts.map(plain).join('')
+      case 'textUrl': {
+        const visible = plain(node.text)
+        urls.push({ visible, target: node.url, hidden: true })
+        return visible
+      }
+      case 'textPhone': {
+        const visible = plain(node.text)
+        return visible.includes(node.phone) ? visible : `${visible} ${node.phone}`
+      }
+      case 'textEmail': {
+        const visible = plain(node.text)
+        return visible.includes(node.email) ? visible : `${visible} ${node.email}`
+      }
+      default: {
+        const inner = (node as { text?: unknown }).text
+        return inner !== null && typeof inner === 'object' && '_' in (inner as object)
+          ? plain(inner as tl.TypeRichText)
+          : ''
+      }
+    }
+  }
+
+  const isRichText = (v: unknown): v is tl.TypeRichText =>
+    v !== null && typeof v === 'object' && '_' in v &&
+    typeof (v as { _: unknown })._ === 'string' && (v as { _: string })._.startsWith('text')
+
+  const walk = (v: unknown): void => {
+    if (Array.isArray(v)) { for (const item of v) walk(item); return }
+    if (v === null || typeof v !== 'object') return
+    if (isRichText(v)) {
+      const t = plain(v).trim()
+      if (t.length > 0) texts.push(t)
+      return
+    }
+    for (const value of Object.values(v)) {
+      if (typeof value === 'object' && value !== null) walk(value)
+    }
+  }
+  walk(rich.blocks)
+
+  const attachments: MessageAttachmentInfo[] = []
+  for (const _photo of rich.photos) attachments.push({ kind: 'photo', fileUniqueId: null })
+  for (const doc of rich.documents) {
+    const mime = doc._ === 'document' ? doc.mimeType : ''
+    const kind: MessageAttachmentInfo['kind'] =
+      mime === 'image/gif' ? 'animation'
+        : mime.startsWith('video/') ? 'video'
+          : mime.startsWith('audio/') ? 'audio'
+            : 'document'
+    attachments.push({ kind, fileUniqueId: null })
+  }
+
+  return { texts, urls, attachments }
+}
+
 // ── content ───────────────────────────────────────────────────────────
 
 /**
@@ -294,11 +381,16 @@ interface MessageContent {
 const extractContent = (msg: Message): MessageContent => {
   const baseText = msg.text ?? ''
 
-  const { attachments, extraText, previewUrl } = mapMedia(msg)
-  const text = [baseText, ...extraText].filter((t) => t.length > 0).join('\n')
+  const media = mapMedia(msg)
+  const rich = msg.raw._ === 'message' && msg.raw.richMessage !== undefined
+    ? richMessageContent(msg.raw.richMessage)
+    : null
+  const attachments = rich === null ? media.attachments : [...media.attachments, ...rich.attachments]
+  const previewUrl = media.previewUrl
+  const text = [baseText, ...media.extraText, ...(rich?.texts ?? [])].filter((t) => t.length > 0).join('\n')
 
   // ── urls / mentions / custom emoji from entities ───────────────────
-  const urls: NormalizedMessage['urls'] = []
+  const urls: NormalizedMessage['urls'] = rich === null ? [] : [...rich.urls]
   const mentions: string[] = []
   const customEmoji: NormalizedMessage['customEmoji'] = []
 

@@ -236,6 +236,61 @@ describe('normalizeMessage — media', () => {
   // todo checklists and quietly broken for every other media type that carries
   // words. A promo poll or a contact card arrived as EMPTY text, so the abstain
   // gate waved it through and no text layer ever saw it.
+  // Layer 228: a rich message is a page of blocks beside a `message` string
+  // that may be empty. Read through text and media alone it is a blank.
+  it('reads the words, links and pictures of a rich message', () => {
+    const msg = makeMessage({
+      message: '',
+      richMessage: {
+        _: 'richMessage',
+        blocks: [
+          { _: 'pageBlockTitle', text: { _: 'textPlain', text: 'Заробіток без вкладень' } },
+          {
+            _: 'pageBlockParagraph',
+            text: {
+              _: 'textConcat',
+              texts: [
+                { _: 'textPlain', text: 'пиши ' },
+                { _: 'textUrl', text: { _: 'textBold', text: { _: 'textPlain', text: 'сюди' } }, url: 'https://t.me/+abcdef', webpageId: long(0) },
+                { _: 'textPlain', text: ' або дзвони ' },
+                { _: 'textPhone', text: { _: 'textPlain', text: 'за номером' }, phone: '+380991234567' }
+              ]
+            }
+          },
+          {
+            _: 'pageBlockList',
+            items: [{ _: 'pageListItemText', text: { _: 'textPlain', text: 'оплата на карту' } }]
+          },
+          {
+            _: 'pageBlockPhoto', photoId: long(1),
+            caption: { _: 'pageCaption', text: { _: 'textPlain', text: 'скрін виплати' }, credit: { _: 'textEmpty' } }
+          }
+        ],
+        photos: [{ _: 'photo', id: long(1), accessHash: long(0), fileReference: new Uint8Array(), date: 0, sizes: [], dcId: 2 }],
+        documents: [{ _: 'document', id: long(2), accessHash: long(0), fileReference: new Uint8Array(), date: 0, mimeType: 'video/mp4', size: 1, dcId: 2, attributes: [] }]
+      }
+    } as Partial<tl.RawMessage>)
+    const n = normalizeMessage(msg)
+    expect(n.text).toContain('Заробіток без вкладень')
+    expect(n.text).toContain('пиши сюди або дзвони за номером +380991234567')
+    expect(n.text).toContain('оплата на карту')
+    expect(n.text).toContain('скрін виплати')
+    expect(n.urls).toContainEqual({ visible: 'сюди', target: 'https://t.me/+abcdef', hidden: true })
+    expect(n.attachments.map((a) => a.kind)).toEqual(['photo', 'video'])
+  })
+
+  it('a block kind it has never seen still yields its words', () => {
+    const msg = makeMessage({
+      message: '',
+      richMessage: {
+        _: 'richMessage',
+        blocks: [{ _: 'pageBlockFromTheFuture', payload: { rows: [{ label: { _: 'textPlain', text: 'пиши в лс' } }] } }],
+        photos: [], documents: []
+      }
+    } as unknown as Partial<tl.RawMessage>)
+    expect(normalizeMessage(msg).text).toBe('пиши в лс')
+  })
+
   it('extracts the poll question and options', () => {
     const msg = makeMessage({
       message: '',
