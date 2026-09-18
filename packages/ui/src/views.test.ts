@@ -419,6 +419,18 @@ describe('topList', () => {
     expect(view.text).toContain('&lt;b&gt;x&lt;/b&gt;')
   })
 
+  it('links a username through t.me and never mentions by id', () => {
+    const view = topList(uk, 'messages', [
+      { name: 'Аня', value: 3, username: 'anya_ok' },
+      { name: 'Богдан', value: 2, username: null },
+      { name: 'Влад', value: 1, username: 'bad"><b>' }
+    ])
+    expect(view.text).toContain('<a href="https://t.me/anya_ok">Аня</a>')
+    expect(view.text).not.toContain('tg://user')
+    expect(view.text).not.toContain('bad"')
+    expect(view.text).toContain('Влад')
+  })
+
   it('uses the banan title and unit for the banan board', () => {
     const view = topList(uk, 'banan', entries)
     expect(view.text).toContain(uk.top.titleBanan)
@@ -1016,19 +1028,19 @@ describe('audit follow-ups', () => {
     expect(uk.panelForChat('Наш чат')).toContain('<b>')
   })
 
-  it('the leaderboard links the names it knows ids for', () => {
+  it('the leaderboard links the names it knows usernames for', () => {
     const view = topList(uk, 'messages', [
-      { name: 'Іра', value: 10, userId: 42 },
+      { name: 'Іра', value: 10, username: 'ira_w' },
       { name: 'Ігор', value: 9 }
     ])
-    expect(view.text).toContain('<a href="tg://user?id=42">Іра</a>')
-    // A row whose id we lost is still a row, just not a link.
+    expect(view.text).toContain('<a href="https://t.me/ira_w">Іра</a>')
+    // A row without a username is still a row, just not a link.
     expect(view.text).toContain('Ігор')
     expect(view.text.match(/<a href=/g)).toHaveLength(1)
   })
 
   it('a leaderboard name that is trying to be markup stays escaped', () => {
-    const view = topList(uk, 'banan', [{ name: '<b>x</b>', value: 1, userId: 7 }])
+    const view = topList(uk, 'banan', [{ name: '<b>x</b>', value: 1, username: 'x_user' }])
     expect(view.text).toContain('&lt;b&gt;x&lt;/b&gt;')
   })
 

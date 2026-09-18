@@ -902,6 +902,9 @@ export const whyCard = (
 
 const MEDALS = ['🥇', '🥈', '🥉']
 
+/** Telegram's public username alphabet; anything else is not linked. */
+const USERNAME_RE = /^[A-Za-z][A-Za-z0-9_]{3,31}$/
+
 /**
  * Group leaderboard for /top (by messages) and /top-banan (by banana count).
  * Top three get medals, the rest a plain rank. Names are attacker-controlled
@@ -911,19 +914,22 @@ export const topList = (
   locale: Locale,
   kind: 'messages' | 'banan',
   /**
-   * `userId` is optional because a row can outlive our knowledge of who it was.
-   * Where it is present the name becomes a mention: two people with the same
-   * display name are indistinguishable on a leaderboard otherwise, and the ids
-   * were being discarded one line before the render.
+   * A row with a public username links to `t.me/<username>`; one without is a
+   * plain name. It used to be a `tg://user` mention, and a mention notifies:
+   * every `/top` pinged ten people who had not asked to be in it. A URL link
+   * tells the reader who it is without telling the person anything.
    */
-  entries: { name: string; value: number; userId?: number | null }[]
+  entries: { name: string; value: number; username?: string | null }[]
 ): ViewMessage => {
   if (entries.length === 0) return { text: locale.top.empty, buttons: [] }
   const title = kind === 'banan' ? locale.top.titleBanan : locale.top.titleMessages
   const unit = kind === 'banan' ? locale.top.bananUnit : locale.top.messagesUnit
   const lines = entries.map((e, i) => {
     const badge = MEDALS[i] ?? `${i + 1}.`
-    return `${badge} ${userMention(e.userId, e.name)} · ${e.value} ${unit(e.value)}`
+    const name = e.username && USERNAME_RE.test(e.username)
+      ? `<a href="https://t.me/${e.username}">${escapeHtml(e.name)}</a>`
+      : escapeHtml(e.name)
+    return `${badge} ${name} · ${e.value} ${unit(e.value)}`
   })
   return { text: [title, '', ...lines].join('\n'), buttons: [] }
 }

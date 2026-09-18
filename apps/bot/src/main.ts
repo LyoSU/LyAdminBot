@@ -67,6 +67,7 @@ import { IncidentTracker, SenderMessageLog, incidentPowerFor, correctionOwns, ty
 import { ArrivalLog, arrivalMessageIds } from './arrival-log.js'
 import { CaptchaGates, type CaptchaGate } from './captcha-gate.js'
 import { DuplicateTally } from './duplicate-tally.js'
+import { getUsersEach } from './users-each.js'
 
 const config = loadConfig()
 
@@ -2589,6 +2590,12 @@ const replayMedia = async (
 
 const pickRandom = <T>(arr: T[]): T | null => (arr.length === 0 ? null : arr[Math.floor(Math.random() * arr.length)] ?? null)
 
+/** One user by id, or null; list lookups go through `getUsersEach`. */
+const fetchUser = async (id: number): Promise<User | null> => {
+  const [user] = await gateway.tg.getUsers(id)
+  return user ?? null
+}
+
 /**
  * New members from a join service message (added, via link, or approved).
  *
@@ -2601,7 +2608,7 @@ const extractJoiners = async (message: Message): Promise<User[]> => {
   if (source.kind === 'sender') return message.sender instanceof User ? [message.sender] : []
   const ids = source.ids.filter((id) => id !== selfId)
   if (ids.length === 0) return []
-  const users = await gateway.tg.getUsers(ids).catch(() => [])
+  const users = await getUsersEach(fetchUser, ids)
   const out: User[] = []
   for (const u of users) if (u instanceof User) out.push(u)
   return out
@@ -3610,17 +3617,17 @@ const fireExtras = async (message: Message, chat: Chat, text: string): Promise<v
 const handleTop = async (message: Message, chat: Chat, caller: User, kind: 'messages' | 'banan'): Promise<void> => {
   const locale = await groupLocale(chat.id)
   const rows = await store.getTopMembers(chat.id, kind, 10).catch(() => [])
-  let entries: { name: string; value: number; userId?: number | null }[] = []
+  let entries: { name: string; value: number; username?: string | null }[] = []
   if (rows.length > 0) {
-    const users = await gateway.tg.getUsers(rows.map((r) => r.telegramId)).catch(() => [])
-    const nameById = new Map<number, string>()
+    const users = await getUsersEach(fetchUser, rows.map((r) => r.telegramId))
+    const byId = new Map<number, User>()
     for (const u of users) {
-      if (u instanceof User) nameById.set(u.id, u.displayName)
+      if (u instanceof User) byId.set(u.id, u)
     }
     entries = rows.map((r) => ({
-      name: nameById.get(r.telegramId) ?? `id${r.telegramId}`,
+      name: byId.get(r.telegramId)?.displayName ?? `id${r.telegramId}`,
       value: r.value,
-      userId: r.telegramId
+      username: byId.get(r.telegramId)?.username ?? null
     }))
   }
   const view = topList(locale, kind, entries)
