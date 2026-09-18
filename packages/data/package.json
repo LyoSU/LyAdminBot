@@ -8,9 +8,9 @@
   },
   "dependencies": {
     "@lyadmin/core": "workspace:*",
-    "@qdrant/js-client-rest": "^1.13.0",
-    "mongodb": "^6.10.0",
-    "openai": "^6.9.0"
+    "@qdrant/js-client-rest": "^1.19.0",
+    "mongodb": "^7.6.0",
+    "openai": "^7.18.0"
   },
   "scripts": {
     "test": "vitest run"

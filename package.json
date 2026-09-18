@@ -17,11 +17,11 @@
     ]
   },
   "devDependencies": {
-    "@types/node": "^25.9.3",
-    "fast-check": "^4.8.0",
-    "tsx": "^4.22.4",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "@types/node": "^26.6.1",
+    "fast-check": "^4.10.1",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.1"
   },
   "packageManager": "pnpm@10.32.1"
 }

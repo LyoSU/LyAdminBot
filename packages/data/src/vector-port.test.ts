@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // The port builds its own Qdrant/OpenAI clients, so the seams are the modules.
-const search = vi.fn()
+const query = vi.fn()
 const upsert = vi.fn()
 const setPayload = vi.fn()
 const retrieve = vi.fn(async () => [] as { payload?: Record<string, unknown> }[])
 const embeddings = vi.fn(async () => ({ data: [{ embedding: [0.1, 0.2, 0.3] }] }))
 
 vi.mock('@qdrant/js-client-rest', () => ({
-  QdrantClient: class { search = search; upsert = upsert; setPayload = setPayload; retrieve = retrieve }
+  QdrantClient: class { query = query; upsert = upsert; setPayload = setPayload; retrieve = retrieve }
 }))
 vi.mock('openai', () => ({
   default: class { embeddings = { create: embeddings } }
@@ -22,14 +22,14 @@ const port = new QdrantVectorPort({ qdrantUrl: 'http://q', openaiApiKey: 'k' })
 const spamText = 'Потрібні люди на склад, оплата щодня, пишіть в особисті зараз'
 
 const hit = (payload: Record<string, unknown>, score = 0.95): void => {
-  search.mockResolvedValueOnce([{ id: 'p1', score, payload }])
+  query.mockResolvedValueOnce({ points: [{ id: 'p1', score, payload }] })
 }
 
 const payloadOf = (call: number = 0): Record<string, unknown> =>
   upsert.mock.calls[call]?.[1].points[0].payload as Record<string, unknown>
 
 beforeEach(() => {
-  search.mockReset()
+  query.mockReset()
   upsert.mockReset()
   setPayload.mockReset()
 })
@@ -75,7 +75,7 @@ describe('QdrantVectorPort.search', () => {
 
   it('emoji-only text never reaches the index (v1 collision bug)', async () => {
     expect(await port.search('🔥🔥🔥')).toBeNull()
-    expect(search).not.toHaveBeenCalled()
+    expect(query).not.toHaveBeenCalled()
   })
 })
 

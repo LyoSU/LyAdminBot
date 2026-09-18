@@ -97,10 +97,10 @@ describe('normalizeMessage — basics', () => {
       replyMarkup: {
         _: 'replyInlineMarkup',
         rows: [{
-          _: 'keyboardButtonRow',
+          _: 'keyboardInlineButtonRow',
           buttons: [
-            { _: 'keyboardButtonUrl', text: 'GO', url: 'https://x.example' },
-            { _: 'keyboardButtonCallback', text: 'ok', data: new Uint8Array() }
+            { _: 'keyboardInlineButton', text: 'GO', type: { _: 'inlineButtonTypeUrl', url: 'https://x.example' } },
+            { _: 'keyboardInlineButton', text: 'ok', type: { _: 'inlineButtonTypeCallback', data: new Uint8Array() } }
           ]
         }]
       }

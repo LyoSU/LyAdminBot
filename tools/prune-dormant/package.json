@@ -6,7 +6,7 @@
   "dependencies": {
     "@lyadmin/core": "workspace:*",
     "@lyadmin/data": "workspace:*",
-    "mongodb": "^6.10.0"
+    "mongodb": "^7.6.0"
   },
   "scripts": {
     "prune": "tsx src/prune.ts"

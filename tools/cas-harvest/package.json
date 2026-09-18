@@ -7,7 +7,7 @@
     "@lyadmin/adapters": "workspace:*",
     "@lyadmin/core": "workspace:*",
     "@lyadmin/data": "workspace:*",
-    "mongodb": "^6.10.0"
+    "mongodb": "^7.6.0"
   },
   "scripts": {
     "harvest": "tsx src/harvest.ts"

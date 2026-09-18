@@ -430,9 +430,11 @@ const extractContent = (msg: Message): MessageContent => {
   if (markup && 'type' in markup && markup.type === 'inline') {
     for (const row of markup.buttons) {
       for (const button of row) {
+        // Layer 229 (mtcute 0.32): an inline button is one constructor with a
+        // `type`, where each kind used to be its own constructor.
         inlineButtons.push({
-          text: 'text' in button ? button.text : '',
-          url: button._ === 'keyboardButtonUrl' ? button.url : null
+          text: button.text,
+          url: button.type._ === 'inlineButtonTypeUrl' ? button.type.url : null
         })
       }
     }

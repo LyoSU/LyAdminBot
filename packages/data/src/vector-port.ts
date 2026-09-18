@@ -55,7 +55,7 @@ export class QdrantVectorPort implements VectorPort {
 
   constructor(config: QdrantVectorPortConfig) {
     // checkCompatibility:false silences the client/server version mismatch
-    // warning — the REST surface we use (upsert/search/scroll) is stable
+    // warning — the REST surface we use (upsert/query/scroll) is stable
     // across these minor versions.
     this.qdrant = new QdrantClient(
       config.qdrantApiKey !== undefined
@@ -73,8 +73,10 @@ export class QdrantVectorPort implements VectorPort {
     const embedding = await this.embed(text)
     if (!embedding) return null
 
-    const results = await this.qdrant.search(SPAM_COLLECTION, {
-      vector: embedding,
+    // `query` is the universal endpoint; the client dropped `search` in 1.19.
+    // Same request, same scored points, one level deeper in the answer.
+    const { points } = await this.qdrant.query(SPAM_COLLECTION, {
+      query: embedding,
       limit: SEARCH_LIMIT,
       with_payload: true,
       filter: {
@@ -84,7 +86,7 @@ export class QdrantVectorPort implements VectorPort {
     })
 
     const nowUnix = Math.floor(Date.now() / 1000)
-    for (const point of results) {
+    for (const point of points) {
       const payload = (point.payload ?? {}) as SpamPayload
       if (payload.disabledAt) continue
       if (typeof payload.expiresAtUnix === 'number' && payload.expiresAtUnix < nowUnix) continue
