@@ -4611,6 +4611,30 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     })
   }
 
+  /**
+   * Shadow only: which picture this was, so the same advert posted by many
+   * accounts can be counted before anything is built to act on it.
+   *
+   * Nothing recorded this until 2026-09-19. The bytes of a newish sender's photo
+   * were downloaded for vision and thrown away, and the one identity the
+   * message did carry — `fileUniqueId` — was folded into `contentKey` together
+   * with the text, where no query can get it back. So the question "is picture
+   * spam repeated across accounts, as it is for avatars?" had no data at all.
+   *
+   * Two keys, because they answer different things. `photoUid` is free and set
+   * for every sender: Telegram's identity of the stored file, equal only for the
+   * same upload (a resend by file id, a forward). `photoDhash` survives a
+   * re-upload and a re-encode, but needs the bytes, so it exists only where the
+   * bytes were already fetched — newish senders, the population that matters.
+   * The decode runs behind the same sha1-keyed cache the avatars use.
+   */
+  const firstPhoto = normalized.attachments.find((a) => a.kind === 'photo')
+  if (firstPhoto?.fileUniqueId) verdict.meta['photoUid'] = firstPhoto.fileUniqueId
+  if (photoBase64 !== null) {
+    const photoDhash = avatarDhashOf(photoBase64)
+    if (photoDhash !== null) verdict.meta['photoDhash'] = photoDhash
+  }
+
   // ── execute ─────────────────────────────────────────────────────────
   const senderIsAdmin = verdict.action !== 'none' && verdict.action !== 'observe'
     ? await isChatAdmin(chat.id, sender.id)
