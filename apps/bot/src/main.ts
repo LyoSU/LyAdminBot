@@ -32,7 +32,7 @@ import {
   fetchUserProfile, userHasProfilePhoto, downloadPhotoBase64, downloadAvatarBase64, downloadStoriesBase64, rawPhotoToBase64,
   fetchExternalBan, sourcesToQuery, resolveMentionKinds, shouldScanChannelSender,
   createChatDescriptionCache, fetchChatDescription, createTmePreviewResolver,
-  avatarDhashOf,
+  avatarDhashOf, MUTE_DURATION_SECONDS,
   type ExternalBanCacheView, type IncomingMessage
 } from '@lyadmin/adapters'
 import {
@@ -41,13 +41,13 @@ import {
   PersistentVelocityPort, PersistentSessionPort, PersistentBurstPort, MemoryConversationWindow,
   MongoProfileMediaPort,
   matchExtras, buildWelcomeGreeting, PendingInput,
-  groupDocToChatPolicy, presetToThreshold, userDocToHistory, mergeExternalBan,
+  groupDocToChatPolicy, presetToThreshold, userDocToHistory, mergeExternalBan, trustGrantOf,
   type NormalizedExtra, type PendingEntry
 } from '@lyadmin/data'
 import {
   captchaPrompt, compactNotification, escapeHtml as escapeName, helpView,
   langPanel, langPicker, parseCallback, resolveLocale, settingsDeepLink, settingsPanel,
-  nameIsPromo, startCard, startGroupHint, statsCard, topList, userMention, userProfileCard, votePrompt, voteResult,
+  nameIsPromo, ownRestrictionsView, OWN_RESTRICTIONS_SHOWN, startCard, startGroupHint, statsCard, topList, userMention, userProfileCard, votePrompt, voteResult,
   voterListView, whyCard, whyView,
   welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor,
   LOCALES, type Locale, type UserFacts, type ViewMessage
@@ -518,7 +518,16 @@ const CAPTCHA_TTL_MS =
  * different gate entirely. See that file for the three bugs that came of
  * mutating by key.
  */
-const captchas = new CaptchaGates()
+const captchas = new CaptchaGates(Date.now, undefined, {
+  save: (gate) => {
+    void store.saveCaptchaGate(gate).catch((err: unknown) => {
+      log.warn('captcha_gate_unsaved', { chatId: gate.chatId, userId: gate.userId, error: telegramErrorName(err) })
+    })
+  },
+  drop: (chatId, userId, issuedMs) => {
+    void store.dropCaptchaGate(chatId, userId, issuedMs).catch(() => { /* its own TTL removes it */ })
+  }
+})
 
 /**
  * What `deliverCaptcha` actually managed to do — because the caller records it.
@@ -851,6 +860,10 @@ const removeGatePrompts = async (gate: CaptchaGate): Promise<void> => {
  * one tap on a stale captcha lifted a mute the chat had just voted for.
  */
 const dropGate = async (chatId: number, userId: number, reason: string): Promise<void> => {
+  // Unconditionally, and before the memory check: a gate issued before a
+  // restart exists only there, and its button clears every restriction — the
+  // mute this removal or vote is about to impose included.
+  void store.dropCaptchaGate(chatId, userId).catch(() => { /* its own TTL removes it */ })
   const gate = captchas.peek(chatId, userId)
   if (gate === null) return
   const ageMs = captchas.ageMs(gate)
@@ -884,14 +897,13 @@ const passCaptcha = async (
    * a whisper — the one population the 45-second question is about.
    */
   via: 'whisper' | 'visible',
-  answer: (text?: string) => Promise<void>
+  answer: (text?: string) => Promise<void>,
+  /** The prompt that was tapped, when it is an ordinary group message we may remove. */
+  tappedPromptId: number | null = null
 ): Promise<boolean> => {
   // Forgeable payload: lift the gate only if WE issued it.
   const gate = captchas.peek(chatId, userId)
-  if (!gate) {
-    await answer()
-    return false
-  }
+  if (!gate) return passRecoveredCaptcha(chatId, userId, locale, via, answer, tappedPromptId)
   /**
    * Marked BEFORE the unrestrict, because the tap is the evidence and our RPC
    * is not.
@@ -931,6 +943,46 @@ const passCaptcha = async (
   // Clean up whichever channels actually announced this gate — a gate whose
   // whisper went unanswered has both.
   await removeGatePrompts(gate)
+  return true
+}
+
+/**
+ * A tap on a gate this process never issued — the one a restart left behind.
+ *
+ * Asks the persisted copy whether we really gave this person a way out; the
+ * callback data alone is forgeable and proves nothing. What memory held and
+ * the row does not — the prompt ids, the whisper — is simply not cleaned up
+ * beyond the button that was tapped: the whisper expires by itself and the
+ * visible card had its removal scheduled when it was posted.
+ */
+const passRecoveredCaptcha = async (
+  chatId: number,
+  userId: number,
+  locale: Locale,
+  via: 'whisper' | 'visible',
+  answer: (text?: string) => Promise<void>,
+  tappedPromptId: number | null
+): Promise<boolean> => {
+  const persisted = await store.findCaptchaGate(chatId, userId).catch(() => null)
+  if (persisted === null) {
+    await answer()
+    return false
+  }
+  const lifted = await gateway.tg.restrictChatMember({ chatId, userId, restrictions: {} })
+    .then(() => true).catch(() => false)
+  if (!lifted) {
+    log.warn('captcha_unrestrict_failed', { chatId, userId, recovered: true })
+    await answer(locale.captcha.retry)
+    return false
+  }
+  void store.dropCaptchaGate(chatId, userId, persisted.issuedMs).catch(() => { /* TTL */ })
+  const ageMs = Date.now() - persisted.issuedMs
+  log.info('captcha_passed', { chatId, userId, via, ageMs, recovered: true })
+  void store.recordCaptchaEvent({ chatId, userId, event: 'passed', via, ageMs })
+  await answer(locale.captcha.passed)
+  if (tappedPromptId !== null) {
+    await gateway.tg.deleteMessagesById(chatId, [tappedPromptId]).catch(() => { /* already gone */ })
+  }
   return true
 }
 
@@ -2056,9 +2108,42 @@ const handlePrivateMessage = async (message: Message): Promise<void> => {
     return
   }
 
+  const own = await renderOwnRestrictions(locale, sender.id)
+  if (own) await sendView(message, own)
   await sendView(message, startCard(
     locale, sender.displayName, selfUsername ?? '', await statsCache.get('network')
   ))
+}
+
+/**
+ * What the bot did to this person, if anything — shown ahead of the welcome.
+ *
+ * The one notice a removed member can reach: the card about their ban is in a
+ * chat they can no longer open, and a bot cannot write first. See
+ * `recentRestrictionsOf`. Best-effort in every step: a failed read costs this
+ * card, never the welcome under it.
+ */
+const renderOwnRestrictions = async (locale: Locale, userId: number): Promise<ViewMessage | null> => {
+  const rows = await store.recentRestrictionsOf(userId, OWN_RESTRICTIONS_SHOWN).catch((err: unknown) => {
+    log.warn('own_restrictions_unreadable', { userId, error: telegramErrorName(err) })
+    return []
+  })
+  if (rows.length === 0) return null
+  const entries = await Promise.all(rows.map(async (row) => ({
+    chatId: row.chatId,
+    messageId: row.messageId,
+    action: row.action,
+    // What the executor actually applied: a mute with no stated term got the
+    // default, and the person is owed that number rather than "no end date".
+    termSeconds: row.action === 'kick'
+      ? null
+      : row.banDurationSeconds ?? (row.action === 'mute' ? MUTE_DURATION_SECONDS : null),
+    reasonCode: row.reasonCode,
+    at: row.at,
+    overturned: row.overturned,
+    chatTitle: await chatTitleFor(row.chatId)
+  })))
+  return ownRestrictionsView(locale, entries, { userId, botUsername: selfUsername ?? null, now: Date.now() })
 }
 
 /** Target labels for undo notifications (memory, bounded like recentVerdicts). */
@@ -2240,6 +2325,28 @@ const buildLiveFacts = async (chatId: number, target: User): Promise<UserFacts> 
 }
 
 /**
+ * Who vouched for a trusted member, ready for the /check card.
+ *
+ * The admin's name is looked up live rather than stored: a stored name goes
+ * stale, and the id is what the mention links to anyway. A failed lookup still
+ * names them — by number — because "trusted by somebody" is the one answer this
+ * line exists to replace.
+ */
+const trustGrantView = async (
+  groupDoc: unknown, userId: number
+): Promise<{ by: number; byLabel: string; via: 'override' | 'vote' | 'toggle'; agoSeconds: number } | null> => {
+  const grant = trustGrantOf(groupDoc, userId)
+  if (!grant) return null
+  const [admin] = await gateway.tg.getUsers([grant.by]).catch(() => [null])
+  return {
+    by: grant.by,
+    byLabel: admin?.displayName ?? `#${grant.by}`,
+    via: grant.via,
+    agoSeconds: Math.max(0, (Date.now() - grant.at.getTime()) / 1000)
+  }
+}
+
+/**
  * /check — admin looks up the profile of the replied-to user. Builds a LIVE
  * snapshot (history + getFullUser + external-ban + join time) and renders the
  * profile card. Reply required; admin-only; the card auto-deletes.
@@ -2260,10 +2367,13 @@ const handleCheck = async (message: Message, chat: Chat, caller: User): Promise<
 
   const facts = await buildLiveFacts(chat.id, target)
   log.info('check', { chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName, by: caller.id })
-  const checkPolicy = groupDocToChatPolicy(await store.getGroupDoc(chat.id).catch(() => null) as never)
+  const checkDoc = await store.getGroupDoc(chat.id).catch(() => null)
+  const checkPolicy = groupDocToChatPolicy(checkDoc as never)
+  const checkTrusted = checkPolicy.trustedUserIds.includes(target.id)
   const card = userProfileCard(locale, facts, {
     chatId: chat.id,
-    isTrusted: checkPolicy.trustedUserIds.includes(target.id)
+    isTrusted: checkTrusted,
+    grant: checkTrusted ? await trustGrantView(checkDoc, target.id) : null
   })
   const sent = await tgSendText(chat.id, viewHtml(card.text), {
     ...(card.buttons.length > 0 ? { replyMarkup: toKeyboard(card.buttons) } : {})
@@ -5534,10 +5644,13 @@ const wireCallbacks = (): void => {
         await query.answer({ text: locale.profile.notFound, alert: true })
         return
       }
-      const policy = groupDocToChatPolicy(await store.getGroupDoc(chatId).catch(() => null) as never)
+      const groupDoc = await store.getGroupDoc(chatId).catch(() => null)
+      const policy = groupDocToChatPolicy(groupDoc as never)
+      const isTrusted = policy.trustedUserIds.includes(userId)
       const card = userProfileCard(locale, facts, {
         chatId,
-        isTrusted: policy.trustedUserIds.includes(userId)
+        isTrusted,
+        grant: isTrusted ? await trustGrantView(groupDoc, userId) : null
       })
       log.info('profile_opened', { chatId, userId, by: query.user.id, via: 'why_card' })
       await tgSendText(query.user.id, viewHtml(card.text), {
@@ -5557,7 +5670,7 @@ const wireCallbacks = (): void => {
         return
       }
       const makeTrusted = flagRaw === '1'
-      if (makeTrusted) await store.addTrustedUser(chatId, userId).catch(() => { /* best-effort */ })
+      if (makeTrusted) await store.addTrustedUser(chatId, userId, { by: query.user.id, via: 'toggle' }).catch(() => { /* best-effort */ })
       else await store.removeTrustedUser(chatId, userId).catch(() => { /* best-effort */ })
       log.info('trust', { chatId, userId, by: query.user.id, trusted: makeTrusted })
       // Flip the card's single button to the opposite action (markup-only edit).
@@ -5776,7 +5889,9 @@ const wireCallbacks = (): void => {
         }
         const ballots = (vote['ballots'] ?? []) as VoteBallot[]
         if (ballots.some((b) => b.isAdmin && b.choice === 'ham')) {
-          await store.addTrustedUser(chatId, targetUserId).catch(() => { /* best-effort */ })
+          const voucher = ballots.findLast((b) => b.isAdmin && b.choice === 'ham')
+          await store.addTrustedUser(chatId, targetUserId, voucher ? { by: voucher.userId, via: 'vote' } : undefined)
+            .catch(() => { /* best-effort */ })
         }
       }
       const subjectId = Number(vote['targetUserId'] ?? 0)
@@ -5857,7 +5972,7 @@ const wireCallbacks = (): void => {
       }
       await passCaptcha(chatId, userId, locale, 'visible', async (text) => {
         await query.answer(text === undefined ? {} : { text })
-      })
+      }, query.chat.id === chatId ? query.messageId : null)
       return
     }
 
@@ -5890,7 +6005,7 @@ const wireCallbacks = (): void => {
       // The admin vouched — auto-trust this user in this chat from now on.
       // No longer "best-effort" in the sense of unreported: the toast promises
       // trust in so many words, and a Mongo outage used to make that a lie.
-      const trusted = await store.addTrustedUser(chatId, Number(userIdRaw))
+      const trusted = await store.addTrustedUser(chatId, Number(userIdRaw), { by: query.user.id, via: 'override' })
         .then(() => true).catch(() => false)
       log.info('override', {
         chatId, userId: Number(userIdRaw), messageId: Number(messageIdRaw), by: query.user.id,

@@ -30,6 +30,30 @@ export interface Locale {
     langButton: string
   }
 
+  /**
+   * "What the bot did to you" — shown on /start to somebody it removed.
+   *
+   * The only notice a removed member can reach: the card in the chat went with
+   * the chat. Written to the person the decision is about, so it names the
+   * chat, the term and the way back, and never a signal or a list.
+   */
+  ownRestrictions: {
+    /** Header (HTML). */
+    title: string
+    /** `span` is already formatted ("3д"). */
+    ago: (span: string) => string
+    endsIn: (span: string) => string
+    ended: string
+    permanent: string
+    overturned: string
+    /** Stand-in when the chat's title cannot be read any more. */
+    unknownChat: string
+    /** Closing paragraph: automatic, who can undo it, terms lapse by themselves. */
+    footer: string
+    /** Button to the full "Why?" card of entry `n` (1-based, as numbered above). */
+    whyButton: (n: number) => string
+  }
+
   /** /help — full command reference (HTML). */
   helpText: string
 
@@ -446,6 +470,14 @@ export interface Locale {
     added: string
     /** Toast after revoking trust. */
     removed: string
+    /**
+     * Provenance line on the /check card of a trusted member (HTML). `who` is a
+     * ready mention, `ago` a formatted span. Trust never expires, so the card
+     * has to say who to ask before anybody takes it back.
+     */
+    grantedBy: (who: string, ago: string, via: 'override' | 'vote' | 'toggle') => string
+    /** Same line for an entry made before provenance was kept. */
+    grantUnknown: string
   }
 
   /** Welcome greetings for new members (off by default). */

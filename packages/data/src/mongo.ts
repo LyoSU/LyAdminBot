@@ -396,6 +396,8 @@ export class MongoStore {
    * the observed rate (33 gates/day) a fortnight holds a few hundred rows.
    */
   get captchaEvents(): Collection<Document> { return this.collection('pipeline_captcha') }
+  /** Open captcha gates, so a button survives a restart — see `saveCaptchaGate`. */
+  get captchaGates(): Collection<Document> { return this.collection('pipeline_captcha_gates') }
   /** Resume cursor for the offline CAS signature harvester (tools/cas-harvest). */
   get harvestState(): Collection<Document> { return this.collection('cas_harvest_state') }
   // Persistent moderation state (survives restarts; TTL-expired).
@@ -491,7 +493,41 @@ export class MongoStore {
     }
   }
 
+  /**
+   * The persisted half of a captcha gate — see `GatePersistence` in the bot.
+   *
+   * One row per person per chat, overwritten by a newer gate and removed by its
+   * own expiry. It exists for one read: a tap that memory cannot place, after a
+   * restart, asking whether we really issued this person a way out.
+   */
+  async saveCaptchaGate(gate: { chatId: number; userId: number; issuedMs: number; expiresMs: number }): Promise<void> {
+    await this.captchaGates.updateOne(
+      { chatId: gate.chatId, userId: gate.userId },
+      { $set: { issuedMs: gate.issuedMs, expiresAt: new Date(gate.expiresMs) } },
+      { upsert: true }
+    )
+  }
+
+  /**
+   * Remove the persisted gate. With `issuedMs`, only that exact gate: a drop that
+   * arrives after a newer gate was saved for the same person must not take the
+   * newer one with it. Without it, whatever is there — for the paths that close a
+   * case outright (ban, vote) and must shut every button at once.
+   */
+  async dropCaptchaGate(chatId: number, userId: number, issuedMs?: number): Promise<void> {
+    await this.captchaGates.deleteOne({ chatId, userId, ...(issuedMs === undefined ? {} : { issuedMs }) })
+  }
+
+  /** The live persisted gate for this person, or null. Expiry is checked here, not left to the TTL sweeper, which runs once a minute at best. */
+  async findCaptchaGate(chatId: number, userId: number): Promise<{ issuedMs: number; expiresMs: number } | null> {
+    const doc = await this.captchaGates.findOne({ chatId, userId, expiresAt: { $gt: new Date() } })
+    if (!doc || typeof doc['issuedMs'] !== 'number' || !(doc['expiresAt'] instanceof Date)) return null
+    return { issuedMs: doc['issuedMs'], expiresMs: doc['expiresAt'].getTime() }
+  }
+
   private async ensureIndexes(): Promise<void> {
+    await ensureTtlIndex(this.captchaGates, { expiresAt: 1 }, 0)
+    await this.captchaGates.createIndex({ chatId: 1, userId: 1 }, { unique: true })
     await ensureTtlIndex(this.decisions, { createdAt: 1 }, DECISIONS_TTL_DAYS * 86400)
     // The same fortnight as the decisions these rows are analysed against —
     // a funnel outliving the verdicts it explains could not be sliced by path.
@@ -499,6 +535,26 @@ export class MongoStore {
     await this.decisions.createIndex({ chatId: 1, userId: 1, createdAt: -1 })
     // Why?/override lookup (getDecision) filters by chat+message.
     await this.decisions.createIndex({ chatId: 1, messageId: 1, createdAt: -1 })
+    /**
+     * `recentRestrictionsOf` asks by person across chats, which neither index
+     * above answers. Partial, because only executed verdicts are ever asked for:
+     * ~2.5 % of the rows, so the index costs next to nothing on a quota that is
+     * mostly indexes already. Equality only — `$in` inside a partial filter is
+     * not accepted by every server version this may run against. The query
+     * carries the same equality, which is what lets the planner use it.
+     *
+     * Caught: a query shape nobody reaches without it is not worth an unbootable
+     * bot (2026-08-26, 71 minutes down over an index).
+     */
+    await this.decisions.createIndex(
+      { userId: 1, createdAt: -1 },
+      {
+        name: 'own_restrictions',
+        partialFilterExpression: { 'execution.applied': true }
+      }
+    ).catch((err: unknown) => {
+      console.warn(`[mongo] own_restrictions index not built: ${(err as Error).message}`)
+    })
     /**
      * One message, one label — which `recordOverride` has claimed in its
      * docstring since it was written, and which a non-unique index cannot
@@ -1525,10 +1581,27 @@ export class MongoStore {
    * through the pipeline and can reach delete+vote.)
    * Writes into the v1-compatible settings.openaiSpamCheck.trustedUsers.
    */
-  async addTrustedUser(chatId: number, userId: number): Promise<void> {
+  async addTrustedUser(chatId: number, userId: number, grant?: Omit<TrustGrant, 'at'>): Promise<void> {
     await this.groups.updateOne(
       { group_id: chatId },
-      { $addToSet: { 'settings.openaiSpamCheck.trustedUsers': userId } }
+      {
+        $addToSet: { 'settings.openaiSpamCheck.trustedUsers': userId },
+        /**
+         * Who vouched, and when (2026-09-21).
+         *
+         * Trust outranks every verdict short of a platform flag and never
+         * expires, and the list said only THAT somebody is on it. So an admin
+         * looking at a trusted spammer could not tell whether a colleague
+         * vouched last week or a misclick did in June — which is the question
+         * that decides whether to take it back. Kept beside the v1 array rather
+         * than in it, because v1 reads that array as plain ids.
+         *
+         * Rewritten on every grant: the latest voucher is the one to ask.
+         */
+        ...(grant === undefined
+          ? {}
+          : { $set: { [`settings.openaiSpamCheck.trustGrants.${userId}`]: { ...grant, at: new Date() } } })
+      }
     )
   }
 
@@ -1537,7 +1610,10 @@ export class MongoStore {
   async removeTrustedUser(chatId: number, userId: number): Promise<boolean> {
     const res = await this.groups.updateOne(
       { group_id: chatId },
-      { $pull: { 'settings.openaiSpamCheck.trustedUsers': userId } } as never
+      {
+        $pull: { 'settings.openaiSpamCheck.trustedUsers': userId },
+        $unset: { [`settings.openaiSpamCheck.trustGrants.${userId}`]: '' }
+      } as never
     )
     return res.modifiedCount > 0
   }
@@ -2274,6 +2350,97 @@ export class MongoStore {
     }, { projection: { _id: 1 } })
     return prior !== null
   }
+
+  /**
+   * What the bot did to this person, across every chat, newest first — for the
+   * person themselves.
+   *
+   * The notice that outlives a removal (2026-09-21 review). The card explaining a
+   * ban lives in the chat, and the ban is what shuts the reader out of it, so the
+   * one person the decision is about was the one person who could not read it.
+   * A bot cannot open a conversation with somebody who never started it, which
+   * rules out sending the notice; what it can do is answer when they come asking,
+   * and a banned member's first move is to look for the bot that banned them.
+   *
+   * Applied removals only. A skipped or failed verdict did nothing to them, and
+   * a `delete` left them in the chat where the card already speaks to them.
+   *
+   * `overturned` is read from the correction store rather than inferred from a
+   * later decision: an admin's undo writes a label, not a new verdict, and a card
+   * still announcing a ban somebody already lifted would be the worst version of
+   * this screen.
+   */
+  async recentRestrictionsOf(userId: number, limit = 5): Promise<OwnRestriction[]> {
+    const docs = await this.decisions.find(
+      { userId, action: { $in: [...SENDER_REMOVAL_ACTIONS] }, 'execution.applied': true },
+      {
+        projection: {
+          chatId: 1, messageId: 1, action: 1, banDurationSeconds: 1,
+          decidedBy: 1, reasonCode: 1, createdAt: 1
+        },
+        sort: { createdAt: -1 },
+        limit
+      }
+    ).toArray()
+    if (docs.length === 0) return []
+    const labels = await this.feedback.find(
+      { $or: docs.map((d) => ({ chatId: d['chatId'], messageId: d['messageId'] })) },
+      { projection: { chatId: 1, messageId: 1 } }
+    ).toArray()
+    const overturned = new Set(labels.map((l) => `${String(l['chatId'])}:${String(l['messageId'])}`))
+    return docs.map((d) => ({
+      chatId: Number(d['chatId']),
+      messageId: Number(d['messageId']),
+      action: d['action'] as OwnRestriction['action'],
+      banDurationSeconds: typeof d['banDurationSeconds'] === 'number' ? d['banDurationSeconds'] : null,
+      decidedBy: String(d['decidedBy'] ?? 'error'),
+      reasonCode: String(d['reasonCode'] ?? 'unknown'),
+      at: d['createdAt'] instanceof Date ? d['createdAt'] : new Date(0),
+      overturned: overturned.has(`${String(d['chatId'])}:${String(d['messageId'])}`)
+    }))
+  }
+}
+
+/** Provenance of one chat-level trust entry — see `addTrustedUser`. */
+export interface TrustGrant {
+  /** The admin who vouched. */
+  by: number
+  /** Which act carried the vouch. */
+  via: 'override' | 'vote' | 'toggle'
+  at: Date
+}
+
+/**
+ * The grant recorded for `userId` in a group document, or null.
+ *
+ * Null covers two different facts and says so: entries made before provenance
+ * was stored, and a document that never had any. The card renders both as
+ * "unknown", never as "nobody".
+ */
+export const trustGrantOf = (groupDoc: unknown, userId: number): TrustGrant | null => {
+  const grants = (groupDoc as { settings?: { openaiSpamCheck?: { trustGrants?: Record<string, unknown> } } } | null)
+    ?.settings?.openaiSpamCheck?.trustGrants
+  const raw = grants?.[String(userId)] as Partial<TrustGrant> | undefined
+  if (!raw || typeof raw.by !== 'number' || !(raw.at instanceof Date)) return null
+  const via = raw.via === 'vote' || raw.via === 'toggle' ? raw.via : 'override'
+  return { by: raw.by, via, at: raw.at }
+}
+
+/** The actions that take the person, not just the message. */
+const SENDER_REMOVAL_ACTIONS = ['kick', 'mute', 'ban'] as const
+
+/** One row of `recentRestrictionsOf`. */
+export interface OwnRestriction {
+  chatId: number
+  messageId: number
+  action: (typeof SENDER_REMOVAL_ACTIONS)[number]
+  /** Null for a kick, and for a ban with no term. */
+  banDurationSeconds: number | null
+  decidedBy: string
+  reasonCode: string
+  at: Date
+  /** An admin or the chat already reversed it. */
+  overturned: boolean
 }
 
 /** Signature ruleIds are stringified Mongo _ids. */

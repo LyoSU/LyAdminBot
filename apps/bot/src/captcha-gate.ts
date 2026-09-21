@@ -57,6 +57,29 @@ export interface CaptchaGate {
   readonly cancels: Array<() => void>
 }
 
+/**
+ * Where a gate outlives the process (2026-09-21).
+ *
+ * The registry is memory, and a restart used to empty it while the prompts it
+ * had posted stayed up: the member tapped a button the chat still showed, `peek`
+ * found nothing, and the tap was answered with silence while the restriction ran
+ * its full term. That is the one failure a captcha may not have — the button is
+ * the promised exit.
+ *
+ * So the registry reports every gate it opens and every gate it closes, and the
+ * tap path asks the persisted copy when memory has none. Only what the exit
+ * needs is kept: who, and until when. The consequence is not rebuilt after a
+ * restart — a gate that outlived its process can still be passed, never punished.
+ *
+ * Fire-and-forget by contract: the registry is synchronous and a Mongo hiccup
+ * must not reach it. `issuedMs` rides on the drop so a late delete cannot remove
+ * a newer gate for the same person that was saved after it.
+ */
+export interface GatePersistence {
+  save(gate: { chatId: number; userId: number; issuedMs: number; expiresMs: number }): void
+  drop(chatId: number, userId: number, issuedMs: number): void
+}
+
 /** Gates held before room is made; a raid is what makes this a real number. */
 const MAX_GATES = 2000
 
@@ -68,8 +91,14 @@ export class CaptchaGates {
 
   constructor(
     private readonly now: () => number = Date.now,
-    private readonly maxGates: number = MAX_GATES
+    private readonly maxGates: number = MAX_GATES,
+    private readonly persistence: GatePersistence | null = null
   ) {}
+
+  private persist(op: (p: GatePersistence) => void): void {
+    if (this.persistence === null) return
+    try { op(this.persistence) } catch { /* see GatePersistence: never reaches the registry */ }
+  }
 
   /** How many gates are open — for the sweep, and for tests. */
   get size(): number { return this.gates.size }
@@ -100,6 +129,7 @@ export class CaptchaGates {
       cancels: []
     }
     this.gates.set(key, gate)
+    this.persist((p) => p.save({ chatId, userId, issuedMs: gate.issuedMs, expiresMs: gate.expiresMs }))
     return gate
   }
 
@@ -144,6 +174,7 @@ export class CaptchaGates {
     if (this.gates.get(key) !== gate) return false
     this.stop(gate)
     this.gates.delete(key)
+    this.persist((p) => p.drop(gate.chatId, gate.userId, gate.issuedMs))
     return true
   }
 
@@ -184,13 +215,20 @@ export class CaptchaGates {
       if (gate.expiresMs <= now) {
         this.stop(gate)
         this.gates.delete(key)
+        // No drop: the persisted copy carries the same expiry and its TTL
+        // removes it; a drop here would be a write per dead gate in a raid.
       }
     }
     while (this.gates.size >= this.maxGates) {
       const oldest = this.gates.keys().next()
       if (oldest.done === true) return
       const gate = this.gates.get(oldest.value)
-      if (gate !== undefined) this.stop(gate)
+      if (gate !== undefined) {
+        this.stop(gate)
+        // The persisted copy is KEPT. Eviction is about memory, not about the
+        // member: their gate was legitimate, its consequence is stopped with its
+        // timers, and the button they are looking at should still let them out.
+      }
       this.gates.delete(oldest.value)
     }
   }

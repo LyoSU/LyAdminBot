@@ -72,7 +72,8 @@ export interface ExecutionResult {
 const hasHardAccountVerdict = (verdict: Verdict): boolean =>
   verdict.signals.some((s) => OVERRIDES_CHAT_TRUST_SIGNALS.has(s.name))
 
-const MUTE_DURATION_SECONDS = 24 * 60 * 60
+/** Term of a `mute` whose verdict names none. Exported so a notice can say it. */
+export const MUTE_DURATION_SECONDS = 24 * 60 * 60
 const CAPTCHA_WINDOW_SECONDS = 10 * 60
 /** FLOOD_WAITs up to this long are absorbed; longer ones propagate. */
 const FLOOD_WAIT_RETRY_MAX_SECONDS = 60

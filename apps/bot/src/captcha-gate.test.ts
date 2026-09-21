@@ -210,3 +210,67 @@ describe('CaptchaGates — the cap holds during a raid', () => {
     expect(stopped).toBe(1)
   })
 })
+
+/**
+ * The persisted copy is what a tap falls back on after a restart, so it has to
+ * track the registry exactly: saved when a gate opens, dropped when it closes,
+ * and never dropped in a way that can take a NEWER gate with it.
+ */
+describe('CaptchaGates — persistence follows the registry', () => {
+  const recorder = (): {
+    saved: { chatId: number; userId: number; issuedMs: number; expiresMs: number }[]
+    dropped: [number, number, number][]
+    persistence: { save: (g: never) => void; drop: (c: number, u: number, i: number) => void }
+  } => {
+    const saved: { chatId: number; userId: number; issuedMs: number; expiresMs: number }[] = []
+    const dropped: [number, number, number][] = []
+    return {
+      saved,
+      dropped,
+      persistence: {
+        save: (g) => { saved.push(g) },
+        drop: (c, u, i) => { dropped.push([c, u, i]) }
+      }
+    }
+  }
+
+  it('saves who and until when on issue', () => {
+    const c = clock(5_000)
+    const r = recorder()
+    new CaptchaGates(c.now, 10, r.persistence).issue(-100, 7, TTL)
+    expect(r.saved).toEqual([{ chatId: -100, userId: 7, issuedMs: 5_000, expiresMs: 5_000 + TTL }])
+  })
+
+  it('drops exactly the gate that was forgotten, by its issue time', () => {
+    const c = clock(5_000)
+    const r = recorder()
+    const gates = new CaptchaGates(c.now, 10, r.persistence)
+    const first = gates.issue(-100, 7, TTL)
+    c.ms += 1_000
+    const second = gates.issue(-100, 7, TTL)
+    // The superseded gate is no longer the one in force: nothing is dropped.
+    expect(gates.forget(first)).toBe(false)
+    expect(r.dropped).toEqual([])
+    gates.forget(second)
+    expect(r.dropped).toEqual([[-100, 7, 6_000]])
+  })
+
+  it('keeps the persisted exit of a live gate evicted by a raid', () => {
+    const r = recorder()
+    const gates = new CaptchaGates(clock().now, 1, r.persistence)
+    gates.issue(-100, 1, TTL)
+    gates.issue(-100, 2, TTL)
+    expect(gates.peek(-100, 1)).toBeNull()
+    expect(r.dropped).toEqual([])
+  })
+
+  it('a persistence layer that throws cannot break the registry', () => {
+    const gates = new CaptchaGates(clock().now, 10, {
+      save: () => { throw new Error('mongo down') },
+      drop: () => { throw new Error('mongo down') }
+    })
+    const gate = gates.issue(-100, 7, TTL)
+    expect(gates.peek(-100, 7)).toBe(gate)
+    expect(gates.forget(gate)).toBe(true)
+  })
+})

@@ -151,6 +151,81 @@ export const startCard = (
   ]
 })
 
+/** One removal, as `ownRestrictionsView` needs it. */
+export interface OwnRestrictionEntry {
+  chatId: number
+  messageId: number
+  action: 'kick' | 'mute' | 'ban'
+  /**
+   * The term actually applied, resolved by the caller: a mute with no stated
+   * length got the executor's default, and the reader is owed that number, not
+   * "no end date". Null means none — a kick, or a ban with no term.
+   */
+  termSeconds: number | null
+  reasonCode: string
+  at: Date
+  overturned: boolean
+  /** Null when the chat can no longer be read. */
+  chatTitle: string | null
+}
+
+/** Entries shown at most — the card is an answer, not an archive. */
+export const OWN_RESTRICTIONS_SHOWN = 5
+
+/**
+ * The notice a removed member can still reach (2026-09-21).
+ *
+ * Every other explanation of a ban lives in the chat the ban shut. A bot cannot
+ * message somebody who never started it, so this is shown when they do — on
+ * /start, which is where a banned person arrives looking for the bot that banned
+ * them. It says what was done, where, why in plain words, when it ends and who
+ * can reverse it; the "Why?" buttons open the same card an admin reviews, minus
+ * the override.
+ *
+ * Null when there is nothing to say, so the caller's ordinary welcome stands.
+ */
+export const ownRestrictionsView = (
+  locale: Locale,
+  entries: readonly OwnRestrictionEntry[],
+  options: { userId: number; botUsername: string | null; now: number }
+): ViewMessage | null => {
+  const shown = entries.slice(0, OWN_RESTRICTIONS_SHOWN)
+  if (shown.length === 0) return null
+  const o = locale.ownRestrictions
+  const lines = [o.title, '']
+  shown.forEach((entry, i) => {
+    const where = escapeHtml(entry.chatTitle ?? o.unknownChat)
+    lines.push(`${i + 1}. <b>${escapeHtml(locale.actions[entry.action])}</b> · ${where}`)
+    const state = entry.overturned
+      ? o.overturned
+      : entry.action === 'kick'
+        ? null
+        : entry.termSeconds === null
+          ? o.permanent
+          : (() => {
+              const left = entry.at.getTime() + entry.termSeconds * 1000 - options.now
+              return left > 0 ? o.endsIn(humanSpan(locale, left / 1000)) : o.ended
+            })()
+    const ago = o.ago(humanSpan(locale, Math.max(0, (options.now - entry.at.getTime()) / 1000)))
+    const detail = [reasonText(locale, entry.reasonCode), ago, ...(state === null ? [] : [state])]
+    lines.push(`<i>${escapeHtml(detail.join(' · '))}</i>`)
+  })
+  lines.push('', escapeHtml(o.footer))
+
+  // The "Why?" card is reached by the same deep link the chat notice uses, so a
+  // restart that emptied the verdict cache still answers from the stored row.
+  const botUsername = options.botUsername
+  const links: ButtonSpec[] = botUsername
+    ? shown.map((entry, i) => ({
+        text: o.whyButton(i + 1),
+        url: whyDeepLink(botUsername, entry.chatId, entry.messageId, options.userId)
+      }))
+    : []
+  const buttons: ButtonSpec[][] = []
+  for (let i = 0; i < links.length; i += 3) buttons.push(links.slice(i, i + 3))
+  return { text: lines.join('\n'), buttons }
+}
+
 /** Whether there is anything to boast about — and anything to divide by. */
 const hasCountableWork = (stats: BotStats | null): stats is BotStats =>
   stats !== null && stats.checked > 0
@@ -841,9 +916,28 @@ export const userProfileLines = (locale: Locale, facts: UserFacts, options: { ht
 export const userProfileCard = (
   locale: Locale,
   facts: UserFacts,
-  action: { chatId: number; isTrusted: boolean } | null = null
+  action: {
+    chatId: number
+    isTrusted: boolean
+    /**
+     * Who vouched, for a trusted member. `byLabel` is shown as given and linked
+     * to `by`; null renders the "not recorded" line rather than nothing, because
+     * an absent line would read as "nobody vouched".
+     */
+    grant?: { by: number; byLabel: string; via: 'override' | 'vote' | 'toggle'; agoSeconds: number } | null
+  } | null = null
 ): ViewMessage => ({
-  text: userProfileLines(locale, facts, { html: true }).join('\n'),
+  text: [
+    ...userProfileLines(locale, facts, { html: true }),
+    ...(action?.isTrusted
+      ? ['', action.grant
+          ? locale.trust.grantedBy(
+            userMention(action.grant.by, action.grant.byLabel),
+            humanSpan(locale, action.grant.agoSeconds),
+            action.grant.via)
+          : locale.trust.grantUnknown]
+      : [])
+  ].join('\n'),
   buttons: action
     ? [[{
         text: action.isTrusted ? locale.trust.untrustButton : locale.trust.button,

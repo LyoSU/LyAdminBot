@@ -25,6 +25,22 @@ export const en: Locale = {
     langButton: '🌐 Language'
   },
 
+  ownRestrictions: {
+    title: '🧾 <b>What I did about you</b>',
+    ago: (span) => `${span} ago`,
+    endsIn: (span) => `ends in ${span}`,
+    ended: 'already over',
+    permanent: 'no end date',
+    overturned: '↩️ reversed',
+    unknownChat: 'untitled chat',
+    footer: [
+      'These were automatic decisions by the bot, not by the admins.',
+      "If I got it wrong, write to an admin of that chat: they can undo it with one tap.",
+      'Restrictions with a term lift by themselves.'
+    ].join('\n'),
+    whyButton: (n) => `Why? · ${n}`
+  },
+
   helpText: [
     '🛡 <b>What I do</b>',
     'I catch spam and ban scammers on my own. Most actions are buttons, not commands.',
@@ -388,7 +404,11 @@ export const en: Locale = {
     button: '✅ Trust',
     untrustButton: '🔓 Untrust',
     added: 'Added to this chat’s trusted users.',
-    removed: 'Trust revoked.'
+    removed: 'Trust revoked.',
+    grantedBy: (who, ago, via) =>
+      `✅ Trusted by ${who}, ${ago} ago` +
+      (via === 'override' ? ' · reversed a bot decision' : via === 'vote' ? ' · by admin ballot' : ''),
+    grantUnknown: '✅ Trusted · who granted it and when was not recorded'
   },
 
   welcome: {

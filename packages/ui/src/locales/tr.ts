@@ -24,6 +24,22 @@ export const tr: Locale = {
     langButton: '🌐 Dil'
   },
 
+  ownRestrictions: {
+    title: '🧾 <b>Senin hakkında aldığım kararlar</b>',
+    ago: (span) => `${span} önce`,
+    endsIn: (span) => `${span} sonra biter`,
+    ended: 'süresi doldu',
+    permanent: 'süresiz',
+    overturned: '↩️ geri alındı',
+    unknownChat: 'adsız sohbet',
+    footer: [
+      'Bunlar yöneticilerin değil, botun otomatik kararlarıdır.',
+      'Yanıldıysam o sohbetin bir yöneticisine yaz: tek dokunuşla geri alabilir.',
+      'Süreli kısıtlamalar kendiliğinden kalkar.'
+    ].join('\n'),
+    whyButton: (n) => `Neden? · ${n}`
+  },
+
   helpText: [
     '🛡 <b>Neler yapabilirim</b>',
     'Spam’i yakalar, dolandırıcıları kendim banlarım. Çoğu işlem komut değil, butonla.',
@@ -386,7 +402,11 @@ export const tr: Locale = {
     button: '✅ Güven',
     untrustButton: '🔓 Güveni kaldır',
     added: 'Bu sohbetin güvenilir listesine eklendi.',
-    removed: 'Güven kaldırıldı.'
+    removed: 'Güven kaldırıldı.',
+    grantedBy: (who, ago, via) =>
+      `✅ Güvenen: ${who}, ${ago} önce` +
+      (via === 'override' ? ' · bot kararını geri aldı' : via === 'vote' ? ' · yönetici oyuyla' : ''),
+    grantUnknown: '✅ Güvenilir · kimin ne zaman verdiği kayıtlı değil'
   },
 
   welcome: {

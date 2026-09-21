@@ -15,7 +15,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Verdict } from '@lyadmin/core'
 import { VOTE_WINDOW_SECONDS } from '@lyadmin/core'
-import { MongoStore, ensureTtlIndex, ensureUniqueIndex, toRightsBlockRecord } from './mongo.js'
+import { MongoStore, ensureTtlIndex, ensureUniqueIndex, toRightsBlockRecord, trustGrantOf } from './mongo.js'
 
 interface Captured {
   doc: Record<string, unknown> | null
@@ -1828,5 +1828,157 @@ describe('recordDecision → getDecision — the grounds survive', () => {
     // forever — the 2026-08-07 lesson, which is silent on this path.
     expect(written).not.toContain('�')
     expect([...written].every((c) => c.codePointAt(0) !== 0xfffd)).toBe(true)
+  })
+})
+
+describe('recentRestrictionsOf — the notice a removed member can reach', () => {
+  const at = new Date('2026-09-20T10:00:00Z')
+  const restrictionsStore = (
+    decisions: Record<string, unknown>[],
+    labels: Record<string, unknown>[] = []
+  ): MongoStore & { calls: { filter: Record<string, unknown>; options: Record<string, unknown> }[]; labelFilters: Record<string, unknown>[] } => {
+    const calls: { filter: Record<string, unknown>; options: Record<string, unknown> }[] = []
+    const labelFilters: Record<string, unknown>[] = []
+    const store = {
+      decisions: {
+        find: (filter: Record<string, unknown>, options: Record<string, unknown>) => {
+          calls.push({ filter, options })
+          return { toArray: async () => decisions }
+        }
+      },
+      feedback: {
+        find: (filter: Record<string, unknown>) => {
+          labelFilters.push(filter)
+          return { toArray: async () => labels }
+        }
+      }
+    } as unknown as MongoStore
+    return Object.assign(store, {
+      recentRestrictionsOf: MongoStore.prototype.recentRestrictionsOf, calls, labelFilters
+    }) as never
+  }
+
+  it('asks for applied removals of this person across chats, newest first', async () => {
+    const store = restrictionsStore([])
+    await store.recentRestrictionsOf(42, 5)
+    expect(store.calls[0]!.filter).toEqual({
+      userId: 42, action: { $in: ['kick', 'mute', 'ban'] }, 'execution.applied': true
+    })
+    expect(store.calls[0]!.options).toMatchObject({ sort: { createdAt: -1 }, limit: 5 })
+  })
+
+  it('does not touch the correction store when there is nothing to correct', async () => {
+    const store = restrictionsStore([])
+    await expect(store.recentRestrictionsOf(42)).resolves.toEqual([])
+    expect(store.labelFilters).toHaveLength(0)
+  })
+
+  it('marks exactly the decisions somebody already reversed', async () => {
+    const store = restrictionsStore([
+      { chatId: -1, messageId: 10, action: 'ban', banDurationSeconds: 2592000, decidedBy: 'deterministic', reasonCode: 'x', createdAt: at },
+      { chatId: -2, messageId: 10, action: 'mute', banDurationSeconds: null, decidedBy: 'llm', reasonCode: 'y', createdAt: at }
+    ], [{ chatId: -2, messageId: 10 }])
+    const rows = await store.recentRestrictionsOf(42)
+    expect(rows.map((r) => [r.chatId, r.overturned])).toEqual([[-1, false], [-2, true]])
+    expect(rows[1]!.banDurationSeconds).toBeNull()
+    expect(rows[0]!.at).toEqual(at)
+  })
+})
+
+describe('trust provenance — who vouched, and when', () => {
+  const groupsStore = (): MongoStore & { updates: Record<string, unknown>[] } => {
+    const updates: Record<string, unknown>[] = []
+    const store = {
+      groups: {
+        updateOne: async (_filter: unknown, update: Record<string, unknown>) => {
+          updates.push(update)
+          return { modifiedCount: 1 }
+        }
+      }
+    } as unknown as MongoStore
+    return Object.assign(store, {
+      addTrustedUser: MongoStore.prototype.addTrustedUser,
+      removeTrustedUser: MongoStore.prototype.removeTrustedUser,
+      updates
+    }) as never
+  }
+
+  it('a grant writes the v1 id list AND who vouched, beside it', async () => {
+    const store = groupsStore()
+    await store.addTrustedUser(-100, 42, { by: 7, via: 'override' })
+    const update = store.updates[0] as { $addToSet: unknown; $set: Record<string, { by: number; via: string; at: Date }> }
+    expect(update.$addToSet).toEqual({ 'settings.openaiSpamCheck.trustedUsers': 42 })
+    const grant = update.$set['settings.openaiSpamCheck.trustGrants.42']!
+    expect(grant).toMatchObject({ by: 7, via: 'override' })
+    expect(grant.at).toBeInstanceOf(Date)
+  })
+
+  it('a grant without a voucher leaves provenance alone rather than inventing one', async () => {
+    const store = groupsStore()
+    await store.addTrustedUser(-100, 42)
+    expect(store.updates[0]).not.toHaveProperty('$set')
+  })
+
+  it('revoking trust takes its provenance with it', async () => {
+    const store = groupsStore()
+    await store.removeTrustedUser(-100, 42)
+    expect(store.updates[0]).toMatchObject({ $unset: { 'settings.openaiSpamCheck.trustGrants.42': '' } })
+  })
+
+  it('reads back only a well-formed grant', () => {
+    const at = new Date('2026-09-01T00:00:00Z')
+    const doc = { settings: { openaiSpamCheck: { trustGrants: { 42: { by: 7, via: 'vote', at }, 43: { by: 'x', at } } } } }
+    expect(trustGrantOf(doc, 42)).toEqual({ by: 7, via: 'vote', at })
+    expect(trustGrantOf(doc, 43)).toBeNull()
+    expect(trustGrantOf(doc, 44)).toBeNull()
+    expect(trustGrantOf(null, 42)).toBeNull()
+  })
+})
+
+describe('captcha gates that survive a restart', () => {
+  const gateStore = (found: Record<string, unknown> | null = null) => {
+    const ops: { op: string; filter: Record<string, unknown>; update?: unknown; options?: unknown }[] = []
+    const store = {
+      captchaGates: {
+        updateOne: async (filter: Record<string, unknown>, update: unknown, options: unknown) => { ops.push({ op: 'update', filter, update, options }); return {} },
+        deleteOne: async (filter: Record<string, unknown>) => { ops.push({ op: 'delete', filter }); return {} },
+        findOne: async (filter: Record<string, unknown>) => { ops.push({ op: 'find', filter }); return found }
+      }
+    } as unknown as MongoStore
+    return Object.assign(store, {
+      saveCaptchaGate: MongoStore.prototype.saveCaptchaGate,
+      dropCaptchaGate: MongoStore.prototype.dropCaptchaGate,
+      findCaptchaGate: MongoStore.prototype.findCaptchaGate,
+      ops
+    })
+  }
+
+  it('one row per person per chat, overwritten by the newer gate', async () => {
+    const store = gateStore()
+    await store.saveCaptchaGate({ chatId: -1, userId: 7, issuedMs: 1000, expiresMs: 61_000 })
+    expect(store.ops[0]).toMatchObject({
+      filter: { chatId: -1, userId: 7 },
+      update: { $set: { issuedMs: 1000, expiresAt: new Date(61_000) } },
+      options: { upsert: true }
+    })
+  })
+
+  it('a drop with an issue time cannot remove a newer gate; without one it closes the case', async () => {
+    const store = gateStore()
+    await store.dropCaptchaGate(-1, 7, 1000)
+    await store.dropCaptchaGate(-1, 7)
+    expect(store.ops.map((o) => o.filter)).toEqual([
+      { chatId: -1, userId: 7, issuedMs: 1000 },
+      { chatId: -1, userId: 7 }
+    ])
+  })
+
+  it('reads only an unexpired gate, and refuses a malformed row', async () => {
+    const expiresAt = new Date(Date.now() + 60_000)
+    const store = gateStore({ issuedMs: 1000, expiresAt })
+    await expect(store.findCaptchaGate(-1, 7)).resolves.toEqual({ issuedMs: 1000, expiresMs: expiresAt.getTime() })
+    expect(store.ops[0]!.filter).toMatchObject({ chatId: -1, userId: 7, expiresAt: { $gt: expect.any(Date) } })
+    await expect(gateStore({ issuedMs: 'x', expiresAt }).findCaptchaGate(-1, 7)).resolves.toBeNull()
+    await expect(gateStore(null).findCaptchaGate(-1, 7)).resolves.toBeNull()
   })
 })

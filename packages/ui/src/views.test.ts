@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Verdict, SignalName, BotStats, ChatStats } from '@lyadmin/core'
-import { callbackData, captchaPrompt, startCard, statsCard, compactNotification, startGroupHint, langPanel, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, userProfileCard, userProfileLines, votePrompt, voterListView, voteResult, VOTERS_SHOWN_MAX, whyCard, whyDeepLink, whyView, welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor, LOCALES, type UserFacts } from './views.js'
+import { callbackData, captchaPrompt, ownRestrictionsView, OWN_RESTRICTIONS_SHOWN, type OwnRestrictionEntry, startCard, statsCard, compactNotification, startGroupHint, langPanel, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, userProfileCard, userProfileLines, votePrompt, voterListView, voteResult, VOTERS_SHOWN_MAX, whyCard, whyDeepLink, whyView, welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor, LOCALES, type UserFacts } from './views.js'
 import { uk } from './locales/uk.js'
 
 const makeVerdict = (overrides: Partial<Verdict> = {}): Verdict => ({
@@ -1400,5 +1400,107 @@ describe('whyView — the signal name is stated once', () => {
     }))
     expect(text).toContain(uk.why.signalLabels.private_invite_in_bio)
     expect(text).toContain(uk.reasons.external_ban_new)
+  })
+})
+
+/**
+ * The notice a removed member can reach. Each assertion is something the person
+ * reading it needs to be true: which chat, whether it is still in force, and a
+ * way to the grounds — never a signal name or a list.
+ */
+describe('ownRestrictionsView', () => {
+  const now = Date.parse('2026-09-21T12:00:00Z')
+  const DAY = 86400
+  const entry = (over: Partial<OwnRestrictionEntry> = {}): OwnRestrictionEntry => ({
+    chatId: -100123, messageId: 7, action: 'ban', termSeconds: 30 * DAY,
+    reasonCode: 'job_scam', at: new Date(now - 2 * DAY * 1000), overturned: false,
+    chatTitle: 'Оренда <Київ>', ...over
+  })
+  const view = (entries: OwnRestrictionEntry[], botUsername: string | null = 'LyAdminBot') =>
+    ownRestrictionsView(uk, entries, { userId: 42, botUsername, now })
+
+  it('says nothing when nothing was done, so the welcome stands alone', () => {
+    expect(view([])).toBeNull()
+  })
+
+  it('names the chat, the reason in words, how long ago and when it ends', () => {
+    const text = view([entry()])!.text
+    expect(text).toContain('Оренда &lt;Київ&gt;')
+    expect(text).toContain(uk.reasons['job_scam'])
+    expect(text).toContain('2д тому')
+    expect(text).toContain('спливе через 28д')
+    expect(text).not.toContain('job_scam')
+  })
+
+  it('tells an overturned decision apart from one still in force', () => {
+    const text = view([entry({ overturned: true })])!.text
+    expect(text).toContain(uk.ownRestrictions.overturned)
+    expect(text).not.toContain('спливе')
+  })
+
+  it('tells a lapsed term from a running one, and a ban with no term from both', () => {
+    expect(view([entry({ termSeconds: DAY })])!.text).toContain(uk.ownRestrictions.ended)
+    expect(view([entry({ termSeconds: null })])!.text).toContain(uk.ownRestrictions.permanent)
+  })
+
+  it('claims no term at all for a kick, which has none', () => {
+    const text = view([entry({ action: 'kick', termSeconds: null })])!.text
+    expect(text).not.toContain(uk.ownRestrictions.permanent)
+    expect(text).not.toContain('спливе')
+  })
+
+  it('falls back to a neutral name for a chat it can no longer read', () => {
+    expect(view([entry({ chatTitle: null })])!.text).toContain(uk.ownRestrictions.unknownChat)
+  })
+
+  it('links every entry to its own Why? card, three to a row', () => {
+    const entries = Array.from({ length: 5 }, (_, i) => entry({ messageId: 100 + i }))
+    const buttons = view(entries)!.buttons
+    expect(buttons.map((row) => row.length)).toEqual([3, 2])
+    expect(buttons.flat()[4]!.url).toBe('https://t.me/LyAdminBot?start=why_-100123_104_42')
+  })
+
+  it('shows no buttons it cannot build, rather than broken ones', () => {
+    expect(view([entry()], null)!.buttons).toEqual([])
+  })
+
+  it('stops at the cap', () => {
+    const many = Array.from({ length: OWN_RESTRICTIONS_SHOWN + 3 }, (_, i) => entry({ messageId: i }))
+    expect(view(many)!.buttons.flat()).toHaveLength(OWN_RESTRICTIONS_SHOWN)
+  })
+
+  it('renders in every locale without leaking a placeholder', () => {
+    for (const locale of Object.values(LOCALES)) {
+      const text = ownRestrictionsView(locale, [entry()], { userId: 42, botUsername: 'b', now })!.text
+      expect(text).not.toMatch(/undefined|NaN|\[object/)
+    }
+  })
+})
+
+describe('userProfileCard — trust provenance', () => {
+  const facts = {
+    userId: 42, displayName: 'Іван', username: null, isPremium: false, isVerified: false,
+    isScam: false, isFake: false, hasProfilePhoto: true, predictedAgeDays: null,
+    tenureDays: null, messagesInChat: 0, externalBan: null, promoInBio: false, personalChannel: false
+  } as unknown as UserFacts
+
+  it('names who vouched for a trusted member, and how', () => {
+    const card = userProfileCard(uk, facts, {
+      chatId: -100, isTrusted: true,
+      grant: { by: 7, byLabel: 'Адмін', via: 'override', agoSeconds: 3 * 86400 }
+    })
+    expect(card.text).toContain('<a href="tg://user?id=7">Адмін</a>')
+    expect(card.text).toContain('3д тому')
+    expect(card.text).toContain('скасував рішення бота')
+  })
+
+  it('says provenance is unknown rather than implying nobody vouched', () => {
+    const card = userProfileCard(uk, facts, { chatId: -100, isTrusted: true, grant: null })
+    expect(card.text).toContain(uk.trust.grantUnknown)
+  })
+
+  it('prints no trust line for a member who is not trusted', () => {
+    const card = userProfileCard(uk, facts, { chatId: -100, isTrusted: false })
+    expect(card.text).not.toContain('✅')
   })
 })
