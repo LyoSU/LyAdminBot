@@ -17,7 +17,7 @@ import {
   classifyUrl, strongestTelegramLink, removesSender, truncate, mediaCategoryOf,
   escalateChannelRecidivism, isChannelSenderId,
   BURST_GREY_FLOOR, ESTABLISHED_MIN_TENURE_DAYS, ESTABLISHED_MIN_MESSAGES,
-  accountVerdict, hasHardAccountVerdict, extractUserSignals, PROFILE_EVIDENCE_SIGNALS,
+  accountVerdict, hasBanGradeAccountVerdict, extractUserSignals, PROFILE_EVIDENCE_SIGNALS,
   accountScreenAllowed, accountScreenRemoves, accountScreenUnasked, hardVerdictSourceOf,
   captchaBlockers, TIMED_BAN_SECONDS, VOTE_WINDOW_SECONDS, LLM_CLEARANCE_TTL_MS, expiryOutcome,
   createProfileRecheckQueue, profileRecheckOutcome, wantsProfileRecheck,
@@ -3265,7 +3265,9 @@ const screenAccount = async (params: {
     }
   }
 
-  const doorway = accountVerdict(signals, { hardAccountVerdict: hasHardAccountVerdict(snapshot) })
+  // Ban-grade, not merely hard: a listing past STALE_EXTERNAL_BAN_DAYS does not
+  // ban at the door, where there is no message to read at all.
+  const doorway = accountVerdict(signals, { hardAccountVerdict: hasBanGradeAccountVerdict(snapshot) })
   /**
    * The gate bar this screen answers to, and why it is not the doorway's.
    *

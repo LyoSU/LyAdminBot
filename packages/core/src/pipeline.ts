@@ -18,7 +18,7 @@ import type { EvaluationInput, Signal, Verdict, VerdictAction, DecidedBy } from 
 import type { BurstEntry, LlmVerdict, MessageObservations, PipelinePorts } from './ports.js'
 import { extractMessageSignals } from './signals/message.js'
 import {
-  extractUserSignals, tenureDays, hasHardAccountVerdict,
+  extractUserSignals, tenureDays, hasHardAccountVerdict, isStaleExternalBan,
   ESTABLISHED_MIN_MESSAGES, ESTABLISHED_MIN_IN_CHAT, ESTABLISHED_MIN_TENURE_DAYS
 } from './signals/user.js'
 import { profileHasCase } from './signals/account-verdict.js'
@@ -1167,10 +1167,11 @@ export const evaluateMessage = async (
    * 35 008 deterministic verdicts in three days, most of them an external-ban
    * listing that says nothing about a picture.
    */
-  let deterministic = applyDeterministicRules(signals, { lowInformation })
+  const ruleContext = { lowInformation, staleExternalBan: isStaleExternalBan(input.user) }
+  let deterministic = applyDeterministicRules(signals, ruleContext)
   if (!deterministic) {
     await Promise.all([screenProfileReuse(), screenProfileMedia()])
-    deterministic = applyDeterministicRules(signals, { lowInformation })
+    deterministic = applyDeterministicRules(signals, ruleContext)
   }
   if (deterministic) {
     if (deterministic.kind === 'clean') {

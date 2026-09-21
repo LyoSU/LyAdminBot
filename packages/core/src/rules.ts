@@ -58,6 +58,12 @@ export interface DeterministicVerdict {
 export interface MessageContext {
   /** `shouldAbstain`: nothing in the message is classifiable on its own. */
   lowInformation: boolean
+  /**
+   * The external listing is older than `STALE_EXTERNAL_BAN_DAYS`. About the
+   * account rather than the message, but likewise not readable off a signal
+   * name. Absent reads as false — the rule's behaviour before this existed.
+   */
+  staleExternalBan?: boolean
 }
 
 export const applyDeterministicRules = (
@@ -92,8 +98,10 @@ export const applyDeterministicRules = (
 
   // External ban databases (CAS/lols) + no meaningful local history.
   // Local-history requirement guards against rehabilitated accounts —
-  // the known FP class of these databases.
-  if (has('external_ban') && has('new_globally') && !isEstablished) {
+  // the known FP class of these databases. A listing past
+  // `STALE_EXTERNAL_BAN_DAYS` is the other face of that class and goes to the
+  // stages that read the message instead (2026-09-21).
+  if (has('external_ban') && has('new_globally') && !isEstablished && message.staleExternalBan !== true) {
     return { kind: 'spam', ruleId: 'external_ban_new', pSpam: 0.96, aboutAccount: true }
   }
 

@@ -149,3 +149,21 @@ describe('edit-to-inject — two facts, not one', () => {
       .toBe('edit_injected_invisibles')
   })
 })
+
+describe('external_ban_new — a stale listing no longer bans unread', () => {
+  it('fires for a listing that is not stale, and when nobody said', () => {
+    expect(applyDeterministicRules(s('external_ban', 'new_globally'), { lowInformation: false, staleExternalBan: false })?.ruleId)
+      .toBe('external_ban_new')
+    expect(applyDeterministicRules(s('external_ban', 'new_globally'))?.ruleId).toBe('external_ban_new')
+  })
+
+  it('leaves a stale listing to the stages that read the message', () => {
+    expect(applyDeterministicRules(s('external_ban', 'new_globally'), { lowInformation: false, staleExternalBan: true }))
+      .toBeNull()
+  })
+
+  it('does not spare a stale listing that Telegram itself flagged', () => {
+    expect(applyDeterministicRules(s('external_ban', 'scam_flag', 'new_globally'), { lowInformation: false, staleExternalBan: true })?.ruleId)
+      .toBe('scam_flag_new')
+  })
+})

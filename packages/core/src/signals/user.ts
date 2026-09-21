@@ -107,6 +107,51 @@ export const hasHardAccountVerdict = (user: UserSnapshot): boolean =>
   user.restrictionReasons.some((r) => /spam|scam/i.test(r))
 
 /**
+ * Age past which an external listing stops being grounds to remove somebody
+ * UNREAD (2026-09-21).
+ *
+ * Measured over the 14 days to 2026-09-21, same window for bans and
+ * corrections: listings of at most two days — 1546 bans, 3 overturned
+ * (0.19 %); older dated ones — 128 bans, 4 overturned (3.1 %). And all four of
+ * those were listings 138 to 992 days old on three accounts asking ordinary
+ * questions ("Київська область хтось є?"), while the median old listing is 12
+ * days and none of the young-old ones was overturned. So the error is not
+ * "not fresh" — the freshness gate was rightly rejected on 2026-08-25 — it is
+ * the tail: 25 bans a fortnight past 90 days, three of them wrong.
+ *
+ * Such a listing is still a listing. It keeps its weight in the score, still
+ * outranks chat trust and still blocks the established exemption
+ * (`hasHardAccountVerdict` is unchanged); what it loses is the power to ban at
+ * the door or through `external_ban_new` before anything has read the text.
+ * The message then goes to the stages that do read it.
+ *
+ * A listing with no date is NOT stale: in the same window its 41 bans drew no
+ * correction, and "no date" is not "old" (the 2026-08-25 lesson about null).
+ */
+export const STALE_EXTERNAL_BAN_DAYS = 90
+
+/** Whether the account's only listing evidence is older than `STALE_EXTERNAL_BAN_DAYS`. */
+export const isStaleExternalBan = (user: Pick<UserSnapshot, 'externalBan'>, now = Date.now()): boolean =>
+  user.externalBan?.banned === true &&
+  user.externalBan.bannedAt !== null &&
+  now - user.externalBan.bannedAt.getTime() > STALE_EXTERNAL_BAN_DAYS * MS_PER_DAY
+
+/**
+ * `hasHardAccountVerdict`, for the one question of whether the account may be
+ * BANNED on its record alone — at the door, with no message to read.
+ *
+ * Identical except that a stale listing does not count; see
+ * `STALE_EXTERNAL_BAN_DAYS`. A stale listing plus any other hard fact is still
+ * a ban.
+ */
+export const hasBanGradeAccountVerdict = (user: UserSnapshot, now = Date.now()): boolean =>
+  user.flags.scam ||
+  user.flags.fake ||
+  (user.externalBan?.banned === true && !isStaleExternalBan(user, now)) ||
+  user.spamDetections >= PRIOR_DETECTIONS_MIN ||
+  user.restrictionReasons.some((r) => /spam|scam/i.test(r))
+
+/**
  * How long this sender has demonstrably been around, in days — null when
  * nothing says.
  *

@@ -3,7 +3,7 @@ import fc from 'fast-check'
 import type { UserSnapshot } from '../types.js'
 import { contentEvidence, mayRemoveSender } from '../score.js'
 import { isTrustSignal } from './registry.js'
-import { extractUserSignals, hasHardAccountVerdict
+import { extractUserSignals, hasHardAccountVerdict, hasBanGradeAccountVerdict, isStaleExternalBan, STALE_EXTERNAL_BAN_DAYS
 } from './user.js'
 
 const makeUser = (overrides: Partial<UserSnapshot> = {}): UserSnapshot => ({
@@ -613,5 +613,47 @@ describe('extractUserSignals — robustness', () => {
     for (let i = 0; i < 5; i += 1) {
       expect(names(promo), `call ${i}`).toContain('promo_in_name')
     }
+  })
+})
+
+/**
+ * 2026-09-21: every overturned `external_ban_new` in a fortnight was a listing
+ * 138–992 days old. Past the threshold a listing may no longer ban unread —
+ * and nothing else it does may change.
+ */
+describe('stale external listings', () => {
+  const now = Date.parse('2026-09-21T12:00:00Z')
+  const DAY = 86_400_000
+  const listed = (daysAgo: number | null) => makeUser({
+    externalBan: { banned: true, bannedAt: daysAgo === null ? null : new Date(now - daysAgo * DAY), offenses: 1, sources: ['cas'] }
+  })
+
+  it('is stale strictly past the threshold, and never for a listing with no date', () => {
+    expect(isStaleExternalBan(listed(STALE_EXTERNAL_BAN_DAYS + 1), now)).toBe(true)
+    expect(isStaleExternalBan(listed(STALE_EXTERNAL_BAN_DAYS), now)).toBe(false)
+    expect(isStaleExternalBan(listed(12), now)).toBe(false)
+    expect(isStaleExternalBan(listed(null), now)).toBe(false)
+    expect(isStaleExternalBan(makeUser({ externalBan: null }), now)).toBe(false)
+  })
+
+  it('a stale listing alone is not ban-grade, but is still a hard verdict', () => {
+    const user = listed(992)
+    expect(hasBanGradeAccountVerdict(user, now)).toBe(false)
+    // Trust override and the established veto read this one: unchanged.
+    expect(hasHardAccountVerdict(user)).toBe(true)
+  })
+
+  it('a stale listing next to any other hard fact is still ban-grade', () => {
+    expect(hasBanGradeAccountVerdict({ ...listed(992), flags: { ...listed(992).flags, scam: true } }, now)).toBe(true)
+    expect(hasBanGradeAccountVerdict({ ...listed(992), spamDetections: 5 }, now)).toBe(true)
+  })
+
+  it('a recent or undated listing stays ban-grade', () => {
+    expect(hasBanGradeAccountVerdict(listed(1), now)).toBe(true)
+    expect(hasBanGradeAccountVerdict(listed(null), now)).toBe(true)
+  })
+
+  it('keeps emitting the listing itself, so the score still weighs it', () => {
+    expect(extractUserSignals(listed(992), now).map((x) => x.name)).toContain('external_ban')
   })
 })
