@@ -1659,6 +1659,15 @@ const enforceVoteSpam = async (vote: {
       spam: vote.tally.spam, ham: vote.tally.ham, source: learnSource
     })
   }
+  // The ruling itself, kept with its text past the decisions window — see
+  // `recordLabel`. Written whatever the learning above decided: a short text
+  // too thin to become a rule is still a person's answer about it.
+  const decided = await recallVerdict(vote.chatId, vote.messageId)
+  await store.recordLabel({
+    chatId: vote.chatId, messageId: vote.messageId, userId: vote.targetUserId,
+    label: 'spam', source: learnSource, text: vote.learnText,
+    decidedBy: decided?.decidedBy, reasonCode: decided?.reasonCode
+  }).catch(() => { /* the ruling is enforced; the record is best-effort */ })
 
   return { deleted, muted }
 }
@@ -1717,8 +1726,28 @@ const restoreFalsePositive = async (params: {
    * correction retires anything with it — see the retirement block below.
    */
   learnText?: string | undefined
+  /**
+   * The text to keep with the ruling (`recordLabel`). Separate from
+   * `learnText` because giving a community ruling that field would reach the
+   * retirement block's inputs; a label only records.
+   */
+  labelText?: string | undefined
 }): Promise<RestitutionResult> => {
   const verdict = await recallVerdict(params.chatId, params.messageId)
+  // The ruling with its text, which `pipeline_feedback` does not keep — and
+  // written before the gate below, because a chat saying "not spam" about a
+  // message we never acted on is still a person's answer about that text.
+  // After a restart the in-memory text is gone; the decision record still has
+  // its preview for another fortnight.
+  const labelText = params.labelText ?? params.learnText ??
+    await store.getDecisionText(params.chatId, params.messageId).catch(() => null)
+  if (labelText) {
+    await store.recordLabel({
+      chatId: params.chatId, messageId: params.messageId, userId: params.userId,
+      label: 'ham', source: params.source === 'admin' ? 'admin_override' : 'community_vote',
+      text: labelText, decidedBy: verdict?.decidedBy, reasonCode: verdict?.reasonCode
+    }).catch(() => { /* best-effort, like the override record below */ })
+  }
   /**
    * A chat may only undo what WE did. See `needsRestitution`: the calls below
    * lift whatever restriction is in place regardless of who imposed it, and a
@@ -6106,7 +6135,8 @@ const wireCallbacks = (): void => {
         const targetUserId = Number(vote['targetUserId'] ?? 0)
         const restitution = await restoreFalsePositive({
           chatId, messageId, userId: targetUserId,
-          byUserId: query.user.id, source: 'community_vote'
+          byUserId: query.user.id, source: 'community_vote',
+          labelText: String(vote['learnText'] ?? vote['textPreview'] ?? '')
         })
         /**
          * The chat has just said this was not spam; the notice saying it was

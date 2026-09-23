@@ -2058,3 +2058,54 @@ describe('forgetLlmVerdict', () => {
     expect(deleted).toHaveLength(0)
   })
 })
+
+describe('recordLabel', () => {
+  const labelStore = () => {
+    const rows = new Map<string, Record<string, unknown>>()
+    const store = {
+      labels: {
+        updateOne: async (
+          filter: Record<string, unknown>,
+          update: Record<string, Record<string, unknown>>,
+          options?: { upsert?: boolean }
+        ) => {
+          const key = JSON.stringify(filter)
+          const existing = rows.get(key)
+          rows.set(key, {
+            ...(existing ?? (options?.upsert === true ? update['$setOnInsert'] ?? {} : {})),
+            ...(update['$set'] ?? {})
+          })
+          return {}
+        }
+      }
+    } as unknown as MongoStore
+    return { store: Object.assign(store, { recordLabel: MongoStore.prototype.recordLabel }), rows }
+  }
+
+  it('keeps one row per message, and the latest ruling wins', async () => {
+    const { store, rows } = labelStore()
+    await store.recordLabel({ chatId: -100, messageId: 7, userId: 42, label: 'spam', source: 'community_vote', text: 'текст' })
+    const first = [...rows.values()][0]
+    await store.recordLabel({ chatId: -100, messageId: 7, userId: 42, label: 'ham', source: 'admin_override', text: 'текст', decidedBy: 'llm' })
+
+    expect(rows.size).toBe(1)
+    const row = [...rows.values()][0]
+    expect(row).toMatchObject({ label: 'ham', source: 'admin_override', text: 'текст', decidedBy: 'llm' })
+    // When we first learned a person's answer about it, not when it last changed.
+    expect(row?.['createdAt']).toBe(first?.['createdAt'])
+  })
+
+  it('writes nothing for a message with no text', async () => {
+    const { store, rows } = labelStore()
+    await store.recordLabel({ chatId: -100, messageId: 8, userId: 42, label: 'spam', source: 'community_vote', text: '   ' })
+    expect(rows.size).toBe(0)
+  })
+
+  it('bounds the text without splitting a character', async () => {
+    const { store, rows } = labelStore()
+    await store.recordLabel({ chatId: -100, messageId: 9, userId: 42, label: 'spam', source: 'community_vote', text: '😀'.repeat(2000) })
+    const text = String([...rows.values()][0]?.['text'])
+    expect([...text].length).toBeLessThanOrEqual(1000)
+    expect(text).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/)
+  })
+})

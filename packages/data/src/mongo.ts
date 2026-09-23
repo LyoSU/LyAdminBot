@@ -3,6 +3,7 @@
  * additive-only). New collections introduced by v2:
  *   pipeline_decisions — every verdict, TTL 14d (replay + calibration)
  *   pipeline_feedback  — admin overrides, permanent (ham labels)
+ *   pipeline_labels    — human verdicts with their text, TTL 365d (training set)
  *   llm_cache          — LLM verdict cache, TTL 7d
  */
 import { MongoClient, ObjectId, type Collection, type Db, type Document } from 'mongodb'
@@ -189,6 +190,19 @@ const standingFrom = (stats: { messagesCount?: number; spamMessages?: number } |
  * Module-level rather than a method: it touches no instance state, and as a
  * private method the behaviour above could not be tested at all.
  */
+/**
+ * How long a human verdict keeps its text in `pipeline_labels`.
+ *
+ * The decisions that carry text expire in 14 days and `pipeline_feedback`
+ * keeps no text at all, so until this collection existed nothing a person had
+ * ruled on survived long enough to train or replay against: an audit on
+ * 2026-09-23 found 22 overturned decisions with text out of 239. A year is
+ * long enough to span campaigns and short enough that a person's words are
+ * not kept indefinitely. A few hundred rows a month.
+ */
+export const LABEL_TTL_DAYS = 365
+const LABEL_TEXT_MAX = 1000
+
 export const ensureTtlIndex = async (
   collection: Collection<Document>,
   keySpec: Document,
@@ -389,6 +403,7 @@ export class MongoStore {
   // v2 collections
   get decisions(): Collection<Document> { return this.collection('pipeline_decisions') }
   get feedback(): Collection<Document> { return this.collection('pipeline_feedback') }
+  get labels(): Collection<Document> { return this.collection('pipeline_labels') }
   get llmCache(): Collection<Document> { return this.collection('llm_cache') }
   get votes(): Collection<Document> { return this.collection('pipeline_votes') }
   /**
@@ -564,6 +579,8 @@ export class MongoStore {
      * positive moves production weights twice.
      */
     await ensureUniqueIndex(this.feedback, 'chatId', 'messageId')
+    await ensureUniqueIndex(this.labels, 'chatId', 'messageId')
+    await ensureTtlIndex(this.labels, { createdAt: 1 }, LABEL_TTL_DAYS * 86400)
     await ensureTtlIndex(this.llmCache, { createdAt: 1 }, LLM_CACHE_TTL_DAYS * 86400)
     await this.llmCache.createIndex({ key: 1 }, { unique: true })
     await this.votes.createIndex({ chatId: 1, messageId: 1 }, { unique: true })
@@ -1573,6 +1590,54 @@ export class MongoStore {
    * evidence is not persisted, so only signal names come back; the verdict's
    * own `reasonEvidence` — the line the card quotes — is.
    */
+  /**
+   * A person's ruling on one message, with the text it was about.
+   *
+   * One row per message, an upsert, and the latest ruling wins: a spam ballot
+   * later overturned by an admin is a ham example, not both. Kept apart from
+   * `pipeline_feedback` because that collection is read, by message key and
+   * without regard to kind, as "this decision was overturned" — a spam label
+   * there would read as a correction.
+   */
+  async recordLabel(params: {
+    chatId: number
+    messageId: number
+    userId: number
+    label: 'spam' | 'ham'
+    /** Who ruled: `community_vote`, `admin_vote`, `admin_override`. */
+    source: string
+    text: string
+    /** What the pipeline had decided, when known — the disagreement is the point. */
+    decidedBy?: string | undefined
+    reasonCode?: string | undefined
+  }): Promise<void> {
+    const text = truncate(params.text.trim(), LABEL_TEXT_MAX)
+    if (text === '') return
+    await this.labels.updateOne({ chatId: params.chatId, messageId: params.messageId }, {
+      $setOnInsert: { createdAt: new Date() },
+      $set: {
+        chatId: params.chatId,
+        messageId: params.messageId,
+        userId: params.userId,
+        label: params.label,
+        source: params.source,
+        text,
+        ...(params.decidedBy === undefined ? {} : { decidedBy: params.decidedBy }),
+        ...(params.reasonCode === undefined ? {} : { reasonCode: params.reasonCode }),
+        labelledAt: new Date()
+      }
+    }, { upsert: true })
+  }
+
+  /** The stored preview of a decided message, for a ruling made after a restart. */
+  async getDecisionText(chatId: number, messageId: number): Promise<string | null> {
+    const doc = await this.decisions.findOne(
+      { chatId, messageId }, { sort: { createdAt: -1 }, projection: { textPreview: 1 } }
+    )
+    const text = doc?.['textPreview']
+    return typeof text === 'string' && text !== '' ? text : null
+  }
+
   async getDecision(chatId: number, messageId: number): Promise<Verdict | null> {
     const doc = await this.decisions.findOne({ chatId, messageId }, { sort: { createdAt: -1 } })
     if (!doc) return null
