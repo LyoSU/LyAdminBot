@@ -2243,6 +2243,7 @@ const handleBanan = async (message: Message, chat: Chat, caller: User, arg: stri
     const ok = await gateway.moderationActions.mute(chat.id, caller.id, seconds)
       .then(() => true).catch(() => false)
     if (ok) {
+      await dropGate(chat.id, caller.id, 'banan_self')
       log.info('banan', { chatId: chat.id, chat: chat.title ?? undefined, userId: caller.id, user: caller.displayName, by: caller.id, kind: 'self', seconds })
       await tgSendText(chat.id, viewHtml(locale.banan.self(userMention(caller.id, caller.displayName), human)))
         .catch(() => { /* non-fatal */ })
@@ -2273,6 +2274,9 @@ const handleBanan = async (message: Message, chat: Chat, caller: User, arg: stri
     .then(() => true).catch(() => false)
   await dropCommand()
   if (!ok) return
+  // A pending captcha's button clears every restriction, this mute included —
+  // the target could undo an admin's /banan with one tap (2026-09-23 review).
+  await dropGate(chat.id, target.id, 'banan')
   log.info('banan', { chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName, by: caller.id, byName: caller.displayName, kind: 'admin', seconds })
   rememberBananLabel(chat.id, target.id, target.displayName)
   const sent = await tgSendText(chat.id, viewHtml(locale.banan.success(userMention(target.id, target.displayName), human)), {
@@ -2565,6 +2569,8 @@ const holdOnTrustedReport = async (
   const muted = await gateway.moderationActions
     .mute(chat.id, target.id, CAPTCHA_IGNORED_MUTE_SECONDS)
     .then(() => true).catch((err: unknown) => { muteError = telegramErrorName(err); return false })
+  // The gate's button would lift this hold with one tap; see `dropGate`.
+  if (muted) await dropGate(chat.id, target.id, 'trusted_report')
   log.info('trusted_report_hold', {
     chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, by: reporterId,
     messageId, deleted, muted, ...(muteError === null ? {} : { error: muteError as string })
@@ -3634,6 +3640,7 @@ const screenAccount = async (params: {
   const held = await gateway.moderationActions
     .mute(chat.id, target.id, CAPTCHA_IGNORED_MUTE_SECONDS)
     .then(() => true).catch((err: unknown) => { holdError = telegramErrorName(err); return false })
+  if (held) await dropGate(chat.id, target.id, 'account_screen_hold')
   log.info('account_screen_hold', {
     chatId: chat.id, chat: chat.title ?? undefined, userId: target.id,
     reason: params.reason, blockers: gated.blockers.join(','), applied: held,
