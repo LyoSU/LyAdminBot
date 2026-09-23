@@ -155,6 +155,7 @@ export const tr: Locale = {
     profile_farm_unreachable: 'profil fotoğrafının kendisi reklam ve doğrulama iletilemedi — bir saat duraklatıldı',
     content_unconfirmed: 'şüpheli profil, mesaj içeriği doğrulanmadı',
     admin_report: 'bir yönetici bunu spam olarak bildirdi',
+    trusted_report: 'güvenilir bir üye bunu spam olarak bildirdi',
     community_vote: 'topluluk oyladı: spam',
     forward_blacklist: 'bilinen bir spam kaynağından iletildi'
   },

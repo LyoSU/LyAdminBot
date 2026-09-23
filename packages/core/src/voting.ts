@@ -347,3 +347,28 @@ export const expiryOutcome = (tally: Pick<VoteTally, 'spam' | 'ham'>): 'delete' 
 
 export const voteMayRecordDetection = (learnText: string): boolean =>
   learnText.trim().length > 0
+
+/**
+ * What one report is worth, before anybody else has voted.
+ *
+ * A report from a member on the chat's trusted list is the admin's word by
+ * delegation: the admin put them there, and the list already outranks every
+ * verdict short of a platform flag. So against a stranger it does not wait
+ * for a room that may never have enough standing to settle it (the ballots
+ * that expire unanswered): the message goes, the author is held for the
+ * hour, and the vote runs on — a "not spam" outcome lifts the hold through
+ * the ordinary restitution. Nothing here bans, and nothing is learned until
+ * the vote closes.
+ *
+ * Against somebody the chat already vouches for — its own trusted list, or
+ * standing enough to vote here — one member's word is not a lever over
+ * another's, whoever put the first one on the list. That stays a question.
+ */
+export type ReportWeight = 'hold' | 'ballot'
+
+export const reportWeight = (facts: {
+  reporterTrusted: boolean
+  targetTrusted: boolean
+  targetHasStanding: boolean
+}): ReportWeight =>
+  facts.reporterTrusted && !facts.targetTrusted && !facts.targetHasStanding ? 'hold' : 'ballot'

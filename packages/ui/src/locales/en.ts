@@ -156,6 +156,7 @@ export const en: Locale = {
     profile_farm_unreachable: 'profile picture is the advert and no check could reach them — paused for an hour',
     content_unconfirmed: 'suspicious profile, message content unconfirmed',
     admin_report: 'an admin reported this as spam',
+    trusted_report: 'a trusted member reported this as spam',
     community_vote: 'the community voted: spam',
     forward_blacklist: 'forwarded from a known spam source'
   },

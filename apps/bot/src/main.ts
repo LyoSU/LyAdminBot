@@ -11,7 +11,7 @@ import {
   countsAgainstSender,
   shouldAutoLearn, autoLearnSource, VOTE_LEARN_STATUS, hasNetworkVoice, conversationLineFor, nsfwProfileHit,
   sexualScore, suggestiveProfileEvidence, profileHasCase,
-  voterRoster, voteEligibility, voteMayRecordDetection, needsRestitution, restitutionLiftsRestrictions,
+  voterRoster, voteEligibility, voteMayRecordDetection, reportWeight, needsRestitution, restitutionLiftsRestrictions,
   mergeTenureDays,
   type VoterStanding,
   classifyUrl, strongestTelegramLink, removesSender, truncate, mediaCategoryOf,
@@ -2483,6 +2483,52 @@ const reportTarget = async (replied: Message): Promise<ReportTarget> => {
 }
 
 /**
+ * A trusted member's report against a stranger: remove the message and hold
+ * the author for the hour while the vote runs (`reportWeight`).
+ *
+ * Recorded as a `mute` verdict on the reported message, which is what makes it
+ * reversible by the ordinary path: a "not spam" outcome runs
+ * `restoreFalsePositive`, which recalls this verdict and lifts the mute. Nothing
+ * is learned here and no detection is filed — that waits for the vote.
+ */
+const holdOnTrustedReport = async (
+  chat: Chat, target: User, messageId: number, textPreview: string, reporterId: number
+): Promise<void> => {
+  const deleted = await gateway.tg.deleteMessagesById(chat.id, [messageId])
+    .then(() => true).catch(() => false)
+  let muteError: string | null = null
+  const muted = await gateway.moderationActions
+    .mute(chat.id, target.id, CAPTCHA_IGNORED_MUTE_SECONDS)
+    .then(() => true).catch((err: unknown) => { muteError = telegramErrorName(err); return false })
+  log.info('trusted_report_hold', {
+    chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, by: reporterId,
+    messageId, deleted, muted, ...(muteError === null ? {} : { error: muteError as string })
+  })
+  if (!deleted && !muted) return
+  const verdict: Verdict = {
+    pSpam: 0, action: muted ? 'mute' : 'delete', needsVote: true,
+    banDurationSeconds: muted ? CAPTCHA_IGNORED_MUTE_SECONDS : null,
+    decidedBy: 'deterministic', ruleId: 'trusted_report', signals: [],
+    reasonCode: 'trusted_report', reasonEvidence: textPreview || null,
+    meta: { reportedBy: reporterId }
+  }
+  rememberVerdict(chat.id, messageId, verdict)
+  await store.recordDecision({
+    chatId: chat.id, userId: target.id, messageId, textPreview,
+    verdict,
+    execution: {
+      applied: muted, deleted, skippedReason: null,
+      failed: [
+        ...(deleted ? [] : ['delete']),
+        ...(muted ? [] : [muteError === null ? 'mute' : `mute:${muteError as string}`])
+      ],
+      albumRemoved: 0, retroPurged: 0
+    },
+    latencyMs: 0
+  }).catch(() => { /* telemetry must never break moderation */ })
+}
+
+/**
  * /report: one flow for everyone. The report opens (or joins) a community
  * vote and casts the reporter's spam ballot. tallyVotes resolves an admin
  * ballot instantly, so an admin report is an immediate verdict while a
@@ -2576,6 +2622,8 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
 
   const reporterStanding = await voterStandingFor(chat.id, reporter.id, target.id)
   const reporterIsAdmin = reporterStanding.isAdmin
+  const reportPolicy = groupDocToChatPolicy(await store.getGroupDoc(chat.id).catch(() => null) as never)
+  const reporterTrusted = !reporterIsAdmin && reportPolicy.trustedUserIds.includes(reporter.id)
   log.info('report', {
     chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName,
     by: reporter.id, byName: reporter.displayName, byAdmin: reporterIsAdmin, messageId: replied.id,
@@ -2588,7 +2636,11 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
    * a fresh spam wave lands on. Deciding the question is what needs standing,
    * so an ineligible report opens the vote and casts nothing.
    */
-  if (voteEligibility(reporterStanding) === 'eligible') {
+  // A trusted reporter's ballot counts without the standing an ordinary voter
+  // needs: an admin vouched for them, which is the stronger statement. Being
+  // the target or already caught spamming still disqualifies.
+  const eligibility = voteEligibility(reporterStanding)
+  if (eligibility === 'eligible' || (reporterTrusted && eligibility === 'no_standing')) {
     await store.castBallot({
       chatId: chat.id, messageId: replied.id,
       userId: reporter.id, isAdmin: reporterIsAdmin, choice: 'spam',
@@ -2688,6 +2740,16 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
    * Fire-and-forget: the reporter should not wait on a profile fetch, and a
    * screen that fails must not cost them their ballot.
    */
+  if (open && reporterTrusted) {
+    const targetStanding = await voterStandingFor(chat.id, target.id, 0)
+    const weight = reportWeight({
+      reporterTrusted,
+      targetTrusted: reportPolicy.trustedUserIds.includes(target.id),
+      targetHasStanding: voteEligibility(targetStanding) === 'eligible'
+    })
+    if (weight === 'hold') await holdOnTrustedReport(chat, target, replied.id, textPreview, reporter.id)
+  }
+
   void screenAccount({
     chat, target, reason: 'reported', replyToMessageId: replied.id,
     subjectMessageId: replied.id

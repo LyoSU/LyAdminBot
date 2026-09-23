@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import {
   tallyVotes, voterRoster, voteEligibility, voteMayRecordDetection, VOTE_TENURE_ALONE_DAYS,
-  expiryOutcome, UNOPPOSED_EXPIRY_MIN_SPAM,
+  expiryOutcome, UNOPPOSED_EXPIRY_MIN_SPAM, reportWeight,
   type VoteBallot, type VoterStanding
 } from './voting.js'
 
@@ -447,5 +447,32 @@ describe('voterRoster — a deduplicated ballot carries its own change of mind',
   it('a flag on a ballot with no tap count is believed — nothing contradicts it', () => {
     const roster = voterRoster([{ ...b(1, 'ham'), changedMind: true }])
     expect(roster.ham[0]?.changedMind).toBe(true)
+  })
+})
+
+describe('reportWeight — a report from somebody an admin trusts', () => {
+  const base = { reporterTrusted: true, targetTrusted: false, targetHasStanding: false }
+
+  it('holds a newcomer at once: the message goes and the author waits out the vote', () => {
+    expect(reportWeight(base)).toBe('hold')
+  })
+
+  it('an untrusted report only asks the chat', () => {
+    expect(reportWeight({ ...base, reporterTrusted: false })).toBe('ballot')
+  })
+
+  it('does not hold somebody the chat already vouches for', () => {
+    // A trusted member's word is an admin's delegated word about strangers.
+    // It is not a lever against another member with standing here — that
+    // stays a question for the room.
+    expect(reportWeight({ ...base, targetTrusted: true })).toBe('ballot')
+    expect(reportWeight({ ...base, targetHasStanding: true })).toBe('ballot')
+  })
+
+  it('property: nothing but a trusted reporter against a stranger holds', () => {
+    fc.assert(fc.property(fc.boolean(), fc.boolean(), fc.boolean(), (r, t, s) => {
+      const w = reportWeight({ reporterTrusted: r, targetTrusted: t, targetHasStanding: s })
+      return (w === 'hold') === (r && !t && !s)
+    }))
   })
 })

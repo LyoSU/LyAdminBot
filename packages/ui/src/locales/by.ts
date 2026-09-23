@@ -167,6 +167,7 @@ export const by: Locale = {
     profile_farm_unreachable: 'аватарка і ёсць рэклама, а праверку не даставіць — паўза на гадзіну',
     content_unconfirmed: 'падазроны профіль, але змест не пацверджаны',
     admin_report: 'адмін зарэпорціў як спам',
+    trusted_report: 'давераны ўдзельнік зарэпорціў як спам',
     community_vote: 'супольнасць прагаласавала: спам',
     forward_blacklist: 'пераслана з вядомай спам-крыніцы'
   },

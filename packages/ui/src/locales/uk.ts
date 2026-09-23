@@ -167,6 +167,7 @@ export const uk: Locale = {
     profile_farm_unreachable: 'аватарка і є реклама, а перевірку не доставити — пауза на годину',
     content_unconfirmed: 'підозрілий профіль, але зміст не підтверджено',
     admin_report: 'адмін репортнув як спам',
+    trusted_report: 'довірений учасник репортнув як спам',
     community_vote: 'спільнота проголосувала: спам',
     forward_blacklist: 'переслано з відомого спам-джерела'
   },
