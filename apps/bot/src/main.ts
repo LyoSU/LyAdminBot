@@ -9,7 +9,7 @@ import {
   evaluateMessage, tallyVotes, extractBioSignals, BIO_PROMO_SIGNALS,
   isEnforcementAction, countsAsDetection,
   countsAgainstSender,
-  shouldAutoLearn, autoLearnSource, VOTE_LEARN_STATUS, conversationLineFor, nsfwProfileHit,
+  shouldAutoLearn, autoLearnSource, VOTE_LEARN_STATUS, hasNetworkVoice, conversationLineFor, nsfwProfileHit,
   sexualScore, suggestiveProfileEvidence, profileHasCase,
   voterRoster, voteEligibility, voteMayRecordDetection, needsRestitution, restitutionLiftsRestrictions,
   mergeTenureDays,
@@ -31,7 +31,7 @@ import {
   editBaselineOf, classifyEditDelivery,
   fetchUserProfile, userHasProfilePhoto, downloadPhotoBase64, downloadAvatarBase64, downloadStoriesBase64, rawPhotoToBase64,
   fetchExternalBan, sourcesToQuery, resolveMentionKinds, shouldScanChannelSender,
-  createChatDescriptionCache, fetchChatDescription, createTmePreviewResolver,
+  createChatDescriptionCache, fetchChatDescription, fetchChatMemberCount, createTmePreviewResolver,
   avatarDhashOf, MUTE_DURATION_SECONDS,
   type ExternalBanCacheView, type IncomingMessage
 } from '@lyadmin/adapters'
@@ -1466,6 +1466,36 @@ const probeRights = async (chatId: number): Promise<boolean> => {
  * The eligibility rule lives in @lyadmin/core (`shouldAutoLearn`) so it can be
  * tested — poisoning this store would silently delete innocent messages.
  */
+/**
+ * Whether this chat's word counts beyond itself — see `hasNetworkVoice`.
+ *
+ * Read only when something is about to be learned or retired, which is rare
+ * next to messages, and remembered for six hours because neither a chat's age
+ * nor its size moves faster than that. A failed read is remembered as "no":
+ * the chat keeps full authority inside itself either way.
+ */
+const NETWORK_VOICE_TTL_MS = 6 * 60 * 60 * 1000
+const networkVoices = new Map<number, { voice: boolean; expiresAt: number }>()
+const chatNetworkVoice = async (chatId: number): Promise<boolean> => {
+  const hit = networkVoices.get(chatId)
+  if (hit && hit.expiresAt > Date.now()) return hit.voice
+  const [firstSeenAt, members] = await Promise.all([
+    store.chatFirstSeenAt(chatId).catch(() => null),
+    fetchChatMemberCount(gateway.tg, chatId).catch(() => null)
+  ])
+  const voice = hasNetworkVoice({
+    tenureDays: firstSeenAt === null ? null : (Date.now() - firstSeenAt) / 86_400_000,
+    members
+  })
+  networkVoices.delete(chatId)
+  networkVoices.set(chatId, { voice, expiresAt: Date.now() + NETWORK_VOICE_TTL_MS })
+  if (networkVoices.size > 2000) {
+    const oldest = networkVoices.keys().next()
+    if (!oldest.done) networkVoices.delete(oldest.value)
+  }
+  return voice
+}
+
 const learnFromAutoVerdict = async (verdict: Verdict, text: string, chatId: number): Promise<void> => {
   if (!shouldAutoLearn(verdict, text)) return
   const learnText = text.trim()
@@ -1473,9 +1503,14 @@ const learnFromAutoVerdict = async (verdict: Verdict, text: string, chatId: numb
   // Both stores get the SAME strength. They used to disagree: the signature was
   // written as a candidate while the vector went in `confirmed` with no expiry,
   // so the blunter of the two layers was the one that could convict alone.
-  await signaturePort.learn(learnText, source, 'candidate', chatId)
+  //
+  // The chat is named as a corroborating reporter only when it has network
+  // voice; otherwise the text is still stored, as an unattributed candidate
+  // that can raise a signal and cannot count towards promotion.
+  const corroborating = await chatNetworkVoice(chatId) ? chatId : undefined
+  await signaturePort.learn(learnText, source, 'candidate', corroborating)
     .catch(() => { /* learning is best-effort — never block moderation */ })
-  await vectorPort?.learn(learnText, source, 'candidate', chatId)
+  await vectorPort?.learn(learnText, source, 'candidate', corroborating)
     .catch(() => { /* best-effort */ })
   log.debug('auto_learned', { decidedBy: verdict.decidedBy, reason: verdict.reasonCode })
 }
@@ -1579,11 +1614,16 @@ const enforceVoteSpam = async (vote: {
 
   if (hasContent) {
     const requested = VOTE_LEARN_STATUS
-    const signature = await signaturePort.learn(vote.learnText, learnSource, requested, vote.chatId)
+    // An admin ballot settles a vote alone, so a chat is a corroborating
+    // reporter only with network voice — or one owner of two groups mints a
+    // rule for every chat (2026-09-23 review).
+    const networkVoice = await chatNetworkVoice(vote.chatId)
+    const corroborating = networkVoice ? vote.chatId : undefined
+    const signature = await signaturePort.learn(vote.learnText, learnSource, requested, corroborating)
       .catch(() => null)
     // Seed the vector layer too, so semantic matching learns alongside
     // signatures instead of staying frozen at the v1 snapshot.
-    const vector = await vectorPort?.learn(vote.learnText, learnSource, requested, vote.chatId)
+    const vector = await vectorPort?.learn(vote.learnText, learnSource, requested, corroborating)
       .catch(() => null) ?? null
     /**
      * Logged AFTER the writes, and reporting all three values.
@@ -1594,7 +1634,7 @@ const enforceVoteSpam = async (vote: {
      * deciding rules did votes create" taken from these lines was too high.
      */
     log.info('vote_learned', {
-      chatId: vote.chatId, requested, signature, vector,
+      chatId: vote.chatId, requested, signature, vector, networkVoice,
       spam: vote.tally.spam, ham: vote.tally.ham, source: learnSource
     })
   }
@@ -1725,12 +1765,15 @@ const restoreFalsePositive = async (params: {
     correctionOwns(pendingGate.triggerMessageId, params.messageId)) {
     captchas.forget(pendingGate)
   }
+  // Asked only where an admin's word could reach the shared tables.
+  const networkVoice = params.source === 'admin' && await chatNetworkVoice(params.chatId)
   await store.recordOverride({
     chatId: params.chatId,
     messageId: params.messageId,
     userId: params.userId,
     adminId: params.byUserId,
     source: params.source,
+    networkVoice,
     ...(removedCount !== undefined ? { removedCount } : {}),
     // A label with no recallable verdict keeps no evidence — the decision
     // record expired or the bot restarted. Recorded anyway (somebody did say
@@ -1796,9 +1839,15 @@ const restoreFalsePositive = async (params: {
    *  - the vector twin, whose `disabledAt` the search has always honoured and
    *    nobody ever wrote — a false positive there was unretirable by anyone.
    */
+  //
+  // And admin-only is not the whole answer: the crew that owns a chat has its
+  // admin. Without network voice the retirement is scoped to this chat — the
+  // rule stops here and keeps its standing elsewhere (2026-09-23 review).
   if (params.source === 'admin' && params.learnText) {
-    await signaturePort.retire(params.learnText).catch(() => { /* best-effort */ })
-    await vectorPort?.retire(params.learnText).catch(() => { /* best-effort */ })
+    const onlyIn = networkVoice ? undefined : params.chatId
+    await signaturePort.retire(params.learnText, onlyIn).catch(() => { /* best-effort */ })
+    await vectorPort?.retire(params.learnText, onlyIn).catch(() => { /* best-effort */ })
+    log.info('signature_retired', { chatId: params.chatId, scope: networkVoice ? 'network' : 'chat' })
   }
 
   // A forwarded FP also earns its origin a clean point (v1 2:1 math).

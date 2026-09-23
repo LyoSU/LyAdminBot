@@ -110,3 +110,18 @@ export const fetchChatDescription = async (
   const full = await tg.getFullChat(chatId)
   return clean(full.bio ?? null)
 }
+
+/**
+ * How many members Telegram says the chat has, for `hasNetworkVoice`.
+ *
+ * mtcute reports 0 where the count is not available (a basic group's
+ * `chatFull` carries none), and 0 is not a small chat — it is an unanswered
+ * question, so it comes back as null.
+ */
+export const fetchChatMemberCount = async (
+  tg: TelegramClient,
+  chatId: number
+): Promise<number | null> => {
+  const full = await tg.getFullChat(chatId)
+  return full.membersCount > 0 ? full.membersCount : null
+}

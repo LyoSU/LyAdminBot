@@ -47,6 +47,8 @@ interface SpamPayload {
   expiresAtUnix?: number
   /** Distinct chats that reported this text; absent on v1 points. */
   chats?: number[]
+  /** Chats that switched this point off for themselves (`hasNetworkVoice`). */
+  suppressedIn?: number[]
 }
 
 export class QdrantVectorPort implements VectorPort {
@@ -65,7 +67,7 @@ export class QdrantVectorPort implements VectorPort {
     this.openai = new OpenAI({ apiKey: config.openaiApiKey })
   }
 
-  async search(text: string): Promise<VectorMatch | null> {
+  async search(text: string, chatId?: number): Promise<VectorMatch | null> {
     // Emoji-only / low-info texts produce degenerate embeddings that
     // false-match each other — the v1 collision bug. Hard guard.
     if (!hasTextualContent(text)) return null
@@ -89,6 +91,7 @@ export class QdrantVectorPort implements VectorPort {
     for (const point of points) {
       const payload = (point.payload ?? {}) as SpamPayload
       if (payload.disabledAt) continue
+      if (chatId !== undefined && Array.isArray(payload.suppressedIn) && payload.suppressedIn.includes(chatId)) continue
       if (typeof payload.expiresAtUnix === 'number' && payload.expiresAtUnix < nowUnix) continue
       if (point.score < MIN_REPORTABLE_SIMILARITY) continue
       // `confidence >= 90` used to count as confirmation. That field comes from
@@ -175,6 +178,9 @@ export class QdrantVectorPort implements VectorPort {
             status: effective,
             source,
             chats: [...chats],
+            // Carried across the full-point upsert, or a chat's own retirement
+            // would come back to life the way `disabledAt` did.
+            ...(Array.isArray(previous?.suppressedIn) ? { suppressedIn: previous.suppressedIn } : {}),
             ...(effective === 'confirmed'
               ? { hitCount: CONFIRMED_HIT_COUNT, confidence: CONFIRMED_CONFIDENCE }
               : {}),
@@ -209,11 +215,26 @@ export class QdrantVectorPort implements VectorPort {
    * once believed survives for calibration replay — the same reason the
    * signature is demoted to `candidate` instead of being removed.
    */
-  async retire(text: string): Promise<void> {
+  async retire(text: string, onlyIn?: number): Promise<void> {
+    const id = pointIdFor(text)
     try {
+      if (onlyIn === undefined) {
+        await this.qdrant.setPayload(SPAM_COLLECTION, {
+          payload: { disabledAt: new Date().toISOString() },
+          points: [id]
+        })
+        return
+      }
+      // Scoped to the admin's chat (`hasNetworkVoice`). `setPayload` replaces
+      // the key, so the list is read and extended rather than written blind.
+      const existing = await this.qdrant.retrieve(SPAM_COLLECTION, { ids: [id], with_payload: true })
+      const previous = (existing[0]?.payload ?? undefined) as SpamPayload | undefined
+      if (!previous) return
+      const suppressedIn = Array.isArray(previous.suppressedIn) ? previous.suppressedIn : []
+      if (suppressedIn.includes(onlyIn)) return
       await this.qdrant.setPayload(SPAM_COLLECTION, {
-        payload: { disabledAt: new Date().toISOString() },
-        points: [pointIdFor(text)]
+        payload: { suppressedIn: [...suppressedIn, onlyIn] },
+        points: [id]
       })
     } catch { /* nothing learned for this text, or Qdrant is down — best-effort */ }
   }

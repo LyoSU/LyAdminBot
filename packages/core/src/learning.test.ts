@@ -3,7 +3,8 @@ import fc from 'fast-check'
 import type { DecidedBy, Verdict } from './types.js'
 import {
   shouldAutoLearn, autoLearnSource, AUTO_LEARN_DECIDED_BY, AUTO_LEARN_MIN_LENGTH,
-  isDistinctive, MIN_DISTINCTIVE_LENGTH, VOTE_LEARN_STATUS
+  isDistinctive, MIN_DISTINCTIVE_LENGTH, VOTE_LEARN_STATUS,
+  hasNetworkVoice, NETWORK_VOICE_MIN_TENURE_DAYS, NETWORK_VOICE_MIN_MEMBERS
 } from './learning.js'
 
 const makeVerdict = (overrides: Partial<Verdict> = {}): Verdict => ({
@@ -123,5 +124,24 @@ describe('VOTE_LEARN_STATUS', () => {
     // The guard is the constant's value, not any logic around it: promotion is
     // the signature port's job and it needs a second, independent chat.
     expect(VOTE_LEARN_STATUS).toBe('candidate')
+  })
+})
+
+describe('hasNetworkVoice', () => {
+  const old = NETWORK_VOICE_MIN_TENURE_DAYS
+  const big = NETWORK_VOICE_MIN_MEMBERS
+
+  it('a chat that is both old and populated speaks for the network', () => {
+    expect(hasNetworkVoice({ tenureDays: old, members: big })).toBe(true)
+  })
+
+  it('either bar alone is not enough — a captured chat has to fake both', () => {
+    expect(hasNetworkVoice({ tenureDays: old - 1, members: big * 10 })).toBe(false)
+    expect(hasNetworkVoice({ tenureDays: old * 10, members: big - 1 })).toBe(false)
+  })
+
+  it('a fact we could not read is not a fact in its favour', () => {
+    expect(hasNetworkVoice({ tenureDays: null, members: big * 10 })).toBe(false)
+    expect(hasNetworkVoice({ tenureDays: old * 10, members: null })).toBe(false)
   })
 })

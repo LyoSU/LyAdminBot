@@ -16,7 +16,8 @@ export interface SignatureMatch {
 }
 
 export interface SignaturePort {
-  match(text: string): Promise<SignatureMatch | null>
+  /** `chatId` skips rules this chat switched off for itself (`hasNetworkVoice`). */
+  match(text: string, chatId?: number): Promise<SignatureMatch | null>
 }
 
 export interface VelocityResult {
@@ -72,7 +73,7 @@ export interface VectorMatch {
 
 export interface VectorPort {
   /** Semantic nearest-spam search (embeddings). */
-  search(text: string): Promise<VectorMatch | null>
+  search(text: string, chatId?: number): Promise<VectorMatch | null>
 }
 
 export interface ModerationResult {

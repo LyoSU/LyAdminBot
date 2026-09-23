@@ -1764,7 +1764,7 @@ export const evaluateMessage = async (
   }
 
   if (ports.signatures) {
-    const match = await safe('signatures', () => ports.signatures!.match(text))
+    const match = await safe('signatures', () => ports.signatures!.match(text, input.chat.id))
     if (match) {
       if (match.status === 'confirmed') {
         return finalize(
@@ -1833,7 +1833,7 @@ export const evaluateMessage = async (
   }
 
   if (ports.vectors) {
-    const match = await safe('vectors', () => ports.vectors!.search(text))
+    const match = await safe('vectors', () => ports.vectors!.search(text, input.chat.id))
     if (match) {
       // A nearest-neighbour hit may only DECIDE on a text long enough for the
       // distance to mean something. Short strings cluster: two unrelated

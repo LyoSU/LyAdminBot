@@ -68,6 +68,13 @@ describe('QdrantVectorPort.search', () => {
     expect(await port.search(spamText)).toBeNull()
   })
 
+  it('a point switched off in this chat is skipped here and matches elsewhere', async () => {
+    hit({ status: 'confirmed', suppressedIn: [-100] })
+    expect(await port.search(spamText, -100)).toBeNull()
+    hit({ status: 'confirmed', suppressedIn: [-100] })
+    expect(await port.search(spamText, -200)).not.toBeNull()
+  })
+
   it('below the reportable similarity nothing is returned', async () => {
     hit({ status: 'confirmed' }, 0.5)
     expect(await port.search(spamText)).toBeNull()
@@ -142,6 +149,14 @@ describe('QdrantVectorPort.retire', () => {
     setPayload.mockRejectedValueOnce(new Error('point not found'))
     await expect(port.retire('нічого такого не було')).resolves.toBeUndefined()
   })
+
+  it('a retirement scoped to one chat adds the chat and keeps the ones already there', async () => {
+    retrieve.mockResolvedValueOnce([{ payload: { status: 'confirmed', suppressedIn: [-300] } }])
+    await port.retire(spamText, -100)
+    const payload = (setPayload.mock.calls[0]?.[1] as { payload: Record<string, unknown> }).payload
+    expect(payload['suppressedIn']).toEqual([-300, -100])
+    expect(payload['disabledAt']).toBeUndefined()
+  })
 })
 
 /**
@@ -208,6 +223,14 @@ describe('QdrantVectorPort.learn — earning confirmation', () => {
     retrieve.mockRejectedValue(new Error('qdrant down'))
     expect(await port().learn(longSpam, 'community_vote', 'candidate', -100)).toBeNull()
     expect(upsert).not.toHaveBeenCalled()
+  })
+
+  it('re-learning keeps the chats that switched the point off for themselves', async () => {
+    // The upsert replaces the whole point; a scoped retirement dropped here
+    // would come back to life the same way `disabledAt` did.
+    retrieve.mockResolvedValue([{ payload: { status: 'candidate', chats: [-100], suppressedIn: [-300] } }])
+    await port().learn(longSpam, 'community_vote', 'candidate', -200)
+    expect(written()?.['suppressedIn']).toEqual([-300])
   })
 
   it('a caller with real authority still confirms alone', async () => {

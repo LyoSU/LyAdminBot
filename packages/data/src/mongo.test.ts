@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest'
 import type { Verdict } from '@lyadmin/core'
 import { VOTE_WINDOW_SECONDS } from '@lyadmin/core'
 import { MongoStore, ensureTtlIndex, ensureUniqueIndex, toRightsBlockRecord, trustGrantOf } from './mongo.js'
+import { ObjectId } from 'mongodb'
 
 interface Captured {
   doc: Record<string, unknown> | null
@@ -370,6 +371,37 @@ describe('recordOverride', () => {
       chatId: -100, messageId: 7, userId: 42, adminId: 1, source: 'admin', verdict: bySignature
     })
     expect(retired).toHaveLength(1)
+  })
+})
+
+describe('recordOverride — whose chat the retirement speaks for', () => {
+  const verdict = {
+    decidedBy: 'signature' as const, ruleId: 'abc', reasonCode: 'known_spam_signature',
+    pSpam: 0.96, action: 'ban' as const, signals: [], meta: {}
+  }
+  const make = () => {
+    const updates: unknown[] = []
+    const store = {
+      feedback: { updateOne: async () => ({}) },
+      spamSignatures: { updateOne: async (_f: unknown, u: unknown) => { updates.push(u); return {} } }
+    } as unknown as MongoStore
+    return { store: Object.assign(store, { recordOverride: MongoStore.prototype.recordOverride }), updates }
+  }
+
+  it('an admin of a chat with network voice switches the rule off everywhere', async () => {
+    const { store, updates } = make()
+    await store.recordOverride({ chatId: -100, messageId: 7, userId: 42, adminId: 1, verdict, networkVoice: true })
+    expect((updates[0] as { $set: Record<string, unknown> }).$set['disabledAt']).toBeInstanceOf(Date)
+  })
+
+  it('an admin of a chat without it switches the rule off in that chat only', async () => {
+    // Retirement being admin-only stops the crew that does not own the chat;
+    // it did nothing about the crew that does (2026-09-23 review).
+    const { store, updates } = make()
+    await store.recordOverride({ chatId: -100, messageId: 7, userId: 42, adminId: 1, verdict })
+    const update = updates[0] as { $set?: Record<string, unknown>; $addToSet?: Record<string, unknown> }
+    expect(update.$addToSet?.['suppressedIn']).toBe(-100)
+    expect(update.$set?.['disabledAt']).toBeUndefined()
   })
 })
 
@@ -1980,5 +2012,22 @@ describe('captcha gates that survive a restart', () => {
     expect(store.ops[0]!.filter).toMatchObject({ chatId: -1, userId: 7, expiresAt: { $gt: expect.any(Date) } })
     await expect(gateStore({ issuedMs: 'x', expiresAt }).findCaptchaGate(-1, 7)).resolves.toBeNull()
     await expect(gateStore(null).findCaptchaGate(-1, 7)).resolves.toBeNull()
+  })
+})
+
+describe('chatFirstSeenAt', () => {
+  const make = (doc: Record<string, unknown> | null) =>
+    Object.assign({ groups: { findOne: async () => doc } } as unknown as MongoStore,
+      { chatFirstSeenAt: MongoStore.prototype.chatFirstSeenAt })
+
+  it('reads the clock every group document carries, its ObjectId', async () => {
+    const at = new Date('2026-01-15T00:00:00Z')
+    expect(await make({ _id: ObjectId.createFromTime(at.getTime() / 1000) }).chatFirstSeenAt(-100))
+      .toBe(at.getTime())
+  })
+
+  it('says it cannot tell rather than guessing', async () => {
+    expect(await make(null).chatFirstSeenAt(-100)).toBeNull()
+    expect(await make({ _id: 'not-an-object-id' }).chatFirstSeenAt(-100)).toBeNull()
   })
 })

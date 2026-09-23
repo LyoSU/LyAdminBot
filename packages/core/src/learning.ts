@@ -101,6 +101,41 @@ export const VOTE_LEARN_STATUS = 'candidate' as const
  */
 export const CORROBORATING_CHATS_MIN = 2
 
+/**
+ * What a chat must be before its word counts beyond itself.
+ *
+ * "Two chats rarely are captured" (above) assumed the two were independent,
+ * and nothing checked. An admin ballot settles a vote instantly, so one person
+ * who owns two groups with the bot in them could mint a confirmed rule for the
+ * whole network in minutes; the same admin's "not spam" retired a rule in every
+ * chat (2026-09-23 review). The prior answer to the second half — retirement
+ * is admin-only, never a quorum — stands: it stops the crew that does not own
+ * the chat, and this stops the crew that does.
+ *
+ * Tenure and size are what a captured chat costs to fake: a month of the bot's
+ * presence and a room of people. A chat below either bar still acts in full
+ * inside itself — its vote removes, its override lifts and switches the rule
+ * off there — it only stops speaking for the others.
+ *
+ * Starting values, not calibrated: the production distribution of chat age and
+ * size was not readable when this was written. Re-read against
+ * `vote_learned`/`signature_retired` once it is.
+ */
+export const NETWORK_VOICE_MIN_TENURE_DAYS = 30
+export const NETWORK_VOICE_MIN_MEMBERS = 100
+
+export interface ChatStanding {
+  /** Days since the bot first recorded this chat; null when it cannot say. */
+  tenureDays: number | null
+  /** Telegram's member count; null when it would not tell us. */
+  members: number | null
+}
+
+/** Unknown is not enough: a claim on the network needs both facts, read. */
+export const hasNetworkVoice = (standing: ChatStanding): boolean =>
+  standing.tenureDays !== null && standing.tenureDays >= NETWORK_VOICE_MIN_TENURE_DAYS &&
+  standing.members !== null && standing.members >= NETWORK_VOICE_MIN_MEMBERS
+
 export const shouldAutoLearn = (verdict: Verdict, text: string): boolean => {
   if (!AUTO_LEARN_DECIDED_BY.has(verdict.decidedBy)) return false
   if (!Number.isFinite(verdict.pSpam) || verdict.pSpam < AUTO_LEARN_MIN_PSPAM) return false

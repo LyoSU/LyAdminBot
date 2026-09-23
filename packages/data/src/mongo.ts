@@ -630,6 +630,21 @@ export class MongoStore {
     return this.groups.findOne({ group_id: groupId })
   }
 
+  /**
+   * When the bot first recorded this chat, from the group document's ObjectId.
+   *
+   * The id and not a field: v1 stamped `createdAt` through Mongoose, while
+   * every v2 path that creates a group upserts `{ group_id }` and stamps
+   * nothing. The id's timestamp is written by the driver on insert in both, so
+   * it is the one clock every group document carries. Null when there is no
+   * document, or its id is not an ObjectId.
+   */
+  async chatFirstSeenAt(chatId: number): Promise<number | null> {
+    const group = await this.groups.findOne({ group_id: chatId }, { projection: { _id: 1 } })
+    const id = group?.['_id']
+    return id instanceof ObjectId ? id.getTimestamp().getTime() : null
+  }
+
   /** Messages this user wrote in this group (v1 groupmembers stats). */
   async getMemberMessageCount(groupObjectId: unknown, telegramId: number): Promise<number> {
     if (!groupObjectId) return 0
@@ -2110,6 +2125,12 @@ export class MongoStore {
      * the mistakes that cost the most.
      */
     removedCount?: number
+    /**
+     * Whether this chat's word counts beyond itself (`hasNetworkVoice`). Absent
+     * means no: a caller that did not ask retires the rule for its own chat,
+     * which is the direction a mistake here can afford.
+     */
+    networkVoice?: boolean
     verdict: Pick<Verdict, 'decidedBy' | 'ruleId' | 'reasonCode' | 'pSpam' | 'action' | 'signals' | 'meta'>
   }): Promise<void> {
     const source = params.source ?? 'admin'
@@ -2160,10 +2181,17 @@ export class MongoStore {
     // could otherwise vote their own text clean and take the rule down
     // everywhere. Community ham is recorded above and calibrated offline, which
     // is the honest weight for it.
+    //
+    // And admin-only was not enough on its own: the crew that OWNS a chat has
+    // its admin. Only a chat with network voice (`hasNetworkVoice`) retires the
+    // rule everywhere; any other switches it off for itself (2026-09-23 review).
     if (source === 'admin' && params.verdict.decidedBy === 'signature' && params.verdict.ruleId) {
+      const update = params.networkVoice === true
+        ? { $set: { status: 'candidate', disabledAt: new Date(), disabledBy: 'admin_override' } }
+        : { $addToSet: { suppressedIn: params.chatId } }
       await this.spamSignatures.updateOne(
         { _id: asObjectIdMaybe(params.verdict.ruleId) ?? params.verdict.ruleId as never },
-        { $set: { status: 'candidate', disabledAt: new Date(), disabledBy: 'admin_override' } }
+        update
       ).catch(() => { /* a missing signature is fine */ })
     }
   }

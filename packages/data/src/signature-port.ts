@@ -48,7 +48,7 @@ interface SignatureDoc extends Document {
 export class MongoSignaturePort implements SignaturePort {
   constructor(private readonly store: MongoStore) {}
 
-  async match(text: string): Promise<SignatureMatch | null> {
+  async match(text: string, chatId?: number): Promise<SignatureMatch | null> {
     const hashes = computeSignatureHashes(text)
     if (!hashes) return null
 
@@ -64,7 +64,9 @@ export class MongoSignaturePort implements SignaturePort {
     const doc = await this.store.spamSignatures.findOne(
       {
         $and: [{ $or: query }, unexpired],
-        disabledAt: { $exists: false }
+        disabledAt: { $exists: false },
+        // A chat without network voice switches a rule off for itself only.
+        ...(chatId === undefined ? {} : { suppressedIn: { $ne: chatId } })
       },
       { projection: { status: 1, exactHash: 1, normalizedHash: 1 }, sort: { status: -1 } } // 'confirmed' > 'candidate'
     ) as SignatureDoc | null
@@ -109,7 +111,7 @@ export class MongoSignaturePort implements SignaturePort {
    * override path. A chat's own ballot is not authority over the network (see
    * `recordOverride`), and nothing here changes that.
    */
-  async retire(text: string): Promise<void> {
+  async retire(text: string, onlyIn?: number): Promise<void> {
     const hashes = computeSignatureHashes(text)
     if (!hashes) return
     // The same three layers `match` searches, in the same order — a signature
@@ -120,10 +122,14 @@ export class MongoSignaturePort implements SignaturePort {
     // Every document the lookup could reach, not the first one found: `match`
     // sorts confirmed first and this had no sort, so an exact-hash candidate
     // could be switched off while a template-hash rule went on deciding.
-    await this.store.spamSignatures.updateMany(
-      { $or: query },
-      { $set: { status: 'candidate', disabledAt: new Date(), disabledBy: 'admin_override' } }
-    ).catch(() => { /* a missing signature is fine */ })
+    //
+    // `onlyIn`: the admin's chat has no voice beyond itself (`hasNetworkVoice`),
+    // so the rule stops firing there and keeps its standing everywhere else.
+    const update = onlyIn === undefined
+      ? { $set: { status: 'candidate', disabledAt: new Date(), disabledBy: 'admin_override' } }
+      : { $addToSet: { suppressedIn: onlyIn } }
+    await this.store.spamSignatures.updateMany({ $or: query }, update)
+      .catch(() => { /* a missing signature is fine */ })
   }
 
   /**

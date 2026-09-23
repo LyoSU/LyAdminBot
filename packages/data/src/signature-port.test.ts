@@ -79,6 +79,20 @@ describe('MongoSignaturePort.match', () => {
     expect((live?.['expiresAt']?.['$gt'] as Date).getTime()).toBeLessThanOrEqual(Date.now())
   })
 
+  it('a rule switched off in one chat does not match there, and still matches elsewhere', async () => {
+    // A chat without network voice retires a rule for itself only
+    // (`hasNetworkVoice`); the lookup has to honour that per chat.
+    const filters: Record<string, unknown>[] = []
+    const store = {
+      spamSignatures: { findOne: async (f: Record<string, unknown>) => { filters.push(f); return null } }
+    } as unknown as MongoStore
+    const port = new MongoSignaturePort(store)
+    await port.match('Заработок от 500$ в день, пиши в личку прямо сейчас!!!', -100)
+    expect(filters[0]?.['suppressedIn']).toEqual({ $ne: -100 })
+    await port.match('Заработок от 500$ в день, пиши в личку прямо сейчас!!!')
+    expect(filters[1]?.['suppressedIn']).toBeUndefined()
+  })
+
   it('returns null when nothing matches', async () => {
     const port = new MongoSignaturePort(storeWith(null))
     expect(await port.match('будь-який текст повідомлення тут')).toBeNull()
@@ -252,6 +266,15 @@ describe('MongoSignaturePort.retire', () => {
     const { store, calls } = storeRecording()
     await new MongoSignaturePort(store).retire(spamText)
     expect(calls).toHaveLength(1)
+  })
+
+  it('a retirement scoped to one chat switches the rule off there and nowhere else', async () => {
+    const { store, calls } = storeRecording()
+    await new MongoSignaturePort(store).retire(spamText, -100)
+    const update = calls[0]?.[1] as { $set?: Record<string, unknown>; $addToSet?: Record<string, unknown> }
+    expect(update.$addToSet?.['suppressedIn']).toBe(-100)
+    expect(update.$set?.['disabledAt']).toBeUndefined()
+    expect(update.$set?.['status']).toBeUndefined()
   })
 
   it('text with nothing to hash is a no-op', async () => {
