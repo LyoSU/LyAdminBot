@@ -2075,7 +2075,9 @@ export const evaluateMessage = async (
     return {
       ...verdict,
       action: 'observe' as VerdictAction,
-      needsVote: false,
+      // When the reader this branch waits for was asked and did not answer,
+      // the chat is the reader still available — see the fail-safe below.
+      needsVote: llmNeededButUnavailable && input.policy.votingEnabled,
       banDurationSeconds: null,
       reasonCode: 'soft_shape_only'
     }
@@ -2120,9 +2122,17 @@ export const evaluateMessage = async (
   }
 
   // Fail-safe: when the LLM was needed but unavailable (rate limit, outage),
-  // a grey-zone message must never silently pass as clean.
+  // a grey-zone message must never silently pass as clean. `observe` alone did
+  // exactly that — nothing reads the code afterwards — so the message is put
+  // to the chat, the one reader still available (2026-09-23 review). At the
+  // classifier's usual ~25 live calls an hour, an outage costs as many ballots.
   if (llmNeededButUnavailable && verdict.action === 'none') {
-    return { ...verdict, action: 'observe' as VerdictAction, reasonCode: 'llm_unavailable_grey_zone' }
+    return {
+      ...verdict,
+      action: 'observe' as VerdictAction,
+      needsVote: input.policy.votingEnabled,
+      reasonCode: 'llm_unavailable_grey_zone'
+    }
   }
 
   // Nothing was found, and the sender has not earned the benefit of that doubt.

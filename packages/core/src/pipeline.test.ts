@@ -1758,6 +1758,21 @@ describe('evaluateMessage — LLM escalation', () => {
     if (v.action === 'delete') expect(v.needsVote).toBe(true)
   })
 
+  it('REGRESSION: a grey message the classifier could not read is put to the chat', async () => {
+    // The fail-safe returned `observe` with nothing behind it — no vote, no
+    // recheck — so during an outage grey-zone spam stayed up exactly as if it
+    // had been judged clean, which is what the fail-safe exists to prevent
+    // (2026-09-23 review). The chat is the reader that is still available.
+    const input = greyZoneInput()
+    const v = await evaluateMessage({ ...input, policy: { ...input.policy, votingEnabled: true } },
+      { llm: { classify: async () => null } })
+    // Which of the two unread branches it lands in depends on whether the
+    // score alone reached enforcement; both have to ask.
+    expect(['llm_unavailable_grey_zone', 'soft_shape_only']).toContain(v.reasonCode)
+    expect(v.action).toBe('observe')
+    expect(v.needsVote).toBe(true)
+  })
+
   it('cached LLM verdicts are attributed as llm_cached', async () => {
     const ports: PipelinePorts = {
       llm: { classify: async () => ({ pSpam: 0.95, reasonCode: 'job_scam', evidence: null, cached: true }) }
