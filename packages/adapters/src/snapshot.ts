@@ -199,8 +199,11 @@ export const buildChannelSnapshot = (
   localAgeDays: history?.firstSeenUnix != null
     ? Math.max(0, (nowUnix - history.firstSeenUnix) / 86400)
     : null,
-  messagesInChat: history?.messagesInChat ?? 0,
-  messagesGlobal: history?.messagesGlobal ?? 0,
+  // Null, not zero, when nothing was read — the reason `EMPTY_HISTORY` gives:
+  // a failed read is not "wrote nothing anywhere", and zero raises `new_in_chat`
+  // and `new_globally` on every channel sender for the length of an outage.
+  messagesInChat: history?.messagesInChat ?? null,
+  messagesGlobal: history?.messagesGlobal ?? null,
   groupsActive: history?.groupsActive ?? 0,
   spamDetections: history?.spamDetections ?? 0,
   reputationStatus: history?.reputationStatus ?? 'neutral',

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { User } from '@mtcute/node'
 import type { tl } from '@mtcute/node'
-import { buildUserSnapshot, withLiveFacts, type UserHistory } from './snapshot.js'
+import { buildUserSnapshot, buildChannelSnapshot, withLiveFacts, type UserHistory } from './snapshot.js'
 
 const NOW = 1_781_000_000
 
@@ -131,5 +131,20 @@ describe('withLiveFacts', () => {
       { avatars: null, externalBan: null }
     ), NOW)
     expect(snap.externalBan).toBeNull()
+  })
+})
+
+describe('buildChannelSnapshot — an unread history is not an empty one', () => {
+  it('REGRESSION: no history reads as unknown, the way it does for a person', () => {
+    // `?? 0` here made every channel sender "new in chat and new everywhere"
+    // whenever the data layer failed — the defect `EMPTY_HISTORY` fixed for
+    // user senders on 2026-09-01, left standing on this path (2026-09-23).
+    const channel = {
+      id: -1000000000777, username: null, displayName: 'Новини',
+      isScam: false, isFake: false, isRestricted: false, isVerified: false
+    } as never
+    const snap = buildChannelSnapshot(channel, null)
+    expect(snap.messagesInChat).toBeNull()
+    expect(snap.messagesGlobal).toBeNull()
   })
 })
