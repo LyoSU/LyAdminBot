@@ -46,7 +46,7 @@ export const en: Locale = {
     'I catch spam and ban scammers on my own. Most actions are buttons, not commands.',
     '',
     '<b>Everyone:</b>',
-    '/report — report spam (as a reply)',
+    '/report — report spam (as a reply, or /report @username or id)',
     '/stats — how much spam I have caught',
     '/mystats — my stats · /top, /top_banan — leaderboards',
     '/lang — language',
@@ -343,7 +343,9 @@ export const en: Locale = {
   },
 
   report: {
-    needReply: 'Use /report as a reply to the message you want to report.',
+    needReply: 'Use /report as a reply to a message, or name the person: /report @username, /report 123456789, or pick them from the list with @.',
+    notFound: (who) => `I have not seen ${who} in this chat. Reply to one of their messages or pick them from the list with @.`,
+    notInChat: 'That person is no longer in the chat.',
     cantReportAdmin: 'Admins cannot be reported.',
     rateLimited: 'Too many reports. Wait a few minutes.',
     accepted: 'Got it, thanks.',

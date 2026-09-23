@@ -366,6 +366,14 @@ export interface Locale {
   /** Report command feedback. */
   report: {
     needReply: string
+    /**
+     * `/report @name` or an id we cannot place. Only the bot's own peer cache is
+     * consulted — resolving a username over the network costs a flood wait that
+     * stops moderation — so "not seen" is literal, and the reply says how to
+     * name the person in a way that always works.
+     */
+    notFound: (who: string) => string
+    notInChat: string
     cantReportAdmin: string
     rateLimited: string
     accepted: string

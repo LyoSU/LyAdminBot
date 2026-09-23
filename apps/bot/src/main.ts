@@ -69,6 +69,7 @@ import { CaptchaGates, type CaptchaGate } from './captcha-gate.js'
 import { DuplicateTally } from './duplicate-tally.js'
 import { getUsersEach } from './users-each.js'
 import { parseCommand } from './command.js'
+import { parseReportTarget } from './report-target.js'
 
 const config = loadConfig()
 
@@ -2483,6 +2484,70 @@ const reportTarget = async (replied: Message): Promise<ReportTarget> => {
 }
 
 /**
+ * `/report` that names the person instead of replying to them — see
+ * `parseReportTarget` for the forms and why they exist.
+ *
+ * Resolved from the bot's own peer cache and nothing else. mtcute's
+ * `resolvePeer` falls through to `contacts.resolveUsername` on a miss, and that
+ * call's flood wait (46 minutes observed) lands on the connection moderation
+ * runs on. Everyone who has written here or joined since the bot arrived is in
+ * the cache, which is everyone a report can usefully be about; anybody else
+ * gets an answer that says how to name them in a way that always works.
+ *
+ * What follows is the arrival path's: with no message there is no ballot, and
+ * the report asks the bot to look at the account (`screenAccount`).
+ */
+const reportNamedAccount = async (message: Message, chat: Chat, reporter: User, args: string): Promise<void> => {
+  const locale = await groupLocale(chat.id)
+  const mentioned = message.entities.flatMap((e) =>
+    e.params.kind === 'text_mention' ? [e.params.userId] : [])
+  const ref = parseReportTarget(args, mentioned)
+  if (ref === null) {
+    await answerAndClear(message, chat.id, locale.report.needReply, 'report_refused')
+    return
+  }
+  const who = ref.kind === 'username' ? `@${ref.username}` : String(ref.id)
+  const cached = ref.kind === 'username'
+    ? await gateway.tg.storage.peers.getByUsername(ref.username.toLowerCase()).catch(() => null)
+    : await gateway.tg.storage.peers.getById(ref.id).catch(() => null)
+  // `FromMessage` is how the cache holds somebody seen only inside a message;
+  // it is the same person, addressable the same way.
+  const userId = cached !== null && (cached._ === 'inputPeerUser' || cached._ === 'inputPeerUserFromMessage')
+    ? cached.userId
+    : null
+  const target = userId === null ? null : await fetchUser(userId).catch(() => null)
+  if (target === null) {
+    await answerAndClear(message, chat.id, locale.report.notFound(who), 'report_refused')
+    return
+  }
+  if (target.isBot || target.id === selfId || target.id === reporter.id) {
+    await gateway.tg.deleteMessagesById(chat.id, [message.id]).catch(() => { /* no rights */ })
+    return
+  }
+  const facts = await chatMemberFacts(chat.id, target.id)
+  if (facts.isAdmin) {
+    await answerAndClear(message, chat.id, locale.report.cantReportAdmin, 'report_refused')
+    return
+  }
+  if (facts.isParticipant === false) {
+    await answerAndClear(message, chat.id, locale.report.notInChat, 'report_refused')
+    return
+  }
+  if (!reportAllowed(reporter.id)) {
+    await answerAndClear(message, chat.id, locale.report.rateLimited, 'report_refused')
+    return
+  }
+  await answerAndClear(message, chat.id, locale.report.accepted, 'report_accepted')
+  log.info('report', {
+    chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName,
+    by: reporter.id, byName: reporter.displayName, on: ref.kind === 'username' ? 'username' : 'id'
+  })
+  void screenAccount({
+    chat, target, reason: 'reported_account', replyToMessageId: null, subjectMessageId: null
+  }).catch(() => { /* best-effort */ })
+}
+
+/**
  * A trusted member's report against a stranger: remove the message and hold
  * the author for the hour while the vote runs (`reportWeight`).
  *
@@ -2537,7 +2602,7 @@ const holdOnTrustedReport = async (
  * Raising the alarm is open to everyone; only the ballot needs standing. See
  * the eligibility block below for why the two rights are split.
  */
-const handleReport = async (message: Message, chat: Chat, reporter: User): Promise<void> => {
+const handleReport = async (message: Message, chat: Chat, reporter: User, args = ''): Promise<void> => {
   const locale = await groupLocale(chat.id)
   // The /report command itself never stays in the chat.
   const dropCommand = (): Promise<void> =>
@@ -2545,7 +2610,7 @@ const handleReport = async (message: Message, chat: Chat, reporter: User): Promi
 
   const replied = await gateway.fetchRepliedMessage(message)
   if (!replied) {
-    await answerAndClear(message, chat.id, locale.report.needReply, 'report_refused')
+    await reportNamedAccount(message, chat, reporter, args)
     return
   }
   const about = await reportTarget(replied)
@@ -4179,8 +4244,8 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       await sendView(message, view)
       return
     }
-    if (bare('report')) {
-      await handleReport(message, chat, userSender)
+    if (cmd?.name === 'report') {
+      await handleReport(message, chat, userSender, cmd.args)
       return
     }
     if (cmd?.name === 'banan') {

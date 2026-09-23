@@ -45,7 +45,7 @@ export const tr: Locale = {
     'Spam’i yakalar, dolandırıcıları kendim banlarım. Çoğu işlem komut değil, butonla.',
     '',
     '<b>Herkes:</b>',
-    '/report — spam bildir (yanıt olarak)',
+    '/report — spam bildir (yanıt olarak ya da /report @kullanıcı veya id)',
     '/stats — ne kadar spam engelledim',
     '/mystats — istatistiğim · /top, /top_banan — sıralamalar',
     '/lang — dil',
@@ -341,7 +341,9 @@ export const tr: Locale = {
   },
 
   report: {
-    needReply: 'Bildirmek istediğin mesaja yanıt olarak /report kullan.',
+    needReply: '/report komutunu bir mesaja yanıt olarak kullan ya da kişiyi belirt: /report @kullanıcı, /report 123456789 veya @ ile listeden seç.',
+    notFound: (who) => `${who} kullanıcısını bu sohbette görmedim. Bu kişinin bir mesajına yanıt ver ya da @ ile listeden seç.`,
+    notInChat: 'Bu kişi artık sohbette değil.',
     cantReportAdmin: 'Yöneticiler bildirilemez.',
     rateLimited: 'Çok fazla bildirim. Birkaç dakika bekle.',
     accepted: 'Anlaşıldı, teşekkürler.',
