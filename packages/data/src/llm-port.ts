@@ -60,7 +60,7 @@
  */
 import { randomBytes, createHash } from 'node:crypto'
 import type { EvaluationInput, LlmPort, LlmVerdict, MessageObservations } from '@lyadmin/core'
-import { isDistinctive, LLM_REASON_CODES, toWellFormed, truncate } from '@lyadmin/core'
+import { extractBioSignals, isDistinctive, LLM_REASON_CODES, toWellFormed, truncate } from '@lyadmin/core'
 import { foldConfusables, normalizeLight } from './hashing.js'
 import type { MongoStore } from './mongo.js'
 
@@ -277,6 +277,13 @@ const sha = (s: string): string => createHash('sha256').update(s).digest('hex').
  * signature and vector layers, which is what makes this cache the third line of
  * defence rather than the first.
  */
+const profileClass = (input: EvaluationInput): string => {
+  const { bio, businessTexts } = input.enrichment
+  const promo = extractBioSignals(bio, businessTexts)[0]?.name
+  if (promo !== undefined) return `bio:${promo}`
+  return bio || businessTexts.some((t) => t.trim().length > 0) ? 'bio' : '-'
+}
+
 export const contextDigest = (input: EvaluationInput): string => {
   const msg = input.message
   const links = msg.urls.map((u) => `${u.hidden ? 'h' : 'v'}:${u.target}`).sort().join(',')
@@ -313,7 +320,13 @@ export const contextDigest = (input: EvaluationInput): string => {
       : msg.channelComment
         ? `post:${sha(msg.channelComment.postPreview ?? '').slice(0, 8)}`
         : '-',
-    input.enrichment.bio ? 'bio' : '-',
+    // What the profile ADVERTISES, by the class the bio reader names — not just
+    // that a bio exists. The prompt shows the model the text, so "spam, because
+    // the bio sells a private channel" was being served to the same words from
+    // anybody with any bio (2026-09-23 review). A class, not the text: two
+    // plain bios are the same question, and a campaign's accounts still share
+    // one answer.
+    profileClass(input),
     standing,
     // Appended only when there IS a purpose, so that a chat without one keeps
     // producing byte-identical keys. An unconditional field would have changed

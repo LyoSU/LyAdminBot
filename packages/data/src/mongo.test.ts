@@ -2031,3 +2031,30 @@ describe('chatFirstSeenAt', () => {
     expect(await make({ _id: 'not-an-object-id' }).chatFirstSeenAt(-100)).toBeNull()
   })
 })
+
+describe('forgetLlmVerdict', () => {
+  const make = () => {
+    const deleted: unknown[] = []
+    const store = Object.assign(
+      { llmCache: { deleteMany: async (f: unknown) => { deleted.push(f); return { deletedCount: 1 } } } } as unknown as MongoStore,
+      { forgetLlmVerdict: MongoStore.prototype.forgetLlmVerdict }
+    )
+    return { store, deleted }
+  }
+
+  it('drops the cached answer a correction overturned, by the prefix the verdict kept', async () => {
+    // Nothing deleted from `llm_cache`, so a verdict an admin had just called
+    // wrong came back from cache for the next sender of the same text, for up
+    // to seven days — and was then auto-learned (2026-09-23 review).
+    const { store, deleted } = make()
+    await store.forgetLlmVerdict('0a1b2c3d')
+    expect(deleted).toEqual([{ key: { $regex: '^0a1b2c3d' } }])
+  })
+
+  it('a prefix that is not one of ours deletes nothing', async () => {
+    const { store, deleted } = make()
+    await store.forgetLlmVerdict('.*')
+    await store.forgetLlmVerdict('')
+    expect(deleted).toHaveLength(0)
+  })
+})

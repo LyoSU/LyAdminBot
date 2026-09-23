@@ -962,6 +962,19 @@ export class MongoStore {
    * Recent confirmed-spam sample texts — the raw material for the LLM
    * "active campaigns this week" briefing (dynamic few-shot self-learning).
    */
+  /**
+   * Drop the cached classifier answer a correction has just overturned.
+   *
+   * The verdict keeps only the first eight hex characters of its cache key
+   * (`meta.llmKey`), which is what this matches on: an anchored prefix, so the
+   * unique index on `key` serves it. Anything else is refused rather than
+   * turned into a pattern — the value comes back from a stored verdict.
+   */
+  async forgetLlmVerdict(keyPrefix: string): Promise<void> {
+    if (!/^[0-9a-f]{8}$/.test(keyPrefix)) return
+    await this.llmCache.deleteMany({ key: { $regex: `^${keyPrefix}` } })
+  }
+
   async recentConfirmedSpamSamples(limit: number, sinceMs: number): Promise<string[]> {
     const docs = await this.spamSignatures
       .find(

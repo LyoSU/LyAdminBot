@@ -1850,6 +1850,15 @@ const restoreFalsePositive = async (params: {
     log.info('signature_retired', { chatId: params.chatId, scope: networkVoice ? 'network' : 'chat' })
   }
 
+  // The classifier's cached answer goes with the verdict it produced, from
+  // either kind of correction: forgetting it costs one fresh call, keeping it
+  // served the overturned verdict to the next sender of the same text for up to
+  // a week, and fed it to auto-learning (2026-09-23 review).
+  const llmKey = verdict?.meta?.['llmKey']
+  if (typeof llmKey === 'string') {
+    await store.forgetLlmVerdict(llmKey).catch(() => { /* its own TTL removes it */ })
+  }
+
   // A forwarded FP also earns its origin a clean point (v1 2:1 math).
   const key = `${params.chatId}:${params.messageId}`
   const forward = recentForwards.get(key)

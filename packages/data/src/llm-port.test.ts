@@ -1030,3 +1030,26 @@ describe('campaign briefing — attacker text, read as data', () => {
     expect(asText(buildUserContent(makeInput(), 'c'))).not.toContain('CONFIRMED SPAM')
   })
 })
+
+describe('contextDigest — what the profile says, in buckets', () => {
+  const withBio = (bio: string | null, businessTexts: string[] = []): EvaluationInput =>
+    makeInput({ enrichment: { bio, businessTexts } })
+
+  it('REGRESSION: a verdict about an advertising profile is not served to a plain one', () => {
+    // The key recorded only that a bio EXISTED, while the prompt shows the
+    // model its text. "Spam, because the bio sells a private channel" was then
+    // the cached answer for the same words from anybody with any bio
+    // (2026-09-23 review).
+    expect(contextDigest(withBio('Пишу про каву'))).not.toBe(contextDigest(withBio('Заробіток тут t.me/+AbCdEf123')))
+    expect(contextDigest(withBio('Пишу про каву'))).not.toBe(contextDigest(withBio('Замовлення 099 123 45 67')))
+  })
+
+  it('two plain bios are the same question, so a campaign still shares its answer', () => {
+    expect(contextDigest(withBio('Пишу про каву'))).toBe(contextDigest(withBio('Мама двох котів')))
+  })
+
+  it('a business greeting is read like the bio it sits beside', () => {
+    expect(contextDigest(withBio(null, ['Пиши сюди t.me/+AbCdEf123'])))
+      .not.toBe(contextDigest(withBio(null)))
+  })
+})
