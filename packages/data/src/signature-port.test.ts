@@ -183,8 +183,35 @@ describe('MongoSignaturePort.learn (2026-07-30 review)', () => {
 
   it('promotes a candidate once a SECOND chat reports the same text', async () => {
     const stub = learnStub({ chats: [-100, -200], status: 'candidate' })
+    await new MongoSignaturePort(stub.store).learn(longSpam, 'community_vote', 'candidate', -200)
+    expect(statusOf(stub)).toBe('confirmed')
+  })
+
+  it('REGRESSION: two machine verdicts are not a person saying so', async () => {
+    // `learnFromAutoVerdict` writes candidates, but two chats were enough to
+    // promote whoever wrote them — so the classifier agreeing with itself twice
+    // minted a deciding rule no human had seen (2026-09-23 review).
+    const stub = learnStub({ chats: [-100, -200], status: 'candidate' })
+    await new MongoSignaturePort(stub.store).learn(longSpam, 'auto:llm:job_scam', 'candidate', -200)
+    expect(statusOf(stub)).toBe('candidate')
+  })
+
+  it('machine sightings still count as chats once a person has confirmed the text', async () => {
+    const stub = learnStub({ chats: [-100, -200], status: 'candidate', humanConfirmed: true })
     await new MongoSignaturePort(stub.store).learn(longSpam, 'auto:llm:job_scam', 'candidate', -200)
     expect(statusOf(stub)).toBe('confirmed')
+  })
+
+  it('a person\'s report marks the text as seen by a person, and a machine never does', async () => {
+    const human = learnStub()
+    await new MongoSignaturePort(human.store).learn(longSpam, 'community_vote', 'candidate', -100)
+    const humanSet = (vi.mocked(human.store.spamSignatures.findOneAndUpdate).mock.calls[0]?.[1] as { $set: Record<string, unknown> }).$set
+    expect(humanSet['humanConfirmed']).toBe(true)
+
+    const machine = learnStub()
+    await new MongoSignaturePort(machine.store).learn(longSpam, 'auto:llm:job_scam', 'candidate', -100)
+    const machineSet = (vi.mocked(machine.store.spamSignatures.findOneAndUpdate).mock.calls[0]?.[1] as { $set: Record<string, unknown> }).$set
+    expect(machineSet['humanConfirmed']).toBeUndefined()
   })
 
   it('does NOT promote on repetition inside one chat', async () => {

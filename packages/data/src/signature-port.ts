@@ -7,7 +7,7 @@
 import type { Document } from 'mongodb'
 import type { SignatureMatch, SignaturePort } from '@lyadmin/core'
 import { truncate, CORROBORATING_CHATS_MIN } from '@lyadmin/core'
-import { isDistinctive } from '@lyadmin/core'
+import { isDistinctive, isMachineLearnSource } from '@lyadmin/core'
 import type { MongoStore } from './mongo.js'
 import { computeSignatureHashes, normalizeHeavy } from './hashing.js'
 
@@ -158,6 +158,7 @@ export class MongoSignaturePort implements SignaturePort {
     if (!hashes) return null
 
     const distinctive = isDistinctive(text)
+    const human = !isMachineLearnSource(source)
     const now = new Date()
     const doc = await this.store.spamSignatures.findOneAndUpdate(
       { exactHash: hashes.exactHash },
@@ -173,17 +174,23 @@ export class MongoSignaturePort implements SignaturePort {
         // that produced `exactHash`, so rewriting it is idempotent — and that is
         // what backfills the signatures (v1's included) stored before this layer
         // existed, on their next sighting.
-        $set: { lastSeenAt: now, foldedHash: hashes.foldedHash },
+        // `humanConfirmed` is only ever set, never cleared: once a person has
+        // said this text is spam, later machine sightings may corroborate it.
+        $set: { lastSeenAt: now, foldedHash: hashes.foldedHash, ...(human ? { humanConfirmed: true } : {}) },
         $inc: { confirmations: 1 },
         ...(chatId === undefined ? {} : { $addToSet: { chats: chatId } })
       },
-      { upsert: true, returnDocument: 'after', projection: { chats: 1, status: 1 } }
-    ) as { chats?: number[]; status?: string } | null
+      { upsert: true, returnDocument: 'after', projection: { chats: 1, status: 1, humanConfirmed: 1 } }
+    ) as { chats?: number[]; status?: string; humanConfirmed?: boolean } | null
 
     // Independent corroboration: two different chats reporting the same text is
     // evidence a single (possibly mistaken) reporter cannot provide. Repetition
     // by the same reporter in the same chat is ONE observation, not two.
-    const corroborated = (doc?.chats?.length ?? 0) >= CORROBORATING_CHATS_MIN
+    //
+    // And at least one of those observations a person's (`isMachineLearnSource`):
+    // our own verdict agreeing with itself in two rooms is one opinion twice.
+    const corroborated = (doc?.chats?.length ?? 0) >= CORROBORATING_CHATS_MIN &&
+      (human || doc?.humanConfirmed === true)
     const earned = status === 'confirmed' || corroborated || doc?.status === 'confirmed'
     const effective: 'candidate' | 'confirmed' = earned && distinctive ? 'confirmed' : 'candidate'
 

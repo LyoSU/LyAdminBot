@@ -9,7 +9,7 @@
 import { QdrantClient } from '@qdrant/js-client-rest'
 import OpenAI from 'openai'
 import type { VectorMatch, VectorPort } from '@lyadmin/core'
-import { hasTextualContent, isDistinctive, truncate, CORROBORATING_CHATS_MIN } from '@lyadmin/core'
+import { hasTextualContent, isDistinctive, isMachineLearnSource, truncate, CORROBORATING_CHATS_MIN } from '@lyadmin/core'
 import { sha256 } from './hashing.js'
 
 /** Deterministic point id from the text, so re-learning the same spam upserts
@@ -49,6 +49,8 @@ interface SpamPayload {
   chats?: number[]
   /** Chats that switched this point off for themselves (`hasNetworkVoice`). */
   suppressedIn?: number[]
+  /** A person (vote, report) has called this text spam; see `isMachineLearnSource`. */
+  humanConfirmed?: boolean
 }
 
 export class QdrantVectorPort implements VectorPort {
@@ -163,7 +165,9 @@ export class QdrantVectorPort implements VectorPort {
       Array.isArray(previous?.chats) ? previous.chats.filter((c) => typeof c === 'number') : []
     )
     if (chatId !== undefined) chats.add(chatId)
-    const corroborated = chats.size >= CORROBORATING_CHATS_MIN
+    // Two chats AND a person among the reporters — the signature port's rule.
+    const humanConfirmed = !isMachineLearnSource(source) || previous?.humanConfirmed === true
+    const corroborated = chats.size >= CORROBORATING_CHATS_MIN && humanConfirmed
     const effective: 'candidate' | 'confirmed' =
       status === 'confirmed' || corroborated || previous?.status === 'confirmed'
         ? 'confirmed'
@@ -178,6 +182,7 @@ export class QdrantVectorPort implements VectorPort {
             status: effective,
             source,
             chats: [...chats],
+            ...(humanConfirmed ? { humanConfirmed: true } : {}),
             // Carried across the full-point upsert, or a chat's own retirement
             // would come back to life the way `disabledAt` did.
             ...(Array.isArray(previous?.suppressedIn) ? { suppressedIn: previous.suppressedIn } : {}),

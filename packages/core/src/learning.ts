@@ -145,3 +145,15 @@ export const shouldAutoLearn = (verdict: Verdict, text: string): boolean => {
 /** Provenance string stored with the learned text, for later auditing. */
 export const autoLearnSource = (verdict: Verdict): string =>
   `auto:${verdict.decidedBy}:${verdict.reasonCode}`
+
+/**
+ * Whether a learn came from our own verdict rather than from a person (a vote,
+ * a report) or an outside authority (the threat feed).
+ *
+ * The stores need to know because corroboration alone was never meant to be
+ * the whole bar. Auto-learning writes candidates, and two chats promoted any
+ * candidate — so the classifier agreeing with itself in two rooms minted a
+ * deciding rule no person had looked at (2026-09-23 review). Machine sightings
+ * still count as chats; promotion additionally needs one human confirmation.
+ */
+export const isMachineLearnSource = (source: string): boolean => source.startsWith('auto:')

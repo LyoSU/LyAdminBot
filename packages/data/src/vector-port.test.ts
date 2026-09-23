@@ -194,6 +194,18 @@ describe('QdrantVectorPort.learn — earning confirmation', () => {
     retrieve.mockResolvedValue([{ payload: { status: 'candidate', chats: [-100] } }])
     expect(await port().learn(longSpam, 'community_vote', 'candidate', -200)).toBe('confirmed')
     expect(written()?.['status']).toBe('confirmed')
+    expect(written()?.['humanConfirmed']).toBe(true)
+  })
+
+  it('REGRESSION: two machine verdicts are not a person saying so', async () => {
+    retrieve.mockResolvedValue([{ payload: { status: 'candidate', chats: [-100] } }])
+    expect(await port().learn(longSpam, 'auto:llm:job_scam', 'candidate', -200)).toBe('candidate')
+  })
+
+  it('a person having confirmed it once lets later machine sightings count', async () => {
+    retrieve.mockResolvedValue([{ payload: { status: 'candidate', chats: [-100], humanConfirmed: true } }])
+    expect(await port().learn(longSpam, 'auto:llm:job_scam', 'candidate', -200)).toBe('confirmed')
+    expect(written()?.['humanConfirmed']).toBe(true)
   })
 
   it('does NOT promote on repetition inside one chat', async () => {
