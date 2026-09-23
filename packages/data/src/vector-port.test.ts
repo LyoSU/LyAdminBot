@@ -193,6 +193,23 @@ describe('QdrantVectorPort.learn — earning confirmation', () => {
     expect(await port().learn(longSpam, 'community_vote', 'candidate', -100)).toBe('confirmed')
   })
 
+  it('REGRESSION: learning a retired text does not bring its point back', async () => {
+    // `retire` sets `disabledAt` on the payload; `learn` rewrote the whole
+    // point without it and kept its `confirmed` status, so the next automatic
+    // verdict on the same text undid an admin's correction (2026-09-23 review).
+    retrieve.mockResolvedValue([{ payload: { status: 'confirmed', chats: [-100, -200], disabledAt: '2026-09-01' } }])
+    expect(await port().learn(longSpam, 'auto_verdict', 'candidate', -300)).toBeNull()
+    expect(upsert).not.toHaveBeenCalled()
+  })
+
+  it('REGRESSION: a point it could not read is not overwritten', async () => {
+    // A failed read looked like "never learned", so the upsert replaced
+    // whatever was there — a retirement or another chat's corroboration.
+    retrieve.mockRejectedValue(new Error('qdrant down'))
+    expect(await port().learn(longSpam, 'community_vote', 'candidate', -100)).toBeNull()
+    expect(upsert).not.toHaveBeenCalled()
+  })
+
   it('a caller with real authority still confirms alone', async () => {
     // The threat feed speaks for itself; it is not one chat's opinion.
     expect(await port().learn(longSpam, 'cas', 'confirmed')).toBe('confirmed')

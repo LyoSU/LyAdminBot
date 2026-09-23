@@ -143,9 +143,19 @@ export class QdrantVectorPort implements VectorPort {
      * text — every learn upserts the same point, so without it a later
      * candidate would overwrite what a second chat established.
      */
+    //
+    // A failed read is not "never learned": the upsert below replaces the
+    // whole point, so writing blind would erase a retirement or another chat's
+    // corroboration. Best-effort means skipping, not guessing.
     const existing = await this.qdrant.retrieve(SPAM_COLLECTION, { ids: [id], with_payload: true })
-      .catch(() => [] as { payload?: Record<string, unknown> | null }[])
+      .catch(() => null)
+    if (existing === null) return null
     const previous = (existing[0]?.payload ?? undefined) as SpamPayload | undefined
+    // Retirement is an admin's correction and outlives any later automatic
+    // verdict on the same text; the full-point upsert used to drop `disabledAt`
+    // and bring the point back `confirmed` (2026-09-23 review). The signature
+    // layer keeps the same rule by never unsetting its own `disabledAt`.
+    if (previous?.disabledAt) return null
     const chats = new Set<number>(
       Array.isArray(previous?.chats) ? previous.chats.filter((c) => typeof c === 'number') : []
     )

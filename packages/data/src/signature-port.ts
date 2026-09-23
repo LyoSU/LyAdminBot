@@ -109,7 +109,10 @@ export class MongoSignaturePort implements SignaturePort {
     const query: Document[] = [{ exactHash: hashes.exactHash }]
     if (hashes.normalizedHash) query.push({ normalizedHash: hashes.normalizedHash })
     if (hashes.foldedHash) query.push({ foldedHash: hashes.foldedHash })
-    await this.store.spamSignatures.updateOne(
+    // Every document the lookup could reach, not the first one found: `match`
+    // sorts confirmed first and this had no sort, so an exact-hash candidate
+    // could be switched off while a template-hash rule went on deciding.
+    await this.store.spamSignatures.updateMany(
       { $or: query },
       { $set: { status: 'candidate', disabledAt: new Date(), disabledBy: 'admin_override' } }
     ).catch(() => { /* a missing signature is fine */ })

@@ -192,7 +192,7 @@ describe('MongoSignaturePort.retire', () => {
     const calls: unknown[][] = []
     const store = {
       spamSignatures: {
-        updateOne: async (...args: unknown[]) => { calls.push(args); return { matchedCount: 1 } }
+        updateMany: async (...args: unknown[]) => { calls.push(args); return { matchedCount: 1 } }
       }
     } as unknown as MongoStore
     return { store, calls }
@@ -222,6 +222,17 @@ describe('MongoSignaturePort.retire', () => {
     expect(filter.$or.map((c) => Object.keys(c)[0]))
       .toEqual(['exactHash', 'normalizedHash', 'foldedHash'])
     expect(filter.$or[0]?.['exactHash']).toBe(hashes.exactHash)
+  })
+
+  it('REGRESSION: retires every signature the text reaches, not the first one found', async () => {
+    // `match` sorts confirmed first; `retire` used `updateOne` on the same
+    // `$or` with no sort, so with an exact-hash candidate and a template-hash
+    // confirmed rule the candidate could be the one switched off while the rule
+    // went on deciding (2026-09-23 review). A retirement that leaves any of
+    // them standing leaves the verdict standing.
+    const { store, calls } = storeRecording()
+    await new MongoSignaturePort(store).retire(spamText)
+    expect(calls).toHaveLength(1)
   })
 
   it('text with nothing to hash is a no-op', async () => {
