@@ -457,6 +457,32 @@ describe('extractMessageSignals — trust signals (negative)', () => {
     expect(suspicious(makeMsg({ text: mural }))).not.toContain('emoji_only')
   })
 
+  it('REGRESSION: a message that points somewhere is not read as having nothing to read', () => {
+    // The three "nothing to read" discounts were granted without looking at
+    // what the message carried. An arrow over a hidden private invite scored
+    // 1.8 − 1.5, under the grey floor, and a bare `t.me/+…` earned −1.0 for
+    // being "only an internal link" while also being a private invite
+    // (2026-09-23 review). Same doctrine as `short_message`: a discount is
+    // withheld where the message already says something, never turned into
+    // suspicion.
+    const invite = { visible: '👉', target: 'https://t.me/+AbCdEf123', hidden: true }
+    expect(trust(makeMsg({ text: '👉', urls: [invite] }))).not.toContain('emoji_only')
+    const bareInvite = { visible: 't.me/+AbCdEf123', target: 'https://t.me/+AbCdEf123', hidden: false }
+    expect(trust(makeMsg({ text: 't.me/+AbCdEf123', urls: [bareInvite] }))).not.toContain('internal_link_only')
+    const referral = { visible: 't.me/x_bot?start=ref', target: 'https://t.me/x_bot?start=ref', hidden: false }
+    expect(trust(makeMsg({ text: 't.me/x_bot?start=ref', urls: [referral] }))).not.toContain('internal_link_only')
+    const site = { visible: 'shop.example', target: 'https://shop.example', hidden: true }
+    expect(trust(makeMsg({ attachments: [{ kind: 'sticker', fileUniqueId: 'u1' }], urls: [site] })))
+      .not.toContain('media_only')
+  })
+
+  it('a plain reaction or a pointer to a public channel keeps its discount', () => {
+    expect(trust(makeMsg({ text: '👍' }))).toContain('emoji_only')
+    const channel = { visible: 't.me/somechannel', target: 'https://t.me/somechannel', hidden: false }
+    expect(trust(makeMsg({ text: 't.me/somechannel', urls: [channel] }))).toContain('internal_link_only')
+    expect(trust(makeMsg({ attachments: [{ kind: 'sticker', fileUniqueId: 'u1' }] }))).toContain('media_only')
+  })
+
   it('multi-codepoint emoji still read as reactions', () => {
     // The bar is counted in codepoints because one emoji can be several: a ZWJ
     // family is 7, so a bar set for "three emoji" has to allow 21.

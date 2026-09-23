@@ -273,6 +273,13 @@ export const extractMessageSignals = (msg: NormalizedMessage): Signal[] => {
     }
   }
 
+  /**
+   * Everything above is something the message says or carries. The three
+   * "nothing to read" discounts below and `short_message` are all withheld
+   * once any of it is present: an arrow over a hidden private invite is not a
+   * reaction, and a bare `t.me/+…` is not merely an internal pointer
+   * (2026-09-23 review). Withheld, never inverted — no suspicion is added here.
+   */
   const hasSuspicious = signals.length > 0
 
   // ── trust signals ──────────────────────────────────────────────────
@@ -286,7 +293,7 @@ export const extractMessageSignals = (msg: NormalizedMessage): Signal[] => {
   }
 
   const stickerOrGif = attachmentKinds.has('sticker') || attachmentKinds.has('animation')
-  if (stickerOrGif && !text) {
+  if (stickerOrGif && !text && !hasSuspicious) {
     signals.push({ name: 'media_only' })
   }
 
@@ -316,13 +323,13 @@ export const extractMessageSignals = (msg: NormalizedMessage): Signal[] => {
    */
   const plainEmojiReaction = msg.customEmoji.length === 0 &&
     codepointLength(text) <= EMOJI_ONLY_MAX_CODEPOINTS
-  if (text && isEmojiOnly(text) && plainEmojiReaction) {
+  if (text && isEmojiOnly(text) && plainEmojiReaction && !hasSuspicious) {
     signals.push({ name: 'emoji_only' })
   }
 
   // Message consisting solely of t.me/telegram.me links — internal pointer,
   // not external promo.
-  if (text && /^[\s\n]*((https?:\/\/)?(t\.me|telegram\.me)\/\S+[\s\n]*)+$/i.test(text)) {
+  if (text && !hasSuspicious && /^[\s\n]*((https?:\/\/)?(t\.me|telegram\.me)\/\S+[\s\n]*)+$/i.test(text)) {
     signals.push({ name: 'internal_link_only' })
   }
 
