@@ -56,8 +56,16 @@ export class MongoSignaturePort implements SignaturePort {
     if (hashes.normalizedHash) query.push({ normalizedHash: hashes.normalizedHash })
     if (hashes.foldedHash) query.push({ foldedHash: hashes.foldedHash })
 
+    // The term `learn` writes is enforced here, on the read: nothing else in
+    // this repo expires a signature (no TTL index — one would delete retired
+    // documents too, and a later `learn` would then recreate them without
+    // their `disabledAt`). A document with no term predates terms and counts.
+    const unexpired = { $or: [{ expiresAt: { $exists: false } }, { expiresAt: { $gt: new Date() } }] }
     const doc = await this.store.spamSignatures.findOne(
-      { $or: query, disabledAt: { $exists: false } },
+      {
+        $and: [{ $or: query }, unexpired],
+        disabledAt: { $exists: false }
+      },
       { projection: { status: 1, exactHash: 1, normalizedHash: 1 }, sort: { status: -1 } } // 'confirmed' > 'candidate'
     ) as SignatureDoc | null
     if (!doc) return null

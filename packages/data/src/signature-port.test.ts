@@ -60,6 +60,25 @@ describe('MongoSignaturePort.match', () => {
     expect((await port.match(rotated))?.status).toBe('candidate')
   })
 
+  it('REGRESSION: an expired signature does not match', async () => {
+    // `learn` writes `expiresAt` and nothing read it: no filter in `match` and
+    // no TTL index in this repo, so a rule for a campaign that stopped went on
+    // deciding past its ninety days (2026-09-23 review). The read enforces the
+    // term; a document with no term (written before terms existed) still counts.
+    const filters: Record<string, unknown>[] = []
+    const store = {
+      spamSignatures: { findOne: async (f: Record<string, unknown>) => { filters.push(f); return null } }
+    } as unknown as MongoStore
+    await new MongoSignaturePort(store).match('Заработок от 500$ в день, пиши в личку прямо сейчас!!!')
+    const expiry = (filters[0]?.['$and'] as Record<string, unknown>[] | undefined)
+      ?.find((c) => JSON.stringify(c).includes('expiresAt'))
+    expect(expiry).toBeDefined()
+    const terms = (expiry?.['$or'] as Record<string, Record<string, unknown>>[])
+    expect(terms.some((t) => t['expiresAt']?.['$exists'] === false)).toBe(true)
+    const live = terms.find((t) => t['expiresAt']?.['$gt'] instanceof Date)
+    expect((live?.['expiresAt']?.['$gt'] as Date).getTime()).toBeLessThanOrEqual(Date.now())
+  })
+
   it('returns null when nothing matches', async () => {
     const port = new MongoSignaturePort(storeWith(null))
     expect(await port.match('будь-який текст повідомлення тут')).toBeNull()
