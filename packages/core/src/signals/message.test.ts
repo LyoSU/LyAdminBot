@@ -155,6 +155,35 @@ describe('extractMessageSignals — suspicious signals', () => {
     }
   })
 
+  it('REGRESSION: a date, a sum, a card or a hashtag is not a number to dial', () => {
+    // Nine digits in a run said "phone" for anything with nine digits in a
+    // run. A date with its time, a sum in the billions, a payment card (the
+    // way every fundraiser in these chats asks for help) and a numbered tag
+    // all have them. Each is a class with a shape of its own, read off before
+    // the phone check the way links already are (2026-09-23 review).
+    for (const text of [
+      'збір 12.09.2026 14:00 біля ратуші',
+      'початок 2026-09-12 14:30',
+      'дедлайн 12/09/2026 18:00',
+      'бюджет 1 200 000 000 грн',
+      'картка для збору 4149 4393 1234 5678',
+      'картка 4149439312345678',
+      'звіт #20240912001'
+    ]) {
+      expect(names(makeMsg({ text })), text).not.toContain('phone_number')
+    }
+  })
+
+  it('the classes read off before the phone check leave a phone beside them', () => {
+    for (const text of [
+      'збір 12.09.2026 14:00, дзвоніть 067 123 45 67',
+      'картка 4149 4393 1234 5678, тел +380 99 123 45 67',
+      '#оголошення 0671234567'
+    ]) {
+      expect(names(makeMsg({ text })), text).toContain('phone_number')
+    }
+  })
+
   it('REGRESSION: a long run of digits inside a link is an identifier, not a number to dial', () => {
     // Measured over the 14 days to 2026-09-18: 11 rows carried `phone_number`
     // with every long digit run sitting inside a URL — story and video ids,

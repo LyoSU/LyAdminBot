@@ -14,8 +14,8 @@
  */
 import type { Signal } from '../types.js'
 import { truncate } from '../text/normalize.js'
-import { classifyUrl, URL_TOKEN_REGEX, PROMO_URL_KINDS, withoutUrls } from './urls.js'
-import { PHONE_REGEX, CASHTAG_REGEX } from './message.js'
+import { classifyUrl, URL_TOKEN_REGEX, PROMO_URL_KINDS } from './urls.js'
+import { hasPhoneNumber, CASHTAG_REGEX } from './message.js'
 
 /**
  * Every signal `extractBioSignals` can raise, as one exported set.
@@ -61,7 +61,7 @@ const promoIn = (text: string): BioPromo | null => {
 
   // A link that is not promo (a `t.me/c/…` message link) still reaches here
   // with its ids in the text — see `withoutUrls`.
-  if (PHONE_REGEX.test(withoutUrls(text))) return { name: 'contact_in_bio', what: 'phone number' }
+  if (hasPhoneNumber(text)) return { name: 'contact_in_bio', what: 'phone number' }
   if (CASHTAG_REGEX.test(text)) return { name: 'contact_in_bio', what: 'cashtag' }
   return null
 }

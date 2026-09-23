@@ -64,6 +64,38 @@ const RECENT_REPLY_MAX_AGE_SECONDS = 3600
  */
 export const PHONE_REGEX = /(?:\+|\b)\d(?:[ ().-]{0,2}\d){8,}\b/
 
+/**
+ * Digit runs that carry a shape of their own, read off before the phone check
+ * the way `withoutUrls` reads off links. Nine digits in a run is what a phone
+ * has, but also what a date with its time, a hashtag's numeric tail and a sum
+ * in the billions have (2026-09-23 review).
+ *
+ * A date needs a four-digit year, or two-digit day-month-year with the SAME
+ * separator twice — `067.123.45` never repeats its separator into a year. A
+ * time is `H:MM`, a colon no phone format uses.
+ */
+const DATE_OR_TIME_REGEX =
+  /\b\d{4}([./-])\d{1,2}\1\d{1,2}\b|\b\d{1,2}([./-])\d{1,2}\2\d{2,4}\b|\b\d{1,2}:\d{2}\b/g
+const HASHTAG_REGEX = /#[\p{L}\p{N}_]+/gu
+/**
+ * Grouped thousands: a leading group of one to three digits that is not a
+ * trunk prefix, then groups of exactly three. A phone written in threes starts
+ * with `+` or `0` in every national format we see, which keeps it on the phone
+ * side of this line.
+ */
+const GROUPED_THOUSANDS_REGEX = /(?<![+\d])\b[1-9]\d{0,2}(?:[ .,\u00A0]\d{3}){2,}\b/g
+/** E.164 caps a dialable number at fifteen digits; a payment card has 16–19. */
+const PHONE_MAX_DIGITS = 15
+
+export const hasPhoneNumber = (text: string): boolean => {
+  const residue = withoutUrls(text)
+    .replace(DATE_OR_TIME_REGEX, ' ')
+    .replace(HASHTAG_REGEX, ' ')
+    .replace(GROUPED_THOUSANDS_REGEX, ' ')
+  const runs = residue.match(new RegExp(PHONE_REGEX.source, 'g')) ?? []
+  return runs.some((run) => run.replace(/\D/g, '').length <= PHONE_MAX_DIGITS)
+}
+
 // Cashtags: $BTC, $ETH — crypto-promo marker.
 export const CASHTAG_REGEX = /\$[A-Z]{2,6}\b/
 
@@ -164,7 +196,7 @@ export const extractMessageSignals = (msg: NormalizedMessage): Signal[] => {
 
   // Links out first: the ids they carry are the digit runs this reads —
   // see `withoutUrls`.
-  if (PHONE_REGEX.test(withoutUrls(text))) signals.push({ name: 'phone_number' })
+  if (hasPhoneNumber(text)) signals.push({ name: 'phone_number' })
   if (CASHTAG_REGEX.test(text)) signals.push({ name: 'cashtag' })
   if (text.length > LONG_TEXT_THRESHOLD) signals.push({ name: 'long_text' })
   const separation = separationShare(text)
