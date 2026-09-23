@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createChatDescriptionCache } from './chat-profile.js'
+import { createChatDescriptionCache, findChatMemberByUsername, holdsUsername } from './chat-profile.js'
+import type { TelegramClient } from '@mtcute/node'
 
 describe('createChatDescriptionCache', () => {
   it('asks Telegram once and serves the rest from memory', () => {
@@ -89,5 +90,50 @@ describe('createChatDescriptionCache', () => {
     // The oldest entry went, so it costs one more call.
     await cache.get(1)
     expect(fetch).toHaveBeenCalledTimes(5)
+  })
+})
+
+describe('holdsUsername', () => {
+  const user = (username: string | null, usernames: Array<{ username: string; active?: boolean }> | null = null) =>
+    ({ username, usernames })
+
+  it('matches the primary handle regardless of case', () => {
+    expect(holdsUsername(user('Some_Name'), 'some_name')).toBe(true)
+  })
+
+  it('matches an active additional handle and ignores an inactive one', () => {
+    expect(holdsUsername(user(null, [{ username: 'second', active: true }]), 'second')).toBe(true)
+    expect(holdsUsername(user(null, [{ username: 'old', active: false }]), 'old')).toBe(false)
+  })
+
+  it('does not take a prefix or a name for the handle', () => {
+    expect(holdsUsername(user('name_1'), 'name')).toBe(false)
+    expect(holdsUsername(user(null), 'name')).toBe(false)
+  })
+})
+
+describe('findChatMemberByUsername', () => {
+  const member = (id: number, username: string | null, status: string) =>
+    ({ status, user: { id, username, usernames: null } })
+  const tgWith = (members: unknown[]) => {
+    const getChatMembers = vi.fn(async () => members)
+    return { tg: { getChatMembers } as unknown as TelegramClient, getChatMembers }
+  }
+
+  it('returns the member whose handle is the one asked for, not a name match', async () => {
+    const { tg, getChatMembers } = tgWith([member(1, 'target_x', 'member'), member(2, 'target', 'member')])
+    const found = await findChatMemberByUsername(tg, -100, 'Target')
+    expect(found?.id).toBe(2)
+    expect(getChatMembers).toHaveBeenCalledWith(-100, expect.objectContaining({ type: 'all', query: 'Target' }))
+  })
+
+  it('does not count someone who left or was banned as a member', async () => {
+    const { tg } = tgWith([member(1, 'target', 'left'), member(2, 'target', 'banned')])
+    expect(await findChatMemberByUsername(tg, -100, 'target')).toBeNull()
+  })
+
+  it('finds a restricted member', async () => {
+    const { tg } = tgWith([member(3, 'target', 'restricted')])
+    expect((await findChatMemberByUsername(tg, -100, 'target'))?.id).toBe(3)
   })
 })

@@ -31,7 +31,8 @@ import {
   editBaselineOf, classifyEditDelivery,
   fetchUserProfile, userHasProfilePhoto, downloadPhotoBase64, downloadAvatarBase64, downloadStoriesBase64, rawPhotoToBase64,
   fetchExternalBan, sourcesToQuery, resolveMentionKinds, shouldScanChannelSender,
-  createChatDescriptionCache, fetchChatDescription, fetchChatMemberCount, createTmePreviewResolver,
+  createChatDescriptionCache, fetchChatDescription, fetchChatMemberCount, findChatMemberByUsername,
+  createTmePreviewResolver,
   avatarDhashOf, MUTE_DURATION_SECONDS,
   type ExternalBanCacheView, type IncomingMessage
 } from '@lyadmin/adapters'
@@ -2499,12 +2500,13 @@ const reportTarget = async (replied: Message): Promise<ReportTarget> => {
  * `/report` that names the person instead of replying to them — see
  * `parseReportTarget` for the forms and why they exist.
  *
- * Resolved from the bot's own peer cache and nothing else. mtcute's
- * `resolvePeer` falls through to `contacts.resolveUsername` on a miss, and that
- * call's flood wait (46 minutes observed) lands on the connection moderation
- * runs on. Everyone who has written here or joined since the bot arrived is in
- * the cache, which is everyone a report can usefully be about; anybody else
- * gets an answer that says how to name them in a way that always works.
+ * Never through `resolvePeer`: on a miss it falls through to
+ * `contacts.resolveUsername`, whose flood wait (46 minutes observed) lands on
+ * the connection moderation runs on. The bot's peer cache answers first. It
+ * holds an id indefinitely but a handle only for a day after the account was
+ * last seen, so a handle it misses is looked up in this chat's member list
+ * (`findChatMemberByUsername`). Anybody neither finds gets an answer that says
+ * how to name them in a way that always works.
  *
  * What follows is the arrival path's: with no message there is no ballot, and
  * the report asks the bot to look at the account (`screenAccount`).
@@ -2519,6 +2521,7 @@ const reportNamedAccount = async (message: Message, chat: Chat, reporter: User, 
     return
   }
   const who = ref.kind === 'username' ? `@${ref.username}` : String(ref.id)
+  let quotaSpent = false
   const cached = ref.kind === 'username'
     ? await gateway.tg.storage.peers.getByUsername(ref.username.toLowerCase()).catch(() => null)
     : await gateway.tg.storage.peers.getById(ref.id).catch(() => null)
@@ -2527,7 +2530,24 @@ const reportNamedAccount = async (message: Message, chat: Chat, reporter: User, 
   const userId = cached !== null && (cached._ === 'inputPeerUser' || cached._ === 'inputPeerUserFromMessage')
     ? cached.userId
     : null
-  const target = userId === null ? null : await fetchUser(userId).catch(() => null)
+  let target = userId === null ? null : await fetchUser(userId).catch(() => null)
+  let via: 'cache' | 'members' = 'cache'
+  // The cache keeps a handle for a day after it last saw the account, so a
+  // member who has been quiet since yesterday misses here. Their chat's own
+  // member list still has them. The reporter's quota is spent before the
+  // search, so the command cannot be used to drive lookups.
+  if (target === null && ref.kind === 'username') {
+    if (!reportAllowed(reporter.id)) {
+      await answerAndClear(message, chat.id, locale.report.rateLimited, 'report_refused')
+      return
+    }
+    quotaSpent = true
+    target = await findChatMemberByUsername(gateway.tg, chat.id, ref.username).catch((err: unknown) => {
+      log.warn('report_member_search_failed', { chatId: chat.id, error: telegramErrorName(err) })
+      return null
+    })
+    via = 'members'
+  }
   if (target === null) {
     await answerAndClear(message, chat.id, locale.report.notFound(who), 'report_refused')
     return
@@ -2545,14 +2565,14 @@ const reportNamedAccount = async (message: Message, chat: Chat, reporter: User, 
     await answerAndClear(message, chat.id, locale.report.notInChat, 'report_refused')
     return
   }
-  if (!reportAllowed(reporter.id)) {
+  if (!quotaSpent && !reportAllowed(reporter.id)) {
     await answerAndClear(message, chat.id, locale.report.rateLimited, 'report_refused')
     return
   }
   await answerAndClear(message, chat.id, locale.report.accepted, 'report_accepted')
   log.info('report', {
     chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName,
-    by: reporter.id, byName: reporter.displayName, on: ref.kind === 'username' ? 'username' : 'id'
+    by: reporter.id, byName: reporter.displayName, on: ref.kind === 'username' ? 'username' : 'id', via
   })
   void screenAccount({
     chat, target, reason: 'reported_account', replyToMessageId: null, subjectMessageId: null

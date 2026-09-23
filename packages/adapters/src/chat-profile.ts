@@ -14,7 +14,7 @@
  * have none, and that is exactly the case that would otherwise pay on every
  * single message.
  */
-import type { TelegramClient } from '@mtcute/node'
+import type { TelegramClient, User } from '@mtcute/node'
 
 /**
  * A description is edited rarely; six hours bounds how long a stale one can
@@ -124,4 +124,44 @@ export const fetchChatMemberCount = async (
 ): Promise<number | null> => {
   const full = await tg.getFullChat(chatId)
   return full.membersCount > 0 ? full.membersCount : null
+}
+
+/**
+ * Whether `username` is one of the account's handles, primary or additional.
+ * Telegram compares handles case-insensitively; so does this.
+ */
+export const holdsUsername = (
+  user: { readonly username: string | null; readonly usernames: ReadonlyArray<{ readonly username: string; readonly active?: boolean }> | null },
+  username: string
+): boolean => {
+  const wanted = username.toLowerCase()
+  if (user.username?.toLowerCase() === wanted) return true
+  return (user.usernames ?? []).some((u) => u.active !== false && u.username.toLowerCase() === wanted)
+}
+
+const MEMBER_STATUSES = new Set(['creator', 'admin', 'member', 'restricted'])
+
+/**
+ * Find a current member of the chat by handle, by searching the chat's own
+ * member list.
+ *
+ * This is the lookup for a handle the peer cache does not answer. mtcute's cache
+ * forgets a username a day after it last saw the account, so anyone who has
+ * been quiet for a day looks absent — while they are sitting in the chat. The
+ * alternative, `contacts.resolveUsername`, carries a flood wait long enough to
+ * stall moderation; a member search is scoped to one chat, answers membership in
+ * the same call, and puts the account's access hash in the cache for whatever
+ * comes next.
+ *
+ * The search matches names as well as handles, so a hit counts only when the
+ * handle itself is the one asked for.
+ */
+export const findChatMemberByUsername = async (
+  tg: TelegramClient,
+  chatId: number,
+  username: string
+): Promise<User | null> => {
+  const found = await tg.getChatMembers(chatId, { type: 'all', query: username, limit: 50 })
+  const member = found.find((m) => MEMBER_STATUSES.has(m.status) && holdsUsername(m.user, username))
+  return member?.user ?? null
 }
