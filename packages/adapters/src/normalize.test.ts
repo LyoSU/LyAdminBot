@@ -501,6 +501,28 @@ describe('normalizeMessage — guest bots & edits', () => {
     )
     expect(after.editDelta?.injectedInvisibles).toBe(1)
   })
+
+  it('REGRESSION: a pasted soft hyphen or byte-order mark is not injection', () => {
+    // Both arrive by accident — hyphenated web text, a BOM at the head of a
+    // pasted file — and core stopped reading them as obfuscation on 2026-07-30.
+    // This counter kept them, so an edit that pasted in a paragraph became
+    // `edit_injected_invisibles` and a 0.93 rule (2026-09-23 review).
+    const before = normalizeMessage(makeMessage({ message: 'Доброго дня' }))
+    const after = normalizeMessage(
+      makeMessage({ message: '\uFEFFДоброго дня. Пере\u00ADнос у сло\u00ADві', editDate: 1_780_000_100 }),
+      { isEdit: true, previousBaseline: editBaselineOf(before) }
+    )
+    expect(after.editDelta?.injectedInvisibles).toBe(0)
+  })
+
+  it('a joiner between words is spacing, not a word broken in two', () => {
+    const before = normalizeMessage(makeMessage({ message: 'Доброго дня' }))
+    const after = normalizeMessage(
+      makeMessage({ message: 'Доброго \u200Bдня', editDate: 1_780_000_100 }),
+      { isEdit: true, previousBaseline: editBaselineOf(before) }
+    )
+    expect(after.editDelta?.injectedInvisibles).toBe(0)
+  })
 })
 
 /**

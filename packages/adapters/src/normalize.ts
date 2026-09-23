@@ -76,11 +76,15 @@ const PREVIEW_LIMIT = 120
 // still linkify them. Scheme-less t.me deliberately included.
 const TEXT_URL_REGEX = /(?:https?:\/\/\S+|(?:^|\s)(?:t\.me|telegram\.me|wa\.me|bit\.ly|tinyurl\.com)\/\S+)/gi
 
-// Invisible chars used for in-word obfuscation (kept in sync with core's
-// invisible_in_word signal): word joiner, ZWSP, soft hyphen, BOM.
-const OBFUSCATION_INVISIBLES = /[\u2060\u200B\u00AD\uFEFF]/gu
+// Invisible characters that break a word in two — the same test as core's
+// `INVISIBLE_IN_WORD_REGEX`: word joiner or ZWSP with a letter on each side.
+// Soft hyphen and BOM were dropped there on 2026-07-30 because they arrive by
+// accident (hyphenated web text, a pasted file's BOM) and were still counted
+// here, so a pasted paragraph turned an edit into a 0.93 rule (2026-09-23).
+const OBFUSCATION_INVISIBLES = /(?<=\p{L})[\u2060\u200B]+(?=\p{L})/gu
 
-const countInvisibles = (text: string): number => (text.match(OBFUSCATION_INVISIBLES) ?? []).length
+const countInvisibles = (text: string): number =>
+  (text.match(OBFUSCATION_INVISIBLES) ?? []).reduce((n, run) => n + run.length, 0)
 
 /**
  * What has to be remembered about a message so a later edit can be measured
