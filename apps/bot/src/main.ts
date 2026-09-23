@@ -1378,13 +1378,33 @@ const answerAndClear = async (
   if (sent) scheduleDelete(chatId, sent.id, NOTIFY_TTL_REFUSAL_MS, source)
 }
 
-/** Report rate limit: 3 reports per reporter per 5 minutes. */
+/**
+ * Report rate limit, per reporter per 5 minutes, sized by who is reporting.
+ *
+ * The limit exists so one account cannot drive holds and lookups at will. For
+ * a stranger that is 3. A trusted member meets the spam where it lands and
+ * during a raid needs more — but their report deletes and mutes on the spot,
+ * so a hijacked trusted account is exactly what a limit is for: raised, not
+ * removed. An admin can ban outright, so limiting their reports protects
+ * nothing and only gets in their way.
+ */
 const REPORT_WINDOW_MS = 5 * 60 * 1000
+const REPORTS_PER_WINDOW = 3
+const TRUSTED_REPORTS_PER_WINDOW = 20
 const reportTimes = new Map<number, number[]>()
-const reportAllowed = (userId: number): boolean => {
+
+const reportAllowance = async (chatId: number, userId: number): Promise<number> => {
+  if (await isChatAdmin(chatId, userId).catch(() => false)) return Number.POSITIVE_INFINITY
+  const policy = groupDocToChatPolicy(await store.getGroupDoc(chatId).catch(() => null) as never)
+  return policy.trustedUserIds.includes(userId) ? TRUSTED_REPORTS_PER_WINDOW : REPORTS_PER_WINDOW
+}
+
+const reportAllowed = async (chatId: number, userId: number): Promise<boolean> => {
+  const allowance = await reportAllowance(chatId, userId)
+  if (allowance === Number.POSITIVE_INFINITY) return true
   const now = Date.now()
   const recent = (reportTimes.get(userId) ?? []).filter((t) => now - t < REPORT_WINDOW_MS)
-  if (recent.length >= 3) { reportTimes.set(userId, recent); return false }
+  if (recent.length >= allowance) { reportTimes.set(userId, recent); return false }
   recent.push(now)
   reportTimes.set(userId, recent)
   if (reportTimes.size > 2000) {
@@ -2537,7 +2557,7 @@ const reportNamedAccount = async (message: Message, chat: Chat, reporter: User, 
   // member list still has them. The reporter's quota is spent before the
   // search, so the command cannot be used to drive lookups.
   if (target === null && ref.kind === 'username') {
-    if (!reportAllowed(reporter.id)) {
+    if (!(await reportAllowed(chat.id, reporter.id))) {
       await answerAndClear(message, chat.id, locale.report.rateLimited, 'report_refused')
       return
     }
@@ -2565,7 +2585,7 @@ const reportNamedAccount = async (message: Message, chat: Chat, reporter: User, 
     await answerAndClear(message, chat.id, locale.report.notInChat, 'report_refused')
     return
   }
-  if (!quotaSpent && !reportAllowed(reporter.id)) {
+  if (!quotaSpent && !(await reportAllowed(chat.id, reporter.id))) {
     await answerAndClear(message, chat.id, locale.report.rateLimited, 'report_refused')
     return
   }
@@ -2667,7 +2687,7 @@ const handleReport = async (message: Message, chat: Chat, reporter: User, args =
     await answerAndClear(message, chat.id, locale.report.cantReportAdmin, 'report_refused')
     return
   }
-  if (!reportAllowed(reporter.id)) {
+  if (!(await reportAllowed(chat.id, reporter.id))) {
     await answerAndClear(message, chat.id, locale.report.rateLimited, 'report_refused')
     return
   }
