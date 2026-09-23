@@ -557,7 +557,9 @@ export const evaluateMessage = async (
       action: 'delete' as VerdictAction,
       needsVote: input.policy.votingEnabled,
       banDurationSeconds: null,
-      requireCaptcha: input.policy.captchaEnabled && isNewish(input),
+      // `mayAskCaptcha`, as the reply branch above: the gate is a mute, and a
+      // mute on a channel identity is a ban (2026-09-23 review).
+      requireCaptcha: mayAskCaptcha(policyInputFor(verdict.pSpam, verdict.signals)),
       reasonCode: 'content_unconfirmed'
     }
   }
@@ -731,7 +733,7 @@ export const evaluateMessage = async (
       action: 'delete' as VerdictAction,
       needsVote: input.policy.votingEnabled,
       banDurationSeconds: null,
-      requireCaptcha: input.policy.captchaEnabled && isNewish(input)
+      requireCaptcha: mayAskCaptcha(policyInputFor(verdict.pSpam, verdict.signals))
     }
   }
 

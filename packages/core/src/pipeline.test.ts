@@ -467,6 +467,36 @@ describe('evaluateMessage — abstain & session', () => {
     expect(calls).toBe(1)
   })
 
+  it('REGRESSION: a capped deletion does not gate a sender nobody can ask', async () => {
+    // `capSoleWitness` and `capUnearnedRemoval` set the captcha from
+    // `captchaEnabled && isNewish`, while their own reply branch used
+    // `mayAskCaptcha`. The executor then mutes the sender for the gate — and a
+    // mute on a channel identity is a ban (2026-09-23 review).
+    const ports: PipelinePorts = {
+      session: {
+        append: async () => ({
+          combinedText: 'пиши мені\nв особисті\nзаробіток\nвід 500$\nна день усім хто напише',
+          count: 5
+        }),
+        reset: async () => { /* noop */ }
+      },
+      llm: { classify: async () => ({ pSpam: 0.9, reasonCode: 'job_scam', evidence: null, cached: false }) }
+    }
+    const asChannel = makeInput({
+      msg: { text: 'на день усім хто напише' },
+      user: { ...newcomer, id: -1001234567890 },
+      policy: { captchaEnabled: true }
+    })
+    const v = await evaluateMessage(asChannel, ports)
+    expect(v.meta['cappedSoleWitness']).toBe(true)
+    expect(v.requireCaptcha).not.toBe(true)
+
+    const asPerson = makeInput({
+      msg: { text: 'на день усім хто напише' }, user: newcomer, policy: { captchaEnabled: true }
+    })
+    expect((await evaluateMessage(asPerson, ports)).requireCaptcha).toBe(true)
+  })
+
   it('REGRESSION: a short message nothing found anything in still gets read eventually', async () => {
     // Production, 2026-08-01 15:26, reported by an admin: a five-word
     // solicitation from a newcomer was never judged by anything. It carried no
