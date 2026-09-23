@@ -19,7 +19,7 @@
  */
 import type { ChannelPreview, Signal } from '../types.js'
 import { truncate } from '../text/normalize.js'
-import { extractBioSignals } from './bio.js'
+import { channelPromoIn } from './bio.js'
 
 /** Where the channel came from, for the evidence line. */
 const label = (source: ChannelPreview['source']): string =>
@@ -29,9 +29,9 @@ const label = (source: ChannelPreview['source']): string =>
 
 /** A channel's own blurb is self-description, and reads like a bio. */
 const promoEvidence = (channel: ChannelPreview): string | null => {
-  const promo = extractBioSignals(channel.title, [channel.description ?? ''])
-  if (promo.length === 0) return null
-  return truncate(`${label(channel.source)} «${channel.title}»: ${promo[0]?.evidence ?? ''}`, 120)
+  const promo = channelPromoIn(channel.title) ?? channelPromoIn(channel.description ?? '')
+  if (promo === null) return null
+  return truncate(`${label(channel.source)} «${channel.title}»: ${promo.what}`, 120)
 }
 
 export const extractLinkedChannelSignals = (

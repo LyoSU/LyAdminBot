@@ -67,6 +67,30 @@ const promoIn = (text: string): BioPromo | null => {
 }
 
 /**
+ * What a CHANNEL's own blurb advertises — the bio reading, less the plain
+ * website, and without stopping at the first hit.
+ *
+ * A news channel naming its site is describing itself; in a bio the same fact
+ * weighs 0.3 because it carries no information, but a channel hit is priced
+ * 1.5 (`promo_in_linked_channel` / `promo_in_message_link`), so the site alone
+ * turned an ordinary channel into an advert (2026-09-23 review). A link that
+ * hides its destination — a shortener, a messenger contact — still counts, and
+ * so does a number to call, which the bio reader never reached when a site came
+ * first.
+ */
+export const channelPromoIn = (text: string): BioPromo | null => {
+  const urls = (text.match(URL_TOKEN_REGEX) ?? [])
+    .map((token) => ({ token, kind: classifyUrl(token).kind }))
+  const invite = urls.find((u) => u.kind === 'private_invite')
+  if (invite) return { name: 'private_invite_in_bio', what: invite.token }
+  const hidden = urls.find((u) => u.kind !== 'external' && PROMO_URL_KINDS.has(u.kind))
+  if (hidden) return { name: 'promo_in_bio', what: hidden.token }
+  if (hasPhoneNumber(text)) return { name: 'contact_in_bio', what: 'phone number' }
+  if (CASHTAG_REGEX.test(text)) return { name: 'contact_in_bio', what: 'cashtag' }
+  return null
+}
+
+/**
  * @param bio userFull.about
  * @param businessTexts Business intro / greeting / away messages. Premium-only,
  *   so usually empty — but the same kind of text, read the same way. A greeting

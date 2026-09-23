@@ -27,6 +27,27 @@ describe('extractLinkedChannelSignals', () => {
     expect(names([channel({ description: 'мій другий акаунт t.me/durov' })])).toEqual([])
   })
 
+  it('REGRESSION: a website, an email or a frequency is what an ordinary channel says about itself', () => {
+    // The blurb was read through the whole bio vocabulary, so a plain website
+    // — 0.3 in a bio, measured as carrying no information — became a 1.5
+    // `promo_in_*` here, and "Radio 101.5 FM" parsed as a host (2026-09-23).
+    for (const description of ['Новини міста. Сайт: news.example.ua', 'Пишіть: news@gmail.com', 'Radio 101.5 FM']) {
+      expect(names([channel({ description })]), description).toEqual([])
+      expect(names([channel({ source: 'message_link', description })]), description).toEqual([])
+    }
+  })
+
+  it('a site next to a number to call is still a number to call', () => {
+    // The bio reader stops at the strongest hit, and a site outranked the phone.
+    expect(names([channel({ description: 'site.example.ua, замовлення 099 123 45 67' })]))
+      .toEqual(['promo_in_linked_channel'])
+  })
+
+  it('a link that hides where it goes still counts', () => {
+    expect(names([channel({ description: 'Пиши сюди wa.me/380991234567' })]))
+      .toEqual(['promo_in_linked_channel'])
+  })
+
   it('names where it looked, so a false positive can be argued with', () => {
     const [signal] = extractLinkedChannelSignals([
       channel({ source: 'bio_link', title: 'Канал', description: 'usd → wa.me/79991234567' })
