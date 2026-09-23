@@ -82,8 +82,6 @@ describe('the other three actions', () => {
     const { tg, calls } = makeTransport()
     await moderationActionsOver(tg).kick(CHAT, USER)
     expect(calls.map((c) => c.name)).toEqual(['banChatMember', 'unbanChatMember'])
-    // No deadline: the ban exists to be undone on the next line.
-    expect((calls[0]!.args as { untilDate?: Date }).untilDate).toBeUndefined()
   })
 
   it('bans for a term, or for good when there is none', async () => {
@@ -93,5 +91,23 @@ describe('the other three actions', () => {
     await actions.ban(CHAT, USER, null)
     expect((calls[0]!.args as { untilDate?: Date }).untilDate).toBeInstanceOf(Date)
     expect((calls[1]!.args as { untilDate?: Date }).untilDate).toBeUndefined()
+  })
+})
+
+describe('kick', () => {
+  it('REGRESSION: the ban half expires by itself if the unban never lands', async () => {
+    // Ban-then-unban with no expiry: an unban that failed left a permanent ban
+    // behind a record that said the kick did not apply (2026-09-23 review).
+    // Under 30 seconds Telegram reads the date as "forever", so the safety net
+    // sits above that.
+    const { tg, calls } = makeTransport()
+    const before = Date.now()
+    await moderationActionsOver(tg).kick(CHAT, USER)
+    expect(calls.map((c) => c.name)).toEqual(['banChatMember', 'unbanChatMember'])
+    const until = (calls[0]!.args as { untilDate?: Date }).untilDate
+    expect(until).toBeInstanceOf(Date)
+    const seconds = (until!.getTime() - before) / 1000
+    expect(seconds).toBeGreaterThan(30)
+    expect(seconds).toBeLessThanOrEqual(120)
   })
 })

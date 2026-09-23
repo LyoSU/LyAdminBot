@@ -35,6 +35,12 @@ const SILENCE_ALL = {
  */
 export const isChannelSender = isChannelSenderId
 
+/**
+ * How long the ban half of a kick lasts if nothing lifts it. Telegram reads an
+ * expiry under 30 seconds away as "forever", so the net sits above that.
+ */
+export const KICK_BAN_SECONDS = 60
+
 export const moderationActionsOver = (tg: ModerationTransport): ModerationActions => ({
   deleteMessage: async (chatId, messageId) => {
     await tg.deleteMessagesById(chatId, [messageId])
@@ -73,9 +79,12 @@ export const moderationActionsOver = (tg: ModerationTransport): ModerationAction
 
   // Kick = ban then immediately unban: Telegram has no "remove without
   // blocking", and leaving the ban in place would make it a silent permaban.
-  // Matches what the manual /kick command already does.
+  // The ban carries its own short expiry as a safety net: when the unban
+  // fails, the kick heals itself within a minute instead of standing forever
+  // behind a record that says it did not apply (2026-09-23 review).
   kick: async (chatId, userId) => {
-    await tg.banChatMember({ chatId, participantId: userId })
+    const until = new Date(Date.now() + KICK_BAN_SECONDS * 1000)
+    await tg.banChatMember({ chatId, participantId: userId, untilDate: until })
     await tg.unbanChatMember({ chatId, participantId: userId })
   },
 

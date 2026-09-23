@@ -2298,8 +2298,8 @@ const handleKick = async (message: Message, chat: Chat, caller: User): Promise<v
   const target = replied.sender
   if (!(target instanceof User) || target.isBot || target.id === selfId) return
   if (await isChatAdmin(chat.id, target.id)) return
-  const ok = await gateway.tg.banChatMember({ chatId: chat.id, participantId: target.id })
-    .then(() => gateway.tg.unbanChatMember({ chatId: chat.id, participantId: target.id }))
+  // The same kick the verdicts use, so the ban half carries its safety expiry.
+  const ok = await gateway.moderationActions.kick(chat.id, target.id)
     .then(() => true).catch(() => false)
   await dropCommand()
   if (!ok) {
