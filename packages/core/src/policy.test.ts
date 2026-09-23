@@ -225,6 +225,17 @@ describe('decideAction — safety invariants', () => {
     }))
   })
 
+  it('property: standing shields a sender the tenure clock still calls newish', () => {
+    // `userIsNewish` is true on a week of local tenure, standing is earned by
+    // volume anywhere. Either one is standing; only a hard verdict spends it.
+    fc.assert(fc.property(pSpamArb, inputArb, (pSpam, rest) => {
+      const d = decideAction({
+        ...rest, pSpam, userIsNewish: true, userHasStanding: true, userHasHardVerdict: false
+      })
+      return d.action !== 'ban' && d.action !== 'kick'
+    }))
+  })
+
   it('standing built out of spam does not shield the account from a ban', () => {
     // Production 2026-07-31: a known repeat offender was muted at pSpam 1.00,
     // twice inside half an hour, because `userIsNewish` had decayed to false —

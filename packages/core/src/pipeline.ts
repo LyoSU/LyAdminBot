@@ -447,6 +447,7 @@ export const evaluateMessage = async (
     userIsNewish: isNewish(input),
     userIsTrusted: isTrusted(input),
     userHasHardVerdict: hasHardAccountVerdict(input.user),
+    userHasStanding: hasSenderStanding(signals),
     ephemeralCaptcha: input.policy.ephemeralCaptcha === true,
     senderIsParticipant: input.user.isParticipant ?? null,
     // A channel identity cannot answer a captcha: the button carries the

@@ -1902,6 +1902,21 @@ describe('evaluateMessage — an act members also perform (2026-08-07 audit)', (
       expect(v.meta['cappedStanding']).toBeUndefined()
     })
 
+    it('standing earned elsewhere still spares a newcomer here the ban', async () => {
+      // `established_user` is earned by volume across our chats, while
+      // `isNewish` also answers yes to a week of tenure HERE — so both held at
+      // once and the policy shield, which read only the latter, came off. A
+      // code that names the act still removes the sender; it may not remove
+      // them for a month on the classifier's word alone.
+      const v = await evaluateMessage(corroboratedBy(established), {
+        ...withVelocity, ...llmSaying('job_scam')
+      })
+      expect(v.signals.some((s) => s.name === 'established_user')).toBe(true)
+      expect(removesSender(v.action)).toBe(true)
+      expect(v.action).not.toBe('ban')
+      expect(v.action).not.toBe('kick')
+    })
+
     it('cappedStanding marks only the branch where evidence was sufficient', async () => {
       // A stranger with no corroboration is capped too, by the original rule —
       // and must NOT be counted as a standing cap, or the next audit prices the

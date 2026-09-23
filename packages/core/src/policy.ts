@@ -47,6 +47,15 @@ export interface PolicyInput {
    */
   userHasHardVerdict: boolean
   /**
+   * The sender has standing by volume or by an admin's word
+   * (`hasSenderStanding`). Kept apart from `userIsNewish` because the two are
+   * not negations of each other: `established_user` is earned across our
+   * chats, while newness also answers yes to a week of tenure in this one, so
+   * both can hold at once. The shield read only newness, and came off exactly
+   * there. Optional so that a caller with no signals to read asserts nothing.
+   */
+  userHasStanding?: boolean
+  /**
    * The captcha can be delivered as an ephemeral message — visible to the
    * suspect alone (Bot API 10.2). This is what lifts the discussion-group
    * exclusion below: the objection to captcha under a channel post was that it
@@ -461,7 +470,8 @@ export const decideAction = (input: PolicyInput): PolicyDecision => {
   // `userIsNewish` had decayed to false, so the longer it had been spamming the
   // milder its treatment got. Note this only chooses between mute and ban for a
   // message already judged removable; it lowers no threshold.
-  const shielded = !input.userIsNewish && !input.userHasHardVerdict
+  const hasStanding = !input.userIsNewish || input.userHasStanding === true
+  const shielded = hasStanding && !input.userHasHardVerdict
 
   if (p >= t.ban && !shielded) {
     return {
@@ -473,7 +483,7 @@ export const decideAction = (input: PolicyInput): PolicyDecision => {
   if (p >= t.mute) return decide('mute')
   // Kick needs newness: removing an account with local standing over a
   // single grey-band message is worse than deleting it and watching.
-  if (p >= t.kick && input.userIsNewish) return decide('kick', uncertain)
+  if (p >= t.kick && input.userIsNewish && input.userHasStanding !== true) return decide('kick', uncertain)
   if (p >= t.delete) return decide('delete', uncertain)
   if (p >= t.grey) return decide(mayAskCaptcha(input) ? 'captcha' : 'observe')
 
