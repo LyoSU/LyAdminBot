@@ -965,7 +965,15 @@ export class MongoStore {
   async recentConfirmedSpamSamples(limit: number, sinceMs: number): Promise<string[]> {
     const docs = await this.spamSignatures
       .find(
-        { status: 'confirmed', lastSeenAt: { $gte: new Date(sinceMs) } },
+        // Only rules still in force: a retired or expired signature is one
+        // somebody decided was wrong, or that stopped being true, and it must not
+        // go on teaching the classifier what spam looks like.
+        {
+          status: 'confirmed',
+          lastSeenAt: { $gte: new Date(sinceMs) },
+          disabledAt: { $exists: false },
+          $or: [{ expiresAt: { $exists: false } }, { expiresAt: { $gt: new Date() } }]
+        },
         { projection: { sampleText: 1 }, sort: { lastSeenAt: -1 }, limit }
       )
       .toArray()

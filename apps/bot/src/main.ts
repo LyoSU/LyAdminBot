@@ -166,16 +166,15 @@ const FREE_TIER_WARN_MB = 435
 
 const BRIEFING_TTL_MS = 10 * 60 * 1000
 const BRIEFING_WINDOW_MS = 7 * 86400 * 1000
-let briefingCache: { text: string | null; at: number } = { text: null, at: 0 }
-const campaignBriefing = async (): Promise<string | null> => {
+let briefingCache: { samples: readonly string[] | null; at: number } = { samples: null, at: 0 }
+const campaignBriefing = async (): Promise<readonly string[] | null> => {
   const now = Date.now()
-  if (briefingCache.at !== 0 && now - briefingCache.at < BRIEFING_TTL_MS) return briefingCache.text
-  const samples = await store.recentConfirmedSpamSamples(8, now - BRIEFING_WINDOW_MS).catch(() => [])
-  const text = samples.length > 0
-    ? samples.map((s) => `- ${truncate(s.replace(/\s+/g, ' '), 120)}`).join('\n')
-    : null
-  briefingCache = { text, at: now }
-  return text
+  if (briefingCache.at !== 0 && now - briefingCache.at < BRIEFING_TTL_MS) return briefingCache.samples
+  const found = await store.recentConfirmedSpamSamples(8, now - BRIEFING_WINDOW_MS).catch(() => [])
+  // Quoting and length are the prompt builder's job (`untrusted`), in one place.
+  const samples = found.length > 0 ? found : null
+  briefingCache = { samples, at: now }
+  return samples
 }
 
 const gateway = new TelegramGateway({
