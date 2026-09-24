@@ -112,6 +112,15 @@ describe('IncidentTracker', () => {
     expect(t.live(-100, 42)).toBeNull()
   })
 
+  it('a card adopted mid-run remembers whether it had a keyboard', () => {
+    const t = new IncidentTracker()
+    open(t, 'card_only')
+    t.attachCard(-100, 42, 777, false)
+    expect(t.live(-100, 42)?.cardButtons).toBe(false)
+    t.attachCard(-100, 42, 778)
+    expect(t.live(-100, 42)?.cardButtons).toBe(true)
+  })
+
   it('stays bounded under load', () => {
     const t = new IncidentTracker({ maxTracked: 10 })
     for (let i = 0; i < 100; i += 1) {

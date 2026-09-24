@@ -226,6 +226,64 @@ export const ownRestrictionsView = (
   return { text: lines.join('\n'), buttons }
 }
 
+export interface ChatActionEntry {
+  userId: number
+  /** Null when the name could not be read; the row then names the id. */
+  userLabel: string | null
+  /** The decision's message; 0 when it had none, and then there is no card to open. */
+  messageId: number
+  action: 'delete' | 'kick' | 'mute' | 'ban'
+  reasonCode: string
+  at: Date
+  overturned: boolean
+}
+
+/** Rows shown on the recent-actions screen. */
+export const CHAT_ACTIONS_SHOWN = 10
+
+/**
+ * What the bot did in one chat, for its admins (PM, behind the settings panel).
+ *
+ * The correction path that outlives the notice. Quiet mode takes the button off
+ * a notice and the notice off the chat within seconds, so the list is where an
+ * admin finds a decision again; each "Why?" opens the same card the notice's
+ * link does, where "Not spam" is. A row without a message (an arrival screened
+ * with nothing to reply to) has no stored card to open and gets no button.
+ */
+export const chatActionsView = (
+  locale: Locale,
+  chatId: number,
+  entries: readonly ChatActionEntry[],
+  options: { botUsername: string | null; now: number }
+): ViewMessage => {
+  const shown = entries.slice(0, CHAT_ACTIONS_SHOWN)
+  const back: ButtonSpec[] = [{ text: locale.settings.back, data: callbackData.settings(chatId, 'root') }]
+  if (shown.length === 0) {
+    return { text: [locale.chatActions.title, '', escapeHtml(locale.chatActions.empty)].join('\n'), buttons: [back] }
+  }
+  const o = locale.ownRestrictions
+  const lines = [locale.chatActions.title, '']
+  shown.forEach((entry, i) => {
+    const who = escapeHtml(entry.userLabel ?? locale.hiddenName(entry.userId))
+    lines.push(`${i + 1}. <b>${escapeHtml(locale.actions[entry.action])}</b> · ${who}`)
+    const ago = o.ago(humanSpan(locale, Math.max(0, (options.now - entry.at.getTime()) / 1000)))
+    const detail = [reasonText(locale, entry.reasonCode), ago, ...(entry.overturned ? [o.overturned] : [])]
+    lines.push(`<i>${escapeHtml(detail.join(' · '))}</i>`)
+  })
+  lines.push('', escapeHtml(locale.chatActions.footer))
+
+  const botUsername = options.botUsername
+  const links: ButtonSpec[] = botUsername
+    ? shown.flatMap((entry, i) => entry.messageId > 0
+      ? [{ text: o.whyButton(i + 1), url: whyDeepLink(botUsername, chatId, entry.messageId, entry.userId) }]
+      : [])
+    : []
+  const buttons: ButtonSpec[][] = []
+  for (let i = 0; i < links.length; i += 3) buttons.push(links.slice(i, i + 3))
+  buttons.push(back)
+  return { text: lines.join('\n'), buttons }
+}
+
 /** Whether there is anything to boast about — and anything to divide by. */
 const hasCountableWork = (stats: BotStats | null): stats is BotStats =>
   stats !== null && stats.checked > 0
@@ -1049,6 +1107,8 @@ export interface SettingsState {
   votingEnabled: boolean
   /** External ban databases (lols/CAS) toggle. */
   externalBanEnabled: boolean
+  /** Confident notices leave the chat within seconds. */
+  quietMode: boolean
   /** Default /banan mute duration, in seconds. */
   bananDefaultSeconds: number
   /** Current group interface-language code (uk/en/ru/tr/by). */
@@ -1091,8 +1151,12 @@ export const settingsPanel = (locale: Locale, chatId: number, state: SettingsSta
       `${locale.settings.captcha}: ${onOff(state.captchaEnabled)}`,
       `${locale.settings.voting}: ${onOff(state.votingEnabled)}`,
       `${locale.settings.banDatabase}: ${onOff(state.externalBanEnabled)}`,
+      `${locale.settings.quiet}: ${onOff(state.quietMode)}`,
       `${locale.settings.banan}: ${bananLabel(locale, state.bananDefaultSeconds)}`,
-      `${locale.settings.language}: ${langName(state.locale)}`
+      `${locale.settings.language}: ${langName(state.locale)}`,
+      // Said where the switch is: an admin who turned it on and then misses the
+      // notices has to be told where they went.
+      ...(state.quietMode ? ['', locale.settings.quietHint] : [])
     ].join('\n'),
     buttons: [
       [{ text: `${locale.settings.enabled}: ${onOff(state.enabled)}`, data: callbackData.settings(chatId, 'toggle_enabled') }],
@@ -1104,6 +1168,8 @@ export const settingsPanel = (locale: Locale, chatId: number, state: SettingsSta
       [{ text: `${locale.settings.captcha}: ${onOff(state.captchaEnabled)}`, data: callbackData.settings(chatId, 'toggle_captcha') }],
       [{ text: `${locale.settings.voting}: ${onOff(state.votingEnabled)}`, data: callbackData.settings(chatId, 'toggle_voting') }],
       [{ text: `${locale.settings.banDatabase}: ${onOff(state.externalBanEnabled)}`, data: callbackData.settings(chatId, 'toggle_bandb') }],
+      [{ text: `${locale.settings.quiet}: ${onOff(state.quietMode)}`, data: callbackData.settings(chatId, 'toggle_quiet') }],
+      [{ text: locale.chatActions.button, data: callbackData.settings(chatId, 'actions') }],
       bananRow,
       // Welcome + extras editors live behind their own screens.
       [

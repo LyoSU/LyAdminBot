@@ -37,6 +37,19 @@ export interface Locale {
    * the chat. Written to the person the decision is about, so it names the
    * chat, the term and the way back, and never a signal or a list.
    */
+  /**
+   * The chat's recent-actions screen, reached from the settings panel. Rows
+   * reuse `ownRestrictions.ago`, `.overturned` and `.whyButton`.
+   */
+  chatActions: {
+    /** Settings-panel button that opens the screen. */
+    button: string
+    /** Header (HTML). */
+    title: string
+    empty: string
+    /** Closing line: where the evidence and the undo are. */
+    footer: string
+  }
   ownRestrictions: {
     /** Header (HTML). */
     title: string
@@ -604,6 +617,10 @@ export interface Locale {
     enabled: string
     /** External ban databases (lols/CAS) toggle label. */
     banDatabase: string
+    /** Quiet-mode toggle label. */
+    quiet: string
+    /** Panel line shown while quiet mode is on: what it does, where to look. */
+    quietHint: string
     /** Default /banan mute-duration row label. */
     banan: string
     /** Group interface-language row label + toast on change. */

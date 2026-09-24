@@ -455,6 +455,13 @@ export interface ChatPolicy {
   votingEnabled: boolean
   /** Honour external ban databases (lols/CAS); v1 `settings.banDatabase`. */
   externalBanEnabled: boolean
+  /**
+   * Quiet mode: a notice about an action the bot was sure of leaves the chat
+   * within seconds and arrives without a sound. Questions — anything carrying
+   * `needsVote` — are untouched. Presentation only; nothing is decided
+   * differently. Optional: absent means off.
+   */
+  quietMode?: boolean
   customRules: string[] // "ALLOW: ..." / "DENY: ..."
   trustedUserIds: number[]
   /**

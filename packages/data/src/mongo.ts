@@ -570,6 +570,17 @@ export class MongoStore {
     ).catch((err: unknown) => {
       console.warn(`[mongo] own_restrictions index not built: ${(err as Error).message}`)
     })
+    // `recentActionsIn` asks by chat, newest first: the same partial shape as
+    // above, for the same reasons, caught for the same reason.
+    await this.decisions.createIndex(
+      { chatId: 1, createdAt: -1 },
+      {
+        name: 'chat_actions',
+        partialFilterExpression: { 'execution.applied': true }
+      }
+    ).catch((err: unknown) => {
+      console.warn(`[mongo] chat_actions index not built: ${(err as Error).message}`)
+    })
     /**
      * One message, one label — which `recordOverride` has claimed in its
      * docstring since it was written, and which a non-unique index cannot
@@ -1448,6 +1459,14 @@ export class MongoStore {
      * absent field and a failed action must stay distinguishable.
      */
     execution?: ExecutionRecord
+    /**
+     * The chat was in quiet mode when this was decided. Kept because quiet mode
+     * takes the "Not spam" button off the notice and the notice off the chat in
+     * seconds, so fewer corrections arrive from these chats — and a false-positive
+     * rate counted from corrections has to be able to leave them out rather than
+     * read their silence as accuracy. Written only when true.
+     */
+    quiet?: boolean
     latencyMs: number
   }): Promise<void> {
     await this.decisions.insertOne({
@@ -1505,6 +1524,7 @@ export class MongoStore {
       meta: params.verdict.meta,
       ...(params.editBaseline === undefined ? {} : { editBaseline: params.editBaseline }),
       ...(params.execution === undefined ? {} : { execution: params.execution }),
+      ...(params.quiet === true ? { quiet: true } : {}),
       latencyMs: params.latencyMs,
       createdAt: new Date()
     })
@@ -2150,6 +2170,7 @@ export class MongoStore {
     captchaEnabled?: boolean
     votingEnabled?: boolean
     banDatabase?: boolean
+    quiet?: boolean
     bananDefault?: number
     locale?: string
   }): Promise<void> {
@@ -2159,6 +2180,7 @@ export class MongoStore {
     if (patch.captchaEnabled !== undefined) set['settings.captcha.enabled'] = patch.captchaEnabled
     if (patch.votingEnabled !== undefined) set['settings.voting.enabled'] = patch.votingEnabled
     if (patch.banDatabase !== undefined) set['settings.banDatabase'] = patch.banDatabase
+    if (patch.quiet !== undefined) set['settings.quiet'] = patch.quiet
     if (patch.bananDefault !== undefined) set['settings.banan.default'] = patch.bananDefault
     if (patch.locale !== undefined) set['settings.locale'] = patch.locale
     if (Object.keys(set).length === 0) return
@@ -2484,6 +2506,44 @@ export class MongoStore {
    * still announcing a ban somebody already lifted would be the worst version of
    * this screen.
    */
+  /**
+   * What the bot did in this chat, newest first — for its admins.
+   *
+   * The way back to a correction that does not depend on the notice still being
+   * up. In quiet mode a notice lives seconds and carries no button, and the
+   * group's Recent actions log records a member's removed message and ban but
+   * not the bot deleting its own notice, so the "why?" link goes with it. This
+   * list is where an admin finds the decision again, and each row opens the same
+   * card the link would have, "Not spam" included.
+   *
+   * Applied actions only, as on `recentRestrictionsOf`: a verdict that did
+   * nothing has nothing to undo. Served by the partial `chat_actions` index.
+   */
+  async recentActionsIn(chatId: number, limit = 10): Promise<ChatAction[]> {
+    const docs = await this.decisions.find(
+      { chatId, action: { $in: [...CHAT_ACTIONS] }, 'execution.applied': true },
+      {
+        projection: { userId: 1, messageId: 1, action: 1, reasonCode: 1, createdAt: 1 },
+        sort: { createdAt: -1 },
+        limit
+      }
+    ).toArray()
+    if (docs.length === 0) return []
+    const labels = await this.feedback.find(
+      { chatId, messageId: { $in: docs.map((d) => d['messageId']) } },
+      { projection: { messageId: 1 } }
+    ).toArray()
+    const overturned = new Set(labels.map((l) => Number(l['messageId'])))
+    return docs.map((d) => ({
+      userId: Number(d['userId']),
+      messageId: Number(d['messageId']),
+      action: d['action'] as ChatAction['action'],
+      reasonCode: String(d['reasonCode'] ?? 'unknown'),
+      at: d['createdAt'] instanceof Date ? d['createdAt'] : new Date(0),
+      overturned: overturned.has(Number(d['messageId']))
+    }))
+  }
+
   async recentRestrictionsOf(userId: number, limit = 5): Promise<OwnRestriction[]> {
     const docs = await this.decisions.find(
       { userId, action: { $in: [...SENDER_REMOVAL_ACTIONS] }, 'execution.applied': true },
@@ -2542,6 +2602,19 @@ export const trustGrantOf = (groupDoc: unknown, userId: number): TrustGrant | nu
 
 /** The actions that take the person, not just the message. */
 const SENDER_REMOVAL_ACTIONS = ['kick', 'mute', 'ban'] as const
+/** Everything a chat's admins can see the bot do: removals and deletions. */
+const CHAT_ACTIONS = ['delete', ...SENDER_REMOVAL_ACTIONS] as const
+
+/** One row of `recentActionsIn`. */
+export interface ChatAction {
+  userId: number
+  messageId: number
+  action: (typeof CHAT_ACTIONS)[number]
+  reasonCode: string
+  at: Date
+  /** An admin or the chat already reversed it. */
+  overturned: boolean
+}
 
 /** One row of `recentRestrictionsOf`. */
 export interface OwnRestriction {

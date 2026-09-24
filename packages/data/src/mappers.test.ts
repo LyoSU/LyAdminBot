@@ -58,6 +58,12 @@ describe('groupDocToChatPolicy', () => {
     const policy = groupDocToChatPolicy({ group_id: -1, settings: { banDatabase: false } })
     expect(policy.externalBanEnabled).toBe(false)
   })
+
+  it('quiet mode is off unless a chat turned it on', () => {
+    expect(groupDocToChatPolicy(null).quietMode).toBe(false)
+    expect(groupDocToChatPolicy({ group_id: -1, settings: {} }).quietMode).toBe(false)
+    expect(groupDocToChatPolicy({ group_id: -1, settings: { quiet: true } }).quietMode).toBe(true)
+  })
 })
 
 describe('countRecentChanges (v1 semantics)', () => {

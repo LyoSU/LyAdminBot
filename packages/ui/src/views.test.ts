@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Verdict, SignalName, BotStats, ChatStats } from '@lyadmin/core'
-import { callbackData, captchaPrompt, ownRestrictionsView, OWN_RESTRICTIONS_SHOWN, type OwnRestrictionEntry, startCard, statsCard, compactNotification, startGroupHint, langPanel, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, userProfileCard, userProfileLines, votePrompt, voterListView, voteResult, VOTERS_SHOWN_MAX, whyCard, whyDeepLink, whyView, welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor, LOCALES, type UserFacts } from './views.js'
+import { callbackData, captchaPrompt, chatActionsView, CHAT_ACTIONS_SHOWN, ownRestrictionsView, OWN_RESTRICTIONS_SHOWN, type OwnRestrictionEntry, startCard, statsCard, compactNotification, startGroupHint, langPanel, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, userProfileCard, userProfileLines, votePrompt, voterListView, voteResult, VOTERS_SHOWN_MAX, whyCard, whyDeepLink, whyView, welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor, LOCALES, type UserFacts } from './views.js'
 import { uk } from './locales/uk.js'
 
 const makeVerdict = (overrides: Partial<Verdict> = {}): Verdict => ({
@@ -550,7 +550,7 @@ describe('settings', () => {
   it('every panel button carries the target chatId (the panel lives in PM)', () => {
     const view = settingsPanel(uk, -1001234567890, {
       enabled: true, preset: 'standard', captchaEnabled: false, votingEnabled: true,
-      externalBanEnabled: true, bananDefaultSeconds: 300, locale: 'uk'
+      externalBanEnabled: true, quietMode: false, bananDefaultSeconds: 300, locale: 'uk'
     })
     const datas = view.buttons.flat().map((b) => b.data ?? '')
     expect(datas.length).toBeGreaterThan(0)
@@ -562,10 +562,33 @@ describe('settings', () => {
     }
   })
 
+  it('quiet mode has its own toggle, and says where the notices went only while on', () => {
+    const state = {
+      enabled: true, preset: 'standard' as const, captchaEnabled: true, votingEnabled: true,
+      externalBanEnabled: true, quietMode: false, bananDefaultSeconds: 600, locale: 'uk'
+    }
+    const off = settingsPanel(uk, -100123, state)
+    expect(off.buttons.flat().map((b) => b.data)).toContain('set:-100123:toggle_quiet')
+    expect(off.text).toContain(`${uk.settings.quiet}: ${uk.settings.off}`)
+    expect(off.text).not.toContain(uk.settings.quietHint)
+
+    const on = settingsPanel(uk, -100123, { ...state, quietMode: true })
+    expect(on.text).toContain(`${uk.settings.quiet}: ${uk.settings.on}`)
+    expect(on.text).toContain(uk.settings.quietHint)
+  })
+
+  it('the root panel opens the recent-actions screen', () => {
+    const root = settingsPanel(uk, -100123, {
+      enabled: true, preset: 'standard', captchaEnabled: true, votingEnabled: true,
+      externalBanEnabled: true, quietMode: true, bananDefaultSeconds: 600, locale: 'uk'
+    })
+    expect(root.buttons.flat().map((b) => b.data)).toContain('set:-100123:actions')
+  })
+
   it('language lives behind its own screen, not inline on the root panel', () => {
     const root = settingsPanel(uk, -100123, {
       enabled: true, preset: 'standard', captchaEnabled: false, votingEnabled: true,
-      externalBanEnabled: true, bananDefaultSeconds: 600, locale: 'uk'
+      externalBanEnabled: true, quietMode: false, bananDefaultSeconds: 600, locale: 'uk'
     })
     const rootDatas = root.buttons.flat().map((b) => b.data ?? '')
     // The root panel opens the language screen but never sets a language directly.
@@ -1502,5 +1525,47 @@ describe('userProfileCard — trust provenance', () => {
   it('prints no trust line for a member who is not trusted', () => {
     const card = userProfileCard(uk, facts, { chatId: -100, isTrusted: false })
     expect(card.text).not.toContain('✅')
+  })
+})
+
+describe('chatActionsView — the way back to a correction after the notice is gone', () => {
+  const now = Date.parse('2026-09-24T12:00:00Z')
+  const entry = (over: Partial<Parameters<typeof chatActionsView>[2][number]> = {}) => ({
+    userId: 7, userLabel: 'Ann', messageId: 55, action: 'ban' as const,
+    reasonCode: 'unknown', at: new Date(now - 5 * 60 * 1000), overturned: false, ...over
+  })
+
+  it('says so when there is nothing, and still leads back to the panel', () => {
+    const view = chatActionsView(uk, -100, [], { botUsername: 'LyAdminBot', now })
+    expect(view.text).toContain(uk.chatActions.empty)
+    expect(view.buttons.flat().map((b) => b.data)).toEqual(['set:-100:root'])
+  })
+
+  it('opens each decision on the same card the notice linked to', () => {
+    const view = chatActionsView(uk, -100, [entry()], { botUsername: 'LyAdminBot', now })
+    const urls = view.buttons.flat().map((b) => b.url).filter(Boolean)
+    expect(urls).toEqual([whyDeepLink('LyAdminBot', -100, 55, 7)])
+    expect(view.text).toContain(uk.actions.ban)
+    expect(view.buttons.at(-1)?.[0]?.data).toBe('set:-100:root')
+  })
+
+  it('escapes names, names the unnamed by id, and marks what was reversed', () => {
+    const view = chatActionsView(uk, -100, [
+      entry({ userLabel: '<b>x</b>' }),
+      entry({ userId: 9, userLabel: null, overturned: true })
+    ], { botUsername: null, now })
+    expect(view.text).toContain('&lt;b&gt;x&lt;/b&gt;')
+    expect(view.text).toContain(uk.hiddenName(9))
+    expect(view.text).toContain(uk.ownRestrictions.overturned)
+    // No username, no deep link: only the way back.
+    expect(view.buttons.flat().map((b) => b.data)).toEqual(['set:-100:root'])
+  })
+
+  it('offers no card for a decision that had no message, and shows at most the cap', () => {
+    const many = Array.from({ length: CHAT_ACTIONS_SHOWN + 3 }, (_, i) => entry({ messageId: i === 0 ? 0 : 100 + i }))
+    const view = chatActionsView(uk, -100, many, { botUsername: 'LyAdminBot', now })
+    const urls = view.buttons.flat().map((b) => b.url).filter(Boolean)
+    expect(urls).toHaveLength(CHAT_ACTIONS_SHOWN - 1)
+    expect(view.text).not.toContain(`${CHAT_ACTIONS_SHOWN + 1}.`)
   })
 })

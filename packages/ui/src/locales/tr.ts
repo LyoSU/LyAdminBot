@@ -24,6 +24,13 @@ export const tr: Locale = {
     langButton: '🌐 Dil'
   },
 
+  chatActions: {
+    button: '🧾 Son işlemler',
+    title: '🧾 <b>Botun bu sohbetteki son işlemleri</b>',
+    empty: 'Henüz bir şey yok: bot bu sohbette kimseye işlem yapmadı.',
+    footer: '“Neden?” kanıtı ve bot yanıldıysa “Spam değil” düğmesini açar.'
+  },
+
   ownRestrictions: {
     title: '🧾 <b>Senin hakkında aldığım kararlar</b>',
     ago: (span) => `${span} önce`,
@@ -510,6 +517,8 @@ export const tr: Locale = {
     voting: 'Topluluk oylaması',
     enabled: 'Anti-spam',
     banDatabase: 'Spam veritabanları',
+    quiet: 'Sessiz mod',
+    quietHint: '🤫 Emin olunan işlemlerle ilgili bildirimler 5 sn sonra silinir. Botun yaptığı her şey “🧾 Son işlemler” altında. Oylamalar etkilenmez.',
     banan: 'Banan süresi',
     language: 'Bu sohbette bot dili',
     languageSaved: 'Sohbet dili güncellendi',

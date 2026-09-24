@@ -1917,6 +1917,55 @@ describe('recentRestrictionsOf — the notice a removed member can reach', () =>
   })
 })
 
+describe('recentActionsIn — what the bot did in a chat, for its admins', () => {
+  const at = new Date('2026-09-24T10:00:00Z')
+  const actionsStore = (
+    decisions: Record<string, unknown>[],
+    labels: Record<string, unknown>[] = []
+  ): MongoStore & { calls: { filter: Record<string, unknown>; options: Record<string, unknown> }[]; labelFilters: Record<string, unknown>[] } => {
+    const calls: { filter: Record<string, unknown>; options: Record<string, unknown> }[] = []
+    const labelFilters: Record<string, unknown>[] = []
+    const store = {
+      decisions: {
+        find: (filter: Record<string, unknown>, options: Record<string, unknown>) => {
+          calls.push({ filter, options })
+          return { toArray: async () => decisions }
+        }
+      },
+      feedback: {
+        find: (filter: Record<string, unknown>) => {
+          labelFilters.push(filter)
+          return { toArray: async () => labels }
+        }
+      }
+    } as unknown as MongoStore
+    return Object.assign(store, {
+      recentActionsIn: MongoStore.prototype.recentActionsIn, calls, labelFilters
+    }) as never
+  }
+
+  it('asks for applied actions in this chat, deletions included, newest first', async () => {
+    const store = actionsStore([])
+    await store.recentActionsIn(-100, 10)
+    expect(store.calls[0]!.filter).toEqual({
+      chatId: -100, action: { $in: ['delete', 'kick', 'mute', 'ban'] }, 'execution.applied': true
+    })
+    expect(store.calls[0]!.options).toMatchObject({ sort: { createdAt: -1 }, limit: 10 })
+    expect(store.labelFilters).toHaveLength(0)
+  })
+
+  it('marks exactly the actions somebody already reversed', async () => {
+    const store = actionsStore([
+      { userId: 1, messageId: 10, action: 'ban', reasonCode: 'x', createdAt: at },
+      { userId: 2, messageId: 11, action: 'delete', reasonCode: 'y', createdAt: at }
+    ], [{ messageId: 11 }])
+    const rows = await store.recentActionsIn(-100)
+    expect(store.labelFilters[0]).toEqual({ chatId: -100, messageId: { $in: [10, 11] } })
+    expect(rows.map((r) => [r.userId, r.action, r.overturned])).toEqual([[1, 'ban', false], [2, 'delete', true]])
+    expect(rows[0]!.at).toEqual(at)
+  })
+})
+
 describe('trust provenance — who vouched, and when', () => {
   const groupsStore = (): MongoStore & { updates: Record<string, unknown>[] } => {
     const updates: Record<string, unknown>[] = []

@@ -46,7 +46,7 @@ import {
   type NormalizedExtra, type PendingEntry
 } from '@lyadmin/data'
 import {
-  captchaPrompt, compactNotification, escapeHtml as escapeName, helpView,
+  captchaPrompt, chatActionsView, CHAT_ACTIONS_SHOWN, compactNotification, escapeHtml as escapeName, helpView,
   langPanel, langPicker, parseCallback, resolveLocale, settingsDeepLink, settingsPanel,
   nameIsPromo, ownRestrictionsView, OWN_RESTRICTIONS_SHOWN, startCard, startGroupHint, statsCard, topList, userMention, userProfileCard, votePrompt, voteResult,
   voterListView, whyCard, whyView,
@@ -71,6 +71,7 @@ import { DuplicateTally } from './duplicate-tally.js'
 import { getUsersEach } from './users-each.js'
 import { parseCommand } from './command.js'
 import { parseReportTarget } from './report-target.js'
+import { noticeDelivery } from './quiet.js'
 
 const config = loadConfig()
 
@@ -1955,9 +1956,30 @@ const renderSettingsPanel = async (locale: Locale, chatId: number): Promise<View
     captchaEnabled: policy.captchaEnabled,
     votingEnabled: policy.votingEnabled,
     externalBanEnabled: policy.externalBanEnabled,
+    quietMode: policy.quietMode ?? false,
     bananDefaultSeconds,
     locale: settings?.locale ?? 'en'
   }))
+}
+
+/**
+ * What the bot did in this chat — the settings panel's recent-actions screen.
+ * Best-effort like `renderOwnRestrictions`: an unreadable store shows an empty
+ * list and a name that cannot be looked up falls back to the id, so the screen
+ * never fails to open over either.
+ */
+const renderChatActions = async (locale: Locale, chatId: number): Promise<ViewMessage> => {
+  const rows = await store.recentActionsIn(chatId, CHAT_ACTIONS_SHOWN).catch((err: unknown) => {
+    log.warn('chat_actions_unreadable', { chatId, error: telegramErrorName(err) })
+    return []
+  })
+  const ids = [...new Set(rows.map((r) => r.userId))]
+  const users = await getUsersEach(fetchUser, ids)
+  const names = new Map<number, string>()
+  for (const u of users) if (u instanceof User) names.set(u.id, u.displayName)
+  return forChat(locale, chatId, chatActionsView(locale, chatId, rows.map((row) => ({
+    ...row, userLabel: names.get(row.userId) ?? null
+  })), { botUsername: selfUsername ?? null, now: Date.now() }))
 }
 
 /** Language sub-screen for the settings panel (rendered from a fresh doc). */
@@ -3643,6 +3665,7 @@ const screenAccount = async (params: {
       chatId: chat.id, userId: target.id, messageId: cardMessageId,
       textPreview: '',
       verdict: banVerdict,
+      quiet: policy.quietMode === true,
       execution: {
         applied: true, deleted: removed, skippedReason: null,
         failed: [], albumRemoved: 0, retroPurged: 0
@@ -3654,10 +3677,12 @@ const screenAccount = async (params: {
     const view = compactNotification(locale, banVerdict, {
       chatId: chat.id, messageId: cardMessageId, userId: target.id, userLabel: target.displayName
     }, { botUsername: selfUsername ?? undefined })
+    const delivery = noticeDelivery(policy, banVerdict, NOTIFY_TTL_COMPACT_MS, selfUsername ?? null)
     const sent = await tgSendText(chat.id, viewHtml(view.text), {
-      replyMarkup: toKeyboard(view.buttons), disableWebPreview: true
+      ...(delivery.buttons ? { replyMarkup: toKeyboard(view.buttons) } : {}),
+      disableWebPreview: true, silent: delivery.silent
     }).catch(() => null)
-    if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_COMPACT_MS, 'mod_event:account_screen')
+    if (sent) scheduleDelete(chat.id, sent.id, delivery.ttlMs, 'mod_event:account_screen')
     return 'ban'
   }
 
@@ -4069,7 +4094,7 @@ const refreshIncidentCard = async (
   // and the caller posts a fresh one rather than leaving the run unannounced.
   return await tgEditMessage({
     chatId, message: incident.cardMessageId,
-    text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons),
+    text: viewHtml(view.text), ...(incident.cardButtons === false ? {} : { replyMarkup: toKeyboard(view.buttons) }),
     disableWebPreview: true
   }).then(() => true).catch(() => false)
 }
@@ -5383,6 +5408,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     messageId: message.id,
     textPreview: normalized.text,
     verdict,
+    quiet: policy.quietMode === true,
     // Rides along so an edit arriving after a restart still has something to be
     // measured against, and so a replay can recompute the delta this verdict
     // was — or was not — given.
@@ -5579,6 +5605,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     // never enough to silence somebody the bot could not remove.
     const power = incidentPowerFor(executed, actedVisibly)
     const live = incidents.live(chat.id, sender.id)
+    const delivery = noticeDelivery(policy, verdict, NOTIFY_TTL_COMPACT_MS, selfUsername ?? null)
 
     /**
      * One notice per run, not per message — with one exception, which is the
@@ -5623,11 +5650,16 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       } else if (await refreshIncidentCard(
         chat.id, sender.id, updated, sender.displayName, locale)) {
         return
+      } else if (delivery.silent) {
+        // A quiet card is gone within seconds by design, so a failed refresh is
+        // the expected case here, not a lost notice: the run was announced once,
+        // and a fresh card per message would make quiet mode louder than loud.
+        return
       }
       // Falling through means one of two things: the chat has not been asked yet,
-      // or the card expired (90 seconds) while the run continued (ten minutes).
-      // An enforcement with no notice at all is invisible moderation, so a fresh
-      // notice goes up and the incident adopts it.
+      // or the card expired while the run continued (ten minutes). An enforcement
+      // with no notice at all is invisible moderation, so a fresh notice goes up
+      // and the incident adopts it.
     }
 
     // Grey-zone verdicts ask the community: the vote prompt (with the quoted
@@ -5639,20 +5671,20 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       chatId: chat.id, messageId: message.id, userId: sender.id, userLabel: sender.displayName
     }, { botUsername: selfUsername ?? undefined })
     const sent = await tgSendText(chat.id, viewHtml(view.text), {
-      replyMarkup: toKeyboard(view.buttons),
-      disableWebPreview: true
+      ...(delivery.buttons ? { replyMarkup: toKeyboard(view.buttons) } : {}),
+      disableWebPreview: true, silent: delivery.silent
     }).catch(() => null)
-    if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_COMPACT_MS, `mod_event:${verdict.action}`)
+    if (sent) scheduleDelete(chat.id, sent.id, delivery.ttlMs, `mod_event:${verdict.action}`)
     if (live) {
       // The run continues under its own count; only the notice is new.
-      if (sent) incidents.attachCard(chat.id, sender.id, sent.id)
+      if (sent) incidents.attachCard(chat.id, sender.id, sent.id, delivery.buttons)
     } else if (power) {
       // `removedCount` starts at the trigger plus whatever the sweep took: the
       // number exists so a correction can say how much this verdict cost, and
       // the swept messages cost exactly as much as the one that triggered it.
       incidents.open(chat.id, sender.id, {
         power, action: executed.action, reasonCode: verdict.reasonCode,
-        triggerMessageId: message.id, cardMessageId: sent?.id ?? null,
+        triggerMessageId: message.id, cardMessageId: sent?.id ?? null, cardButtons: delivery.buttons,
         removedCount: 1 + retroPurged + albumRemoved
       })
     }
@@ -5736,10 +5768,12 @@ const wireCallbacks = (): void => {
       }
       // Navigation only (no DB write): open the language sub-screen, or return
       // to the root panel from it.
-      if (action === 'lang_open' || action === 'root') {
+      if (action === 'lang_open' || action === 'root' || action === 'actions') {
         const navView = action === 'lang_open'
           ? await renderLangPanel(locale, chatId)
-          : await renderSettingsPanel(locale, chatId)
+          : action === 'actions'
+            ? await renderChatActions(locale, chatId)
+            : await renderSettingsPanel(locale, chatId)
         await tgEditMessage({
           chatId: query.user.id, message: query.messageId,
           text: viewHtml(navView.text), replyMarkup: toKeyboard(navView.buttons)
@@ -5768,6 +5802,8 @@ const wireCallbacks = (): void => {
         await store.updateGroupSettings(chatId, { confidenceThreshold: presetToThreshold(value) })
       } else if (action === 'toggle_bandb') {
         await store.updateGroupSettings(chatId, { banDatabase: !policy.externalBanEnabled })
+      } else if (action === 'toggle_quiet') {
+        await store.updateGroupSettings(chatId, { quiet: !(policy.quietMode ?? false) })
       } else if (action === 'banan_default') {
         const sec = Number(value)
         if (!Number.isFinite(sec) || sec <= 0) { await query.answer({}); return }

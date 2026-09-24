@@ -54,6 +54,12 @@ export interface Incident {
   /** The compact card in the chat, edited in place as the run grows. */
   cardMessageId: number | null
   /**
+   * Whether that card carries a keyboard. A quiet card does not — its "why?"
+   * link stands in for it — and an edit that re-rendered the view would put the
+   * buttons back. Absent means it does.
+   */
+  cardButtons?: boolean
+  /**
    * A community ballot is already open on this run. Further messages join it
    * rather than opening a second one — the ballot asks about the SENDER, and
    * `enforceVoteSpam` acts on the sender when it resolves.
@@ -156,9 +162,14 @@ export class IncidentTracker {
    * one, and the incident adopts it rather than starting over — the count of what
    * the run has cost has to survive the notice that announced it.
    */
-  attachCard(chatId: number, userId: number, cardMessageId: number, now = Date.now()): void {
+  attachCard(
+    chatId: number, userId: number, cardMessageId: number, cardButtons = true, now = Date.now()
+  ): void {
     const incident = this.live(chatId, userId, now)
-    if (incident) incident.cardMessageId = cardMessageId
+    if (incident) {
+      incident.cardMessageId = cardMessageId
+      incident.cardButtons = cardButtons
+    }
   }
 
   /** The chat has been asked about this run; further messages join that ballot. */

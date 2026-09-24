@@ -25,6 +25,13 @@ export const en: Locale = {
     langButton: '🌐 Language'
   },
 
+  chatActions: {
+    button: '🧾 Recent actions',
+    title: '🧾 <b>What the bot did in this chat</b>',
+    empty: 'Nothing yet: the bot has not acted on anyone in this chat.',
+    footer: '“Why?” opens the evidence, and “Not spam” if the bot got it wrong.'
+  },
+
   ownRestrictions: {
     title: '🧾 <b>What I did about you</b>',
     ago: (span) => `${span} ago`,
@@ -512,6 +519,8 @@ export const en: Locale = {
     voting: 'Community voting',
     enabled: 'Anti-spam',
     banDatabase: 'Spammer databases',
+    quiet: 'Quiet mode',
+    quietHint: '🤫 Notices about confident actions disappear after 5 s. Everything the bot did is under “🧾 Recent actions”. Votes are unaffected.',
     banan: 'Banan duration',
     language: 'Bot language in this chat',
     languageSaved: 'Chat language updated',
