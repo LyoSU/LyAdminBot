@@ -23,6 +23,18 @@ import {
 // 14d is the free-tier (Atlas M0, 512 MB) sustainable ceiling: at the observed
 // write rate 90d retention refills the cluster past quota and blocks writes.
 const DECISIONS_TTL_DAYS = 14
+
+/**
+ * How long a join is remembered.
+ *
+ * Measured over the 14 days to 2026-09-27: 25.6 % of `external_ban_new`
+ * removals were an account already removed in another chat, p50 six minutes
+ * and p90 199 minutes between the two — and nothing could act sooner, because
+ * a join was written nowhere. A week covers that tail many times over and the
+ * accounts that sit silent for days before posting, at a few hundred bytes a
+ * row.
+ */
+export const ARRIVAL_TTL_DAYS = 7
 const LLM_CACHE_TTL_DAYS = 7
 
 /**
@@ -428,6 +440,8 @@ export class MongoStore {
    * moment anything succeeds there.
    */
   get rightsBlocks(): Collection<Document> { return this.collection('pipeline_rights') }
+  /** Who joined which chat this week — see `recordArrival`. */
+  get arrivals(): Collection<Document> { return this.collection('pipeline_arrivals') }
 
   /**
    * Profile-picture hashes, one row per (picture, account).
@@ -646,6 +660,22 @@ export class MongoStore {
      * collection was created to end, arriving through the index list instead.
      */
     await ensureUniqueIndex(this.rightsBlocks, 'chatId')
+
+    /**
+     * Arrivals: the `_id` is the (chat, account) key, so there are two indexes
+     * of our own, one per question asked — "who came into this chat lately" and
+     * "which chats did this account come into". Caught like `chat_actions`: a
+     * missing index costs a scan of a week of joins, never the boot.
+     */
+    await ensureTtlIndex(this.arrivals, { at: 1 }, ARRIVAL_TTL_DAYS * 86400)
+    await this.arrivals.createIndex({ chatId: 1, at: -1 }, { name: 'arrivals_by_chat' })
+      .catch((err: unknown) => {
+        console.warn(`[mongo] arrivals_by_chat index not built: ${(err as Error).message}`)
+      })
+    await this.arrivals.createIndex({ userId: 1 }, { name: 'arrivals_by_user' })
+      .catch((err: unknown) => {
+        console.warn(`[mongo] arrivals_by_user index not built: ${(err as Error).message}`)
+      })
   }
 
   // ── reads used per message ───────────────────────────────────────────
@@ -2544,6 +2574,56 @@ export class MongoStore {
     }))
   }
 
+  /**
+   * Remember that an account joined a chat.
+   *
+   * One row per (chat, account): a second join replaces the first and clears
+   * whatever was concluded about it, since a person who left and came back is
+   * a new arrival to judge. Written for every joiner, screened or not — the
+   * questions this answers ("which other chats is this account sitting in",
+   * "who came in beside it") are about everybody.
+   */
+  async recordArrival(arrival: Omit<ArrivalRecord, 'outcome'>): Promise<void> {
+    await this.arrivals.updateOne(
+      { _id: arrivalKey(arrival.chatId, arrival.userId) as never },
+      {
+        $set: {
+          chatId: arrival.chatId,
+          userId: arrival.userId,
+          joinMessageId: arrival.joinMessageId,
+          at: arrival.at,
+          shape: arrival.shape,
+          messagesGlobalAtJoin: arrival.messagesGlobalAtJoin
+        },
+        $unset: { outcome: '' }
+      },
+      { upsert: true }
+    )
+  }
+
+  /** What became of an arrival. Never creates a row: no join, nothing to annotate. */
+  async noteArrivalOutcome(chatId: number, userId: number, outcome: string): Promise<void> {
+    await this.arrivals.updateOne(
+      { _id: arrivalKey(chatId, userId) as never },
+      { $set: { outcome } }
+    )
+  }
+
+  /** Arrivals in one chat since `since`, newest first. Served by `arrivals_by_chat`. */
+  async recentArrivalsIn(chatId: number, since: Date, limit = 50): Promise<ArrivalRecord[]> {
+    const docs = await this.arrivals.find(
+      { chatId, at: { $gte: since } },
+      { sort: { at: -1 }, limit }
+    ).toArray()
+    return docs.map(docToArrival)
+  }
+
+  /** Every chat this account joined since `since`. Served by `arrivals_by_user`. */
+  async arrivalsOf(userId: number, since: Date): Promise<ArrivalRecord[]> {
+    const docs = await this.arrivals.find({ userId, at: { $gte: since } }).toArray()
+    return docs.map(docToArrival)
+  }
+
   async recentRestrictionsOf(userId: number, limit = 5): Promise<OwnRestriction[]> {
     const docs = await this.decisions.find(
       { userId, action: { $in: [...SENDER_REMOVAL_ACTIONS] }, 'execution.applied': true },
@@ -2598,6 +2678,59 @@ export const trustGrantOf = (groupDoc: unknown, userId: number): TrustGrant | nu
   if (!raw || typeof raw.by !== 'number' || !(raw.at instanceof Date)) return null
   const via = raw.via === 'vote' || raw.via === 'toggle' ? raw.via : 'override'
   return { by: raw.by, via, at: raw.at }
+}
+
+/**
+ * What an account looked like when it joined — facts, never the name itself.
+ *
+ * The fields are the ones that come free with the join (no profile request),
+ * and they are what lets two arrivals be compared later: accounts registered
+ * and dressed in one batch share them, a chat's ordinary newcomers vary.
+ */
+export interface ArrivalShape {
+  username: boolean
+  photo: boolean
+  lastName: boolean
+  premium: boolean
+  /** Dominant script of the display name; null when the letters do not agree. */
+  script: string | null
+  /** Registration predicted from the id, unix seconds; null when the id says nothing. */
+  registeredUnix: number | null
+}
+
+export interface ArrivalRecord {
+  chatId: number
+  userId: number
+  /** Telegram's join line, 0 when there was none to point at. */
+  joinMessageId: number
+  at: Date
+  shape: ArrivalShape
+  /** Standing across all chats when it joined; null when we had no record of the account. */
+  messagesGlobalAtJoin: number | null
+  /** What was concluded about this arrival, when anything was. */
+  outcome: string | null
+}
+
+const arrivalKey = (chatId: number, userId: number): string => `${chatId}:${userId}`
+
+const docToArrival = (d: Document): ArrivalRecord => {
+  const shape = (d['shape'] ?? {}) as Partial<ArrivalShape>
+  return {
+    chatId: Number(d['chatId']),
+    userId: Number(d['userId']),
+    joinMessageId: Number(d['joinMessageId'] ?? 0),
+    at: d['at'] instanceof Date ? d['at'] : new Date(0),
+    shape: {
+      username: shape.username === true,
+      photo: shape.photo === true,
+      lastName: shape.lastName === true,
+      premium: shape.premium === true,
+      script: typeof shape.script === 'string' ? shape.script : null,
+      registeredUnix: typeof shape.registeredUnix === 'number' ? shape.registeredUnix : null
+    },
+    messagesGlobalAtJoin: typeof d['messagesGlobalAtJoin'] === 'number' ? d['messagesGlobalAtJoin'] : null,
+    outcome: typeof d['outcome'] === 'string' ? d['outcome'] : null
+  }
 }
 
 /** The actions that take the person, not just the message. */

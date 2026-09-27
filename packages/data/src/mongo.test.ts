@@ -1917,6 +1917,74 @@ describe('recentRestrictionsOf — the notice a removed member can reach', () =>
   })
 })
 
+describe('arrivals — who joined which chat this week', () => {
+  const shape = {
+    username: false, photo: true, lastName: true, premium: false, script: 'cyrillic', registeredUnix: 1_780_000_000
+  }
+  const arrivalsStore = (docs: Record<string, unknown>[] = []): MongoStore & {
+    updates: { filter: Record<string, unknown>; update: Record<string, unknown>; options?: Record<string, unknown> }[]
+    finds: { filter: Record<string, unknown>; options?: Record<string, unknown> }[]
+  } => {
+    const updates: { filter: Record<string, unknown>; update: Record<string, unknown>; options?: Record<string, unknown> }[] = []
+    const finds: { filter: Record<string, unknown>; options?: Record<string, unknown> }[] = []
+    const store = {
+      arrivals: {
+        updateOne: async (filter: Record<string, unknown>, update: Record<string, unknown>, options?: Record<string, unknown>) => {
+          updates.push({ filter, update, ...(options ? { options } : {}) })
+          return { modifiedCount: 1 }
+        },
+        find: (filter: Record<string, unknown>, options?: Record<string, unknown>) => {
+          finds.push({ filter, ...(options ? { options } : {}) })
+          return { toArray: async () => docs }
+        }
+      }
+    } as unknown as MongoStore
+    return Object.assign(store, {
+      recordArrival: MongoStore.prototype.recordArrival,
+      noteArrivalOutcome: MongoStore.prototype.noteArrivalOutcome,
+      recentArrivalsIn: MongoStore.prototype.recentArrivalsIn,
+      arrivalsOf: MongoStore.prototype.arrivalsOf,
+      updates, finds
+    }) as never
+  }
+  const at = new Date('2026-09-27T10:00:00Z')
+
+  it('keeps one row per chat and account, and a rejoin clears the old conclusion', async () => {
+    const store = arrivalsStore()
+    await store.recordArrival({ chatId: -100, userId: 7, joinMessageId: 55, at, shape, messagesGlobalAtJoin: null })
+    expect(store.updates[0]!.filter).toEqual({ _id: '-100:7' })
+    expect(store.updates[0]!.update).toEqual({
+      $set: { chatId: -100, userId: 7, joinMessageId: 55, at, shape, messagesGlobalAtJoin: null },
+      $unset: { outcome: '' }
+    })
+    expect(store.updates[0]!.options).toEqual({ upsert: true })
+  })
+
+  it('annotates an arrival without ever creating one', async () => {
+    const store = arrivalsStore()
+    await store.noteArrivalOutcome(-100, 7, 'listed')
+    expect(store.updates[0]).toEqual({ filter: { _id: '-100:7' }, update: { $set: { outcome: 'listed' } } })
+  })
+
+  it('reads a chat newest first, and an account across chats', async () => {
+    const store = arrivalsStore()
+    await store.recentArrivalsIn(-100, at, 20)
+    await store.arrivalsOf(7, at)
+    expect(store.finds[0]).toEqual({ filter: { chatId: -100, at: { $gte: at } }, options: { sort: { at: -1 }, limit: 20 } })
+    expect(store.finds[1]).toEqual({ filter: { userId: 7, at: { $gte: at } } })
+  })
+
+  it('reads a row with missing fields as absent facts, not as false claims', async () => {
+    const store = arrivalsStore([{ chatId: -100, userId: 7, at }])
+    const [row] = await store.recentArrivalsIn(-100, at)
+    expect(row).toEqual({
+      chatId: -100, userId: 7, joinMessageId: 0, at,
+      shape: { username: false, photo: false, lastName: false, premium: false, script: null, registeredUnix: null },
+      messagesGlobalAtJoin: null, outcome: null
+    })
+  })
+})
+
 describe('recentActionsIn — what the bot did in a chat, for its admins', () => {
   const at = new Date('2026-09-24T10:00:00Z')
   const actionsStore = (

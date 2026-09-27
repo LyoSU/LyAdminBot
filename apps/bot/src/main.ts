@@ -66,6 +66,7 @@ import { MemberFactsCache, type MemberFacts } from './member-facts.js'
 import { JOIN_WINDOW_MS, JoinRateTracker } from './join-rate.js'
 import { IncidentTracker, SenderMessageLog, incidentPowerFor, correctionOwns, type Incident } from './incident.js'
 import { ArrivalLog, arrivalMessageIds } from './arrival-log.js'
+import { arrivalShapeOf } from './arrival-cohort.js'
 import { CaptchaGates, type CaptchaGate } from './captcha-gate.js'
 import { DuplicateTally } from './duplicate-tally.js'
 import { getUsersEach } from './users-each.js'
@@ -3839,6 +3840,44 @@ const screenJoinerAvatars = async (
   }
 }
 
+/**
+ * A bulk add can name dozens; each row costs a user-doc read and an upsert, so
+ * the tail of an unusually large add goes unrecorded rather than stalling.
+ */
+const ARRIVALS_RECORDED_MAX = 50
+
+/**
+ * Write every join down — see `arrival-cohort.ts` for what it answers. Runs
+ * for joiners who are never screened too: the question "which chats is this
+ * account in" is about all of them.
+ */
+const recordArrivals = async (chat: Chat, joiners: User[], joinMessageId: number): Promise<void> => {
+  const at = new Date()
+  const nowUnix = Math.floor(at.getTime() / 1000)
+  for (const joiner of joiners.filter((j) => j.id !== selfId && !j.isBot).slice(0, ARRIVALS_RECORDED_MAX)) {
+    const history = await store.getUserDoc(joiner.id)
+      .then((doc) => userDocToHistory(doc as never, 0))
+      .catch(() => null)
+    await store.recordArrival({
+      chatId: chat.id,
+      userId: joiner.id,
+      joinMessageId,
+      at,
+      shape: arrivalShapeOf({
+        id: joiner.id,
+        displayName: joiner.displayName,
+        username: joiner.username,
+        lastName: joiner.lastName,
+        hasPhoto: joiner.photo !== null,
+        isPremium: joiner.isPremium
+      }, nowUnix),
+      messagesGlobalAtJoin: history?.messagesGlobal ?? null
+    }).catch((err: unknown) => {
+      log.warn('arrival_unsaved', { chatId: chat.id, userId: joiner.id, error: telegramErrorName(err) })
+    })
+  }
+}
+
 /** Greet new members when welcome is enabled (off by default). */
 const handleWelcomeGreeting = async (message: Message, chat: Chat, joiners: User[]): Promise<void> => {
   if (joiners.length === 0) return
@@ -4246,6 +4285,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       // Noted before the greeting and independently of it: the service line is
       // Telegram's own and exists whether or not this chat greets anybody.
       arrivals.noteJoin(chat.id, joiners.map((joiner) => joiner.id), message.id)
+      void recordArrivals(chat, joiners, message.id).catch(() => { /* best-effort */ })
       await handleWelcomeGreeting(message, chat, joiners)
       // Fire-and-forget: avatar download must never delay update handling.
       void screenJoinerAvatars(chat, joiners, message.id).catch(() => { /* best-effort */ })
