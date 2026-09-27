@@ -3114,7 +3114,7 @@ const joinerAvatarsInFlight = new Map<number, Promise<string | null>>()
  * stalls the shared connection and with it moderation everywhere. The message
  * path had already learned this twice; the join path had not.
  *
- * `screenJoinerAvatars` is fire-and-forget, so several runs genuinely overlap —
+ * `screenJoiners` is fire-and-forget, so several runs genuinely overlap —
  * a plain cache read is not enough on its own, hence the in-flight map.
  */
 const joinerAvatar = async (userId: number): Promise<string | null> => {
@@ -3912,13 +3912,97 @@ const gateExplicitJoiner = async (
   })
 }
 
-const screenJoinerAvatars = async (
+/**
+ * Ban a joiner at the door when its record alone would ban it unread.
+ *
+ * The join path read the cached listing and did nothing with it but count it
+ * toward a surge alert; the fresh lookup ran only on the account's first
+ * message. So a listed account sat in the chat until it posted, and every
+ * member saw the advert before `external_ban_new` removed it. The lookup is
+ * the message path's own — per-source cache, retry backoff, the chat's
+ * ban-database switch — moved to the moment the account arrives. It is two
+ * HTTP requests with a 2s ceiling and no Telegram call, so unlike the avatar
+ * screen it is not rationed by the surge budget.
+ *
+ * True when the account was banned.
+ */
+const banJoinerOnRecord = async (
+  chat: Chat, joiner: User, joinMessageId: number, policy: ReturnType<typeof groupDocToChatPolicy>
+): Promise<boolean> => {
+  if (!policy.enabled) return false
+  const userDoc = await store.getUserDoc(joiner.id).catch(() => null)
+  const history = userDocToHistory(userDoc as never, 0)
+  let externalBan = policy.externalBanEnabled ? (history?.externalBan ?? null) : null
+  if (policy.externalBanEnabled) {
+    const cached = (userDoc as { externalBan?: ExternalBanCacheView } | null)?.externalBan
+    const sources = sourcesToQuery(cached, Date.now())
+    if (sources.lols || sources.cas) {
+      const fresh = await fetchExternalBan(joiner.id, { sources }).catch(() => null)
+      if (fresh) {
+        store.saveExternalBan(joiner.id, fresh).catch(() => { /* cache is best-effort */ })
+        externalBan = mergeExternalBan({
+          lols: fresh.lols ?? (cached?.lols as never),
+          cas: fresh.cas ?? (cached?.cas as never)
+        })
+      }
+    }
+  }
+  const snapshot = buildUserSnapshot(joiner, withLiveFacts(history, {
+    avatars: history?.avatars ?? null, externalBan
+  }))
+  if (!hasBanGradeAccountVerdict(snapshot)) return false
+
+  const signals = extractUserSignals(snapshot)
+  const saw: Record<string, string | number> = { extban: externalBan ? 'listed' : 'none' }
+  const outcome = await banOnRecord({
+    chat, target: joiner, signals, evidence: null, evidenceSignal: null, saw,
+    messagesGlobal: history?.messagesGlobal ?? 0,
+    reason: 'listed_arrival',
+    replyToMessageId: joinMessageId > 0 ? joinMessageId : null,
+    subjectMessageId: null,
+    note: (screen, noted = []) => {
+      void store.recordDecision({
+        chatId: chat.id, userId: joiner.id, messageId: 0, textPreview: '',
+        verdict: {
+          pSpam: 0, action: 'none', needsVote: false, banDurationSeconds: null,
+          decidedBy: 'join_screen', ruleId: null, signals: noted,
+          reasonCode: 'listed_arrival', reasonEvidence: null,
+          meta: { screen, saw: Object.entries(saw).map(([k, v]) => `${k}=${v}`).join(' ') }
+        },
+        latencyMs: 0
+      }).catch(() => { /* telemetry must never break moderation */ })
+    }
+  })
+  log.info('listed_arrival', { chatId: chat.id, chat: chat.title ?? undefined, userId: joiner.id, outcome })
+  if (outcome !== 'ban') return false
+
+  await store.noteArrivalOutcome(chat.id, joiner.id, 'banned_on_record').catch(() => { /* no row is fine */ })
+  // The join line names somebody who is gone — the arrival purge's rule, for
+  // the same reason, and with its exception: a bulk add's line is still true
+  // about everybody else it names.
+  const arrival = arrivals.take(chat.id, joiner.id)
+  if (arrival && arrival.subjects === 1) {
+    const ids = arrivalMessageIds(arrival)
+    if (ids.length > 0) await gateway.tg.deleteMessagesById(chat.id, ids).catch(() => { /* no rights */ })
+  }
+  void propagateRecordBan(chat.id, joiner, signals).catch(() => { /* best-effort */ })
+  return true
+}
+
+const screenJoiners = async (
   chat: Chat, joiners: User[], joinMessageId: number
 ): Promise<void> => {
+  const listed = new Set<number>()
+  const groupDoc = await store.getGroupDoc(chat.id).catch(() => null)
+  const policy = groupDocToChatPolicy(groupDoc as never)
+  for (const joiner of joiners.filter((j) => j.id !== selfId && !j.isBot).slice(0, ARRIVALS_RECORDED_MAX)) {
+    if (await banJoinerOnRecord(chat, joiner, joinMessageId, policy).catch(() => false)) listed.add(joiner.id)
+  }
+
   // A bulk add can carry dozens of users; screening all of them sequentially
   // would stall the update loop and burn a moderation call each. The cap keeps
   // the join path bounded — the authoritative check still runs per message.
-  const candidates = joiners.filter((joiner) => joiner.id !== selfId)
+  const candidates = joiners.filter((joiner) => joiner.id !== selfId && !listed.has(joiner.id))
   const granted = Math.min(JOIN_SCREEN_MAX, joinRate.claimScreening(chat.id, candidates.length))
   for (const joiner of candidates.slice(0, granted)) {
     const history = await store.getUserDoc(joiner.id)
@@ -4395,10 +4479,12 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       // Noted before the greeting and independently of it: the service line is
       // Telegram's own and exists whether or not this chat greets anybody.
       arrivals.noteJoin(chat.id, joiners.map((joiner) => joiner.id), message.id)
-      void recordArrivals(chat, joiners, message.id).catch(() => { /* best-effort */ })
+      // Recorded before screening, so a ban at the door annotates a row that
+      // exists rather than racing the upsert that would clear it.
+      const recorded = recordArrivals(chat, joiners, message.id).catch(() => { /* best-effort */ })
       await handleWelcomeGreeting(message, chat, joiners)
-      // Fire-and-forget: avatar download must never delay update handling.
-      void screenJoinerAvatars(chat, joiners, message.id).catch(() => { /* best-effort */ })
+      // Fire-and-forget: lookups and avatar downloads must never delay update handling.
+      void recorded.then(() => screenJoiners(chat, joiners, message.id)).catch(() => { /* best-effort */ })
     }
     return
   }

@@ -165,7 +165,8 @@ export const tr: Locale = {
     trusted_report: 'güvenilir bir üye bunu spam olarak bildirdi',
     community_vote: 'topluluk oyladı: spam',
     forward_blacklist: 'bilinen bir spam kaynağından iletildi',
-    record_ban_elsewhere: 'hesap kaydı nedeniyle başka bir sohbetten zaten çıkarıldı (spam veritabanları, Telegram işareti) — burada ilk mesajından önce çıkarıldı'
+    record_ban_elsewhere: 'hesap kaydı nedeniyle başka bir sohbetten zaten çıkarıldı (spam veritabanları, Telegram işareti) — burada ilk mesajından önce çıkarıldı',
+    listed_arrival: 'girişte: hesap spam veritabanlarında veya Telegram tarafından işaretli'
   },
   reasonFallback: 'şüpheli etkinlik',
 

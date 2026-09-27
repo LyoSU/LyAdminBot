@@ -166,7 +166,8 @@ export const en: Locale = {
     trusted_report: 'a trusted member reported this as spam',
     community_vote: 'the community voted: spam',
     forward_blacklist: 'forwarded from a known spam source',
-    record_ban_elsewhere: 'account already removed from another chat on its record (spam databases, Telegram flag) — removed here before it posted'
+    record_ban_elsewhere: 'account already removed from another chat on its record (spam databases, Telegram flag) — removed here before it posted',
+    listed_arrival: 'on arrival: account is in spammer databases or flagged by Telegram'
   },
   reasonFallback: 'suspicious activity',
 
