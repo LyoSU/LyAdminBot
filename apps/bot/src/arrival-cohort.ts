@@ -33,3 +33,43 @@ export const arrivalShapeOf = (joiner: JoinerFacts, nowUnix = Math.floor(Date.no
   script: dominantScript(String(joiner.displayName ?? '')),
   registeredUnix: predictRegistrationUnix(joiner.id, nowUnix)
 })
+
+/**
+ * Outcomes after which an arrival is settled: the account has already been
+ * taken from that chat, so there is nothing left to carry over to it.
+ */
+export const REMOVED_ARRIVAL_OUTCOMES: ReadonlySet<string> = new Set([
+  'removed', 'banned_on_record', 'banned_by_admin'
+])
+
+/**
+ * At most this many chats per account. The measured worst spree touched nine
+ * chats in a fortnight; ten keeps one account from turning into a burst of
+ * bans and notices across the network.
+ */
+export const RECORD_BAN_CHATS_MAX = 10
+
+/**
+ * The other chats an account was removed from one chat for, on its record.
+ *
+ * Only chats it was SEEN joining this week — the one membership the bot knows
+ * without asking Telegram about every chat it sits in, which at the observed
+ * removal rate would cost tens of thousands of requests a day. Newest first,
+ * because the most recent join is the one most likely to be about to post.
+ */
+export const recordBanTargets = (
+  arrivals: readonly { chatId: number; at: Date; outcome: string | null }[],
+  fromChatId: number,
+  max = RECORD_BAN_CHATS_MAX
+): number[] => {
+  const seen = new Set<number>()
+  const out: number[] = []
+  for (const a of [...arrivals].sort((x, y) => y.at.getTime() - x.at.getTime())) {
+    if (a.chatId === fromChatId || seen.has(a.chatId)) continue
+    seen.add(a.chatId)
+    if (a.outcome !== null && REMOVED_ARRIVAL_OUTCOMES.has(a.outcome)) continue
+    out.push(a.chatId)
+    if (out.length >= max) break
+  }
+  return out
+}

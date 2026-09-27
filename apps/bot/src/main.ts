@@ -42,7 +42,7 @@ import {
   PersistentVelocityPort, PersistentSessionPort, PersistentBurstPort, MemoryConversationWindow,
   MongoProfileMediaPort,
   matchExtras, buildWelcomeGreeting, PendingInput,
-  groupDocToChatPolicy, presetToThreshold, userDocToHistory, mergeExternalBan, trustGrantOf,
+  groupDocToChatPolicy, presetToThreshold, userDocToHistory, mergeExternalBan, trustGrantOf, ARRIVAL_TTL_DAYS,
   type NormalizedExtra, type PendingEntry
 } from '@lyadmin/data'
 import {
@@ -66,7 +66,7 @@ import { MemberFactsCache, type MemberFacts } from './member-facts.js'
 import { JOIN_WINDOW_MS, JoinRateTracker } from './join-rate.js'
 import { IncidentTracker, SenderMessageLog, incidentPowerFor, correctionOwns, type Incident } from './incident.js'
 import { ArrivalLog, arrivalMessageIds } from './arrival-log.js'
-import { arrivalShapeOf } from './arrival-cohort.js'
+import { arrivalShapeOf, recordBanTargets } from './arrival-cohort.js'
 import { CaptchaGates, type CaptchaGate } from './captcha-gate.js'
 import { DuplicateTally } from './duplicate-tally.js'
 import { getUsersEach } from './users-each.js'
@@ -3421,6 +3421,213 @@ const scheduleProfileRecheck = (chat: Chat, target: User, messageId: number): vo
 }
 
 /**
+ * Ban an account on its record alone — somebody else's verdict on it, with no
+ * message of its own to read — in one chat, under that chat's rules.
+ *
+ * Lifted out of `screenAccount` unchanged so the same guarded act can be
+ * repeated in the other chats an account is known to have joined; see
+ * `propagateRecordBan`. Every guard stays with the act rather than with any
+ * caller, which is the whole of what 2026-08-26 taught about this branch.
+ */
+const banOnRecord = async (p: {
+  chat: { id: number; title?: string | null }
+  target: { id: number; displayName: string }
+  signals: Signal[]
+  evidence: string | null
+  evidenceSignal: string | null
+  messagesGlobal: number
+  reason: string
+  replyToMessageId: number | null
+  subjectMessageId: number | null
+  saw: Record<string, string | number>
+  note: (outcome: string, signals?: Signal[]) => void
+}): Promise<'ban' | 'none'> => {
+  const { chat, target, signals, evidence, evidenceSignal, saw, note } = p
+  /**
+   * The severe outcome, and until 2026-08-26 the only one with no chat-level
+   * guard on it at all — `gateAccount` below checked five things and wrote a
+   * decision row, while this branch returned three lines earlier having
+   * checked nothing and written two log lines.
+   *
+   * So any member's `/report` could ban an account for thirty days in a chat
+   * that had switched anti-spam off, or that does not honour lols/CAS. And
+   * because there was no decision row, the ban was invisible to everything
+   * built to correct one: no "Why?" card, no override button, nothing for
+   * `restoreFalsePositive` to find. The person simply disappeared for a month.
+   *
+   * Trust and standing are still not consulted — see `accountScreenAllowed`,
+   * where that asymmetry is now stated rather than implied.
+   */
+  const groupDoc = await store.getGroupDoc(chat.id).catch(() => null)
+  const policy = groupDocToChatPolicy(groupDoc as never)
+  const allowed = accountScreenAllowed('ban', policy, {
+    id: target.id, messagesGlobal: p.messagesGlobal
+  }, hardVerdictSourceOf(signals))
+  // Defence in depth. Both callers check the target's adminship before they
+  // get here, but `executor.ts` treats "never act on an admin" as absolute
+  // and this path does not go through the executor at all.
+  if (allowed !== 'allow' || await isChatAdmin(chat.id, target.id)) {
+    const why = allowed === 'allow' ? 'senderIsAdmin' : allowed
+    log.info('account_screen_ban_skipped', { chatId: chat.id, userId: target.id, reason: why })
+    saw['blocked'] = why
+    note('ban_blocked', signals)
+    return 'none'
+  }
+
+  /**
+   * The message goes with the person.
+   *
+   * This branch does not go through `executor.ts`, where every removal action
+   * deletes the message as its first line — so the invariant the rest of the
+   * codebase holds was simply absent here, and the reported message outlived
+   * the account by design of nothing at all.
+   *
+   * Production 2026-08-27, one comment section: a message scored 0.92 and was
+   * answered with a captcha (the `low_information_profile` ceiling), the
+   * captcha was undeliverable to a commenter who is not a member of the
+   * discussion group, and the gate lifted itself. Five reports later this
+   * branch banned the account for a month, twice — and the message stayed.
+   *
+   * Attempted BEFORE the ban and independently of it, exactly as the executor
+   * does, because deleting and banning are separate rights: a chat that grants
+   * one and not the other is not hypothetical (2026-08-26: 269 deletions and 0
+   * bans across 67 accounts in one chat). Tying the delete to the ban's
+   * success would hand that chat the worst of both.
+   */
+  const removeId = accountScreenRemoves('ban', p.subjectMessageId)
+  const removed = removeId === null
+    ? null
+    : await gateway.tg.deleteMessagesById(chat.id, [removeId])
+      .then(() => true).catch(() => false)
+  if (removed !== null) saw['deleted'] = removed ? 'yes' : 'failed'
+
+  const banned = await gateway.moderationActions.ban(chat.id, target.id, TIMED_BAN_SECONDS)
+    .then(() => true).catch(() => false)
+  log.info('account_screen_ban', {
+    chatId: chat.id, userId: target.id, applied: banned,
+    ...(removed !== null ? { deleted: removed, messageId: removeId } : {})
+  })
+  // The gate this screen may have opened minutes ago is now about somebody
+  // who is not here. Production 2026-08-27 21:47: banned, and the gate went
+  // on to mute the banned account and leave its card up for 69 minutes.
+  if (banned) await dropGate(chat.id, target.id, 'account_screen_ban')
+  if (!banned) {
+    note('ban_failed', signals)
+    return 'none'
+  }
+
+  const banVerdict: Verdict = {
+    pSpam: 1, action: 'ban', needsVote: false, banDurationSeconds: TIMED_BAN_SECONDS,
+    decidedBy: 'join_screen', ruleId: null, signals,
+    reasonCode: p.reason, reasonEvidence: evidence,
+    meta: evidenceSignal === null ? {} : { reasonSignal: evidenceSignal }
+  }
+  const cardMessageId = p.replyToMessageId ?? 0
+  // Both halves, because both are how a correction finds this: the memory the
+  // override callback reads first, and the row it falls back to.
+  rememberVerdict(chat.id, cardMessageId, banVerdict)
+  await store.recordDecision({
+    chatId: chat.id, userId: target.id, messageId: cardMessageId,
+    textPreview: '',
+    verdict: banVerdict,
+    quiet: policy.quietMode === true,
+    execution: {
+      applied: true, deleted: removed, skippedReason: null,
+      failed: [], albumRemoved: 0, retroPurged: 0
+    },
+    latencyMs: 0
+  }).catch(() => { /* telemetry must never break moderation */ })
+
+  const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
+  const view = compactNotification(locale, banVerdict, {
+    chatId: chat.id, messageId: cardMessageId, userId: target.id, userLabel: target.displayName
+  }, { botUsername: selfUsername ?? undefined })
+  const delivery = noticeDelivery(policy, banVerdict, NOTIFY_TTL_COMPACT_MS, selfUsername ?? null)
+  const sent = await tgSendText(chat.id, viewHtml(view.text), {
+    ...(delivery.buttons ? { replyMarkup: toKeyboard(view.buttons) } : {}),
+    disableWebPreview: true, silent: delivery.silent
+  }).catch(() => null)
+  if (sent) scheduleDelete(chat.id, sent.id, delivery.ttlMs, 'mod_event:account_screen')
+  return 'ban'
+}
+
+/**
+ * Carries one account's record ban at most once an hour: a second trigger for
+ * the same account (its next message racing the first ban, two chats banning
+ * it at once) must not walk its chats again and post a second round of notices.
+ */
+const recordBansCarried = new Map<number, number>()
+const RECORD_BAN_CARRY_TTL_MS = 60 * 60 * 1000
+
+/**
+ * An account removed on its RECORD in one chat, removed in the other chats it
+ * joined this week before it posts there.
+ *
+ * Measured over the 14 days to 2026-09-27: 442 of 1729 `external_ban_new`
+ * removals (25.6 %) were an account already removed from another chat, p50 six
+ * minutes and p90 199 minutes earlier. Each of those was one more advert that
+ * every member of the next chat saw first. The record does not change between
+ * chats, so neither does the verdict — only the chat's own rules can, and
+ * `banOnRecord` applies them per chat: anti-spam off, ban databases off, an
+ * admin, all still refuse.
+ *
+ * Only a verdict that bans unread qualifies (`hasBanGradeAccountVerdict`) —
+ * never something the pipeline concluded from a message, which is a finding
+ * about that message and not about the account.
+ */
+const propagateRecordBan = async (
+  fromChatId: number, target: { id: number; displayName: string }, signals: Signal[]
+): Promise<void> => {
+  const now = Date.now()
+  const last = recordBansCarried.get(target.id)
+  if (last !== undefined && now - last < RECORD_BAN_CARRY_TTL_MS) return
+  recordBansCarried.set(target.id, now)
+  if (recordBansCarried.size > 5000) {
+    for (const [id, at] of recordBansCarried) if (now - at >= RECORD_BAN_CARRY_TTL_MS) recordBansCarried.delete(id)
+  }
+
+  const since = new Date(now - ARRIVAL_TTL_DAYS * 86400_000)
+  const rows = await store.arrivalsOf(target.id, since).catch(() => [])
+  await store.noteArrivalOutcome(fromChatId, target.id, 'removed').catch(() => { /* no row is fine */ })
+  const joins = new Map(rows.map((r) => [r.chatId, r.joinMessageId]))
+  for (const chatId of recordBanTargets(rows, fromChatId)) {
+    // Somebody who already left is not about to post; a notice about them
+    // would name a person nobody in the room can see.
+    const facts = await chatMemberFacts(chatId, target.id)
+    if (facts.isParticipant === false) {
+      log.info('record_ban_carry_skipped', { from: fromChatId, chatId, userId: target.id, reason: 'not_participant' })
+      continue
+    }
+    const saw: Record<string, string | number> = { carriedFrom: fromChatId }
+    const joinMessageId = joins.get(chatId) ?? 0
+    const outcome = await banOnRecord({
+      chat: { id: chatId, title: null },
+      target, signals, evidence: null, evidenceSignal: null, saw,
+      messagesGlobal: 0,
+      reason: 'record_ban_elsewhere',
+      replyToMessageId: joinMessageId > 0 ? joinMessageId : null,
+      subjectMessageId: null,
+      note: (screen, noted = []) => {
+        void store.recordDecision({
+          chatId, userId: target.id, messageId: 0, textPreview: '',
+          verdict: {
+            pSpam: 0, action: 'none', needsVote: false, banDurationSeconds: null,
+            decidedBy: 'join_screen', ruleId: null, signals: noted,
+            reasonCode: 'record_ban_elsewhere', reasonEvidence: null,
+            meta: { screen, carriedFrom: fromChatId }
+          },
+          latencyMs: 0
+        }).catch(() => { /* telemetry must never break moderation */ })
+      }
+    })
+    log.info('record_ban_carried', { from: fromChatId, chatId, userId: target.id, outcome })
+    if (outcome === 'ban') {
+      await store.noteArrivalOutcome(chatId, target.id, 'banned_on_record').catch(() => { /* no row is fine */ })
+    }
+  }
+}
+
+/**
  * Look at an account, with no message to go on.
  *
  * A report is not evidence — it is a request to LOOK, and looking is the one
@@ -3579,112 +3786,15 @@ const screenAccount = async (params: {
   }
 
   if (verdict === 'ban') {
-    /**
-     * The severe outcome, and until 2026-08-26 the only one with no chat-level
-     * guard on it at all — `gateAccount` below checked five things and wrote a
-     * decision row, while this branch returned three lines earlier having
-     * checked nothing and written two log lines.
-     *
-     * So any member's `/report` could ban an account for thirty days in a chat
-     * that had switched anti-spam off, or that does not honour lols/CAS. And
-     * because there was no decision row, the ban was invisible to everything
-     * built to correct one: no "Why?" card, no override button, nothing for
-     * `restoreFalsePositive` to find. The person simply disappeared for a month.
-     *
-     * Trust and standing are still not consulted — see `accountScreenAllowed`,
-     * where that asymmetry is now stated rather than implied.
-     */
-    const groupDoc = await store.getGroupDoc(chat.id).catch(() => null)
-    const policy = groupDocToChatPolicy(groupDoc as never)
-    const allowed = accountScreenAllowed('ban', policy, {
-      id: target.id, messagesGlobal: history?.messagesGlobal ?? 0
-    }, hardVerdictSourceOf(signals))
-    // Defence in depth. Both callers check the target's adminship before they
-    // get here, but `executor.ts` treats "never act on an admin" as absolute
-    // and this path does not go through the executor at all.
-    if (allowed !== 'allow' || await isChatAdmin(chat.id, target.id)) {
-      const why = allowed === 'allow' ? 'senderIsAdmin' : allowed
-      log.info('account_screen_ban_skipped', { chatId: chat.id, userId: target.id, reason: why })
-      saw['blocked'] = why
-      note('ban_blocked', signals)
-      return 'none'
-    }
-
-    /**
-     * The message goes with the person.
-     *
-     * This branch does not go through `executor.ts`, where every removal action
-     * deletes the message as its first line — so the invariant the rest of the
-     * codebase holds was simply absent here, and the reported message outlived
-     * the account by design of nothing at all.
-     *
-     * Production 2026-08-27, one comment section: a message scored 0.92 and was
-     * answered with a captcha (the `low_information_profile` ceiling), the
-     * captcha was undeliverable to a commenter who is not a member of the
-     * discussion group, and the gate lifted itself. Five reports later this
-     * branch banned the account for a month, twice — and the message stayed.
-     *
-     * Attempted BEFORE the ban and independently of it, exactly as the executor
-     * does, because deleting and banning are separate rights: a chat that grants
-     * one and not the other is not hypothetical (2026-08-26: 269 deletions and 0
-     * bans across 67 accounts in one chat). Tying the delete to the ban's
-     * success would hand that chat the worst of both.
-     */
-    const removeId = accountScreenRemoves('ban', params.subjectMessageId)
-    const removed = removeId === null
-      ? null
-      : await gateway.tg.deleteMessagesById(chat.id, [removeId])
-        .then(() => true).catch(() => false)
-    if (removed !== null) saw['deleted'] = removed ? 'yes' : 'failed'
-
-    const banned = await gateway.moderationActions.ban(chat.id, target.id, TIMED_BAN_SECONDS)
-      .then(() => true).catch(() => false)
-    log.info('account_screen_ban', {
-      chatId: chat.id, userId: target.id, applied: banned,
-      ...(removed !== null ? { deleted: removed, messageId: removeId } : {})
+    const outcome = await banOnRecord({
+      chat, target, signals, evidence, evidenceSignal, saw, note,
+      messagesGlobal: history?.messagesGlobal ?? 0,
+      reason: params.reason,
+      replyToMessageId: params.replyToMessageId,
+      subjectMessageId: params.subjectMessageId
     })
-    // The gate this screen may have opened minutes ago is now about somebody
-    // who is not here. Production 2026-08-27 21:47: banned, and the gate went
-    // on to mute the banned account and leave its card up for 69 minutes.
-    if (banned) await dropGate(chat.id, target.id, 'account_screen_ban')
-    if (!banned) {
-      note('ban_failed', signals)
-      return 'none'
-    }
-
-    const banVerdict: Verdict = {
-      pSpam: 1, action: 'ban', needsVote: false, banDurationSeconds: TIMED_BAN_SECONDS,
-      decidedBy: 'join_screen', ruleId: null, signals,
-      reasonCode: params.reason, reasonEvidence: evidence,
-      meta: evidenceSignal === null ? {} : { reasonSignal: evidenceSignal }
-    }
-    const cardMessageId = params.replyToMessageId ?? 0
-    // Both halves, because both are how a correction finds this: the memory the
-    // override callback reads first, and the row it falls back to.
-    rememberVerdict(chat.id, cardMessageId, banVerdict)
-    await store.recordDecision({
-      chatId: chat.id, userId: target.id, messageId: cardMessageId,
-      textPreview: '',
-      verdict: banVerdict,
-      quiet: policy.quietMode === true,
-      execution: {
-        applied: true, deleted: removed, skippedReason: null,
-        failed: [], albumRemoved: 0, retroPurged: 0
-      },
-      latencyMs: 0
-    }).catch(() => { /* telemetry must never break moderation */ })
-
-    const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
-    const view = compactNotification(locale, banVerdict, {
-      chatId: chat.id, messageId: cardMessageId, userId: target.id, userLabel: target.displayName
-    }, { botUsername: selfUsername ?? undefined })
-    const delivery = noticeDelivery(policy, banVerdict, NOTIFY_TTL_COMPACT_MS, selfUsername ?? null)
-    const sent = await tgSendText(chat.id, viewHtml(view.text), {
-      ...(delivery.buttons ? { replyMarkup: toKeyboard(view.buttons) } : {}),
-      disableWebPreview: true, silent: delivery.silent
-    }).catch(() => null)
-    if (sent) scheduleDelete(chat.id, sent.id, delivery.ttlMs, 'mod_event:account_screen')
-    return 'ban'
+    if (outcome === 'ban') void propagateRecordBan(chat.id, target, signals).catch(() => { /* best-effort */ })
+    return outcome
   }
 
   const gated = await gateAccount({
@@ -5152,6 +5262,12 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
    */
   if (result.applied && removesSender(verdict.action)) {
     await dropGate(chat.id, sender.id, `enforced:${verdict.action}`)
+    void store.noteArrivalOutcome(chat.id, sender.id, 'removed').catch(() => { /* no row is fine */ })
+    // The account's record, not this message, is what carries to its other
+    // chats — so only a verdict that would have banned it unread qualifies.
+    if (userSender && user && !verdict.needsVote && hasBanGradeAccountVerdict(user)) {
+      void propagateRecordBan(chat.id, userSender, verdict.signals).catch(() => { /* best-effort */ })
+    }
   }
 
   let retroPurged = 0
