@@ -46,7 +46,7 @@ import {
   type NormalizedExtra, type PendingEntry
 } from '@lyadmin/data'
 import {
-  captchaPrompt, chatActionsView, cohortCard, CHAT_ACTIONS_SHOWN, compactNotification, escapeHtml as escapeName, helpView,
+  captchaPrompt, chatActionsView, chatArrivalsView, ARRIVALS_SHOWN, arrivalBannable, arrivalSilent, type ArrivalEntry, cohortCard, CHAT_ACTIONS_SHOWN, compactNotification, escapeHtml as escapeName, helpView,
   langPanel, langPicker, parseCallback, resolveLocale, settingsDeepLink, settingsPanel,
   nameIsPromo, ownRestrictionsView, OWN_RESTRICTIONS_SHOWN, startCard, startGroupHint, statsCard, topList, userMention, userProfileCard, votePrompt, voteResult,
   voterListView, whyCard, whyView,
@@ -66,7 +66,9 @@ import { MemberFactsCache, type MemberFacts } from './member-facts.js'
 import { JOIN_WINDOW_MS, JoinRateTracker } from './join-rate.js'
 import { IncidentTracker, SenderMessageLog, incidentPowerFor, correctionOwns, type Incident } from './incident.js'
 import { ArrivalLog, arrivalMessageIds } from './arrival-log.js'
-import { arrivalShapeOf, cohortSiblings, COHORT_WINDOW_MS, recordBanTargets } from './arrival-cohort.js'
+import {
+  arrivalShapeOf, cohortSiblings, COHORT_WINDOW_MS, recordBanTargets, REMOVED_ARRIVAL_OUTCOMES
+} from './arrival-cohort.js'
 import { CaptchaGates, type CaptchaGate } from './captcha-gate.js'
 import { DuplicateTally } from './duplicate-tally.js'
 import { getUsersEach } from './users-each.js'
@@ -3869,6 +3871,73 @@ const surfaceCohort = async (chatId: number, spammer: { id: number; displayName:
 }
 
 /**
+ * An admin banning a newcomer from a card or the arrivals screen: the person
+ * goes, their join line goes with them, and one decision row records a
+ * person's decision on the grounds it was offered — so the ban has a "Why?"
+ * and an undo like any other. Never an admin; false when Telegram refused.
+ */
+const adminBanNewcomer = async (
+  chatId: number, userId: number,
+  how: { ruleId: string; reasonCode: string; signals: Signal[]; meta: Record<string, string | number | boolean> }
+): Promise<boolean> => {
+  if (userId === selfId || await isChatAdmin(chatId, userId)) return false
+  const banned = await gateway.moderationActions.ban(chatId, userId, TIMED_BAN_SECONDS)
+    .then(() => true).catch(() => false)
+  if (!banned) return false
+  cohortSuspects.delete(`${chatId}:${userId}`)
+  await dropGate(chatId, userId, how.ruleId)
+  await store.noteArrivalOutcome(chatId, userId, 'banned_by_admin').catch(() => { /* no row */ })
+  const arrival = arrivals.take(chatId, userId)
+  if (arrival && arrival.subjects === 1) {
+    const ids = arrivalMessageIds(arrival)
+    if (ids.length > 0) await gateway.tg.deleteMessagesById(chatId, ids).catch(() => { /* no rights */ })
+  }
+  await store.recordDecision({
+    chatId, userId, messageId: 0, textPreview: '',
+    verdict: {
+      pSpam: 0.99, action: 'ban', needsVote: false, banDurationSeconds: TIMED_BAN_SECONDS,
+      decidedBy: 'deterministic', ruleId: how.ruleId, signals: how.signals,
+      reasonCode: how.reasonCode, reasonEvidence: null, meta: how.meta
+    },
+    execution: { applied: true, deleted: null, skippedReason: null, failed: [], albumRemoved: 0, retroPurged: 0 },
+    latencyMs: 0
+  }).catch(() => { /* telemetry must never break moderation */ })
+  log.info('admin_newcomer_ban', { chatId, userId, rule: how.ruleId })
+  return true
+}
+
+/**
+ * The arrivals screen, read fresh on every open: this week's joins, whether
+ * each has written since, what the bot concluded. Best-effort like
+ * `renderChatActions` — an unreadable store shows an empty list.
+ */
+const arrivalEntries = async (chatId: number): Promise<ArrivalEntry[]> => {
+  const since = new Date(Date.now() - ARRIVAL_TTL_DAYS * 86400_000)
+  const rows = await store.recentArrivalsIn(chatId, since, ARRIVALS_SHOWN).catch((err: unknown) => {
+    log.warn('chat_arrivals_unreadable', { chatId, error: telegramErrorName(err) })
+    return []
+  })
+  const users = await getUsersEach(fetchUser, rows.map((r) => r.userId))
+  const names = new Map<number, string>()
+  for (const u of users) if (u instanceof User) names.set(u.id, u.displayName)
+  const entries = await Promise.all(rows.map(async (r) => ({
+    userId: r.userId,
+    userLabel: names.get(r.userId) ?? null,
+    at: r.at,
+    outcome: r.outcome,
+    removed: r.outcome !== null && REMOVED_ARRIVAL_OUTCOMES.has(r.outcome),
+    messagesInChat: await store.getMemberStats(chatId, r.userId).then((m) => m.messagesCount).catch(() => null),
+    suspect: isCohortSuspect(chatId, r.userId)
+  })))
+  return entries
+}
+
+const renderChatArrivals = async (
+  locale: Locale, chatId: number, confirmAll = false
+): Promise<ViewMessage> =>
+  forChat(locale, chatId, chatArrivalsView(locale, chatId, await arrivalEntries(chatId), { now: Date.now(), confirmAll }))
+
+/**
  * An admin's answer to a cohort card. "Ban" bans each named newcomer who is
  * still not an admin, and writes one decision row per person — made by a
  * person, on the card's grounds — so each ban has its "Why?" and its undo like
@@ -3896,30 +3965,11 @@ const answerCohortCard = async (
 
   let done = 0
   for (const userId of card.userIds) {
-    if (await isChatAdmin(chatId, userId)) continue
-    const banned = await gateway.moderationActions.ban(chatId, userId, TIMED_BAN_SECONDS)
-      .then(() => true).catch(() => false)
-    if (!banned) continue
-    done++
-    cohortSuspects.delete(`${chatId}:${userId}`)
-    await dropGate(chatId, userId, 'cohort_ban')
-    await store.noteArrivalOutcome(chatId, userId, 'banned_by_admin').catch(() => { /* no row */ })
-    const arrival = arrivals.take(chatId, userId)
-    if (arrival && arrival.subjects === 1) {
-      const ids = arrivalMessageIds(arrival)
-      if (ids.length > 0) await gateway.tg.deleteMessagesById(chatId, ids).catch(() => { /* no rights */ })
-    }
-    await store.recordDecision({
-      chatId, userId, messageId: 0, textPreview: '',
-      verdict: {
-        pSpam: 0.99, action: 'ban', needsVote: false, banDurationSeconds: TIMED_BAN_SECONDS,
-        decidedBy: 'deterministic', ruleId: 'admin_cohort', signals: [{ name: 'arrived_with_spammer' }],
-        reasonCode: 'arrived_with_spammer', reasonEvidence: null,
-        meta: { by: admin.id, spammerId: card.spammerId }
-      },
-      execution: { applied: true, deleted: null, skippedReason: null, failed: [], albumRemoved: 0, retroPurged: 0 },
-      latencyMs: 0
-    }).catch(() => { /* telemetry must never break moderation */ })
+    const banned = await adminBanNewcomer(chatId, userId, {
+      ruleId: 'admin_cohort', reasonCode: 'arrived_with_spammer',
+      signals: [{ name: 'arrived_with_spammer' }], meta: { by: admin.id, spammerId: card.spammerId }
+    })
+    if (banned) done++
   }
   log.info('cohort_banned', { chatId, by: admin.id, banned: done, members: card.userIds.length })
   await tgEditMessage({
@@ -6321,12 +6371,40 @@ const wireCallbacks = (): void => {
       }
       // Navigation only (no DB write): open the language sub-screen, or return
       // to the root panel from it.
-      if (action === 'lang_open' || action === 'root' || action === 'actions') {
+      // The arrivals screen's bans: the admin check above is the permission,
+      // and each lands back on the same screen, re-read, rather than the root.
+      if (action === 'arr_ban' || action === 'arr_all_ok') {
+        // Read again, not trusted from the screen: the button carries only an
+        // id, and a forged one must not turn the list into a ban-anyone tool.
+        const entries = await arrivalEntries(chatId)
+        const userId = Number(value)
+        const targets = action === 'arr_ban'
+          ? entries.filter((e) => e.userId === userId && arrivalBannable(e)).map((e) => e.userId)
+          : entries.filter(arrivalSilent).map((e) => e.userId)
+        let banned = 0
+        for (const userId of targets) {
+          if (await adminBanNewcomer(chatId, userId, {
+            ruleId: 'admin_arrivals', reasonCode: 'admin_arrival_ban', signals: [],
+            meta: { by: query.user.id, bulk: action === 'arr_all_ok' }
+          })) banned++
+        }
+        log.info('arrivals_ban', { chatId, by: query.user.id, requested: targets.length, banned, bulk: action === 'arr_all_ok' })
+        const view = await renderChatArrivals(locale, chatId)
+        await tgEditMessage({
+          chatId: query.user.id, message: query.messageId,
+          text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons)
+        }).catch(() => { /* unchanged → MESSAGE_NOT_MODIFIED, fine */ })
+        await query.answer({ text: locale.arrivals.banned(banned) })
+        return
+      }
+      if (action === 'lang_open' || action === 'root' || action === 'actions' || action === 'arrivals' || action === 'arr_all') {
         const navView = action === 'lang_open'
           ? await renderLangPanel(locale, chatId)
           : action === 'actions'
             ? await renderChatActions(locale, chatId)
-            : await renderSettingsPanel(locale, chatId)
+            : action === 'arrivals' || action === 'arr_all'
+              ? await renderChatArrivals(locale, chatId, action === 'arr_all')
+              : await renderSettingsPanel(locale, chatId)
         await tgEditMessage({
           chatId: query.user.id, message: query.messageId,
           text: viewHtml(navView.text), replyMarkup: toKeyboard(navView.buttons)

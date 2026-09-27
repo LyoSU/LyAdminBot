@@ -24,6 +24,27 @@ export const en: Locale = {
     helpButton: '❓ Commands',
     langButton: '🌐 Language'
   },
+  arrivals: {
+    button: '👥 Newcomers',
+    title: '👥 <b>Who joined the chat this week</b>',
+    empty: 'The bot has not seen anyone join this chat this week.',
+    silent: 'silent',
+    spoke: (count) => `wrote: ${count}`,
+    suspect: 'joined alongside a spammer',
+    outcomes: {
+      removed: 'removed',
+      banned_on_record: 'banned via spam databases',
+      banned_by_admin: 'banned by an admin',
+      gated: 'being checked'
+    },
+    footer: '⚠️ — joined alongside a spammer and looks like it. "🚫 N" bans number N.',
+    banButton: (index) => `🚫 ${index}`,
+    banAllButton: (count) => `🚫 Ban everyone still silent (${count})`,
+    confirmAll: (count) => `Ban <b>${count}</b> ${count === 1 ? 'newcomer' : 'newcomers'} who have not written anything yet?`,
+    confirmYes: '🚫 Yes, ban',
+    cancel: 'Cancel',
+    banned: (count) => `Banned: ${count}`
+  },
   cohort: {
     title: (count, spammer) => `👥 <b>${count} similar ${count === 1 ? 'newcomer' : 'newcomers'} joined alongside the spammer ${spammer}</b>`,
     hint: 'Same kind of profile, joined around the same time, have not written anything yet. The bot has not touched them — an admin decides.',
@@ -178,7 +199,8 @@ export const en: Locale = {
     record_ban_elsewhere: 'account already removed from another chat on its record (spam databases, Telegram flag) — removed here before it posted',
     listed_arrival: 'on arrival: account is in spammer databases or flagged by Telegram',
     arrival_look: 'a silent newcomer whose profile now looks like a spam network — asking to confirm',
-    arrived_with_spammer: 'joined alongside a spammer and looks like it — banned by an admin'
+    arrived_with_spammer: 'joined alongside a spammer and looks like it — banned by an admin',
+    admin_arrival_ban: 'an admin banned this newcomer from the newcomers list'
   },
   reasonFallback: 'suspicious activity',
 

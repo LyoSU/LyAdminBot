@@ -23,6 +23,27 @@ export const tr: Locale = {
     helpButton: '❓ Komutlar',
     langButton: '🌐 Dil'
   },
+  arrivals: {
+    button: '👥 Yeni üyeler',
+    title: '👥 <b>Bu hafta sohbete kim katıldı</b>',
+    empty: 'Bot bu hafta bu sohbete kimsenin katıldığını görmedi.',
+    silent: 'sessiz',
+    spoke: (count) => `yazdı: ${count}`,
+    suspect: 'bir spamcıyla birlikte katıldı',
+    outcomes: {
+      removed: 'çıkarıldı',
+      banned_on_record: 'spam veritabanları nedeniyle yasaklandı',
+      banned_by_admin: 'yönetici yasakladı',
+      gated: 'kontrol ediliyor'
+    },
+    footer: '⚠️ — bir spamcıyla birlikte katıldı ve ona benziyor. "🚫 N", N numaralı kişiyi yasaklar.',
+    banButton: (index) => `🚫 ${index}`,
+    banAllButton: (count) => `🚫 Hâlâ sessiz olan herkesi yasakla (${count})`,
+    confirmAll: (count) => `Henüz hiçbir şey yazmamış <b>${count}</b> yeni üye yasaklansın mı?`,
+    confirmYes: '🚫 Evet, yasakla',
+    cancel: 'İptal',
+    banned: (count) => `Yasaklandı: ${count}`
+  },
   cohort: {
     title: (count, spammer) => `👥 <b>Spamcı ${spammer} ile birlikte ${count} benzer yeni üye katıldı</b>`,
     hint: 'Aynı tür profil, aynı zamanda katıldılar, henüz bir şey yazmadılar. Bot onlara dokunmadı — karar yöneticinin.',
@@ -177,7 +198,8 @@ export const tr: Locale = {
     record_ban_elsewhere: 'hesap kaydı nedeniyle başka bir sohbetten zaten çıkarıldı (spam veritabanları, Telegram işareti) — burada ilk mesajından önce çıkarıldı',
     listed_arrival: 'girişte: hesap spam veritabanlarında veya Telegram tarafından işaretli',
     arrival_look: 'sessiz yeni üyenin profili artık bir spam ağına benziyor — onay istiyoruz',
-    arrived_with_spammer: 'bir spamcıyla birlikte katıldı ve ona benziyor — yönetici yasakladı'
+    arrived_with_spammer: 'bir spamcıyla birlikte katıldı ve ona benziyor — yönetici yasakladı',
+    admin_arrival_ban: 'yönetici bu yeni üyeyi yeni üyeler listesinden yasakladı'
   },
   reasonFallback: 'şüpheli etkinlik',
 

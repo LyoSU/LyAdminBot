@@ -256,6 +256,86 @@ export const cohortCard = (
   }
 }
 
+export interface ArrivalEntry {
+  userId: number
+  /** Null when the name could not be read; the row then names the id. */
+  userLabel: string | null
+  at: Date
+  /** What became of the arrival, for the row's label. */
+  outcome: string | null
+  /** Already taken from the chat — decided by the caller, which owns that list. */
+  removed: boolean
+  /** Messages in this chat since; null when the count could not be read. */
+  messagesInChat: number | null
+  /** Named on a cohort card. */
+  suspect: boolean
+}
+
+/** Rows shown on the arrivals screen. */
+export const ARRIVALS_SHOWN = 15
+
+/** Whether an arrival can still be banned from the screen. */
+export const arrivalBannable = (entry: ArrivalEntry): boolean => !entry.removed
+
+/** Silent and still here: what the "ban all" button covers. */
+export const arrivalSilent = (entry: ArrivalEntry): boolean =>
+  arrivalBannable(entry) && entry.messagesInChat === 0
+
+/**
+ * Who joined the chat this week, for its admins — the answer to "the bot does
+ * nothing about newcomers until they post". Each row says whether the person
+ * has written since and what the bot concluded; a ban button stands beside
+ * every row still in the chat, and one more covers everybody still silent,
+ * behind a confirmation.
+ */
+export const chatArrivalsView = (
+  locale: Locale,
+  chatId: number,
+  entries: readonly ArrivalEntry[],
+  options: { now: number; confirmAll?: boolean }
+): ViewMessage => {
+  const a = locale.arrivals
+  const shown = entries.slice(0, ARRIVALS_SHOWN)
+  const back: ButtonSpec[] = [{ text: locale.settings.back, data: callbackData.settings(chatId, 'root') }]
+  if (shown.length === 0) {
+    return { text: [a.title, '', escapeHtml(a.empty)].join('\n'), buttons: [back] }
+  }
+  const silent = shown.filter(arrivalSilent)
+  if (options.confirmAll === true && silent.length > 0) {
+    return {
+      text: a.confirmAll(silent.length),
+      buttons: [[
+        { text: a.confirmYes, data: callbackData.settings(chatId, 'arr_all_ok') },
+        { text: a.cancel, data: callbackData.settings(chatId, 'arrivals') }
+      ]]
+    }
+  }
+  const lines = [a.title, '']
+  shown.forEach((entry, i) => {
+    const who = escapeHtml(entry.userLabel ?? locale.hiddenName(entry.userId))
+    lines.push(`${i + 1}. ${entry.suspect ? '⚠️ ' : ''}<b>${who}</b>`)
+    const ago = locale.ownRestrictions.ago(humanSpan(locale, Math.max(0, (options.now - entry.at.getTime()) / 1000)))
+    const outcome = entry.outcome !== null && entry.outcome in a.outcomes
+      ? a.outcomes[entry.outcome as keyof typeof a.outcomes]
+      : null
+    const spoke = entry.messagesInChat === null ? null : entry.messagesInChat === 0 ? a.silent : a.spoke(entry.messagesInChat)
+    const detail = [ago, ...(spoke ? [spoke] : []), ...(outcome ? [outcome] : []), ...(entry.suspect ? [a.suspect] : [])]
+    lines.push(`<i>${escapeHtml(detail.join(' · '))}</i>`)
+  })
+  lines.push('', escapeHtml(a.footer))
+
+  const bans: ButtonSpec[] = shown.flatMap((entry, i) => arrivalBannable(entry)
+    ? [{ text: a.banButton(i + 1), data: callbackData.settings(chatId, 'arr_ban', String(entry.userId)) }]
+    : [])
+  const buttons: ButtonSpec[][] = []
+  for (let i = 0; i < bans.length; i += 5) buttons.push(bans.slice(i, i + 5))
+  if (silent.length > 1) {
+    buttons.push([{ text: a.banAllButton(silent.length), data: callbackData.settings(chatId, 'arr_all') }])
+  }
+  buttons.push(back)
+  return { text: lines.join('\n'), buttons }
+}
+
 export interface ChatActionEntry {
   userId: number
   /** Null when the name could not be read; the row then names the id. */
@@ -1199,7 +1279,10 @@ export const settingsPanel = (locale: Locale, chatId: number, state: SettingsSta
       [{ text: `${locale.settings.voting}: ${onOff(state.votingEnabled)}`, data: callbackData.settings(chatId, 'toggle_voting') }],
       [{ text: `${locale.settings.banDatabase}: ${onOff(state.externalBanEnabled)}`, data: callbackData.settings(chatId, 'toggle_bandb') }],
       [{ text: `${locale.settings.quiet}: ${onOff(state.quietMode)}`, data: callbackData.settings(chatId, 'toggle_quiet') }],
-      [{ text: locale.chatActions.button, data: callbackData.settings(chatId, 'actions') }],
+      [
+        { text: locale.chatActions.button, data: callbackData.settings(chatId, 'actions') },
+        { text: locale.arrivals.button, data: callbackData.settings(chatId, 'arrivals') }
+      ],
       bananRow,
       // Welcome + extras editors live behind their own screens.
       [

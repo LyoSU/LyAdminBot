@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Verdict, SignalName, BotStats, ChatStats } from '@lyadmin/core'
-import { callbackData, captchaPrompt, chatActionsView, cohortCard, CHAT_ACTIONS_SHOWN, ownRestrictionsView, OWN_RESTRICTIONS_SHOWN, type OwnRestrictionEntry, startCard, statsCard, compactNotification, startGroupHint, langPanel, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, userProfileCard, userProfileLines, votePrompt, voterListView, voteResult, VOTERS_SHOWN_MAX, whyCard, whyDeepLink, whyView, welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor, LOCALES, type UserFacts } from './views.js'
+import { callbackData, captchaPrompt, chatActionsView, chatArrivalsView, cohortCard, CHAT_ACTIONS_SHOWN, ownRestrictionsView, OWN_RESTRICTIONS_SHOWN, type OwnRestrictionEntry, startCard, statsCard, compactNotification, startGroupHint, langPanel, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, userProfileCard, userProfileLines, votePrompt, voterListView, voteResult, VOTERS_SHOWN_MAX, whyCard, whyDeepLink, whyView, welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor, LOCALES, type UserFacts } from './views.js'
 import { uk } from './locales/uk.js'
 
 const makeVerdict = (overrides: Partial<Verdict> = {}): Verdict => ({
@@ -1525,6 +1525,56 @@ describe('userProfileCard — trust provenance', () => {
   it('prints no trust line for a member who is not trusted', () => {
     const card = userProfileCard(uk, facts, { chatId: -100, isTrusted: false })
     expect(card.text).not.toContain('✅')
+  })
+})
+
+describe('chatArrivalsView — who joined this week, for the admins', () => {
+  const now = Date.UTC(2026, 8, 27, 12)
+  const entry = (over: Partial<Parameters<typeof chatArrivalsView>[2][number]> = {}) => ({
+    userId: 1, userLabel: 'Анютка', at: new Date(now - 3600_000), outcome: null, removed: false,
+    messagesInChat: 0, suspect: false, ...over
+  })
+  const data = (view: ReturnType<typeof chatArrivalsView>): string[] =>
+    view.buttons.flat().map((b) => ('data' in b ? b.data ?? '' : ''))
+
+  it('offers a ban beside every arrival still in the chat, and none beside the removed', () => {
+    const view = chatArrivalsView(uk, -100, [
+      entry({ userId: 1 }),
+      entry({ userId: 2, removed: true, outcome: 'banned_on_record' }),
+      entry({ userId: 3, messagesInChat: 4 })
+    ], { now })
+    expect(data(view)).toContain('set:-100:arr_ban:1')
+    expect(data(view)).toContain('set:-100:arr_ban:3')
+    expect(data(view)).not.toContain('set:-100:arr_ban:2')
+    expect(view.text).toContain(uk.arrivals.outcomes.banned_on_record)
+    expect(view.text).toContain(uk.arrivals.spoke(4))
+  })
+
+  it('offers "ban all silent" only when there are several, and asks before doing it', () => {
+    const one = chatArrivalsView(uk, -100, [entry()], { now })
+    expect(data(one)).not.toContain('set:-100:arr_all')
+    const rows = [entry({ userId: 1 }), entry({ userId: 2 }), entry({ userId: 3, messagesInChat: 1 })]
+    expect(data(chatArrivalsView(uk, -100, rows, { now }))).toContain('set:-100:arr_all')
+    const confirm = chatArrivalsView(uk, -100, rows, { now, confirmAll: true })
+    expect(confirm.text).toContain('<b>2</b>')
+    expect(data(confirm)).toEqual(['set:-100:arr_all_ok', 'set:-100:arrivals'])
+  })
+
+  it('marks a suspect and escapes every name', () => {
+    const view = chatArrivalsView(uk, -100, [entry({ suspect: true, userLabel: '<x>' })], { now })
+    expect(view.text).toContain('⚠️ <b>&lt;x&gt;</b>')
+  })
+
+  it('says so when nobody joined, and always leads back', () => {
+    const view = chatArrivalsView(uk, -100, [], { now })
+    expect(view.text).toContain(uk.arrivals.empty)
+    expect(data(view)).toEqual(['set:-100:root'])
+  })
+
+  it('renders in every locale', () => {
+    for (const locale of Object.values(LOCALES)) {
+      expect(chatArrivalsView(locale, -1, [entry(), entry({ userId: 2 })], { now, confirmAll: true }).text.length).toBeGreaterThan(0)
+    }
   })
 })
 

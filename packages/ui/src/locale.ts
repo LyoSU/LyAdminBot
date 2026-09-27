@@ -41,6 +41,33 @@ export interface Locale {
    * The chat's recent-actions screen, reached from the settings panel. Rows
    * reuse `ownRestrictions.ago`, `.overturned` and `.whyButton`.
    */
+  /** Who joined the chat this week (PM, behind the settings panel). */
+  arrivals: {
+    /** Settings-panel button that opens the screen. */
+    button: string
+    /** Header (HTML). */
+    title: string
+    empty: string
+    silent: string
+    spoke: (count: number) => string
+    /** Named on a cohort card. */
+    suspect: string
+    outcomes: {
+      removed: string
+      banned_on_record: string
+      banned_by_admin: string
+      gated: string
+    }
+    footer: string
+    banButton: (index: number) => string
+    banAllButton: (count: number) => string
+    /** Asked before a bulk ban (HTML). */
+    confirmAll: (count: number) => string
+    confirmYes: string
+    cancel: string
+    /** Toast after a ban from this screen. */
+    banned: (count: number) => string
+  }
   /** The card naming newcomers who arrived beside a confirmed spammer. Admins act on it. */
   cohort: {
     /** Header (HTML); `spammer` is already escaped. */
