@@ -68,7 +68,9 @@ export const callbackData = {
   welcome: (chatId: number, action: string, arg = ''): string =>
     `wel:${chatId}:${action}${arg !== '' ? `:${arg}` : ''}`,
   extras: (chatId: number, action: string, arg = ''): string =>
-    `ext:${chatId}:${action}${arg !== '' ? `:${arg}` : ''}`
+    `ext:${chatId}:${action}${arg !== '' ? `:${arg}` : ''}`,
+  /** An admin's answer to a cohort card; `key` names the card, not the people on it. */
+  cohort: (chatId: number, key: string, act: 'ban' | 'keep'): string => `coh:${chatId}:${key}:${act}`
 }
 
 /** For app-layer strings that interpolate user-controlled text into HTML. */
@@ -224,6 +226,34 @@ export const ownRestrictionsView = (
   const buttons: ButtonSpec[][] = []
   for (let i = 0; i < links.length; i += 3) buttons.push(links.slice(i, i + 3))
   return { text: lines.join('\n'), buttons }
+}
+
+/**
+ * Newcomers who came in beside a confirmed spammer and look like it — posted
+ * in the chat for its admins to decide on. Names only, no links: the people on
+ * it have done nothing, and a card that pinged them would announce the
+ * suspicion to them before any admin has read it.
+ */
+export const cohortCard = (
+  locale: Locale,
+  chatId: number,
+  key: string,
+  spammerLabel: string,
+  members: readonly { userId: number; label: string | null }[]
+): ViewMessage => {
+  const c = locale.cohort
+  const lines = [c.title(members.length, escapeHtml(spammerLabel)), '']
+  members.forEach((m, i) => {
+    lines.push(`${i + 1}. ${escapeHtml(m.label ?? locale.hiddenName(m.userId))}`)
+  })
+  lines.push('', escapeHtml(c.hint))
+  return {
+    text: lines.join('\n'),
+    buttons: [[
+      { text: c.banButton(members.length), data: callbackData.cohort(chatId, key, 'ban') },
+      { text: c.keepButton, data: callbackData.cohort(chatId, key, 'keep') }
+    ]]
+  }
 }
 
 export interface ChatActionEntry {

@@ -145,6 +145,12 @@ export interface UserSnapshot {
   /** True while this member's recorded join belongs to a detected chat surge. */
   joinedDuringSurge?: boolean
   /**
+   * Joined this chat beside an account since confirmed as a spammer here, and
+   * looks like it — see `cohortSiblings`. Never set for anybody who has spoken
+   * anywhere before joining.
+   */
+  arrivedWithSpammer?: boolean
+  /**
    * Facts recorded, not weighed — see `AccountTelemetry`. Absent when the
    * adapter had nothing to record.
    */

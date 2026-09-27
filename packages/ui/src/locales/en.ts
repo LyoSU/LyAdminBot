@@ -24,6 +24,15 @@ export const en: Locale = {
     helpButton: '❓ Commands',
     langButton: '🌐 Language'
   },
+  cohort: {
+    title: (count, spammer) => `👥 <b>${count} similar ${count === 1 ? 'newcomer' : 'newcomers'} joined alongside the spammer ${spammer}</b>`,
+    hint: 'Same kind of profile, joined around the same time, have not written anything yet. The bot has not touched them — an admin decides.',
+    banButton: (count) => `🚫 Ban ${count}`,
+    keepButton: 'Keep',
+    banned: (done, total, admin) => `🚫 Banned ${done} of ${total} newcomers who joined alongside the spammer · ${admin}`,
+    kept: (admin) => `✅ Newcomers kept · ${admin}`,
+    expired: 'This card is out of date.'
+  },
 
   chatActions: {
     button: '🧾 Recent actions',
@@ -168,7 +177,8 @@ export const en: Locale = {
     forward_blacklist: 'forwarded from a known spam source',
     record_ban_elsewhere: 'account already removed from another chat on its record (spam databases, Telegram flag) — removed here before it posted',
     listed_arrival: 'on arrival: account is in spammer databases or flagged by Telegram',
-    arrival_look: 'a silent newcomer whose profile now looks like a spam network — asking to confirm'
+    arrival_look: 'a silent newcomer whose profile now looks like a spam network — asking to confirm',
+    arrived_with_spammer: 'joined alongside a spammer and looks like it — banned by an admin'
   },
   reasonFallback: 'suspicious activity',
 
@@ -203,6 +213,7 @@ export const en: Locale = {
       restricted_for_spam: 'Telegram restricted them for spam',
       just_joined: 'joined and posted right away',
       joined_during_surge: 'joined during an influx of new members',
+      arrived_with_spammer: 'joined alongside a spammer and looks like it',
       scam_flag: 'Telegram flagged the account as a scam',
       fake_flag: 'Telegram flagged the account as fake',
       restricted_flag: 'the account is restricted by Telegram',

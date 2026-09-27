@@ -29,6 +29,7 @@ export interface UserProfileFacts {
   /** Whether Telegram says they are in this chat — see `MemberFacts`. */
   isParticipant?: boolean | null
   joinedDuringSurge?: boolean
+  arrivedWithSpammer?: boolean
   /** Recorded, not weighed — see `AccountTelemetry`. */
   commonChatsCount?: number | null
   peerFacts?: {
@@ -141,6 +142,7 @@ const snapshotOf = (
   joinedAgoSeconds: profile?.joinedAgoSeconds ?? null,
   isParticipant: profile?.isParticipant ?? null,
   joinedDuringSurge: profile?.joinedDuringSurge ?? false,
+  arrivedWithSpammer: profile?.arrivedWithSpammer ?? false,
   predictedAgeDays: predictAccountAgeDays(sender.id, nowUnix),
   predictedAgeBoundsDays: predictAccountAgeBoundsDays(sender.id, nowUnix),
   localAgeDays: history.firstSeenUnix != null
@@ -192,6 +194,7 @@ export const buildChannelSnapshot = (
   restrictionReasons: [],
   joinedAgoSeconds: null,
   joinedDuringSurge: false,
+  arrivedWithSpammer: false,
   // Channel ids come from a different namespace than user ids: feeding one to
   // the user-id → registration-date table would invent an age.
   predictedAgeDays: null,

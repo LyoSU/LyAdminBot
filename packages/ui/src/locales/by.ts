@@ -35,6 +35,15 @@ export const by: Locale = {
     helpButton: '❓ Каманды',
     langButton: '🌐 Мова'
   },
+  cohort: {
+    title: (count, spammer) => `👥 <b>Разам са спамерам ${spammer} прыйшлі яшчэ ${count} ${plural(count, 'падобны навічок', 'падобныя навічкі', 'падобных навічкоў')}</b>`,
+    hint: 'Такі самы профіль, прыйшлі ў той самы час, пакуль нічога не пісалі. Бот іх не чапаў — вырашае адмін.',
+    banButton: (count) => `🚫 Забаніць ${count}`,
+    keepButton: 'Пакінуць',
+    banned: (done, total, admin) => `🚫 Забанена ${done} з ${total} навічкоў, што прыйшлі разам са спамерам · ${admin}`,
+    kept: (admin) => `✅ Навічкоў пакінута · ${admin}`,
+    expired: 'Гэтая картка ўжо неактуальная.'
+  },
 
   chatActions: {
     button: '🧾 Апошнія дзеянні',
@@ -179,7 +188,8 @@ export const by: Locale = {
     forward_blacklist: 'пераслана з вядомай спам-крыніцы',
     record_ban_elsewhere: 'акаўнт ужо прыбраны з іншага чата паводле яго запісу (спам-базы, пазнака Telegram) — тут прыбраны да першага паведамлення',
     listed_arrival: 'пры ўваходзе: акаўнт у базах спамераў або пазначаны Telegram',
-    arrival_look: 'навічок маўчыць, а профіль ужо як у спам-сеткі — просім пацвердзіць'
+    arrival_look: 'навічок маўчыць, а профіль ужо як у спам-сеткі — просім пацвердзіць',
+    arrived_with_spammer: 'прыйшоў разам са спамерам і падобны да яго — забаніў адмін'
   },
   reasonFallback: 'падазроная актыўнасць',
 
@@ -214,6 +224,7 @@ export const by: Locale = {
       restricted_for_spam: 'Telegram абмежаваў за спам',
       just_joined: 'толькі зайшоў і адразу піша',
       joined_during_surge: 'далучыўся падчас наплыву новых удзельнікаў',
+      arrived_with_spammer: 'прыйшоў у чат разам са спамерам і падобны да яго',
       scam_flag: 'Telegram пазначыў акаўнт як махлярскі',
       fake_flag: 'Telegram пазначыў акаўнт як фэйкавы',
       restricted_flag: 'акаўнт абмежаваны Telegram',

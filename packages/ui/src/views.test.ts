@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Verdict, SignalName, BotStats, ChatStats } from '@lyadmin/core'
-import { callbackData, captchaPrompt, chatActionsView, CHAT_ACTIONS_SHOWN, ownRestrictionsView, OWN_RESTRICTIONS_SHOWN, type OwnRestrictionEntry, startCard, statsCard, compactNotification, startGroupHint, langPanel, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, userProfileCard, userProfileLines, votePrompt, voterListView, voteResult, VOTERS_SHOWN_MAX, whyCard, whyDeepLink, whyView, welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor, LOCALES, type UserFacts } from './views.js'
+import { callbackData, captchaPrompt, chatActionsView, cohortCard, CHAT_ACTIONS_SHOWN, ownRestrictionsView, OWN_RESTRICTIONS_SHOWN, type OwnRestrictionEntry, startCard, statsCard, compactNotification, startGroupHint, langPanel, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, userProfileCard, userProfileLines, votePrompt, voterListView, voteResult, VOTERS_SHOWN_MAX, whyCard, whyDeepLink, whyView, welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor, LOCALES, type UserFacts } from './views.js'
 import { uk } from './locales/uk.js'
 
 const makeVerdict = (overrides: Partial<Verdict> = {}): Verdict => ({
@@ -1525,6 +1525,37 @@ describe('userProfileCard — trust provenance', () => {
   it('prints no trust line for a member who is not trusted', () => {
     const card = userProfileCard(uk, facts, { chatId: -100, isTrusted: false })
     expect(card.text).not.toContain('✅')
+  })
+})
+
+describe('cohortCard — newcomers who arrived beside a spammer, for the admins to decide', () => {
+  it('lists them by name without linking them, and escapes every name', () => {
+    const view = cohortCard(uk, -100, 'k1', '<Spam>', [
+      { userId: 1, label: 'Орислава <b>' }, { userId: 2, label: null }
+    ])
+    expect(view.text).toContain('&lt;Spam&gt;')
+    expect(view.text).toContain('1. Орислава &lt;b&gt;')
+    expect(view.text).not.toContain('tg://')
+    expect(view.text).not.toContain('<a ')
+  })
+
+  it('carries the card key, never the people, in both buttons, within the 64-byte cap', () => {
+    const view = cohortCard(uk, -1001234567890, 'k123', 'x', [{ userId: 9876543210, label: 'a' }])
+    const data = view.buttons.flat().map((b) => ('data' in b ? b.data : ''))
+    expect(data).toEqual(['coh:-1001234567890:k123:ban', 'coh:-1001234567890:k123:keep'])
+    for (const d of data) {
+      expect(d).not.toContain('9876543210')
+      expect(Buffer.byteLength(d)).toBeLessThanOrEqual(64)
+    }
+    expect(parseCallback(data[0]!)).toEqual({ kind: 'coh', parts: ['-1001234567890', 'k123', 'ban'] })
+  })
+
+  it('renders in every locale', () => {
+    for (const locale of Object.values(LOCALES)) {
+      const view = cohortCard(locale, -1, 'k', 's', [{ userId: 1, label: 'a' }, { userId: 2, label: 'b' }])
+      expect(view.text.length).toBeGreaterThan(0)
+      expect(locale.cohort.banned(1, 2, 'x')).toContain('1')
+    }
   })
 })
 

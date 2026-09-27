@@ -588,6 +588,18 @@ export const SIGNALS = {
   /** Joined inside a high-rate episode; routing context, never message proof. */
   joined_during_surge: { weight: 0.5, kind: 'shape', group: 'newness' },
   /**
+   * Came into this chat within 72 hours of an account since confirmed as a
+   * spammer here, shaped like it, and silent until now (2026-09-27).
+   *
+   * A statement about company, not about the message, so `shape`: it may send
+   * the first message to the stages that read text, never enforce by itself.
+   * Kept out of `newness` because it is not a restatement of being new — every
+   * member of the cohort is new, and this says which new accounts arrived as
+   * a batch. 1.0 is the weight of `just_joined`, the nearest measured claim of
+   * the same strength; unmeasured until rows exist.
+   */
+  arrived_with_spammer: { weight: 1.0, kind: 'shape' },
+  /**
    * Present in many chats we watch while barely posting — spreader pattern.
    * Modest weight; replay should confirm before trusting it further.
    */

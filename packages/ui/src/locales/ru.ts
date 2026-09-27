@@ -35,6 +35,15 @@ export const ru: Locale = {
     helpButton: '❓ Команды',
     langButton: '🌐 Язык'
   },
+  cohort: {
+    title: (count, spammer) => `👥 <b>Вместе со спамером ${spammer} пришли ещё ${count} ${plural(count, 'похожий новичок', 'похожих новичка', 'похожих новичков')}</b>`,
+    hint: 'Такой же профиль, пришли в то же время, пока ничего не писали. Бот их не трогал — решает админ.',
+    banButton: (count) => `🚫 Забанить ${count}`,
+    keepButton: 'Оставить',
+    banned: (done, total, admin) => `🚫 Забанено ${done} из ${total} новичков, пришедших вместе со спамером · ${admin}`,
+    kept: (admin) => `✅ Новички оставлены · ${admin}`,
+    expired: 'Эта карточка уже неактуальна.'
+  },
 
   chatActions: {
     button: '🧾 Последние действия',
@@ -179,7 +188,8 @@ export const ru: Locale = {
     forward_blacklist: 'переслано из известного спам-источника',
     record_ban_elsewhere: 'аккаунт уже удалён из другого чата по его записи (спам-базы, пометка Telegram) — здесь удалён до первого сообщения',
     listed_arrival: 'при входе: аккаунт в базах спамеров или помечен Telegram',
-    arrival_look: 'новичок молчит, а профиль уже как у спам-сети — просим подтвердить'
+    arrival_look: 'новичок молчит, а профиль уже как у спам-сети — просим подтвердить',
+    arrived_with_spammer: 'пришёл вместе со спамером и похож на него — забанил админ'
   },
   reasonFallback: 'подозрительная активность',
 
@@ -214,6 +224,7 @@ export const ru: Locale = {
       restricted_for_spam: 'Telegram ограничил за спам',
       just_joined: 'только зашёл и сразу пишет',
       joined_during_surge: 'присоединился во время наплыва новых участников',
+      arrived_with_spammer: 'пришёл в чат вместе со спамером и похож на него',
       scam_flag: 'Telegram пометил аккаунт как мошеннический',
       fake_flag: 'Telegram пометил аккаунт как фейковый',
       restricted_flag: 'аккаунт ограничен Telegram',

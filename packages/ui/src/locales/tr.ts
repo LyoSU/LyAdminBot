@@ -23,6 +23,15 @@ export const tr: Locale = {
     helpButton: '❓ Komutlar',
     langButton: '🌐 Dil'
   },
+  cohort: {
+    title: (count, spammer) => `👥 <b>Spamcı ${spammer} ile birlikte ${count} benzer yeni üye katıldı</b>`,
+    hint: 'Aynı tür profil, aynı zamanda katıldılar, henüz bir şey yazmadılar. Bot onlara dokunmadı — karar yöneticinin.',
+    banButton: (count) => `🚫 ${count} kişiyi yasakla`,
+    keepButton: 'Bırak',
+    banned: (done, total, admin) => `🚫 Spamcıyla katılan ${total} yeni üyeden ${done} tanesi yasaklandı · ${admin}`,
+    kept: (admin) => `✅ Yeni üyeler bırakıldı · ${admin}`,
+    expired: 'Bu kart artık güncel değil.'
+  },
 
   chatActions: {
     button: '🧾 Son işlemler',
@@ -167,7 +176,8 @@ export const tr: Locale = {
     forward_blacklist: 'bilinen bir spam kaynağından iletildi',
     record_ban_elsewhere: 'hesap kaydı nedeniyle başka bir sohbetten zaten çıkarıldı (spam veritabanları, Telegram işareti) — burada ilk mesajından önce çıkarıldı',
     listed_arrival: 'girişte: hesap spam veritabanlarında veya Telegram tarafından işaretli',
-    arrival_look: 'sessiz yeni üyenin profili artık bir spam ağına benziyor — onay istiyoruz'
+    arrival_look: 'sessiz yeni üyenin profili artık bir spam ağına benziyor — onay istiyoruz',
+    arrived_with_spammer: 'bir spamcıyla birlikte katıldı ve ona benziyor — yönetici yasakladı'
   },
   reasonFallback: 'şüpheli etkinlik',
 
@@ -201,6 +211,7 @@ export const tr: Locale = {
       restricted_for_spam: 'Telegram spam nedeniyle kısıtladı',
       just_joined: 'katılır katılmaz hemen yazdı',
       joined_during_surge: 'yeni üye akını sırasında katıldı',
+      arrived_with_spammer: 'bir spamcıyla birlikte katıldı ve ona benziyor',
       scam_flag: 'Telegram hesabı dolandırıcı olarak işaretledi',
       fake_flag: 'Telegram hesabı sahte olarak işaretledi',
       restricted_flag: 'hesap Telegram tarafından kısıtlanmış',

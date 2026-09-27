@@ -41,6 +41,20 @@ export interface Locale {
    * The chat's recent-actions screen, reached from the settings panel. Rows
    * reuse `ownRestrictions.ago`, `.overturned` and `.whyButton`.
    */
+  /** The card naming newcomers who arrived beside a confirmed spammer. Admins act on it. */
+  cohort: {
+    /** Header (HTML); `spammer` is already escaped. */
+    title: (count: number, spammer: string) => string
+    /** Why these, and that nobody has been touched yet. */
+    hint: string
+    banButton: (count: number) => string
+    keepButton: string
+    /** Replaces the card after an admin banned them; `admin` is already escaped. */
+    banned: (done: number, total: number, admin: string) => string
+    kept: (admin: string) => string
+    /** Tapped on a card the bot no longer holds (restart, or already handled). */
+    expired: string
+  }
   chatActions: {
     /** Settings-panel button that opens the screen. */
     button: string

@@ -157,6 +157,11 @@ describe('extractUserSignals — suspicious', () => {
     expect(mayRemoveSender(signals)).toBe(false)
   })
 
+  it('names an arrival beside a confirmed spammer, and nothing when absent', () => {
+    expect(extractUserSignals(makeUser({ arrivedWithSpammer: true }))).toContainEqual({ name: 'arrived_with_spammer' })
+    expect(extractUserSignals(makeUser({})).map((s) => s.name)).not.toContain('arrived_with_spammer')
+  })
+
   it('flags sleeper-awakened accounts (old account, fresh local activity)', () => {
     const sleeper = makeUser({ predictedAgeDays: 1500, localAgeDays: 3, messagesGlobal: 2, messagesInChat: 1 })
     expect(names(sleeper)).toContain('sleeper_awakened')

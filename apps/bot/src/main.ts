@@ -46,7 +46,7 @@ import {
   type NormalizedExtra, type PendingEntry
 } from '@lyadmin/data'
 import {
-  captchaPrompt, chatActionsView, CHAT_ACTIONS_SHOWN, compactNotification, escapeHtml as escapeName, helpView,
+  captchaPrompt, chatActionsView, cohortCard, CHAT_ACTIONS_SHOWN, compactNotification, escapeHtml as escapeName, helpView,
   langPanel, langPicker, parseCallback, resolveLocale, settingsDeepLink, settingsPanel,
   nameIsPromo, ownRestrictionsView, OWN_RESTRICTIONS_SHOWN, startCard, startGroupHint, statsCard, topList, userMention, userProfileCard, votePrompt, voteResult,
   voterListView, whyCard, whyView,
@@ -66,7 +66,7 @@ import { MemberFactsCache, type MemberFacts } from './member-facts.js'
 import { JOIN_WINDOW_MS, JoinRateTracker } from './join-rate.js'
 import { IncidentTracker, SenderMessageLog, incidentPowerFor, correctionOwns, type Incident } from './incident.js'
 import { ArrivalLog, arrivalMessageIds } from './arrival-log.js'
-import { arrivalShapeOf, recordBanTargets } from './arrival-cohort.js'
+import { arrivalShapeOf, cohortSiblings, COHORT_WINDOW_MS, recordBanTargets } from './arrival-cohort.js'
 import { CaptchaGates, type CaptchaGate } from './captcha-gate.js'
 import { DuplicateTally } from './duplicate-tally.js'
 import { getUsersEach } from './users-each.js'
@@ -1604,6 +1604,7 @@ const enforceVoteSpam = async (vote: {
    * one-tap undo of that vote, available to the person it was cast against.
    */
   if (muted) await dropGate(vote.chatId, vote.targetUserId, 'vote_spam')
+  if (muted) void surfaceCohort(vote.chatId, { id: vote.targetUserId, displayName: null }).catch(() => { /* best-effort */ })
   /**
    * The chat confirmed it, so it is now a fact about the account and not only
    * about the message.
@@ -3425,8 +3426,8 @@ const scheduleProfileRecheck = (chat: Chat, target: User, messageId: number): vo
  * of `scheduleProfileRecheck`, and NOT a shadow.
  *
  * The profile recheck starts from a message, so an account that joins bare,
- * dresses, and sits silent is never looked at twice: exactly the accounts an
- * admin reported on 2026-09-27 because "the bot doesn't see them". Measured
+ * dresses, and sits silent is never looked at twice — the accounts admins were
+ * reporting by hand on arrival lines as of 2026-09-27. Measured
  * over the 14 days to that date, the shadow recheck called 63 accounts
  * `dressed_farm`; 12.7 % were later removed or voted spam against 0.8 % of
  * those still bare, none was overturned, and 59 of the 63 carried
@@ -3690,6 +3691,7 @@ const banOnRecord = async (p: {
     disableWebPreview: true, silent: delivery.silent
   }).catch(() => null)
   if (sent) scheduleDelete(chat.id, sent.id, delivery.ttlMs, 'mod_event:account_screen')
+  void surfaceCohort(chat.id, target).catch(() => { /* best-effort */ })
   return 'ban'
 }
 
@@ -3767,6 +3769,164 @@ const propagateRecordBan = async (
       await store.noteArrivalOutcome(chatId, target.id, 'banned_on_record').catch(() => { /* no row is fine */ })
     }
   }
+}
+
+/**
+ * Newcomers named on a cohort card, `chat:user` → until. Read by the message
+ * path as `arrived_with_spammer`, so a suspect's first message goes to the
+ * stages that read text. In memory: a deploy forgets who was suspected, which
+ * costs a nudge on a first message and nothing else.
+ */
+const cohortSuspects = new Map<string, number>()
+const COHORT_SUSPECTS_MAX = 5000
+
+const isCohortSuspect = (chatId: number, userId: number): boolean => {
+  const until = cohortSuspects.get(`${chatId}:${userId}`)
+  return until !== undefined && until > Date.now()
+}
+
+/** A card an admin can still answer, by its short key. */
+interface CohortCardState {
+  chatId: number
+  spammerId: number
+  userIds: number[]
+  expiresAt: number
+}
+const cohortCards = new Map<string, CohortCardState>()
+let cohortCardSeq = 0
+/** Spammers whose cohort was already looked for, `chat:spammer` → when. */
+const cohortChecked = new Map<string, number>()
+/** Long enough for an admin to get to it; the card deletes itself at the same time. */
+const COHORT_CARD_TTL_MS = 6 * 60 * 60 * 1000
+
+/**
+ * An account in this chat is now a confirmed spammer: name the newcomers who
+ * came in beside it, look like it, and have not said anything — to the chat's
+ * admins, on a card with one "ban them" button.
+ *
+ * Added 2026-09-27, when a chat's admins were banning such joiners by hand or
+ * waiting for them to post. The bot does not ban them itself. They have done nothing; resembling a spammer and
+ * arriving with it is a reason to ask a person, which is also where
+ * `account-verdict.ts` draws the line for anybody who has said nothing. What
+ * it saves the admin is the finding: which of this week's silent joiners
+ * belong with the one that just spammed.
+ */
+const surfaceCohort = async (chatId: number, spammer: { id: number; displayName: string | null }): Promise<void> => {
+  // One look per spammer per chat: a run of its messages, each removed, and a
+  // ban on its record would otherwise all ask the same question again.
+  const checkedKey = `${chatId}:${spammer.id}`
+  const checkedAt = cohortChecked.get(checkedKey)
+  if (checkedAt !== undefined && Date.now() - checkedAt < COHORT_CARD_TTL_MS) return
+  cohortChecked.set(checkedKey, Date.now())
+  if (cohortChecked.size > COHORT_SUSPECTS_MAX) {
+    for (const [k, at] of cohortChecked) if (Date.now() - at >= COHORT_CARD_TTL_MS) cohortChecked.delete(k)
+  }
+  const groupDoc = await store.getGroupDoc(chatId).catch(() => null)
+  const policy = groupDocToChatPolicy(groupDoc as never)
+  if (!policy.enabled) return
+  const now = Date.now()
+  const rows = await store.recentArrivalsIn(chatId, new Date(now - ARRIVAL_TTL_DAYS * 86400_000), 200)
+    .catch(() => [])
+  const spammerRow = rows.find((r) => r.userId === spammer.id)
+  // Joined before arrivals were recorded, or not seen joining: nobody to compare with.
+  if (!spammerRow) return
+
+  const onLiveCard = new Set<number>()
+  for (const [key, card] of cohortCards) {
+    if (card.expiresAt <= now) { cohortCards.delete(key); continue }
+    if (card.chatId === chatId) for (const id of card.userIds) onLiveCard.add(id)
+  }
+  const members: number[] = []
+  for (const sibling of cohortSiblings(spammerRow, rows.filter((r) => !onLiveCard.has(r.userId)))) {
+    const facts = await chatMemberFacts(chatId, sibling.userId)
+    if (facts.isParticipant === false || facts.isAdmin) continue
+    const stats = await store.getMemberStats(chatId, sibling.userId).catch(() => null)
+    if ((stats?.messagesCount ?? 0) > 0) continue
+    members.push(sibling.userId)
+  }
+  log.info('cohort_checked', { chatId, spammerId: spammer.id, arrivals: rows.length, members: members.length })
+  if (members.length === 0) return
+
+  for (const id of members) cohortSuspects.set(`${chatId}:${id}`, now + COHORT_WINDOW_MS)
+  if (cohortSuspects.size > COHORT_SUSPECTS_MAX) {
+    for (const [key, until] of cohortSuspects) if (until <= now) cohortSuspects.delete(key)
+  }
+
+  const users = await getUsersEach(fetchUser, [spammer.id, ...members])
+  const names = new Map<number, string>()
+  for (const u of users) if (u instanceof User) names.set(u.id, u.displayName)
+  const key = (++cohortCardSeq).toString(36)
+  cohortCards.set(key, { chatId, spammerId: spammer.id, userIds: members, expiresAt: now + COHORT_CARD_TTL_MS })
+  const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
+  const view = cohortCard(locale, chatId, key,
+    spammer.displayName ?? names.get(spammer.id) ?? locale.hiddenName(spammer.id),
+    members.map((id) => ({ userId: id, label: names.get(id) ?? null })))
+  const sent = await tgSendText(chatId, viewHtml(view.text), {
+    replyMarkup: toKeyboard(view.buttons), disableWebPreview: true, silent: policy.quietMode === true
+  }).catch(() => null)
+  if (sent) scheduleDelete(chatId, sent.id, COHORT_CARD_TTL_MS, 'cohort_card')
+  log.info('cohort_card', { chatId, spammerId: spammer.id, members: members.join(','), posted: sent !== null })
+}
+
+/**
+ * An admin's answer to a cohort card. "Ban" bans each named newcomer who is
+ * still not an admin, and writes one decision row per person — made by a
+ * person, on the card's grounds — so each ban has its "Why?" and its undo like
+ * any other. "Keep" drops the suspicion.
+ */
+const answerCohortCard = async (
+  chatId: number, key: string, act: string, admin: User, cardMessageId: number, locale: Locale
+): Promise<string | null> => {
+  const card = cohortCards.get(key)
+  if (!card || card.chatId !== chatId || card.expiresAt <= Date.now()) {
+    await tgEditMessage({ chatId, message: cardMessageId, replyMarkup: toKeyboard([]) }).catch(() => { /* gone */ })
+    return locale.cohort.expired
+  }
+  cohortCards.delete(key)
+  const groupLoc = await groupLocale(chatId)
+  const adminLabel = escapeName(admin.displayName)
+  if (act !== 'ban') {
+    for (const id of card.userIds) cohortSuspects.delete(`${chatId}:${id}`)
+    log.info('cohort_kept', { chatId, by: admin.id, members: card.userIds.length })
+    await tgEditMessage({ chatId, message: cardMessageId, text: viewHtml(groupLoc.cohort.kept(adminLabel)) })
+      .catch(() => { /* gone */ })
+    scheduleDelete(chatId, cardMessageId, NOTIFY_TTL_COMPACT_MS, 'cohort_card')
+    return null
+  }
+
+  let done = 0
+  for (const userId of card.userIds) {
+    if (await isChatAdmin(chatId, userId)) continue
+    const banned = await gateway.moderationActions.ban(chatId, userId, TIMED_BAN_SECONDS)
+      .then(() => true).catch(() => false)
+    if (!banned) continue
+    done++
+    cohortSuspects.delete(`${chatId}:${userId}`)
+    await dropGate(chatId, userId, 'cohort_ban')
+    await store.noteArrivalOutcome(chatId, userId, 'banned_by_admin').catch(() => { /* no row */ })
+    const arrival = arrivals.take(chatId, userId)
+    if (arrival && arrival.subjects === 1) {
+      const ids = arrivalMessageIds(arrival)
+      if (ids.length > 0) await gateway.tg.deleteMessagesById(chatId, ids).catch(() => { /* no rights */ })
+    }
+    await store.recordDecision({
+      chatId, userId, messageId: 0, textPreview: '',
+      verdict: {
+        pSpam: 0.99, action: 'ban', needsVote: false, banDurationSeconds: TIMED_BAN_SECONDS,
+        decidedBy: 'deterministic', ruleId: 'admin_cohort', signals: [{ name: 'arrived_with_spammer' }],
+        reasonCode: 'arrived_with_spammer', reasonEvidence: null,
+        meta: { by: admin.id, spammerId: card.spammerId }
+      },
+      execution: { applied: true, deleted: null, skippedReason: null, failed: [], albumRemoved: 0, retroPurged: 0 },
+      latencyMs: 0
+    }).catch(() => { /* telemetry must never break moderation */ })
+  }
+  log.info('cohort_banned', { chatId, by: admin.id, banned: done, members: card.userIds.length })
+  await tgEditMessage({
+    chatId, message: cardMessageId, text: viewHtml(groupLoc.cohort.banned(done, card.userIds.length, adminLabel))
+  }).catch(() => { /* gone */ })
+  scheduleDelete(chatId, cardMessageId, NOTIFY_TTL_COMPACT_MS, 'cohort_card')
+  return null
 }
 
 /**
@@ -5139,6 +5299,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
           joinedAgoSeconds,
           isParticipant,
           joinedDuringSurge: joinRate.joinedDuringSurge(chat.id, userSender.id),
+          arrivedWithSpammer: isCohortSuspect(chat.id, userSender.id),
           commonChatsCount: profile.commonChatsCount,
           peerFacts: profile.peerFacts
         }
@@ -5496,6 +5657,9 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
   if (result.applied && removesSender(verdict.action)) {
     await dropGate(chat.id, sender.id, `enforced:${verdict.action}`)
     void store.noteArrivalOutcome(chat.id, sender.id, 'removed').catch(() => { /* no row is fine */ })
+    if (userSender && !verdict.needsVote) {
+      void surfaceCohort(chat.id, userSender).catch(() => { /* best-effort */ })
+    }
     // The account's record, not this message, is what carries to its other
     // chats — so only a verdict that would have banned it unread qualifies.
     if (userSender && user && !verdict.needsVote && hasBanGradeAccountVerdict(user)) {
@@ -6372,6 +6536,18 @@ const wireCallbacks = (): void => {
       await tgEditMessage({ chatId: query.chat.id, message: query.messageId, replyMarkup: flipped })
         .catch(() => { /* card may be gone */ })
       await query.answer({ text: makeTrusted ? locale.trust.added : locale.trust.removed })
+      return
+    }
+
+    if (kind === 'coh') {
+      const [chatIdRaw = '', key = '', act = ''] = parts
+      const chatId = Number(chatIdRaw)
+      if (!Number.isFinite(chatId) || !(await isChatAdmin(chatId, query.user.id))) {
+        await query.answer({ text: locale.notification.adminOnly, alert: true })
+        return
+      }
+      const note = await answerCohortCard(chatId, key, act, query.user, query.messageId, locale)
+      await query.answer(note === null ? {} : { text: note })
       return
     }
 
