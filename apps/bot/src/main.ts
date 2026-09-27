@@ -3421,6 +3421,148 @@ const scheduleProfileRecheck = (chat: Chat, target: User, messageId: number): vo
 }
 
 /**
+ * A second look at a newcomer who has not said anything — the join-side twin
+ * of `scheduleProfileRecheck`, and NOT a shadow.
+ *
+ * The profile recheck starts from a message, so an account that joins bare,
+ * dresses, and sits silent is never looked at twice: exactly the accounts an
+ * admin reported on 2026-09-27 because "the bot doesn't see them". Measured
+ * over the 14 days to that date, the shadow recheck called 63 accounts
+ * `dressed_farm`; 12.7 % were later removed or voted spam against 0.8 % of
+ * those still bare, none was overturned, and 59 of the 63 carried
+ * `avatar_shared_with_accounts`.
+ *
+ * What it may do is the doorway's answer and nothing more: `accountVerdict`,
+ * which bans only on a record and otherwise at most closes a gate the person
+ * opens with one tap — the same thing an explicit avatar has done at the door
+ * since it was written. 12.7 % confirmed is a lift, not a precision; it does
+ * not buy a removal.
+ *
+ * Priced like the profile recheck: one `users.getUsers` per look, the profile
+ * and the picture only once a picture is there. In memory; a deploy drops what
+ * is pending, which costs a look and no moderation.
+ */
+/**
+ * Twice the message-side queue: every joiner is a candidate here, not only the
+ * ones who wrote bare, and a raid past this simply goes unlooked-at.
+ */
+const ARRIVAL_LOOKS_MAX_PENDING = 2 * PROFILE_RECHECK_MAX_PENDING
+
+const arrivalLooks = createProfileRecheckQueue({
+  delaysMs: PROFILE_RECHECK_DELAYS_MS,
+  maxPending: ARRIVAL_LOOKS_MAX_PENDING,
+  setTimer: (fn, ms) => { setTimeout(fn, ms).unref?.() }
+})
+
+const scheduleArrivalLook = (
+  chat: Chat, joiner: User, joinMessageId: number, messagesGlobal: number | null
+): void => {
+  if (joiner.isBot || joiner.id === selfId) return
+  // Standing earned elsewhere is what `established_user` exempts, and the gate
+  // below would refuse on it anyway: no look to pay for.
+  if ((messagesGlobal ?? 0) >= ESTABLISHED_MIN_MESSAGES) return
+  const joinedAt = Date.now()
+  arrivalLooks.schedule(`${chat.id}:${joiner.id}`, async (attempt, last) => {
+    const startedAt = Date.now()
+    const saw: Record<string, string | number> = {}
+    const note = (screen: string, signals: Signal[] = []): void => {
+      void store.recordDecision({
+        chatId: chat.id, userId: joiner.id, messageId: 0, textPreview: '',
+        verdict: {
+          pSpam: 0, action: 'none', needsVote: false, banDurationSeconds: null,
+          decidedBy: 'join_screen', ruleId: null, signals,
+          reasonCode: 'arrival_look', reasonEvidence: null,
+          meta: {
+            screen, attempt, lagMin: Math.round((startedAt - joinedAt) / 60000),
+            saw: Object.entries(saw).map(([k, v]) => `${k}=${v}`).join(' ')
+          }
+        },
+        latencyMs: Date.now() - startedAt
+      }).catch(() => { /* telemetry must never break moderation */ })
+    }
+
+    // Gone, or spoke: either way this look has nothing left to add. A message
+    // goes through the pipeline, which reads the profile itself.
+    const facts = await chatMemberFacts(chat.id, joiner.id)
+    if (facts.isParticipant === false) return 'done'
+    const stats = await store.getMemberStats(chat.id, joiner.id).catch(() => null)
+    if ((stats?.messagesCount ?? 0) > 0) return 'done'
+    // Already asked — at the door over an explicit avatar, or by an earlier
+    // look. A second prompt to somebody who has not answered the first is
+    // noise in the chat, not a second question.
+    if (captchas.peek(chat.id, joiner.id) !== null) return 'done'
+
+    const hasPhoto = await userHasProfilePhoto(gateway.tg, joiner.id)
+    if (hasPhoto !== true) {
+      if (last) note(hasPhoto === null ? 'no_answer' : 'still_bare')
+      return 'again'
+    }
+    const profile = await fetchUserProfile(gateway.tg, joiner.id).catch(() => null)
+    if (profile === null || profile.latestAvatar === null) {
+      saw['profile'] = profile === null ? 'failed' : 'no_photo_list'
+      if (last) note('no_answer')
+      return 'again'
+    }
+    const userDoc = await store.getUserDoc(joiner.id).catch(() => null)
+    const history = userDocToHistory(userDoc as never, 0)
+    const snapshot = buildUserSnapshot(
+      joiner,
+      withLiveFacts(history, { avatars: profile.avatars, externalBan: history?.externalBan ?? null }),
+      undefined,
+      { unofficialClientRisk: profile.unofficialClientRisk }
+    )
+    const signals = [...extractUserSignals(snapshot), ...extractBioSignals(profile.bio, profile.businessTexts)]
+    let evidence: string | null = null
+    let evidenceSignal: string | null = null
+    const avatarBase64 = await rawPhotoToBase64(gateway.tg, profile.latestAvatar, AVATAR_MAX_BYTES)
+      .catch(() => null)
+    saw['avatar'] = avatarBase64 === null ? 'failed' : 'bytes'
+    if (avatarBase64 !== null) {
+      for (const finding of await avatarFindings(joiner.id, avatarBase64, saw)) {
+        signals.push(finding)
+        if (evidence === null) { evidence = finding.evidence ?? null; evidenceSignal = finding.name }
+      }
+    }
+
+    const verdict = accountVerdict(signals, { hardAccountVerdict: hasBanGradeAccountVerdict(snapshot) })
+    log.info('arrival_look', {
+      chatId: chat.id, chat: chat.title ?? undefined, userId: joiner.id, attempt,
+      lagMin: Math.round((startedAt - joinedAt) / 60000), verdict,
+      farm: profileRecheckOutcome(true, signals) === 'dressed_farm'
+    })
+    if (verdict === 'none') {
+      note('dressed_clean', signals)
+      return 'done'
+    }
+    if (verdict === 'ban') {
+      const outcome = await banOnRecord({
+        chat, target: joiner, signals, evidence, evidenceSignal, saw,
+        messagesGlobal: history?.messagesGlobal ?? 0,
+        reason: 'arrival_look',
+        replyToMessageId: joinMessageId > 0 ? joinMessageId : null,
+        subjectMessageId: null,
+        note: (screen, noted = []) => note(screen, noted)
+      })
+      if (outcome === 'ban') {
+        await store.noteArrivalOutcome(chat.id, joiner.id, 'banned_on_record').catch(() => { /* no row */ })
+        void propagateRecordBan(chat.id, joiner, signals).catch(() => { /* best-effort */ })
+      }
+      return 'done'
+    }
+    const gated = await gateAccount({
+      chat, user: joiner, history,
+      reason: 'arrival_look', evidence,
+      replyToMessageId: joinMessageId > 0 ? joinMessageId : null
+    })
+    if (gated.outcome === 'blocked') saw['blocked'] = gated.blockers.join(',')
+    // `gated` writes its own captcha row; the others are answers of their own.
+    if (gated.outcome !== 'gated') note(`gate_${gated.outcome}`, signals)
+    else await store.noteArrivalOutcome(chat.id, joiner.id, 'gated').catch(() => { /* no row */ })
+    return 'done'
+  })
+}
+
+/**
  * Ban an account on its record alone — somebody else's verdict on it, with no
  * message of its own to read — in one chat, under that chat's rules.
  *
@@ -3924,14 +4066,16 @@ const gateExplicitJoiner = async (
  * HTTP requests with a 2s ceiling and no Telegram call, so unlike the avatar
  * screen it is not rationed by the surge budget.
  *
- * True when the account was banned.
+ * `banned` when the account was; `messagesGlobal` is its standing, read here
+ * anyway and needed by the look that follows.
  */
 const banJoinerOnRecord = async (
   chat: Chat, joiner: User, joinMessageId: number, policy: ReturnType<typeof groupDocToChatPolicy>
-): Promise<boolean> => {
-  if (!policy.enabled) return false
+): Promise<{ banned: boolean; messagesGlobal: number | null }> => {
   const userDoc = await store.getUserDoc(joiner.id).catch(() => null)
   const history = userDocToHistory(userDoc as never, 0)
+  const messagesGlobal = history?.messagesGlobal ?? null
+  if (!policy.enabled) return { banned: false, messagesGlobal }
   let externalBan = policy.externalBanEnabled ? (history?.externalBan ?? null) : null
   if (policy.externalBanEnabled) {
     const cached = (userDoc as { externalBan?: ExternalBanCacheView } | null)?.externalBan
@@ -3950,7 +4094,7 @@ const banJoinerOnRecord = async (
   const snapshot = buildUserSnapshot(joiner, withLiveFacts(history, {
     avatars: history?.avatars ?? null, externalBan
   }))
-  if (!hasBanGradeAccountVerdict(snapshot)) return false
+  if (!hasBanGradeAccountVerdict(snapshot)) return { banned: false, messagesGlobal }
 
   const signals = extractUserSignals(snapshot)
   const saw: Record<string, string | number> = { extban: externalBan ? 'listed' : 'none' }
@@ -3974,7 +4118,7 @@ const banJoinerOnRecord = async (
     }
   })
   log.info('listed_arrival', { chatId: chat.id, chat: chat.title ?? undefined, userId: joiner.id, outcome })
-  if (outcome !== 'ban') return false
+  if (outcome !== 'ban') return { banned: false, messagesGlobal }
 
   await store.noteArrivalOutcome(chat.id, joiner.id, 'banned_on_record').catch(() => { /* no row is fine */ })
   // The join line names somebody who is gone — the arrival purge's rule, for
@@ -3986,7 +4130,7 @@ const banJoinerOnRecord = async (
     if (ids.length > 0) await gateway.tg.deleteMessagesById(chat.id, ids).catch(() => { /* no rights */ })
   }
   void propagateRecordBan(chat.id, joiner, signals).catch(() => { /* best-effort */ })
-  return true
+  return { banned: true, messagesGlobal }
 }
 
 const screenJoiners = async (
@@ -3996,7 +4140,10 @@ const screenJoiners = async (
   const groupDoc = await store.getGroupDoc(chat.id).catch(() => null)
   const policy = groupDocToChatPolicy(groupDoc as never)
   for (const joiner of joiners.filter((j) => j.id !== selfId && !j.isBot).slice(0, ARRIVALS_RECORDED_MAX)) {
-    if (await banJoinerOnRecord(chat, joiner, joinMessageId, policy).catch(() => false)) listed.add(joiner.id)
+    const door = await banJoinerOnRecord(chat, joiner, joinMessageId, policy)
+      .catch(() => ({ banned: false, messagesGlobal: null }))
+    if (door.banned) listed.add(joiner.id)
+    else if (policy.enabled) scheduleArrivalLook(chat, joiner, joinMessageId, door.messagesGlobal)
   }
 
   // A bulk add can carry dozens of users; screening all of them sequentially
