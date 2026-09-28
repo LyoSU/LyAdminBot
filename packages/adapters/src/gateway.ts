@@ -12,7 +12,7 @@
  */
 import {
   BotKeyboard, TelegramClient, html, type InputText,
-  type EphemeralCallbackQuery, type Message
+  type Chat, type ChatMemberUpdate, type EphemeralCallbackQuery, type Message, type User
 } from '@mtcute/node'
 import { Dispatcher, type CallbackQueryContext } from '@mtcute/dispatcher'
 import type { ModerationActions } from './executor.js'
@@ -129,6 +129,23 @@ export class TelegramGateway {
   /** Expose callback-query routing without leaking the dispatcher. */
   onCallbackQuery(handler: (query: CallbackQueryContext) => Promise<void>): void {
     this.dispatcher.onCallbackQuery(handler)
+  }
+
+  /**
+   * Somebody joined or was added to a group, from the member update rather
+   * than the service line — the one report of a join a chat cannot hide. Where
+   * the line is shown too, both arrive; telling them apart is the app's job.
+   */
+  onMemberJoin(handler: (chat: Chat, user: User) => Promise<void>): void {
+    this.dispatcher.onChatMemberUpdate(async (upd: ChatMemberUpdate) => {
+      if (upd.isSelf) return
+      if (upd.type !== 'joined' && upd.type !== 'added') return
+      try {
+        await handler(upd.chat, upd.user)
+      } catch (err) {
+        this.errorSink(err)
+      }
+    })
   }
 
   /**

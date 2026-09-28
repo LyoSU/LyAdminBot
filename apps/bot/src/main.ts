@@ -66,6 +66,7 @@ import { MemberFactsCache, type MemberFacts } from './member-facts.js'
 import { JOIN_WINDOW_MS, JoinRateTracker } from './join-rate.js'
 import { IncidentTracker, SenderMessageLog, incidentPowerFor, correctionOwns, type Incident } from './incident.js'
 import { ArrivalLog, arrivalMessageIds } from './arrival-log.js'
+import { JOIN_LINE_GRACE_MS, JoinWitness } from './join-witness.js'
 import {
   arrivalShapeOf, cohortSiblings, COHORT_WINDOW_MS, recordBanTargets, REMOVED_ARRIVAL_OUTCOMES
 } from './arrival-cohort.js'
@@ -219,6 +220,8 @@ const senderLog = new SenderMessageLog()
  * and our greeting of them — so removing the person can take both down.
  */
 const arrivals = new ArrivalLog()
+/** Which report of a join acts on it — the service line or the member update. See `join-witness.ts`. */
+const joinWitness = new JoinWitness()
 
 /** Verdicts kept for the [Why?] button (memory, bounded). */
 /**
@@ -4260,7 +4263,9 @@ const gateExplicitJoiner = async (
 ): Promise<void> => {
   await gateAccount({
     chat, user: joiner, history,
-    reason: 'nsfw_avatar_join', evidence: hit, replyToMessageId: joinMessageId
+    reason: 'nsfw_avatar_join', evidence: hit,
+    // A join seen only as a member update has no line to answer.
+    replyToMessageId: joinMessageId > 0 ? joinMessageId : null
   })
 }
 
@@ -4809,6 +4814,27 @@ const renderStatsCard = async (
   })
 }
 
+/**
+ * A join reported by the member update. Where the chat shows the service line
+ * too, that line normally lands first and has already acted; this waits
+ * `JOIN_LINE_GRACE_MS` for it, because the line carries the message id the
+ * door ban replies to and the arrival purge removes. Where no line comes, this
+ * is the only way the bot learns of the newcomer before they post.
+ */
+const handleMemberJoin = async (chat: Chat, user: User): Promise<void> => {
+  if (chat.chatType !== 'supergroup' && chat.chatType !== 'group') return
+  if (user.id === selfId || user.isBot) return
+  await new Promise((resolve) => setTimeout(resolve, JOIN_LINE_GRACE_MS))
+  if (!joinWitness.claim(chat.id, user.id, 'member')) return
+  const rate = joinRate.note(chat.id, 1, [user.id])
+  if (rate.started) {
+    log.info('join_surge', { chatId: chat.id, count: rate.total, windowMs: JOIN_WINDOW_MS })
+    void maybeSendJoinSurgeAlert(chat).catch(() => { /* best-effort */ })
+  }
+  await recordArrivals(chat, [user], 0).catch(() => { /* best-effort */ })
+  void screenJoiners(chat, [user], 0).catch(() => { /* best-effort */ })
+}
+
 const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage): Promise<void> => {
   const chat = message.chat
   if (!(chat instanceof Chat)) {
@@ -4836,12 +4862,16 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       // Noted before the greeting and independently of it: the service line is
       // Telegram's own and exists whether or not this chat greets anybody.
       arrivals.noteJoin(chat.id, joiners.map((joiner) => joiner.id), message.id)
+      // A join the member update already acted on is not screened again.
+      const unclaimed = joiners.filter((joiner) => joinWitness.claim(chat.id, joiner.id, 'line'))
       // Recorded before screening, so a ban at the door annotates a row that
       // exists rather than racing the upsert that would clear it.
-      const recorded = recordArrivals(chat, joiners, message.id).catch(() => { /* best-effort */ })
+      const recorded = recordArrivals(chat, unclaimed, message.id).catch(() => { /* best-effort */ })
       await handleWelcomeGreeting(message, chat, joiners)
       // Fire-and-forget: lookups and avatar downloads must never delay update handling.
-      void recorded.then(() => screenJoiners(chat, joiners, message.id)).catch(() => { /* best-effort */ })
+      if (unclaimed.length > 0) {
+        void recorded.then(() => screenJoiners(chat, unclaimed, message.id)).catch(() => { /* best-effort */ })
+      }
     }
     return
   }
@@ -7038,6 +7068,8 @@ const main = async (): Promise<void> => {
   if (restored.length > 0) log.info('rights_restored_at_boot', { chats: restored.length })
 
   gateway.onMessage(handleMessage)
+  // Detached: the grace wait must not hold up the updates behind it.
+  gateway.onMemberJoin(async (chat, user) => { void handleMemberJoin(chat, user).catch(() => { /* best-effort */ }) })
   gateway.onError((err) => log.error('handler_error', { err: err instanceof Error ? err : String(err) }))
   // Debug, not warn: a redelivery is the transport working as specified, and
   // the pipeline now absorbs it. It becomes interesting only in bulk, which
@@ -7083,6 +7115,14 @@ const main = async (): Promise<void> => {
     log.info('duplicate_deliveries', { ...duplicates.drain() })
   }, DUPLICATE_REPORT_MS)
   duplicateTimer.unref?.()
+
+  // Same cadence and the same silence when idle. `memberOnly` is the count of
+  // joins the service line alone would have missed.
+  const joinSourcesTimer = setInterval(() => {
+    if (joinWitness.pending() === 0) return
+    log.info('join_sources', { ...joinWitness.drain() })
+  }, DUPLICATE_REPORT_MS)
+  joinSourcesTimer.unref?.()
 
   /**
    * Housekeeping the database cannot do for itself.
