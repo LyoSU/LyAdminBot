@@ -2609,6 +2609,32 @@ export class MongoStore {
     )
   }
 
+  /**
+   * Shadow measurement for carrying a content ban to the chats an account sits
+   * silent in: stamps the arrival rows a carry WOULD have reached, and does
+   * nothing else.
+   *
+   * Written beside the arrival rather than into a collection of its own so the
+   * question it answers — "did the account later post there, and what did the
+   * pipeline say" — is a join against `pipeline_decisions` on (chat, account)
+   * after `at`, and so the stamp expires with the row (7 days). Only the first
+   * act per row is kept: that is the act a carry would have fired on. Never
+   * creates a row, for the reason `noteArrivalOutcome` gives. Returns how many
+   * rows it stamped.
+   */
+  async noteShadowCarry(
+    chatIds: readonly number[],
+    userId: number,
+    stamp: { from: number; at: Date; by: string; reason: string; action: string; pSpam: number }
+  ): Promise<number> {
+    if (chatIds.length === 0) return 0
+    const result = await this.arrivals.updateMany(
+      { _id: { $in: chatIds.map((c) => arrivalKey(c, userId)) as never[] }, shadowCarry: { $exists: false } },
+      { $set: { shadowCarry: stamp } }
+    )
+    return result.modifiedCount
+  }
+
   /** Arrivals in one chat since `since`, newest first. Served by `arrivals_by_chat`. */
   async recentArrivalsIn(chatId: number, since: Date, limit = 50): Promise<ArrivalRecord[]> {
     const docs = await this.arrivals.find(

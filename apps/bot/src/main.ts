@@ -68,7 +68,7 @@ import { IncidentTracker, SenderMessageLog, incidentPowerFor, correctionOwns, ty
 import { ArrivalLog, arrivalMessageIds } from './arrival-log.js'
 import { JOIN_LINE_GRACE_MS, JoinWitness } from './join-witness.js'
 import {
-  arrivalShapeOf, cohortSiblings, COHORT_WINDOW_MS, recordBanTargets, REMOVED_ARRIVAL_OUTCOMES
+  arrivalShapeOf, cohortSiblings, COHORT_WINDOW_MS, recordBanTargets, REMOVED_ARRIVAL_OUTCOMES, isShadowCarryAct
 } from './arrival-cohort.js'
 import { CaptchaGates, type CaptchaGate } from './captcha-gate.js'
 import { DuplicateTally } from './duplicate-tally.js'
@@ -3777,6 +3777,33 @@ const propagateRecordBan = async (
 }
 
 /**
+ * Shadow only: which chats a content ban WOULD be carried to. Stamps the
+ * arrival rows (`noteShadowCarry`) and logs one line; removes nobody.
+ *
+ * The answer to "should it be carried" is whether the account later posts in
+ * those chats and what the pipeline says about it — a join of the stamp with
+ * `pipeline_decisions` after `shadowCarry.at`. Read it after two to three
+ * weeks; a clean share meaningfully above zero is the reason not to carry.
+ */
+const shadowCarry = async (
+  fromChatId: number, userId: number,
+  verdict: { decidedBy: string; action: string; reasonCode: string; pSpam: number }
+): Promise<void> => {
+  const rows = await store.arrivalsOf(userId, new Date(Date.now() - ARRIVAL_TTL_DAYS * 86400_000))
+  const targets = recordBanTargets(rows, fromChatId)
+  const stamped = await store.noteShadowCarry(targets, userId, {
+    from: fromChatId, at: new Date(), by: verdict.decidedBy, reason: verdict.reasonCode,
+    action: verdict.action, pSpam: Math.round(verdict.pSpam * 100) / 100
+  })
+  if (stamped > 0) {
+    log.info('carry_shadow', {
+      from: fromChatId, userId, targets: stamped, by: verdict.decidedBy,
+      reason: verdict.reasonCode, action: verdict.action
+    })
+  }
+}
+
+/**
  * Newcomers named on a cohort card, `chat:user` → until. Read by the message
  * path as `arrived_with_spammer`, so a suspect's first message goes to the
  * stages that read text. In memory: a deploy forgets who was suspected, which
@@ -5931,6 +5958,11 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     // With the sender, so the notice can say how many accounts this chat has
     // been left with rather than how many times we tried.
     rights.noteOutcome(chat.id, result.errors, sender.id)
+    if (isShadowCarryAct({
+      decidedBy: verdict.decidedBy, action: verdict.action, messageId: message.id, applied: result.applied
+    })) {
+      void shadowCarry(chat.id, sender.id, verdict).catch(() => { /* measurement must never break moderation */ })
+    }
     // Spam caught but we couldn't act → tell admins to grant rights (once/hr).
     //
     // Either half being refused counts. `!applied` alone missed the mirror case:

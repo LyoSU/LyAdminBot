@@ -1933,6 +1933,10 @@ describe('arrivals — who joined which chat this week', () => {
           updates.push({ filter, update, ...(options ? { options } : {}) })
           return { modifiedCount: 1 }
         },
+        updateMany: async (filter: Record<string, unknown>, update: Record<string, unknown>) => {
+          updates.push({ filter, update })
+          return { modifiedCount: ((filter['_id'] as { $in: unknown[] }).$in).length }
+        },
         find: (filter: Record<string, unknown>, options?: Record<string, unknown>) => {
           finds.push({ filter, ...(options ? { options } : {}) })
           return { toArray: async () => docs }
@@ -1942,6 +1946,7 @@ describe('arrivals — who joined which chat this week', () => {
     return Object.assign(store, {
       recordArrival: MongoStore.prototype.recordArrival,
       noteArrivalOutcome: MongoStore.prototype.noteArrivalOutcome,
+      noteShadowCarry: MongoStore.prototype.noteShadowCarry,
       recentArrivalsIn: MongoStore.prototype.recentArrivalsIn,
       arrivalsOf: MongoStore.prototype.arrivalsOf,
       updates, finds
@@ -1964,6 +1969,18 @@ describe('arrivals — who joined which chat this week', () => {
     const store = arrivalsStore()
     await store.noteArrivalOutcome(-100, 7, 'listed')
     expect(store.updates[0]).toEqual({ filter: { _id: '-100:7' }, update: { $set: { outcome: 'listed' } } })
+  })
+
+  it('stamps the rows a carry would reach, only the first act, and never creates one', async () => {
+    const store = arrivalsStore()
+    const stamp = { from: -1, at, by: 'llm', reason: 'job_scam', action: 'ban', pSpam: 0.98 }
+    expect(await store.noteShadowCarry([-100, -200], 7, stamp)).toBe(2)
+    expect(store.updates[0]).toEqual({
+      filter: { _id: { $in: ['-100:7', '-200:7'] }, shadowCarry: { $exists: false } },
+      update: { $set: { shadowCarry: stamp } }
+    })
+    expect(await store.noteShadowCarry([], 7, stamp)).toBe(0)
+    expect(store.updates).toHaveLength(1)
   })
 
   it('reads a chat newest first, and an account across chats', async () => {

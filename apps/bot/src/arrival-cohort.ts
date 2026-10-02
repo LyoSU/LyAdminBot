@@ -75,6 +75,30 @@ export const recordBanTargets = (
 }
 
 /**
+ * Stages whose act is a finding about a MESSAGE. A removal on the account's
+ * record (`deterministic` listings, `join_screen`) is not in this set: it
+ * already carries.
+ */
+const CONTENT_DECIDERS: ReadonlySet<string> = new Set([
+  'signature', 'llm', 'llm_cached', 'session', 'score', 'burst'
+])
+
+/**
+ * Whether an act would be a candidate for carrying to the chats the account
+ * sits silent in, if content bans were ever carried. Used only to measure that
+ * (2026-10-02, shadow): a hijacked account posts spam once, so the verdict on
+ * the message can be right while the conclusion about the account is wrong —
+ * the reason content bans are not carried today.
+ */
+export const isShadowCarryAct = (
+  act: { decidedBy: string; action: string; messageId: number; applied: boolean }
+): boolean =>
+  act.applied
+  && act.messageId > 0
+  && CONTENT_DECIDERS.has(act.decidedBy)
+  && (act.action === 'ban' || act.action === 'delete' || act.action === 'mute')
+
+/**
  * Arrivals this close to a confirmed spammer's, either side, count as having
  * come in with it. The screenshot that started this (2026-09-27) showed one
  * batch trickling in over two days; the arrivals themselves last a week.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  arrivalShapeOf, cohortSiblings, recordBanTargets, sameShape, type CohortArrival, type JoinerFacts
+  arrivalShapeOf, cohortSiblings, isShadowCarryAct, recordBanTargets, sameShape, type CohortArrival, type JoinerFacts
 } from './arrival-cohort.js'
 import type { ArrivalShape } from '@lyadmin/data'
 
@@ -141,5 +141,25 @@ describe('cohortSiblings', () => {
       expect(Math.abs(s.at.getTime() - t0)).toBeLessThanOrEqual(72 * hour)
       expect(s.messagesGlobalAtJoin ?? 0).toBe(0)
     }
+  })
+})
+
+describe('isShadowCarryAct', () => {
+  const act = { decidedBy: 'llm', action: 'ban', messageId: 5, applied: true }
+
+  it('takes an applied act decided from a message', () => {
+    for (const decidedBy of ['signature', 'llm', 'llm_cached', 'session', 'score', 'burst']) {
+      expect(isShadowCarryAct({ ...act, decidedBy })).toBe(true)
+    }
+    expect(isShadowCarryAct({ ...act, action: 'delete' })).toBe(true)
+  })
+
+  it('leaves out what already carries, what removed nobody, and what read no message', () => {
+    expect(isShadowCarryAct({ ...act, decidedBy: 'join_screen' })).toBe(false)
+    expect(isShadowCarryAct({ ...act, decidedBy: 'deterministic' })).toBe(false)
+    expect(isShadowCarryAct({ ...act, decidedBy: 'captcha_ignored' })).toBe(false)
+    expect(isShadowCarryAct({ ...act, applied: false })).toBe(false)
+    expect(isShadowCarryAct({ ...act, messageId: 0 })).toBe(false)
+    expect(isShadowCarryAct({ ...act, action: 'none' })).toBe(false)
   })
 })
