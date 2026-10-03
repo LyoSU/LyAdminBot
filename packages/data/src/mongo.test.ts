@@ -1863,6 +1863,42 @@ describe('recordDecision → getDecision — the grounds survive', () => {
   })
 })
 
+describe('recentSenderTimes — the cadence the shadow measurement reads', () => {
+  const t = (m: number) => new Date(Date.UTC(2026, 9, 3, 12, m))
+  const storeOf = (docs: Record<string, unknown>[]) => {
+    const calls: { filter: Record<string, unknown>; options: Record<string, unknown> }[] = []
+    const store = {
+      decisions: {
+        find: (filter: Record<string, unknown>, options: Record<string, unknown>) => {
+          calls.push({ filter, options })
+          return { toArray: async () => docs }
+        }
+      }
+    } as unknown as MongoStore
+    return Object.assign(store, { recentSenderTimes: MongoStore.prototype.recentSenderTimes, calls }) as MongoStore & { calls: typeof calls }
+  }
+
+  it('asks by chat and account, oldest first, real messages only', async () => {
+    const store = storeOf([])
+    await store.recentSenderTimes(-100, 7, t(0), 12)
+    expect(store.calls[0]).toEqual({
+      filter: { chatId: -100, userId: 7, createdAt: { $gte: t(0) }, messageId: { $gt: 0 } },
+      options: { projection: { messageId: 1, textPreview: 1, createdAt: 1 }, sort: { createdAt: 1 }, limit: 12 }
+    })
+  })
+
+  it('counts an edit once and reports whether anything was typed', async () => {
+    const store = storeOf([
+      { messageId: 1, textPreview: '', createdAt: t(0) },
+      { messageId: 1, textPreview: '', createdAt: t(1) },
+      { messageId: 2, textPreview: '', createdAt: t(6) }
+    ])
+    expect(await store.recentSenderTimes(-100, 7, t(0))).toEqual({ times: [t(0).getTime(), t(6).getTime()], typed: false })
+    const typed = storeOf([{ messageId: 3, textPreview: 'hi', createdAt: t(0) }])
+    expect((await typed.recentSenderTimes(-100, 7, t(0))).typed).toBe(true)
+  })
+})
+
 describe('recentRestrictionsOf — the notice a removed member can reach', () => {
   const at = new Date('2026-09-20T10:00:00Z')
   const restrictionsStore = (

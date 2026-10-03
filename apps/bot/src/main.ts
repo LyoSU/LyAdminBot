@@ -21,7 +21,7 @@ import {
   accountScreenAllowed, accountScreenRemoves, accountScreenUnasked, hardVerdictSourceOf,
   captchaBlockers, TIMED_BAN_SECONDS, VOTE_WINDOW_SECONDS, LLM_CLEARANCE_TTL_MS, expiryOutcome,
   createProfileRecheckQueue, profileRecheckOutcome, wantsProfileRecheck,
-  PROFILE_RECHECK_DELAYS_MS, PROFILE_RECHECK_MAX_PENDING,
+  PROFILE_RECHECK_DELAYS_MS, PROFILE_RECHECK_MAX_PENDING, metronomeShape,
   type AccountAction, type CaptchaBlocker,
   type BotStats, type ChannelPreview, type ChatStats, type EditBaseline, type EvaluationInput, type ForwardOrigin,
   type MediaCategory, type PipelinePorts, type Signal, type UserSnapshot, type Verdict, type VoteBallot
@@ -3804,6 +3804,29 @@ const shadowCarry = async (
 }
 
 /**
+ * Shadow only: does this sender post textless messages on a steady timer.
+ * Logs `metronome_shadow` once per chat and account per hour; removes nobody
+ * and feeds nothing to the scorer. The decisions already carry what is needed
+ * to read it later — a cadence line followed by what the account did next.
+ */
+const METRONOME_WINDOW_MS = 6 * 3600_000
+const METRONOME_LOG_EVERY_MS = 3600_000
+const metronomeLogged = new Map<string, number>()
+
+const shadowMetronome = async (chatId: number, userId: number): Promise<void> => {
+  const key = `${chatId}:${userId}`
+  const now = Date.now()
+  if ((metronomeLogged.get(key) ?? 0) > now - METRONOME_LOG_EVERY_MS) return
+  const { times, typed } = await store.recentSenderTimes(chatId, userId, new Date(now - METRONOME_WINDOW_MS), 20)
+  if (typed) return
+  const shape = metronomeShape(times)
+  if (!shape) return
+  if (metronomeLogged.size >= 5000) metronomeLogged.clear()
+  metronomeLogged.set(key, now)
+  log.info('metronome_shadow', { chatId, userId, ...shape })
+}
+
+/**
  * Newcomers named on a cohort card, `chat:user` → until. Read by the message
  * path as `arrived_with_spammer`, so a suspect's first message goes to the
  * stages that read text. In memory: a deploy forgets who was suspected, which
@@ -6108,6 +6131,9 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     },
     latencyMs: Date.now() - started
   }).catch(() => { /* telemetry must never break moderation */ })
+  if (!isEdit && normalized.text.length === 0) {
+    void shadowMetronome(chat.id, sender.id).catch(() => { /* measurement must never break moderation */ })
+  }
 
   // `captchaRequired` already means the restriction took hold (the executor
   // only claims a gate it managed to close), so no `result.applied` check: for

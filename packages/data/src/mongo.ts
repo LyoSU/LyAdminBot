@@ -2650,6 +2650,29 @@ export class MongoStore {
     return docs.map(docToArrival)
   }
 
+  /**
+   * When one account posted in one chat since `since`, one instant per message
+   * (an edit repeats a messageId and is not a second act), and whether any of
+   * those messages carried text. Served by the `chatId, userId, createdAt` index.
+   * Read by the shadow cadence measurement and nothing else.
+   */
+  async recentSenderTimes(
+    chatId: number, userId: number, since: Date, limit = 20
+  ): Promise<{ times: number[]; typed: boolean }> {
+    const docs = await this.decisions.find(
+      { chatId, userId, createdAt: { $gte: since }, messageId: { $gt: 0 } },
+      { projection: { messageId: 1, textPreview: 1, createdAt: 1 }, sort: { createdAt: 1 }, limit }
+    ).toArray()
+    const first = new Map<number, number>()
+    let typed = false
+    for (const d of docs) {
+      if (typeof d['textPreview'] === 'string' && d['textPreview'].length > 0) typed = true
+      const id = Number(d['messageId'])
+      if (d['createdAt'] instanceof Date && !first.has(id)) first.set(id, d['createdAt'].getTime())
+    }
+    return { times: [...first.values()], typed }
+  }
+
   async recentRestrictionsOf(userId: number, limit = 5): Promise<OwnRestriction[]> {
     const docs = await this.decisions.find(
       { userId, action: { $in: [...SENDER_REMOVAL_ACTIONS] }, 'execution.applied': true },
