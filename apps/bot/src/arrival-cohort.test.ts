@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  arrivalShapeOf, cohortSiblings, isContentCarryAct, isShadowCarryAct, recordBanTargets, sameShape, type CohortArrival, type JoinerFacts
+  arrivalShapeOf, chatsJoinedWithin, cohortSiblings, isContentCarryAct, isShadowCarryAct, MULTI_JOIN_MIN_CHATS, recordBanTargets, sameShape, type CohortArrival, type JoinerFacts
 } from './arrival-cohort.js'
 import type { ArrivalShape } from '@lyadmin/data'
 
@@ -161,6 +161,27 @@ describe('isShadowCarryAct', () => {
     expect(isShadowCarryAct({ ...act, applied: false })).toBe(false)
     expect(isShadowCarryAct({ ...act, messageId: 0 })).toBe(false)
     expect(isShadowCarryAct({ ...act, action: 'none' })).toBe(false)
+  })
+})
+
+describe('chatsJoinedWithin', () => {
+  const now = Date.parse('2026-10-14T18:00:00Z')
+  const at = (hoursAgo: number) => new Date(now - hoursAgo * 3_600_000)
+
+  it('counts distinct chats inside the window only', () => {
+    const arrivals = [
+      { chatId: -1, at: at(0) }, { chatId: -2, at: at(2) }, { chatId: -3, at: at(5.9) },
+      { chatId: -4, at: at(6.1) }, { chatId: -2, at: at(1) }
+    ]
+    expect(chatsJoinedWithin(arrivals, now)).toBe(3)
+    expect(chatsJoinedWithin(arrivals, now, 3 * 3_600_000)).toBe(2)
+    expect(chatsJoinedWithin([], now)).toBe(0)
+  })
+
+  it('reaches the bar on the third chat, not on a rejoin', () => {
+    const two = [{ chatId: -1, at: at(1) }, { chatId: -2, at: at(0.5) }, { chatId: -1, at: at(0) }]
+    expect(chatsJoinedWithin(two, now) >= MULTI_JOIN_MIN_CHATS).toBe(false)
+    expect(chatsJoinedWithin([...two, { chatId: -3, at: at(0) }], now) >= MULTI_JOIN_MIN_CHATS).toBe(true)
   })
 })
 

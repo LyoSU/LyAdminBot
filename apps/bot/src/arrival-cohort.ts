@@ -123,6 +123,28 @@ export const isContentCarryAct = (
 ): boolean => isShadowCarryAct(act) && act.action === 'ban' && !act.needsVote
 
 /**
+ * An account seen joining this many of our chats inside this window is
+ * marked, in shadow, on the arrival that crossed the line.
+ *
+ * Measured over the 7 days of arrivals to 2026-10-14, by the most distinct
+ * chats an account joined inside any 6 hours: one chat, 29.6 % later punished
+ * (66 ever regulars); two, 67 % (1); three or four, 76 %; five or more, 90 % —
+ * and of the 82 accounts at three or more, none was ever a regular and none
+ * posted three clean messages anywhere. 17 of the 68 punished were caught
+ * before the third join; the rest were not, and the first post-deploy farm the
+ * same day sat in nine chats with one message between them.
+ */
+export const MULTI_JOIN_WINDOW_MS = 6 * 3_600_000
+export const MULTI_JOIN_MIN_CHATS = 3
+
+/** Distinct chats among `arrivals` joined at or after `now - windowMs`. */
+export const chatsJoinedWithin = (
+  arrivals: readonly { chatId: number; at: Date }[],
+  now: number,
+  windowMs = MULTI_JOIN_WINDOW_MS
+): number => new Set(arrivals.filter((a) => now - a.at.getTime() <= windowMs).map((a) => a.chatId)).size
+
+/**
  * Arrivals this close to a confirmed spammer's, either side, count as having
  * come in with it. The screenshot that started this (2026-09-27) showed one
  * batch trickling in over two days; the arrivals themselves last a week.

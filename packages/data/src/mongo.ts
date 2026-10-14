@@ -2611,6 +2611,19 @@ export class MongoStore {
     )
   }
 
+  /**
+   * Shadow: this arrival was the account's `chats`-th distinct chat of ours
+   * inside the multi-join window (`MULTI_JOIN_MIN_CHATS` in the bot). Written
+   * beside the arrival so the read is a join against `pipeline_decisions` on
+   * (chat, account) after `at`, and it expires with the row. Never creates one.
+   */
+  async noteMultiJoin(chatId: number, userId: number, stamp: { chats: number; at: Date }): Promise<void> {
+    await this.arrivals.updateOne(
+      { _id: arrivalKey(chatId, userId) as never },
+      { $set: { multiJoin: stamp } }
+    )
+  }
+
   /** What became of an arrival. Never creates a row: no join, nothing to annotate. */
   async noteArrivalOutcome(chatId: number, userId: number, outcome: string): Promise<void> {
     await this.arrivals.updateOne(

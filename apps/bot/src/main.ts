@@ -69,7 +69,7 @@ import { ArrivalLog, arrivalMessageIds } from './arrival-log.js'
 import { JOIN_LINE_GRACE_MS, JoinWitness } from './join-witness.js'
 import {
   arrivalShapeOf, cohortSiblings, COHORT_WINDOW_MS, recordBanTargets, REMOVED_ARRIVAL_OUTCOMES, isShadowCarryAct,
-  isContentCarryAct
+  isContentCarryAct, chatsJoinedWithin, MULTI_JOIN_MIN_CHATS, MULTI_JOIN_WINDOW_MS
 } from './arrival-cohort.js'
 import { CaptchaGates, type CaptchaGate } from './captcha-gate.js'
 import { IGNORED_CAPTCHA_ESCALATION_MS, wouldEscalateAfterIgnoredCaptcha } from './recidivism-shadow.js'
@@ -4582,10 +4582,25 @@ const recordArrivals = async (chat: Chat, joiners: User[], joinMessageId: number
         isPremium: joiner.isPremium
       }, nowUnix),
       messagesGlobalAtJoin: history?.messagesGlobal ?? null
-    }).catch((err: unknown) => {
+    }).then(() => shadowMultiJoin(chat.id, joiner.id, at)).catch((err: unknown) => {
       log.warn('arrival_unsaved', { chatId: chat.id, userId: joiner.id, error: telegramErrorName(err) })
     })
   }
+}
+
+/**
+ * Shadow only — see `MULTI_JOIN_MIN_CHATS`. After the arrival is written, so
+ * the count includes it; marks the row and logs `multi_join_shadow`, removes
+ * nobody. Its failures are its own: an unsaved stamp is not an unsaved join.
+ */
+const shadowMultiJoin = async (chatId: number, userId: number, at: Date): Promise<void> => {
+  try {
+    const rows = await store.arrivalsOf(userId, new Date(at.getTime() - MULTI_JOIN_WINDOW_MS))
+    const chats = chatsJoinedWithin(rows, at.getTime())
+    if (chats < MULTI_JOIN_MIN_CHATS) return
+    await store.noteMultiJoin(chatId, userId, { chats, at })
+    log.info('multi_join_shadow', { chatId, userId, chats })
+  } catch { /* measurement must never break moderation */ }
 }
 
 /** Greet new members when welcome is enabled (off by default). */

@@ -2005,6 +2005,7 @@ describe('arrivals — who joined which chat this week', () => {
       recordArrival: MongoStore.prototype.recordArrival,
       noteArrivalOutcome: MongoStore.prototype.noteArrivalOutcome,
       noteShadowCarry: MongoStore.prototype.noteShadowCarry,
+      noteMultiJoin: MongoStore.prototype.noteMultiJoin,
       recentArrivalsIn: MongoStore.prototype.recentArrivalsIn,
       arrivalsOf: MongoStore.prototype.arrivalsOf,
       updates, finds
@@ -2094,6 +2095,13 @@ describe('arrivals — who joined which chat this week', () => {
     expect(finds[1]).toEqual({
       chatId: -200, userId: 7, action: { $in: ['kick', 'mute', 'ban'] }, 'execution.applied': true
     })
+  })
+
+  it('stamps a multi-join on the arrival without ever creating one', async () => {
+    const store = arrivalsStore()
+    const stamp = { chats: 4, at }
+    await store.noteMultiJoin(-100, 7, stamp)
+    expect(store.updates[0]).toEqual({ filter: { _id: '-100:7' }, update: { $set: { multiJoin: stamp } } })
   })
 
   it('reads a chat newest first, and an account across chats', async () => {
