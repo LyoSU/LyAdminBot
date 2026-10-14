@@ -67,7 +67,7 @@ export interface MemberFacts {
 }
 
 /** The shape we read out of `getChatMember`, as loosely as it is worth reading. */
-export type MemberAnswer = { status?: unknown; joinedDate?: unknown } | null | undefined
+export type MemberAnswer = { status?: unknown; joinedDate?: unknown; isMember?: unknown } | null | undefined
 
 const NOT_AN_ADMIN: MemberFacts = { isAdmin: false, joinedAgoSeconds: null, isParticipant: null }
 
@@ -97,6 +97,19 @@ export class MemberFactsCache {
    * "Unknown" and "not an admin" are different answers and the caller has to be
    * able to tell them apart, which is why this is not a boolean.
    */
+  /**
+   * Throw away what we know about one person, so the next `get` asks.
+   *
+   * For the one caller that must not act on a ten-minute-old answer: the
+   * ignored-captcha consequence, which mutes for an hour two minutes after the
+   * gate was issued — and the gate's own membership check is what filled this
+   * entry, so without this it would read back "present" for somebody who has
+   * since left.
+   */
+  invalidate(chatId: number, userId: number): void {
+    this.entries.delete(`${chatId}:${userId}`)
+  }
+
   peek(chatId: number, userId: number): MemberFacts | null {
     const cached = this.entries.get(`${chatId}:${userId}`)
     return cached && cached.expiresMs > this.now() ? cached.facts : null
@@ -129,6 +142,19 @@ export class MemberFactsCache {
     // mtcute hands back for `USER_NOT_PARTICIPANT`, and the shape a basic group
     // gives for somebody absent from its participant list.
     if (!member) return NOT_A_MEMBER
+    /**
+     * A participant record is not always a participant.
+     *
+     * Telegram keeps a row for somebody who was restricted and then left —
+     * mtcute reads it as `restricted` with `isMember: false` — and for the
+     * banned and the departed. Read as present until 2026-10-14, which is the
+     * exact population a captcha produces: the gate restricts first, so a
+     * gated account that leaves is one of these rows, and the consequence then
+     * muted somebody who was no longer here.
+     */
+    if (member.status === 'left' || member.status === 'banned' || member.isMember === false) {
+      return NOT_A_MEMBER
+    }
     const joinedMs = timestampMs(member.joinedDate)
     return {
       isAdmin: member.status === 'admin' || member.status === 'creator',

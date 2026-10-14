@@ -223,4 +223,33 @@ describe('MemberFacts — is this person in the chat at all', () => {
     await cache.get(1, 2, l.call)
     expect(l.calls).toBe(1)
   })
+
+  it('somebody restricted who then left is not a participant', async () => {
+    // The captcha's own population: the gate restricts first, so a gated
+    // account that leaves comes back as `restricted` with `isMember: false`.
+    const cache = new MemberFactsCache()
+    const facts = await cache.get(1, 2, async () => ({ status: 'restricted', joinedDate: null, isMember: false }))
+    expect(facts.isParticipant).toBe(false)
+  })
+
+  it('the departed and the banned are not participants; a restricted member is', async () => {
+    const cache = new MemberFactsCache()
+    const row = (status: string, isMember: boolean) => async () => ({ status, joinedDate: null, isMember })
+    expect((await cache.get(1, 1, row('left', false))).isParticipant).toBe(false)
+    expect((await cache.get(1, 2, row('banned', true))).isParticipant).toBe(false)
+    expect((await cache.get(1, 3, row('restricted', true))).isParticipant).toBe(true)
+    expect((await cache.get(1, 4, row('member', true))).isParticipant).toBe(true)
+  })
+
+  it('invalidate makes the next read ask again', async () => {
+    const cache = new MemberFactsCache()
+    const l = lookup([
+      () => ({ status: 'member', joinedDate: null, isMember: true }),
+      () => ({ status: 'restricted', joinedDate: null, isMember: false })
+    ])
+    expect((await cache.get(1, 2, l.call)).isParticipant).toBe(true)
+    cache.invalidate(1, 2)
+    expect((await cache.get(1, 2, l.call)).isParticipant).toBe(false)
+    expect(l.calls).toBe(2)
+  })
 })

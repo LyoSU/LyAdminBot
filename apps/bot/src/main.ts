@@ -585,6 +585,29 @@ const applyIgnoredCaptcha = async (
   // this API is fifteen separate permission flags, and a call that passes only
   // `sendMessages` leaves photos, stickers and media wide open — which is the
   // half of the traffic this class of account actually posts.
+  /**
+   * Nobody left to ask, so nobody to hold.
+   *
+   * Until 2026-10-14 the hour's mute landed on accounts that had already left
+   * in the two minutes since the gate went up, and a restriction set on
+   * somebody who is gone stays on the account: it was waiting for them when
+   * they came back, with no gate and no button left to lift it. A fresh read,
+   * not the cached one — the gate's own membership check filled the cache two
+   * minutes ago, when they were still here. A failed read (`null`) keeps the
+   * old behaviour: the mute is undone by one tap, and a guess of "gone" would
+   * let a lookup timeout spare an account that is still posting.
+   */
+  memberFacts.invalidate(chatId, userId)
+  const presence = (await chatMemberFacts(chatId, userId)).isParticipant
+  if (presence === false) {
+    // The message still comes down: it was posted, nobody vouched for it, and
+    // leaving does not take it with them.
+    if (gate.triggerMessageId !== null) {
+      await gateway.tg.deleteMessagesById(chatId, [gate.triggerMessageId]).catch(() => { /* gone */ })
+    }
+    await dropGate(chatId, userId, 'left_before_consequence')
+    return
+  }
   const held = await gateway.moderationActions
     .mute(chatId, userId, CAPTCHA_IGNORED_MUTE_SECONDS)
     .then(() => true).catch(() => false)
@@ -903,7 +926,7 @@ const dropGate = async (chatId: number, userId: number, reason: string): Promise
   // issued it, and taking its prompts down would be the same class of bug.
   if (!captchas.forget(gate)) return
   log.info('captcha_gate_dropped', { chatId, userId, reason, ageMs, wentPublic })
-  void store.recordCaptchaEvent({ chatId, userId, event: 'dropped', ageMs, wentPublic })
+  void store.recordCaptchaEvent({ chatId, userId, event: 'dropped', ageMs, wentPublic, reason })
   await removeGatePrompts(gate)
 }
 

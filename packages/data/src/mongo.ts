@@ -490,7 +490,9 @@ export class MongoStore {
     ageMs?: number
     wentPublic?: boolean
     /**
-     * Why the send failed, for `undeliverable` only.
+     * Why the send failed, for `undeliverable`; for `dropped` (since
+     * 2026-10-14), why the question stopped applying — `vote_spam`,
+     * `left_before_consequence` and the like, a code we chose, never text.
      *
      * The event was a name and nothing else, which made it the same kind of
      * unauditable answer `captchaBlockers` was written to replace: 32 of these
