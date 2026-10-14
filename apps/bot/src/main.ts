@@ -64,6 +64,7 @@ import { joinerSource } from './join-action.js'
 import { LlmHealth } from './llm-health.js'
 import { telegramErrorName } from './telegram-error.js'
 import { reportVoteRoute, rulesFirst } from './report-route.js'
+import { sendWithReplyFallback } from './reply-fallback.js'
 import { MemberFactsCache, type MemberFacts } from './member-facts.js'
 import { JOIN_WINDOW_MS, JoinRateTracker } from './join-rate.js'
 import { IncidentTracker, SenderMessageLog, incidentPowerFor, correctionOwns, type Incident } from './incident.js'
@@ -729,14 +730,17 @@ const deliverCaptcha = async (
   }
 
   const postVisible = async (): Promise<boolean> => {
-    const sent = await tgSendText(chatId, viewHtml(view.text), {
+    const sent = await sendWithReplyFallback((replyTo) => tgSendText(chatId, viewHtml(view.text), {
       replyMarkup: toKeyboard(view.buttons),
       // Replied to the message that triggered it, so the member sees what this
       // is about and gets a notification for it. Without the reply the prompt is
       // one more line in a busy chat, and the person it is addressed to is
-      // exactly the person who must not miss it.
-      ...(gate.triggerMessageId !== null ? { replyTo: gate.triggerMessageId } : {})
+      // exactly the person who must not miss it. Dropped only when the trigger
+      // is already gone — see `sendWithReplyFallback`.
+      ...(replyTo !== undefined ? { replyTo } : {})
       // Prompt failure is survivable: the restriction expires on its own.
+    }), gate.triggerMessageId ?? undefined, (reason) => {
+      log.info('captcha_reply_dropped', { chatId, userId, via: 'visible', reason })
     }).catch(() => null)
     if (!sent) {
       // Logged, because until 2026-08-25 this returned in silence and the logs
@@ -791,11 +795,15 @@ const deliverCaptcha = async (
   }
 
   try {
-    gate.ephemeralMessageId = await tgSendEphemeral(
+    // The trigger on the arrival path is the "X joined" line, which the
+    // arrival purge may already have removed — see `sendWithReplyFallback`.
+    gate.ephemeralMessageId = await sendWithReplyFallback((replyTo) => tgSendEphemeral(
       chatId, userId, viewHtml(view.text),
       view.buttons.map((row) => row.map((b) => ({ text: b.text, data: b.data ?? '' }))),
-      gate.triggerMessageId ?? undefined
-    )
+      replyTo
+    ), gate.triggerMessageId ?? undefined, (reason) => {
+      log.info('captcha_reply_dropped', { chatId, userId, via: 'whisper', reason })
+    })
     log.info('captcha_whispered', { chatId, userId })
     void store.recordCaptchaEvent({ chatId, userId, event: 'delivered', via: 'whisper' })
     /**
