@@ -278,7 +278,7 @@ describe('whyView', () => {
     const text = whyView(uk, makeVerdict())
     expect(text).not.toMatch(/<[a-z]/) // no HTML in the toast surface
     expect(text).toContain('93%')
-    expect(text).toContain('шахрайську "вакансію"')
+    expect(text).toContain('шахрайську «вакансію»')
     expect(text).toContain('оплата щодня') // evidence quote is allowed
   })
 
@@ -325,7 +325,7 @@ describe('userProfileLines', () => {
     expect(text).toContain('8 чатів')
     expect(text).toContain('статус: підозрілий') // agrees in gender, unlike "репутація: підозрілий"
     expect(text).toContain('спам-базах')
-    expect(text).toContain('промо в біо')
+    expect(text).toContain('реклама в біо')
   })
 
   it('declines the counts it prints (a card that writes "1 чатів" reads as a machine)', () => {
@@ -656,7 +656,7 @@ describe('votePrompt', () => {
       chatId: -1, messageId: 1, userLabel: 'Іра', textPreview: '', media: 'photo'
     }, { spam: 0, ham: 0, outcome: 'pending' })
     expect(view.text).not.toContain('""')
-    expect(view.text).toContain('світлина')
+    expect(view.text).toContain('фото')
     expect(view.text).toContain('Іра')
   })
 
@@ -686,7 +686,7 @@ describe('votePrompt', () => {
       chatId: -1, messageId: 1, userLabel: 'Іра', textPreview: 'купи крипту', media: 'photo'
     }, { spam: 0, ham: 0, outcome: 'pending' })
     expect(view.text).toContain('купи крипту')
-    expect(view.text).toContain('світлина')
+    expect(view.text).toContain('фото')
   })
 
   it('quotes the message as a quote, keeping its real newlines', () => {
@@ -1514,7 +1514,7 @@ describe('userProfileCard — trust provenance', () => {
     })
     expect(card.text).toContain('<a href="tg://user?id=7">Адмін</a>')
     expect(card.text).toContain('3д тому')
-    expect(card.text).toContain('скасував рішення бота')
+    expect(card.text).toContain('скасування рішення бота')
   })
 
   it('says provenance is unknown rather than implying nobody vouched', () => {
@@ -1664,5 +1664,97 @@ describe('top list unit agrees with the number', () => {
       ['by', 3, 'паведамленні'], ['by', 12, 'паведамленняў']
     ]
     for (const [code, n, form] of cases) expect(LOCALES[code]!.top.messagesUnit(n), `${code} ${n}`).toBe(form)
+  })
+})
+
+/**
+ * Number agreement in the Ukrainian copy (2026-10-14 copy audit). Each counted
+ * phrase is checked at 1, 2, 5, 11, 21 and 22 — the six numbers that exercise
+ * every branch of the one / few / many picker, including the 11-19 teens that
+ * end in 1 or 2 and still take "many".
+ */
+describe('uk number agreement', () => {
+  const NS = [1, 2, 5, 11, 21, 22] as const
+  const check = (render: (n: number) => string, expected: Record<(typeof NS)[number], string>): void => {
+    for (const n of NS) expect(render(n), `n=${n}`).toContain(expected[n])
+  }
+
+  it('missingRights: the verb agrees with the account count', () => {
+    check((n) => uk.notification.missingRights({ deleteBlocked: false, senderBlocked: true, accounts: n }), {
+      1: 'лишився 1 акаунт.', 2: 'лишилося 2 акаунти.', 5: 'лишилося 5 акаунтів.',
+      11: 'лишилося 11 акаунтів.', 21: 'лишився 21 акаунт.', 22: 'лишилося 22 акаунти.'
+    })
+  })
+
+  it('cohort title: verb and adjective follow the count', () => {
+    check((n) => uk.cohort.title(n, 'X'), {
+      1: 'прийшов ще 1 схожий новачок', 2: 'прийшли ще 2 схожі новачки', 5: 'прийшло ще 5 схожих новачків',
+      11: 'прийшло ще 11 схожих новачків', 21: 'прийшов ще 21 схожий новачок', 22: 'прийшли ще 22 схожі новачки'
+    })
+    // The hint sits under a card of one or many, so it names no number at all.
+    expect(uk.cohort.hint).not.toMatch(/прийшли|писали/)
+  })
+
+  it('confirmAll: the relative clause agrees with one versus many', () => {
+    check((n) => uk.arrivals.confirmAll(n), {
+      1: 'новачка, який досі нічого не написав?', 2: 'новачків, які досі нічого не написали?',
+      5: 'новачків, які', 11: 'новачків, які', 21: 'новачка, який', 22: 'новачків, які'
+    })
+  })
+
+  it('botStats window, checked, spammers and memory', () => {
+    check((n) => uk.botStats.window(n), {
+      1: 'За останній 1 день:', 2: 'За останні 2 дні:', 5: 'За останні 5 днів:',
+      11: 'За останні 11 днів:', 21: 'За останній 21 день:', 22: 'За останні 22 дні:'
+    })
+    check((n) => uk.botStats.checked(n), {
+      1: '<b>1</b> повідомлення', 2: '<b>2</b> повідомлення', 5: '<b>5</b> повідомлень',
+      11: '<b>11</b> повідомлень', 21: '<b>21</b> повідомлення', 22: '<b>22</b> повідомлення'
+    })
+    check((n) => uk.botStats.spammers(n), {
+      1: '<b>1</b> спамера', 2: '<b>2</b> спамерів', 5: '<b>5</b> спамерів',
+      11: '<b>11</b> спамерів', 21: '<b>21</b> спамера', 22: '<b>22</b> спамерів'
+    })
+    check((n) => uk.botStats.memory(n), {
+      1: '1 сигнатура', 2: '2 сигнатури', 5: '5 сигнатур', 11: '11 сигнатур', 21: '21 сигнатура', 22: '22 сигнатури'
+    })
+    expect(uk.botStats.memory(3)).not.toContain("'")
+  })
+
+  it('liveProof: chats, days and spammers each agree', () => {
+    check((n) => uk.start.liveProof(n, n, n), {
+      1: '<b>1</b> чат, за 1 день заблокував <b>1</b> спамера.',
+      2: '<b>2</b> чати, за 2 дні заблокував <b>2</b> спамерів.',
+      5: '<b>5</b> чатів, за 5 днів заблокував <b>5</b> спамерів.',
+      11: '<b>11</b> чатів, за 11 днів заблокував <b>11</b> спамерів.',
+      21: '<b>21</b> чат, за 21 день заблокував <b>21</b> спамера.',
+      22: '<b>22</b> чати, за 22 дні заблокував <b>22</b> спамерів.'
+    })
+  })
+
+  it('surgeAlert: members and suspects agree', () => {
+    check((n) => uk.welcome.surgeAlert(n, n), {
+      1: '1 учасник, з них 1 підозрілий', 2: '2 учасники, з них 2 підозрілі', 5: '5 учасників, з них 5 підозрілих',
+      11: '11 учасників, з них 11 підозрілих', 21: '21 учасник, з них 21 підозрілий', 22: '22 учасники, з них 22 підозрілі'
+    })
+  })
+})
+
+describe('uk elapsed time', () => {
+  it('a span under a minute reads "щойно", never "щойно тому"', () => {
+    const now = Date.UTC(2026, 9, 14, 12)
+    const view = ownRestrictionsView(uk, [{
+      chatId: -100, messageId: 1, action: 'mute', termSeconds: 3600, reasonCode: 'other_spam',
+      at: new Date(now - 10_000), overturned: false, chatTitle: 'Чат'
+    }], { userId: 42, botUsername: null, now })!
+    expect(view.text).toContain('щойно')
+    expect(view.text).not.toContain('щойно тому')
+    expect(uk.botStats.chatLastSpam(uk.profile.units.now)).toBe('Останній спам: щойно')
+    expect(uk.trust.grantedBy('A', uk.profile.units.now, 'toggle')).not.toContain('тому')
+    expect(uk.ownRestrictions.ago('5хв')).toBe('5хв тому')
+  })
+
+  it('an unknown account age reads as a phrase, not "акаунт вік невідомий"', () => {
+    expect(uk.profile.accountAge(uk.profile.unknownAge)).toBe('акаунт невідомого віку')
   })
 })

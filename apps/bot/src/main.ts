@@ -5128,7 +5128,9 @@ const renderStatsCard = async (
       stats: here,
       ago: here.lastActionAt === null
         ? null
-        : formatDuration((Date.now() - here.lastActionAt.getTime()) / 1000, locale.banan.units)
+        // Floored at a minute: `formatDuration` rounds to whole units, and a
+        // spam caught seconds ago used to read "0 min ago".
+        : formatDuration(Math.max(60, (Date.now() - here.lastActionAt.getTime()) / 1000), locale.banan.units)
     }
   })
 }
