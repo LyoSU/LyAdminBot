@@ -402,7 +402,8 @@ export const tr: Locale = {
     rateLimited: 'Çok fazla bildirim. Birkaç dakika bekle.',
     accepted: 'Anlaşıldı, teşekkürler.',
     oneAtATime: 'O satırda birden fazla kişi katıldı. Kastettiğin kişinin mesajına yanıt ver.',
-    voteClosed: 'Bu mesajla ilgili oylama kapandı. Kararı bir yönetici verebilir.'
+    voteClosed: 'Bu mesajla ilgili oylama kapandı. Kararı bir yönetici verebilir.',
+    channelSender: 'Bu bir kanal adına gönderildi. Kanalı yalnızca bir yönetici engelleyebilir.'
   },
 
   botStats: {

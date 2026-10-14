@@ -65,6 +65,42 @@ export const rulesFirst = (closedStatus: string): boolean => closedStatus !== 's
  * somebody. With nothing named it stays a reply, and the reply path explains
  * what it can and cannot do with a root.
  */
+/**
+ * A report on a message posted AS a chat rather than by a person.
+ *
+ * Until 2026-10-14 every such report was answered "reply to a message" —
+ * which the reporter had just done. The pipeline has judged channel senders
+ * since 2026-07-30, so spam from a channel identity is a real shape, and the
+ * one place a member could flag the pipeline's miss told them they had used
+ * the command wrong.
+ *
+ * - `admin_post`: the group posting as itself — an anonymous admin.
+ * - `thread_root`: the linked channel's own post, mirrored into its discussion
+ *   group; a report on it is the implicit reply of a comment (see `reportPath`).
+ * - `ban`: an admin's report on a channel identity. A channel cannot be muted
+ *   — a sender chat is posting or banned, nothing between — so the ruling is a
+ *   ban of that identity, which costs no person anything.
+ * - `explain`: anybody else, who is told only an admin can act on it. Not a
+ *   community vote: the vote's sanction is a mute, which a channel ignores.
+ *
+ * The shape test is `shouldScanChannelSender`'s, passed in, so the report and
+ * the pipeline cannot disagree on which channel senders are ours to judge.
+ */
+export type ChannelReportRoute = 'admin_post' | 'thread_root' | 'ban' | 'explain'
+
+export const channelReportRoute = (p: {
+  senderId: number
+  chatId: number
+  isAutomaticForward: boolean
+  /** `shouldScanChannelSender` for this message. */
+  judgeable: boolean
+  reporterIsAdmin: boolean
+}): ChannelReportRoute => {
+  if (p.senderId === p.chatId) return 'admin_post'
+  if (p.isAutomaticForward || !p.judgeable) return 'thread_root'
+  return p.reporterIsAdmin ? 'ban' : 'explain'
+}
+
 export interface RepliedShape {
   /** The channel post Telegram copied into the discussion group. */
   isAutomaticForward: boolean

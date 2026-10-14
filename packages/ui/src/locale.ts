@@ -445,6 +445,13 @@ export interface Locale {
      * admin. Said out loud since 2026-10-14: the report used to vanish here.
      */
     voteClosed: string
+    /**
+     * The reported message was posted as a channel, and the reporter is not an
+     * admin. A channel cannot be muted, so a vote has nothing to give; only an
+     * admin's ban reaches it. Added 2026-10-14: this used to say "reply to a
+     * message" to somebody who had.
+     */
+    channelSender: string
   }
 
   /** /mystats personal panel (PM only). */

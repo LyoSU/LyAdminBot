@@ -1,5 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { isThreadRoot, reportPath, reportVoteRoute, rulesFirst } from './report-route.js'
+import { channelReportRoute, isThreadRoot, reportPath, reportVoteRoute, rulesFirst } from './report-route.js'
+
+describe('channelReportRoute', () => {
+  const base = { senderId: -1002, chatId: -1001, isAutomaticForward: false, judgeable: true }
+
+  it('an admin reporting a channel identity bans it; anybody else is told why not', () => {
+    expect(channelReportRoute({ ...base, reporterIsAdmin: true })).toBe('ban')
+    expect(channelReportRoute({ ...base, reporterIsAdmin: false })).toBe('explain')
+  })
+
+  it('the group posting as itself is an admin, never a target', () => {
+    for (const reporterIsAdmin of [true, false]) {
+      expect(channelReportRoute({ ...base, senderId: -1001, reporterIsAdmin })).toBe('admin_post')
+    }
+  })
+
+  it('the linked channel\'s mirrored post is the thread root, never banned', () => {
+    expect(channelReportRoute({ ...base, isAutomaticForward: true, judgeable: false, reporterIsAdmin: true }))
+      .toBe('thread_root')
+    expect(channelReportRoute({ ...base, judgeable: false, reporterIsAdmin: true })).toBe('thread_root')
+  })
+})
 
 describe('reportPath', () => {
   const plain = { isAutomaticForward: false, actionType: null }

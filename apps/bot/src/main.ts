@@ -63,7 +63,7 @@ import { RightsMemory, RIGHTS_ERROR_REGEX, failureLabels } from './rights.js'
 import { joinerSource } from './join-action.js'
 import { LlmHealth } from './llm-health.js'
 import { telegramErrorName } from './telegram-error.js'
-import { reportPath, reportVoteRoute, rulesFirst } from './report-route.js'
+import { channelReportRoute, reportPath, reportVoteRoute, rulesFirst } from './report-route.js'
 import { sendWithReplyFallback } from './reply-fallback.js'
 import { captchaLift, readMemberRestriction } from './captcha-lift.js'
 import { MemberFactsCache, isAnonymousAdminSender, type MemberFacts } from './member-facts.js'
@@ -2680,6 +2680,8 @@ const handleDelete = async (message: Message, chat: Chat, caller: User): Promise
  */
 type ReportTarget =
   | { kind: 'message'; user: User }
+  /** Posted AS a chat — a channel identity, the group itself, or the linked channel. */
+  | { kind: 'channel'; sender: Chat }
   | { kind: 'arrival'; user: User }
   | { kind: 'many' }
   | { kind: 'none' }
@@ -2695,6 +2697,7 @@ const reportTarget = async (replied: Message): Promise<ReportTarget> => {
   // but nobody that line is ABOUT. `replied.sender` there is whoever performed
   // the action, and reporting them is not what the reporter asked for.
   if (replied.action) return { kind: 'none' }
+  if (replied.sender instanceof Chat) return { kind: 'channel', sender: replied.sender }
   return replied.sender instanceof User
     ? { kind: 'message', user: replied.sender }
     : { kind: 'none' }
@@ -2840,6 +2843,92 @@ const holdOnTrustedReport = async (
 }
 
 /**
+ * `/report` on a message posted as a chat — see `channelReportRoute`.
+ *
+ * An admin's report bans the channel identity and removes the message, and is
+ * written down like every other enforcement, so "За що?" and "Не спам" work on
+ * it: `restoreFalsePositive` lifts a ban as well as a mute. Nothing is learned
+ * and no detection is filed — a channel id is not an account standing can
+ * attach to, and the ruling is one admin's on one message.
+ */
+const reportChannelSender = async (
+  message: Message, chat: Chat, reporter: Reporter, replied: Message, sender: Chat
+): Promise<void> => {
+  const locale = await groupLocale(chat.id)
+  const route = channelReportRoute({
+    senderId: sender.id, chatId: chat.id, isAutomaticForward: replied.isAutomaticForward,
+    judgeable: shouldScanChannelSender({
+      senderId: sender.id, chatId: chat.id,
+      isAutomaticForward: replied.isAutomaticForward, isChannelPost: replied.isChannelPost
+    }),
+    reporterIsAdmin: await isChatAdmin(chat.id, reporter.id)
+  })
+  log.info('report', {
+    chatId: chat.id, chat: chat.title ?? undefined, userId: sender.id, user: sender.displayName,
+    by: reporter.id, byName: reporter.displayName, messageId: replied.id, on: 'sender_chat', route
+  })
+  if (route === 'admin_post') {
+    await answerAndClear(message, chat.id, locale.report.cantReportAdmin, 'report_refused')
+    return
+  }
+  if (route === 'thread_root') {
+    await answerAndClear(message, chat.id, locale.report.needReply, 'report_refused')
+    return
+  }
+  if (route === 'explain') {
+    await answerAndClear(message, chat.id, locale.report.channelSender, 'report_refused')
+    return
+  }
+  await gateway.tg.deleteMessagesById(chat.id, [message.id]).catch(() => { /* no rights */ })
+  const textPreview = truncate(replied.text ?? '', 200)
+  const failure = { deleted: null as string | null, banned: null as string | null }
+  const deleted = await gateway.moderationActions.deleteMessage(chat.id, replied.id)
+    .then(() => true).catch((err: unknown) => { failure.deleted = telegramErrorName(err); return false })
+  const banned = await gateway.moderationActions.ban(chat.id, sender.id, null)
+    .then(() => true).catch((err: unknown) => { failure.banned = telegramErrorName(err); return false })
+  if (!deleted || !banned) {
+    log.warn('report_channel_incomplete', {
+      chatId: chat.id, userId: sender.id, messageId: replied.id, deleted, banned,
+      ...(failure.deleted === null ? {} : { deleteError: failure.deleted }),
+      ...(failure.banned === null ? {} : { banError: failure.banned })
+    })
+  }
+  const action = banned ? 'ban' : deleted ? 'delete' : 'observe'
+  const verdict: Verdict = {
+    pSpam: 0.99, action, needsVote: false, banDurationSeconds: null,
+    decidedBy: 'deterministic', ruleId: 'admin_report', signals: [], reasonCode: 'admin_report',
+    reasonEvidence: textPreview || null, meta: { senderChat: true }
+  }
+  rememberVerdict(chat.id, replied.id, verdict)
+  const policy = groupDocToChatPolicy(await store.getGroupDoc(chat.id).catch(() => null) as never)
+  await store.recordDecision({
+    chatId: chat.id, userId: sender.id, messageId: replied.id, textPreview, verdict,
+    quiet: policy.quietMode === true,
+    execution: {
+      applied: banned, deleted, skippedReason: null,
+      failed: [
+        ...(deleted ? [] : [failure.deleted === null ? 'delete' : `delete:${failure.deleted}`]),
+        ...(banned ? [] : [failure.banned === null ? 'ban' : `ban:${failure.banned}`])
+      ],
+      albumRemoved: 0, retroPurged: 0
+    },
+    latencyMs: 0
+  }).catch(() => { /* telemetry must never break moderation */ })
+  if (action === 'observe') {
+    const warned = await tgSendText(chat.id, missingRightsText(chat.id, locale)).catch(() => null)
+    if (warned) scheduleDelete(chat.id, warned.id, NOTIFY_TTL_COMPACT_MS, 'missing_rights:admin_report')
+    return
+  }
+  const view = compactNotification(locale, verdict, {
+    chatId: chat.id, messageId: replied.id, userId: sender.id, userLabel: sender.displayName
+  }, { botUsername: selfUsername ?? undefined })
+  const sent = await tgSendText(chat.id, viewHtml(view.text), {
+    replyMarkup: toKeyboard(view.buttons), disableWebPreview: true
+  }).catch(() => null)
+  if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_COMPACT_MS, 'mod_event:admin_report')
+}
+
+/**
  * /report: one flow for everyone. The report opens (or joins) a community
  * vote and casts the reporter's spam ballot. tallyVotes resolves an admin
  * ballot instantly, so an admin report is an immediate verdict while a
@@ -2872,6 +2961,10 @@ const handleReport = async (message: Message, chat: Chat, reporter: Reporter, ar
     // A service line that is not a join — a pin, a departure, a video chat.
     // There is no account this is a report about.
     await answerAndClear(message, chat.id, locale.report.needReply, 'report_refused')
+    return
+  }
+  if (about.kind === 'channel') {
+    await reportChannelSender(message, chat, reporter, replied, about.sender)
     return
   }
   const target = about.user

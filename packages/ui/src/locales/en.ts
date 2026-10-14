@@ -404,7 +404,8 @@ export const en: Locale = {
     rateLimited: 'Too many reports. Wait a few minutes.',
     accepted: 'Got it, thanks.',
     oneAtATime: 'Several people joined on that line. Reply to a message from the one you mean.',
-    voteClosed: 'The vote on this message is already closed. An admin can still decide.'
+    voteClosed: 'The vote on this message is already closed. An admin can still decide.',
+    channelSender: 'This was posted as a channel. Only an admin can block a channel.'
   },
 
   botStats: {
