@@ -60,6 +60,15 @@ export interface EditEcho {
   total: number
 }
 
+/** What the app is told about a join request — facts only, no way to answer it. */
+export interface JoinRequestFacts {
+  chat: Chat
+  user: User
+  /** The bio as the update carries it; null when empty. */
+  bio: string | null
+  date: Date
+}
+
 const ALBUM_BUFFER_MS = 600
 
 export class TelegramGateway {
@@ -142,6 +151,26 @@ export class TelegramGateway {
       if (upd.type !== 'joined' && upd.type !== 'added') return
       try {
         await handler(upd.chat, upd.user)
+      } catch (err) {
+        this.errorSink(err)
+      }
+    })
+  }
+
+  /**
+   * A request to join a chat with "approve new members" on — sent to admin bots
+   * holding the invite-users right (`updateBotChatInviteRequester`).
+   *
+   * Added 2026-10-14 for a SHADOW measurement only. The dispatcher's context
+   * carries `approve()` / `decline()`; the app is handed plain facts instead,
+   * so nothing on the far side of this method can answer a request by
+   * accident. Not serialized through the chat queue: it acts on nothing, and a
+   * burst of requests must not hold back the messages queued behind it.
+   */
+  onJoinRequest(handler: (request: JoinRequestFacts) => Promise<void>): void {
+    this.dispatcher.onBotChatJoinRequest(async (upd) => {
+      try {
+        await handler({ chat: upd.chat, user: upd.user, bio: upd.userBio || null, date: upd.date })
       } catch (err) {
         this.errorSink(err)
       }

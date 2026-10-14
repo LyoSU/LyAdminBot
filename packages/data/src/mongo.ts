@@ -2654,6 +2654,24 @@ export class MongoStore {
     )
   }
 
+  /**
+   * Shadow (2026-10-14): this arrival came through a join request, and this is
+   * what the request screen would have answered. Beside the arrival so its
+   * `outcome` — removed, banned, restored — reads against the answer without a
+   * join; the full row is in `pipeline_decisions` under (chat, account) with
+   * `reasonCode: 'join_request_shadow'`. Never creates a row.
+   */
+  async noteJoinRequest(
+    chatId: number,
+    userId: number,
+    stamp: { wouldDecide: string; reason: string; at: Date }
+  ): Promise<void> {
+    await this.arrivals.updateOne(
+      { _id: arrivalKey(chatId, userId) as never },
+      { $set: { joinRequest: stamp } }
+    )
+  }
+
   /** What became of an arrival. Never creates a row: no join, nothing to annotate. */
   async noteArrivalOutcome(chatId: number, userId: number, outcome: string): Promise<void> {
     await this.arrivals.updateOne(

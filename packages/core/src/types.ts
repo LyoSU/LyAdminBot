@@ -534,6 +534,12 @@ export type DecidedBy =
    * because no message existed to judge.
    */
   | 'join_screen'
+  /**
+   * SHADOW, 2026-10-14: what the door would answer to a join request, before
+   * the person is in the room. Always `action: 'none'` — nothing answers the
+   * request; see `join-request.ts`.
+   */
+  | 'join_request'
   | 'abstain'
   | 'error'
 

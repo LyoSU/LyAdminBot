@@ -21,7 +21,7 @@ import {
   accountScreenAllowed, accountScreenRemoves, accountScreenUnasked, hardVerdictSourceOf, PRESET_THRESHOLDS,
   captchaBlockers, TIMED_BAN_SECONDS, VOTE_WINDOW_SECONDS, LLM_CLEARANCE_TTL_MS, expiryOutcome,
   createProfileRecheckQueue, profileRecheckOutcome, wantsProfileRecheck,
-  PROFILE_RECHECK_DELAYS_MS, PROFILE_RECHECK_MAX_PENDING, metronomeShape,
+  PROFILE_RECHECK_DELAYS_MS, PROFILE_RECHECK_MAX_PENDING, metronomeShape, joinRequestVerdict,
   type AccountAction, type CaptchaBlocker,
   type BotStats, type ChannelPreview, type ChatStats, type EditBaseline, type EvaluationInput, type ForwardOrigin,
   type MediaCategory, type PipelinePorts, type Signal, type UserSnapshot, type Verdict, type VoteBallot
@@ -34,7 +34,7 @@ import {
   createChatDescriptionCache, fetchChatDescription, fetchChatMemberCount, findChatMemberByUsername,
   createTmePreviewResolver,
   avatarDhashOf, MUTE_DURATION_SECONDS, warmPeer,
-  type ExternalBanCacheView, type IncomingMessage
+  type ExternalBanCacheView, type IncomingMessage, type JoinRequestFacts
 } from '@lyadmin/adapters'
 import {
   MongoStore, MongoSignaturePort, MongoForwardPort, QdrantVectorPort,
@@ -54,6 +54,7 @@ import {
   LOCALES, type Locale, type UserFacts, type ViewMessage
 } from '@lyadmin/ui'
 import { loadConfig } from './config.js'
+import { JoinRequestLedger, createScreenLimiter } from './join-request.js'
 import { registerBotCommands } from './commands.js'
 import { createStatsCache } from './stats-cache.js'
 import { formatDuration, parseBananDuration } from './duration.js'
@@ -4609,7 +4610,13 @@ const recordArrivals = async (chat: Chat, joiners: User[], joinMessageId: number
         isPremium: joiner.isPremium
       }, nowUnix),
       messagesGlobalAtJoin: history?.messagesGlobal ?? null
-    }).then(() => shadowMultiJoin(chat.id, joiner.id, at)).catch((err: unknown) => {
+    }).then(async () => {
+      // A join request this process screened (2026-10-14): its answer goes on
+      // the arrival, where whatever later becomes of the account is written.
+      const requested = joinRequests.take(chat.id, joiner.id)
+      if (requested) await store.noteJoinRequest(chat.id, joiner.id, requested).catch(() => { /* no row */ })
+      await shadowMultiJoin(chat.id, joiner.id, at)
+    }).catch((err: unknown) => {
       log.warn('arrival_unsaved', { chatId: chat.id, userId: joiner.id, error: telegramErrorName(err) })
     })
   }
@@ -4628,6 +4635,121 @@ const shadowMultiJoin = async (chatId: number, userId: number, at: Date): Promis
     await store.noteMultiJoin(chatId, userId, { chats, at })
     log.info('multi_join_shadow', { chatId, userId, chats })
   } catch { /* measurement must never break moderation */ }
+}
+
+/**
+ * SHADOW, 2026-10-14 — what the door would answer to a join request, written
+ * as one `pipeline_decisions` row and a `join_request_shadow` log line. Nothing
+ * here approves, declines or messages anybody: the gateway hands over facts,
+ * not the update's `approve()` / `decline()`. See `join-request.ts` (core) for
+ * the question and the bot-side `join-request.ts` for the bounds.
+ *
+ * The read is `banJoinerOnRecord`'s plus the arrival look's, in that order, and
+ * stops as soon as the answer is fixed: a ban-grade record or standing earned
+ * elsewhere settles it before any profile call is paid for.
+ */
+const joinRequests = new JoinRequestLedger()
+const joinRequestScreens = createScreenLimiter()
+
+const handleJoinRequest = async (request: JoinRequestFacts): Promise<void> => {
+  const { chat, user } = request
+  if (chat.chatType !== 'supergroup' && chat.chatType !== 'group') return
+  if (user.isBot || user.id === selfId) return
+  // Before any read: a re-tapped request costs one map lookup, not a screen.
+  if (!joinRequests.claim(chat.id, user.id)) return
+  const groupDoc = await store.getGroupDoc(chat.id).catch(() => null)
+  const policy = groupDocToChatPolicy(groupDoc as never)
+  if (!policy.enabled) return
+
+  // Past the queue a raid gets the read that costs no network call at all —
+  // the user doc and what the update carries — and the row says so.
+  const full = joinRequestScreens.submit(() => screenJoinRequest(request, policy, 'full'))
+  if (full === null) await screenJoinRequest(request, policy, 'cached')
+  else await full
+}
+
+const screenJoinRequest = async (
+  request: JoinRequestFacts,
+  policy: ReturnType<typeof groupDocToChatPolicy>,
+  depth: 'full' | 'cached'
+): Promise<void> => {
+  const { chat, user } = request
+  const startedAt = Date.now()
+  const saw: Record<string, string | number> = { depth }
+  const userDoc = await store.getUserDoc(user.id).catch(() => null)
+  const history = userDocToHistory(userDoc as never, 0)
+
+  // The ban-database read exactly as the arrival screen makes it, including
+  // the cache write, so the arrival that may follow does not ask again.
+  let externalBan = policy.externalBanEnabled ? (history?.externalBan ?? null) : null
+  if (policy.externalBanEnabled && depth === 'full') {
+    const cached = (userDoc as { externalBan?: ExternalBanCacheView } | null)?.externalBan
+    const sources = sourcesToQuery(cached, Date.now())
+    if (sources.lols || sources.cas) {
+      const fresh = await fetchExternalBan(user.id, { sources }).catch(() => null)
+      if (fresh) {
+        store.saveExternalBan(user.id, fresh).catch(() => { /* cache is best-effort */ })
+        externalBan = mergeExternalBan({
+          lols: fresh.lols ?? (cached?.lols as never),
+          cas: fresh.cas ?? (cached?.cas as never)
+        })
+      }
+      saw['extban'] = fresh ? 'fresh' : 'failed'
+    } else saw['extban'] = 'cached'
+  } else saw['extban'] = policy.externalBanEnabled ? 'cached' : 'off'
+
+  const recordOnly = buildUserSnapshot(user, withLiveFacts(history, {
+    avatars: history?.avatars ?? null, externalBan
+  }))
+  const settled = hasBanGradeAccountVerdict(recordOnly) ||
+    policy.trustedUserIds.includes(user.id) ||
+    (history?.messagesGlobal ?? 0) >= ESTABLISHED_MIN_MESSAGES
+
+  let snapshot = recordOnly
+  let signals: Signal[] = []
+  if (depth === 'full' && !settled) {
+    const profile = await fetchUserProfile(gateway.tg, user.id).catch(() => null)
+    saw['profile'] = profile === null ? 'failed' : 'ok'
+    if (profile !== null) {
+      snapshot = buildUserSnapshot(user, withLiveFacts(history, {
+        avatars: profile.avatars, externalBan
+      }), undefined, { unofficialClientRisk: profile.unofficialClientRisk })
+      signals.push(...extractBioSignals(profile.bio ?? request.bio, profile.businessTexts))
+      const avatarBase64 = profile.latestAvatar
+        ? await rawPhotoToBase64(gateway.tg, profile.latestAvatar, AVATAR_MAX_BYTES).catch(() => null)
+        : null
+      saw['avatar'] = profile.latestAvatar === null ? 'none' : avatarBase64 === null ? 'failed' : 'bytes'
+      if (avatarBase64 !== null) signals.push(...await avatarFindings(user.id, avatarBase64, saw))
+    } else signals.push(...extractBioSignals(request.bio))
+  } else if (!settled) {
+    // The bio rides on the update for free; nothing else of the profile does.
+    signals.push(...extractBioSignals(request.bio))
+  }
+  signals = [...extractUserSignals(snapshot), ...signals]
+
+  const verdict = joinRequestVerdict({ user: snapshot, signals, chat: policy })
+  const meta: Record<string, string | number | boolean> = {
+    wouldDecide: verdict.wouldDecide,
+    reason: verdict.reason,
+    ...(verdict.blocked === undefined ? {} : { blocked: verdict.blocked }),
+    requestedAt: request.date.toISOString(),
+    saw: Object.entries(saw).map(([k, v]) => `${k}=${v}`).join(' ')
+  }
+  log.info('join_request_shadow', {
+    chatId: chat.id, userId: user.id, wouldDecide: verdict.wouldDecide, reason: verdict.reason, depth
+  })
+  joinRequests.remember(chat.id, user.id, {
+    wouldDecide: verdict.wouldDecide, reason: verdict.reason, at: new Date(startedAt)
+  })
+  await store.recordDecision({
+    chatId: chat.id, userId: user.id, messageId: 0, textPreview: '',
+    verdict: {
+      pSpam: 0, action: 'none', needsVote: false, banDurationSeconds: null,
+      decidedBy: 'join_request', ruleId: null, signals,
+      reasonCode: 'join_request_shadow', reasonEvidence: null, meta
+    },
+    latencyMs: Date.now() - startedAt
+  }).catch(() => { /* telemetry must never break moderation */ })
 }
 
 /** Greet new members when welcome is enabled (off by default). */
@@ -7304,6 +7426,9 @@ const main = async (): Promise<void> => {
   gateway.onMessage(handleMessage)
   // Detached: the grace wait must not hold up the updates behind it.
   gateway.onMemberJoin(async (chat, user) => { void handleMemberJoin(chat, user).catch(() => { /* best-effort */ }) })
+  // Shadow only (2026-10-14): fire-and-forget like the member update, so a
+  // burst of requests never sits in front of anything else the dispatcher holds.
+  gateway.onJoinRequest(async (request) => { void handleJoinRequest(request).catch(() => { /* best-effort */ }) })
   gateway.onError((err) => log.error('handler_error', { err: err instanceof Error ? err : String(err) }))
   // Debug, not warn: a redelivery is the transport working as specified, and
   // the pipeline now absorbs it. It becomes interesting only in bulk, which

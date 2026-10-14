@@ -2006,6 +2006,7 @@ describe('arrivals — who joined which chat this week', () => {
       noteArrivalOutcome: MongoStore.prototype.noteArrivalOutcome,
       noteShadowCarry: MongoStore.prototype.noteShadowCarry,
       noteMultiJoin: MongoStore.prototype.noteMultiJoin,
+      noteJoinRequest: MongoStore.prototype.noteJoinRequest,
       recentArrivalsIn: MongoStore.prototype.recentArrivalsIn,
       arrivalsOf: MongoStore.prototype.arrivalsOf,
       updates, finds
@@ -2102,6 +2103,13 @@ describe('arrivals — who joined which chat this week', () => {
     const stamp = { chats: 4, at }
     await store.noteMultiJoin(-100, 7, stamp)
     expect(store.updates[0]).toEqual({ filter: { _id: '-100:7' }, update: { $set: { multiJoin: stamp } } })
+  })
+
+  it('stamps a join request\'s shadow answer on the arrival without ever creating one', async () => {
+    const store = arrivalsStore()
+    const stamp = { wouldDecide: 'look', reason: 'farm_shape', at }
+    await store.noteJoinRequest(-100, 7, stamp)
+    expect(store.updates[0]).toEqual({ filter: { _id: '-100:7' }, update: { $set: { joinRequest: stamp } } })
   })
 
   it('reads a chat newest first, and an account across chats', async () => {
