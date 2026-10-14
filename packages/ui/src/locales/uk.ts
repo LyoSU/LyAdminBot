@@ -23,6 +23,9 @@ const plural = (n: number, one: string, few: string, many: string): string => {
 const NOW = 'щойно'
 const ago = (span: string): string => (span === NOW ? NOW : `${span} тому`)
 
+/** First-seen placeholder: the profile line reads it as a phrase, not a span. */
+const NEVER_SEEN = 'уперше'
+
 export const uk: Locale = {
   languageName: 'Українська',
 
@@ -36,7 +39,7 @@ export const uk: Locale = {
       'Додай у групу → дай права адміна → готово.'
     ].join('\n'),
     liveProof: (chats, spammers, days) =>
-      `📊 Зараз тримаю <b>${groupDigits(chats)}</b> ${plural(chats, 'чат', 'чати', 'чатів')}, ` +
+      `📊 Зараз захищаю <b>${groupDigits(chats)}</b> ${plural(chats, 'чат', 'чати', 'чатів')}, ` +
       `за ${days} ${plural(days, 'день', 'дні', 'днів')} заблокував <b>${groupDigits(spammers)}</b> ${plural(spammers, 'спамера', 'спамерів', 'спамерів')}.`,
     groupHint: '🛡 Ловлю спам, баню шахраїв.\n<code>/settings</code> для адмінів · <code>/stats</code> цифри · <code>/help</code> команди',
     addToGroupButton: '➕ Додати в групу',
@@ -46,7 +49,7 @@ export const uk: Locale = {
   arrivals: {
     button: '👥 Нові учасники',
     title: '👥 <b>Хто прийшов у чат за тиждень</b>',
-    empty: 'За тиждень бот не бачив жодного входу в цей чат.',
+    empty: 'За тиждень бот не помітив у цьому чаті нових учасників.',
     silent: 'мовчить',
     spoke: (count) => `повідомлень: ${count}`,
     suspect: 'вхід разом зі спамером',
@@ -66,11 +69,11 @@ export const uk: Locale = {
     banned: (count) => `Забанено: ${count}`
   },
   cohort: {
-    title: (count, spammer) => `👥 <b>Разом зі спамером ${spammer} ${plural(count, 'прийшов', 'прийшли', 'прийшло')} ще ${count} ${plural(count, 'схожий новачок', 'схожі новачки', 'схожих новачків')}</b>`,
-    hint: 'Схожий профіль, вхід у той самий час, жодного повідомлення. Бот нікого не чіпав — вирішує адмін.',
+    title: (count, spammer) => `👥 <b>Разом зі спамером ${plural(count, 'прийшов', 'прийшли', 'прийшло')} ще ${count} ${plural(count, 'схожий новачок', 'схожі новачки', 'схожих новачків')}</b>\nСпамер: ${spammer}`,
+    hint: 'Схожий профіль, вхід у той самий час, жодного повідомлення. Бот нікого не обмежував — вирішує адмін.',
     banButton: (count) => `🚫 Забанити ${count}`,
     keepButton: 'Лишити',
-    banned: (done, total, admin) => `🚫 Забанено ${done} з ${total} новачків, що прийшли разом зі спамером · ${admin}`,
+    banned: (done, total, admin) => `🚫 Новачків, що прийшли разом зі спамером, забанено: ${done} з ${total} · ${admin}`,
     kept: (admin) => `✅ Новачки лишаються в чаті · ${admin}`,
     expired: 'Ця картка вже неактуальна.'
   },
@@ -78,7 +81,7 @@ export const uk: Locale = {
   chatActions: {
     button: '🧾 Останні дії',
     title: '🧾 <b>Останні дії бота в чаті</b>',
-    empty: 'Поки нічого: у цьому чаті бот ще нікого не чіпав.',
+    empty: 'Поки порожньо: у цьому чаті бот ще нічого не робив.',
     footer: '«За що?» відкриває доказ і кнопку «Не спам», якщо бот помилився.'
   },
 
@@ -92,7 +95,7 @@ export const uk: Locale = {
     unknownChat: 'чат без назви',
     footer: [
       'Це автоматичні рішення бота, не адміністраторів.',
-      'Якщо я помилився — напиши адміну того чату: він може скасувати це одним дотиком.',
+      'Якщо я помилився — напиши адміну того чату: адмін може скасувати це одним дотиком.',
       'Обмеження на строк спливають самі.'
     ].join('\n'),
     whyButton: (n) => `За що? · ${n}`
@@ -111,10 +114,10 @@ export const uk: Locale = {
     '<b>Адмінам:</b>',
     '/settings — панель налаштувань (у ПП, далі все кнопками)',
     '/banan /kick /del — модерація у відповідь',
-    '/check — картка користувача з кнопками (довіра тощо)',
+    '/check — картка користувача з кнопкою довіри · /untrust — зняти довіру',
     '/welcome — привітання новачків · /extra, /extras — тригери',
     '',
-    'У кожному сповіщенні є посилання <b>за що?</b> — там уся картка рішення. Адмінам ще й <b>[✅ Не спам]</b>.'
+    'У кожному сповіщенні є посилання <b>за що?</b> — там уся картка рішення. Адмінам ще й <b>[✅ Не спам]</b>: скасовує рішення й додає людину в довірені чату.'
   ].join('\n'),
 
   writeFailed: '⚠️ Не зберіг — спробуй ще раз.',
@@ -124,7 +127,7 @@ export const uk: Locale = {
   lang: {
     pickerTitle: 'Обери мову:',
     saved: 'Готово, тепер українською',
-    openInPm: 'Мову для себе вибереш в особистих.',
+    openInPm: 'Свою мову вибереш у приватному чаті з ботом — тисни кнопку.',
     openButton: '🌐 Вибрати мову'
   },
 
@@ -159,10 +162,10 @@ export const uk: Locale = {
   notification: {
     compact: (action, userLabel) => `${action} · ${userLabel}`,
     whyLink: 'за що?',
-    whyButton: '🤨 За що?',
+    whyButton: 'ℹ️ За що?',
     notSpamButton: '✅ Не спам',
     overrideDone: 'Скасовано: обмеження знято, акаунт тепер у довірених цього чату.',
-    overridePartial: 'Скасував, але не все вдалося застосувати. Спробуй ще раз або перевір мої права.',
+    overridePartial: '⚠️ Скасовано не повністю: не вдалося зняти обмеження чи додати в довірені. Перевір мої права й натисни ще раз.',
     overrideAlreadyDone: 'Уже скасовано.',
     adminOnly: 'Тільки для адмінів цього чату.',
     missingRights: ({ deleteBlocked, senderBlocked, accounts }) => {
@@ -175,67 +178,67 @@ export const uk: Locale = {
       if (deleteBlocked && !senderBlocked) {
         return '⚠️ Спамерів блокую, але їхні повідомлення видалити не можу — бракує права «Видаляти повідомлення».'
       }
-      return `⚠️ Знайшов спам, але не маю прав нічого зробити. Дайте мені права «Видаляти повідомлення» та «Блокувати користувачів».${left}`
+      return `⚠️ Знайшов спам, але не маю прав нічого зробити. Дай мені права «Видаляти повідомлення» та «Блокувати користувачів».${left}`
     }
   },
 
   reasons: {
-    job_scam: 'схоже на шахрайську «вакансію»',
+    job_scam: 'схоже на шахрайську пропозицію роботи',
     crypto_scam: 'криптошахрайство',
-    gambling_promo: 'реклама казино/ставок',
+    gambling_promo: 'реклама казино чи ставок',
     adult_promo: 'реклама 18+',
-    ad_network: 'продаж реклами/розміщень',
+    ad_network: 'продаж реклами й розміщень',
     flirt_bait: 'флірт-приманка',
     phishing: 'фішингове посилання',
     channel_promo: 'непрохана реклама каналу',
     guest_bot_promo: 'реклама через бота, викликаного згадкою',
-    flood: 'флуд/масова розсилка',
-    prompt_injection: 'спроба обдурити модерацію',
+    flood: 'флуд або масова розсилка',
+    prompt_injection: 'спроба обійти антиспам-перевірку',
     other_spam: 'спам',
     known_spam_signature: 'збіг із підтвердженим спамом',
     semantic_spam_match: 'дуже схоже на відомий спам',
     velocity_exceeded: 'те саме повідомлення в кількох чатах поспіль',
     custom_deny: 'заборонено правилом чату',
     scam_flag_new: 'Telegram позначив акаунт як шахрайський',
-    external_ban_new: 'акаунт у базах спамерів',
+    external_ban_new: 'акаунт у спам-базах',
     shared_profile_photo: 'те саме фото профілю ще на кількох акаунтах',
-    external_high_factor_new: 'акаунт у базах спамерів',
-    edit_injected_promo: 'рекламу додано редагуванням',
-    edit_injected_invisibles: 'невидимі символи вставлено редагуванням',
-    private_invite_new: 'закрите запрошення від нового акаунта',
-    identity_churn_promo: 'часта зміна імені + реклама',
-    nsfw_promo_profile: 'профіль сам є рекламою (відверте медіа + канал у профілі)',
+    external_high_factor_new: 'акаунт у спам-базах',
+    edit_injected_promo: 'рекламу додано під час редагування',
+    edit_injected_invisibles: 'невидимі символи додано під час редагування',
+    private_invite_new: 'запрошення в закритий чат від нового акаунта',
+    identity_churn_promo: 'часта зміна імені й реклама',
+    nsfw_promo_profile: 'профіль працює як реклама: відверті фото чи відео й канал у профілі',
     hidden_url_new: 'приховане посилання від новачка',
-    low_information: 'недостатньо інформації, спостерігаємо',
+    low_information: 'недостатньо інформації — поки лише спостереження',
     low_information_profile: 'мало тексту, але профіль підозрілий',
-    low_information_profile_unreachable: 'профіль підозрілий, але перевірку надіслати не вдалося — спостерігаємо',
-    reported_unreachable: 'на акаунт поскаржилися, а перевірку надіслати не вдалося — пауза на годину',
-    profile_farm_unreachable: 'реклама прямо на аватарці, а перевірку надіслати не вдалося — пауза на годину',
-    content_unconfirmed: 'підозрілий профіль, але зміст не підтверджено',
+    low_information_profile_unreachable: 'профіль підозрілий, але перевірку надіслати не вдалося — поки лише спостереження',
+    reported_unreachable: 'на акаунт поскаржилися, а перевірку надіслати не вдалося — обмежено на годину',
+    profile_farm_unreachable: 'реклама прямо у фото профілю, а перевірку надіслати не вдалося — обмежено на годину',
+    content_unconfirmed: 'профіль підозрілий, але сам текст спамом не підтверджено',
     admin_report: 'скарга адміна: спам',
     trusted_report: 'скарга довіреного учасника: спам',
     community_vote: 'спільнота проголосувала: спам',
     forward_blacklist: 'переслано з відомого спам-джерела',
     record_ban_elsewhere: 'акаунт уже забанено в іншому чаті через спам-бази чи позначку Telegram — тут забанено ще до першого повідомлення',
     content_ban_elsewhere: 'акаунт забанено в іншому чаті за спам — тут забанено ще до першого повідомлення',
-    listed_arrival: 'на вході: акаунт у базах спамерів або позначений Telegram',
+    listed_arrival: 'на вході: акаунт у спам-базах або позначений Telegram',
     arrival_look: 'новачок мовчить, а профіль схожий на спам-мережу',
     arrived_with_spammer: 'вхід разом зі спамером, схожий профіль — забанив адмін',
-    admin_arrival_ban: 'адмін забанив новачка зі списку нових учасників'
+    admin_arrival_ban: 'забанено адміном зі списку нових учасників'
   },
   reasonFallback: 'підозріла активність',
 
   why: {
-    title: '🛡 Чому я втрутився',
+    title: '🛡 Бот лише спостерігає',
     inChat: (chatTitle) => `у чаті ${chatTitle}`,
     confidence: {
-      high: (percent) => `🔴 Дуже схоже на спам · ${percent}%`,
-      medium: (percent) => `🟠 Імовірно спам · ${percent}%`,
-      low: (percent) => `🟡 Можливо спам · ${percent}%`
+      high: (percent) => `🔴 Дуже схоже на спам · оцінка бота ${percent}%`,
+      medium: (percent) => `🟠 Імовірно спам · оцінка бота ${percent}%`,
+      low: (percent) => `🟡 Можливо спам · оцінка бота ${percent}%`
     },
     noticedTitle: 'Що я помітив:',
     profileReuseEvidence: (accounts) =>
-      `та сама аватарка ще на ${accounts} ${plural(accounts, 'акаунті', 'акаунтах', 'акаунтах')}`,
+      `те саме фото профілю ще на ${accounts} ${plural(accounts, 'акаунті', 'акаунтах', 'акаунтах')}`,
     profileMediaEvidence: (score) => `відверте фото в профілі · оцінка ${score}`,
     externalBanEvidence: (sources, when) => [
       'у спам-базах',
@@ -251,65 +254,65 @@ export const uk: Locale = {
       private_invite_in_bio: 'запрошення до закритого каналу в біо',
       contact_in_bio: 'контакт поза Telegram у біо',
       personal_channel: 'канал прив’язаний до профілю',
-      promo_in_linked_channel: 'канал з профілю рекламує сам себе',
+      promo_in_linked_channel: 'у каналі з профілю — реклама',
       promo_in_message_link: 'посилання веде на рекламний канал',
       restricted_for_spam: 'Telegram обмежив за спам',
       just_joined: 'пише одразу після входу в чат',
-      joined_during_surge: 'приєднався під час напливу нових учасників',
+      joined_during_surge: 'вхід під час напливу нових учасників',
       arrived_with_spammer: 'вхід у чат разом зі спамером, схожий профіль',
       scam_flag: 'Telegram позначив акаунт як шахрайський',
       fake_flag: 'Telegram позначив акаунт як фейковий',
       restricted_flag: 'акаунт обмежений Telegram',
-      sleeper_awakened: 'сплячий акаунт раптом ожив',
+      sleeper_awakened: 'давно неактивний акаунт раптом почав писати',
       fresh_account: 'акаунт може бути зовсім новий',
-      new_globally: 'у наших чатах ще без довіри',
-      new_in_chat: 'у цьому чаті ще без довіри',
-      identity_churn_24h: 'часта зміна імені / фото',
-      avatar_recently_set: 'аватар поставлено цими днями',
-      prior_spam_detections: 'раніше вже ловили на спамі',
+      new_globally: 'новий у наших чатах',
+      new_in_chat: 'новий у цьому чаті',
+      identity_churn_24h: 'часта зміна імені чи фото профілю',
+      avatar_recently_set: 'фото профілю поставлено цими днями',
+      prior_spam_detections: 'від акаунта вже був спам раніше',
       unofficial_client_risk: 'надіслано з неофіційного застосунку',
-      forward_hidden_user: 'переслано від прихованого акаунта',
+      forward_hidden_user: 'переслано від автора, який приховав свій профіль',
       forward_source_suspicious: 'переслано з підозрілого джерела',
       hidden_url: 'замасковане посилання',
       external_url: 'зовнішнє посилання',
       url_shortener: 'скорочене посилання',
-      private_invite_link: 'закрите запрошувальне посилання',
-      bot_deeplink: 'посилання-запуск бота',
+      private_invite_link: 'запрошення в закритий чат',
+      bot_deeplink: 'посилання, що запускає бота',
       messenger_contact_link: 'контакт в іншому месенджері',
-      many_url_buttons: 'кілька посилань-кнопок',
+      many_url_buttons: 'кілька кнопок із посиланнями',
       phone_number: 'номер телефону',
-      cashtag: 'згадка криптовалюти / тікера',
+      cashtag: 'згадка монети чи акції через $',
       long_text: 'довгий текст',
       invisible_in_word: 'невидимі символи всередині слів',
-      mixed_script_word: 'мішанина алфавітів у слові',
+      mixed_script_word: 'літери різних алфавітів в одному слові',
       greek_homoglyph_word: 'грецькі літери-двійники в слові',
       foreign_script: 'написано незвичним для чату письмом',
       custom_emoji_heavy: 'багато преміум-емодзі',
       paid_media: 'платний медіаконтент',
       giveaway_media: 'розіграш',
-      story_share: 'поширена сторіс',
+      story_share: 'переслана історія',
       unknown_media: 'нерозпізнане вкладення',
       guest_bot_delivery: 'надіслано через бота, викликаного згадкою',
       edited_message: 'повідомлення відредаговано',
-      edit_injected_invisibles: 'невидимі символи вставлено редагуванням',
-      edit_injected_link: 'посилання додано редагуванням',
+      edit_injected_invisibles: 'невидимі символи додано під час редагування',
+      edit_injected_link: 'посилання додано під час редагування',
       moderation_flagged: '18+ у тексті або фото',
-      sole_avatar_replaced: 'єдине фото профілю, поставлене щойно на старому акаунті',
+      sole_avatar_replaced: 'старий акаунт, єдине фото профілю поставлено нещодавно',
       avatar_shared_with_account: 'те саме фото профілю ще на одному акаунті',
       avatar_shared_with_accounts: 'те саме фото профілю на кількох акаунтах',
-      nsfw_avatar: '18+ на аватарці',
+      nsfw_avatar: '18+ у фото профілю',
       suggestive_profile_media: 'напіввідверте фото чи відео в профілі',
-      nsfw_stories: '18+ у сторіс',
-      nsfw_linked_channel: '18+ на аватарці каналу з профілю',
+      nsfw_stories: '18+ в історіях',
+      nsfw_linked_channel: '18+ у фото каналу з профілю',
       promo_in_name: 'реклама в імені акаунта',
       invisible_in_name: 'невидимі символи в імені',
       signature_candidate_match: 'схоже на відомий спам',
-      vector_similar_spam: 'семантично близьке до спаму',
+      vector_similar_spam: 'за змістом схоже на відомий спам',
       velocity_repeats: 'той самий текст повторюється',
       velocity_wave: 'той самий текст із кількох акаунтів',
       bot_mention: 'згадка бота',
       sender_burst: 'серія повідомлень від одного акаунта',
-      burst_grey_repeat: 'серія, де кілька повідомлень уже виглядали підозріло'
+      burst_grey_repeat: 'кілька повідомлень серії вже виглядали підозріло'
     },
     decidedBy: {
       custom_rule: 'правило чату',
@@ -327,14 +330,16 @@ export const uk: Locale = {
       abstain: 'без рішення',
       error: 'помилка'
     },
-    expired: 'Це рішення вже застаріло — деталей не лишилось.'
+    expired: 'Деталі цього рішення більше не зберігаються.'
   },
 
   profile: {
     title: '👤 Профіль',
     openButton: '👤 Профіль',
     accountAge: (age) => `акаунт ${age}`,
-    firstSeen: (seen) => `у нас ${seen}`,
+    // "відомий боту <span>" agrees with the "акаунт" that opens the line; a span
+    // under a minute is a first sighting too, and "відомий боту щойно" is not.
+    firstSeen: (seen) => (seen === NEVER_SEEN || seen === NOW ? 'бот бачить уперше' : `відомий боту ${seen}`),
     activity: (messages, chats) =>
       [
         ...(messages === null ? [] : [`${messages} ${plural(messages, 'повідомлення', 'повідомлення', 'повідомлень')}`]),
@@ -351,7 +356,7 @@ export const uk: Locale = {
     promoInBio: 'реклама в біо',
     personalChannel: 'прив’язаний канал',
     unknownAge: 'невідомого віку',
-    neverSeen: 'вперше',
+    neverSeen: NEVER_SEEN,
     units: { now: NOW, m: 'хв', h: 'год', d: 'д', mo: 'міс', y: 'р' },
     checkNeedReply: 'Зроби /check відповіддю на повідомлення користувача.',
     notFound: 'Не вдалося отримати профіль.'
@@ -359,22 +364,22 @@ export const uk: Locale = {
 
   vote: {
     prompt: ({ userLabel, textPreview, media, whyLink }) =>
-      `🤔 <b>Це спам?</b> Повідомлення від ${userLabel}`
+      `🤔 <b>Це спам?</b> Автор: ${userLabel}`
       + (media ? ` · 📎 ${media}` : '')
       + (whyLink ? ` · ${whyLink}` : '')
       + `\n${textPreview}`,
     promptNoText: (userLabel, what, whyLink) =>
       (what
-        ? `🤔 <b>Це спам?</b> Повідомлення від ${userLabel} — без тексту, лише ${what}.`
-        : `🤔 <b>Це спам?</b> Повідомлення від ${userLabel} — без тексту.`)
+        ? `🤔 <b>Це спам?</b> Автор: ${userLabel} · без тексту, лише ${what}`
+        : `🤔 <b>Це спам?</b> Автор: ${userLabel} · без тексту`)
       + (whyLink ? ` · ${whyLink}` : ''),
     media: {
       photo: 'фото', sticker: 'стікер', video: 'відео',
-      voice: 'аудіо', file: 'файл', other: 'вкладення'
+      voice: 'голосове чи аудіо', file: 'файл', other: 'вкладення'
     },
     redacted: { link: '[посилання]', mention: '[@згадка]', invite: '[запрошення]' },
     spamButton: (count) => `🗑 Спам (${count})`,
-    hamButton: (count) => `👌 Норм (${count})`,
+    hamButton: (count) => `✅ Не спам (${count})`,
     counted: 'Голос зараховано.',
     enforcement: {
       done: 'Видалено, автора обмежено.',
@@ -383,32 +388,33 @@ export const uk: Locale = {
       failed: '⚠️ Не вдалося ні видалити повідомлення, ні обмежити автора.'
     },
     resolvedSpam: ({ who, enforcement, whyLink }) =>
-      (who ? `🗑 Спільнота вирішила: повідомлення від ${who} — спам.` : '🗑 Спільнота вирішила: спам.')
-      + (enforcement ? ` ${enforcement}` : '')
+      // The name follows a "·", never "від": a display name cannot be declined.
+      '🗑 Спільнота вирішила: спам' + (who ? ` · ${who}` : '')
+      + (enforcement ? `. ${enforcement}` : '')
       + (whyLink ? ` · ${whyLink}` : ''),
     resolvedHam: ({ who, whyLink }) =>
-      (who ? `👌 Спільнота вирішила: повідомлення від ${who} — не спам.` : '👌 Спільнота вирішила: не спам.')
+      '✅ Спільнота вирішила: не спам' + (who ? ` · ${who}` : '')
       + (whyLink ? ` · ${whyLink}` : ''),
     alreadyEnded: 'Голосування вже закрите.',
     voters: {
       button: '👥 Хто голосував',
-      title: (spam, ham) => `👥 <b>Голосування</b> · спам ${spam} : ${ham} норм`,
+      title: (spam, ham) => `👥 <b>Голосування</b> · спам ${spam} : ${ham} не спам`,
       spamGroup: '🗑 Спам',
-      hamGroup: '👌 Норм',
+      hamGroup: '✅ Не спам',
       adminMark: 'адмін',
       changedMark: 'голос змінено',
-      span: (span) => `⏱ від першого до останнього голосу: ${span}`,
+      span: (span) => (span === NOW ? '⏱ усі голоси — менш ніж за хвилину' : `⏱ від першого до останнього голосу: ${span}`),
       more: (count) => `…і ще ${count}`,
       nobody: 'Ніхто не встиг проголосувати.',
-      notForTarget: 'Це голосування про тебе.',
-      noStanding: 'Голосують ті, хто вже освоївся в чаті.',
-      knownBad: 'Твій голос тут не рахується.'
+      notForTarget: 'Це голосування про тебе: у ньому ти не голосуєш і не бачиш, хто голосував.',
+      noStanding: 'Голос не зараховано: голосують ті, хто в чаті щонайменше тиждень і вже має тут повідомлення.',
+      knownBad: 'Голос не зараховано: з цього акаунта вже надходив спам.'
     }
   },
 
   report: {
     needReply: 'Зроби /report відповіддю на повідомлення або вкажи людину: /report @нік, /report 123456789, чи вибери її через @ зі списку.',
-    notFound: (who) => `Не бачив ${who} у цьому чаті. Відповідай на повідомлення цієї людини або вибери її через @ зі списку.`,
+    notFound: (who) => `Не знайшов у цьому чаті: ${who}. Відповідай на повідомлення цієї людини або вибери її через @ зі списку.`,
     notInChat: 'Цієї людини вже немає в чаті.',
     cantReportAdmin: 'На адмінів скаржитися не можна.',
     rateLimited: 'Забагато скарг. Почекай кілька хвилин.',
@@ -423,7 +429,7 @@ export const uk: Locale = {
     reputation: (score, status) => `Репутація: ${score} (${status})`,
     repStatus: { trusted: 'довірений', neutral: 'нейтральний', suspicious: 'підозрілий', restricted: 'обмежений' },
     bananCaught: (count) => `Бананів отримано: ${count} 🍌`,
-    openInPm: 'Статистика прийде в особисті.',
+    openInPm: 'Твоя статистика — у приватному чаті з ботом, тисни кнопку.',
     openButton: '📊 Моя статистика'
   },
 
@@ -443,7 +449,7 @@ export const uk: Locale = {
     chatLine: (checked, spammers, deletes) =>
       `📬 ${groupDigits(checked)} перевірено · 🚫 ${groupDigits(spammers)} ${plural(spammers, 'спамер', 'спамери', 'спамерів')} · 🧹 ${groupDigits(deletes)} видалено`,
     chatLastSpam: (span) => `Останній спам: ${ago(span)}`,
-    chatClean: '✨ За цей час — жодного спаму.',
+    chatClean: '✨ За цей час бот не виявив спаму.',
     unavailable: '📊 Цифри зараз недоступні, спробуй трохи пізніше.',
     button: '📊 Мої цифри'
   },
@@ -464,7 +470,7 @@ export const uk: Locale = {
   untrust: {
     success: (name) => `🔓 Довіру знято: ${name}. Повідомлення знову проходять перевірку.`,
     needReply: 'Зроби /untrust відповіддю на повідомлення того, з кого хочеш зняти довіру.',
-    notTrusted: (name) => `${name} і так не у списку довірених.`
+    notTrusted: (name) => `ℹ️ ${name} не в списку довірених — знімати нічого.`
   },
 
   trust: {
@@ -488,7 +494,7 @@ export const uk: Locale = {
       '/welcome <текст з %name%> — задати привітання',
       'відповідь гіфкою на /welcome — задати гіфку'
     ].join('\n'),
-    limit: '⚠️ Досягнуто ліміту — спершу видали щось у налаштуваннях.',
+    limit: '⚠️ Більше додати не можна: ліміт вичерпано. Спершу видали щось у налаштуваннях.',
     duplicate: 'ℹ️ Це вже додано.',
     tooLong: '⚠️ Текст задовгий (макс. 1000 символів).',
     saveFailed: '⚠️ Не вдалося зберегти.',
@@ -513,8 +519,8 @@ export const uk: Locale = {
       promptText: '📝 Надішли текст привітання одним повідомленням.\nМожна вставити <code>%name%</code> — підставлю ім’я новачка.\n\n/cancel — скасувати.',
       promptGif: '🎞 Надішли гіфку, відео або фото одним повідомленням.\n\n/cancel — скасувати.',
       added: '✅ Додано.',
-      cancelled: '❌ Скасовано.',
-      invalidGif: '⚠️ Це не медіа. Надішли гіфку, відео або фото.',
+      cancelled: '↩️ Скасовано.',
+      invalidGif: '⚠️ Тут потрібна гіфка, відео або фото — надішли одне з них.',
       removed: '🗑 Видалено.',
       removeMissing: 'Цього вже немає — оновив список.',
       expired: '⌛ Час вийшов. Відкрий редактор ще раз.',
@@ -534,16 +540,16 @@ export const uk: Locale = {
     listEmpty: 'Тут поки нема тригерів.',
     editor: {
       title: (n, max) =>
-        `#️⃣ <b>Тригери</b> (${n})\n\nНапиши <code>#назва</code> в чаті — бот надішле збережене.\nМакс. спрацювань на повідомлення: ${max}.`,
+        `#️⃣ <b>Тригери</b> (${n})\n\nНапиши <code>#назва</code> в чаті — бот надішле збережене.\nЛіміт: не більше ${max} відповідей на одне повідомлення.`,
       item: (i, icon, name) => `${i}. ${icon} #${name}`,
       empty: '#️⃣ <b>Тригери</b>\n\nПоки порожньо. Додай перший — назва + текст або медіа.',
       add: '➕ Додати тригер',
-      maxLabel: (n) => `Макс: ${n}`,
+      maxLabel: (n) => `Ліміт: ${n}`,
       promptName: '#️⃣ Введи назву тригера (без #), одним словом.\n\n/cancel — скасувати.',
-      promptContent: (name) => `Тепер надішли вміст для <code>#${name}</code> — текст або медіа (гіфка/фото/відео).\n\n/cancel — скасувати.`,
+      promptContent: (name) => `Тепер надішли, що бот відповідатиме на <code>#${name}</code>: текст, гіфку, фото чи відео.\n\n/cancel — скасувати.`,
       added: (name) => `✅ Тригер #${name} збережено.`,
-      cancelled: '❌ Скасовано.',
-      invalidName: '⚠️ Назва має бути одним словом без пробілів (літери/цифри/_).',
+      cancelled: '↩️ Скасовано.',
+      invalidName: '⚠️ Назва — одне слово: літери, цифри або _, без пробілів.',
       removed: '🗑 Видалено.'
     }
   },
@@ -559,25 +565,26 @@ export const uk: Locale = {
   },
 
   captcha: {
-    prompt: (name) => `👋 ${name}, тисни кнопку і пиши далі. Це швидка перевірка, що ти не бот.`,
+    prompt: (name, minutes) =>
+      `👋 ${name}, натисни кнопку${minutes ? ` протягом ${minutes} хв` : ''} і пиши далі. Це швидка перевірка, що ти не бот.`,
     button: '🙋 Я людина',
     passed: 'Готово, пиши.',
     retry: 'Не вдалося зняти обмеження. Тисни ще раз.',
-    notForYou: 'Ця кнопка не для тебе.'
+    notForYou: 'Ця кнопка для іншого учасника.'
   },
 
   settings: {
-    openInPm: 'Налаштування доступні в особистих повідомленнях.',
+    openInPm: 'Налаштування — у приватному чаті з ботом, тисни кнопку.',
     openInPmButton: '⚙️ Відкрити налаштування',
     title: '⚙️ <b>Налаштування антиспаму</b>',
     preset: 'Режим',
-    presets: { soft: 'М’який', standard: 'Стандарт', strict: 'Суворий' },
+    presets: { soft: 'М’який', standard: 'Стандартний', strict: 'Суворий' },
     captcha: 'Капча для новачків',
     voting: 'Голосування спільноти',
     enabled: 'Антиспам',
-    banDatabase: 'Бази спамерів',
+    banDatabase: 'Спам-бази',
     quiet: 'Тихий режим',
-    quietHint: '🤫 Сповіщення про впевнені дії зникають за 5 с. Усе, що бот зробив, — у «🧾 Останні дії». Голосування лишаються.',
+    quietHint: '🤫 Сповіщення про впевнені дії приходять без звуку й кнопок і зникають за 5 с. Усе, що бот зробив, — у «🧾 Останні дії». Голосування лишаються.',
     banan: 'Тривалість банана',
     language: 'Мова бота в чаті',
     languageSaved: 'Мову чату оновлено',

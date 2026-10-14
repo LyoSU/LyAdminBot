@@ -667,7 +667,9 @@ const deliverCaptcha = async (
 ): Promise<CaptchaDelivery> => {
   const gate = captchas.issue(chatId, userId, CAPTCHA_TTL_MS)
   gate.triggerMessageId = triggerMessageId
-  const view = captchaPrompt(locale, { chatId, userId, userLabel })
+  const view = captchaPrompt(locale, {
+    chatId, userId, userLabel, answerMinutes: Math.round(CAPTCHA_ANSWER_GRACE_MS / 60_000)
+  })
 
   /**
    * Start the clock on an ignored gate — and only ever from a prompt that left
@@ -7310,8 +7312,11 @@ const wireCallbacks = (): void => {
     if (kind === 'why') {
       const [chatId = '', messageId = ''] = parts
       const verdict = await recallVerdict(Number(chatId), Number(messageId))
+      // A cut alert ends on an ellipsis, so a half word does not read as the
+      // whole card; a forgotten verdict says so instead of a bare "…".
+      const full = verdict ? whyView(locale, verdict) : locale.why.expired
       await query.answer({
-        text: verdict ? truncate(whyView(locale, verdict), 200) : '…',
+        text: full.length > 200 ? `${truncate(full, 199)}…` : full,
         alert: true
       })
       return

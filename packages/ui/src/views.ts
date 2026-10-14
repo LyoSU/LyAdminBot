@@ -1681,9 +1681,9 @@ export const voteResult = (
  */
 export const captchaPrompt = (
   locale: Locale,
-  target: { chatId: number; userId: number; userLabel: string }
+  target: { chatId: number; userId: number; userLabel: string; answerMinutes?: number }
 ): ViewMessage => ({
-  text: locale.captcha.prompt(userMention(target.userId, target.userLabel)),
+  text: locale.captcha.prompt(userMention(target.userId, target.userLabel), target.answerMinutes),
   buttons: [[{
     text: locale.captcha.button,
     data: callbackData.captcha(target.chatId, target.userId)

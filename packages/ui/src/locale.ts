@@ -634,8 +634,13 @@ export interface Locale {
 
   /** Captcha gate for suspicious newcomers. */
   captcha: {
-    /** Group prompt (HTML). `name` arrives pre-escaped. */
-    prompt: (name: string) => string
+    /**
+     * Group prompt (HTML). `name` arrives pre-escaped. `answerMinutes` is the
+     * real answer window from the bot (`CAPTCHA_ANSWER_GRACE_MS`), passed in so
+     * a translation that states the deadline cannot drift from the timer;
+     * absent where the caller does not know it.
+     */
+    prompt: (name: string, answerMinutes?: number) => string
     button: string
     passed: string
     /**

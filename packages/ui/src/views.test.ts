@@ -278,7 +278,7 @@ describe('whyView', () => {
     const text = whyView(uk, makeVerdict())
     expect(text).not.toMatch(/<[a-z]/) // no HTML in the toast surface
     expect(text).toContain('93%')
-    expect(text).toContain('шахрайську «вакансію»')
+    expect(text).toContain('шахрайську пропозицію роботи')
     expect(text).toContain('оплата щодня') // evidence quote is allowed
   })
 
@@ -1250,7 +1250,7 @@ describe('whyView on an account-screen verdict', () => {
 
   it('reads the shared-avatar evidence in the reader’s language', () => {
     // The producer writes it for the record; the record is English.
-    expect(whyView(uk, screened())).toContain('та сама аватарка ще на 35 акаунтах')
+    expect(whyView(uk, screened())).toContain('те саме фото профілю ще на 35 акаунтах')
     expect(whyView(uk, screened())).not.toContain('same photo')
   })
 
@@ -1322,7 +1322,7 @@ describe('whyView — the evidence names its signal', () => {
       reasonEvidence: 'same photo on 35 other account(s)',
       meta: { reasonSignal: 'avatar_shared_with_accounts' }
     }))
-    expect(text).toContain('та сама аватарка ще на 35 акаунтах')
+    expect(text).toContain('те саме фото профілю ще на 35 акаунтах')
     expect(text).not.toContain('same photo')
   })
 })
@@ -1968,5 +1968,109 @@ describe('elapsed time under a minute in every locale', () => {
         expect(text, code).not.toMatch(/прав|rights|yetki/)
       }
     }
+  })
+})
+
+/**
+ * A Telegram display name cannot be declined: "від Тарас", "з Тарас", "зі
+ * спамером Аліна Робота" are what a Ukrainian template produces when the name
+ * lands after a preposition. Every uk phrase that carries a name puts it where
+ * the nominative is grammatical — after a colon, a "·" separator, or as the
+ * subject (2026-10-14 second copy audit).
+ */
+describe('uk never declines a substituted name', () => {
+  const NAME = 'Тарас'
+  const PREPOSITION_BEFORE_NAME = new RegExp(`(від|з|зі|із|у|в|до|для|про|спамером) ${NAME}`)
+  const surfaces: Array<[string, string]> = [
+    ['vote.prompt', uk.vote.prompt({ userLabel: NAME, textPreview: 'x', media: 'фото', whyLink: null })],
+    ['vote.promptNoText', uk.vote.promptNoText(NAME, 'стікер', 'за що?')],
+    ['vote.promptNoText bare', uk.vote.promptNoText(NAME, null, null)],
+    ['vote.resolvedSpam', uk.vote.resolvedSpam({ who: NAME, enforcement: uk.vote.enforcement.done, whyLink: null })],
+    ['vote.resolvedHam', uk.vote.resolvedHam({ who: NAME, whyLink: null })],
+    ['report.notFound', uk.report.notFound(NAME)],
+    ['cohort.title', uk.cohort.title(3, NAME)],
+    ['untrust.success', uk.untrust.success(NAME)],
+    ['untrust.notTrusted', uk.untrust.notTrusted(NAME)],
+    ['kick.success', uk.kick.success(NAME)],
+    ['captcha.prompt', uk.captcha.prompt(NAME, 2)]
+  ]
+
+  it.each(surfaces)('%s', (_key, text) => {
+    expect(text).toContain(NAME)
+    expect(text).not.toMatch(PREPOSITION_BEFORE_NAME)
+  })
+
+  it('names the vote author after a colon and resolves with "· name"', () => {
+    expect(uk.vote.prompt({ userLabel: NAME, textPreview: 'x', media: null, whyLink: null })).toContain(`Автор: ${NAME}`)
+    expect(uk.vote.resolvedSpam({ who: NAME, enforcement: null, whyLink: null })).toBe(`🗑 Спільнота вирішила: спам · ${NAME}`)
+    expect(uk.vote.resolvedSpam({ who: NAME, enforcement: uk.vote.enforcement.done, whyLink: null }))
+      .toBe(`🗑 Спільнота вирішила: спам · ${NAME}. ${uk.vote.enforcement.done}`)
+    expect(uk.vote.resolvedHam({ who: NAME, whyLink: 'за що?' })).toBe(`✅ Спільнота вирішила: не спам · ${NAME} · за що?`)
+    expect(uk.cohort.title(1, NAME)).toContain(`\nСпамер: ${NAME}`)
+  })
+
+  it('a no-text ballot does not leave a full stop before the "· за що?" link', () => {
+    expect(uk.vote.promptNoText(NAME, 'стікер', 'за що?')).not.toContain('. ·')
+  })
+})
+
+describe('uk second copy audit', () => {
+  it('one word for "not spam": the ballot button, roster and receipt match the admin button', () => {
+    expect(uk.vote.hamButton(2)).toBe('✅ Не спам (2)')
+    expect(uk.vote.voters.hamGroup).toBe(uk.notification.notSpamButton)
+    expect(uk.vote.resolvedHam({ who: null, whyLink: null })).toContain('не спам')
+    expect(JSON.stringify(uk.vote.voters)).not.toContain('Норм')
+    expect(uk.vote.voters.title(3, 1)).not.toContain('норм')
+  })
+
+  it('the captcha prompt states the window it is given, and only that one', () => {
+    expect(uk.captcha.prompt('X', 2)).toContain('протягом 2 хв')
+    expect(uk.captcha.prompt('X', 5)).toContain('протягом 5 хв')
+    expect(uk.captcha.prompt('X')).not.toContain('протягом')
+    const view = captchaPrompt(uk, { chatId: -1, userId: 1, userLabel: 'X', answerMinutes: 2 })
+    expect(view.text).toContain('протягом 2 хв')
+  })
+
+  it('a refused ballot says it was not counted; the target is told why the button is closed', () => {
+    expect(uk.vote.voters.noStanding).toMatch(/^Голос не зараховано/)
+    expect(uk.vote.voters.knownBad).toMatch(/^Голос не зараховано/)
+    expect(uk.vote.voters.notForTarget).toContain('про тебе')
+    for (const text of [uk.vote.voters.noStanding, uk.vote.voters.knownBad, uk.vote.voters.notForTarget]) {
+      expect(text.length).toBeLessThanOrEqual(200) // callback alert
+    }
+  })
+
+  it('the confidence line says the percent is the bot\'s estimate', () => {
+    expect(uk.why.confidence.high(94)).toBe('🔴 Дуже схоже на спам · оцінка бота 94%')
+    expect(whyView(uk, makeVerdict())).toContain('оцінка бота 93%')
+  })
+
+  it('a roster whose votes all came within a minute does not print "щойно" as a duration', () => {
+    expect(uk.vote.voters.span(uk.profile.units.now)).not.toContain('щойно')
+    expect(uk.vote.voters.span('4хв')).toContain('4хв')
+  })
+
+  it('first-seen reads as a phrase for a new account and agrees with "акаунт" otherwise', () => {
+    expect(uk.profile.firstSeen(uk.profile.neverSeen)).toBe('бот бачить уперше')
+    expect(uk.profile.firstSeen(uk.profile.units.now)).toBe('бот бачить уперше')
+    expect(uk.profile.firstSeen('3хв')).toBe('відомий боту 3хв')
+  })
+
+  it('a successful cancel is not drawn as a failure', () => {
+    expect(uk.welcome.editor.cancelled).not.toContain('❌')
+    expect(uk.extra.editor.cancelled).not.toContain('❌')
+  })
+
+  it('one word for the profile picture, and "історія" for a story, in reasons and signals', () => {
+    const texts = [
+      ...Object.values(uk.reasons), ...Object.values(uk.why.signalLabels), uk.why.profileReuseEvidence(3)
+    ].join('\n')
+    expect(texts).not.toMatch(/аватар/)
+    expect(texts).not.toMatch(/сторіс/)
+  })
+
+  it('the forgotten-verdict text fits a callback alert', () => {
+    expect(uk.why.expired.length).toBeLessThanOrEqual(200)
+    expect(uk.why.expired).not.toBe('…')
   })
 })
