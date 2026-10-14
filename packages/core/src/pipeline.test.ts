@@ -4076,3 +4076,18 @@ describe('otherSpamObserveShadow', () => {
     expect(otherSpamObserveShadow(v({ action: 'observe', signals: [] as never }))).toBeNull()
   })
 })
+
+describe('abstain shadow: a mixed-alphabet word from a stranger', () => {
+  it('is stamped and still abstains — the shadow changes nothing', async () => {
+    const v = await evaluateMessage(makeInput({ msg: { text: 'пишu в лс' }, user: newcomer }), {})
+    expect(v.decidedBy).toBe('abstain')
+    expect(v.action).toBe('observe')
+    expect(v.meta['shadowAbstainMixed']).toBe(true)
+  })
+
+  it('is not stamped without the word', async () => {
+    const v = await evaluateMessage(makeInput({ msg: { text: 'пиши в лс' }, user: newcomer }), {})
+    expect(v.decidedBy).toBe('abstain')
+    expect(v.meta['shadowAbstainMixed']).toBeUndefined()
+  })
+})
