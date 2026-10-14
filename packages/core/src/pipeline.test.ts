@@ -4091,3 +4091,124 @@ describe('abstain shadow: a mixed-alphabet word from a stranger', () => {
     expect(v.meta['shadowAbstainMixed']).toBeUndefined()
   })
 })
+
+/**
+ * Shadow, 2026-10-14: the farm hold with a chat's captcha switch not read as
+ * its answer. Over the 14 days before, 56 farm-shaped accounts whose blockers
+ * were exactly `captcha_disabled` + `sender_not_participant` were only
+ * observed, 0 later clean, 0 reversed; 35 of them wore a shared photo.
+ *
+ * The stamp must change nothing. Each case compares against a twin that
+ * differs only in the account being a member: the switch is then the only
+ * blocker, nothing would hold, and the verdict must be the same one.
+ */
+describe('evaluateMessage — shadow: a hold the captcha switch declined', () => {
+  const farmPort: PipelinePorts['profileMedia'] = {
+    seen: async () => ({ otherAccounts: 17, sampleUserIds: [11, 22] })
+  }
+  const cleared = {
+    classify: async () => ({
+      pSpam: 0.02, reasonCode: 'legit_conversation', evidence: null, cached: false
+    })
+  }
+  const suggestive = { check: async () => modResult({ sexual: 0.42 }, false) }
+  const farmShaped = {
+    ...newcomer, isParticipant: false, avatars: { count: 1, latestSetDaysAgo: 2 }
+  }
+  const decision = (v: { action: unknown, needsVote: unknown, pSpam: unknown,
+    reasonCode: unknown, banDurationSeconds: unknown }) => ({
+    action: v.action, needsVote: v.needsVote, pSpam: v.pSpam,
+    reasonCode: v.reasonCode, banDurationSeconds: v.banDurationSeconds
+  })
+  const twin = async (
+    over: NonNullable<Parameters<typeof makeInput>[0]>, ports: Partial<PipelinePorts>
+  ) => {
+    const stamped = await evaluateMessage(makeInput(over), ports)
+    const member = await evaluateMessage(
+      makeInput({ ...over, user: { ...over.user, isParticipant: true } }), ports)
+    return { stamped, member }
+  }
+
+  it('stamps the abstain row, and the row is the one it was', async () => {
+    const { stamped, member } = await twin({
+      msg: { text: 'вот так вот' },
+      user: farmShaped,
+      policy: { captchaEnabled: false },
+      enrichment: { avatarBase64: 'AAAA', personalChannelId: 42 }
+    }, { moderation: suggestive })
+
+    expect(stamped.meta['shadowHoldCaptchaOff']).toBe('farm')
+    expect(stamped.meta['captchaBlockedBy']).toBe('captcha_disabled,sender_not_participant')
+    expect(stamped.action).toBe('observe')
+    expect(stamped.needsVote).toBe(false)
+    expect(stamped.reasonCode).toBe('low_information_profile_unreachable')
+    expect(member.meta['shadowHoldCaptchaOff']).toBeUndefined()
+    expect(decision(stamped)).toEqual(decision(member))
+  })
+
+  it('names the shared-photo population on the abstain row', async () => {
+    const { stamped, member } = await twin({
+      msg: { text: 'вот так вот' },
+      user: farmShaped,
+      policy: { captchaEnabled: false },
+      enrichment: { avatarDhash: 'ff00ff00ff00ff00', personalChannelId: 42 }
+    }, { profileMedia: farmPort })
+
+    expect(stamped.signals.map((s) => s.name)).toContain('avatar_shared_with_accounts')
+    expect(stamped.meta['shadowHoldCaptchaOff']).toBe('shared_avatar')
+    expect(stamped.reasonCode).toBe('low_information_profile_unreachable')
+    expect(stamped.action).toBe('observe')
+    expect(decision(stamped)).toEqual(decision(member))
+  })
+
+  it('stamps the cleared-sentence farm, which stays cleared', async () => {
+    const { stamped, member } = await twin({
+      msg: { text: 'Дуже цікава думка, дякую авторові за такий розбір' },
+      user: farmShaped,
+      policy: { captchaEnabled: false },
+      enrichment: { avatarBase64: 'AAAA', personalChannelId: 42 }
+    }, { moderation: suggestive, llm: cleared })
+
+    expect(stamped.meta['shadowHoldCaptchaOff']).toBe('farm')
+    expect(stamped.meta['flooredFarmShape']).toBeUndefined()
+    expect(stamped.action).toBe('none')
+    expect(decision(stamped)).toEqual(decision(member))
+  })
+
+  it('stamps the shared-photo floor, which stays a watch and a ballot', async () => {
+    const { stamped, member } = await twin({
+      msg: { text: 'Увімкніть людність під час війни' },
+      user: farmShaped,
+      policy: { captchaEnabled: false },
+      enrichment: { avatarDhash: 'ff00ff00ff00ff00' }
+    }, { profileMedia: farmPort, llm: cleared })
+
+    expect(stamped.meta['shadowHoldCaptchaOff']).toBe('shared_avatar')
+    expect(stamped.action).toBe('observe')
+    expect(stamped.needsVote).toBe(true)
+    expect(stamped.reasonCode).toBe('shared_profile_photo')
+    expect(decision(stamped)).toEqual(decision(member))
+  })
+
+  it('stays off the rows the live hold already takes', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'вот так вот' },
+      user: farmShaped,
+      policy: { captchaEnabled: true },
+      enrichment: { avatarBase64: 'AAAA', personalChannelId: 42 }
+    }), { moderation: suggestive })
+    expect(v.reasonCode).toBe('profile_farm_unreachable')
+    expect(v.meta['shadowHoldCaptchaOff']).toBeUndefined()
+  })
+
+  it('stays off a picture set long ago', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'вот так вот' },
+      user: { ...newcomer, isParticipant: false },
+      policy: { captchaEnabled: false },
+      enrichment: { avatarBase64: 'AAAA', personalChannelId: 42 }
+    }), { moderation: suggestive })
+    expect(v.reasonCode).toBe('low_information_profile_unreachable')
+    expect(v.meta['shadowHoldCaptchaOff']).toBeUndefined()
+  })
+})

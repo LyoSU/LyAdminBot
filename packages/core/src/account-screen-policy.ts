@@ -269,3 +269,55 @@ export const accountScreenUnasked = (
   // anywhere in the list is the chat's answer, and it stands.
   return blockers.every((b) => b === 'sender_not_participant') ? 'hold' : 'none'
 }
+
+/**
+ * A picture that is itself the advert. Together with `avatar_recently_set` —
+ * the account dressed for the campaign days ago — these are the farm's shape;
+ * see the hold in the pipeline's abstain branch for the measurement. Each of
+ * the two halves alone is ordinary: fresh pictures belong to 28 regulars in
+ * 1516.
+ */
+const FARM_PICTURE_SIGNALS: ReadonlySet<string> = new Set([
+  'suggestive_profile_media', 'nsfw_avatar',
+  'avatar_shared_with_account', 'avatar_shared_with_accounts'
+])
+export const isFarmShapedProfile = (signals: readonly { name: string }[]): boolean =>
+  signals.some((s) => s.name === 'avatar_recently_set') &&
+  signals.some((s) => FARM_PICTURE_SIGNALS.has(s.name))
+
+/**
+ * SHADOW ONLY. Would the farm hold apply if a chat's captcha switch were not
+ * read as its answer about a hold? Nothing acts on this; the pipeline stamps it
+ * into `meta` so the question can be priced before anybody decides it.
+ *
+ * ── the measurement, 2026-10-14 ──
+ *
+ * Over the 14 days before, 56 farm-shaped accounts on which every blocker but
+ * `sender_not_participant` was `captcha_disabled` were only observed, almost
+ * all of them in one chat. None later wrote a clean message and none was
+ * reversed. 35 of the 56 wore a profile photo also found on other accounts
+ * (`avatar_shared_with_accounts`); none of those wrote a clean message either.
+ *
+ * ── the open argument ──
+ *
+ * `accountScreenUnasked` reads `captcha_disabled` as the chat declining the
+ * question, and so the hold. Against that: where `sender_not_participant` is
+ * also present the question could not have been delivered with the switch on,
+ * so the switch decides nothing about whether it gets asked — only, by
+ * inference, whether a hold is welcome. That inference is what this measures.
+ *
+ * Returns which population the row belongs to (`shared_avatar` is the narrower
+ * one, carrying the plural shared-photo signal), or null. Never non-null where
+ * `accountScreenUnasked` already holds — `captcha_disabled` must be present —
+ * and never without `sender_not_participant`.
+ */
+export const wouldHoldDespiteCaptchaOff = (
+  blockers: readonly string[],
+  signals: readonly { name: string }[],
+): 'farm' | 'shared_avatar' | null => {
+  if (!blockers.includes('sender_not_participant')) return null
+  if (!blockers.includes('captcha_disabled')) return null
+  if (!blockers.every((b) => b === 'sender_not_participant' || b === 'captcha_disabled')) return null
+  if (!isFarmShapedProfile(signals)) return null
+  return signals.some((s) => s.name === 'avatar_shared_with_accounts') ? 'shared_avatar' : 'farm'
+}

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import fc from 'fast-check'
 import {
-  accountScreenAllowed, accountScreenRemoves, accountScreenUnasked, hardVerdictSourceOf
+  accountScreenAllowed, accountScreenRemoves, accountScreenUnasked, hardVerdictSourceOf,
+  wouldHoldDespiteCaptchaOff
 } from './account-screen-policy.js'
 
 const chat = (over: Partial<Parameters<typeof accountScreenAllowed>[1]> = {}) => ({
@@ -232,5 +234,76 @@ describe('accountScreenUnasked', () => {
 
   it('nothing blocked it, so the gate is live and holds them itself', () => {
     expect(accountScreenUnasked([])).toBe('none')
+  })
+})
+
+/**
+ * Shadow only (2026-10-14): which rows the farm hold would reach if a chat's
+ * captcha switch were not read as its answer about a hold.
+ */
+describe('wouldHoldDespiteCaptchaOff', () => {
+  const sig = (...names: string[]) => names.map((name) => ({ name }))
+  const farm = sig('avatar_recently_set', 'suggestive_profile_media')
+  const sharedFarm = sig('avatar_recently_set', 'avatar_shared_with_accounts')
+
+  it.each([
+    ['captcha off, not a member, farm', ['captcha_disabled', 'sender_not_participant'], farm, 'farm'],
+    ['captcha off, not a member, shared photo', ['captcha_disabled', 'sender_not_participant'], sharedFarm, 'shared_avatar'],
+    ['singular shared photo is the wider population', ['captcha_disabled', 'sender_not_participant'],
+      sig('avatar_recently_set', 'avatar_shared_with_account'), 'farm'],
+    ['not a member alone already holds', ['sender_not_participant'], farm, null],
+    ['captcha off alone: the question was deliverable', ['captcha_disabled'], farm, null],
+    ['a channel sender cannot be held', ['captcha_disabled', 'sender_not_participant', 'sender_is_channel'], farm, null],
+    ['the privacy promise stands', ['captcha_disabled', 'sender_not_participant', 'discussion_without_ephemeral'], farm, null],
+    ['standing excuses them', ['captcha_disabled', 'not_newish', 'sender_not_participant'], farm, null],
+    ['a picture set long ago is not the shape', ['captcha_disabled', 'sender_not_participant'],
+      sig('suggestive_profile_media', 'avatar_shared_with_accounts'), null],
+    ['a fresh picture that advertises nothing is not the shape', ['captcha_disabled', 'sender_not_participant'],
+      sig('avatar_recently_set', 'private_invite_in_bio'), null],
+    ['nothing blocked it', [], farm, null]
+  ] as const)('%s', (_label, blockers, signals, expected) => {
+    expect(wouldHoldDespiteCaptchaOff(blockers, signals)).toBe(expected)
+  })
+
+  const blockerArb = fc.uniqueArray(fc.constantFrom(
+    'captcha_disabled', 'not_newish', 'sender_is_channel',
+    'sender_not_participant', 'discussion_without_ephemeral'
+  ))
+  const signalArb = fc.uniqueArray(fc.constantFrom(
+    'avatar_recently_set', 'suggestive_profile_media', 'nsfw_avatar',
+    'avatar_shared_with_account', 'avatar_shared_with_accounts',
+    'private_invite_in_bio', 'new_in_chat'
+  )).map((names) => names.map((name) => ({ name })))
+
+  it('never claims a row the live hold already takes', () => {
+    fc.assert(fc.property(blockerArb, signalArb, (blockers, signals) => {
+      if (accountScreenUnasked(blockers) === 'hold') {
+        expect(wouldHoldDespiteCaptchaOff(blockers, signals)).toBeNull()
+      }
+    }))
+  })
+
+  it('never fires without the network refusal', () => {
+    fc.assert(fc.property(blockerArb, signalArb, (blockers, signals) => {
+      if (!blockers.includes('sender_not_participant')) {
+        expect(wouldHoldDespiteCaptchaOff(blockers, signals)).toBeNull()
+      }
+    }))
+  })
+
+  it('fires exactly on {captcha off, not a member} with a farm shape', () => {
+    fc.assert(fc.property(blockerArb, signalArb, (blockers, signals) => {
+      const names = new Set<string>(signals.map((s) => s.name))
+      const farmShaped = names.has('avatar_recently_set') && [
+        'suggestive_profile_media', 'nsfw_avatar', 'avatar_shared_with_account', 'avatar_shared_with_accounts'
+      ].some((n) => names.has(n))
+      const exact = blockers.length === 2 &&
+        blockers.includes('captcha_disabled') && blockers.includes('sender_not_participant')
+      const got = wouldHoldDespiteCaptchaOff(blockers, signals)
+      expect(got !== null).toBe(exact && farmShaped)
+      if (got !== null) {
+        expect(got).toBe(names.has('avatar_shared_with_accounts') ? 'shared_avatar' : 'farm')
+      }
+    }))
   })
 })

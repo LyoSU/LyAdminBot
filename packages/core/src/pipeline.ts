@@ -22,7 +22,9 @@ import {
   ESTABLISHED_MIN_MESSAGES, ESTABLISHED_MIN_IN_CHAT, ESTABLISHED_MIN_TENURE_DAYS
 } from './signals/user.js'
 import { profileHasCase } from './signals/account-verdict.js'
-import { accountScreenUnasked } from './account-screen-policy.js'
+import {
+  accountScreenUnasked, isFarmShapedProfile, wouldHoldDespiteCaptchaOff
+} from './account-screen-policy.js'
 import { extractBioSignals } from './signals/bio.js'
 import { extractLinkedChannelSignals } from './signals/channel.js'
 import { applyDeterministicRules } from './rules.js'
@@ -144,18 +146,10 @@ export const otherSpamObserveShadow = (
   return null
 }
 /**
- * A picture that is itself the advert. Together with `avatar_recently_set` —
- * the account dressed for the campaign days ago — these are the farm's shape;
- * see the hold in the abstain branch for the measurement. Each of the two
- * halves alone is ordinary: fresh pictures belong to 28 regulars in 1516.
+ * The farm's shape lives beside the hold policy that reads it (see
+ * `account-screen-policy.ts`); re-exported here for its existing importers.
  */
-const FARM_PICTURE_SIGNALS: ReadonlySet<string> = new Set([
-  'suggestive_profile_media', 'nsfw_avatar',
-  'avatar_shared_with_account', 'avatar_shared_with_accounts'
-])
-export const isFarmShapedProfile = (signals: readonly Signal[]): boolean =>
-  signals.some((s) => s.name === 'avatar_recently_set') &&
-  signals.some((s) => FARM_PICTURE_SIGNALS.has(s.name))
+export { isFarmShapedProfile }
 const SESSION_EVAL_MIN_MESSAGES = 5
 /**
  * Up to this many messages into a chat, a sender's unreadable message is worth
@@ -642,7 +636,14 @@ export const evaluateMessage = async (
     const grey = (PRESET_THRESHOLDS[input.policy.preset] ?? PRESET_THRESHOLDS.standard).grey
     if (score < grey) return verdict
     const blockers = captchaBlockers(policyInputFor(score, verdict.signals))
-    if (accountScreenUnasked(blockers) !== 'hold') return verdict
+    if (accountScreenUnasked(blockers) !== 'hold') {
+      // Shadow, 2026-10-14: the same question as the abstain branch's stamp —
+      // would this hold if a chat's captcha switch were not its answer? The
+      // verdict is returned untouched either way.
+      const captchaOffHold = wouldHoldDespiteCaptchaOff(blockers, verdict.signals)
+      if (captchaOffHold !== null) meta['shadowHoldCaptchaOff'] = captchaOffHold
+      return verdict
+    }
     meta['flooredFarmShape'] = true
     meta['captchaBlockedBy'] = blockers.join(',')
     return {
@@ -721,6 +722,10 @@ export const evaluateMessage = async (
         reasonCode: 'shared_profile_photo'
       }
     }
+    // Shadow, 2026-10-14: the floor's hold is gated by the same blocker
+    // reading, so the same stamp; it is always `shared_avatar` here. Stamp only.
+    const captchaOffHold = wouldHoldDespiteCaptchaOff(blockers, verdict.signals)
+    if (captchaOffHold !== null) meta['shadowHoldCaptchaOff'] = captchaOffHold
     const gate = blockers.length === 0
     return {
       ...verdict,
@@ -1700,6 +1705,14 @@ export const evaluateMessage = async (
     }
 
     if (deserved && hasCase && blockers.length > 0) {
+      /**
+       * Shadow, 2026-10-14: the hold above with `captcha_disabled` not read as
+       * the chat's answer (`wouldHoldDespiteCaptchaOff`). 56 farm-shaped
+       * accounts observed here in 14 days, 0 later clean, 0 reversed. Stamp
+       * only; the row below is unchanged.
+       */
+      const captchaOffHold = wouldHoldDespiteCaptchaOff(blockers, signals)
+      if (captchaOffHold !== null) meta['shadowHoldCaptchaOff'] = captchaOffHold
       return finalize(
         {
           pSpam: shaped.pSpam,
