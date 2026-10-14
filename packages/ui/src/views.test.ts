@@ -2109,3 +2109,14 @@ describe('why card appeal line', () => {
     for (const code of ['uk', 'ru', 'by', 'en', 'tr']) expect(LOCALES[code]!.why.appeal.length).toBeGreaterThan(10)
   })
 })
+
+/** The captcha deadline reached only the uk prompt (2026-10-14). */
+describe('captcha prompt states the deadline in every locale', () => {
+  it('names the minutes when given, and reads cleanly without them', () => {
+    for (const code of ['uk', 'ru', 'by', 'en', 'tr']) {
+      const L = LOCALES[code]!
+      expect(L.captcha.prompt('X', 2), code).toContain('2')
+      expect(L.captcha.prompt('X'), code).not.toMatch(/undefined|\s{2}/)
+    }
+  })
+})

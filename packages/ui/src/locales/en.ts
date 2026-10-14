@@ -551,7 +551,8 @@ export const en: Locale = {
   },
 
   captcha: {
-    prompt: (name) => `👋 ${name}, tap the button to keep chatting. Quick check that you are not a bot.`,
+    prompt: (name, minutes) =>
+      `👋 ${name}, tap the button${minutes === undefined ? '' : ` within ${minutes} min`} to keep chatting. Quick check that you are not a bot.`,
     button: '🙋 I am human',
     passed: 'Done, go ahead.',
     retry: 'Could not lift the restriction. Tap again.',

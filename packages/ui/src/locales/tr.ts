@@ -549,7 +549,8 @@ export const tr: Locale = {
   },
 
   captcha: {
-    prompt: (name) => `👋 ${name}, sohbete devam etmek için düğmeye dokun. Bot olmadığını gösteren hızlı bir kontrol.`,
+    prompt: (name, minutes) =>
+      `👋 ${name}, sohbete devam etmek için ${minutes === undefined ? '' : `${minutes} dakika içinde `}düğmeye dokun. Bot olmadığını gösteren hızlı bir kontrol.`,
     button: '🙋 Ben insanım',
     passed: 'Tamam, devam edebilirsin.',
     retry: 'Kısıtlama kaldırılamadı. Tekrar dokun.',
