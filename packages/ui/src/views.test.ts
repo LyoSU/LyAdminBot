@@ -2069,6 +2069,14 @@ describe('uk second copy audit', () => {
     expect(texts).not.toMatch(/сторіс/)
   })
 
+  it('cohort.banned: the count follows a colon, so no noun has to agree with it', () => {
+    for (const n of [1, 2, 5, 11, 21, 22]) {
+      const text = uk.cohort.banned(n, n, 'Адмін')
+      expect(text, `n=${n}`).toContain(`забанено: ${n} з ${n} · Адмін`)
+      expect(text, `n=${n}`).not.toMatch(/\d+ новачк/)
+    }
+  })
+
   it('the forgotten-verdict text fits a callback alert', () => {
     expect(uk.why.expired.length).toBeLessThanOrEqual(200)
     expect(uk.why.expired).not.toBe('…')
