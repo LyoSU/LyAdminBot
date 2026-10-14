@@ -2258,6 +2258,27 @@ describe('captcha gates that survive a restart', () => {
     })
   })
 
+  it('a newer gate does not inherit what the older one learned', async () => {
+    const store = gateStore()
+    await store.saveCaptchaGate({ chatId: -1, userId: 7, issuedMs: 2000, expiresMs: 62_000 })
+    expect(store.ops[0]!.update).toMatchObject({
+      $unset: { deliveredMs: '', answered: '', consequenceApplied: '', triggerMessageId: '' }
+    })
+  })
+
+  it('a mark updates only that exact gate and never brings a dropped row back', async () => {
+    const store = Object.assign(gateStore(), { markCaptchaGate: MongoStore.prototype.markCaptchaGate })
+    await store.markCaptchaGate(-1, 7, 1000, { deliveredMs: 1500, triggerMessageId: 42 })
+    await store.markCaptchaGate(-1, 7, 1000, {})
+    expect(store.ops).toHaveLength(1)
+    expect(store.ops[0]).toMatchObject({
+      filter: { chatId: -1, userId: 7, issuedMs: 1000 },
+      update: { $set: { deliveredMs: 1500, triggerMessageId: 42 } }
+    })
+    expect(store.ops[0]!.options).toBeUndefined()
+    expect((store.ops[0]!.update as { $set: object }).$set).not.toHaveProperty('answered')
+  })
+
   it('a drop with an issue time cannot remove a newer gate; without one it closes the case', async () => {
     const store = gateStore()
     await store.dropCaptchaGate(-1, 7, 1000)

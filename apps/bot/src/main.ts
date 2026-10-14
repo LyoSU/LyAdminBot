@@ -75,7 +75,7 @@ import {
   arrivalShapeOf, cohortSiblings, COHORT_WINDOW_MS, recordBanTargets, REMOVED_ARRIVAL_OUTCOMES, isShadowCarryAct,
   isContentCarryAct, chatsJoinedWithin, MULTI_JOIN_MIN_CHATS, MULTI_JOIN_WINDOW_MS
 } from './arrival-cohort.js'
-import { CaptchaGates, type CaptchaGate } from './captcha-gate.js'
+import { CaptchaGates, memberGone, planRestoredGate, type CaptchaGate } from './captcha-gate.js'
 import { IGNORED_CAPTCHA_ESCALATION_MS, wouldEscalateAfterIgnoredCaptcha } from './recidivism-shadow.js'
 import { DuplicateTally } from './duplicate-tally.js'
 import { getUsersEach } from './users-each.js'
@@ -487,16 +487,19 @@ const CAPTCHA_ANSWER_GRACE_MS = 2 * 60 * 1000
  * Restriction imposed once a gate goes unanswered, in seconds.
  *
  * Bounded by what the tap can actually undo, NOT by what would inconvenience a
- * bot most. Gates live in `captchas`, in memory: after a restart the
- * button is still in the chat but the registry no longer recognises it, so the
- * member's own way out is gone and only Telegram's own expiry remains. The
- * restriction must therefore never be longer than we are willing to leave
- * somebody muted with no button — an hour, not a day.
+ * bot most. The button only works while the gate does: until its TTL, and —
+ * when it was written — only while the process that issued it was alive. Gates
+ * have been persisted in `pipeline_captcha_gates` since 2026-09-21 (a tap after
+ * a restart is honoured from the row) and their consequence since 2026-10-15
+ * (re-armed or applied at boot, see `restoreCaptchaGates`), but a row can still
+ * be lost — a failed write, the TTL, a cluster that stopped accepting writes —
+ * and then only Telegram's own expiry remains. The restriction must therefore
+ * never be longer than we are willing to leave somebody muted with no button —
+ * an hour, not a day.
  *
  * This is the same rule the whisper-first design already states from the other
  * side: "a restriction the user cannot lift is the one failure mode that must
- * not exist". Persisting the gate would let this be longer; until it is
- * persisted, it may not be.
+ * not exist".
  */
 const CAPTCHA_IGNORED_MUTE_SECONDS = 60 * 60
 
@@ -549,8 +552,101 @@ const captchas = new CaptchaGates(Date.now, undefined, {
   },
   drop: (chatId, userId, issuedMs) => {
     void store.dropCaptchaGate(chatId, userId, issuedMs).catch(() => { /* its own TTL removes it */ })
+  },
+  // A lost mark costs a restored gate its consequence (undelivered reads as
+  // "never asked") or, for answered/claimed, at worst one consequence too many
+  // after a restart — logged so the second shape is countable.
+  mark: (chatId, userId, issuedMs, patch) => {
+    void store.markCaptchaGate(chatId, userId, issuedMs, patch).catch((err: unknown) => {
+      log.warn('captcha_gate_unmarked', { chatId, userId, error: telegramErrorName(err) })
+    })
   }
 })
+
+/**
+ * Restored gates processed per boot, and how many at once.
+ *
+ * A gate lives 72 minutes and production opens ~33 a day, so a normal deploy
+ * finds a handful; the cap is for a raid that coincided with an outage. Each
+ * restored gate costs one `getChatMember` and, when overdue, a mute and a
+ * delete — four at a time keeps that from queueing in front of live traffic.
+ */
+const CAPTCHA_RESTORE_LIMIT = 200
+const CAPTCHA_RESTORE_CONCURRENCY = 4
+
+/**
+ * Put the gates a restart interrupted back in force — before updates flow, so
+ * a tap arriving in the first second finds the gate in memory, marks it
+ * answered, and shuts the door on the consequence settled below.
+ *
+ * Only gates still owed something are restored; the rest stay passable from
+ * the row (see `passRecoveredCaptcha`) and are never punished.
+ */
+const restoreCaptchaGates = async (): Promise<CaptchaGate[]> => {
+  const rows = await store.loadOpenCaptchaGates(CAPTCHA_RESTORE_LIMIT).catch((err: unknown) => {
+    log.warn('captcha_gates_restore_failed', { error: telegramErrorName(err) })
+    return []
+  })
+  const restored: CaptchaGate[] = []
+  for (const row of rows) {
+    const plan = planRestoredGate(row, Date.now(), CAPTCHA_ANSWER_GRACE_MS, CAPTCHA_IGNORED_MUTE_SECONDS * 1000)
+    if (plan.kind === 'skip') continue
+    const gate = captchas.restore(row)
+    if (gate !== null) restored.push(gate)
+  }
+  return restored
+}
+
+/**
+ * Finish what the restart interrupted for one restored gate: drop it if the
+ * person left or was removed while we were not listening, otherwise re-arm the
+ * consequence for what remains of the 120 s, or apply it now if that moment
+ * passed during the downtime. Both through `claimConsequence`, the same claim
+ * the live timer in `deliverCaptcha` takes, so "punished once" holds across
+ * the restart.
+ */
+const settleRestoredGate = async (
+  gate: CaptchaGate
+): Promise<'rearmed' | 'applied' | 'dropped' | 'skipped'> => {
+  const { chatId, userId } = gate
+  const answer = await gateway.tg.getChatMember({ chatId, userId }).catch(() => undefined)
+  // Re-asked after the await: a tap or a newer gate may have settled it.
+  if (!captchas.isCurrent(gate) || gate.answered) return 'skipped'
+  if (memberGone(answer)) {
+    await dropGate(chatId, userId, 'restored_member_gone')
+    return 'dropped'
+  }
+  const plan = planRestoredGate(gate, Date.now(), CAPTCHA_ANSWER_GRACE_MS, CAPTCHA_IGNORED_MUTE_SECONDS * 1000)
+  if (plan.kind === 'rearm') {
+    const timer = setTimeout(() => {
+      if (!captchas.claimConsequence(gate)) return
+      void applyIgnoredCaptcha(chatId, userId, gate)
+    }, plan.delayMs)
+    timer.unref?.()
+    gate.cancels.push(() => clearTimeout(timer))
+    return 'rearmed'
+  }
+  if (plan.kind === 'apply' && captchas.claimConsequence(gate)) {
+    await applyIgnoredCaptcha(chatId, userId, gate)
+    return 'applied'
+  }
+  return 'skipped'
+}
+
+/** Settle every restored gate, a few at a time; never throws. */
+const settleRestoredGates = async (gates: CaptchaGate[]): Promise<void> => {
+  const counts = { rearmed: 0, applied: 0, dropped: 0, skipped: 0 }
+  let next = 0
+  const worker = async (): Promise<void> => {
+    while (next < gates.length) {
+      const gate = gates[next++]!
+      const outcome = await settleRestoredGate(gate).catch(() => 'skipped' as const)
+      counts[outcome] += 1
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(CAPTCHA_RESTORE_CONCURRENCY, gates.length) }, worker))
+  log.info('captcha_gates_restored', { restored: gates.length, ...counts })
+}
 
 /**
  * What `deliverCaptcha` actually managed to do — because the caller records it.
@@ -7679,6 +7775,11 @@ const main = async (): Promise<void> => {
   rights.restore(restored)
   if (restored.length > 0) log.info('rights_restored_at_boot', { chats: restored.length })
 
+  // Before `gateway.start`, for the same reason: a tap in the first second must
+  // find its gate in memory, or the consequence settled below could still
+  // punish somebody who just answered.
+  const restoredGates = await restoreCaptchaGates()
+
   gateway.onMessage(handleMessage)
   // Detached: the grace wait must not hold up the updates behind it.
   gateway.onMemberJoin(async (chat, user) => { void handleMemberJoin(chat, user).catch(() => { /* best-effort */ }) })
@@ -7712,6 +7813,10 @@ const main = async (): Promise<void> => {
   // Populate the Telegram command menu (slash button + autocomplete). Fire and
   // forget — it self-swallows errors and must not delay readiness.
   void registerBotCommands(gateway.tg)
+
+  // Detached and bounded (see CAPTCHA_RESTORE_LIMIT): a backlog after a long
+  // outage must not hold up readiness, and nothing here can throw.
+  void settleRestoredGates(restoredGates)
 
   // Clear deletions that came due while we were down, then sweep periodically
   // as the backstop for the in-memory timers.

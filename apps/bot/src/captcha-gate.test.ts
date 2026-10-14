@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CaptchaGates } from './captcha-gate.js'
+import { CaptchaGates, memberGone, planRestoredGate, type GateMark, type PersistedGate } from './captcha-gate.js'
 
 const TTL = 60_000
 
@@ -272,5 +272,156 @@ describe('CaptchaGates — persistence follows the registry', () => {
     const gate = gates.issue(-100, 7, TTL)
     expect(gates.peek(-100, 7)).toBe(gate)
     expect(gates.forget(gate)).toBe(true)
+  })
+})
+
+/**
+ * The consequence across a restart (2026-10-15). Until then the 120-second
+ * timer lived only in memory, and a gate counting down during a deploy was
+ * never punished. What the registry persists, and what the boot path decides
+ * from it, are pinned here.
+ */
+describe('CaptchaGates — the consequence survives a restart', () => {
+  const GRACE = 120_000
+  const MUTE = 3_600_000
+  const LIFE = GRACE + MUTE + 600_000
+
+  const marks = (): {
+    log: [number, number, number, GateMark][]
+    persistence: { save: () => void; drop: () => void; mark: (c: number, u: number, i: number, p: GateMark) => void }
+  } => {
+    const log: [number, number, number, GateMark][] = []
+    return {
+      log,
+      persistence: { save: () => {}, drop: () => {}, mark: (c, u, i, p) => { log.push([c, u, i, p]) } }
+    }
+  }
+
+  const row = (over: Partial<PersistedGate> = {}): PersistedGate => ({
+    chatId: -100, userId: 7, issuedMs: 1_000, expiresMs: 1_000 + LIFE,
+    deliveredMs: 1_500, triggerMessageId: 42, ephemeralMessageId: 9, publicMessageId: null,
+    answered: false, consequenceApplied: false, ...over
+  })
+
+  it('records the delivery moment, with the trigger, when the first prompt id lands', () => {
+    const c = clock(1_000)
+    const m = marks()
+    const gates = new CaptchaGates(c.now, 10, m.persistence)
+    const gate = gates.issue(-100, 7, LIFE)
+    gate.triggerMessageId = 42
+    expect(gate.deliveredMs).toBeNull()
+    c.ms = 1_500
+    gate.ephemeralMessageId = 9
+    expect(gate.deliveredMs).toBe(1_500)
+    expect(gate.ephemeralMessageId).toBe(9)
+    expect(m.log).toEqual([[-100, 7, 1_000, {
+      deliveredMs: 1_500, triggerMessageId: 42, ephemeralMessageId: 9, publicMessageId: null
+    }]])
+    // A later prompt keeps the first delivery moment: the clock started once.
+    c.ms = 9_000
+    gate.publicMessageId = 11
+    expect(gate.deliveredMs).toBe(1_500)
+  })
+
+  it('records an answer and a claimed consequence against the exact gate', () => {
+    const m = marks()
+    const gates = new CaptchaGates(clock(1_000).now, 10, m.persistence)
+    const answered = gates.issue(-100, 7, LIFE)
+    gates.markAnswered(answered)
+    const ignored = gates.issue(-100, 8, LIFE)
+    expect(gates.claimConsequence(ignored)).toBe(true)
+    expect(gates.claimConsequence(ignored)).toBe(false)
+    expect(m.log).toEqual([
+      [-100, 7, 1_000, { answered: true }],
+      [-100, 8, 1_000, { consequenceApplied: true }]
+    ])
+  })
+
+  it('a restored gate is in force, carries its row, and can be claimed exactly once', () => {
+    const gates = new CaptchaGates(clock(200_000).now)
+    const gate = gates.restore(row())
+    expect(gate).not.toBeNull()
+    expect(gates.peek(-100, 7)).toBe(gate)
+    expect(gate!.triggerMessageId).toBe(42)
+    expect(gate!.ephemeralMessageId).toBe(9)
+    expect(gate!.deliveredMs).toBe(1_500)
+    expect(gates.claimConsequence(gate!)).toBe(true)
+    expect(gates.claimConsequence(gate!)).toBe(false)
+  })
+
+  it('a restore never displaces a gate issued since boot, nor revives a lapsed one', () => {
+    const gates = new CaptchaGates(clock(200_000).now)
+    const fresh = gates.issue(-100, 7, LIFE)
+    expect(gates.restore(row())).toBeNull()
+    expect(gates.peek(-100, 7)).toBe(fresh)
+    expect(gates.restore(row({ userId: 8, expiresMs: 199_999 }))).toBeNull()
+  })
+
+  it('a tap on a restored gate shuts the door on its consequence', () => {
+    const gates = new CaptchaGates(clock(200_000).now)
+    const gate = gates.restore(row())!
+    gates.markAnswered(gate)
+    expect(gates.claimConsequence(gate)).toBe(false)
+  })
+
+  describe('planRestoredGate', () => {
+    it('future consequence → re-arm for exactly the time that remains', () => {
+      // Delivered at 1.5 s, due at 121.5 s; the bot is back at 60 s.
+      expect(planRestoredGate(row(), 60_000, GRACE, MUTE)).toEqual({ kind: 'rearm', delayMs: 61_500 })
+    })
+
+    it('past consequence → apply once', () => {
+      expect(planRestoredGate(row(), 300_000, GRACE, MUTE)).toEqual({ kind: 'apply' })
+      // Exactly at the moment counts as past: the live timer would have fired.
+      expect(planRestoredGate(row(), 121_500, GRACE, MUTE)).toEqual({ kind: 'apply' })
+    })
+
+    it('answered, punished, expired or never delivered → nothing', () => {
+      expect(planRestoredGate(row({ answered: true }), 300_000, GRACE, MUTE))
+        .toEqual({ kind: 'skip', reason: 'answered' })
+      expect(planRestoredGate(row({ consequenceApplied: true }), 300_000, GRACE, MUTE))
+        .toEqual({ kind: 'skip', reason: 'punished' })
+      expect(planRestoredGate(row(), 1_000 + LIFE, GRACE, MUTE))
+        .toEqual({ kind: 'skip', reason: 'expired' })
+      expect(planRestoredGate(row({ deliveredMs: null }), 300_000, GRACE, MUTE))
+        .toEqual({ kind: 'skip', reason: 'undelivered' })
+    })
+
+    it('never mutes for longer than the button still lives', () => {
+      // The button lapses at 1_000 + LIFE; a mute applied after LIFE − MUTE
+      // past the issue would outlast it.
+      const late = 1_000 + LIFE - MUTE + 1
+      expect(planRestoredGate(row(), late, GRACE, MUTE)).toEqual({ kind: 'skip', reason: 'button_would_lapse' })
+      expect(planRestoredGate(row(), late - 1, GRACE, MUTE)).toEqual({ kind: 'apply' })
+    })
+
+    it('over the whole life of a gate: a re-arm is positive and never longer than the grace', () => {
+      for (let now = 0; now <= LIFE + 2_000; now += 7_919) {
+        for (const delivered of [null, 1_000, 1_500, 50_000]) {
+          const plan = planRestoredGate(row({ deliveredMs: delivered }), now, GRACE, MUTE)
+          if (plan.kind === 'rearm') {
+            expect(plan.delayMs).toBeGreaterThan(0)
+            expect(plan.delayMs).toBeLessThanOrEqual(GRACE + (delivered ?? 0))
+            expect(now + plan.delayMs).toBe((delivered ?? 0) + GRACE)
+          }
+          if (delivered === null) expect(plan.kind).toBe('skip')
+        }
+      }
+    })
+  })
+
+  describe('memberGone', () => {
+    it('reads removal from the raw member answer', () => {
+      expect(memberGone(null)).toBe(true)
+      expect(memberGone({ status: 'banned' })).toBe(true)
+      expect(memberGone({ status: 'left' })).toBe(true)
+      expect(memberGone({ status: 'restricted', isMember: false })).toBe(true)
+    })
+
+    it('a member, a restricted member, or a failed lookup is not gone', () => {
+      expect(memberGone({ status: 'member' })).toBe(false)
+      expect(memberGone({ status: 'restricted', isMember: true })).toBe(false)
+      expect(memberGone(undefined)).toBe(false)
+    })
   })
 })

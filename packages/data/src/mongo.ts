@@ -534,7 +534,16 @@ export class MongoStore {
   async saveCaptchaGate(gate: { chatId: number; userId: number; issuedMs: number; expiresMs: number }): Promise<void> {
     await this.captchaGates.updateOne(
       { chatId: gate.chatId, userId: gate.userId },
-      { $set: { issuedMs: gate.issuedMs, expiresAt: new Date(gate.expiresMs) } },
+      {
+        $set: { issuedMs: gate.issuedMs, expiresAt: new Date(gate.expiresMs) },
+        // A newer gate overwrites the row; what the older one learned (see
+        // `markCaptchaGate`) must not ride along, or the boot path would read
+        // the new gate as delivered — or as answered — before it is.
+        $unset: {
+          deliveredMs: '', triggerMessageId: '', ephemeralMessageId: '',
+          publicMessageId: '', answered: '', consequenceApplied: ''
+        }
+      },
       { upsert: true }
     )
   }
@@ -547,6 +556,70 @@ export class MongoStore {
    */
   async dropCaptchaGate(chatId: number, userId: number, issuedMs?: number): Promise<void> {
     await this.captchaGates.deleteOne({ chatId, userId, ...(issuedMs === undefined ? {} : { issuedMs }) })
+  }
+
+  /**
+   * Record what a gate learned after it was opened — delivery, prompt ids, an
+   * answer, a claimed consequence. Filtered by `issuedMs` and never upserted:
+   * a mark arriving after the gate's drop must not bring the row back, or the
+   * next boot would read a passed gate as one still owed a consequence.
+   */
+  async markCaptchaGate(
+    chatId: number, userId: number, issuedMs: number,
+    patch: {
+      deliveredMs?: number
+      triggerMessageId?: number | null
+      ephemeralMessageId?: number | null
+      publicMessageId?: number | null
+      answered?: true
+      consequenceApplied?: true
+    }
+  ): Promise<void> {
+    const set: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(patch)) if (v !== undefined) set[k] = v
+    if (Object.keys(set).length === 0) return
+    await this.captchaGates.updateOne({ chatId, userId, issuedMs }, { $set: set })
+  }
+
+  /**
+   * Gates still owed a consequence, for the boot path (2026-10-15): unexpired,
+   * delivered, unanswered and unpunished, newest delivery first and at most
+   * `limit` of them, so a backlog after a long outage costs a bounded read.
+   *
+   * `$ne: true` rather than `false` on purpose: a row that never received the
+   * mark has no field at all, and missing is not `false` to Mongo.
+   */
+  async loadOpenCaptchaGates(limit: number): Promise<Array<{
+    chatId: number; userId: number; issuedMs: number; expiresMs: number
+    deliveredMs: number | null; triggerMessageId: number | null
+    ephemeralMessageId: number | null; publicMessageId: number | null
+    answered: boolean; consequenceApplied: boolean
+  }>> {
+    const docs = await this.captchaGates.find({
+      expiresAt: { $gt: new Date() },
+      deliveredMs: { $type: 'number' },
+      answered: { $ne: true },
+      consequenceApplied: { $ne: true }
+    }).sort({ deliveredMs: -1 }).limit(limit).toArray()
+    const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+    const out = []
+    for (const doc of docs) {
+      const chatId = num(doc['chatId'])
+      const userId = num(doc['userId'])
+      const issuedMs = num(doc['issuedMs'])
+      if (chatId === null || userId === null || issuedMs === null || !(doc['expiresAt'] instanceof Date)) continue
+      out.push({
+        chatId, userId, issuedMs,
+        expiresMs: doc['expiresAt'].getTime(),
+        deliveredMs: num(doc['deliveredMs']),
+        triggerMessageId: num(doc['triggerMessageId']),
+        ephemeralMessageId: num(doc['ephemeralMessageId']),
+        publicMessageId: num(doc['publicMessageId']),
+        answered: doc['answered'] === true,
+        consequenceApplied: doc['consequenceApplied'] === true
+      })
+    }
+    return out
   }
 
   /** The live persisted gate for this person, or null. Expiry is checked here, not left to the TTL sweeper, which runs once a minute at best. */
