@@ -66,7 +66,7 @@ import { telegramErrorName } from './telegram-error.js'
 import { reportPath, reportVoteRoute, rulesFirst } from './report-route.js'
 import { sendWithReplyFallback } from './reply-fallback.js'
 import { captchaLift, readMemberRestriction } from './captcha-lift.js'
-import { MemberFactsCache, type MemberFacts } from './member-facts.js'
+import { MemberFactsCache, isAnonymousAdminSender, type MemberFacts } from './member-facts.js'
 import { JOIN_WINDOW_MS, JoinRateTracker } from './join-rate.js'
 import { IncidentTracker, SenderMessageLog, incidentPowerFor, correctionOwns, type Incident } from './incident.js'
 import { ArrivalLog, arrivalMessageIds } from './arrival-log.js'
@@ -2715,7 +2715,15 @@ const reportTarget = async (replied: Message): Promise<ReportTarget> => {
  * What follows is the arrival path's: with no message there is no ballot, and
  * the report asks the bot to look at the account (`screenAccount`).
  */
-const reportNamedAccount = async (message: Message, chat: Chat, reporter: User, args: string): Promise<void> => {
+/**
+ * Who filed a report. A person, or — since 2026-10-14 — the group itself, which
+ * is how Telegram shows an anonymous admin (`isAnonymousAdminSender`). Only the
+ * id and the name are ever read, and `chatMemberFacts` answers "admin" for the
+ * group's own id, so the rest of the flow needs no special case.
+ */
+type Reporter = Pick<User, 'id' | 'displayName'>
+
+const reportNamedAccount = async (message: Message, chat: Chat, reporter: Reporter, args: string): Promise<void> => {
   const locale = await groupLocale(chat.id)
   const mentioned = message.entities.flatMap((e) =>
     e.params.kind === 'text_mention' ? [e.params.userId] : [])
@@ -2840,7 +2848,7 @@ const holdOnTrustedReport = async (
  * Raising the alarm is open to everyone; only the ballot needs standing. See
  * the eligibility block below for why the two rights are split.
  */
-const handleReport = async (message: Message, chat: Chat, reporter: User, args = ''): Promise<void> => {
+const handleReport = async (message: Message, chat: Chat, reporter: Reporter, args = ''): Promise<void> => {
   const locale = await groupLocale(chat.id)
   // The /report command itself never stays in the chat.
   const dropCommand = (): Promise<void> =>
@@ -5353,6 +5361,21 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     ? rawSender
     : null
   const sender = userSender ?? channelSender
+  /**
+   * An anonymous admin's `/report`. The group posting as itself is never
+   * scanned (`shouldScanChannelSender`) and is not a `User`, so until
+   * 2026-10-14 its commands fell through to the line below and vanished. Only
+   * `/report` is let through: it needs nothing from the reporter beyond an id
+   * and a name, while the other moderator commands authorise against a
+   * person's account.
+   */
+  if (!sender && !isEdit && rawSender instanceof Chat && isAnonymousAdminSender(rawSender.id, chat.id)) {
+    const cmd = parseCommand(message.text ?? '', selfUsername)
+    if (cmd?.name === 'report') {
+      await handleReport(message, chat, { id: rawSender.id, displayName: rawSender.displayName }, cmd.args)
+    }
+    return
+  }
   if (!sender) return
   if (sender.id === selfId) return
 

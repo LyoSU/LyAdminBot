@@ -235,10 +235,20 @@ describe('MemberFacts — is this person in the chat at all', () => {
   it('the departed and the banned are not participants; a restricted member is', async () => {
     const cache = new MemberFactsCache()
     const row = (status: string, isMember: boolean) => async () => ({ status, joinedDate: null, isMember })
-    expect((await cache.get(1, 1, row('left', false))).isParticipant).toBe(false)
-    expect((await cache.get(1, 2, row('banned', true))).isParticipant).toBe(false)
-    expect((await cache.get(1, 3, row('restricted', true))).isParticipant).toBe(true)
-    expect((await cache.get(1, 4, row('member', true))).isParticipant).toBe(true)
+    expect((await cache.get(1, 11, row('left', false))).isParticipant).toBe(false)
+    expect((await cache.get(1, 12, row('banned', true))).isParticipant).toBe(false)
+    expect((await cache.get(1, 13, row('restricted', true))).isParticipant).toBe(true)
+    expect((await cache.get(1, 14, row('member', true))).isParticipant).toBe(true)
+  })
+
+  it('the group posting as itself is an anonymous admin, without a lookup', async () => {
+    const cache = new MemberFactsCache()
+    const l = lookup([throws('Telegram API error 400: USER_ID_INVALID')])
+    const facts = await cache.get(-1001234, -1001234, l.call)
+    expect(facts).toEqual({ isAdmin: true, joinedAgoSeconds: null, isParticipant: true })
+    expect(l.calls).toBe(0)
+    // Any other chat id is not.
+    expect((await cache.get(-1001234, -1009999, l.call)).isAdmin).toBe(false)
   })
 
   it('invalidate makes the next read ask again', async () => {

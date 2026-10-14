@@ -69,7 +69,22 @@ export interface MemberFacts {
 /** The shape we read out of `getChatMember`, as loosely as it is worth reading. */
 export type MemberAnswer = { status?: unknown; joinedDate?: unknown; isMember?: unknown } | null | undefined
 
-const NOT_AN_ADMIN: MemberFacts = { isAdmin: false, joinedAgoSeconds: null, isParticipant: null }
+/**
+ * A message whose sender is the group itself.
+ *
+ * Telegram lets only an admin post "as the group" (anonymous admin), so the
+ * identity is an admin by construction — and it is the one identity
+ * `getChatMember` cannot answer for, because a chat is not a member of itself.
+ * Asked anyway until 2026-10-14, the lookup failed and the admin read as "not
+ * an admin", which on top of the router dropping non-user senders made
+ * `/report` from an anonymous admin do nothing at all.
+ */
+export const isAnonymousAdminSender = (senderId: number, chatId: number): boolean =>
+  senderId === chatId
+
+export const ANONYMOUS_ADMIN: MemberFacts = { isAdmin: true, joinedAgoSeconds: null, isParticipant: true }
+
+const NOT_AN_ADMIN: MemberFacts ={ isAdmin: false, joinedAgoSeconds: null, isParticipant: null }
 
 /** Telegram answered, and the answer names nobody. */
 const NOT_A_MEMBER: MemberFacts = { isAdmin: false, joinedAgoSeconds: null, isParticipant: false }
@@ -118,6 +133,7 @@ export class MemberFactsCache {
   async get(
     chatId: number, userId: number, lookup: () => Promise<MemberAnswer>
   ): Promise<MemberFacts> {
+    if (isAnonymousAdminSender(userId, chatId)) return ANONYMOUS_ADMIN
     const key = `${chatId}:${userId}`
     const cached = this.entries.get(key)
     if (cached && cached.expiresMs > this.now()) return cached.facts
