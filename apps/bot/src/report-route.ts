@@ -47,3 +47,35 @@ export const reportVoteRoute = (s: ReportVoteState): ReportVoteRoute => {
  * re-applied; they are the part that evidently did not stick.
  */
 export const rulesFirst = (closedStatus: string): boolean => closedStatus !== 'spam'
+
+/**
+ * Which `/report` this is: about the message it replies to, or about the
+ * person it names.
+ *
+ * A reply is not always a reply. In the comments under a channel post every
+ * message carries a reply to the thread's root — the post the channel
+ * auto-forwarded into the discussion group — and in a forum topic every
+ * message carries a reply to the topic's creation line. Telegram sets those
+ * whether or not the person pressed "reply". Until 2026-10-14 `/report @name`
+ * typed in either place was read as a report on the channel post or on the
+ * service line, and answered "reply to a message": the named form was dead
+ * exactly where comment spam lands.
+ *
+ * So a reply to a thread root counts as no reply when the command names
+ * somebody. With nothing named it stays a reply, and the reply path explains
+ * what it can and cannot do with a root.
+ */
+export interface RepliedShape {
+  /** The channel post Telegram copied into the discussion group. */
+  isAutomaticForward: boolean
+  /** mtcute's `MessageAction.type`, or null for an ordinary message. */
+  actionType: string | null
+}
+
+export const isThreadRoot = (replied: RepliedShape): boolean =>
+  replied.isAutomaticForward || replied.actionType === 'topic_created'
+
+export const reportPath = (replied: RepliedShape | null, args: string): 'named' | 'reply' => {
+  if (replied === null) return 'named'
+  return isThreadRoot(replied) && args.trim() !== '' ? 'named' : 'reply'
+}

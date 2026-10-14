@@ -1,5 +1,35 @@
 import { describe, expect, it } from 'vitest'
-import { reportVoteRoute, rulesFirst } from './report-route.js'
+import { isThreadRoot, reportPath, reportVoteRoute, rulesFirst } from './report-route.js'
+
+describe('reportPath', () => {
+  const plain = { isAutomaticForward: false, actionType: null }
+  const channelRoot = { isAutomaticForward: true, actionType: null }
+  const topicRoot = { isAutomaticForward: false, actionType: 'topic_created' }
+
+  it('no reply at all is the named form', () => {
+    expect(reportPath(null, '')).toBe('named')
+    expect(reportPath(null, '@someone')).toBe('named')
+  })
+
+  it('a reply to an ordinary message is about that message, whatever follows', () => {
+    expect(reportPath(plain, '')).toBe('reply')
+    expect(reportPath(plain, '@someone spams')).toBe('reply')
+  })
+
+  it('the implicit reply to a thread root does not swallow a named report', () => {
+    expect(reportPath(channelRoot, '@someone')).toBe('named')
+    expect(reportPath(topicRoot, '123456789')).toBe('named')
+  })
+
+  it('a bare report on a thread root stays a reply', () => {
+    expect(reportPath(channelRoot, '')).toBe('reply')
+    expect(reportPath(topicRoot, '   ')).toBe('reply')
+  })
+
+  it('other service lines are not thread roots', () => {
+    expect(isThreadRoot({ isAutomaticForward: false, actionType: 'user_joined_link' })).toBe(false)
+  })
+})
 
 describe('reportVoteRoute', () => {
   it('an admin on an open vote resolves it, as before', () => {

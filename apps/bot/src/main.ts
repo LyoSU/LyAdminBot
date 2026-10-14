@@ -63,7 +63,7 @@ import { RightsMemory, RIGHTS_ERROR_REGEX, failureLabels } from './rights.js'
 import { joinerSource } from './join-action.js'
 import { LlmHealth } from './llm-health.js'
 import { telegramErrorName } from './telegram-error.js'
-import { reportVoteRoute, rulesFirst } from './report-route.js'
+import { reportPath, reportVoteRoute, rulesFirst } from './report-route.js'
 import { sendWithReplyFallback } from './reply-fallback.js'
 import { captchaLift, readMemberRestriction } from './captcha-lift.js'
 import { MemberFactsCache, type MemberFacts } from './member-facts.js'
@@ -2847,7 +2847,11 @@ const handleReport = async (message: Message, chat: Chat, reporter: User, args =
     gateway.tg.deleteMessagesById(chat.id, [message.id]).catch(() => { /* no rights */ })
 
   const replied = await gateway.fetchRepliedMessage(message)
-  if (!replied) {
+  // A thread root's implicit reply does not count when somebody is named — see
+  // `reportPath`.
+  if (!replied || reportPath({
+    isAutomaticForward: replied.isAutomaticForward, actionType: replied.action?.type ?? null
+  }, args) === 'named') {
     await reportNamedAccount(message, chat, reporter, args)
     return
   }
