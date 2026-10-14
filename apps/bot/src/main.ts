@@ -65,6 +65,7 @@ import { LlmHealth } from './llm-health.js'
 import { telegramErrorName } from './telegram-error.js'
 import { reportVoteRoute, rulesFirst } from './report-route.js'
 import { sendWithReplyFallback } from './reply-fallback.js'
+import { captchaLift, readMemberRestriction } from './captcha-lift.js'
 import { MemberFactsCache, type MemberFacts } from './member-facts.js'
 import { JOIN_WINDOW_MS, JoinRateTracker } from './join-rate.js'
 import { IncidentTracker, SenderMessageLog, incidentPowerFor, correctionOwns, type Incident } from './incident.js'
@@ -745,9 +746,11 @@ const deliverCaptcha = async (
       log.warn('captcha_undeliverable_superseded', { chatId, userId })
       return 'undeliverable'
     }
-    const lifted = await gateway.tg.restrictChatMember({ chatId, userId, restrictions: {} })
-      .then(() => true).catch(() => false)
-    log.warn('captcha_undeliverable', { chatId, userId, lifted, reason })
+    // A failed read leaves the executor's hold to lapse on its own (ten
+    // minutes) rather than risk clearing a mute that is not ours.
+    const lift = await liftCaptchaRestriction(chatId, userId, gate.expiresMs, 'undeliverable')
+    const lifted = lift === 'lifted' || lift === 'nothing'
+    log.warn('captcha_undeliverable', { chatId, userId, lifted, lift, reason })
     void store.recordCaptchaEvent({ chatId, userId, event: 'undeliverable', reason })
     return 'undeliverable'
   }
@@ -880,6 +883,35 @@ const deliverCaptcha = async (
   }
 }
 
+/**
+ * Lift the captcha's restriction — and only the captcha's. See
+ * `captcha-lift.ts`: an empty `restrictChatMember` clears every restriction,
+ * an admin's hand-applied mute included, so what is in force is read first.
+ *
+ * `lifted` and `nothing` both leave the member free of OUR gate; `foreign`
+ * leaves somebody else's restriction where it was; `failed` is a lift that did
+ * not go through or a read that did not answer, and the caller treats it as
+ * the restrict failure it already handled.
+ */
+type CaptchaLiftOutcome = 'lifted' | 'nothing' | 'foreign' | 'failed'
+const liftCaptchaRestriction = async (
+  chatId: number, userId: number, gateExpiresMs: number, site: string
+): Promise<CaptchaLiftOutcome> => {
+  const current = await gateway.tg.getChatMember({ chatId, userId })
+    .then(readMemberRestriction).catch(() => null)
+  const plan = captchaLift(current, gateExpiresMs)
+  if (plan.kind === 'lift') {
+    return await gateway.tg.restrictChatMember({ chatId, userId, restrictions: {} })
+      .then((): CaptchaLiftOutcome => 'lifted').catch((): CaptchaLiftOutcome => 'failed')
+  }
+  if (plan.kind === 'nothing') return 'nothing'
+  log.info('captcha_lift_skipped', {
+    chatId, userId, site, reason: plan.kind === 'foreign' ? plan.reason : 'unreadable',
+    ...(current?.untilMs == null ? {} : { untilMs: current.untilMs }), gateExpiresMs
+  })
+  return plan.kind === 'foreign' ? 'foreign' : 'failed'
+}
+
 /** Take down whichever prompts actually announced a gate. */
 const removeGatePrompts = async (gate: CaptchaGate): Promise<void> => {
   if (gate.publicMessageId !== null) {
@@ -970,8 +1002,10 @@ const passCaptcha = async (
    * reads this flag, so the door shuts here rather than after the round trip.
    */
   captchas.markAnswered(gate)
-  const lifted = await gateway.tg.restrictChatMember({ chatId, userId, restrictions: {} })
-    .then(() => true).catch(() => false)
+  // A restriction that is not ours stays (`foreign`), and the tap still counts:
+  // the question was answered, and the mute left in place is an admin's.
+  const lift = await liftCaptchaRestriction(chatId, userId, gate.expiresMs, 'pass')
+  const lifted = lift !== 'failed'
   if (!lifted) {
     // The gate stays. Another tap is the only thing the member can do, and it
     // is worth something — the usual cause is transient.
@@ -990,7 +1024,7 @@ const passCaptcha = async (
    */
   const ageMs = captchas.ageMs(gate)
   const wentPublic = gate.publicMessageId !== null
-  log.info('captcha_passed', { chatId, userId, via, ageMs, wentPublic })
+  log.info('captcha_passed', { chatId, userId, via, ageMs, wentPublic, lift })
   void store.recordCaptchaEvent({ chatId, userId, event: 'passed', via, ageMs, wentPublic })
   await answer(locale.captcha.passed)
 
@@ -1022,16 +1056,15 @@ const passRecoveredCaptcha = async (
     await answer()
     return false
   }
-  const lifted = await gateway.tg.restrictChatMember({ chatId, userId, restrictions: {} })
-    .then(() => true).catch(() => false)
-  if (!lifted) {
+  const lift = await liftCaptchaRestriction(chatId, userId, persisted.expiresMs, 'pass_recovered')
+  if (lift === 'failed') {
     log.warn('captcha_unrestrict_failed', { chatId, userId, recovered: true })
     await answer(locale.captcha.retry)
     return false
   }
   void store.dropCaptchaGate(chatId, userId, persisted.issuedMs).catch(() => { /* TTL */ })
   const ageMs = Date.now() - persisted.issuedMs
-  log.info('captcha_passed', { chatId, userId, via, ageMs, recovered: true })
+  log.info('captcha_passed', { chatId, userId, via, ageMs, recovered: true, lift })
   void store.recordCaptchaEvent({ chatId, userId, event: 'passed', via, ageMs })
   await answer(locale.captcha.passed)
   if (tappedPromptId !== null) {
