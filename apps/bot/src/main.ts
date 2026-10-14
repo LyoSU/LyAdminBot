@@ -4715,11 +4715,12 @@ const screenJoinRequest = async (
         avatars: profile.avatars, externalBan
       }), undefined, { unofficialClientRisk: profile.unofficialClientRisk })
       signals.push(...extractBioSignals(profile.bio ?? request.bio, profile.businessTexts))
-      const avatarBase64 = profile.latestAvatar
-        ? await rawPhotoToBase64(gateway.tg, profile.latestAvatar, AVATAR_MAX_BYTES).catch(() => null)
-        : null
-      saw['avatar'] = profile.latestAvatar === null ? 'none' : avatarBase64 === null ? 'failed' : 'bytes'
-      if (avatarBase64 !== null) signals.push(...await avatarFindings(user.id, avatarBase64, saw))
+      // The picture is not read here, on purpose (review 2026-10-14): this is
+      // somebody the chat has not let in and may never, and reading it means
+      // sending it to the moderation provider and filing its hash. A shadow
+      // that measures how many requests we would decline does not need that —
+      // the decline rests on the record — so `look` is undercounted instead.
+      saw['avatar'] = profile.latestAvatar === null ? 'none' : 'not_read'
     } else signals.push(...extractBioSignals(request.bio))
   } else if (!settled) {
     // The bio rides on the update for free; nothing else of the profile does.
