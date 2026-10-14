@@ -1869,6 +1869,36 @@ export class MongoStore {
     )
   }
 
+  /**
+   * What a spam outcome actually did, on the question it settled.
+   *
+   * `status: 'spam'` says what the chat decided, not that the author was
+   * silenced; on 2026-10-14 three settled votes deleted the message and failed
+   * the mute, and only a rotating log line said so. The error is a wire or
+   * mtcute class name (`telegramErrorName`), never message text.
+   */
+  async noteVoteEnforcement(chatId: number, messageId: number, outcome: {
+    deleted: boolean
+    muted: boolean
+    /** Which route made the author addressable — see `warmPeer`. */
+    peer: string
+    deleteError: string | null
+    muteError: string | null
+  }): Promise<void> {
+    await this.votes.updateOne(
+      { chatId, messageId },
+      {
+        $set: {
+          enforcement: {
+            deleted: outcome.deleted, muted: outcome.muted, peer: outcome.peer,
+            ...(outcome.deleteError === null ? {} : { deleteError: outcome.deleteError }),
+            ...(outcome.muteError === null ? {} : { muteError: outcome.muteError })
+          }
+        }
+      }
+    )
+  }
+
   async setVotePrompt(chatId: number, messageId: number, promptMessageId: number): Promise<void> {
     await this.votes.updateOne({ chatId, messageId }, { $set: { promptMessageId } })
   }

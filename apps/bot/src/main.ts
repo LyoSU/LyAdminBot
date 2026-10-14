@@ -33,7 +33,7 @@ import {
   fetchExternalBan, sourcesToQuery, resolveMentionKinds, shouldScanChannelSender,
   createChatDescriptionCache, fetchChatDescription, fetchChatMemberCount, findChatMemberByUsername,
   createTmePreviewResolver,
-  avatarDhashOf, MUTE_DURATION_SECONDS,
+  avatarDhashOf, MUTE_DURATION_SECONDS, warmPeer,
   type ExternalBanCacheView, type IncomingMessage
 } from '@lyadmin/adapters'
 import {
@@ -1574,6 +1574,11 @@ const enforceVoteSpam = async (vote: {
   chatId: number
   messageId: number
   targetUserId: number
+  /**
+   * The author's display name as stored with the vote — the member-search
+   * fallback in `warmPeer` when the message is already gone.
+   */
+  targetLabel: string | null
   /** Full text to learn (not the truncated display preview). */
   learnText: string
   tally: { spam: number; ham: number }
@@ -1601,6 +1606,17 @@ const enforceVoteSpam = async (vote: {
    * sendMessage`; the honest fix is to write down what this call said.
    */
   const failure = { deleted: null as string | null, muted: null as string | null }
+  /**
+   * The author made addressable while the message still exists — see
+   * `warmPeer`. The order is the point: the delete below takes away the one
+   * thing a bot can fetch the author's access hash from, and the mute after it
+   * names the author by that hash. Production 2026-10-14: three of four votes
+   * resolved after a deploy wiped the peer cache lost their mute to
+   * `MtPeerNotFoundError` this way.
+   */
+  const peer = await warmPeer(gateway.tg, {
+    chatId: vote.chatId, userId: vote.targetUserId, messageId: vote.messageId, nameHint: vote.targetLabel
+  })
   const deleted = await gateway.moderationActions.deleteMessage(vote.chatId, vote.messageId)
     .then(() => true).catch((err: unknown) => { failure.deleted = telegramErrorName(err); return false })
   const muted = await gateway.moderationActions.mute(vote.chatId, vote.targetUserId, MUTE_AFTER_VOTE_SECONDS)
@@ -1608,11 +1624,22 @@ const enforceVoteSpam = async (vote: {
   if (!deleted || !muted) {
     log.warn('vote_enforce_incomplete', {
       chatId: vote.chatId, userId: vote.targetUserId, messageId: vote.messageId,
-      deleted, muted, source: learnSource,
+      deleted, muted, source: learnSource, peer: peer.source,
       ...(failure.deleted === null ? {} : { deleteError: failure.deleted }),
-      ...(failure.muted === null ? {} : { muteError: failure.muted })
+      ...(failure.muted === null ? {} : { muteError: failure.muted }),
+      ...(peer.error === undefined ? {} : { peerError: telegramErrorName(peer.error) })
+    })
+  } else if (peer.source !== 'cached') {
+    // The recovery itself, counted: how often a vote would have lost its mute.
+    log.info('vote_peer_recovered', {
+      chatId: vote.chatId, userId: vote.targetUserId, messageId: vote.messageId, peer: peer.source
     })
   }
+  // Kept on the question itself, not only in a log that rotates: a settled
+  // vote whose author was never silenced is the row an audit has to find.
+  await store.noteVoteEnforcement(vote.chatId, vote.messageId, {
+    deleted, muted, peer: peer.source, deleteError: failure.deleted, muteError: failure.muted
+  }).catch(() => { /* the record is best-effort */ })
   /**
    * Not tidiness here: `passCaptcha` lifts restrictions with an EMPTY
    * `restrictChatMember`, which clears every restriction on the account. A
@@ -2858,8 +2885,8 @@ const handleReport = async (message: Message, chat: Chat, reporter: User, args =
     if (!(await store.closeVote(chat.id, replied.id, 'spam'))) return
     log.info('vote_resolved', { chatId: chat.id, userId: target.id, messageId: replied.id, outcome: 'spam', by: 'admin_report' })
     const enforced = await enforceVoteSpam({
-      chatId: chat.id, messageId: replied.id, targetUserId: target.id, learnText: fullText,
-      tally: { spam: tally.spam, ham: tally.ham }
+      chatId: chat.id, messageId: replied.id, targetUserId: target.id, targetLabel: target.displayName,
+      learnText: fullText, tally: { spam: tally.spam, ham: tally.ham }
     }, 'admin_report')
     /**
      * The action is read off what happened, not asserted.
@@ -7040,6 +7067,7 @@ const wireCallbacks = (): void => {
         enforced = await enforceVoteSpam({
           chatId, messageId,
           targetUserId: Number(vote['targetUserId'] ?? 0),
+          targetLabel: typeof vote['targetLabel'] === 'string' ? vote['targetLabel'] : null,
           learnText: String(vote['learnText'] ?? vote['textPreview'] ?? ''),
           tally: { spam: tally.spam, ham: tally.ham }
         }, 'community_vote')
