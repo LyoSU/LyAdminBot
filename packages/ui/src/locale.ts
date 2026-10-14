@@ -440,6 +440,11 @@ export interface Locale {
      * a whole bulk add off a single tap is leverage nobody should have.
      */
     oneAtATime: string
+    /**
+     * The message's vote already closed or expired, and the reporter is not an
+     * admin. Said out loud since 2026-10-14: the report used to vanish here.
+     */
+    voteClosed: string
   }
 
   /** /mystats personal panel (PM only). */

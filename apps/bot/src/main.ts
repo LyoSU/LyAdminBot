@@ -63,6 +63,7 @@ import { RightsMemory, RIGHTS_ERROR_REGEX, failureLabels } from './rights.js'
 import { joinerSource } from './join-action.js'
 import { LlmHealth } from './llm-health.js'
 import { telegramErrorName } from './telegram-error.js'
+import { reportVoteRoute, rulesFirst } from './report-route.js'
 import { MemberFactsCache, type MemberFacts } from './member-facts.js'
 import { JOIN_WINDOW_MS, JoinRateTracker } from './join-rate.js'
 import { IncidentTracker, SenderMessageLog, incidentPowerFor, correctionOwns, type Incident } from './incident.js'
@@ -1585,7 +1586,13 @@ const enforceVoteSpam = async (vote: {
   /** Full text to learn (not the truncated display preview). */
   learnText: string
   tally: { spam: number; ham: number }
-}, learnSource: string): Promise<VoteEnforcement> => {
+}, learnSource: string,
+/**
+ * False on a second ruling over a question that already closed as spam — see
+ * `rulesFirst`. The removal and the mute run either way; the detection, the
+ * learning and the label were written the first time.
+ */
+firstRuling = true): Promise<VoteEnforcement> => {
   // Both outcomes are reported, on the same reasoning `ExecutionResult` already
   // separates `applied` from `deleted`: "the message went, the person stayed"
   // is a different fact from "nothing happened", and the receipt used to
@@ -1671,6 +1678,7 @@ const enforceVoteSpam = async (vote: {
    * already used. The removal and the mute still stand on a wordless ballot;
    * the durable counter does not.
    */
+  if (!firstRuling) return { deleted, muted }
   const hasContent = voteMayRecordDetection(vote.learnText)
   if (hasContent) {
     await store.recordSpamDetection(vote.chatId, vote.targetUserId)
@@ -2878,20 +2886,54 @@ const handleReport = async (message: Message, chat: Chat, reporter: User, args =
       label: reporter.displayName
     }).catch(() => { /* vote may have closed a moment ago */ })
   }
-  await dropCommand()
 
   const vote = await store.getVote(chat.id, replied.id).catch(() => null)
   const open = vote !== null && vote['status'] === 'open'
   const tally = tallyVotes((vote?.['ballots'] ?? []) as VoteBallot[])
+  const closedStatus = vote === null ? null : String(vote['status'] ?? 'open')
+  const route = reportVoteRoute({
+    status: closedStatus, tallySpam: tally.outcome === 'spam', reporterIsAdmin
+  })
 
-  if (open && tally.outcome === 'spam') {
-    // Admin ballot resolved instantly.
-    if (!(await store.closeVote(chat.id, replied.id, 'spam'))) return
-    log.info('vote_resolved', { chatId: chat.id, userId: target.id, messageId: replied.id, outcome: 'spam', by: 'admin_report' })
+  if (route === 'closed') {
+    // Answered rather than dropped: until 2026-10-14 this case deleted the
+    // command and said nothing. The screen still looks at the account.
+    log.info('report_vote_closed', {
+      chatId: chat.id, userId: target.id, messageId: replied.id, status: closedStatus, by: reporter.id
+    })
+    await answerAndClear(message, chat.id, locale.report.voteClosed, 'report_refused')
+    void screenAccount({
+      chat, target, reason: 'reported', replyToMessageId: replied.id,
+      subjectMessageId: replied.id
+    }).catch(() => { /* best-effort */ })
+    return
+  }
+  await dropCommand()
+
+  if (route === 'resolve' || route === 'rerule') {
+    /**
+     * `resolve`: admin ballot resolved an open vote instantly.
+     *
+     * `rerule`: an admin reporting a message whose question already closed or
+     * expired. A fresh ruling enforced directly rather than a reopened vote:
+     * reopening needs a new status transition in the store, would repost a
+     * prompt only to close it in the same breath, and would let the expiry
+     * sweep and a late ballot race the admin over a question they have just
+     * answered. The vote row keeps the outcome it closed with; this ruling is
+     * written where every other enforcement is — `pipeline_decisions`.
+     */
+    if (route === 'resolve' && !(await store.closeVote(chat.id, replied.id, 'spam'))) return
+    log.info('vote_resolved', {
+      chatId: chat.id, userId: target.id, messageId: replied.id, outcome: 'spam', by: 'admin_report',
+      ...(route === 'rerule' ? { rerule: closedStatus } : {})
+    })
     const enforced = await enforceVoteSpam({
       chatId: chat.id, messageId: replied.id, targetUserId: target.id, targetLabel: target.displayName,
-      learnText: fullText, tally: { spam: tally.spam, ham: tally.ham }
-    }, 'admin_report')
+      learnText: fullText,
+      // A closed question's own ballots settled something else; this ruling is
+      // the admin's alone.
+      tally: route === 'resolve' ? { spam: tally.spam, ham: tally.ham } : { spam: 1, ham: 0 }
+    }, 'admin_report', route === 'resolve' || rulesFirst(closedStatus ?? 'open'))
     /**
      * The action is read off what happened, not asserted.
      *
@@ -2950,7 +2992,9 @@ const handleReport = async (message: Message, chat: Chat, reporter: User, args =
     // asked through must stop asking. Without this the buttons stayed live on a
     // closed vote and answered "already ended" to every tap, forever: the
     // expiry sweep only claims votes still marked open.
-    const openPrompt = vote['promptMessageId']
+    // Only an open question still has a live prompt: a closed one had its
+    // prompt edited into a receipt or removed when it closed.
+    const openPrompt = route === 'resolve' ? vote?.['promptMessageId'] : null
     if (typeof openPrompt === 'number') {
       const receipt = voteResult(await groupLocale(chat.id), {
         chatId: chat.id, messageId: replied.id,

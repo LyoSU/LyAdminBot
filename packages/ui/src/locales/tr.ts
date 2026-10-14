@@ -401,7 +401,8 @@ export const tr: Locale = {
     cantReportAdmin: 'Yöneticiler bildirilemez.',
     rateLimited: 'Çok fazla bildirim. Birkaç dakika bekle.',
     accepted: 'Anlaşıldı, teşekkürler.',
-    oneAtATime: 'O satırda birden fazla kişi katıldı. Kastettiğin kişinin mesajına yanıt ver.'
+    oneAtATime: 'O satırda birden fazla kişi katıldı. Kastettiğin kişinin mesajına yanıt ver.',
+    voteClosed: 'Bu mesajla ilgili oylama kapandı. Kararı bir yönetici verebilir.'
   },
 
   botStats: {

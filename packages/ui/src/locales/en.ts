@@ -403,7 +403,8 @@ export const en: Locale = {
     cantReportAdmin: 'Admins cannot be reported.',
     rateLimited: 'Too many reports. Wait a few minutes.',
     accepted: 'Got it, thanks.',
-    oneAtATime: 'Several people joined on that line. Reply to a message from the one you mean.'
+    oneAtATime: 'Several people joined on that line. Reply to a message from the one you mean.',
+    voteClosed: 'The vote on this message is already closed. An admin can still decide.'
   },
 
   botStats: {
