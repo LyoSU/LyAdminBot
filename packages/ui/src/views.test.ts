@@ -1650,3 +1650,19 @@ describe('chatActionsView — the way back to a correction after the notice is g
     expect(view.text).not.toContain(`${CHAT_ACTIONS_SHOWN + 1}.`)
   })
 })
+
+/**
+ * REGRESSION, 2026-10-14: the top list's unit had two forms in the Slavic
+ * locales, so 2 and 22 came out in the genitive plural ("2 повідомлень").
+ */
+describe('top list unit agrees with the number', () => {
+  it('uses one / few / many forms', () => {
+    const cases: Array<[string, number, string]> = [
+      ['uk', 1, 'повідомлення'], ['uk', 2, 'повідомлення'], ['uk', 5, 'повідомлень'],
+      ['uk', 11, 'повідомлень'], ['uk', 21, 'повідомлення'], ['uk', 22, 'повідомлення'],
+      ['ru', 2, 'сообщения'], ['ru', 5, 'сообщений'], ['ru', 21, 'сообщение'],
+      ['by', 3, 'паведамленні'], ['by', 12, 'паведамленняў']
+    ]
+    for (const [code, n, form] of cases) expect(LOCALES[code]!.top.messagesUnit(n), `${code} ${n}`).toBe(form)
+  })
+})

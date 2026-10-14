@@ -444,7 +444,7 @@ export const uk: Locale = {
     titleMessages: '🏆 <b>Найактивніші в чаті</b>',
     titleBanan: '🍌 <b>Топ за бананами</b>',
     empty: 'Поки нема статистики.',
-    messagesUnit: (count) => (count % 10 === 1 && count % 100 !== 11 ? 'повідомлення' : 'повідомлень'),
+    messagesUnit: (count) => plural(count, 'повідомлення', 'повідомлення', 'повідомлень'),
     bananUnit: () => '🍌'
   },
 

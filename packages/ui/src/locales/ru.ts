@@ -444,7 +444,7 @@ export const ru: Locale = {
     titleMessages: '🏆 <b>Самые активные в чате</b>',
     titleBanan: '🍌 <b>Топ по бананам</b>',
     empty: 'Пока нет статистики.',
-    messagesUnit: (count) => (count % 10 === 1 && count % 100 !== 11 ? 'сообщение' : 'сообщений'),
+    messagesUnit: (count) => plural(count, 'сообщение', 'сообщения', 'сообщений'),
     bananUnit: () => '🍌'
   },
 
