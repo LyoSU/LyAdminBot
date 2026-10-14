@@ -21,7 +21,11 @@ export const telegramErrorName = (err: unknown): string => {
   const wire = /\b([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)\b/.exec(text)
   if (wire?.[1]) return wire[1]
   // mtcute raises typed errors of its own — `MtPeerNotFoundError` — and the
-  // class name is the whole of what they say that is worth keeping.
-  const klass = err instanceof Error && /^Mt[A-Za-z]{3,60}Error$/.test(err.name) ? err.name : null
+  // class name is the whole of what they say that is worth keeping. Read off
+  // the constructor: mtcute never sets `name`, which stays "Error", so reading
+  // `name` named nothing in production until 2026-10-14. The bot runs unminified
+  // (tsx), so the constructor keeps its name.
+  const cls = err instanceof Error ? err.constructor.name : ''
+  const klass = /^Mt[A-Za-z]{3,60}Error$/.test(cls) ? cls : null
   return klass ?? 'unknown'
 }
