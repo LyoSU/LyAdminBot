@@ -2911,6 +2911,25 @@ const handleReport = async (message: Message, chat: Chat, reporter: User, args =
       reasonEvidence: textPreview || null, meta: {}
     }
     rememberVerdict(chat.id, replied.id, verdict)
+    /**
+     * Written down, not only remembered. Until 2026-10-14 this verdict lived in
+     * the in-process cache alone, so a restart within the ten-minute notice
+     * window left "За що?" answering "expired" and "Не спам" with nothing to
+     * recall: `restoreFalsePositive` falls back to `pipeline_decisions`, and an
+     * admin's own report was the one enforcement path that never wrote a row
+     * there. Same shape as `holdOnTrustedReport`.
+     */
+    await store.recordDecision({
+      chatId: chat.id, userId: target.id, messageId: replied.id, textPreview,
+      verdict,
+      quiet: reportPolicy.quietMode === true,
+      execution: {
+        applied: enforced.muted, deleted: enforced.deleted, skippedReason: null,
+        failed: [...(enforced.deleted ? [] : ['delete']), ...(enforced.muted ? [] : ['mute'])],
+        albumRemoved: 0, retroPurged: 0
+      },
+      latencyMs: 0
+    }).catch(() => { /* telemetry must never break moderation */ })
     if (action === 'observe') {
       const warned = await tgSendText(chat.id, missingRightsText(chat.id, locale))
         .catch(() => null)
