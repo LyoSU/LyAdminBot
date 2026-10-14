@@ -1758,3 +1758,215 @@ describe('uk elapsed time', () => {
     expect(uk.profile.accountAge(uk.profile.unknownAge)).toBe('акаунт невідомого віку')
   })
 })
+
+/**
+ * Number agreement in the ru / by / en copy (2026-10-14 copy audit, mirrored
+ * from the uk fixes). Each counted phrase is checked at 1, 2, 5, 11, 21 and
+ * 22 — every branch of the Slavic one / few / many picker, including the
+ * 11-19 teens that end in 1 or 2 and still take "many".
+ */
+const AGREEMENT_NS = [1, 2, 5, 11, 21, 22] as const
+type AgreementTable = Record<(typeof AGREEMENT_NS)[number], string>
+const checkAgreement = (render: (n: number) => string, expected: AgreementTable): void => {
+  for (const n of AGREEMENT_NS) expect(render(n), `n=${n}`).toContain(expected[n])
+}
+
+describe('ru number agreement', () => {
+  const ru = LOCALES['ru']!
+
+  it('missingRights: the verb agrees with the account count', () => {
+    checkAgreement((n) => ru.notification.missingRights({ deleteBlocked: false, senderBlocked: true, accounts: n }), {
+      1: 'остался 1 аккаунт.', 2: 'осталось 2 аккаунта.', 5: 'осталось 5 аккаунтов.',
+      11: 'осталось 11 аккаунтов.', 21: 'остался 21 аккаунт.', 22: 'осталось 22 аккаунта.'
+    })
+  })
+
+  it('cohort title: verb and adjective follow the count; the hint names no number', () => {
+    checkAgreement((n) => ru.cohort.title(n, 'X'), {
+      1: 'пришёл ещё 1 похожий новичок', 2: 'пришли ещё 2 похожих новичка', 5: 'пришло ещё 5 похожих новичков',
+      11: 'пришло ещё 11 похожих новичков', 21: 'пришёл ещё 21 похожий новичок', 22: 'пришли ещё 22 похожих новичка'
+    })
+    expect(ru.cohort.hint).not.toMatch(/пришли|писали/)
+    checkAgreement((n) => ru.cohort.banned(1, n, 'A'), {
+      1: 'из 1 новичка,', 2: 'из 2 новичков,', 5: 'из 5 новичков,',
+      11: 'из 11 новичков,', 21: 'из 21 новичка,', 22: 'из 22 новичков,'
+    })
+  })
+
+  it('confirmAll: the relative clause agrees with one versus many', () => {
+    checkAgreement((n) => ru.arrivals.confirmAll(n), {
+      1: 'новичка, который ещё ничего не написал?', 2: 'новичков, которые ещё ничего не написали?',
+      5: 'новичков, которые', 11: 'новичков, которые', 21: 'новичка, который', 22: 'новичков, которые'
+    })
+  })
+
+  it('botStats window, checked, spammers and memory', () => {
+    checkAgreement((n) => ru.botStats.window(n), {
+      1: 'За последний 1 день:', 2: 'За последние 2 дня:', 5: 'За последние 5 дней:',
+      11: 'За последние 11 дней:', 21: 'За последний 21 день:', 22: 'За последние 22 дня:'
+    })
+    checkAgreement((n) => ru.botStats.checked(n), {
+      1: '<b>1</b> проверенное сообщение', 2: '<b>2</b> проверенных сообщения', 5: '<b>5</b> проверенных сообщений',
+      11: '<b>11</b> проверенных сообщений', 21: '<b>21</b> проверенное сообщение', 22: '<b>22</b> проверенных сообщения'
+    })
+    checkAgreement((n) => ru.botStats.spammers(n), {
+      1: '<b>1</b> спамер заблокирован', 2: '<b>2</b> спамера заблокированы', 5: '<b>5</b> спамеров заблокировано',
+      11: '<b>11</b> спамеров заблокировано', 21: '<b>21</b> спамер заблокирован', 22: '<b>22</b> спамера заблокированы'
+    })
+    checkAgreement((n) => ru.botStats.memory(n), {
+      1: '1 сигнатура', 2: '2 сигнатуры', 5: '5 сигнатур', 11: '11 сигнатур', 21: '21 сигнатура', 22: '22 сигнатуры'
+    })
+  })
+
+  it('liveProof: chats, spammers and days each agree', () => {
+    checkAgreement((n) => ru.start.liveProof(n, n, n), {
+      1: '<b>1</b> чат: <b>1</b> спамер заблокирован за 1 день.',
+      2: '<b>2</b> чата: <b>2</b> спамера заблокированы за 2 дня.',
+      5: '<b>5</b> чатов: <b>5</b> спамеров заблокировано за 5 дней.',
+      11: '<b>11</b> чатов: <b>11</b> спамеров заблокировано за 11 дней.',
+      21: '<b>21</b> чат: <b>21</b> спамер заблокирован за 21 день.',
+      22: '<b>22</b> чата: <b>22</b> спамера заблокированы за 22 дня.'
+    })
+  })
+
+  it('surgeAlert: members and suspects agree', () => {
+    checkAgreement((n) => ru.welcome.surgeAlert(n, n), {
+      1: '1 участник, из них 1 подозрительный', 2: '2 участника, из них 2 подозрительных',
+      5: '5 участников, из них 5 подозрительных', 11: '11 участников, из них 11 подозрительных',
+      21: '21 участник, из них 21 подозрительный', 22: '22 участника, из них 22 подозрительных'
+    })
+  })
+})
+
+describe('by number agreement', () => {
+  const by = LOCALES['by']!
+
+  it('missingRights: the verb agrees with the account count', () => {
+    checkAgreement((n) => by.notification.missingRights({ deleteBlocked: false, senderBlocked: true, accounts: n }), {
+      1: 'застаўся 1 акаўнт.', 2: 'засталося 2 акаўнты.', 5: 'засталося 5 акаўнтаў.',
+      11: 'засталося 11 акаўнтаў.', 21: 'застаўся 21 акаўнт.', 22: 'засталося 22 акаўнты.'
+    })
+  })
+
+  it('cohort title: verb and adjective follow the count; the hint names no number', () => {
+    checkAgreement((n) => by.cohort.title(n, 'X'), {
+      1: 'прыйшоў яшчэ 1 падобны навічок', 2: 'прыйшлі яшчэ 2 падобныя навічкі', 5: 'прыйшло яшчэ 5 падобных навічкоў',
+      11: 'прыйшло яшчэ 11 падобных навічкоў', 21: 'прыйшоў яшчэ 21 падобны навічок', 22: 'прыйшлі яшчэ 22 падобныя навічкі'
+    })
+    expect(by.cohort.hint).not.toMatch(/прыйшлі|пісалі/)
+    checkAgreement((n) => by.cohort.banned(1, n, 'A'), {
+      1: 'з 1 навічка,', 2: 'з 2 навічкоў,', 5: 'з 5 навічкоў,',
+      11: 'з 11 навічкоў,', 21: 'з 21 навічка,', 22: 'з 22 навічкоў,'
+    })
+  })
+
+  it('confirmAll: the relative clause agrees with one versus many', () => {
+    checkAgreement((n) => by.arrivals.confirmAll(n), {
+      1: 'навічка, які яшчэ нічога не напісаў?', 2: 'навічкоў, якія яшчэ нічога не напісалі?',
+      5: 'навічкоў, якія', 11: 'навічкоў, якія', 21: 'навічка, які', 22: 'навічкоў, якія'
+    })
+  })
+
+  it('botStats window, checked, spammers and memory', () => {
+    checkAgreement((n) => by.botStats.window(n), {
+      1: 'За апошні 1 дзень:', 2: 'За апошнія 2 дні:', 5: 'За апошнія 5 дзён:',
+      11: 'За апошнія 11 дзён:', 21: 'За апошні 21 дзень:', 22: 'За апошнія 22 дні:'
+    })
+    checkAgreement((n) => by.botStats.checked(n), {
+      1: '<b>1</b> праверанае паведамленне', 2: '<b>2</b> правераныя паведамленні', 5: '<b>5</b> правераных паведамленняў',
+      11: '<b>11</b> правераных паведамленняў', 21: '<b>21</b> праверанае паведамленне', 22: '<b>22</b> правераныя паведамленні'
+    })
+    checkAgreement((n) => by.botStats.spammers(n), {
+      1: '<b>1</b> спамер заблакаваны', 2: '<b>2</b> спамеры заблакаваны', 5: '<b>5</b> спамераў заблакавана',
+      11: '<b>11</b> спамераў заблакавана', 21: '<b>21</b> спамер заблакаваны', 22: '<b>22</b> спамеры заблакаваны'
+    })
+    checkAgreement((n) => by.botStats.memory(n), {
+      1: '1 сігнатура', 2: '2 сігнатуры', 5: '5 сігнатур', 11: '11 сігнатур', 21: '21 сігнатура', 22: '22 сігнатуры'
+    })
+  })
+
+  it('liveProof: chats, spammers and days each agree', () => {
+    checkAgreement((n) => by.start.liveProof(n, n, n), {
+      1: '<b>1</b> чат: <b>1</b> спамер заблакаваны за 1 дзень.',
+      2: '<b>2</b> чаты: <b>2</b> спамеры заблакаваны за 2 дні.',
+      5: '<b>5</b> чатаў: <b>5</b> спамераў заблакавана за 5 дзён.',
+      11: '<b>11</b> чатаў: <b>11</b> спамераў заблакавана за 11 дзён.',
+      21: '<b>21</b> чат: <b>21</b> спамер заблакаваны за 21 дзень.',
+      22: '<b>22</b> чаты: <b>22</b> спамеры заблакаваны за 22 дні.'
+    })
+  })
+
+  it('surgeAlert: members and suspects agree', () => {
+    checkAgreement((n) => by.welcome.surgeAlert(n, n), {
+      1: '1 удзельнік, з іх 1 падазроны', 2: '2 удзельнікі, з іх 2 падазроныя',
+      5: '5 удзельнікаў, з іх 5 падазроных', 11: '11 удзельнікаў, з іх 11 падазроных',
+      21: '21 удзельнік, з іх 21 падазроны', 22: '22 удзельнікі, з іх 22 падазроныя'
+    })
+  })
+})
+
+describe('en number agreement', () => {
+  const en = LOCALES['en']!
+  const agrees = (render: (n: number) => string, singular: string, plural: string): void => {
+    expect(render(1), 'n=1').toContain(singular)
+    for (const n of [2, 5, 11, 21, 22]) expect(render(n), `n=${n}`).toContain(plural.replaceAll('#', String(n)))
+  }
+
+  it('every counted phrase takes the singular at 1 and the plural otherwise', () => {
+    agrees((n) => en.notification.missingRights({ deleteBlocked: false, senderBlocked: true, accounts: n }), ' 1 account stayed', ' # accounts stayed')
+    agrees((n) => en.cohort.title(n, 'X'), '1 similar newcomer joined', '# similar newcomers joined')
+    agrees((n) => en.cohort.banned(1, n, 'A'), 'of 1 newcomer who', 'of # newcomers who')
+    agrees((n) => en.arrivals.confirmAll(n), '1</b> newcomer who has not', '#</b> newcomers who have not')
+    agrees((n) => en.botStats.window(n), 'Over the last day:', 'Over the last # days:')
+    agrees((n) => en.botStats.checked(n), '1</b> message checked', '#</b> messages checked')
+    agrees((n) => en.botStats.spammers(n), '1</b> spammer blocked', '#</b> spammers blocked')
+    agrees((n) => en.botStats.memory(n), '1 spam signature in', '# spam signatures in')
+    agrees((n) => en.botStats.chatHeader('T', n), 'over 1 day', 'over # days')
+    agrees((n) => en.start.liveProof(n, n, n), 'blocked in 1 day.', 'blocked in # days.')
+    agrees((n) => en.welcome.surgeAlert(n, n), '1 member, 1 of them', '# members, # of them')
+    expect(en.cohort.hint).not.toMatch(/have not written/)
+  })
+})
+
+/**
+ * The "just now" + "ago" seam, mirrored from uk into every other locale: a
+ * span under a minute is a point in time and must never get "ago" appended.
+ */
+describe('elapsed time under a minute in every locale', () => {
+  const cases: Array<[string, string, RegExp]> = [
+    ['ru', 'только что', /только что назад/],
+    ['by', 'толькі што', /толькі што таму/],
+    ['en', 'just now', /now ago/],
+    ['tr', 'az önce', /şimdi önce/]
+  ]
+  it.each(cases)('%s reads "%s" and never the seam', (code, reads, seam) => {
+    const locale = LOCALES[code]!
+    const now = locale.profile.units.now
+    for (const text of [
+      locale.ownRestrictions.ago(now),
+      locale.botStats.chatLastSpam(now),
+      locale.trust.grantedBy('A', now, 'toggle'),
+      locale.why.externalBanEvidence(1, now),
+      locale.profile.externalBan(now, 1),
+      locale.profile.justJoined(now)
+    ]) expect(text).not.toMatch(seam)
+    expect(locale.ownRestrictions.ago(now)).toBe(reads)
+    expect(locale.ownRestrictions.ago('5m')).not.toBe(reads)
+  })
+
+  it('an unknown account age reads as a phrase in every locale', () => {
+    const age = (code: string): string => LOCALES[code]!.profile.accountAge(LOCALES[code]!.profile.unknownAge)
+    expect(age('ru')).toBe('аккаунт неизвестного возраста')
+    expect(age('by')).toBe('акаўнт невядомага ўзросту')
+    expect(age('en')).toBe('account of unknown age')
+    expect(age('tr')).toBe('hesap yaşı bilinmiyor')
+  })
+
+  it('vote receipts never claim missing rights the code did not learn', () => {
+    for (const code of ['ru', 'by', 'en', 'tr']) {
+      for (const text of Object.values(LOCALES[code]!.vote.enforcement)) {
+        expect(text, code).not.toMatch(/прав|rights|yetki/)
+      }
+    }
+  })
+})

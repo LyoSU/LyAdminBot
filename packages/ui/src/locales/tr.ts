@@ -4,6 +4,14 @@ import { decimal1, groupDigits } from '../format.js'
 /** Turkish number typography: thousands by point, decimals by comma. */
 const n = (v: number): string => groupDigits(v, '.')
 
+/**
+ * "şimdi" is already a point in time: "şimdi önce" is not Turkish. Every
+ * "<span> önce" in this file goes through here, so a span under a minute
+ * reads "az önce" wherever an elapsed time is printed.
+ */
+const NOW = 'şimdi'
+const ago = (span: string): string => (span === NOW ? 'az önce' : `${span} önce`)
+
 export const tr: Locale = {
   languageName: 'Türkçe',
 
@@ -64,7 +72,7 @@ export const tr: Locale = {
 
   ownRestrictions: {
     title: '🧾 <b>Senin hakkında aldığım kararlar</b>',
-    ago: (span) => `${span} önce`,
+    ago,
     endsIn: (span) => `${span} sonra biter`,
     ended: 'süresi doldu',
     permanent: 'süresiz',
@@ -131,7 +139,7 @@ export const tr: Locale = {
   actions: {
     captcha: '👋 kontrol ediliyor',
     delete: '🧹 spam temizlendi',
-    kick: '🚪 sohbetten çıkarıldı',
+    kick: '🚪 sohbetten atıldı',
     mute: '🔇 susturuldu',
     ban: '🔨 yasaklandı'
   },
@@ -163,12 +171,12 @@ export const tr: Locale = {
     job_scam: 'iş dolandırıcılığına benziyor',
     crypto_scam: 'kripto dolandırıcılığı',
     gambling_promo: 'kumarhane/bahis reklamı',
-    adult_promo: 'yetişkin içerik reklamı',
+    adult_promo: '18+ içerik reklamı',
     ad_network: 'reklam yerleştirme teklifi',
     flirt_bait: 'flört tuzağı',
     phishing: 'oltalama bağlantısı',
     channel_promo: 'istenmeyen kanal reklamı',
-    guest_bot_promo: 'misafir bot üzerinden reklam',
+    guest_bot_promo: 'bahsedilerek çağrılan bir bot üzerinden reklam',
     flood: 'flood / toplu gönderim',
     prompt_injection: 'moderasyonu ele geçirme girişimi',
     other_spam: 'spam',
@@ -178,7 +186,7 @@ export const tr: Locale = {
     custom_deny: 'bir sohbet kuralıyla engellendi',
     scam_flag_new: 'Telegram hesabı dolandırıcı olarak işaretledi',
     external_ban_new: 'hesap spam veritabanlarında',
-    shared_profile_photo: 'bu fotoğraf başka hesaplarda da var — lütfen doğrulayın',
+    shared_profile_photo: 'aynı profil fotoğrafı başka birkaç hesapta da var',
     external_high_factor_new: 'hesap spam veritabanlarında',
     edit_injected_promo: 'mesaj, reklam eklemek için düzenlendi',
     edit_injected_invisibles: 'düzenlemeyle görünmez karakter eklendi',
@@ -187,8 +195,8 @@ export const tr: Locale = {
     nsfw_promo_profile: 'profilin kendisi bir reklam (müstehcen içerik + bağlı kanal)',
     hidden_url_new: 'yeni gelen birinden aldatıcı bağlantı',
     low_information: 'yeterli bilgi yok, izleniyor',
-    low_information_profile: 'yargılamak için az bilgi, şüpheli profil — doğrulama istendi',
-    low_information_profile_unreachable: 'profil, iletemediğimiz bir doğrulamayı hak etti — izleniyor',
+    low_information_profile: 'metin az, ama profil şüpheli',
+    low_information_profile_unreachable: 'profil şüpheli, ama doğrulama gönderilemedi — izleniyor',
     reported_unreachable: 'şikâyet edilen profile doğrulama iletilemedi — bir saat duraklatıldı',
     profile_farm_unreachable: 'profil fotoğrafının kendisi reklam ve doğrulama iletilemedi — bir saat duraklatıldı',
     content_unconfirmed: 'şüpheli profil, mesaj içeriği doğrulanmadı',
@@ -196,10 +204,10 @@ export const tr: Locale = {
     trusted_report: 'güvenilir bir üye bunu spam olarak bildirdi',
     community_vote: 'topluluk oyladı: spam',
     forward_blacklist: 'bilinen bir spam kaynağından iletildi',
-    record_ban_elsewhere: 'hesap kaydı nedeniyle başka bir sohbetten zaten çıkarıldı (spam veritabanları, Telegram işareti) — burada ilk mesajından önce çıkarıldı',
-    content_ban_elsewhere: 'hesap başka bir sohbette spam mesajı nedeniyle yasaklandı — burada ilk mesajından önce çıkarıldı',
+    record_ban_elsewhere: 'hesap spam veritabanları veya Telegram işareti nedeniyle başka bir sohbette zaten yasaklandı — burada ilk mesajından önce yasaklandı',
+    content_ban_elsewhere: 'hesap başka bir sohbette spam nedeniyle yasaklandı — burada ilk mesajından önce yasaklandı',
     listed_arrival: 'girişte: hesap spam veritabanlarında veya Telegram tarafından işaretli',
-    arrival_look: 'sessiz yeni üyenin profili artık bir spam ağına benziyor — onay istiyoruz',
+    arrival_look: 'sessiz yeni üyenin profili bir spam ağına benziyor',
     arrived_with_spammer: 'bir spamcıyla birlikte katıldı ve ona benziyor — yönetici yasakladı',
     admin_arrival_ban: 'yönetici bu yeni üyeyi yeni üyeler listesinden yasakladı'
   },
@@ -216,10 +224,10 @@ export const tr: Locale = {
     noticedTitle: 'Fark ettiklerim:',
     profileReuseEvidence: (accounts) => `aynı profil fotoğrafı ${accounts} hesapta daha`,
     profileMediaEvidence: (score) => `müstehcen profil fotoğrafı · puan ${score}`,
-    externalBanEvidence: (sources, ago) => [
+    externalBanEvidence: (sources, when) => [
       'spam veritabanlarında',
       ...(sources > 1 ? [`${sources} kaynak`] : []),
-      ...(ago ? [`${ago} önce`] : [])
+      ...(when ? [ago(when)] : [])
     ].join(' · '),
     signalLabels: {
       external_ban: 'hesap spam veritabanlarında',
@@ -263,23 +271,23 @@ export const tr: Locale = {
       mixed_script_word: 'bir kelimenin içinde karışık alfabeler',
       greek_homoglyph_word: 'bir kelimede benzerlerinin yerine geçen Yunan harfleri',
       foreign_script: 'bu sohbette kullanılmayan bir yazı sistemi',
-      custom_emoji_heavy: 'birden fazla özel emoji',
+      custom_emoji_heavy: 'çok sayıda premium emoji',
       paid_media: 'ücretli medya içeriği',
       giveaway_media: 'bir çekiliş',
       story_share: 'paylaşılan bir hikaye',
       unknown_media: 'tanınmayan bir ek',
-      guest_bot_delivery: 'bir misafir bot üzerinden teslim edildi',
+      guest_bot_delivery: 'bahsedilerek çağrılan bir bot üzerinden gönderildi',
       edited_message: 'mesaj düzenlendi',
       edit_injected_invisibles: 'düzenlemeyle görünmez karakter eklendi',
       edit_injected_link: 'düzenlemeyle bağlantı eklendi',
-      moderation_flagged: 'metin veya fotoğrafta NSFW',
+      moderation_flagged: 'metin veya fotoğrafta 18+ içerik',
       sole_avatar_replaced: 'eski bir hesapta yeni konulmuş tek profil fotoğrafı',
       avatar_shared_with_account: 'aynı profil fotoğrafı başka bir hesapta',
       avatar_shared_with_accounts: 'aynı profil fotoğrafı birkaç hesapta',
-      nsfw_avatar: 'NSFW profil fotoğrafı',
+      nsfw_avatar: '18+ profil fotoğrafı',
       suggestive_profile_media: 'müstehcene yakın profil içeriği',
-      nsfw_stories: 'NSFW hikaye',
-      nsfw_linked_channel: 'kanal fotoğrafında NSFW',
+      nsfw_stories: '18+ hikaye',
+      nsfw_linked_channel: 'profildeki kanalın fotoğrafında 18+ içerik',
       promo_in_name: 'hesap adında reklam',
       invisible_in_name: 'adda görünmez karakterler',
       signature_candidate_match: 'bilinen spama benziyor',
@@ -303,7 +311,7 @@ export const tr: Locale = {
       session: 'mesaj serisi analizi',
       burst: 'tek gönderenin dizisinin analizi',
       score: 'sinyal puanı',
-      abstain: 'çekimser kalındı',
+      abstain: 'karar yok',
       error: 'hata'
     },
     expired: 'Bu kararın süresi doldu — ayrıntı kalmadı.'
@@ -321,17 +329,17 @@ export const tr: Locale = {
       ].join(' · '),
     reputation: (status) => `itibar: ${status}`,
     premium: 'Premium',
-    externalBan: (ago, offenses) => [
+    externalBan: (when, offenses) => [
       'spam veritabanlarında',
-      ...(ago ? [`${ago} önce yasaklandı`] : []),
+      ...(when ? [`${ago(when)} yasaklandı`] : []),
       ...(offenses > 1 ? [`${offenses} ihlal`] : [])
     ].join(' · '),
-    justJoined: (ago) => `sohbete katılalı yalnızca ${ago}`,
+    justJoined: (span) => (span === NOW ? 'sohbete az önce katıldı' : `sohbete katılalı yalnızca ${span}`),
     promoInBio: 'biyografide reklam',
     personalChannel: 'bağlı kanal',
-    unknownAge: 'yaş bilinmiyor',
+    unknownAge: 'yaşı bilinmiyor',
     neverSeen: 'ilk kez',
-    units: { now: 'şimdi', m: 'dk', h: 'sa', d: 'g', mo: 'ay', y: 'yıl' },
+    units: { now: NOW, m: 'dk', h: 'sa', d: 'g', mo: 'ay', y: 'yıl' },
     checkNeedReply: 'Bir kullanıcının mesajına /check ile yanıt ver.',
     notFound: 'Profil alınamadı.'
   },
@@ -356,10 +364,10 @@ export const tr: Locale = {
     hamButton: (count) => `👌 Sorun yok (${count})`,
     counted: 'Oy sayıldı.',
     enforcement: {
-      done: 'Kaldırıldı.',
-      deletedOnly: 'Kaldırıldı, ama yazarı susturamadım — yetki yok.',
-      mutedOnly: 'Yazarı susturdum, ama mesajı kaldıramadım.',
-      failed: '⚠️ Ne kaldırabildim ne kısıtlayabildim — yetki yok.'
+      done: 'Mesaj silindi, yazar kısıtlandı.',
+      deletedOnly: 'Mesaj silindi, ama yazar kısıtlanamadı.',
+      mutedOnly: 'Yazar kısıtlandı, ama mesaj silinemedi.',
+      failed: '⚠️ Ne mesaj silinebildi ne de yazar kısıtlanabildi.'
     },
     resolvedSpam: ({ who, enforcement, whyLink }) =>
       (who ? `🗑 Topluluk ${who} kişisinin mesajına spam dedi.` : '🗑 Topluluk spam diyor.')
@@ -410,7 +418,7 @@ export const tr: Locale = {
     chatHeader: (title, days) => `🛡 <b>${title}</b> · son ${days} gün`,
     chatLine: (checked, spammers, deletes) =>
       `📬 ${n(checked)} kontrol · 🚫 ${n(spammers)} spam hesabı · 🧹 ${n(deletes)} silindi`,
-    chatLastSpam: (ago) => `Son spam: ${ago} önce`,
+    chatLastSpam: (span) => `Son spam: ${ago(span)}`,
     chatClean: '✨ Bu süre boyunca tek bir spam yok.',
     unavailable: '📊 Sayılara şu an ulaşamıyorum, biraz sonra tekrar dene.',
     button: '📊 Rakamlarım'
@@ -436,7 +444,7 @@ export const tr: Locale = {
   },
 
   kick: {
-    success: (name) => `👋 ${name} sohbetten çıkarıldı.`,
+    success: (name) => `👋 ${name} sohbetten atıldı.`,
     needReply: 'Atmak istediğin kişinin mesajına /kick ile yanıt ver.'
   },
 
@@ -451,8 +459,8 @@ export const tr: Locale = {
     untrustButton: '🔓 Güveni kaldır',
     added: 'Bu sohbetin güvenilir listesine eklendi.',
     removed: 'Güven kaldırıldı.',
-    grantedBy: (who, ago, via) =>
-      `✅ Güvenen: ${who}, ${ago} önce` +
+    grantedBy: (who, span, via) =>
+      `✅ Güvenen: ${who}, ${ago(span)}` +
       (via === 'override' ? ' · bot kararını geri aldı' : via === 'vote' ? ' · yönetici oyuyla' : ''),
     grantUnknown: '✅ Güvenilir · kimin ne zaman verdiği kayıtlı değil'
   },
@@ -471,7 +479,7 @@ export const tr: Locale = {
     duplicate: 'ℹ️ Zaten eklendi.',
     tooLong: '⚠️ Metin çok uzun (en fazla 1000 karakter).',
     saveFailed: '⚠️ Kaydedilemedi.',
-    surgeAlert: (count, riskCount) => `⚠️ Hızlı katılım · ${count} üye · ${riskCount} risk işareti`,
+    surgeAlert: (count, riskCount) => `⚠️ Yeni üye akını: ${count} üye, ${riskCount} tanesi şüpheli`,
     defaultGreeting: (name) => `👋 Hoş geldin, ${name}!`,
     editor: {
       title: (state, nTexts, nGifs) =>

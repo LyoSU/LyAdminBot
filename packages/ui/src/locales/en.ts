@@ -5,6 +5,14 @@ import { decimal1, groupDigits } from '../format.js'
 const n = (v: number): string => groupDigits(v, ',')
 const s = (v: number): string => (v === 1 ? '' : 's')
 
+/**
+ * "now" is already a point in time: "now ago" is not English. Every
+ * "<span> ago" in this file goes through here, so a span under a minute reads
+ * "just now" wherever an elapsed time is printed.
+ */
+const NOW = 'now'
+const ago = (span: string): string => (span === NOW ? 'just now' : `${span} ago`)
+
 export const en: Locale = {
   languageName: 'English',
 
@@ -18,7 +26,7 @@ export const en: Locale = {
       'Add me to a group → grant admin rights → done.'
     ].join('\n'),
     liveProof: (chats, spammers, days) =>
-      `📊 Right now I guard <b>${n(chats)}</b> chat${s(chats)}: <b>${n(spammers)}</b> spammer${s(spammers)} blocked in ${days} days.`,
+      `📊 Right now I guard <b>${n(chats)}</b> chat${s(chats)}: <b>${n(spammers)}</b> spammer${s(spammers)} blocked in ${days} day${s(days)}.`,
     groupHint: '🛡 I catch spam and ban scammers.\n<code>/settings</code> for admins · <code>/help</code> commands',
     addToGroupButton: '➕ Add to group',
     helpButton: '❓ Commands',
@@ -41,17 +49,17 @@ export const en: Locale = {
     footer: '⚠️ — joined alongside a spammer and looks like it. "🚫 N" bans number N.',
     banButton: (index) => `🚫 ${index}`,
     banAllButton: (count) => `🚫 Ban everyone still silent (${count})`,
-    confirmAll: (count) => `Ban <b>${count}</b> ${count === 1 ? 'newcomer' : 'newcomers'} who have not written anything yet?`,
+    confirmAll: (count) => `Ban <b>${count}</b> ${count === 1 ? 'newcomer who has' : 'newcomers who have'} not written anything yet?`,
     confirmYes: '🚫 Yes, ban',
     cancel: 'Cancel',
     banned: (count) => `Banned: ${count}`
   },
   cohort: {
     title: (count, spammer) => `👥 <b>${count} similar ${count === 1 ? 'newcomer' : 'newcomers'} joined alongside the spammer ${spammer}</b>`,
-    hint: 'Same kind of profile, joined around the same time, have not written anything yet. The bot has not touched them — an admin decides.',
+    hint: 'Similar profile, joined around the same time, no messages yet. The bot has not touched anyone — an admin decides.',
     banButton: (count) => `🚫 Ban ${count}`,
     keepButton: 'Keep',
-    banned: (done, total, admin) => `🚫 Banned ${done} of ${total} newcomers who joined alongside the spammer · ${admin}`,
+    banned: (done, total, admin) => `🚫 Banned ${done} of ${total} newcomer${s(total)} who joined alongside the spammer · ${admin}`,
     kept: (admin) => `✅ Newcomers kept · ${admin}`,
     expired: 'This card is out of date.'
   },
@@ -65,7 +73,7 @@ export const en: Locale = {
 
   ownRestrictions: {
     title: '🧾 <b>What I did about you</b>',
-    ago: (span) => `${span} ago`,
+    ago,
     endsIn: (span) => `ends in ${span}`,
     ended: 'already over',
     permanent: 'no end date',
@@ -132,7 +140,7 @@ export const en: Locale = {
   actions: {
     captcha: '👋 checking',
     delete: '🧹 spam removed',
-    kick: '🚪 removed from chat',
+    kick: '🚪 kicked from chat',
     mute: '🔇 muted',
     ban: '🔨 banned'
   },
@@ -164,12 +172,12 @@ export const en: Locale = {
     job_scam: 'looks like a job scam',
     crypto_scam: 'crypto scam',
     gambling_promo: 'casino/betting promo',
-    adult_promo: 'adult promo',
+    adult_promo: '18+ promo',
     ad_network: 'ad placement offer',
     flirt_bait: 'flirt bait',
     phishing: 'phishing link',
     channel_promo: 'unsolicited channel promo',
-    guest_bot_promo: 'guest-bot promo delivery',
+    guest_bot_promo: 'promo through a bot called in by mention',
     flood: 'flood / mass posting',
     prompt_injection: 'attempted moderation hijack',
     other_spam: 'spam',
@@ -179,7 +187,7 @@ export const en: Locale = {
     custom_deny: 'blocked by a chat rule',
     scam_flag_new: 'Telegram flagged the account as scam',
     external_ban_new: 'account is in spammer databases',
-    shared_profile_photo: 'this photo is on several other accounts — please confirm',
+    shared_profile_photo: 'the same profile photo is on several other accounts',
     external_high_factor_new: 'account is in spammer databases',
     edit_injected_promo: 'message was edited to insert promo',
     edit_injected_invisibles: 'invisible characters inserted by an edit',
@@ -188,19 +196,19 @@ export const en: Locale = {
     nsfw_promo_profile: 'the profile itself is an advert (explicit media + linked promo)',
     hidden_url_new: 'deceptive link from a newcomer',
     low_information: 'not enough information, observing',
-    low_information_profile: 'too little to judge, suspicious profile — asked to confirm',
-    low_information_profile_unreachable: 'profile deserved a question we could not deliver — observing',
-    reported_unreachable: 'reported profile we could not put a check to — paused for an hour',
-    profile_farm_unreachable: 'profile picture is the advert and no check could reach them — paused for an hour',
+    low_information_profile: 'little text, but a suspicious profile',
+    low_information_profile_unreachable: 'suspicious profile, but the check could not be sent — observing',
+    reported_unreachable: 'the account was reported and the check could not be sent — paused for an hour',
+    profile_farm_unreachable: 'the profile picture is an advert and the check could not be sent — paused for an hour',
     content_unconfirmed: 'suspicious profile, message content unconfirmed',
     admin_report: 'an admin reported this as spam',
     trusted_report: 'a trusted member reported this as spam',
     community_vote: 'the community voted: spam',
     forward_blacklist: 'forwarded from a known spam source',
-    record_ban_elsewhere: 'account already removed from another chat on its record (spam databases, Telegram flag) — removed here before it posted',
-    content_ban_elsewhere: 'account banned in another chat for a spam message — removed here before it posted',
+    record_ban_elsewhere: 'account already banned in another chat over spam databases or a Telegram flag — banned here before its first message',
+    content_ban_elsewhere: 'account banned in another chat for spam — banned here before its first message',
     listed_arrival: 'on arrival: account is in spammer databases or flagged by Telegram',
-    arrival_look: 'a silent newcomer whose profile now looks like a spam network — asking to confirm',
+    arrival_look: 'a silent newcomer whose profile looks like a spam network',
     arrived_with_spammer: 'joined alongside a spammer and looks like it — banned by an admin',
     admin_arrival_ban: 'an admin banned this newcomer from the newcomers list'
   },
@@ -218,10 +226,10 @@ export const en: Locale = {
     profileReuseEvidence: (accounts) =>
       `same avatar on ${accounts} other ${accounts === 1 ? 'account' : 'accounts'}`,
     profileMediaEvidence: (score) => `explicit profile photo · score ${score}`,
-    externalBanEvidence: (sources, ago) => [
+    externalBanEvidence: (sources, when) => [
       'in spam databases',
       ...(sources > 1 ? [`${sources} sources`] : []),
-      ...(ago ? [`${ago} ago`] : [])
+      ...(when ? [ago(when)] : [])
     ].join(' · '),
     signalLabels: {
       external_ban: 'the account is in spam databases',
@@ -265,23 +273,23 @@ export const en: Locale = {
       mixed_script_word: 'mixed alphabets inside a word',
       greek_homoglyph_word: 'Greek letters standing in for look-alikes inside a word',
       foreign_script: 'written in a script this chat does not use',
-      custom_emoji_heavy: 'several custom emoji',
+      custom_emoji_heavy: 'many premium emoji',
       paid_media: 'paid media content',
       giveaway_media: 'a giveaway',
       story_share: 'a shared story',
       unknown_media: 'an unrecognized attachment',
-      guest_bot_delivery: 'delivered through a guest bot',
+      guest_bot_delivery: 'sent through a bot called in by mention',
       edited_message: 'the message was edited',
       edit_injected_invisibles: 'invisible characters inserted by an edit',
       edit_injected_link: 'a link was added by an edit',
-      moderation_flagged: 'NSFW text or photo',
+      moderation_flagged: '18+ text or photo',
       sole_avatar_replaced: 'a single, recently set profile photo on an old account',
       avatar_shared_with_account: 'same profile photo on one other account',
       avatar_shared_with_accounts: 'same profile photo on several accounts',
-      nsfw_avatar: 'NSFW profile photo',
-      suggestive_profile_media: 'suggestive profile media',
-      nsfw_stories: 'NSFW story',
-      nsfw_linked_channel: 'NSFW on the linked channel picture',
+      nsfw_avatar: '18+ profile photo',
+      suggestive_profile_media: 'suggestive photo or video in the profile',
+      nsfw_stories: '18+ story',
+      nsfw_linked_channel: '18+ on the linked channel picture',
       promo_in_name: 'promo in the account name',
       invisible_in_name: 'invisible characters in the name',
       signature_candidate_match: 'resembles known spam',
@@ -305,7 +313,7 @@ export const en: Locale = {
       session: 'message series analysis',
       burst: 'sender run analysis',
       score: 'signal score',
-      abstain: 'abstained',
+      abstain: 'no decision',
       error: 'error'
     },
     expired: 'This decision has expired — no details left.'
@@ -323,17 +331,17 @@ export const en: Locale = {
       ].join(' · '),
     reputation: (status) => `reputation: ${status}`,
     premium: 'Premium',
-    externalBan: (ago, offenses) => [
+    externalBan: (when, offenses) => [
       'in spam databases',
-      ...(ago ? [`banned ${ago} ago`] : []),
+      ...(when ? [`banned ${ago(when)}`] : []),
       ...(offenses > 1 ? [`${offenses} offences`] : [])
     ].join(' · '),
-    justJoined: (ago) => `in the chat only ${ago}`,
+    justJoined: (span) => (span === NOW ? 'joined the chat just now' : `in the chat only ${span}`),
     promoInBio: 'promo in bio',
     personalChannel: 'linked channel',
-    unknownAge: 'age unknown',
+    unknownAge: 'of unknown age',
     neverSeen: 'first time',
-    units: { now: 'now', m: 'm', h: 'h', d: 'd', mo: 'mo', y: 'y' },
+    units: { now: NOW, m: 'm', h: 'h', d: 'd', mo: 'mo', y: 'y' },
     checkNeedReply: 'Reply to a user’s message with /check.',
     notFound: 'Could not fetch the profile.'
   },
@@ -358,10 +366,10 @@ export const en: Locale = {
     hamButton: (count) => `👌 Fine (${count})`,
     counted: 'Vote counted.',
     enforcement: {
-      done: 'Removed.',
-      deletedOnly: 'Removed, but could not mute the author — missing rights.',
-      mutedOnly: 'Muted the author, but could not remove the message.',
-      failed: '⚠️ Could neither remove nor restrict — missing rights.'
+      done: 'Deleted, author restricted.',
+      deletedOnly: 'Deleted, but the author could not be restricted.',
+      mutedOnly: 'Author restricted, but the message could not be deleted.',
+      failed: '⚠️ Could neither delete the message nor restrict the author.'
     },
     resolvedSpam: ({ who, enforcement, whyLink }) =>
       (who ? `🗑 The community says the message from ${who} is spam.` : '🗑 The community says spam.')
@@ -399,7 +407,7 @@ export const en: Locale = {
 
   botStats: {
     title: '🛡 <b>What I have done so far</b>',
-    window: (days) => `Over the last ${days} days:`,
+    window: (days) => (days === 1 ? 'Over the last day:' : `Over the last ${days} days:`),
     checked: (count) => `📬 <b>${n(count)}</b> message${s(count)} checked`,
     spammers: (count) => `🚫 <b>${n(count)}</b> spammer${s(count)} blocked`,
     chats: (count) => `💬 <b>${n(count)}</b> chat${s(count)} under guard`,
@@ -409,10 +417,10 @@ export const en: Locale = {
     reasonLine: (name, count) => `• ${name} — ${n(count)}`,
     memory: (signatures) => `🧠 ${n(signatures)} spam signature${s(signatures)} in memory`,
     corrections: (percent) => `✅ Admins overturned ${decimal1(percent, '.')}% of my calls`,
-    chatHeader: (title, days) => `🛡 <b>${title}</b> over ${days} days`,
+    chatHeader: (title, days) => `🛡 <b>${title}</b> over ${days} day${s(days)}`,
     chatLine: (checked, spammers, deletes) =>
       `📬 ${n(checked)} checked · 🚫 ${n(spammers)} spammer${s(spammers)} · 🧹 ${n(deletes)} removed`,
-    chatLastSpam: (ago) => `Last spam: ${ago} ago`,
+    chatLastSpam: (span) => `Last spam: ${ago(span)}`,
     chatClean: '✨ Not a single spam message in that time.',
     unavailable: '📊 The numbers are out of reach right now, try again a bit later.',
     button: '📊 My numbers'
@@ -438,7 +446,7 @@ export const en: Locale = {
   },
 
   kick: {
-    success: (name) => `👋 ${name} was removed from the chat.`,
+    success: (name) => `👋 ${name} was kicked from the chat.`,
     needReply: 'Reply to the message of whoever you want to kick with /kick.'
   },
 
@@ -453,17 +461,17 @@ export const en: Locale = {
     untrustButton: '🔓 Untrust',
     added: 'Added to this chat’s trusted users.',
     removed: 'Trust revoked.',
-    grantedBy: (who, ago, via) =>
-      `✅ Trusted by ${who}, ${ago} ago` +
+    grantedBy: (who, span, via) =>
+      `✅ Trusted by ${who}, ${ago(span)}` +
       (via === 'override' ? ' · reversed a bot decision' : via === 'vote' ? ' · by admin ballot' : ''),
     grantUnknown: '✅ Trusted · who granted it and when was not recorded'
   },
 
   welcome: {
-    enabled: '👋 Welcome greetings on.',
-    disabled: '👋 Welcome greetings off.',
-    textSet: '✅ Welcome text saved. %name% is substituted.',
-    gifSet: '✅ Welcome gif saved.',
+    enabled: '👋 Greetings on.',
+    disabled: '👋 Greetings off.',
+    textSet: '✅ Greeting text saved. %name% is substituted.',
+    gifSet: '✅ Greeting gif saved.',
     usage: [
       '/welcome — toggle on/off',
       '/welcome <text with %name%> — set the greeting',
@@ -473,7 +481,7 @@ export const en: Locale = {
     duplicate: 'ℹ️ Already added.',
     tooLong: '⚠️ Text too long (max 1000 characters).',
     saveFailed: '⚠️ Could not save.',
-    surgeAlert: (count, riskCount) => `⚠️ Rapid joins · ${count} members · ${riskCount} risk markers`,
+    surgeAlert: (count, riskCount) => `⚠️ Surge of newcomers: ${count} member${s(count)}, ${riskCount} of them suspicious`,
     defaultGreeting: (name) => `👋 Welcome, ${name}!`,
     editor: {
       title: (state, nTexts, nGifs) =>
@@ -562,7 +570,7 @@ export const en: Locale = {
     banan: 'Banan duration',
     language: 'Bot language in this chat',
     languageSaved: 'Chat language updated',
-    welcome: '👋 Welcome',
+    welcome: '👋 Greeting',
     extras: '#️⃣ Triggers',
     on: 'On',
     off: 'Off',
