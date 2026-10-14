@@ -72,6 +72,7 @@ import {
   isContentCarryAct
 } from './arrival-cohort.js'
 import { CaptchaGates, type CaptchaGate } from './captcha-gate.js'
+import { IGNORED_CAPTCHA_ESCALATION_MS, wouldEscalateAfterIgnoredCaptcha } from './recidivism-shadow.js'
 import { DuplicateTally } from './duplicate-tally.js'
 import { getUsersEach } from './users-each.js'
 import { parseCommand } from './command.js'
@@ -6202,6 +6203,23 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       pSpam: verdict.pSpam,
       at: Date.now()
     })
+  }
+
+  // Shadow only — see `wouldEscalateAfterIgnoredCaptcha`. After execution, so
+  // the read never delays the act, and before the row, so the row carries it.
+  if (userSender && result.applied && verdict.action === 'delete') {
+    const since = new Date(Date.now() - IGNORED_CAPTCHA_ESCALATION_MS)
+    const ignoredAt = await store.lastIgnoredCaptchaAt(chat.id, sender.id, since).catch(() => null)
+    if (wouldEscalateAfterIgnoredCaptcha(
+      { action: verdict.action, decidedBy: verdict.decidedBy, messageId: message.id }, ignoredAt
+    )) {
+      verdict.meta['shadowEscalate'] = 'captcha_ignored'
+      verdict.meta['ignoredAgoMin'] = Math.round((Date.now() - ignoredAt!.getTime()) / 60_000)
+      log.info('escalate_shadow', {
+        chatId: chat.id, userId: sender.id, reason: verdict.reasonCode, by: verdict.decidedBy,
+        ignoredAgoMin: verdict.meta['ignoredAgoMin']
+      })
+    }
   }
 
   // ── record + notify ─────────────────────────────────────────────────

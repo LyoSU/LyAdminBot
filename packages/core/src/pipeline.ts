@@ -42,6 +42,7 @@ import {
 import { burstBlob, burstSignals } from './signals/burst.js'
 import { shouldAbstain } from './text/abstain.js'
 import { truncate } from './text/normalize.js'
+import { evidenceGrounding } from './text/evidence-grounding.js'
 import { isForeignScript } from './text/script.js'
 import { isDistinctive } from './learning.js'
 import { nameShapeOf } from './name-shape.js'
@@ -117,6 +118,31 @@ const LLM_SOLE_WITNESS_MIN_EVIDENCE = 1.5
  * outlast one.
  */
 export const PROFILE_HOLD_SECONDS = 60 * 60
+/**
+ * Whether a classifier act on `other_spam` would be held to `observe` and a
+ * chat vote, and on which ground. Shadow only: the answer is stamped on the
+ * decision row as `shadowObserve` and nothing acts on it.
+ *
+ * Measured over the 14 days to 2026-10-14: `other_spam` acts were reversed by
+ * people 13 times in 432, the named categories next to never (`job_scam` 0 in
+ * 765). Of the 13, none carried the model at 0.99, 2 were replies, 3 came from
+ * somebody not new to the chat — while among the 419 that stood, 0 % were
+ * replies and 99 % were newcomers. The vague category on a reply, or on a
+ * member the chat already knows, is where the model guesses. Held there, 4 of
+ * the 13 would have been spared at a cost of 6 other acts; n is small, which
+ * is what the shadow is for.
+ */
+export const otherSpamObserveShadow = (
+  verdict: Pick<Verdict, 'decidedBy' | 'reasonCode' | 'action' | 'signals'>
+): 'reply' | 'not_newcomer' | null => {
+  if (verdict.reasonCode !== 'other_spam') return null
+  if (verdict.decidedBy !== 'llm' && verdict.decidedBy !== 'llm_cached' && verdict.decidedBy !== 'session') return null
+  if (!isEnforcementAction(verdict.action)) return null
+  const names = new Set(verdict.signals.map((s) => s.name))
+  if (names.has('is_reply')) return 'reply'
+  if (!names.has('new_in_chat')) return 'not_newcomer'
+  return null
+}
 /**
  * A picture that is itself the advert. Together with `avatar_recently_set` —
  * the account dressed for the campaign days ago — these are the farm's shape;
@@ -715,6 +741,19 @@ export const evaluateMessage = async (
    * question cannot separate anybody there); this cap then finds a verdict
    * that already stopped removing anybody and only records that it looked.
    */
+  /**
+   * Two shadow readings of a classifier verdict, stamped after every cap so
+   * they describe what was actually done: whether its quoted evidence is in the
+   * text it judged (`evidenceGrounding`), and whether the vague category would
+   * have been held (`otherSpamObserveShadow`). Neither changes the verdict.
+   */
+  const stampLlmShadow = (verdict: Verdict, judgedText: string): Verdict => {
+    meta['llmEvidence'] = evidenceGrounding(verdict.reasonEvidence, judgedText)
+    const held = otherSpamObserveShadow(verdict)
+    if (held !== null) meta['shadowObserve'] = held
+    return verdict
+  }
+
   const capSoleWitness = (verdict: Verdict, score: number): Verdict => {
     if (!isEnforcementAction(verdict.action)) return verdict
     if (score >= LLM_SOLE_WITNESS_SCORE) return verdict
@@ -1353,7 +1392,7 @@ export const evaluateMessage = async (
          */
         const { pSpam: sessionScore } = scoreSignals(signals)
         if (meta['scorePSpam'] === undefined) meta['scorePSpam'] = Number(sessionScore.toFixed(4))
-        return capVouchedWindow(capWindowFlood(capSoleWitness(capImitableAct(finalize(
+        return stampLlmShadow(capVouchedWindow(capWindowFlood(capSoleWitness(capImitableAct(finalize(
           {
             pSpam: llmVerdict.pSpam,
             decidedBy: 'session',
@@ -1362,7 +1401,7 @@ export const evaluateMessage = async (
             reasonEvidence: llmVerdict.evidence
           },
           signals
-        )), sessionScore)))
+        )), sessionScore))), window.combinedText)
       }
     }
     return null
@@ -1407,7 +1446,7 @@ export const evaluateMessage = async (
     meta['judgedCount'] = blob.count
     if (llmVerdict.model !== undefined) meta['llmModel'] = llmVerdict.model
     if (llmVerdict.promptId !== undefined) meta['llmPrompt'] = llmVerdict.promptId
-    const judged = capVouchedWindow(capWindowFlood(capImitableAct(finalize(
+    const judged = stampLlmShadow(capVouchedWindow(capWindowFlood(capImitableAct(finalize(
       {
         pSpam: llmVerdict.pSpam,
         decidedBy: 'burst',
@@ -1416,7 +1455,7 @@ export const evaluateMessage = async (
         reasonEvidence: llmVerdict.evidence
       },
       signals
-    ))))
+    )))), blob.text)
     if (removesSender(judged.action) && !mayRemoveSender(signals)) {
       return capUnearnedRemoval(judged)
     }
@@ -2041,7 +2080,7 @@ export const evaluateMessage = async (
        *
        * `capUnearnedRemoval` is the wrong instrument here — see the session path.
        */
-      return floorNetworkFact(capSoleWitness(capImitableAct(finalize(
+      return stampLlmShadow(floorNetworkFact(capSoleWitness(capImitableAct(finalize(
         {
           pSpam: llmVerdict.pSpam,
           decidedBy: llmVerdict.cached ? 'llm_cached' : 'llm',
@@ -2050,7 +2089,7 @@ export const evaluateMessage = async (
           reasonEvidence: llmVerdict.evidence
         },
         signals
-      )), scorePSpam), scorePSpam)
+      )), scorePSpam), scorePSpam), text)
     }
     llmNeededButUnavailable = true
   }

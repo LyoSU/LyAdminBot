@@ -2646,6 +2646,19 @@ export class MongoStore {
   }
 
   /**
+   * When this account last ignored a captcha in this chat, since `since` —
+   * the row `applyIgnoredCaptcha` writes (`decidedBy: 'captcha_ignored'`).
+   * Null when it never did. Served by `{ chatId, userId, createdAt }`.
+   */
+  async lastIgnoredCaptchaAt(chatId: number, userId: number, since: Date): Promise<Date | null> {
+    const doc = await this.decisions.findOne(
+      { chatId, userId, decidedBy: 'captcha_ignored', createdAt: { $gte: since } },
+      { sort: { createdAt: -1 }, projection: { createdAt: 1 } }
+    )
+    return doc?.['createdAt'] instanceof Date ? doc['createdAt'] : null
+  }
+
+  /**
    * The bans a content ban was carried to from `fromChatId` that a correction
    * there may lift — the applied `content_ban_elsewhere` ban rows with that
    * `carriedFrom` (the carry's skip rows carry it too, and lifted nothing).

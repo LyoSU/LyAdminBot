@@ -4,7 +4,7 @@ import type {
   UserSnapshot, VerdictAction
 } from './types.js'
 import type { BurstEntry, BurstPort, ModerationResult, PipelinePorts, SessionPort } from './ports.js'
-import { evaluateMessage, LLM_SOLE_WITNESS_SCORE, PROFILE_HOLD_SECONDS } from './pipeline.js'
+import { evaluateMessage, LLM_SOLE_WITNESS_SCORE, otherSpamObserveShadow, PROFILE_HOLD_SECONDS } from './pipeline.js'
 import { isEnforcementAction, removesSender, PRESET_THRESHOLDS } from './policy.js'
 import { contentEvidence, mayRemoveSender } from './score.js'
 
@@ -4018,5 +4018,61 @@ describe('evaluateMessage — the shape of a name is written down', () => {
     expect(v.meta).not.toHaveProperty('handleDigits')
     expect(v.meta).not.toHaveProperty('nameCamel')
     expect(v.meta).not.toHaveProperty('nameMixedWords')
+  })
+})
+
+/**
+ * Shadow readings of a classifier verdict, 2026-10-14. Nothing acts on them;
+ * the tests pin that they are stamped, that they describe the right text, and
+ * that they never touch the verdict itself.
+ */
+describe('classifier shadow readings', () => {
+  const sessionPorts = (evidence: string | null, reasonCode = 'job_scam'): PipelinePorts => ({
+    session: {
+      append: async () => ({
+        combinedText: 'пиши мені\nв особисті\nзаробіток\nвід 500$\nна день усім хто напише',
+        count: 5
+      }),
+      reset: async () => { /* noop */ }
+    },
+    llm: { classify: async () => ({ pSpam: 0.9, reasonCode, evidence, cached: false }) }
+  })
+  const input = () => makeInput({ msg: { text: 'на день усім хто напише' }, user: newcomer })
+
+  it('checks the quote against the window the model read, not the last line', async () => {
+    const quoted = await evaluateMessage(input(), sessionPorts('заробіток … від 500$'))
+    expect(quoted.meta['llmEvidence']).toBe('quoted')
+    const invented = await evaluateMessage(input(), sessionPorts('guaranteed crypto returns'))
+    expect(invented.meta['llmEvidence']).toBe('absent')
+    expect((await evaluateMessage(input(), sessionPorts(null))).meta['llmEvidence']).toBe('missing')
+  })
+
+  it('leaves the verdict exactly as the caps made it', async () => {
+    const a = await evaluateMessage(input(), sessionPorts('заробіток'))
+    const b = await evaluateMessage(input(), sessionPorts('guaranteed crypto returns'))
+    expect(b.action).toBe(a.action)
+    expect(b.needsVote).toBe(a.needsVote)
+    expect(b.pSpam).toBe(a.pSpam)
+  })
+})
+
+describe('otherSpamObserveShadow', () => {
+  const v = (over: Partial<Parameters<typeof otherSpamObserveShadow>[0]> = {}) => ({
+    decidedBy: 'llm' as const, reasonCode: 'other_spam', action: 'delete' as const,
+    signals: [{ name: 'new_in_chat' }] as never, ...over
+  })
+
+  it('holds the vague category on a reply or on somebody the chat already knows', () => {
+    expect(otherSpamObserveShadow(v({ signals: [{ name: 'new_in_chat' }, { name: 'is_reply' }] as never }))).toBe('reply')
+    expect(otherSpamObserveShadow(v({ signals: [] as never }))).toBe('not_newcomer')
+    expect(otherSpamObserveShadow(v({ decidedBy: 'session', signals: [] as never }))).toBe('not_newcomer')
+  })
+
+  it('leaves a newcomer, a named category, a non-classifier stage and a verdict that did nothing', () => {
+    expect(otherSpamObserveShadow(v())).toBeNull()
+    expect(otherSpamObserveShadow(v({ reasonCode: 'job_scam', signals: [] as never }))).toBeNull()
+    expect(otherSpamObserveShadow(v({ decidedBy: 'score', signals: [] as never }))).toBeNull()
+    expect(otherSpamObserveShadow(v({ action: 'none', signals: [] as never }))).toBeNull()
+    expect(otherSpamObserveShadow(v({ action: 'observe', signals: [] as never }))).toBeNull()
   })
 })

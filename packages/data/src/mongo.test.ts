@@ -2041,6 +2041,21 @@ describe('arrivals — who joined which chat this week', () => {
     expect(store.updates).toHaveLength(1)
   })
 
+  it('reads the last ignored captcha of an account in one chat, or null', async () => {
+    const at = new Date('2026-10-14T10:00:00Z')
+    const since = new Date('2026-10-07T10:00:00Z')
+    const calls: unknown[] = []
+    const store = (doc: unknown) => Object.assign({
+      decisions: { findOne: async (f: unknown, o: unknown) => { calls.push([f, o]); return doc } }
+    }, { lastIgnoredCaptchaAt: MongoStore.prototype.lastIgnoredCaptchaAt }) as unknown as MongoStore
+    expect(await store({ createdAt: at }).lastIgnoredCaptchaAt(-100, 7, since)).toEqual(at)
+    expect(await store(null).lastIgnoredCaptchaAt(-100, 7, since)).toBeNull()
+    expect(calls[0]).toEqual([
+      { chatId: -100, userId: 7, decidedBy: 'captcha_ignored', createdAt: { $gte: since } },
+      { sort: { createdAt: -1 }, projection: { createdAt: 1 } }
+    ])
+  })
+
   /**
    * Review 2026-10-14: a correction in the source room undoes the carry, never
    * a removal the target room reached on its own after it.
