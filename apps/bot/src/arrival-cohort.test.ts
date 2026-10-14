@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  arrivalShapeOf, cohortSiblings, isShadowCarryAct, recordBanTargets, sameShape, type CohortArrival, type JoinerFacts
+  arrivalShapeOf, cohortSiblings, isContentCarryAct, isShadowCarryAct, recordBanTargets, sameShape, type CohortArrival, type JoinerFacts
 } from './arrival-cohort.js'
 import type { ArrivalShape } from '@lyadmin/data'
 
@@ -161,5 +161,39 @@ describe('isShadowCarryAct', () => {
     expect(isShadowCarryAct({ ...act, applied: false })).toBe(false)
     expect(isShadowCarryAct({ ...act, messageId: 0 })).toBe(false)
     expect(isShadowCarryAct({ ...act, action: 'none' })).toBe(false)
+  })
+})
+
+describe('isContentCarryAct', () => {
+  const act = { decidedBy: 'llm', action: 'ban', messageId: 5, applied: true, needsVote: false }
+
+  it('carries an applied content ban', () => {
+    for (const decidedBy of ['signature', 'llm', 'llm_cached', 'session', 'score', 'burst']) {
+      expect(isContentCarryAct({ ...act, decidedBy })).toBe(true)
+    }
+  })
+
+  it('leaves a finding about the message, a pending ballot, and what the shadow leaves', () => {
+    expect(isContentCarryAct({ ...act, action: 'delete' })).toBe(false)
+    expect(isContentCarryAct({ ...act, action: 'mute' })).toBe(false)
+    expect(isContentCarryAct({ ...act, action: 'kick' })).toBe(false)
+    expect(isContentCarryAct({ ...act, needsVote: true })).toBe(false)
+    expect(isContentCarryAct({ ...act, applied: false })).toBe(false)
+    expect(isContentCarryAct({ ...act, messageId: 0 })).toBe(false)
+    expect(isContentCarryAct({ ...act, decidedBy: 'join_screen' })).toBe(false)
+    expect(isContentCarryAct({ ...act, decidedBy: 'deterministic' })).toBe(false)
+  })
+
+  it('is never wider than the shadow that measured it', () => {
+    for (const decidedBy of ['llm', 'score', 'deterministic', 'join_screen', 'captcha_ignored']) {
+      for (const action of ['ban', 'delete', 'mute', 'kick', 'none']) {
+        for (const applied of [true, false]) {
+          for (const needsVote of [true, false]) {
+            const a = { decidedBy, action, messageId: 5, applied, needsVote }
+            if (isContentCarryAct(a)) expect(isShadowCarryAct(a)).toBe(true)
+          }
+        }
+      }
+    }
   })
 })

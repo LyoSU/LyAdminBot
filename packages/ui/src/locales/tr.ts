@@ -33,6 +33,7 @@ export const tr: Locale = {
     outcomes: {
       removed: 'çıkarıldı',
       banned_on_record: 'spam veritabanları nedeniyle yasaklandı',
+      banned_carried: 'başka bir sohbette spam nedeniyle yasaklandı',
       banned_by_admin: 'yönetici yasakladı',
       gated: 'kontrol ediliyor'
     },
@@ -196,6 +197,7 @@ export const tr: Locale = {
     community_vote: 'topluluk oyladı: spam',
     forward_blacklist: 'bilinen bir spam kaynağından iletildi',
     record_ban_elsewhere: 'hesap kaydı nedeniyle başka bir sohbetten zaten çıkarıldı (spam veritabanları, Telegram işareti) — burada ilk mesajından önce çıkarıldı',
+    content_ban_elsewhere: 'hesap başka bir sohbette spam mesajı nedeniyle yasaklandı — burada ilk mesajından önce çıkarıldı',
     listed_arrival: 'girişte: hesap spam veritabanlarında veya Telegram tarafından işaretli',
     arrival_look: 'sessiz yeni üyenin profili artık bir spam ağına benziyor — onay istiyoruz',
     arrived_with_spammer: 'bir spamcıyla birlikte katıldı ve ona benziyor — yönetici yasakladı',

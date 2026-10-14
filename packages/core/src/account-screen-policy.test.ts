@@ -72,6 +72,46 @@ describe('accountScreenAllowed', () => {
     expect(accountScreenAllowed('ban', chat(), user({ messagesGlobal: 5000 }))).toBe('allow')
   })
 
+  /**
+   * A ban carried on our own reading of a message elsewhere is our judgement,
+   * so the shields against our judgement hold — and a standing nobody could
+   * read is not taken as the absence of one, because the act is a ban.
+   */
+  it('carries a content ban only to a stranger whose standing is known', () => {
+    const c = { pSpam: 0.99, banThreshold: 0.95 }
+    const carry = (ch = chat(), u = user()) => accountScreenAllowed('carry', ch, u, 'integrity', c)
+    expect(carry()).toBe('allow')
+    expect(carry(chat({ captchaEnabled: false, externalBanEnabled: false }))).toBe('allow')
+    expect(carry(chat({ enabled: false }))).toBe('antispam_off')
+    expect(carry(chat({ trustedUserIds: [42] }))).toBe('trusted')
+    expect(carry(chat(), user({ messagesGlobal: 50 }))).toBe('established')
+    expect(carry(chat(), user({ messagesGlobal: 49 }))).toBe('allow')
+    expect(carry(chat(), user({ messagesGlobal: null }))).toBe('standing_unknown')
+  })
+
+  /**
+   * Review 2026-10-14: the carry is for the silent arrival. Somebody already
+   * talking in the target room is that room's to judge, and the notice would
+   * say "removed before it posted" about them.
+   */
+  it('leaves an account that has already spoken cleanly in the target chat', () => {
+    const c = { pSpam: 0.99, banThreshold: 0.95 }
+    expect(accountScreenAllowed('carry', chat(), user({ standingInChat: 3 }), 'integrity', c)).toBe('spoke_here')
+    expect(accountScreenAllowed('carry', chat(), user({ standingInChat: 0 }), 'integrity', c)).toBe('allow')
+    expect(accountScreenAllowed('carry', chat(), user({ standingInChat: null }), 'integrity', c)).toBe('allow')
+  })
+
+  /** A strict chat's ban is not a soft chat's: the target's bar decides. */
+  it('carries only a reading that clears the target chat\'s own ban bar', () => {
+    expect(accountScreenAllowed('carry', chat(), user(), 'integrity', { pSpam: 0.93, banThreshold: 0.98 }))
+      .toBe('below_chat_bar')
+    expect(accountScreenAllowed('carry', chat(), user(), 'integrity', { pSpam: 0.98, banThreshold: 0.98 }))
+      .toBe('allow')
+    expect(accountScreenAllowed('carry', chat(), user(), 'integrity', { pSpam: Number.NaN, banThreshold: 0.9 }))
+      .toBe('below_chat_bar')
+    expect(accountScreenAllowed('carry', chat(), user())).toBe('below_chat_bar')
+  })
+
   /** The master switch outranks everything, so its answer is the one reported. */
   it('names the master switch first when several would refuse', () => {
     expect(accountScreenAllowed('gate', chat({ enabled: false, captchaEnabled: false }), user()))

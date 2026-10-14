@@ -34,6 +34,7 @@ export const en: Locale = {
     outcomes: {
       removed: 'removed',
       banned_on_record: 'banned via spam databases',
+      banned_carried: 'banned in another chat for spam',
       banned_by_admin: 'banned by an admin',
       gated: 'being checked'
     },
@@ -197,6 +198,7 @@ export const en: Locale = {
     community_vote: 'the community voted: spam',
     forward_blacklist: 'forwarded from a known spam source',
     record_ban_elsewhere: 'account already removed from another chat on its record (spam databases, Telegram flag) — removed here before it posted',
+    content_ban_elsewhere: 'account banned in another chat for a spam message — removed here before it posted',
     listed_arrival: 'on arrival: account is in spammer databases or flagged by Telegram',
     arrival_look: 'a silent newcomer whose profile now looks like a spam network — asking to confirm',
     arrived_with_spammer: 'joined alongside a spammer and looks like it — banned by an admin',

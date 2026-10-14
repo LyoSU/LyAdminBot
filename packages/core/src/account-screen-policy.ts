@@ -46,6 +46,20 @@ export interface AccountScreenUser {
    * `null` when it could not be read, which excuses nobody from the gate.
    */
   messagesGlobal: number | null
+  /**
+   * Standing in THIS chat (`getMemberStats`), read only by `carry`. `null` is
+   * no member row here: we never counted a message from them in this room.
+   */
+  standingInChat?: number | null
+}
+
+/**
+ * What a carried content ban brings with it: the reading it rests on and the
+ * bar the TARGET chat sets for a ban (`PRESET_THRESHOLDS[preset].ban`).
+ */
+export interface CarryFacts {
+  pSpam: number
+  banThreshold: number
 }
 
 /**
@@ -64,12 +78,36 @@ export type AccountScreenRefusal =
   | 'captcha_off'
   | 'trusted'
   | 'established'
+  | 'standing_unknown'
+  | 'spoke_here'
+  | 'below_chat_bar'
 
+/**
+ * `carry` is a ban carried from another chat on OUR reading of a message there
+ * (see `isContentCarryAct`), not on anybody else's verdict. So it takes the
+ * gate's shields rather than the ban's: trust and standing are a shield against
+ * our judgement, and this is our judgement — a long-time member whose account
+ * was taken over for one post must not lose every chat it sits in. And because
+ * it bans somebody in a room where they have posted nothing, a standing that
+ * could not be read refuses, the opposite of the gate's generous default. The
+ * chat's captcha setting does not enter: nothing is asked.
+ *
+ * Two refusals the record carry does not need, because a listing is the same
+ * in every chat and our reading is not:
+ *  - `spoke_here`: the account already has clean messages in the target. The
+ *    carry exists for the silent arrival; somebody the room has been talking
+ *    with is that room's to judge, and the notice ("removed before it posted")
+ *    would be false about them.
+ *  - `below_chat_bar`: the reading clears the source chat's ban bar but not
+ *    the target's. A strict chat's 0.92 is not a soft chat's 0.98, and the
+ *    carry must not import the stricter room's preset into the gentler one.
+ */
 export const accountScreenAllowed = (
-  action: 'ban' | 'gate',
+  action: 'ban' | 'gate' | 'carry',
   chat: AccountScreenChat,
   user: AccountScreenUser,
   hardVerdictSource: HardVerdictSource = 'platform',
+  carry?: CarryFacts,
 ): 'allow' | AccountScreenRefusal => {
   // First, and for both: a chat that turned the pipeline off did not ask to be
   // policed at the door instead.
@@ -77,6 +115,16 @@ export const accountScreenAllowed = (
 
   if (action === 'ban') {
     if (hardVerdictSource === 'third_party' && !chat.externalBanEnabled) return 'external_ban_off'
+    return 'allow'
+  }
+
+  if (action === 'carry') {
+    if (chat.trustedUserIds.includes(user.id)) return 'trusted'
+    if (user.messagesGlobal === null) return 'standing_unknown'
+    if (user.messagesGlobal >= ESTABLISHED_MIN_MESSAGES) return 'established'
+    if ((user.standingInChat ?? 0) > 0) return 'spoke_here'
+    // Missing facts refuse: this is a ban, and the bar is the chat's to set.
+    if (carry === undefined || !(carry.pSpam >= carry.banThreshold)) return 'below_chat_bar'
     return 'allow'
   }
 

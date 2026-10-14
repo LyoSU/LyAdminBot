@@ -968,6 +968,28 @@ describe('recordDecision / getDecision — requireCaptcha round-trip', () => {
     // effectively assumed for all of them anyway.
     await expect(load({ action: 'delete' })).resolves.toMatchObject({ requireCaptcha: false })
   })
+
+  /**
+   * Review 2026-10-14: message 0 is every account screen without a join line,
+   * and the telemetry rows those screens note. The newest row there was often
+   * another account's `none`, so the undo of a carried ban recalled nothing to
+   * lift and the "Why?" card showed somebody else's verdict.
+   */
+  it('narrows message 0 to the account and to a row that did something', async () => {
+    const filters: unknown[] = []
+    const store = Object.assign(
+      { decisions: { findOne: async (f: unknown) => { filters.push(f); return null } } } as unknown as MongoStore,
+      { getDecision: MongoStore.prototype.getDecision }
+    )
+    await store.getDecision(-100, 0, 7)
+    await store.getDecision(-100, 10, 7)
+    await store.getDecision(-100, 0)
+    expect(filters).toEqual([
+      { chatId: -100, messageId: 0, userId: 7, action: { $ne: 'none' } },
+      { chatId: -100, messageId: 10 },
+      { chatId: -100, messageId: 0 }
+    ])
+  })
 })
 
 /**
@@ -2017,6 +2039,46 @@ describe('arrivals — who joined which chat this week', () => {
     })
     expect(await store.noteShadowCarry([], 7, stamp)).toBe(0)
     expect(store.updates).toHaveLength(1)
+  })
+
+  /**
+   * Review 2026-10-14: a correction in the source room undoes the carry, never
+   * a removal the target room reached on its own after it.
+   */
+  it('lifts a carried ban only where it is still the last removal in its chat', async () => {
+    const finds: Record<string, unknown>[] = []
+    const lastIn: Record<number, unknown> = {
+      [-200]: { _id: 'carried-200' }, // still the last word there
+      [-300]: { _id: 'own-ban-300' }, // the target banned on its own afterwards
+      [-400]: null
+    }
+    const store = Object.assign({
+      decisions: {
+        find: (filter: Record<string, unknown>) => {
+          finds.push(filter)
+          return {
+            toArray: async () => [
+              { _id: 'carried-200', chatId: -200, messageId: 55 },
+              { _id: 'carried-300', chatId: -300, messageId: 0 },
+              { _id: 'older-200', chatId: -200, messageId: 12 },
+              { _id: 'carried-400', chatId: -400, messageId: 0 }
+            ]
+          }
+        },
+        findOne: async (filter: Record<string, unknown>) => {
+          finds.push(filter)
+          return lastIn[filter['chatId'] as number] ?? null
+        }
+      }
+    }, { carriedContentBans: MongoStore.prototype.carriedContentBans }) as unknown as MongoStore
+    expect(await store.carriedContentBans(7, -100)).toEqual([{ chatId: -200, messageId: 55 }])
+    expect(finds[0]).toEqual({
+      userId: 7, reasonCode: 'content_ban_elsewhere', action: 'ban',
+      'meta.carriedFrom': -100, 'execution.applied': true
+    })
+    expect(finds[1]).toEqual({
+      chatId: -200, userId: 7, action: { $in: ['kick', 'mute', 'ban'] }, 'execution.applied': true
+    })
   })
 
   it('reads a chat newest first, and an account across chats', async () => {

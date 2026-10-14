@@ -55,6 +55,7 @@ export interface Locale {
     outcomes: {
       removed: string
       banned_on_record: string
+      banned_carried: string
       banned_by_admin: string
       gated: string
     }

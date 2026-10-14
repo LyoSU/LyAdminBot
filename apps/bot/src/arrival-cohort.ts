@@ -39,7 +39,7 @@ export const arrivalShapeOf = (joiner: JoinerFacts, nowUnix = Math.floor(Date.no
  * taken from that chat, so there is nothing left to carry over to it.
  */
 export const REMOVED_ARRIVAL_OUTCOMES: ReadonlySet<string> = new Set([
-  'removed', 'banned_on_record', 'banned_by_admin'
+  'removed', 'banned_on_record', 'banned_carried', 'banned_by_admin'
 ])
 
 /**
@@ -88,7 +88,9 @@ const CONTENT_DECIDERS: ReadonlySet<string> = new Set([
  * sits silent in, if content bans were ever carried. Used only to measure that
  * (2026-10-02, shadow): a hijacked account posts spam once, so the verdict on
  * the message can be right while the conclusion about the account is wrong —
- * the reason content bans are not carried today.
+ * the reason content bans were not carried. Still stamped for every act it
+ * takes, so the deletes and mutes `isContentCarryAct` leaves out keep being
+ * measured.
  */
 export const isShadowCarryAct = (
   act: { decidedBy: string; action: string; messageId: number; applied: boolean }
@@ -97,6 +99,28 @@ export const isShadowCarryAct = (
   && act.messageId > 0
   && CONTENT_DECIDERS.has(act.decidedBy)
   && (act.action === 'ban' || act.action === 'delete' || act.action === 'mute')
+
+/**
+ * Whether a content act is carried, as a ban, to the chats the account joined
+ * this week and has not been removed from — no longer only measured.
+ *
+ * Shadow, 2026-10-02 to 2026-10-14: 346 arrival rows stamped. Every row whose
+ * account went on to post in the target chat — 107 of them — was then punished
+ * there by the pipeline itself; none came out clean. None of the source acts
+ * was overridden, and none of the accounts had ever been an established
+ * regular. The stamp landed p50 18 minutes after the join and the next post p50
+ * 2 minutes after the stamp, so carrying is the difference between the advert
+ * being seen and not.
+ *
+ * Narrower than the shadow on purpose: a `ban` alone, the act the pipeline
+ * already took against the ACCOUNT in the source chat. Over the 30 days to the
+ * same date people reversed 51 content acts, one of them a ban; a `delete` says
+ * "this message" and stays a finding about it. `needsVote` is the chat still
+ * being asked, so nothing is concluded yet.
+ */
+export const isContentCarryAct = (
+  act: { decidedBy: string; action: string; messageId: number; applied: boolean; needsVote: boolean }
+): boolean => isShadowCarryAct(act) && act.action === 'ban' && !act.needsVote
 
 /**
  * Arrivals this close to a confirmed spammer's, either side, count as having

@@ -1688,8 +1688,18 @@ export class MongoStore {
     return typeof text === 'string' && text !== '' ? text : null
   }
 
-  async getDecision(chatId: number, messageId: number): Promise<Verdict | null> {
-    const doc = await this.decisions.findOne({ chatId, messageId }, { sort: { createdAt: -1 } })
+  /**
+   * `userId` matters only for `messageId` 0, the key every decision without a
+   * message of its own is written under — an account screen with no join line
+   * to reply to, and every telemetry row those screens note. There the newest
+   * row in the chat is somebody else's as often as not, so the account narrows
+   * it, and a row that did nothing is not what a card or an undo is about.
+   */
+  async getDecision(chatId: number, messageId: number, userId?: number): Promise<Verdict | null> {
+    const filter = messageId === 0 && userId !== undefined
+      ? { chatId, messageId, userId, action: { $ne: 'none' } }
+      : { chatId, messageId }
+    const doc = await this.decisions.findOne(filter, { sort: { createdAt: -1 } })
     if (!doc) return null
     const signalNames = Array.isArray(doc['signals']) ? (doc['signals'] as unknown[]) : []
     return {
@@ -2633,6 +2643,43 @@ export class MongoStore {
       { $set: { shadowCarry: stamp } }
     )
     return result.modifiedCount
+  }
+
+  /**
+   * The bans a content ban was carried to from `fromChatId` that a correction
+   * there may lift — the applied `content_ban_elsewhere` ban rows with that
+   * `carriedFrom` (the carry's skip rows carry it too, and lifted nothing).
+   *
+   * Only where that ban is still the LAST removal of the account in its chat:
+   * a correction in one room undoes what was carried from it, never a removal
+   * the target room arrived at by itself afterwards (review 2026-10-14). The
+   * candidate read is served by the partial `own_restrictions` index.
+   */
+  async carriedContentBans(
+    userId: number, fromChatId: number
+  ): Promise<{ chatId: number; messageId: number }[]> {
+    const docs = await this.decisions.find(
+      {
+        userId, reasonCode: 'content_ban_elsewhere', action: 'ban',
+        'meta.carriedFrom': fromChatId, 'execution.applied': true
+      },
+      { projection: { chatId: 1, messageId: 1, createdAt: 1 }, sort: { createdAt: -1 } }
+    ).toArray()
+    const out: { chatId: number; messageId: number }[] = []
+    const seen = new Set<number>()
+    for (const d of docs) {
+      const chatId = Number(d['chatId'])
+      if (seen.has(chatId)) continue
+      seen.add(chatId)
+      const last = await this.decisions.findOne(
+        { chatId, userId, action: { $in: REMOVAL_ACTIONS }, 'execution.applied': true },
+        { sort: { createdAt: -1 }, projection: { _id: 1 } }
+      )
+      if (last !== null && String(last['_id']) === String(d['_id'])) {
+        out.push({ chatId, messageId: Number(d['messageId'] ?? 0) })
+      }
+    }
+    return out
   }
 
   /** Arrivals in one chat since `since`, newest first. Served by `arrivals_by_chat`. */
