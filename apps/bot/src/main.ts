@@ -2270,6 +2270,7 @@ const handlePrivateMessage = async (message: Message): Promise<void> => {
       }, {
         canOverride,
         facts,
+        viewerIsSubject: sender.id === userId,
         chatTitle: Number.isFinite(chatId) ? await chatTitleFor(chatId) : null
       }))
     } else {

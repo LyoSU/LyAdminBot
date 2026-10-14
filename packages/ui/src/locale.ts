@@ -286,6 +286,8 @@ export interface Locale {
     /** Technical footer (admins only): how the verdict was reached. */
     decidedBy: Record<string, string>
     expired: string
+    /** Shown to the person the verdict was about, when they cannot undo it themselves. */
+    appeal: string
   }
 
   /** User profile card — shared by /check and the "Why?" card's context block. */

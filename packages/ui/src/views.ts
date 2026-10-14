@@ -1132,6 +1132,13 @@ export const whyCard = (
     canOverride: boolean
     facts?: UserFacts | undefined
     chatTitle?: string | null
+    /**
+     * The reader is the person the verdict was about. Without the override
+     * button they had no next step on this card at all (2026-10-14 copy
+     * audit), so they are told who can undo it — only when something was
+     * actually done to them.
+     */
+    viewerIsSubject?: boolean
   }
 ): ViewMessage => {
   const body = whyView(locale, verdict, {
@@ -1148,8 +1155,12 @@ export const whyCard = (
   // Footer last, under the profile: the reader works down from what happened to
   // who it happened to, and only then to how we decided it.
   const footer = options.canOverride ? `\n\n${whyTechnicalFooter(locale, verdict, { html: true })}` : ''
+  const acted = verdict.action !== 'none' && verdict.action !== 'observe'
+  const appeal = options.viewerIsSubject === true && !options.canOverride && acted
+    ? `\n\n${escapeHtml(locale.why.appeal)}`
+    : ''
   return {
-    text: body + profile + footer,
+    text: body + profile + footer + appeal,
     // Both buttons are moderator tools — the override changes state, the
     // profile shows ban history and reputation — so a non-admin reader (whose
     // own message this was) gets the explanation and nothing else.

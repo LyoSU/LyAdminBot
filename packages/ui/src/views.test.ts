@@ -2082,3 +2082,30 @@ describe('uk second copy audit', () => {
     expect(uk.why.expired).not.toBe('…')
   })
 })
+
+/**
+ * The punished reader had no next step on the «За що?» card: the override
+ * button is for admins (2026-10-14 copy audit). They are told who can undo it,
+ * and only they, only when something was done.
+ */
+describe('why card appeal line', () => {
+  const uk = LOCALES['uk']!
+  const target = { chatId: -100, messageId: 7, userId: 42 }
+  const muted = makeVerdict({ action: 'mute', reasonCode: 'job_scam' })
+
+  it('shows the appeal to the subject who cannot override', () => {
+    expect(whyCard(uk, muted, target, { canOverride: false, viewerIsSubject: true }).text).toContain(uk.why.appeal)
+  })
+
+  it('hides it from admins, from bystanders, and when nothing was done', () => {
+    expect(whyCard(uk, muted, target, { canOverride: true, viewerIsSubject: true }).text).not.toContain(uk.why.appeal)
+    expect(whyCard(uk, muted, target, { canOverride: false, viewerIsSubject: false }).text).not.toContain(uk.why.appeal)
+    expect(whyCard(uk, muted, target, { canOverride: false }).text).not.toContain(uk.why.appeal)
+    const observed = makeVerdict({ action: 'observe', reasonCode: 'low_information' })
+    expect(whyCard(uk, observed, target, { canOverride: false, viewerIsSubject: true }).text).not.toContain(uk.why.appeal)
+  })
+
+  it('exists in every locale', () => {
+    for (const code of ['uk', 'ru', 'by', 'en', 'tr']) expect(LOCALES[code]!.why.appeal.length).toBeGreaterThan(10)
+  })
+})

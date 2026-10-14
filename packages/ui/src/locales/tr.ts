@@ -138,7 +138,7 @@ export const tr: Locale = {
 
   actions: {
     captcha: '👋 kontrol ediliyor',
-    delete: '🧹 spam temizlendi',
+    delete: '🧹 mesaj silindi',
     kick: '🚪 sohbetten atıldı',
     mute: '🔇 susturuldu',
     ban: '🔨 yasaklandı'
@@ -314,7 +314,8 @@ export const tr: Locale = {
       abstain: 'karar yok',
       error: 'hata'
     },
-    expired: 'Bu kararın süresi doldu — ayrıntı kalmadı.'
+    expired: 'Bu kararın süresi doldu — ayrıntı kalmadı.',
+    appeal: 'Bu bir hataysa o sohbetin bir yöneticisine yaz — yönetici kararı geri alabilir.'
   },
 
   profile: {
@@ -421,7 +422,7 @@ export const tr: Locale = {
     chatLastSpam: (span) => `Son spam: ${ago(span)}`,
     chatClean: '✨ Bu süre boyunca tek bir spam yok.',
     unavailable: '📊 Sayılara şu an ulaşamıyorum, biraz sonra tekrar dene.',
-    button: '📊 Rakamlarım'
+    button: '📊 Bot istatistikleri'
   },
 
   stats: {

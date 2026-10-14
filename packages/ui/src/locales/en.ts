@@ -139,7 +139,7 @@ export const en: Locale = {
 
   actions: {
     captcha: '👋 checking',
-    delete: '🧹 spam removed',
+    delete: '🧹 message removed',
     kick: '🚪 kicked from chat',
     mute: '🔇 muted',
     ban: '🔨 banned'
@@ -316,7 +316,8 @@ export const en: Locale = {
       abstain: 'no decision',
       error: 'error'
     },
-    expired: 'This decision has expired — no details left.'
+    expired: 'This decision has expired — no details left.',
+    appeal: 'If this is a mistake, message an admin of that chat — an admin can undo it.'
   },
 
   profile: {
@@ -423,7 +424,7 @@ export const en: Locale = {
     chatLastSpam: (span) => `Last spam: ${ago(span)}`,
     chatClean: '✨ Not a single spam message in that time.',
     unavailable: '📊 The numbers are out of reach right now, try again a bit later.',
-    button: '📊 My numbers'
+    button: '📊 Bot stats'
   },
 
   stats: {
