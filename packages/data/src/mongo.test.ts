@@ -15,7 +15,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Verdict } from '@lyadmin/core'
 import { VOTE_WINDOW_SECONDS } from '@lyadmin/core'
-import { MongoStore, ensureTtlIndex, ensureUniqueIndex, toRightsBlockRecord, trustGrantOf } from './mongo.js'
+import {
+  MongoStore, copyKey, copyPrefixRange, ensureTtlIndex, ensureUniqueIndex, parseCopyKey, toRightsBlockRecord,
+  trustGrantOf
+} from './mongo.js'
 import { ObjectId } from 'mongodb'
 
 interface Captured {
@@ -2418,5 +2421,94 @@ describe('recordLabel', () => {
     const text = String([...rows.values()][0]?.['text'])
     expect([...text].length).toBeLessThanOrEqual(1000)
     expect(text).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/)
+  })
+})
+
+describe('copy clusters (shadow)', () => {
+  const at = new Date('2026-10-15T10:00:00Z')
+  const H = '0123456789abcdef'
+  const clusterStore = (rows: Record<string, unknown>[]) => {
+    const calls: { op: string; args: unknown[] }[] = []
+    const store = {
+      copyClusters: {
+        updateOne: async (...args: unknown[]) => { calls.push({ op: 'updateOne', args }); return { modifiedCount: 1 } },
+        updateMany: async (...args: unknown[]) => { calls.push({ op: 'updateMany', args }); return { modifiedCount: 2 } },
+        find: (filter: Record<string, unknown>, options: unknown) => {
+          calls.push({ op: 'find', args: [filter, options] })
+          return {
+            toArray: async () => 'u' in filter
+              ? rows.filter((r) => parseCopyKey(String(r['_id']))?.userId === filter['u'])
+              : rows
+          }
+        }
+      },
+      decisions: {
+        find: (filter: unknown, options: unknown) => {
+          calls.push({ op: 'decisions.find', args: [filter, options] })
+          return { toArray: async () => [{ userId: 8 }] }
+        }
+      }
+    }
+    return Object.assign(store, {
+      noteCopy: MongoStore.prototype.noteCopy,
+      taintCopy: MongoStore.prototype.taintCopy,
+      copyClusterMembers: MongoStore.prototype.copyClusterMembers,
+      alreadyStamped: MongoStore.prototype.alreadyStamped,
+      calls
+    }) as unknown as MongoStore & { calls: typeof calls }
+  }
+
+  it('keys a row by chat, hash and author, and the prefix range holds exactly one text', () => {
+    expect(copyKey(-100, H, 7)).toBe(`-100:${H}:7`)
+    expect(parseCopyKey(copyKey(-100, H, 7))).toEqual({ chatId: -100, hash: H, userId: 7 })
+    expect(parseCopyKey('garbage')).toBeNull()
+    const r = copyPrefixRange(-100, H)
+    const inRange = (id: string) => id >= r.$gte && id < r.$lt
+    expect(inRange(copyKey(-100, H, 7))).toBe(true)
+    expect(inRange(copyKey(-100, H, 123456789))).toBe(true)
+    expect(inRange(copyKey(-1001, H, 7))).toBe(false)
+    expect(inRange(copyKey(-100, 'fedcba9876543210', 7))).toBe(false)
+  })
+
+  it('upserts a minimal row and taints without ever creating one', async () => {
+    const store = clusterStore([])
+    await store.noteCopy(-100, H, 7, at)
+    expect(store.calls[0]!.args).toEqual([
+      { _id: `-100:${H}:7` }, { $set: { c: -100, u: 7, at } }, { upsert: true }
+    ])
+    expect(await store.taintCopy(-100, H)).toBe(2)
+    expect(store.calls[1]!.args).toEqual([
+      { _id: copyPrefixRange(-100, H), r: { $exists: false } }, { $set: { r: true } }
+    ])
+  })
+
+  it('reads the cluster rows of every text the account posted', async () => {
+    const rows = [
+      { _id: `-100:${H}:7`, at }, { _id: `-100:${H}:8`, at, r: true }, { _id: 'bad', at }
+    ]
+    const store = clusterStore(rows)
+    expect(await store.copyClusterMembers(-100, 7)).toEqual([
+      { hash: H, userId: 7, at, regular: false },
+      { hash: H, userId: 8, at, regular: true }
+    ])
+    expect(store.calls[0]!.args[0]).toEqual({ c: -100, u: 7 })
+    expect(store.calls[1]!.args[0]).toEqual({ $or: [{ _id: copyPrefixRange(-100, H) }] })
+  })
+
+  it('does not read further when the account posted nothing long', async () => {
+    const store = clusterStore([])
+    expect(await store.copyClusterMembers(-100, 7)).toEqual([])
+    expect(store.calls).toHaveLength(1)
+  })
+
+  it('finds the accounts already stamped, and skips the read for none', async () => {
+    const store = clusterStore([])
+    const since = new Date('2026-10-14T10:00:00Z')
+    expect([...await store.alreadyStamped(-100, [8, 9], 'copied_with_spammer_shadow', since)]).toEqual([8])
+    expect(store.calls[0]!.args[0]).toEqual({
+      chatId: -100, userId: { $in: [8, 9] }, reasonCode: 'copied_with_spammer_shadow', createdAt: { $gte: since }
+    })
+    expect((await store.alreadyStamped(-100, [], 'x', since)).size).toBe(0)
+    expect(store.calls).toHaveLength(1)
   })
 })

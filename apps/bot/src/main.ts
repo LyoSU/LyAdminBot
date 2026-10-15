@@ -78,6 +78,7 @@ import {
 } from './arrival-cohort.js'
 import { CaptchaGates, memberGone, planRestoredGate, type CaptchaGate } from './captcha-gate.js'
 import { IGNORED_CAPTCHA_ESCALATION_MS, wouldEscalateAfterIgnoredCaptcha } from './recidivism-shadow.js'
+import { COPY_CLUSTER_WINDOW_MS, copyClusterKey, copySiblings, isCopyClusterTrigger } from './copy-cluster.js'
 import { DuplicateTally } from './duplicate-tally.js'
 import { getUsersEach } from './users-each.js'
 import { parseCommand } from './command.js'
@@ -1838,6 +1839,8 @@ firstRuling = true): Promise<VoteEnforcement> => {
    */
   if (muted) await dropGate(vote.chatId, vote.targetUserId, 'vote_spam')
   if (muted) void surfaceCohort(vote.chatId, { id: vote.targetUserId, displayName: null }).catch(() => { /* best-effort */ })
+  // The ruling is the confirmation, whether or not Telegram let the mute through.
+  void shadowCopyCluster(vote.chatId, vote.targetUserId, learnSource).catch(() => { /* measurement only */ })
   /**
    * The chat confirmed it, so it is now a fact about the account and not only
    * about the message.
@@ -4287,6 +4290,54 @@ const shadowCarry = async (
 }
 
 /**
+ * Shadow only: the accounts that posted the same long text as `userId` in this
+ * chat within a day, now that `userId` has been strongly confirmed — see
+ * `copy-cluster.ts` for the rule and its 2026-10-14 measurement. Stamps each
+ * sibling with a `copied_with_spammer_shadow` row (`action: 'none'`, message 0)
+ * at most once per chat and account per day, and logs `cluster_shadow`.
+ * Removes nobody.
+ */
+const COPY_STAMP_REASON = 'copied_with_spammer_shadow'
+const copyStamped = new Map<string, number>()
+
+const shadowCopyCluster = async (chatId: number, userId: number, trigger: string): Promise<void> => {
+  const now = Date.now()
+  const clusters = copySiblings(await store.copyClusterMembers(chatId, userId), userId, now)
+  if (clusters.length === 0) return
+  // One stamp per account even when it shares several texts with the confirmed
+  // one: the largest cluster names it.
+  const firstCluster = new Map<number, (typeof clusters)[number]>()
+  for (const c of clusters) for (const u of c.siblings) if (!firstCluster.has(u)) firstCluster.set(u, c)
+  const since = new Date(now - COPY_CLUSTER_WINDOW_MS)
+  // The in-process memo is claimed before the read, so a second confirmation
+  // arriving during it sees the claim; the decisions read survives a restart.
+  const fresh = [...firstCluster.keys()].filter((u) => (copyStamped.get(`${chatId}:${u}`) ?? 0) <= since.getTime())
+  if (copyStamped.size >= 5000) copyStamped.clear()
+  for (const u of fresh) copyStamped.set(`${chatId}:${u}`, now)
+  const done = await store.alreadyStamped(chatId, fresh, COPY_STAMP_REASON, since)
+  const targets = fresh.filter((u) => !done.has(u))
+  for (const u of targets) {
+    const c = firstCluster.get(u)!
+    await store.recordDecision({
+      chatId, userId: u, messageId: 0, textPreview: '',
+      verdict: {
+        pSpam: 0, action: 'none', needsVote: false, banDurationSeconds: null,
+        decidedBy: 'join_screen', ruleId: null, signals: [],
+        reasonCode: COPY_STAMP_REASON, reasonEvidence: null,
+        meta: { shadow: true, clusterHash: c.hash.slice(0, 8), size: c.size, trigger, triggerUserId: userId }
+      },
+      latencyMs: 0
+    }).catch(() => { /* telemetry must never break moderation */ })
+  }
+  if (targets.length > 0) {
+    log.info('cluster_shadow', {
+      chatId, userId, trigger, stamped: targets.length,
+      clusters: clusters.map((c) => `${c.hash.slice(0, 8)}×${c.size}`).join(',')
+    })
+  }
+}
+
+/**
  * Shadow only: does this sender post textless messages on a steady timer.
  * Logs `metronome_shadow` once per chat and account per hour; removes nobody
  * and feeds nothing to the scorer. The decisions already carry what is needed
@@ -4867,6 +4918,7 @@ const banJoinerOnRecord = async (
   })
   log.info('listed_arrival', { chatId: chat.id, chat: chat.title ?? undefined, userId: joiner.id, outcome })
   if (outcome !== 'ban') return { banned: false, messagesGlobal }
+  void shadowCopyCluster(chat.id, joiner.id, 'listed_arrival').catch(() => { /* measurement only */ })
 
   await store.noteArrivalOutcome(chat.id, joiner.id, 'banned_on_record').catch(() => { /* no row is fine */ })
   // The join line names somebody who is gone — the arrival purge's rule, for
@@ -6745,6 +6797,24 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
    * reads any window, so recording theirs would be a write nothing ever reads.
    * Not for an edit either — the same message would be counted twice.
    */
+  // Copy-cluster membership (shadow, see `copy-cluster.ts`): a non-regular's
+  // long text joins its cluster; a regular's taints it. Off the hot path, and
+  // the trigger is chained after the write so the confirmed copy is a member.
+  const copyHash = userSender && !isEdit ? copyClusterKey(normalized.text) : null
+  const copyTrigger = userSender !== null && isCopyClusterTrigger({
+    action: verdict.action, applied: result.applied, needsVote: verdict.needsVote
+  })
+  if (copyHash !== null || copyTrigger) {
+    void (async () => {
+      if (copyHash !== null) {
+        await (verdict.meta['established_regular'] === true
+          ? store.taintCopy(chat.id, copyHash)
+          : store.noteCopy(chat.id, copyHash, sender.id, new Date())).catch(() => { /* measurement only */ })
+      }
+      if (copyTrigger) await shadowCopyCluster(chat.id, sender.id, verdict.action)
+    })().catch(() => { /* measurement must never break moderation */ })
+  }
+
   if (!isEdit && verdict.meta['established_regular'] !== true) {
     senderLog.note(chat.id, sender.id, message.id, verdict.pSpam)
     void burstPort.append(chat.id, sender.id, {

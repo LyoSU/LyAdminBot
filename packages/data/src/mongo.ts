@@ -218,6 +218,23 @@ const standingFrom = (stats: { messagesCount?: number; spamMessages?: number } |
 export const LABEL_TTL_DAYS = 365
 const LABEL_TEXT_MAX = 1000
 
+/** The copy-cluster window, which is the `copy_clusters` TTL: 24 hours. */
+export const COPY_WINDOW_SECONDS = 24 * 3600
+
+/**
+ * `chat:hash:user`. The hash is hex and the ids are integers, so `:` never
+ * appears inside a part and `;` — the next code unit after `:` — closes the
+ * range of one (chat, hash) prefix.
+ */
+export const copyKey = (chatId: number, hash: string, userId: number): string => `${chatId}:${hash}:${userId}`
+export const copyPrefixRange = (chatId: number, hash: string): { $gte: string; $lt: string } =>
+  ({ $gte: `${chatId}:${hash}:`, $lt: `${chatId}:${hash};` })
+export const parseCopyKey = (id: string): { chatId: number; hash: string; userId: number } | null => {
+  const m = /^(-?\d+):([0-9a-f]+):(-?\d+)$/.exec(id)
+  if (!m) return null
+  return { chatId: Number(m[1]), hash: m[2]!, userId: Number(m[3]) }
+}
+
 export const ensureTtlIndex = async (
   collection: Collection<Document>,
   keySpec: Document,
@@ -435,6 +452,11 @@ export class MongoStore {
   get sessionWindows(): Collection<Document> { return this.collection('session_windows') }
   /** A sender's recent judged messages per chat — see PersistentBurstPort. */
   get burstWindows(): Collection<Document> { return this.collection('burst_windows') }
+  /**
+   * Who posted which long text in which chat, for a day — see `noteCopy`.
+   * SHADOW measurement since 2026-10-15.
+   */
+  get copyClusters(): Collection<Document> { return this.collection('copy_clusters') }
   /**
    * What Telegram refuses us, per chat. Deliberately NOT TTL-expired: unlike
    * every other collection here it holds a fact rather than an observation, and
@@ -702,6 +724,21 @@ export class MongoStore {
     await ensureTtlIndex(this.velocityEvents, { firstSeenAt: 1 }, VELOCITY_WINDOW_MS / 1000)
     await ensureTtlIndex(this.sessionWindows, { startedAt: 1 }, SESSION_WINDOW_MS / 1000)
     await ensureTtlIndex(this.burstWindows, { startedAt: 1 }, BURST_WINDOW_MS / 1000)
+    /**
+     * Copy clusters (shadow, 2026-10-15). Its own collection, not a second key
+     * in `velocity_events`: that collection's TTL IS the 6-hour velocity window
+     * its thresholds were calibrated against, one field carries one TTL, and the
+     * 24-hour membership measured on 2026-10-14 (15 of 48 accounts visible at
+     * 6 hours) needs a different expiry.
+     *
+     * Two indexes besides `_id`, and `_id` does the third job: it is
+     * `chat:hash:user`, so it keeps one row per author per text AND serves the
+     * (chat, hash) read as a prefix range — the index the cluster lookup needs
+     * costs nothing of its own. `{ c, u }` serves "which texts did this account
+     * post here". The TTL is the window.
+     */
+    await ensureTtlIndex(this.copyClusters, { at: 1 }, COPY_WINDOW_SECONDS)
+    await this.copyClusters.createIndex({ c: 1, u: 1 })
     // `spamsignatures` is a v1 collection and v1 owns the exactHash/normalizedHash
     // indexes. The folded layer added in 2026-07-31 needs its own, or the `$or`
     // in `MongoSignaturePort.match` loses index coverage for that branch and
@@ -2808,6 +2845,81 @@ export class MongoStore {
       { $set: { shadowCarry: stamp } }
     )
     return result.modifiedCount
+  }
+
+  /**
+   * Record that `userId` posted the text keyed `hash` in `chatId` (shadow,
+   * 2026-10-15; the key and the rule live in the bot's `copy-cluster.ts`).
+   *
+   * Minimal on purpose: the store sat at 86.7 % of its 512 MB on 2026-10-14.
+   * No text, no message id — the hash is in `_id`, and `at` is the TTL field,
+   * refreshed by a repost so an author stays in the cluster while still copying.
+   * The caller writes only texts of 30+ folded characters from non-regulars.
+   */
+  async noteCopy(chatId: number, hash: string, userId: number, at: Date): Promise<void> {
+    await this.copyClusters.updateOne(
+      { _id: copyKey(chatId, hash, userId) as never },
+      { $set: { c: chatId, u: userId, at } },
+      { upsert: true }
+    )
+  }
+
+  /**
+   * An established regular posted this text: taint every live row of it, so
+   * the cluster can never qualify. Never creates a row — a regular's messages
+   * are the bulk of traffic and stay out of this collection. Returns how many
+   * rows it marked.
+   */
+  async taintCopy(chatId: number, hash: string): Promise<number> {
+    const result = await this.copyClusters.updateMany(
+      { _id: copyPrefixRange(chatId, hash) as never, r: { $exists: false } },
+      { $set: { r: true } }
+    )
+    return result.modifiedCount
+  }
+
+  /**
+   * Every live row of every text `userId` posted in `chatId` — the input of
+   * `copySiblings`. Two indexed reads: the account's hashes by `{ c, u }`, then
+   * each hash's authors by the `_id` prefix. At most 20 texts are followed,
+   * newest first, so one prolific account cannot turn a ban into a scan.
+   */
+  async copyClusterMembers(
+    chatId: number, userId: number
+  ): Promise<{ hash: string; userId: number; at: Date; regular: boolean }[]> {
+    const own = await this.copyClusters
+      .find({ c: chatId, u: userId }, { projection: { _id: 1 }, sort: { at: -1 }, limit: 20 })
+      .toArray()
+    const hashes = [...new Set(own.map((d) => parseCopyKey(String(d['_id']))?.hash).filter(
+      (h): h is string => h !== undefined))]
+    if (hashes.length === 0) return []
+    const rows = await this.copyClusters
+      .find({ $or: hashes.map((h) => ({ _id: copyPrefixRange(chatId, h) as never })) },
+        { projection: { _id: 1, at: 1, r: 1 }, limit: 500 })
+      .toArray()
+    const out: { hash: string; userId: number; at: Date; regular: boolean }[] = []
+    for (const d of rows) {
+      const key = parseCopyKey(String(d['_id']))
+      if (!key || !(d['at'] instanceof Date)) continue
+      out.push({ hash: key.hash, userId: key.userId, at: d['at'], regular: d['r'] === true })
+    }
+    return out
+  }
+
+  /**
+   * Of `userIds`, those that already have a decision with `reasonCode` in this
+   * chat since `since` — the per-(chat, account) dedup of a stamp. Served by
+   * `{ chatId, userId, createdAt }`.
+   */
+  async alreadyStamped(
+    chatId: number, userIds: readonly number[], reasonCode: string, since: Date
+  ): Promise<Set<number>> {
+    if (userIds.length === 0) return new Set()
+    const docs = await this.decisions.find(
+      { chatId, userId: { $in: [...userIds] }, reasonCode, createdAt: { $gte: since } },
+      { projection: { userId: 1 } }
+    ).toArray()
+    return new Set(docs.map((d) => Number(d['userId'])))
   }
 
   /**
