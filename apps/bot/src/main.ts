@@ -60,7 +60,7 @@ import { createStatsCache } from './stats-cache.js'
 import { createNoVotersShadow } from './novoters-shadow.js'
 import { formatDuration, parseBananDuration } from './duration.js'
 import { formatSignals, log } from './logger.js'
-import { RightsMemory, RIGHTS_ERROR_REGEX, failureLabels } from './rights.js'
+import { RightsMemory, RIGHTS_ERROR_REGEX, failureLabels, grantedRights, grantedShape } from './rights.js'
 import { joinerSource } from './join-action.js'
 import { LlmHealth } from './llm-health.js'
 import { telegramErrorName } from './telegram-error.js'
@@ -1674,22 +1674,24 @@ const logRightsState = (chat: Chat, action: string): void => {
 }
 
 /**
- * The cheap half of the rights question: are we an admin in this chat at all?
+ * The cheap half of the rights question: which of the two rights do we hold?
  *
  * Allowed to LIFT a block and never to create one, which is what makes reading
- * it safe (see `RightsMemory.noteProbe`). Only `status` is consulted, not the
- * individual admin rights: a promoted bot missing one specific right will be
- * told so by the very next attempt, and that attempt is the evidence this whole
- * mechanism is built on. Reading the rights bitmask here would add a second,
- * more brittle way to be wrong about the same question.
+ * it safe (see `RightsMemory.noteProbe`). Until 2026-10-15 only `status` was
+ * consulted, on the theory that a promoted bot missing a right would be told so
+ * by its next attempt. In production that attempt cost the full pipeline — the
+ * paid LLM included — after every probe, and the forgotten block took the
+ * notice history with it, so the chat was asked again. The bitmask is read now
+ * (`grantedRights`), and only a right actually present lifts its own block.
+ *
+ * True when the chat is no longer blocked on both capabilities.
  */
 const probeRights = async (chatId: number): Promise<boolean> => {
-  const granted = await gateway.tg.getChatMember({ chatId, userId: selfId })
-    .then((m) => m !== null && (m.status === 'admin' || m.status === 'creator'))
-    .catch(() => false)
-  rights.noteProbe(chatId, granted)
-  if (granted) log.info('rights_restored', { chatId })
-  return granted
+  const member = await gateway.tg.getChatMember({ chatId, userId: selfId }).catch(() => null)
+  const granted = grantedRights(member)
+  const lifted = rights.noteProbe(chatId, granted)
+  if (lifted.length > 0) log.info('rights_restored', { chatId, lifted, missing: grantedShape(granted) })
+  return !rights.cannotEnforce(chatId)
 }
 
 /**

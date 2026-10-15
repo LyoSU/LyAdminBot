@@ -303,6 +303,49 @@ export const rightsLogDecision = (
   return now - prev.at >= remindMs ? { level: 'info', change: 'still' } : null
 }
 
+/**
+ * The bot's own membership in a chat, as loosely as the probe needs it: the
+ * status, and for an admin the rights bitmask (mtcute's `ChatMember.permissions`,
+ * which is null for an admin of a legacy basic group — those hold every right).
+ */
+export interface BotMembership {
+  status: string
+  permissions: { deleteMessages?: boolean; banUsers?: boolean } | null
+}
+
+/** What the probe found the bot is allowed to do: remove messages, act on senders. */
+export interface GrantedRights {
+  canDelete: boolean
+  canRestrict: boolean
+}
+
+/**
+ * Read the bot's membership into the two capabilities refusals are recorded
+ * against. Pure, so the mapping is tested without Telegram.
+ *
+ * Until 2026-10-15 the probe read `status` alone, so an admin bot WITHOUT the
+ * delete or ban right passed it: the block was forgotten, and every message in
+ * that chat paid the full pipeline — the LLM included — until the next refusal
+ * re-created it, together with a fresh missing-rights notice. Acting on a sender
+ * (kick, mute, ban, the captcha's restriction) needs `banUsers`; removing a
+ * message needs `deleteMessages`. Anything unreadable is read as not granted,
+ * which leaves a block standing — the safe direction (see `noteProbe`).
+ */
+export const grantedRights = (member: BotMembership | null | undefined): GrantedRights => {
+  if (!member) return { canDelete: false, canRestrict: false }
+  if (member.status === 'creator') return { canDelete: true, canRestrict: true }
+  if (member.status !== 'admin') return { canDelete: false, canRestrict: false }
+  if (member.permissions === null) return { canDelete: true, canRestrict: true }
+  return {
+    canDelete: member.permissions.deleteMessages === true,
+    canRestrict: member.permissions.banUsers === true
+  }
+}
+
+/** What a probe's answer says is missing, in the shape refusals are logged in. */
+export const grantedShape = (granted: GrantedRights): RightsShape =>
+  rightsShape(!granted.canDelete, !granted.canRestrict)
+
 /** The last in-chat missing-rights notice: which state it was about, how many, when. */
 export interface RightsNoticeMark {
   shape: RightsShape
@@ -363,12 +406,12 @@ export class RightsMemory {
    * it from the persisted records, so a restart restates nothing, and a lost
    * mark costs at most one extra log line.
    *
-   * Deliberately NOT cleared by `forget`. A granted probe forgets the record on
-   * the strength of admin status alone; in a chat where the bot is an admin
-   * without the rights, the next attempt re-creates the same record, and
-   * clearing the mark there would log "lost" and "restored" on every probe.
-   * Only an execution that went through (`noteOutcome` with no refusal) shows
-   * up as `restored`.
+   * Deliberately NOT cleared by `forget`. A probe forgets the record on the
+   * strength of the rights bitmask alone (since 2026-10-15; admin status alone
+   * before that), and where the bitmask and Telegram's answers disagree the next
+   * attempt re-creates the same record — clearing the mark there would log
+   * "lost" and "restored" on every probe. Only an execution that went through
+   * (`noteOutcome` with no refusal) shows up as `restored`.
    */
   private readonly logMarks = new Map<number, RightsLogMark>()
 
@@ -544,24 +587,38 @@ export class RightsMemory {
   }
 
   /**
-   * Record what the cheap lookup said.
+   * Record what the cheap lookup said, and return the capabilities it lifted.
    *
    * `granted` may ONLY clear, never create or extend a block — the asymmetry is
    * the whole reason this lookup is allowed to exist. Read pessimistically
-   * (we are not an admin) it merely leaves the block standing, which is the
+   * (the right is missing) it merely leaves that block standing, which is the
    * status quo; read optimistically it costs one evaluation, and the refusal
    * that follows re-blocks the chat. Were it allowed to block on its own, a
    * misread would silence the bot in a healthy chat with nothing in the log.
+   *
+   * Per capability since 2026-10-15: a right that is present lifts its own
+   * block and nothing else, so an admin without the ban right keeps its sender
+   * block (and its notice history) instead of being forgotten wholesale.
    */
-  noteProbe(chatId: number, granted: boolean): void {
-    if (granted) {
-      this.forget(chatId)
-      return
-    }
+  noteProbe(chatId: number, granted: GrantedRights): ('delete' | 'sender')[] {
     const record = this.records.get(chatId)
-    if (!record) return
+    if (!record) return []
+    const lifted: ('delete' | 'sender')[] = []
+    if (granted.canDelete && record.deleteRefused) {
+      record.deleteRefused = false
+      lifted.push('delete')
+    }
+    if (granted.canRestrict && record.senderRefused) {
+      record.senderRefused = false
+      lifted.push('sender')
+    }
+    if (!record.deleteRefused && !record.senderRefused && lifted.length > 0) {
+      this.forget(chatId)
+      return lifted
+    }
     record.probeAt = this.now() + this.backoffMs(record.strikes)
     this.save(record)
+    return lifted
   }
 
   /**

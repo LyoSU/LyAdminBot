@@ -4,7 +4,8 @@ import {
   RightsMemory, RIGHTS_PROBE_MS, RIGHTS_PROBE_MAX_MS,
   RIGHTS_EPISODE_MS, RIGHTS_NOTICE_REMIND_MS, RIGHTS_NOTICE_MAX, RIGHTS_NOTICE_KEEP_MS,
   failureKind, failureLabels, rightsLogDecision, rightsNoticeDecision, RIGHTS_LOG_REMIND_MS,
-  type RightsNoticeMark, type RightsRecord, type RightsShape
+  grantedRights, grantedShape,
+  type BotMembership, type GrantedRights, type RightsNoticeMark, type RightsRecord, type RightsShape
 } from './rights.js'
 
 const at = (t: { ms: number }): RightsMemory => new RightsMemory(() => t.ms)
@@ -27,6 +28,8 @@ const persisting = (t: { ms: number }): {
 }
 
 const bothRefused = ['delete: FORBIDDEN', 'mute: CHAT_ADMIN_REQUIRED']
+const ALL_RIGHTS: GrantedRights = { canDelete: true, canRestrict: true }
+const NO_RIGHTS: GrantedRights = { canDelete: false, canRestrict: false }
 
 describe('RightsMemory', () => {
   it('knows nothing until something is refused', () => {
@@ -136,7 +139,7 @@ describe('RightsMemory — the refusal does not lapse, only the probe does', () 
     t.ms += RIGHTS_PROBE_MS + 1
     expect(rights.mayProbe(-410)).toBe(true)
 
-    rights.noteProbe(-410, true)
+    expect(rights.noteProbe(-410, ALL_RIGHTS)).toEqual(['delete', 'sender'])
     expect(rights.cannotEnforce(-410)).toBe(false)
     expect(rights.blockedChats()).toEqual([])
   })
@@ -146,7 +149,7 @@ describe('RightsMemory — the refusal does not lapse, only the probe does', () 
     const rights = at(t)
     rights.noteOutcome(-420, bothRefused)
     t.ms += RIGHTS_PROBE_MS + 1
-    rights.noteProbe(-420, false)
+    expect(rights.noteProbe(-420, NO_RIGHTS)).toEqual([])
     expect(rights.cannotEnforce(-420)).toBe(true)
     expect(rights.mayProbe(-420)).toBe(false)
   })
@@ -157,10 +160,32 @@ describe('RightsMemory — the refusal does not lapse, only the probe does', () 
     // direction it costs one evaluation, and the refusal re-blocks the chat.
     const t = { ms: 1_000 }
     const rights = at(t)
-    rights.noteProbe(-430, false)
+    rights.noteProbe(-430, NO_RIGHTS)
+    rights.noteProbe(-430, ALL_RIGHTS)
     expect(rights.cannotEnforce(-430)).toBe(false)
     expect(rights.blockedChats()).toEqual([])
     expect(rights.strikes(-430)).toBe(0)
+  })
+
+  it('a probe lifts only the block whose right is present', () => {
+    // Production 2026-10-15: an admin bot without the delete and ban rights
+    // passed a status-only probe, so the block was forgotten and every message
+    // paid the full pipeline until the next refusal re-created it.
+    const t = { ms: 1_000 }
+    const { rights, saved } = persisting(t)
+    rights.noteOutcome(-440, bothRefused, 111)
+    rights.noticeDecision(-440)
+    t.ms += RIGHTS_PROBE_MS + 1
+    expect(rights.noteProbe(-440, NO_RIGHTS), 'an admin with neither right').toEqual([])
+    expect(rights.cannotEnforce(-440)).toBe(true)
+
+    t.ms += RIGHTS_PROBE_MAX_MS
+    expect(rights.noteProbe(-440, { canDelete: true, canRestrict: false })).toEqual(['delete'])
+    expect(rights.cannotEnforce(-440), 'removing messages is possible again').toBe(false)
+    expect(rights.knownGap(-440)).toEqual({ deleteBlocked: false, senderBlocked: true })
+    // The rest of the record stays: strikes, the accounts, the notice history.
+    expect(saved.get(-440)).toMatchObject({ senderRefused: true, strikes: 1, blockedAccounts: [111], noticeCount: 1 })
+    expect(rights.mayProbe(-440), 'the next probe is still rate-limited').toBe(false)
   })
 
   it('the probe interval doubles while the refusal persists', () => {
@@ -483,6 +508,59 @@ describe('RightsMemory — asking the admins', () => {
 })
 
 /**
+ * The bot's own membership read into the two capabilities refusals are kept
+ * against — the mapping the probe trusts to lift a block.
+ */
+describe('grantedRights', () => {
+  const admin = (permissions: BotMembership['permissions']): BotMembership => ({ status: 'admin', permissions })
+  it.each<[string, BotMembership | null | undefined, GrantedRights, RightsShape]>([
+    ['no answer', null, NO_RIGHTS, 'all'],
+    ['undefined answer', undefined, NO_RIGHTS, 'all'],
+    ['plain member', { status: 'member', permissions: null }, NO_RIGHTS, 'all'],
+    ['restricted', { status: 'restricted', permissions: null }, NO_RIGHTS, 'all'],
+    ['left', { status: 'left', permissions: null }, NO_RIGHTS, 'all'],
+    ['creator', { status: 'creator', permissions: {} }, ALL_RIGHTS, 'none'],
+    ['admin of a basic group (no bitmask)', admin(null), ALL_RIGHTS, 'none'],
+    ['admin with neither right', admin({}), NO_RIGHTS, 'all'],
+    ['admin with delete only', admin({ deleteMessages: true }), { canDelete: true, canRestrict: false }, 'sender'],
+    ['admin with ban only', admin({ banUsers: true }), { canDelete: false, canRestrict: true }, 'delete'],
+    ['admin with both', admin({ deleteMessages: true, banUsers: true }), ALL_RIGHTS, 'none'],
+    ['admin with both explicitly off', admin({ deleteMessages: false, banUsers: false }), NO_RIGHTS, 'all']
+  ])('%s', (_name, member, granted, shape) => {
+    expect(grantedRights(member)).toEqual(granted)
+    expect(grantedShape(grantedRights(member))).toBe(shape)
+  })
+
+  it('never grants a right to anyone but an admin or the creator', () => {
+    fc.assert(fc.property(
+      fc.constantFrom('member', 'restricted', 'banned', 'left', 'weird'),
+      fc.option(fc.record({ deleteMessages: fc.boolean(), banUsers: fc.boolean() }), { nil: null }),
+      (status, permissions) => {
+        const g = grantedRights({ status, permissions })
+        return !g.canDelete && !g.canRestrict
+      }
+    ))
+  })
+
+  it('a probe never lifts a block whose right the bitmask does not show', () => {
+    fc.assert(fc.property(
+      fc.boolean(), fc.boolean(), fc.boolean(), fc.boolean(),
+      (deleteRefused, senderRefused, deleteMessages, banUsers) => {
+        const t = { ms: 1_000 }
+        const rights = at(t)
+        const errors = [...(deleteRefused ? ['delete: FORBIDDEN'] : []), ...(senderRefused ? ['ban: CHAT_ADMIN_REQUIRED'] : [])]
+        if (errors.length === 0) return true
+        rights.noteOutcome(-450, errors)
+        rights.noteProbe(-450, grantedRights({ status: 'admin', permissions: { deleteMessages, banUsers } }))
+        const gap = rights.knownGap(-450) ?? { deleteBlocked: false, senderBlocked: false }
+        return gap.deleteBlocked === (deleteRefused && !deleteMessages) &&
+          gap.senderBlocked === (senderRefused && !banUsers)
+      }
+    ))
+  })
+})
+
+/**
  * Surviving a restart, which is the whole point: the bot restarted three times
  * on 2026-08-07 and each restart cost every refusing chat a fresh evaluation
  * plus a fresh public notice.
@@ -783,7 +861,7 @@ describe('RightsMemory.logDecision', () => {
     const rights = at(t)
     rights.noteOutcome(-901, bothRefused)
     expect(rights.logDecision(-901)?.change).toBe('lost')
-    rights.noteProbe(-901, true)
+    rights.noteProbe(-901, ALL_RIGHTS)
     t.ms += 60_000
     rights.noteOutcome(-901, bothRefused)
     expect(rights.logDecision(-901)).toBeNull()
