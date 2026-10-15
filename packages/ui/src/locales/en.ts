@@ -52,7 +52,7 @@ export const en: Locale = {
       banned_by_admin: 'banned by an admin',
       gated: 'being checked'
     },
-    footer: '⚠️ — joined alongside a spammer and looks like it. "🚫 N" bans number N.',
+    footer: '⚠️ — joined alongside a spammer, with a similar profile. "🚫 N" bans member number N.',
     banButton: (index) => `🚫 ${index}`,
     banAllButton: (count) => `🚫 Ban everyone still silent (${count})`,
     confirmAll: (count) => `Ban <b>${count}</b> ${count === 1 ? 'newcomer who has' : 'newcomers who have'} not written anything yet?`,
@@ -64,9 +64,9 @@ export const en: Locale = {
     title: (count, spammer) => `👥 <b>${count} similar ${count === 1 ? 'newcomer' : 'newcomers'} joined alongside the spammer ${spammer}</b>`,
     hint: 'Similar profile, joined around the same time, no messages yet. The bot has not restricted anyone — an admin decides.',
     banButton: (count) => `🚫 Ban ${count}`,
-    keepButton: 'Keep',
+    keepButton: 'Let them stay',
     banned: (done, total, admin) => `🚫 Banned ${done} of ${total} newcomer${s(total)} who joined alongside the spammer · ${admin}`,
-    kept: (admin) => `✅ Newcomers kept · ${admin}`,
+    kept: (admin) => `✅ The newcomers stay in the chat · ${admin}`,
     expired: 'This card is out of date.'
   },
 
@@ -88,7 +88,7 @@ export const en: Locale = {
     footer: [
       'These were automatic decisions by the bot, not by the admins.',
       'If I got it wrong, write to an admin of that chat: an admin can undo it with one tap.',
-      'Restrictions with a term lift by themselves.'
+      'Time-limited restrictions end on their own.'
     ].join('\n'),
     whyButton: (n) => `Why? · ${n}`
   },
@@ -104,10 +104,10 @@ export const en: Locale = {
     '/lang — language',
     '',
     '<b>Admins:</b>',
-    '/settings — settings panel (opens in PM, all buttons there)',
+    '/settings — settings panel (opens in a private chat, everything there is buttons)',
     '/banan /kick /del — moderation as a reply',
     '/check — user card with a trust button · /untrust — revoke trust',
-    '/welcome — newcomer greetings · /extra, /extras — triggers',
+    '/welcome — newcomer greeting · /extra, /extras — triggers',
     '',
     'Every notice carries a <b>why?</b> link with the full decision card. Admins also get <b>[✅ Not spam]</b>: it undoes the decision and adds the person to the chat’s trusted list.'
   ].join('\n'),
@@ -131,22 +131,22 @@ export const en: Locale = {
     stats: 'How much spam I have caught',
     report: 'Report spam (reply)',
     settings: 'Anti-spam settings (admins)',
-    banan: 'Mute via reply (/banan 5m)',
+    banan: 'Mute a member (reply, /banan 5m)',
     kick: 'Kick a member (reply)',
     del: 'Delete a message (reply)',
     untrust: 'Revoke trust (reply)',
     check: 'Look up a profile (reply)',
-    top: 'Top active members',
-    topBanan: 'Top by bananas',
+    top: 'Most active members',
+    topBanan: 'Banana leaderboard',
     extras: 'Saved triggers',
-    welcome: 'Newcomer greetings',
-    ping: 'Check the bot is alive'
+    welcome: 'Newcomer greeting',
+    ping: 'Check whether the bot is alive'
   },
 
   actions: {
     captcha: '👋 checking',
     delete: '🧹 message removed',
-    kick: '🚪 kicked from chat',
+    kick: '🚪 kicked from the chat',
     mute: '🔇 muted',
     ban: '🔨 banned'
   },
@@ -159,18 +159,18 @@ export const en: Locale = {
     overrideDone: 'Undone: the restriction is lifted and the account is now trusted in this chat.',
     overridePartial: '⚠️ Only partly undone: could not lift the restriction or add to the trusted list. Check my rights and tap again.',
     overrideAlreadyDone: 'Already reverted.',
-    adminOnly: 'Chat admins only.',
+    adminOnly: 'Only admins of this chat can do this.',
     missingRights: ({ deleteBlocked, senderBlocked, accounts }) => {
       const left = accounts > 0
-        ? ` ${accounts} account${accounts === 1 ? '' : 's'} stayed in the chat because of it today.`
+        ? ` Because of this, ${accounts} account${accounts === 1 ? '' : 's'} stayed in the chat over the last day.`
         : ''
       if (senderBlocked && !deleteBlocked) {
-        return `⚠️ I delete the spam, but I cannot remove the spammers — I am missing the "Ban users" right.${left}`
+        return `⚠️ I delete the spam, but I cannot ban the spammers — I am missing the "Ban users" right.${left}`
       }
       if (deleteBlocked && !senderBlocked) {
         return '⚠️ I can ban the spammers, but I cannot delete their messages — I am missing the "Delete messages" right.'
       }
-      return `⚠️ Caught spam and I am allowed to do nothing about it. Please grant me the "Delete messages" and "Ban users" rights.${left}`
+      return `⚠️ I found spam, but I have no rights to act on it. Please grant me the "Delete messages" and "Ban users" rights.${left}`
     }
   },
 
@@ -189,9 +189,9 @@ export const en: Locale = {
     other_spam: 'spam',
     known_spam_signature: 'matches confirmed spam',
     semantic_spam_match: 'very similar to known spam',
-    velocity_exceeded: 'same message across multiple chats',
+    velocity_exceeded: 'the same message posted in several chats in a row',
     custom_deny: 'blocked by a chat rule',
-    scam_flag_new: 'Telegram flagged the account as scam',
+    scam_flag_new: 'Telegram flagged the account as a scam',
     external_ban_new: 'account is in spam databases',
     shared_profile_photo: 'the same profile photo is on several other accounts',
     external_high_factor_new: 'account is in spam databases',
@@ -211,11 +211,11 @@ export const en: Locale = {
     trusted_report: 'a trusted member reported this as spam',
     community_vote: 'the community voted: spam',
     forward_blacklist: 'forwarded from a known spam source',
-    record_ban_elsewhere: 'account already banned in another chat over spam databases or a Telegram flag — banned here before its first message',
-    content_ban_elsewhere: 'account banned in another chat for spam — banned here before its first message',
-    listed_arrival: 'on arrival: account is in spam databases or flagged by Telegram',
+    record_ban_elsewhere: 'the account was already banned in another chat because it is in spam databases or flagged by Telegram — banned here before its first message',
+    content_ban_elsewhere: 'the account was banned in another chat for spam — banned here before its first message',
+    listed_arrival: 'on joining: the account is in spam databases or flagged by Telegram',
     arrival_look: 'a silent newcomer whose profile looks like a spam network',
-    arrived_with_spammer: 'joined alongside a spammer and looks like it — banned by an admin',
+    arrived_with_spammer: 'joined alongside a spammer, with a similar profile — banned by an admin',
     admin_arrival_ban: 'banned by an admin from the newcomers list'
   },
   reasonFallback: 'suspicious activity',
@@ -251,7 +251,7 @@ export const en: Locale = {
       restricted_for_spam: 'Telegram restricted them for spam',
       just_joined: 'joined and posted right away',
       joined_during_surge: 'joined during an influx of new members',
-      arrived_with_spammer: 'joined alongside a spammer and looks like it',
+      arrived_with_spammer: 'joined alongside a spammer, with a similar profile',
       scam_flag: 'Telegram flagged the account as a scam',
       fake_flag: 'Telegram flagged the account as fake',
       restricted_flag: 'the account is restricted by Telegram',
@@ -277,7 +277,7 @@ export const en: Locale = {
       long_text: 'a long post',
       invisible_in_word: 'invisible characters hidden inside words',
       mixed_script_word: 'letters from different alphabets in one word',
-      greek_homoglyph_word: 'Greek letters standing in for look-alikes inside a word',
+      greek_homoglyph_word: 'Greek look-alike letters inside a word',
       foreign_script: 'written in a script this chat does not use',
       custom_emoji_heavy: 'many premium emoji',
       paid_media: 'paid media content',
@@ -303,21 +303,21 @@ export const en: Locale = {
       velocity_repeats: 'same text posted repeatedly',
       velocity_wave: 'same text from several accounts',
       bot_mention: 'mentions a bot',
-      sender_burst: 'a run of messages from one account',
-      burst_grey_repeat: 'several messages in the run already looked suspicious'
+      sender_burst: 'a burst of messages from one account',
+      burst_grey_repeat: 'several messages in the burst already looked suspicious'
     },
     decidedBy: {
       custom_rule: 'chat rule',
-      deterministic: 'deterministic rule',
+      deterministic: 'hard rule',
       signature: 'signature database',
       vector: 'semantic search',
       forward: 'forward-source blacklist',
-      velocity: 'cross-chat velocity',
+      velocity: 'posting across several chats',
       moderation: 'content moderation',
       llm: 'AI analysis',
       llm_cached: 'AI analysis (cached)',
       session: 'message series analysis',
-      burst: 'sender run analysis',
+      burst: 'one-account burst analysis',
       score: 'signal score',
       abstain: 'no decision',
       error: 'error'
@@ -351,7 +351,7 @@ export const en: Locale = {
     neverSeen: NEVER_SEEN,
     units: { now: NOW, m: 'm', h: 'h', d: 'd', mo: 'mo', y: 'y' },
     checkNeedReply: 'Reply to a user’s message with /check.',
-    notFound: 'Could not fetch the profile.'
+    notFound: 'Could not load the profile.'
   },
 
   vote: {
@@ -394,7 +394,7 @@ export const en: Locale = {
       hamGroup: '✅ Not spam',
       adminMark: 'admin',
       changedMark: 'changed their vote',
-      span: (span) => (span === NOW ? '⏱ all votes came within a minute' : `⏱ first to last ballot: ${span}`),
+      span: (span) => (span === NOW ? '⏱ all votes came within a minute' : `⏱ first to last vote: ${span}`),
       more: (count) => `…and ${count} more`,
       nobody: 'Nobody voted in time.',
       notForTarget: 'This vote is about you: you cannot vote in it or see who voted.',
@@ -404,13 +404,13 @@ export const en: Locale = {
   },
 
   report: {
-    needReply: 'Use /report as a reply to a message, or name the person: /report @username, /report 123456789, or pick them from the list with @.',
-    notFound: (who) => `Not found in this chat: ${who}. Reply to one of their messages or pick them from the list with @.`,
+    needReply: 'Use /report as a reply to a message, or name the person: /report @username or /report 123456789. You can also type @ and pick them from the list.',
+    notFound: (who) => `Not found in this chat: ${who}. Reply to one of their messages, or type @ and pick them from the list.`,
     notInChat: 'That person is no longer in the chat.',
     cantReportAdmin: 'Admins cannot be reported.',
     rateLimited: 'Too many reports. Wait a few minutes.',
     accepted: 'Got it, thanks.',
-    oneAtATime: 'Several people joined on that line. Reply to a message from the one you mean.',
+    oneAtATime: 'Several people joined in that one message. Reply to a message from the person you are reporting.',
     voteClosed: 'The vote on this message is already closed. An admin can still decide.',
     channelSender: 'This was posted as a channel. Only an admin can block a channel.'
   },
@@ -420,29 +420,29 @@ export const en: Locale = {
     window: (days) => (days === 1 ? 'Over the last day:' : `Over the last ${days} days:`),
     checked: (count) => `📬 <b>${n(count)}</b> message${s(count)} checked`,
     spammers: (count) => `🚫 <b>${n(count)}</b> spammer${s(count)} blocked`,
-    chats: (count) => `💬 <b>${n(count)}</b> chat${s(count)} under guard`,
-    speed: (ms) => `⚡ a verdict in <b>${n(ms)} ms</b>`,
-    quiet: (percent) => `<b>${decimal1(percent, '.')}%</b> of messages I never touched. No spam, no noise from me.`,
+    chats: (count) => `💬 <b>${n(count)}</b> chat${s(count)} protected`,
+    speed: (ms) => `⚡ a decision in <b>${n(ms)} ms</b>`,
+    quiet: (percent) => `<b>${decimal1(percent, '.')}%</b> of messages I left alone. No spam, no noise from me.`,
     reasonsTitle: '<b>What I catch most:</b>',
     reasonLine: (name, count) => `• ${name} — ${n(count)}`,
     memory: (signatures) => `🧠 ${n(signatures)} spam signature${s(signatures)} in memory`,
-    corrections: (percent) => `✅ Admins overturned ${decimal1(percent, '.')}% of my calls`,
+    corrections: (percent) => `✅ Admins overturned ${decimal1(percent, '.')}% of my decisions`,
     chatHeader: (title, days) => `🛡 <b>${title}</b> over ${days} day${s(days)}`,
     chatLine: (checked, spammers, deletes) =>
       `📬 ${n(checked)} checked · 🚫 ${n(spammers)} spammer${s(spammers)} · 🧹 ${n(deletes)} removed`,
     chatLastSpam: (span) => `Last spam: ${ago(span)}`,
     chatClean: '✨ The bot found no spam in that time.',
-    unavailable: '📊 The numbers are out of reach right now, try again a bit later.',
+    unavailable: '📊 I cannot show the numbers right now. Try again a bit later.',
     button: '📊 Bot stats'
   },
 
   stats: {
     title: '📊 <b>Your stats</b>',
-    inChat: (count, chatTitle) => chatTitle ? `Messages in ${chatTitle}: ${count}` : `Messages in this chat: ${count}`,
-    global: (count) => `Messages everywhere: ${count}`,
+    inChat: (count, chatTitle) => chatTitle ? `Messages in ${chatTitle}: ${n(count)}` : `Messages in this chat: ${n(count)}`,
+    global: (count) => `Messages everywhere: ${n(count)}`,
     reputation: (score, status) => `Reputation: ${score} (${status})`,
     repStatus: { trusted: 'reliable', neutral: 'neutral', suspicious: 'suspicious', restricted: 'restricted' },
-    bananCaught: (count) => `Bananas caught: ${count} 🍌`,
+    bananCaught: (count) => `Bananas caught: ${n(count)} 🍌`,
     openInPm: 'Your stats are in a private chat with the bot — tap the button.',
     openButton: '📊 My stats'
   },
@@ -457,35 +457,35 @@ export const en: Locale = {
 
   kick: {
     success: (name) => `👋 ${name} was kicked from the chat.`,
-    needReply: 'Reply to the message of whoever you want to kick with /kick.'
+    needReply: 'Reply with /kick to a message from the person you want to remove.'
   },
 
   untrust: {
     success: (name) => `🔓 Trust revoked for ${name}. Their messages go through the checks again.`,
-    needReply: 'Reply to the message of whoever you want to untrust with /untrust.',
+    needReply: 'Reply with /untrust to a message from the person whose trust you want to revoke.',
     notTrusted: (name) => `ℹ️ ${name} is not on the trusted list — nothing to revoke.`
   },
 
   trust: {
     button: '✅ Trust',
     untrustButton: '🔓 Untrust',
-    added: 'Added to this chat’s trusted users.',
+    added: 'Added to this chat’s trusted list.',
     removed: 'Trust revoked.',
     grantedBy: (who, span, via) =>
       `✅ Trusted by ${who}, ${ago(span)}` +
-      (via === 'override' ? ' · reversed a bot decision' : via === 'vote' ? ' · by admin ballot' : ''),
+      (via === 'override' ? ' · reversed a bot decision' : via === 'vote' ? ' · by an admin’s vote' : ''),
     grantUnknown: '✅ Trusted · who granted it and when was not recorded'
   },
 
   welcome: {
-    enabled: '👋 Greetings on.',
-    disabled: '👋 Greetings off.',
-    textSet: '✅ Greeting text saved. %name% is substituted.',
+    enabled: '👋 Newcomer greeting on.',
+    disabled: '👋 Newcomer greeting off.',
+    textSet: '✅ Greeting text saved. %name% is replaced with the newcomer’s name.',
     gifSet: '✅ Greeting media saved.',
     usage: [
       '/welcome — toggle on/off',
       '/welcome <text with %name%> — set the greeting',
-      'reply to a gif with /welcome — set the gif'
+      'reply to a GIF with /welcome — set the GIF'
     ].join('\n'),
     limit: '⚠️ Cannot add more: the limit is reached. Remove something in settings first.',
     duplicate: 'ℹ️ Already added.',
@@ -495,7 +495,7 @@ export const en: Locale = {
     defaultGreeting: (name) => `👋 Welcome, ${name}!`,
     editor: {
       title: (state, nTexts, nGifs) =>
-        `👋 <b>Newcomer greeting</b>\n\nStatus: ${state}\nTexts: ${nTexts} · Gifs: ${nGifs}\n\nWith several, the bot picks a random one each time.`,
+        `👋 <b>Newcomer greeting</b>\n\nStatus: ${state}\nTexts: ${nTexts} · GIFs: ${nGifs}\n\nIf there are several, the bot picks one at random each time.`,
       enable: '🔔 Enable',
       disable: '🔕 Disable',
       texts: (n) => `📝 Texts (${n})`,
@@ -507,17 +507,17 @@ export const en: Locale = {
       addText: '➕ Add text',
       gifsTitle: (n, max) => `🎞 <b>Greeting media</b> (${n}/${max})`,
       gifsItem: (i) => `${i}. 🎞 media #${i}`,
-      gifsEmpty: '🎞 <b>Greeting media</b>\n\nEmpty for now. Send a gif, video or photo.',
+      gifsEmpty: '🎞 <b>Greeting media</b>\n\nEmpty for now. Send a GIF, video or photo.',
       addGif: '➕ Add media',
       promptText: '📝 Send the greeting text in one message.\nYou can include <code>%name%</code> — I’ll substitute the newcomer’s name.\n\n/cancel to abort.',
-      promptGif: '🎞 Send a gif, video or photo in one message.\n\n/cancel to abort.',
+      promptGif: '🎞 Send a GIF, video or photo in one message.\n\n/cancel to abort.',
       added: '✅ Added.',
       cancelled: '↩️ Cancelled.',
-      invalidGif: '⚠️ This needs a gif, video or photo — send one of those.',
+      invalidGif: '⚠️ That is not a GIF, video or photo. Send one of those.',
       removed: '🗑 Removed.',
       removeMissing: 'That one is already gone — refreshed the list.',
       expired: '⌛ That took too long. Open the editor again.',
-      previewEmpty: 'Nothing to show yet — add a text, gif, video or photo.'
+      previewEmpty: 'Nothing to show yet — add a text, GIF, video or photo.'
     }
   },
 
@@ -533,13 +533,13 @@ export const en: Locale = {
     listEmpty: 'No triggers here yet.',
     editor: {
       title: (n, max) =>
-        `#️⃣ <b>Triggers</b> (${n})\n\nType <code>#name</code> in the chat and the bot sends the saved reply.\nLimit: up to ${max} per message.`,
+        `#️⃣ <b>Triggers</b> (${n})\n\nType <code>#name</code> in the chat and the bot sends the saved reply.\nLimit: up to ${max} replies per message.`,
       item: (i, icon, name) => `${i}. ${icon} #${name}`,
       empty: '#️⃣ <b>Triggers</b>\n\nEmpty for now. Add the first — a name plus text or media.',
       add: '➕ Add trigger',
       maxLabel: (n) => `Limit: ${n}`,
       promptName: '#️⃣ Send the trigger name (without #), one word.\n\n/cancel to abort.',
-      promptContent: (name) => `Now send what the bot should reply to <code>#${name}</code> with: text, a gif, photo or video.\n\n/cancel to abort.`,
+      promptContent: (name) => `Now send what the bot should reply to <code>#${name}</code> with: text, a GIF, photo or video.\n\n/cancel to abort.`,
       added: (name) => `✅ Trigger #${name} saved.`,
       cancelled: '↩️ Cancelled.',
       invalidName: '⚠️ The name is one word: letters, digits or _, no spaces.',
