@@ -591,6 +591,10 @@ export const by: Locale = {
     banDatabase: 'Спам-базы',
     quiet: 'Ціхі рэжым',
     quietHint: '🤫 Апавяшчэнні пра ўпэўненыя дзеянні прыходзяць без гуку і кнопак і знікаюць праз 5 с. Усё, што зрабіў бот, — у «🧾 Апошнія дзеянні». Галасаванні і няўпэўненыя рашэнні паказваюцца як звычайна.',
+    rightsMissing: ({ deleteBlocked, senderBlocked }) => {
+      const missing = [...(deleteBlocked ? ['выдаляць паведамленні'] : []), ...(senderBlocked ? ['блакаваць карыстальнікаў'] : [])]
+      return (missing.length > 1 ? '⚠️ Не хапае правоў: ' : '⚠️ Не хапае права: ') + missing.join(', ')
+    },
     banan: 'Працягласць банана',
     language: 'Мова бота ў чаце',
     languageSaved: 'Мову чата абноўлена',

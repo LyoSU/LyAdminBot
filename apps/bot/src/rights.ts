@@ -125,11 +125,32 @@ export const RIGHTS_PROBE_MS = 60 * 1000
  */
 export const RIGHTS_PROBE_MAX_MS = 15 * 60 * 1000
 
-/** First quiet period after asking a chat's admins for rights. */
-export const RIGHTS_WARN_MS = 60 * 60 * 1000
+/**
+ * How long after the first missing-rights notice the one reminder may follow.
+ *
+ * Production 2026-10-15: the quota this replaces doubled its quiet period with
+ * the strike count, but in a chat refusing everything the pipeline stops at the
+ * `enforcement_blocked` gate before any execution reaches `noteOutcome`, so the
+ * strike count never grew past one and the same chat was asked every hour,
+ * indefinitely. A chat-facing notice now follows the STATE instead: once when a
+ * chat becomes blocked, one reminder a day later if nothing changed, then
+ * silence until the state moves. See `rightsNoticeDecision`.
+ */
+export const RIGHTS_NOTICE_REMIND_MS = 24 * 60 * 60 * 1000
 
-/** Ceiling on the nag quiet period: once a day into a chat that ignores it. */
-export const RIGHTS_WARN_MAX_MS = 24 * 60 * 60 * 1000
+/** Notices per uninterrupted blocked state: the first one and one reminder. */
+export const RIGHTS_NOTICE_MAX = 2
+
+/**
+ * How long a record that holds nothing but notice history is kept.
+ *
+ * Such a record exists for a chat that refused a manual command (/kick, an
+ * admin's report) without a pipeline execution ever recording a refusal there.
+ * Boot clears records with no refusal once `warnedUntil` has passed, so this is
+ * how long those chats stay quiet after their reminder. Not forever: a size-
+ * capped cluster must not keep one document per group that once failed a /kick.
+ */
+export const RIGHTS_NOTICE_KEEP_MS = 30 * 24 * 60 * 60 * 1000
 
 /**
  * How long a standing refusal stays the SAME episode.
@@ -179,8 +200,19 @@ export interface RightsRecord {
   strikes: number
   /** Not before this (ms epoch): when the cheap lookup may run again. */
   probeAt: number
-  /** Not before this (ms epoch): when the admins may be asked again. */
+  /**
+   * Keep this record at least until then (ms epoch), even with nothing refused.
+   * Until 2026-10-15 this was the nag quota's deadline; it is now set
+   * `RIGHTS_NOTICE_KEEP_MS` past each notice, so the notice history below
+   * outlives a boot-time cleanup. The field name stays: the store reads it.
+   */
   warnedUntil: number
+  /** The rights state the last in-chat notice was about; `none` = never. */
+  noticeShape: RightsShape
+  /** Notices posted for `noticeShape` so far: 0, 1, or `RIGHTS_NOTICE_MAX`. */
+  noticeCount: number
+  /** When the last of those notices was posted (ms epoch); 0 = never. */
+  noticeAt: number
   /**
    * When we last saw a refusal here (ms epoch); 0 for records written before
    * this field existed, which is read as "no opinion" rather than as "long ago".
@@ -206,9 +238,8 @@ export interface RightsRecord {
  * that silently accepted a half-record would leave `blockedAccounts` undefined
  * for `push` to trip over on the next refusal.
  */
-export type RestoredRights =
-  Omit<RightsRecord, 'lastRefusalAt' | 'blockedAccounts'> &
-  Partial<Pick<RightsRecord, 'lastRefusalAt' | 'blockedAccounts'>>
+type LateFields = 'lastRefusalAt' | 'blockedAccounts' | 'noticeShape' | 'noticeCount' | 'noticeAt'
+export type RestoredRights = Omit<RightsRecord, LateFields> & Partial<Pick<RightsRecord, LateFields>>
 
 /** What a chat is currently missing, for the notice that asks for it. */
 export interface RightsGap {
@@ -222,7 +253,7 @@ export interface RightsGap {
  * How often an unchanged refusal may be restated in the log.
  *
  * Production 2026-10-15: `missing_rights` was a WARN written every time the
- * chat-facing notice quota (`shouldWarn`) opened, which in a chat held at one
+ * chat-facing notice quota (then `shouldWarn`) opened, which in a chat held at one
  * strike is hourly: the same few chats all day, one of them six times in a
  * night, burying the warnings somebody has to act on. Those chats' admins are
  * deliberately not chased (decision of 2026-10-02), so after the first line
@@ -272,6 +303,56 @@ export const rightsLogDecision = (
   return now - prev.at >= remindMs ? { level: 'info', change: 'still' } : null
 }
 
+/** The last in-chat missing-rights notice: which state it was about, how many, when. */
+export interface RightsNoticeMark {
+  shape: RightsShape
+  count: number
+  at: number
+}
+
+/**
+ *  - `first`       — the chat has just become blocked: post.
+ *  - `changed`     — a different set of rights is missing now: post, count anew.
+ *  - `reminder`    — unchanged for a day since the only notice: post, last time.
+ *  - `not_due`     — one notice so far, less than a day ago: hold.
+ *  - `reminded`    — both notices for this state already went out: hold.
+ *  - `not_blocked` — nothing is missing, so there is nothing to ask for: hold.
+ */
+export type RightsNoticeReason = 'first' | 'changed' | 'reminder' | 'not_due' | 'reminded' | 'not_blocked'
+
+/**
+ * Whether to post the in-chat missing-rights notice now, and what to remember
+ * if it is posted. Pure, so the cadence is tested without a clock or a chat.
+ *
+ * The cadence is a decision of 2026-10-15: one notice when a chat's rights
+ * state becomes blocked, one reminder a day later if it is unchanged, then
+ * silence until the state changes. A change between a partial block and a full
+ * one counts as a change — the notice asks for a different thing then. Rights
+ * restored and lost again restarts the cycle because restoring them deletes the
+ * record, and with it this mark.
+ *
+ * A clock that went backwards is not a day passing.
+ */
+export const rightsNoticeDecision = (
+  prev: RightsNoticeMark,
+  shape: RightsShape,
+  now: number,
+  remindMs: number = RIGHTS_NOTICE_REMIND_MS
+): { post: boolean; reason: RightsNoticeReason; next: RightsNoticeMark } => {
+  if (shape === 'none') return { post: false, reason: 'not_blocked', next: prev }
+  if (prev.count <= 0 || prev.shape === 'none') {
+    return { post: true, reason: 'first', next: { shape, count: 1, at: now } }
+  }
+  if (prev.shape !== shape) return { post: true, reason: 'changed', next: { shape, count: 1, at: now } }
+  if (prev.count >= RIGHTS_NOTICE_MAX) return { post: false, reason: 'reminded', next: prev }
+  if (now - prev.at >= remindMs) {
+    return { post: true, reason: 'reminder', next: { shape, count: prev.count + 1, at: now } }
+  }
+  return { post: false, reason: 'not_due', next: prev }
+}
+
+const NOTICE_SHAPES: readonly RightsShape[] = ['none', 'delete', 'sender', 'all']
+
 const MAX_TRACKED_CHATS = 2000
 
 export class RightsMemory {
@@ -320,11 +401,26 @@ export class RightsMemory {
     for (const record of records) {
       // Records written before `lastRefusalAt` and `blockedAccounts` existed
       // arrive without them, and every write path below mutates in place.
-      this.records.set(record.chatId, {
+      const adopted: RightsRecord = {
         ...record,
         lastRefusalAt: Number.isFinite(record.lastRefusalAt) ? record.lastRefusalAt as number : 0,
-        blockedAccounts: Array.isArray(record.blockedAccounts) ? [...record.blockedAccounts] : []
-      })
+        blockedAccounts: Array.isArray(record.blockedAccounts) ? [...record.blockedAccounts] : [],
+        noticeShape: NOTICE_SHAPES.includes(record.noticeShape as RightsShape)
+          ? record.noticeShape as RightsShape : 'none',
+        noticeCount: Number.isFinite(record.noticeCount) ? record.noticeCount as number : 0,
+        noticeAt: Number.isFinite(record.noticeAt) ? record.noticeAt as number : 0
+      }
+      // A record from before 2026-10-15 carries no notice history, but a
+      // `warnedUntil` means the chat was asked — in a fully blocked chat, every
+      // hour for as long as the block stood. Starting its cycle over would post
+      // once more and remind a day later; it has been told enough, so it is
+      // read as already reminded about what it is missing now.
+      if (adopted.noticeCount === 0 && adopted.warnedUntil > 0) {
+        adopted.noticeShape = this.noticeShapeOf(adopted)
+        adopted.noticeCount = RIGHTS_NOTICE_MAX
+        adopted.noticeAt = this.now()
+      }
+      this.records.set(record.chatId, adopted)
       // A restart is not a change in anybody's rights: what was known before it
       // was logged then, so the next line here is the daily reminder.
       const shape = rightsShape(record.deleteRefused, record.senderRefused)
@@ -469,24 +565,45 @@ export class RightsMemory {
   }
 
   /**
-   * Whether to ask this chat's admins for rights now, and remember that we did.
+   * Whether to post the missing-rights notice in this chat now, remembering it
+   * when the answer is yes. The cadence is `rightsNoticeDecision`; the state it
+   * follows is what the notice would ask for (`gap`), so a chat with no record —
+   * a manual command refused before any execution — is asked for both rights.
    *
    * Persisted with everything else, because this is the one part of the
-   * mechanism the chat can see. The quiet period doubles from an hour to a day
-   * with the strike count, and both used to live in process memory: after each
-   * of the three restarts on 2026-08-07 the quota fell back to the first hour
-   * and the same chats were asked again.
+   * mechanism the chat can see: the bot restarts several times a day, and a
+   * history held in process memory would re-post after each one (as the old
+   * quota did three times on 2026-08-07).
    */
-  shouldWarn(chatId: number): boolean {
+  noticeDecision(chatId: number): { post: boolean; reason: RightsNoticeReason; shape: RightsShape; count: number } {
     const now = this.now()
-    const record = this.records.get(chatId) ?? this.blank(chatId)
-    if (record.warnedUntil > now) return false
-    record.warnedUntil = now + Math.min(
-      RIGHTS_WARN_MS * 2 ** Math.max(0, record.strikes - 1),
-      RIGHTS_WARN_MAX_MS
-    )
-    this.save(record)
-    return true
+    const existing = this.records.get(chatId)
+    const shape = existing ? this.noticeShapeOf(existing) : 'all'
+    const prev: RightsNoticeMark = existing
+      ? { shape: existing.noticeShape, count: existing.noticeCount, at: existing.noticeAt }
+      : { shape: 'none', count: 0, at: 0 }
+    const decision = rightsNoticeDecision(prev, shape, now)
+    if (decision.post) {
+      const record = existing ?? this.blank(chatId)
+      record.noticeShape = decision.next.shape
+      record.noticeCount = decision.next.count
+      record.noticeAt = decision.next.at
+      record.warnedUntil = now + RIGHTS_NOTICE_KEEP_MS
+      this.save(record)
+      this.prune()
+    }
+    return { post: decision.post, reason: decision.reason, shape, count: decision.next.count }
+  }
+
+  /**
+   * The rights this chat is KNOWN to be missing, or `null` when no refusal is
+   * on record. Unlike `gap`, absence of knowledge is not an ask for both: this
+   * feeds a status line, and a status line must not claim what we never saw.
+   */
+  knownGap(chatId: number): { deleteBlocked: boolean; senderBlocked: boolean } | null {
+    const record = this.records.get(chatId)
+    if (!record || (!record.deleteRefused && !record.senderRefused)) return null
+    return { deleteBlocked: record.deleteRefused, senderBlocked: record.senderRefused }
   }
 
   /**
@@ -515,8 +632,16 @@ export class RightsMemory {
   private blank(chatId: number): RightsRecord {
     return {
       chatId, deleteRefused: false, senderRefused: false,
-      strikes: 0, probeAt: 0, warnedUntil: 0, lastRefusalAt: 0, blockedAccounts: []
+      strikes: 0, probeAt: 0, warnedUntil: 0, lastRefusalAt: 0, blockedAccounts: [],
+      noticeShape: 'none', noticeCount: 0, noticeAt: 0
     }
+  }
+
+  /** The state a notice is about: what `gap` would ask for. Never `none`. */
+  private noticeShapeOf(record: RightsRecord): RightsShape {
+    return record.deleteRefused || record.senderRefused
+      ? rightsShape(record.deleteRefused, record.senderRefused)
+      : 'all'
   }
 
   private save(record: RightsRecord): void {
@@ -544,8 +669,8 @@ export class RightsMemory {
 
   /**
    * Bound the map. Nothing is dropped while it still says something: a record
-   * is disposable only once no capability is refused and the nag quota has
-   * lapsed. Storage is left alone — an entry evicted here for space is not an
+   * is disposable only once no capability is refused and its notice history
+   * is past keeping (`warnedUntil`). Storage is left alone — an entry evicted here for space is not an
    * entry we learned anything new about.
    */
   private prune(): void {

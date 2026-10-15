@@ -581,6 +581,10 @@ export const en: Locale = {
     banDatabase: 'Spam databases',
     quiet: 'Quiet mode',
     quietHint: '🤫 Notices about confident actions arrive silently, without buttons, and disappear after 5 s. Everything the bot did is under “🧾 Recent actions”. Votes and uncertain decisions show as usual.',
+    rightsMissing: ({ deleteBlocked, senderBlocked }) => {
+      const missing = [...(deleteBlocked ? ['"Delete messages"'] : []), ...(senderBlocked ? ['"Ban users"'] : [])]
+      return (missing.length > 1 ? '⚠️ Missing rights: ' : '⚠️ Missing right: ') + missing.join(', ')
+    },
     banan: 'Banan duration',
     language: 'Bot language in this chat',
     languageSaved: 'Chat language updated',

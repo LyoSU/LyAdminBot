@@ -1505,7 +1505,9 @@ describe('toRightsBlockRecord', () => {
       // so the episode carries on rather than being broken by our own gap.
       lastRefusalAt: 0,
       // An array, not undefined — this one gets pushed into.
-      blockedAccounts: []
+      blockedAccounts: [],
+      // No notice under the 2026-10-15 cadence yet; the bot reads `warnedUntil`.
+      noticeShape: 'none', noticeCount: 0, noticeAt: 0
     })
   })
 
@@ -1513,9 +1515,15 @@ describe('toRightsBlockRecord', () => {
     const record = {
       chatId: -100, deleteRefused: true, senderRefused: true,
       strikes: 7, probeAt: 42, warnedUntil: 99,
-      lastRefusalAt: 1_787_200_000_000, blockedAccounts: [111, 222]
+      lastRefusalAt: 1_787_200_000_000, blockedAccounts: [111, 222],
+      noticeShape: 'sender' as const, noticeCount: 2, noticeAt: 1_787_300_000_000
     }
     expect(toRightsBlockRecord({ ...record, _id: 'x', updatedAt: new Date() })).toEqual(record)
+  })
+
+  it('an unknown notice state reads as never noticed, never as a crash', () => {
+    const r = toRightsBlockRecord({ chatId: -100, noticeShape: 'everything', noticeCount: 'x', noticeAt: null })
+    expect([r.noticeShape, r.noticeCount, r.noticeAt]).toEqual(['none', 0, 0])
   })
 
   it('a blockedAccounts that is not a list is dropped, not trusted', () => {

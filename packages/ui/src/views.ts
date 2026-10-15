@@ -1234,6 +1234,11 @@ export interface SettingsState {
   bananDefaultSeconds: number
   /** Current group interface-language code (uk/en/ru/tr/by). */
   locale: string
+  /**
+   * Rights a refusal proved missing in this chat, or null/absent when none is
+   * known. Shown as one line at the top of the panel.
+   */
+  missingRights?: { deleteBlocked: boolean; senderBlocked: boolean } | null
 }
 
 const langName = (code: string): string => LOCALES[code]?.languageName ?? code
@@ -1267,6 +1272,12 @@ export const settingsPanel = (locale: Locale, chatId: number, state: SettingsSta
     text: [
       locale.settings.title,
       '',
+      // First, because it explains everything below: since 2026-10-15 the
+      // in-chat ask for rights goes out at most twice per blocked state, so the
+      // panel is where an admin keeps finding out why nothing gets removed.
+      ...(state.missingRights && (state.missingRights.deleteBlocked || state.missingRights.senderBlocked)
+        ? [locale.settings.rightsMissing(state.missingRights), '']
+        : []),
       `${locale.settings.enabled}: ${onOff(state.enabled)}`,
       `${locale.settings.preset}: ${presetLabel}`,
       `${locale.settings.captcha}: ${onOff(state.captchaEnabled)}`,

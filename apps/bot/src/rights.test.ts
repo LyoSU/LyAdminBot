@@ -1,9 +1,10 @@
+import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import {
-  RightsMemory, RIGHTS_PROBE_MS, RIGHTS_PROBE_MAX_MS, RIGHTS_WARN_MS, RIGHTS_WARN_MAX_MS,
-  RIGHTS_EPISODE_MS,
-  failureKind, failureLabels, rightsLogDecision, RIGHTS_LOG_REMIND_MS,
-  type RightsRecord, type RightsShape
+  RightsMemory, RIGHTS_PROBE_MS, RIGHTS_PROBE_MAX_MS,
+  RIGHTS_EPISODE_MS, RIGHTS_NOTICE_REMIND_MS, RIGHTS_NOTICE_MAX, RIGHTS_NOTICE_KEEP_MS,
+  failureKind, failureLabels, rightsLogDecision, rightsNoticeDecision, RIGHTS_LOG_REMIND_MS,
+  type RightsNoticeMark, type RightsRecord, type RightsShape
 } from './rights.js'
 
 const at = (t: { ms: number }): RightsMemory => new RightsMemory(() => t.ms)
@@ -303,58 +304,181 @@ describe('RightsMemory — what to ask for', () => {
     expect(at(t).gap(-852)).toEqual({ deleteBlocked: true, senderBlocked: true, accounts: 0 })
   })
 
-  it('a record that only holds a nag quota is not a statement about rights', () => {
+  it('a record that only holds notice history is not a statement about rights', () => {
     const t = { ms: 1_000 }
     const rights = at(t)
-    rights.shouldWarn(-853)
+    rights.noticeDecision(-853)
     expect(rights.gap(-853)).toEqual({ deleteBlocked: true, senderBlocked: true, accounts: 0 })
+    expect(rights.knownGap(-853), 'the status line claims only what a refusal proved').toBeNull()
+  })
+
+  it('knownGap names exactly what was refused', () => {
+    const t = { ms: 1_000 }
+    const rights = at(t)
+    expect(rights.knownGap(-854)).toBeNull()
+    rights.noteOutcome(-854, ['delete: FORBIDDEN'])
+    expect(rights.knownGap(-854)).toEqual({ deleteBlocked: true, senderBlocked: false })
+    rights.noteOutcome(-854, [])
+    expect(rights.knownGap(-854)).toBeNull()
+  })
+})
+
+const HOUR = 60 * 60 * 1000
+const never: RightsNoticeMark = { shape: 'none', count: 0, at: 0 }
+const SHAPES: readonly RightsShape[] = ['none', 'delete', 'sender', 'all']
+
+/**
+ * The in-chat notice cadence, decided 2026-10-15: once when the state becomes
+ * blocked, one reminder a day later if unchanged, then silence until it moves.
+ */
+describe('rightsNoticeDecision', () => {
+  const day = RIGHTS_NOTICE_REMIND_MS
+  it.each<[string, RightsNoticeMark, RightsShape, number, boolean, string]>([
+    ['never noticed, now blocked', never, 'all', 0, true, 'first'],
+    ['never noticed, partly blocked', never, 'sender', 0, true, 'first'],
+    ['nothing missing', never, 'none', 0, false, 'not_blocked'],
+    ['nothing missing after notices', { shape: 'all', count: 2, at: 0 }, 'none', day * 9, false, 'not_blocked'],
+    ['one notice, an hour on', { shape: 'all', count: 1, at: 0 }, 'all', HOUR, false, 'not_due'],
+    ['one notice, a day on', { shape: 'all', count: 1, at: 0 }, 'all', day, true, 'reminder'],
+    ['reminded, a week on', { shape: 'all', count: 2, at: 0 }, 'all', day * 7, false, 'reminded'],
+    ['partial became full', { shape: 'sender', count: 2, at: 0 }, 'all', HOUR, true, 'changed'],
+    ['full became partial', { shape: 'all', count: 1, at: 0 }, 'delete', 1, true, 'changed'],
+    ['clock went backwards', { shape: 'all', count: 1, at: day }, 'all', 0, false, 'not_due']
+  ])('%s', (_name, prev, shape, now, post, reason) => {
+    const d = rightsNoticeDecision(prev, shape, now)
+    expect(d.post).toBe(post)
+    expect(d.reason).toBe(reason)
+    if (!post) expect(d.next).toEqual(prev)
+  })
+
+  it('posts at most twice per uninterrupted blocked state, whatever the timing', () => {
+    fc.assert(fc.property(
+      fc.constantFrom<RightsShape>('delete', 'sender', 'all'),
+      fc.array(fc.integer({ min: 0, max: 30 * 24 * HOUR }), { maxLength: 300 }),
+      (shape, gaps) => {
+        let mark = never
+        let now = 0
+        let posts = 0
+        for (const gap of gaps) {
+          now += gap
+          const d = rightsNoticeDecision(mark, shape, now)
+          if (d.post) posts += 1
+          mark = d.next
+        }
+        return posts <= RIGHTS_NOTICE_MAX
+      }
+    ))
+  })
+
+  it('hourly checks for any number of hours: one notice, one reminder a day later', () => {
+    fc.assert(fc.property(fc.integer({ min: 1, max: 24 * 60 }), (hours) => {
+      let mark = never
+      const postedAt: number[] = []
+      for (let h = 0; h < hours; h += 1) {
+        const d = rightsNoticeDecision(mark, 'all', h * HOUR)
+        if (d.post) postedAt.push(h)
+        mark = d.next
+      }
+      expect(postedAt).toEqual(hours > 24 ? [0, 24] : [0])
+    }))
+  })
+
+  it('each change of state opens its own cycle of at most two', () => {
+    fc.assert(fc.property(
+      fc.array(fc.tuple(fc.constantFrom(...SHAPES), fc.integer({ min: 0, max: 3 * 24 * HOUR })), { maxLength: 200 }),
+      (steps) => {
+        let mark = never
+        let now = 0
+        let run = 0
+        let last: RightsShape | null = null
+        for (const [shape, gap] of steps) {
+          now += gap
+          if (shape !== last) run = 0
+          last = shape
+          const d = rightsNoticeDecision(mark, shape, now)
+          if (d.post) run += 1
+          if (shape === 'none' && d.post) return false
+          if (run > RIGHTS_NOTICE_MAX) return false
+          mark = d.next
+        }
+        return true
+      }
+    ))
   })
 })
 
 /**
- * The nag quota, which is the part of this mechanism a chat can see.
+ * The cadence as the chat sees it, through the memory that persists it.
  */
 describe('RightsMemory — asking the admins', () => {
-  it('asks once, then keeps quiet', () => {
+  it('a fully blocked chat checked every hour for a week is asked twice', () => {
+    // Production 2026-10-15: such a chat was asked every hour, indefinitely.
     const t = { ms: 1_000 }
     const rights = at(t)
     rights.noteOutcome(-500, bothRefused)
-    expect(rights.shouldWarn(-500)).toBe(true)
-    expect(rights.shouldWarn(-500)).toBe(false)
-    t.ms += RIGHTS_WARN_MS + 1
-    expect(rights.shouldWarn(-500)).toBe(true)
+    const posted: number[] = []
+    for (let h = 0; h < 24 * 7; h += 1) {
+      if (rights.noticeDecision(-500).post) posted.push(h)
+      t.ms += HOUR
+    }
+    expect(posted).toEqual([0, 24])
   })
 
-  it('the quiet period grows with the strikes and stops at a day', () => {
+  it('a different set of missing rights is a new state', () => {
     const t = { ms: 1_000 }
     const rights = at(t)
-    for (let i = 0; i < 20; i += 1) rights.noteOutcome(-510, bothRefused)
-    expect(rights.shouldWarn(-510)).toBe(true)
-    t.ms += RIGHTS_WARN_MAX_MS - 1
-    expect(rights.shouldWarn(-510)).toBe(false)
-    t.ms += 2
-    expect(rights.shouldWarn(-510)).toBe(true)
+    rights.noteOutcome(-510, ['ban: CHAT_ADMIN_REQUIRED'])
+    expect(rights.noticeDecision(-510)).toMatchObject({ post: true, reason: 'first', shape: 'sender' })
+    rights.noteOutcome(-510, ['delete: FORBIDDEN'])
+    expect(rights.noticeDecision(-510)).toMatchObject({ post: true, reason: 'changed', shape: 'all' })
+    expect(rights.noticeDecision(-510)).toMatchObject({ post: false, reason: 'not_due' })
   })
 
-  it('a chat with nothing recorded may still be asked', () => {
-    // The /banan path warns from its own failed attempt, without an execution
-    // having gone through `noteOutcome` first.
+  it('a chat with nothing recorded may still be asked, for both rights', () => {
+    // The manual paths warn from their own failed attempt, without an
+    // execution having gone through `noteOutcome` first.
     const t = { ms: 1_000 }
     const rights = at(t)
-    expect(rights.shouldWarn(-520)).toBe(true)
-    expect(rights.shouldWarn(-520)).toBe(false)
+    expect(rights.noticeDecision(-520)).toMatchObject({ post: true, shape: 'all' })
+    expect(rights.noticeDecision(-520).post).toBe(false)
     // Being asked is not being blocked.
     expect(rights.cannotEnforce(-520)).toBe(false)
     expect(rights.blockedChats()).toEqual([])
   })
 
-  it('rights coming back resets the quota, so the next episode is heard', () => {
+  it('rights coming back restarts the cycle, so the next episode is heard', () => {
     const t = { ms: 1_000 }
     const rights = at(t)
     rights.noteOutcome(-530, bothRefused)
-    expect(rights.shouldWarn(-530)).toBe(true)
+    expect(rights.noticeDecision(-530).post).toBe(true)
+    t.ms += RIGHTS_NOTICE_REMIND_MS
+    expect(rights.noticeDecision(-530).post).toBe(true)
+    expect(rights.noticeDecision(-530).post).toBe(false)
     rights.noteOutcome(-530, [])
-    expect(rights.shouldWarn(-530)).toBe(true)
+    rights.noteOutcome(-530, bothRefused)
+    expect(rights.noticeDecision(-530)).toMatchObject({ post: true, reason: 'first' })
+  })
+
+  it('a held notice writes nothing', () => {
+    // The blocked gate asks on every message; a write per message is the waste
+    // this class exists to avoid.
+    const t = { ms: 1_000 }
+    const store = persisting(t)
+    store.rights.noteOutcome(-540, bothRefused)
+    store.rights.noticeDecision(-540)
+    const before = store.writes
+    for (let i = 0; i < 50; i += 1) store.rights.noticeDecision(-540)
+    expect(store.writes).toBe(before)
+  })
+
+  it('a posted notice keeps a record of nothing but history for a month', () => {
+    const t = { ms: 1_000 }
+    const { rights, saved } = persisting(t)
+    rights.noticeDecision(-550)
+    expect(saved.get(-550)).toMatchObject({
+      deleteRefused: false, senderRefused: false,
+      noticeShape: 'all', noticeCount: 1, noticeAt: 1_000, warnedUntil: 1_000 + RIGHTS_NOTICE_KEEP_MS
+    })
   })
 })
 
@@ -402,7 +526,7 @@ describe('RightsMemory — persistence', () => {
     }])
     expect(rights.cannotEnforce(-700)).toBe(true)
     expect(rights.mayProbe(-700)).toBe(false)
-    expect(rights.shouldWarn(-700), 'already asked before the restart').toBe(false)
+    expect(rights.noticeDecision(-700).post, 'already asked before the restart').toBe(false)
     expect(rights.strikes(-700)).toBe(4)
   })
 
@@ -596,6 +720,44 @@ describe('rightsLogDecision', () => {
         }
       }
     }
+  })
+})
+
+describe('RightsMemory — notice history across a restart', () => {
+  it('a restart in the middle of a cycle neither re-posts nor skips the reminder', () => {
+    const t = { ms: 1_000 }
+    const { rights, saved } = persisting(t)
+    rights.noteOutcome(-760, bothRefused)
+    expect(rights.noticeDecision(-760).post).toBe(true)
+    const reborn = at(t)
+    reborn.restore([saved.get(-760) as RightsRecord])
+    expect(reborn.noticeDecision(-760).post).toBe(false)
+    t.ms += RIGHTS_NOTICE_REMIND_MS
+    expect(reborn.noticeDecision(-760)).toMatchObject({ post: true, reason: 'reminder' })
+    expect(reborn.noticeDecision(-760).post).toBe(false)
+  })
+
+  it('a record asked under the old hourly quota counts as already reminded', () => {
+    const t = { ms: 100 * HOUR }
+    const rights = at(t)
+    rights.restore([{
+      chatId: -770, deleteRefused: true, senderRefused: true, strikes: 1,
+      probeAt: 0, warnedUntil: t.ms - HOUR
+    }])
+    for (let h = 0; h < 72; h += 1) {
+      expect(rights.noticeDecision(-770).post).toBe(false)
+      t.ms += HOUR
+    }
+  })
+
+  it('a record never asked under the old quota starts its cycle', () => {
+    const t = { ms: 1_000_000 }
+    const rights = at(t)
+    rights.restore([{
+      chatId: -780, deleteRefused: false, senderRefused: true, strikes: 1,
+      probeAt: 0, warnedUntil: 0
+    }])
+    expect(rights.noticeDecision(-780)).toMatchObject({ post: true, reason: 'first', shape: 'sender' })
   })
 })
 

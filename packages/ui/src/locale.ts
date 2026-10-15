@@ -682,6 +682,11 @@ export interface Locale {
     quiet: string
     /** Panel line shown while quiet mode is on: what it does, where to look. */
     quietHint: string
+    /**
+     * One status line naming the rights a refusal proved missing in this chat.
+     * Called only when at least one of the two is missing.
+     */
+    rightsMissing: (gap: { deleteBlocked: boolean; senderBlocked: boolean }) => string
     /** Default /banan mute-duration row label. */
     banan: string
     /** Group interface-language row label + toast on change. */

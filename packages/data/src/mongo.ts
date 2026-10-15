@@ -133,7 +133,15 @@ export interface RightsBlockRecord {
   lastRefusalAt: number
   /** Distinct accounts this chat would not let us act on, this episode. */
   blockedAccounts: number[]
+  /** The rights state the last in-chat notice asked about (`none` = never). */
+  noticeShape: 'none' | 'delete' | 'sender' | 'all'
+  /** Notices posted for that state so far. */
+  noticeCount: number
+  /** When the last of them was posted (ms epoch); 0 = never. */
+  noticeAt: number
 }
+
+const NOTICE_SHAPES = new Set(['none', 'delete', 'sender', 'all'])
 
 /**
  * One stored document, read as a record.
@@ -160,7 +168,15 @@ export const toRightsBlockRecord = (d: Document): RightsBlockRecord => ({
   blockedAccounts: Array.isArray(d['blockedAccounts'])
     ? (d['blockedAccounts'] as unknown[]).filter((n): n is number =>
       typeof n === 'number' && Number.isFinite(n))
-    : []
+    : [],
+  // Arrived 2026-10-15. A document without them has posted no notice under the
+  // current cadence; the bot decides from `warnedUntil` what it had posted
+  // before (see `RightsMemory.restore`), so these default to "never", not to
+  // a guess.
+  noticeShape: NOTICE_SHAPES.has(d['noticeShape'] as string)
+    ? d['noticeShape'] as RightsBlockRecord['noticeShape'] : 'none',
+  noticeCount: Number(d['noticeCount'] ?? 0) || 0,
+  noticeAt: Number(d['noticeAt'] ?? 0) || 0
 })
 
 /**
@@ -1089,9 +1105,10 @@ export class MongoStore {
    * the number of chats where the bot is not an admin — dozens, not thousands.
    */
   async loadRightsBlocks(): Promise<RightsBlockRecord[]> {
-    // A record also exists purely to hold a nag quota, for chats that refused a
-    // manual command without an execution ever reaching the pipeline. Once that
-    // quota lapses such a record says nothing at all, and on a size-capped
+    // A record also exists purely to hold notice history (`warnedUntil` is how
+    // long to keep it), for chats that refused a manual command without an
+    // execution ever reaching the pipeline. Once that lapses such a record says
+    // nothing at all, and on a size-capped
     // cluster "says nothing" must not accumulate one document per group. Cleared
     // here rather than on a timer: boot is the one moment we read them all
     // anyway, so it costs a single extra query.

@@ -1613,37 +1613,52 @@ const rights = new RightsMemory(Date.now, (chatId, record) => {
 })
 
 /**
- * When the bot catches spam but can't act (not an admin / missing rights), it
- * posts a warning in the chat so admins know to grant rights.
- *
- * The quiet period doubles with every consecutive refusal, from an hour to a
- * day, and lives in `RightsMemory` with everything else — it used to be a Map
- * here, so each restart reset it to the first hour and the same chats were asked
- * again (three times on 2026-08-07). A flat hourly notice reads as useful the
- * first time and as nagging the tenth: production 2026-08-01 had chats refusing
- * every action for hours, which at the old cadence is two dozen public messages
- * a day into a group where the bot can do nothing — and each one tells whoever
- * is posting the spam that it cannot be touched here.
- */
-const shouldWarnMissingRights = (chatId: number, errors: string[]): boolean =>
-  errors.some((e) => RIGHTS_ERROR_REGEX.test(e)) && rights.shouldWarn(chatId)
-
-/**
  * The notice itself, asking for what is actually missing here.
  *
- * One helper for all four callers so the wording cannot drift between the
- * pipeline's refusal and a manual command's, and so `rights.gap` is read at the
- * moment of posting rather than passed around: the record it reads was written
- * by the very refusal that triggered this.
+ * `rights.gap` is read at the moment of posting rather than passed around: the
+ * record it reads was written by the very refusal that triggered this.
  */
 const missingRightsText = (chatId: number, locale: Locale): ReturnType<typeof html> =>
   viewHtml(locale.notification.missingRights(rights.gap(chatId)))
 
 /**
+ * When the bot catches spam but can't act (not an admin / missing rights), it
+ * asks the chat's admins for the rights — at most twice per blocked state.
+ *
+ * Production 2026-10-15: a fully blocked chat was asked every hour forever. Its
+ * quota doubled with the strike count, but the `enforcement_blocked` gate
+ * returns before any execution reaches `noteOutcome`, so the count stayed at
+ * one. The cadence is now `rightsNoticeDecision` (one notice when the state
+ * becomes blocked, one reminder a day later, then silence until it changes),
+ * persisted in the rights record so the several restarts a day re-post nothing.
+ *
+ * One helper for every caller — the pipeline, the blocked gate, /kick and the
+ * admin's report — so none of them can post on a cadence of its own. A held
+ * notice is logged at DEBUG: the gate runs per message in a blocked chat.
+ */
+const postMissingRightsNotice = async (
+  chat: Chat, locale: Locale, action: string, ttlMs: number, tag: string
+): Promise<boolean> => {
+  const decision = rights.noticeDecision(chat.id)
+  const fields = {
+    chatId: chat.id, chat: chat.title ?? undefined, action,
+    blocked: decision.shape, reason: decision.reason
+  }
+  if (!decision.post) {
+    log.debug('missing_rights_notice', { ...fields, posted: false })
+    return false
+  }
+  const sent = await tgSendText(chat.id, missingRightsText(chat.id, locale)).catch(() => null)
+  if (sent) scheduleDelete(chat.id, sent.id, ttlMs, tag)
+  log.info('missing_rights_notice', { ...fields, posted: sent !== null, notice: decision.count })
+  return sent !== null
+}
+
+/**
  * The operator's view of a chat's rights: WARN when the state changes (lost,
  * changed, restored), INFO at most once a day while it stands, otherwise
  * nothing. Separate from the chat-facing notice on purpose — that one has its
- * own quota (`shouldWarnMissingRights`), and tying the log to it made an hourly
+ * own cadence (`postMissingRightsNotice`), and tying the log to it made an hourly
  * notice an hourly WARN (production 2026-10-15). See `RIGHTS_LOG_REMIND_MS`.
  */
 const logRightsState = (chat: Chat, action: string): void => {
@@ -2209,7 +2224,11 @@ const renderSettingsPanel = async (locale: Locale, chatId: number): Promise<View
     externalBanEnabled: policy.externalBanEnabled,
     quietMode: policy.quietMode ?? false,
     bananDefaultSeconds,
-    locale: settings?.locale ?? 'en'
+    locale: settings?.locale ?? 'en',
+    // Only what a refusal proved: an admin opening settings should learn why
+    // the bot is idle in their chat without waiting for the in-chat notice,
+    // which since 2026-10-15 goes out at most twice per blocked state.
+    missingRights: rights.knownGap(chatId)
   }))
 }
 
@@ -2639,10 +2658,7 @@ const handleKick = async (message: Message, chat: Chat, caller: User): Promise<v
     .then(() => true).catch(() => false)
   await dropCommand()
   if (!ok) {
-    if (shouldWarnMissingRights(chat.id, ['CHAT_ADMIN_REQUIRED'])) {
-      const sent = await tgSendText(chat.id, missingRightsText(chat.id, locale)).catch(() => null)
-      if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'missing_rights')
-    }
+    await postMissingRightsNotice(chat, locale, 'kick', NOTIFY_TTL_TOP_MS, 'missing_rights')
     return
   }
   log.info('kick', { chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName, by: caller.id })
@@ -3034,8 +3050,7 @@ const reportChannelSender = async (
     latencyMs: 0
   }).catch(() => { /* telemetry must never break moderation */ })
   if (action === 'observe') {
-    const warned = await tgSendText(chat.id, missingRightsText(chat.id, locale)).catch(() => null)
-    if (warned) scheduleDelete(chat.id, warned.id, NOTIFY_TTL_COMPACT_MS, 'missing_rights:admin_report')
+    await postMissingRightsNotice(chat, locale, 'admin_report', NOTIFY_TTL_COMPACT_MS, 'missing_rights:admin_report')
     return
   }
   const view = compactNotification(locale, verdict, {
@@ -3261,9 +3276,7 @@ const handleReport = async (message: Message, chat: Chat, reporter: Reporter, ar
       latencyMs: 0
     }).catch(() => { /* telemetry must never break moderation */ })
     if (action === 'observe') {
-      const warned = await tgSendText(chat.id, missingRightsText(chat.id, locale))
-        .catch(() => null)
-      if (warned) scheduleDelete(chat.id, warned.id, NOTIFY_TTL_COMPACT_MS, 'missing_rights:admin_report')
+      await postMissingRightsNotice(chat, locale, 'admin_report', NOTIFY_TTL_COMPACT_MS, 'missing_rights:admin_report')
     } else {
       const view = compactNotification(locale, verdict, {
         chatId: chat.id, messageId: replied.id, userId: target.id, userLabel: target.displayName
@@ -5865,15 +5878,8 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
   if (rights.cannotEnforce(chat.id) && !(rights.mayProbe(chat.id) && await probeRights(chat.id))) {
     log.debug('enforcement_blocked', { chatId: chat.id, chat: chat.title ?? undefined })
     logRightsState(chat, 'all')
-    if (shouldWarnMissingRights(chat.id, ['CHAT_ADMIN_REQUIRED'])) {
-      const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
-      const sent = await tgSendText(chat.id, missingRightsText(chat.id, locale))
-        .catch(() => null)
-      if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'missing_rights')
-      log.info('missing_rights_notice', {
-        chatId: chat.id, chat: chat.title ?? undefined, action: 'all', posted: sent !== null
-      })
-    }
+    const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
+    await postMissingRightsNotice(chat, locale, 'all', NOTIFY_TTL_TOP_MS, 'missing_rights')
     return
   }
 
@@ -6704,20 +6710,17 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       })
         .catch(() => { /* best-effort */ })
     }
-    // Spam caught but we couldn't act → tell admins to grant rights (once/hr).
+    // Spam caught but we couldn't act → tell admins to grant rights (at most
+    // twice per blocked state, see `postMissingRightsNotice`).
     //
     // Either half being refused counts. `!applied` alone missed the mirror case:
     // a ban that went through while the DELETE was forbidden left a rights error
     // recorded, `applied` true, and nobody told — so the one chat that needed
     // asking was the one that never got asked.
     const partlyRefused = !result.applied || result.deleted === false
-    if (partlyRefused && shouldWarnMissingRights(chat.id, result.errors)) {
+    if (partlyRefused && result.errors.some((e) => RIGHTS_ERROR_REGEX.test(e))) {
       const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
-      const sent = await tgSendText(chat.id, missingRightsText(chat.id, locale)).catch(() => null)
-      if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'missing_rights')
-      log.info('missing_rights_notice', {
-        chatId: chat.id, chat: chat.title ?? undefined, action: verdict.action, posted: sent !== null
-      })
+      await postMissingRightsNotice(chat, locale, verdict.action, NOTIFY_TTL_TOP_MS, 'missing_rights')
     }
   } else if (verdict.action === 'observe') {
     log.debug('observe', {

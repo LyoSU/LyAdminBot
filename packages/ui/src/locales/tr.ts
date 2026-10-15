@@ -577,6 +577,10 @@ export const tr: Locale = {
     banDatabase: 'Spam veritabanları',
     quiet: 'Sessiz mod',
     quietHint: '🤫 Botun emin olduğu işlemlerin bildirimleri sessiz ve düğmesiz gelir, 5 sn sonra silinir. Yaptığı her şey “🧾 Son işlemler” altında. Oylamalar ve emin olunmayan kararlar her zamanki gibi gösterilir.',
+    rightsMissing: ({ deleteBlocked, senderBlocked }) => {
+      const missing = [...(deleteBlocked ? ['"Mesajları sil"'] : []), ...(senderBlocked ? ['"Kullanıcıları engelle"'] : [])]
+      return (missing.length > 1 ? '⚠️ Eksik yetkiler: ' : '⚠️ Eksik yetki: ') + missing.join(', ')
+    },
     banan: 'Banan süresi',
     language: 'Bu sohbette bot dili',
     languageSaved: 'Sohbet dili güncellendi',

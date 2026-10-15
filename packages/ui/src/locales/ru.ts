@@ -591,6 +591,10 @@ export const ru: Locale = {
     banDatabase: 'Спам-базы',
     quiet: 'Тихий режим',
     quietHint: '🤫 Уведомления об уверенных действиях приходят без звука и кнопок и исчезают через 5 с. Всё, что сделал бот, — в «🧾 Последние действия». Голосования и неуверенные решения показываются как обычно.',
+    rightsMissing: ({ deleteBlocked, senderBlocked }) => {
+      const missing = [...(deleteBlocked ? ['удалять сообщения'] : []), ...(senderBlocked ? ['блокировать пользователей'] : [])]
+      return (missing.length > 1 ? '⚠️ Не хватает прав: ' : '⚠️ Не хватает права: ') + missing.join(', ')
+    },
     banan: 'Длительность банана',
     language: 'Язык бота в чате',
     languageSaved: 'Язык чата обновлён',

@@ -577,6 +577,38 @@ describe('settings', () => {
     expect(on.text).toContain(uk.settings.quietHint)
   })
 
+  it('names the missing rights in one line, only when a refusal proved them missing', () => {
+    // Since 2026-10-15 the in-chat ask goes out at most twice per blocked
+    // state; the panel is where an admin keeps learning why nothing is removed.
+    const state = {
+      enabled: true, preset: 'standard' as const, captchaEnabled: true, votingEnabled: true,
+      externalBanEnabled: true, quietMode: false, bananDefaultSeconds: 600, locale: 'uk'
+    }
+    expect(settingsPanel(uk, -100123, state).text).not.toContain('⚠️')
+    for (const missingRights of [null, { deleteBlocked: false, senderBlocked: false }]) {
+      expect(settingsPanel(uk, -100123, { ...state, missingRights }).text).not.toContain('⚠️')
+    }
+    const both = settingsPanel(uk, -100123, { ...state, missingRights: { deleteBlocked: true, senderBlocked: true } })
+    expect(both.text.split('\n')).toContain('⚠️ Бракує прав: видаляти повідомлення, блокувати користувачів')
+    const one = settingsPanel(uk, -100123, { ...state, missingRights: { deleteBlocked: false, senderBlocked: true } })
+    expect(one.text.split('\n')).toContain('⚠️ Бракує права: блокувати користувачів')
+
+    for (const [code, locale] of Object.entries(LOCALES)) {
+      for (const gap of [
+        { deleteBlocked: true, senderBlocked: false },
+        { deleteBlocked: false, senderBlocked: true },
+        { deleteBlocked: true, senderBlocked: true }
+      ]) {
+        const line = locale.settings.rightsMissing(gap)
+        expect(line, code).toMatch(/^⚠️ \S/)
+        expect(line, code).not.toContain('\n')
+      }
+      // The two-right line names both, so it is longer than either single one.
+      const both = locale.settings.rightsMissing({ deleteBlocked: true, senderBlocked: true })
+      expect(both.length, code).toBeGreaterThan(locale.settings.rightsMissing({ deleteBlocked: true, senderBlocked: false }).length)
+    }
+  })
+
   it('the root panel opens the recent-actions screen', () => {
     const root = settingsPanel(uk, -100123, {
       enabled: true, preset: 'standard', captchaEnabled: true, votingEnabled: true,

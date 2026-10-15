@@ -592,6 +592,10 @@ export const uk: Locale = {
     banDatabase: 'Спам-бази',
     quiet: 'Тихий режим',
     quietHint: '🤫 Сповіщення про впевнені дії приходять без звуку й кнопок і зникають за 5 с. Усе, що бот зробив, — у «🧾 Останні дії». Голосування й непевні рішення показуються як звичайно.',
+    rightsMissing: ({ deleteBlocked, senderBlocked }) => {
+      const missing = [...(deleteBlocked ? ['видаляти повідомлення'] : []), ...(senderBlocked ? ['блокувати користувачів'] : [])]
+      return (missing.length > 1 ? '⚠️ Бракує прав: ' : '⚠️ Бракує права: ') + missing.join(', ')
+    },
     banan: 'Тривалість банана',
     language: 'Мова бота в чаті',
     languageSaved: 'Мову чату оновлено',
