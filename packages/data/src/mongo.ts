@@ -737,8 +737,14 @@ export class MongoStore {
      * costs nothing of its own. `{ c, u }` serves "which texts did this account
      * post here". The TTL is the window.
      */
-    await ensureTtlIndex(this.copyClusters, { at: 1 }, COPY_WINDOW_SECONDS)
-    await this.copyClusters.createIndex({ c: 1, u: 1 })
+    await ensureTtlIndex(this.copyClusters, { at: 1 }, COPY_WINDOW_SECONDS).catch((err: unknown) => {
+      console.warn(`[mongo] copy_clusters TTL index not in place (${(err as Error).message}); will retry next boot`)
+    })
+    // A shadow's index, so its failure is a warning and never a bot that is
+    // out of every chat — the 2026-08-26 lesson (`ensureUniqueIndex`).
+    await this.copyClusters.createIndex({ c: 1, u: 1 }).catch((err: unknown) => {
+      console.warn(`[mongo] copy_clusters.c+u index not in place (${(err as Error).message}); will retry next boot`)
+    })
     // `spamsignatures` is a v1 collection and v1 owns the exactHash/normalizedHash
     // indexes. The folded layer added in 2026-07-31 needs its own, or the `$or`
     // in `MongoSignaturePort.match` loses index coverage for that branch and
