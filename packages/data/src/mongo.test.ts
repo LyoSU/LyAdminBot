@@ -615,6 +615,8 @@ describe('vote lifetime', () => {
         castBallot: MongoStore.prototype.castBallot,
         noteBallotRefusal: MongoStore.prototype.noteBallotRefusal,
         voterDiversity: MongoStore.prototype.voterDiversity,
+        recentBallotVoters: MongoStore.prototype.recentBallotVoters,
+        noteVoteNoVotersShadow: MongoStore.prototype.noteVoteNoVotersShadow,
         claimExpiredVotes: MongoStore.prototype.claimExpiredVotes
       }),
       inserted,
@@ -778,6 +780,31 @@ describe('vote lifetime', () => {
     ])
     expect(await store.voterDiversity(-100)).toEqual({
       questions: 1, voters: 0, refused: 0, topTwoShare: 0
+    })
+  })
+
+  it('counts anyone who answered here in the window, admins too, minus the new question', async () => {
+    const { store, finds } = voteStore([
+      { ballots: [{ userId: 1, isAdmin: true }] },
+      { ballots: [{ userId: 2, isAdmin: false }, { userId: 1, isAdmin: true }] },
+      { ballots: [] }
+    ])
+    const now = Date.UTC(2026, 9, 15)
+    expect(await store.recentBallotVoters(-100, 77, now)).toBe(2)
+    const filter = finds[0] as { chatId: number; messageId: unknown; createdAt: { $gte: Date } }
+    expect(filter.chatId).toBe(-100)
+    expect(filter.messageId).toEqual({ $ne: 77 })
+    expect(filter.createdAt.$gte.getTime()).toBe(now - 7 * 86_400_000)
+  })
+
+  it('stamps the shadow fields on the question and nothing else', async () => {
+    const { store, updates } = voteStore()
+    await store.noteVoteNoVotersShadow(-100, 5, {
+      shadowNoVoters: true, recentVoters: 0, recentVotersWindowDays: 7
+    })
+    expect(updates[0]).toEqual({
+      filter: { chatId: -100, messageId: 5 },
+      update: { $set: { shadowNoVoters: true, recentVoters: 0, recentVotersWindowDays: 7 } }
     })
   })
 

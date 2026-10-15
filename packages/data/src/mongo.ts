@@ -10,7 +10,10 @@ import { MongoClient, ObjectId, type Collection, type Db, type Document } from '
 import type {
   BotStats, BurstEntry, ChatStats, EditBaseline, ExecutionRecord, MediaCategory, Verdict, Signal, VoteBallot, VoteEligibility
 } from '@lyadmin/core'
-import { truncate, VOTE_WINDOW_SECONDS } from '@lyadmin/core'
+import {
+  truncate, VOTE_WINDOW_SECONDS, RECENT_VOTERS_WINDOW_DAYS, distinctBallotVoters,
+  type NoVotersShadowStamp
+} from '@lyadmin/core'
 import { normalizeExtra, type NormalizedExtra } from './extras.js'
 import { VELOCITY_WINDOW_MS, SESSION_WINDOW_MS, BURST_WINDOW_MS, type SessionEntry }
   from './persistent-ports.js'
@@ -1942,6 +1945,32 @@ export class MongoStore {
       { chatId, messageId },
       { $set: { expiredAction: outcome, ...(error === null ? {} : { expiredActionError: error }) } }
     )
+  }
+
+  /**
+   * Distinct people who cast any ballot in this chat inside the votes window
+   * (`RECENT_VOTERS_WINDOW_DAYS`, which is the collection TTL), the question
+   * being opened excluded. Shadow input only — see `noVotersShadowStamp`.
+   *
+   * A chat equality on the `{ chatId, messageId }` unique index; the rows are
+   * one week of questions for one chat (tens, rarely hundreds), and only the
+   * voter ids come back. `createdAt` bounds it explicitly because the TTL
+   * monitor deletes lazily, and a row it has not reached yet is outside the
+   * window this number claims.
+   */
+  async recentBallotVoters(chatId: number, excludeMessageId: number, now = Date.now()): Promise<number> {
+    const since = new Date(now - RECENT_VOTERS_WINDOW_DAYS * 86_400_000)
+    const rows = await this.votes.find(
+      { chatId, messageId: { $ne: excludeMessageId }, createdAt: { $gte: since } }
+    ).project({ 'ballots.userId': 1 }).toArray()
+    return distinctBallotVoters(rows as { ballots?: { userId?: unknown }[] }[])
+  }
+
+  /** Stamp a bot-opened question with the no-voters shadow — see `noVotersShadowStamp`. */
+  async noteVoteNoVotersShadow(
+    chatId: number, messageId: number, stamp: NoVotersShadowStamp
+  ): Promise<void> {
+    await this.votes.updateOne({ chatId, messageId }, { $set: { ...stamp } })
   }
 
   /**

@@ -57,6 +57,7 @@ import { loadConfig } from './config.js'
 import { JoinRequestLedger, createScreenLimiter } from './join-request.js'
 import { registerBotCommands } from './commands.js'
 import { createStatsCache } from './stats-cache.js'
+import { createNoVotersShadow } from './novoters-shadow.js'
 import { formatDuration, parseBananDuration } from './duration.js'
 import { formatSignals, log } from './logger.js'
 import { RightsMemory, RIGHTS_ERROR_REGEX, failureLabels } from './rights.js'
@@ -5442,6 +5443,19 @@ const chatStatsCache = createStatsCache<ChatStats>({
   load: (key) => store.chatStats(Number(key), STATS_WINDOW_DAYS)
 })
 
+/**
+ * Shadow only (2026-10-15): stamps a bot-opened question with whether anyone
+ * in the chat answered any question in the last 7 days — see
+ * `noVotersShadowStamp` for the numbers and the read-out.
+ */
+const noVotersShadow = createNoVotersShadow({
+  load: (chatId, messageId) => store.recentBallotVoters(chatId, messageId),
+  stamp: (chatId, messageId, stamp) => store.noteVoteNoVotersShadow(chatId, messageId, stamp),
+  onNoVoters: (chatId, messageId, stamp) => {
+    log.info('vote_shadow_novoters', { chatId, messageId, windowDays: stamp.recentVotersWindowDays })
+  }
+})
+
 /** The effectiveness card, for a PM (no chat) or for the group that asked. */
 const renderStatsCard = async (
   locale: Locale, chatId: number | null
@@ -6896,6 +6910,8 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     }).catch(() => false)
     if (opened) {
       log.info('vote_opened', { chatId: chat.id, userId: sender.id, messageId: message.id, ...logContext, pSpam: Math.round(verdict.pSpam * 100) / 100, reason: verdict.reasonCode })
+      // Bot-opened only (a /report has its own voter); off the hot path.
+      void noVotersShadow(chat.id, message.id).catch(() => { /* shadow */ })
       // `rememberVerdict` ran above for this exact message, so the "why?"
       // anchor on the ballot resolves to the card that explains why the bot
       // was unsure — which is the question a voter is actually being asked.

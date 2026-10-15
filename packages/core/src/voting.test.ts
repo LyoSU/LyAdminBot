@@ -3,6 +3,7 @@ import fc from 'fast-check'
 import {
   tallyVotes, voterRoster, voteEligibility, voteMayRecordDetection, VOTE_TENURE_ALONE_DAYS,
   expiryOutcome, UNOPPOSED_EXPIRY_MIN_SPAM, reportWeight,
+  distinctBallotVoters, noVotersShadowStamp, noVotersShadowOutcome, RECENT_VOTERS_WINDOW_DAYS,
   type VoteBallot, type VoterStanding
 } from './voting.js'
 
@@ -413,6 +414,64 @@ describe('expiryOutcome', () => {
   it('the tally it reads is per voter, so a repeated tap is still one voter', () => {
     const tally = tallyVotes([b(1, 'spam'), b(1, 'spam'), b(1, 'spam')])
     expect(expiryOutcome(tally)).toBeNull()
+  })
+})
+
+describe('no-voters shadow', () => {
+  it('counts distinct ballot authors across rows, admins included', () => {
+    expect(distinctBallotVoters([
+      { ballots: [b(1, 'spam'), b(2, 'ham', true)] },
+      { ballots: [b(1, 'ham')] },
+      { ballots: [] },
+      {}
+    ])).toBe(2)
+  })
+
+  it('ignores a ballot whose author is missing or not a number', () => {
+    expect(distinctBallotVoters([
+      { ballots: [{ userId: undefined }, { userId: '7' }, { userId: Number.NaN }, null as never] }
+    ])).toBe(0)
+    expect(distinctBallotVoters([{ ballots: null }])).toBe(0)
+  })
+
+  it('stamps zero voters as the shadow case, and any voter as not', () => {
+    expect(noVotersShadowStamp(0)).toEqual({
+      shadowNoVoters: true, recentVoters: 0, recentVotersWindowDays: RECENT_VOTERS_WINDOW_DAYS
+    })
+    expect(noVotersShadowStamp(3).shadowNoVoters).toBe(false)
+  })
+
+  it('the window matches the votes TTL, not a longer wish', () => {
+    expect(RECENT_VOTERS_WINDOW_DAYS).toBe(7)
+  })
+
+  it('normalises a garbage count instead of stamping it', () => {
+    fc.assert(fc.property(fc.double(), (n) => {
+      const stamp = noVotersShadowStamp(n)
+      expect(Number.isInteger(stamp.recentVoters)).toBe(true)
+      expect(stamp.recentVoters).toBeGreaterThanOrEqual(0)
+      expect(stamp.shadowNoVoters).toBe(stamp.recentVoters === 0)
+    }))
+  })
+
+  it('reads what a skip would have lost off the closed ballots', () => {
+    expect(noVotersShadowOutcome([])).toBe('silent')
+    expect(noVotersShadowOutcome(undefined)).toBe('silent')
+    expect(noVotersShadowOutcome([b(1, 'spam')])).toBe('spam_only')
+    expect(noVotersShadowOutcome([b(1, 'spam'), b(2, 'ham')])).toBe('appeal')
+    expect(noVotersShadowOutcome([b(1, 'ham', true)])).toBe('appeal')
+  })
+
+  it('any ham ballot makes it an appeal, whatever else is there', () => {
+    fc.assert(fc.property(
+      fc.array(fc.constantFrom<'spam' | 'ham'>('spam', 'ham')),
+      (choices) => {
+        const outcome = noVotersShadowOutcome(choices.map((c, i) => b(i, c)))
+        if (choices.includes('ham')) expect(outcome).toBe('appeal')
+        else if (choices.length > 0) expect(outcome).toBe('spam_only')
+        else expect(outcome).toBe('silent')
+      }
+    ))
   })
 })
 

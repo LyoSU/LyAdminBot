@@ -372,3 +372,69 @@ export const reportWeight = (facts: {
   targetHasStanding: boolean
 }): ReportWeight =>
   facts.reporterTrusted && !facts.targetTrusted && !facts.targetHasStanding ? 'hold' : 'ballot'
+
+/**
+ * Shadow: would a "no ballot where nobody votes" rule have skipped this vote?
+ *
+ * Production 2026-10-14/15: about 14 questions a day expired with zero
+ * ballots, most of them opened by the bot itself; in one week to 2026-10-02,
+ * 24 of 84 chats with questions had no response to any. The idea deferred on
+ * 2026-10-02 was to open no ballot in such a chat — but on a bot-opened
+ * question the message is usually already gone, so the ballot is the appeal
+ * path, and a skip would cost exactly the appeals that did arrive. Nothing
+ * here changes behaviour: the vote row is stamped, and the read-out is
+ * `noVotersShadowOutcome` over the stamped rows once they close.
+ *
+ * The window is the `pipeline_votes` TTL (7 days on `createdAt`). Older
+ * ballots are kept nowhere, so a 30-day window would silently read as 7.
+ */
+export const RECENT_VOTERS_WINDOW_DAYS = 7
+
+/**
+ * Distinct people who cast any ballot across the given vote rows. Admins
+ * count: an admin's tap answers the question as much as anyone's, and "nobody
+ * here votes" has to be measured against every answer (unlike
+ * `voterDiversity`, which sizes the electorate and leaves admins out).
+ */
+export const distinctBallotVoters = (
+  rows: readonly { ballots?: readonly { userId?: unknown }[] | null }[]
+): number => {
+  const ids = new Set<number>()
+  for (const row of rows) {
+    for (const ballot of row.ballots ?? []) {
+      const id = ballot?.userId
+      if (typeof id === 'number' && Number.isFinite(id)) ids.add(id)
+    }
+  }
+  return ids.size
+}
+
+export interface NoVotersShadowStamp {
+  /** True when the chat had no ballot from anyone inside the window. */
+  shadowNoVoters: boolean
+  recentVoters: number
+  recentVotersWindowDays: number
+}
+
+export const noVotersShadowStamp = (recentVoters: number): NoVotersShadowStamp => {
+  const n = Number.isFinite(recentVoters) && recentVoters > 0 ? Math.floor(recentVoters) : 0
+  return { shadowNoVoters: n === 0, recentVoters: n, recentVotersWindowDays: RECENT_VOTERS_WINDOW_DAYS }
+}
+
+/**
+ * What the skip would have cost, read off a closed vote stamped
+ * `shadowNoVoters: true`:
+ *  - `silent` — no ballot at all; the skip would have lost nothing;
+ *  - `spam_only` — the chat confirmed the bot; the skip lost a confirmation;
+ *  - `appeal` — at least one "not spam"; the skip would have lost an appeal.
+ * Reads the stored ballots, one per voter since 2026-09-01.
+ */
+export type NoVotersShadowOutcome = 'silent' | 'spam_only' | 'appeal'
+
+export const noVotersShadowOutcome = (
+  ballots: readonly { choice?: unknown }[] | null | undefined
+): NoVotersShadowOutcome => {
+  const list = ballots ?? []
+  if (list.some((b) => b?.choice === 'ham')) return 'appeal'
+  return list.some((b) => b?.choice === 'spam') ? 'spam_only' : 'silent'
+}
