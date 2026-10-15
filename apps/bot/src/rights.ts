@@ -218,10 +218,78 @@ export interface RightsGap {
   accounts: number
 }
 
+/**
+ * How often an unchanged refusal may be restated in the log.
+ *
+ * Production 2026-10-15: `missing_rights` was a WARN written every time the
+ * chat-facing notice quota (`shouldWarn`) opened, which in a chat held at one
+ * strike is hourly: the same few chats all day, one of them six times in a
+ * night, burying the warnings somebody has to act on. Those chats' admins are
+ * deliberately not chased (decision of 2026-10-02), so after the first line
+ * there is nothing new for an operator until the state moves. A change is a
+ * WARN; an unchanged state is restated once a day at INFO, so a standing block
+ * still appears in any day's log.
+ */
+export const RIGHTS_LOG_REMIND_MS = 24 * 60 * 60 * 1000
+
+/** What a chat refuses us, reduced to the one thing a log line is about. */
+export type RightsShape = 'none' | 'delete' | 'sender' | 'all'
+
+export const rightsShape = (deleteRefused: boolean, senderRefused: boolean): RightsShape =>
+  deleteRefused && senderRefused ? 'all' : deleteRefused ? 'delete' : senderRefused ? 'sender' : 'none'
+
+/** The last rights state that reached the log for a chat, and when. */
+export interface RightsLogMark {
+  shape: RightsShape
+  at: number
+}
+
+/**
+ *  - `lost`     — a refusal where the log knew of none: WARN.
+ *  - `changed`  — a different set of capabilities is refused now: WARN.
+ *  - `restored` — nothing is refused any more, after something was: WARN.
+ *  - `still`    — unchanged, and the last line is at least a day old: INFO.
+ */
+export type RightsLogChange = 'lost' | 'changed' | 'restored' | 'still'
+
+/**
+ * Whether a chat's current rights state is worth a log line, and how loud.
+ * `null` when it is unchanged and was logged recently, or nothing was ever
+ * refused. Pure, so the throttle is tested without a clock, store or logger.
+ */
+export const rightsLogDecision = (
+  prev: RightsLogMark | undefined,
+  shape: RightsShape,
+  now: number,
+  remindMs: number = RIGHTS_LOG_REMIND_MS
+): { level: 'warn' | 'info'; change: RightsLogChange } | null => {
+  if (shape === 'none') {
+    return prev !== undefined && prev.shape !== 'none' ? { level: 'warn', change: 'restored' } : null
+  }
+  if (prev === undefined || prev.shape === 'none') return { level: 'warn', change: 'lost' }
+  if (prev.shape !== shape) return { level: 'warn', change: 'changed' }
+  // A clock that went backwards is not a day passing.
+  return now - prev.at >= remindMs ? { level: 'info', change: 'still' } : null
+}
+
 const MAX_TRACKED_CHATS = 2000
 
 export class RightsMemory {
   private readonly records = new Map<number, RightsRecord>()
+
+  /**
+   * What the log was last told, per chat. Process memory only: `restore` seeds
+   * it from the persisted records, so a restart restates nothing, and a lost
+   * mark costs at most one extra log line.
+   *
+   * Deliberately NOT cleared by `forget`. A granted probe forgets the record on
+   * the strength of admin status alone; in a chat where the bot is an admin
+   * without the rights, the next attempt re-creates the same record, and
+   * clearing the mark there would log "lost" and "restored" on every probe.
+   * Only an execution that went through (`noteOutcome` with no refusal) shows
+   * up as `restored`.
+   */
+  private readonly logMarks = new Map<number, RightsLogMark>()
 
   /**
    * @param now injectable clock, for the tests
@@ -257,7 +325,31 @@ export class RightsMemory {
         lastRefusalAt: Number.isFinite(record.lastRefusalAt) ? record.lastRefusalAt as number : 0,
         blockedAccounts: Array.isArray(record.blockedAccounts) ? [...record.blockedAccounts] : []
       })
+      // A restart is not a change in anybody's rights: what was known before it
+      // was logged then, so the next line here is the daily reminder.
+      const shape = rightsShape(record.deleteRefused, record.senderRefused)
+      if (shape !== 'none') this.logMarks.set(record.chatId, { shape, at: this.now() })
     }
+  }
+
+  /**
+   * Whether this chat's current rights state should be logged, and how loudly,
+   * remembering the answer so the same state is not logged again. Call after
+   * anything that may have changed the state (`noteOutcome`) and wherever a
+   * blocked chat is skipped. Two map lookups; safe per message.
+   */
+  logDecision(chatId: number): { level: 'warn' | 'info'; change: RightsLogChange; shape: RightsShape } | null {
+    const record = this.records.get(chatId)
+    const shape = record ? rightsShape(record.deleteRefused, record.senderRefused) : 'none'
+    const now = this.now()
+    const decision = rightsLogDecision(this.logMarks.get(chatId), shape, now)
+    if (decision === null) return null
+    if (shape === 'none') this.logMarks.delete(chatId)
+    else this.logMarks.set(chatId, { shape, at: now })
+    if (this.logMarks.size > MAX_TRACKED_CHATS) {
+      for (const id of this.logMarks.keys()) if (!this.records.has(id)) this.logMarks.delete(id)
+    }
+    return { ...decision, shape }
   }
 
   /**

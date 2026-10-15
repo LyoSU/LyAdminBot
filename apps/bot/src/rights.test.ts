@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   RightsMemory, RIGHTS_PROBE_MS, RIGHTS_PROBE_MAX_MS, RIGHTS_WARN_MS, RIGHTS_WARN_MAX_MS,
   RIGHTS_EPISODE_MS,
-  failureKind, failureLabels,
-  type RightsRecord
+  failureKind, failureLabels, rightsLogDecision, RIGHTS_LOG_REMIND_MS,
+  type RightsRecord, type RightsShape
 } from './rights.js'
 
 const at = (t: { ms: number }): RightsMemory => new RightsMemory(() => t.ms)
@@ -552,5 +552,93 @@ describe('failureLabels — what the decision row stores', () => {
 
   it('never stores free text from the error', () => {
     expect(failureLabels(['ban: something went badly wrong with Ivan'])).toEqual(['ban:other'])
+  })
+})
+
+describe('rightsLogDecision', () => {
+  const DAY = RIGHTS_LOG_REMIND_MS
+  const shapes: RightsShape[] = ['none', 'delete', 'sender', 'all']
+
+  it('nothing ever refused is not a log line', () => {
+    expect(rightsLogDecision(undefined, 'none', 0)).toBeNull()
+  })
+
+  it('a first refusal is a WARN', () => {
+    expect(rightsLogDecision(undefined, 'all', 0)).toEqual({ level: 'warn', change: 'lost' })
+  })
+
+  it('a different refused set is a WARN at once', () => {
+    expect(rightsLogDecision({ shape: 'delete', at: 0 }, 'all', 1)).toEqual({ level: 'warn', change: 'changed' })
+  })
+
+  it('a refusal lifted is a WARN', () => {
+    expect(rightsLogDecision({ shape: 'all', at: 0 }, 'none', 1)).toEqual({ level: 'warn', change: 'restored' })
+  })
+
+  it('an unchanged refusal is silent inside a day and an INFO after it', () => {
+    expect(rightsLogDecision({ shape: 'all', at: 0 }, 'all', DAY - 1)).toBeNull()
+    expect(rightsLogDecision({ shape: 'all', at: 0 }, 'all', DAY)).toEqual({ level: 'info', change: 'still' })
+  })
+
+  it('a clock running backwards is not a day passing', () => {
+    expect(rightsLogDecision({ shape: 'all', at: 10 * DAY }, 'all', 0)).toBeNull()
+  })
+
+  it('property: WARN exactly on a change of shape, never for an unchanged one', () => {
+    for (const prev of [undefined, ...shapes.map((shape) => ({ shape, at: 0 }))]) {
+      for (const shape of shapes) {
+        for (const now of [0, 1, DAY - 1, DAY, 5 * DAY]) {
+          const d = rightsLogDecision(prev, shape, now)
+          const before = prev?.shape ?? 'none'
+          if (before !== shape) expect(d?.level).toBe('warn')
+          else if (shape === 'none') expect(d).toBeNull()
+          else expect(d === null || d.level === 'info').toBe(true)
+        }
+      }
+    }
+  })
+})
+
+describe('RightsMemory.logDecision', () => {
+  const DAY = RIGHTS_LOG_REMIND_MS
+
+  it('a block observed hourly logs one WARN, then one INFO a day', () => {
+    // Production 2026-10-15: the same blocked chat logged a WARN every hour.
+    const t = { ms: 1_000 }
+    const rights = at(t)
+    rights.noteOutcome(-900, bothRefused)
+    const levels: string[] = []
+    for (let hour = 0; hour <= 48; hour += 1) {
+      const d = rights.logDecision(-900)
+      if (d) levels.push(d.level)
+      t.ms += 60 * 60 * 1000
+    }
+    expect(levels).toEqual(['warn', 'info', 'info'])
+  })
+
+  it('a granted probe does not flap the log; a success restores it', () => {
+    const t = { ms: 1_000 }
+    const rights = at(t)
+    rights.noteOutcome(-901, bothRefused)
+    expect(rights.logDecision(-901)?.change).toBe('lost')
+    rights.noteProbe(-901, true)
+    t.ms += 60_000
+    rights.noteOutcome(-901, bothRefused)
+    expect(rights.logDecision(-901)).toBeNull()
+    rights.noteOutcome(-901, [])
+    expect(rights.logDecision(-901)).toMatchObject({ level: 'warn', change: 'restored', shape: 'none' })
+    expect(rights.logDecision(-901)).toBeNull()
+  })
+
+  it('a restart restates nothing until the daily reminder', () => {
+    const t = { ms: 1_000 }
+    const rights = at(t)
+    rights.restore([{
+      chatId: -902, deleteRefused: true, senderRefused: true,
+      strikes: 1, probeAt: 0, warnedUntil: 0
+    }])
+    expect(rights.logDecision(-902)).toBeNull()
+    t.ms += DAY
+    expect(rights.logDecision(-902)?.level).toBe('info')
   })
 })

@@ -1639,6 +1639,25 @@ const missingRightsText = (chatId: number, locale: Locale): ReturnType<typeof ht
   viewHtml(locale.notification.missingRights(rights.gap(chatId)))
 
 /**
+ * The operator's view of a chat's rights: WARN when the state changes (lost,
+ * changed, restored), INFO at most once a day while it stands, otherwise
+ * nothing. Separate from the chat-facing notice on purpose — that one has its
+ * own quota (`shouldWarnMissingRights`), and tying the log to it made an hourly
+ * notice an hourly WARN (production 2026-10-15). See `RIGHTS_LOG_REMIND_MS`.
+ */
+const logRightsState = (chat: Chat, action: string): void => {
+  const decision = rights.logDecision(chat.id)
+  if (decision === null) return
+  const fields = {
+    chatId: chat.id, chat: chat.title ?? undefined, action,
+    change: decision.change, blocked: decision.shape,
+    ...(decision.shape === 'none' ? {} : { accounts: rights.gap(chat.id).accounts })
+  }
+  if (decision.level === 'warn') log.warn('missing_rights', fields)
+  else log.info('missing_rights', fields)
+}
+
+/**
  * The cheap half of the rights question: are we an admin in this chat at all?
  *
  * Allowed to LIFT a block and never to create one, which is what makes reading
@@ -5793,13 +5812,14 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
   // forgets when it dies.
   if (rights.cannotEnforce(chat.id) && !(rights.mayProbe(chat.id) && await probeRights(chat.id))) {
     log.debug('enforcement_blocked', { chatId: chat.id, chat: chat.title ?? undefined })
+    logRightsState(chat, 'all')
     if (shouldWarnMissingRights(chat.id, ['CHAT_ADMIN_REQUIRED'])) {
       const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
       const sent = await tgSendText(chat.id, missingRightsText(chat.id, locale))
         .catch(() => null)
       if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'missing_rights')
-      log.warn('missing_rights', {
-        chatId: chat.id, chat: chat.title ?? undefined, action: 'all', blocked: true
+      log.info('missing_rights_notice', {
+        chatId: chat.id, chat: chat.title ?? undefined, action: 'all', posted: sent !== null
       })
     }
     return
@@ -6614,6 +6634,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     // With the sender, so the notice can say how many accounts this chat has
     // been left with rather than how many times we tried.
     rights.noteOutcome(chat.id, result.errors, sender.id)
+    logRightsState(chat, verdict.action)
     if (isShadowCarryAct({
       decidedBy: verdict.decidedBy, action: verdict.action, messageId: message.id, applied: result.applied
     })) {
@@ -6642,9 +6663,8 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
       const sent = await tgSendText(chat.id, missingRightsText(chat.id, locale)).catch(() => null)
       if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'missing_rights')
-      log.warn('missing_rights', {
-        chatId: chat.id, chat: chat.title ?? undefined, action: verdict.action,
-        ...rights.gap(chat.id)
+      log.info('missing_rights_notice', {
+        chatId: chat.id, chat: chat.title ?? undefined, action: verdict.action, posted: sent !== null
       })
     }
   } else if (verdict.action === 'observe') {
