@@ -4,7 +4,7 @@ import {
   RightsMemory, RIGHTS_PROBE_MS, RIGHTS_PROBE_MAX_MS,
   RIGHTS_EPISODE_MS, RIGHTS_NOTICE_REMIND_MS, RIGHTS_NOTICE_MAX, RIGHTS_NOTICE_KEEP_MS,
   failureKind, failureLabels, rightsLogDecision, rightsNoticeDecision, RIGHTS_LOG_REMIND_MS,
-  grantedRights, grantedShape,
+  grantedRights, grantedShape, rightsAskRoute,
   type BotMembership, type GrantedRights, type RightsNoticeMark, type RightsRecord, type RightsShape
 } from './rights.js'
 
@@ -429,6 +429,42 @@ describe('rightsNoticeDecision', () => {
         return true
       }
     ))
+  })
+})
+
+/**
+ * An admin's own failed command is answered every time; only the bot's unasked
+ * notices follow the cycle (decision of 2026-10-15).
+ */
+describe('rightsAskRoute', () => {
+  it('an explicit command is always replied to; an unsolicited notice goes through the cycle', () => {
+    expect(rightsAskRoute('command')).toBe('reply')
+    expect(rightsAskRoute('unsolicited')).toBe('cycle')
+  })
+
+  it('answering commands neither spends nor is silenced by the notice cycle', () => {
+    // The command reply reads only the gap; whatever the cycle says, any number
+    // of answered commands leaves the cycle exactly where it was.
+    fc.assert(fc.property(fc.integer({ min: 0, max: 50 }), fc.boolean(), (commands, spentFirst) => {
+      const t = { ms: 1_000 }
+      const store = persisting(t)
+      store.rights.noteOutcome(-560, bothRefused)
+      if (spentFirst) {
+        store.rights.noticeDecision(-560)
+        t.ms += RIGHTS_NOTICE_REMIND_MS
+        store.rights.noticeDecision(-560)
+      }
+      const writes = store.writes
+      const before = store.saved.get(-560)
+      for (let i = 0; i < commands; i += 1) {
+        expect(rightsAskRoute('command')).toBe('reply')
+        store.rights.gap(-560)
+        store.rights.knownGap(-560)
+      }
+      expect(store.writes).toBe(writes)
+      expect(store.saved.get(-560)).toEqual(before)
+      expect(store.rights.noticeDecision(-560).post).toBe(!spentFirst)
+    }))
   })
 })
 

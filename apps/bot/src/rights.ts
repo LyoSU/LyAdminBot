@@ -396,6 +396,31 @@ export const rightsNoticeDecision = (
 
 const NOTICE_SHAPES: readonly RightsShape[] = ['none', 'delete', 'sender', 'all']
 
+/**
+ * What prompted a missing-rights message: an admin's own command that the
+ * rights stopped (/kick, an admin's /report), or the bot's own initiative
+ * (the pipeline's refusal, the `enforcement_blocked` gate).
+ */
+export type RightsAskTrigger = 'command' | 'unsolicited'
+
+/**
+ * How to answer a missing-rights situation. Pure, so the split is tested.
+ *
+ *  - `reply` — an admin explicitly asked for an action and it failed on
+ *    rights. Always answered, as a short reply to the command that removes
+ *    itself like every other refused command, naming the missing right. Not a
+ *    notice to the chat, and outside the notice cycle: it neither reads nor
+ *    writes the notice history, so it cannot spend a reminder, and a spent
+ *    cycle cannot silence it.
+ *  - `cycle` — the bot speaking unasked. Subject to `rightsNoticeDecision`.
+ *
+ * Decided 2026-10-15: the "once plus one reminder" cadence is about notices
+ * nobody asked for. An admin whose /kick silently did nothing would be the
+ * invisible no-op this codebase keeps paying for.
+ */
+export const rightsAskRoute = (trigger: RightsAskTrigger): 'reply' | 'cycle' =>
+  trigger === 'command' ? 'reply' : 'cycle'
+
 const MAX_TRACKED_CHATS = 2000
 
 export class RightsMemory {

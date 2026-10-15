@@ -60,7 +60,10 @@ import { createStatsCache } from './stats-cache.js'
 import { createNoVotersShadow } from './novoters-shadow.js'
 import { formatDuration, parseBananDuration } from './duration.js'
 import { formatSignals, log } from './logger.js'
-import { RightsMemory, RIGHTS_ERROR_REGEX, failureLabels, grantedRights, grantedShape } from './rights.js'
+import {
+  RightsMemory, RIGHTS_ERROR_REGEX, failureKind, failureLabels, grantedRights, grantedShape,
+  rightsAskRoute, rightsShape, type RightsAskTrigger
+} from './rights.js'
 import { joinerSource } from './join-action.js'
 import { LlmHealth } from './llm-health.js'
 import { telegramErrorName } from './telegram-error.js'
@@ -1632,9 +1635,10 @@ const missingRightsText = (chatId: number, locale: Locale): ReturnType<typeof ht
  * becomes blocked, one reminder a day later, then silence until it changes),
  * persisted in the rights record so the several restarts a day re-post nothing.
  *
- * One helper for every caller — the pipeline, the blocked gate, /kick and the
- * admin's report — so none of them can post on a cadence of its own. A held
- * notice is logged at DEBUG: the gate runs per message in a blocked chat.
+ * For the bot's own, unasked notices only — the pipeline and the blocked gate,
+ * through `respondMissingRights` — so neither can post on a cadence of its own.
+ * An admin's failed command is answered outside this cycle (`rightsAskRoute`).
+ * A held notice is logged at DEBUG: the gate runs per message in a blocked chat.
  */
 const postMissingRightsNotice = async (
   chat: Chat, locale: Locale, action: string, ttlMs: number, tag: string
@@ -1652,6 +1656,43 @@ const postMissingRightsNotice = async (
   if (sent) scheduleDelete(chat.id, sent.id, ttlMs, tag)
   log.info('missing_rights_notice', { ...fields, posted: sent !== null, notice: decision.count })
   return sent !== null
+}
+
+/**
+ * The answer to an admin's own command that failed on rights: a reply to the
+ * command, naming what is missing, gone with the command after a minute like
+ * every other refused command. Always sent, and never counted in the notice
+ * cycle — see `rightsAskRoute`. The command may already be deleted on the
+ * report paths, so the reply falls back to a plain message.
+ */
+const answerMissingRightsCommand = async (
+  message: Message, chat: Chat, locale: Locale, action: string,
+  gap: { deleteBlocked: boolean; senderBlocked: boolean }
+): Promise<void> => {
+  const text = viewHtml(locale.settings.rightsMissing(gap))
+  const sent = await sendWithReplyFallback(
+    (replyTo) => tgSendText(chat.id, text, replyTo !== undefined ? { replyTo } : {}),
+    message.id
+  ).catch(() => null)
+  scheduleDelete(chat.id, message.id, NOTIFY_TTL_REFUSAL_MS, 'missing_rights:cmd')
+  if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_REFUSAL_MS, 'missing_rights:command')
+  log.info('missing_rights_notice', {
+    chatId: chat.id, chat: chat.title ?? undefined, action, posted: sent !== null,
+    reason: 'command', blocked: rightsShape(gap.deleteBlocked, gap.senderBlocked)
+  })
+}
+
+/** Every missing-rights message goes through here, routed by what prompted it. */
+const respondMissingRights = async (
+  chat: Chat, locale: Locale, action: string,
+  ask: { trigger: Extract<RightsAskTrigger, 'command'>; message: Message; gap: { deleteBlocked: boolean; senderBlocked: boolean } } |
+    { trigger: Extract<RightsAskTrigger, 'unsolicited'>; ttlMs: number; tag: string }
+): Promise<void> => {
+  if (rightsAskRoute(ask.trigger) === 'reply' && ask.trigger === 'command') {
+    await answerMissingRightsCommand(ask.message, chat, locale, action, ask.gap)
+    return
+  }
+  if (ask.trigger === 'unsolicited') await postMissingRightsNotice(chat, locale, action, ask.ttlMs, ask.tag)
 }
 
 /**
@@ -2656,13 +2697,23 @@ const handleKick = async (message: Message, chat: Chat, caller: User): Promise<v
   if (!(target instanceof User) || target.isBot || target.id === selfId) return
   if (await isChatAdmin(chat.id, target.id)) return
   // The same kick the verdicts use, so the ban half carries its safety expiry.
+  let kickError = ''
   const ok = await gateway.moderationActions.kick(chat.id, target.id)
-    .then(() => true).catch(() => false)
-  await dropCommand()
+    .then(() => true).catch((err: unknown) => { kickError = String(err); return false })
   if (!ok) {
-    await postMissingRightsNotice(chat, locale, 'kick', NOTIFY_TTL_TOP_MS, 'missing_rights')
+    // Answered, not dropped: the admin asked for this. The command stays until
+    // the reply goes with it (`answerMissingRightsCommand`).
+    if (failureKind(`kick: ${kickError}`) === 'rights') {
+      await respondMissingRights(chat, locale, 'kick', {
+        trigger: 'command', message, gap: { deleteBlocked: false, senderBlocked: true }
+      })
+    } else {
+      log.warn('kick_failed', { chatId: chat.id, userId: target.id, error: telegramErrorName(kickError) })
+      await dropCommand()
+    }
     return
   }
+  await dropCommand()
   log.info('kick', { chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName, by: caller.id })
   const sent = await tgSendText(chat.id, viewHtml(locale.kick.success(userMention(target.id, target.displayName)))).catch(() => null)
   if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'kick')
@@ -3052,7 +3103,9 @@ const reportChannelSender = async (
     latencyMs: 0
   }).catch(() => { /* telemetry must never break moderation */ })
   if (action === 'observe') {
-    await postMissingRightsNotice(chat, locale, 'admin_report', NOTIFY_TTL_COMPACT_MS, 'missing_rights:admin_report')
+    await respondMissingRights(chat, locale, 'admin_report', {
+      trigger: 'command', message, gap: { deleteBlocked: !deleted, senderBlocked: !banned }
+    })
     return
   }
   const view = compactNotification(locale, verdict, {
@@ -3278,7 +3331,9 @@ const handleReport = async (message: Message, chat: Chat, reporter: Reporter, ar
       latencyMs: 0
     }).catch(() => { /* telemetry must never break moderation */ })
     if (action === 'observe') {
-      await postMissingRightsNotice(chat, locale, 'admin_report', NOTIFY_TTL_COMPACT_MS, 'missing_rights:admin_report')
+      await respondMissingRights(chat, locale, 'admin_report', {
+        trigger: 'command', message, gap: { deleteBlocked: !enforced.deleted, senderBlocked: !enforced.muted }
+      })
     } else {
       const view = compactNotification(locale, verdict, {
         chatId: chat.id, messageId: replied.id, userId: target.id, userLabel: target.displayName
@@ -5881,7 +5936,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     log.debug('enforcement_blocked', { chatId: chat.id, chat: chat.title ?? undefined })
     logRightsState(chat, 'all')
     const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
-    await postMissingRightsNotice(chat, locale, 'all', NOTIFY_TTL_TOP_MS, 'missing_rights')
+    await respondMissingRights(chat, locale, 'all', { trigger: 'unsolicited', ttlMs: NOTIFY_TTL_TOP_MS, tag: 'missing_rights' })
     return
   }
 
@@ -6722,7 +6777,9 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     const partlyRefused = !result.applied || result.deleted === false
     if (partlyRefused && result.errors.some((e) => RIGHTS_ERROR_REGEX.test(e))) {
       const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
-      await postMissingRightsNotice(chat, locale, verdict.action, NOTIFY_TTL_TOP_MS, 'missing_rights')
+      await respondMissingRights(chat, locale, verdict.action, {
+        trigger: 'unsolicited', ttlMs: NOTIFY_TTL_TOP_MS, tag: 'missing_rights'
+      })
     }
   } else if (verdict.action === 'observe') {
     log.debug('observe', {
