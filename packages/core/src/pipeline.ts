@@ -430,6 +430,29 @@ export const evaluateMessage = async (
   if (nameShape.mixedWords) meta['nameMixedWords'] = true
 
   /**
+   * Who summoned a guest bot. The sender of a guest-bot delivery is the bot,
+   * so the row named only the bot and every action targeted it, while the
+   * human who invoked it was read nowhere. 2026-10-14, 14 days: 73 such rows
+   * from 48 distinct bots (1.5 rows per bot — one-shot bots, so acting on the
+   * bot is acting on nothing) and 17 passed unpunished. Before deciding
+   * whether the caller should answer for the delivery, the rows have to say
+   * who the caller was and which bots the message pointed at. Data only: no
+   * stage reads these keys. Stamped here, before any exit, so deterministic
+   * verdicts carry them too.
+   */
+  const guestBot = input.message.guestBot
+  if (guestBot !== null) {
+    meta['guestBotId'] = guestBot.botId
+    if (guestBot.callerId !== null) meta['guestCallerId'] = guestBot.callerId
+    // Same source as the `bot_mention` signal below, so the list is present
+    // exactly when that signal is raised.
+    const bots = [...new Set(input.enrichment.resolvedMentions
+      .filter((m) => m.kind === 'bot')
+      .map((m) => m.username.replace(/^@/, '').toLowerCase()))].slice(0, 5)
+    if (bots.length > 0) meta['mentionedBots'] = bots.join(',')
+  }
+
+  /**
    * Which paid stages actually ran, and how long each took. A single pipeline
    * total answers neither question: an eleven-second verdict could have been
    * the strong model, a stalled vector search or an avatar download, and the

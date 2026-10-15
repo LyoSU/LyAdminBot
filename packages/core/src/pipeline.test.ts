@@ -4212,3 +4212,76 @@ describe('evaluateMessage — shadow: a hold the captcha switch declined', () =>
     expect(v.meta['shadowHoldCaptchaOff']).toBeUndefined()
   })
 })
+
+/**
+ * 2026-10-14: 73 guest-bot rows in 14 days named only the bot (48 distinct,
+ * 1.5 rows each) and never the human who summoned it. The row must carry the
+ * caller and the mentioned bots so acting on the caller can be measured before
+ * it is built — and nothing extra on an ordinary message. Data only: the
+ * verdict must be the one a twin without the guest-bot record gets.
+ */
+describe('evaluateMessage — the guest-bot caller is on the record', () => {
+  const botMentions = [
+    { username: 'PromoBot', kind: 'bot' as const, isNewish: null },
+    { username: 'promobot', kind: 'bot' as const, isNewish: null },
+    { username: 'OtherBot', kind: 'bot' as const, isNewish: null },
+    { username: 'someone', kind: 'unknown' as const, isNewish: null }
+  ]
+
+  it('stamps the bot, the caller and the mentioned bots', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { guestBot: { botId: 777, botUsername: 'guestbot', callerId: 4242 } },
+      user: newcomer,
+      enrichment: { resolvedMentions: botMentions }
+    }), {})
+    expect(v.signals.map((s) => s.name)).toContain('bot_mention')
+    expect(v.meta['guestBotId']).toBe(777)
+    expect(v.meta['guestCallerId']).toBe(4242)
+    expect(v.meta['mentionedBots']).toBe('promobot,otherbot')
+  })
+
+  it('is on the row of a deterministic exit too', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { guestBot: { botId: 777, botUsername: null, callerId: 4242 } },
+      user: { messagesInChat: 500, messagesGlobal: 900 }
+    }), {})
+    expect(v.reasonCode).toBe('established_regular')
+    expect(v.meta['guestCallerId']).toBe(4242)
+    expect(v.meta).not.toHaveProperty('mentionedBots')
+  })
+
+  it('omits an unknown caller and caps the bot list at five', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { guestBot: { botId: 777, botUsername: null, callerId: null } },
+      user: newcomer,
+      enrichment: {
+        resolvedMentions: ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7']
+          .map((n) => ({ username: `${n}bot`, kind: 'bot' as const, isNewish: null }))
+      }
+    }), {})
+    expect(v.meta['guestBotId']).toBe(777)
+    expect(v.meta).not.toHaveProperty('guestCallerId')
+    expect(String(v.meta['mentionedBots']).split(',')).toHaveLength(5)
+  })
+
+  it('stamps nothing on an ordinary message, even one mentioning a bot', async () => {
+    const v = await evaluateMessage(makeInput({
+      user: newcomer, enrichment: { resolvedMentions: botMentions }
+    }), {})
+    expect(v.meta).not.toHaveProperty('guestBotId')
+    expect(v.meta).not.toHaveProperty('guestCallerId')
+    expect(v.meta).not.toHaveProperty('mentionedBots')
+  })
+
+  it('changes no verdict', async () => {
+    const over = { user: newcomer, enrichment: { resolvedMentions: botMentions } }
+    const guest = await evaluateMessage(makeInput({
+      ...over, msg: { guestBot: { botId: 777, botUsername: null, callerId: 4242 } }
+    }), {})
+    const plain = await evaluateMessage(makeInput({
+      ...over, msg: { guestBot: { botId: 777, botUsername: null, callerId: null } }
+    }), {})
+    expect([guest.action, guest.reasonCode, guest.pSpam, guest.needsVote])
+      .toEqual([plain.action, plain.reasonCode, plain.pSpam, plain.needsVote])
+  })
+})

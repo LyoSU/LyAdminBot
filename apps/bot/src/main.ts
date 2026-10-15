@@ -6558,6 +6558,8 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       // with nothing in the data to say so (2026-08-07).
       llmModel: verdict.meta['llmModel'] ?? undefined,
       portMs: verdict.meta['portMs'] ?? undefined,
+      // The human behind a guest-bot delivery; the sender field names the bot.
+      guestCaller: verdict.meta['guestCallerId'] ?? undefined,
       // Everything the pipeline's own timings cannot see. A deterministic
       // verdict runs no ports, so without this a 4.4-second ban (2026-07-31)
       // had no explanation anywhere in its log line.
