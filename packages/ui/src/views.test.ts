@@ -2120,3 +2120,90 @@ describe('captcha prompt states the deadline in every locale', () => {
     }
   })
 })
+
+/**
+ * The second uk copy audit (2026-10-14) reached uk only; the other locales
+ * still read "👌 Норм", "message from <name>", a refusal without the bar, and
+ * "why I acted" on a verdict where nothing was done (2026-10-15).
+ */
+describe('ru, by, en and tr mirror the second uk copy audit', () => {
+  const OTHERS = ['ru', 'by', 'en', 'tr']
+  const NAME = 'Taras'
+
+  it.each(OTHERS)('%s: one phrase for "not spam" on the ballot, roster and receipt, never 👌', (code) => {
+    const L = LOCALES[code]!
+    expect(L.vote.voters.hamGroup).toBe(L.notification.notSpamButton)
+    expect(L.vote.hamButton(2)).toBe(`${L.notification.notSpamButton} (2)`)
+    expect(L.vote.resolvedHam({ who: NAME, whyLink: null }).startsWith('✅')).toBe(true)
+    const all = JSON.stringify(L.vote.voters) + L.vote.hamButton(1) + L.vote.resolvedHam({ who: null, whyLink: null })
+    expect(all).not.toContain('👌')
+  })
+
+  it.each(OTHERS)('%s: the ballot and receipts put the name after a label or a "·", not after a preposition', (code) => {
+    const L = LOCALES[code]!
+    for (const text of [
+      L.vote.prompt({ userLabel: NAME, textPreview: 'x', media: null, whyLink: null }),
+      L.vote.promptNoText(NAME, L.vote.media.sticker, null),
+      L.vote.promptNoText(NAME, null, null)
+    ]) expect(text).toMatch(new RegExp(`(: |Posted by )${NAME}`))
+    expect(L.vote.resolvedSpam({ who: NAME, enforcement: L.vote.enforcement.done, whyLink: null }))
+      .toContain(` · ${NAME}. ${L.vote.enforcement.done}`)
+    expect(L.vote.resolvedHam({ who: NAME, whyLink: 'w' })).toMatch(new RegExp(` · ${NAME} · w$`))
+    expect(L.vote.promptNoText(NAME, 'x', 'w')).not.toContain('. ·')
+  })
+
+  it('en puts the right article before the media noun', () => {
+    const en = LOCALES['en']!
+    expect(en.vote.promptNoText('A', en.vote.media.other, null)).toContain('just an attachment')
+    expect(en.vote.promptNoText('A', en.vote.media.photo, null)).toContain('just a photo')
+  })
+
+  it.each(OTHERS)('%s: a refused ballot says it was not counted and states the real bar (10 here, 50 across chats)', (code) => {
+    const v = LOCALES[code]!.vote.voters
+    expect(v.noStanding).toContain('10')
+    expect(v.noStanding).toContain('50')
+    // Both refusals open with the same "not counted" clause, then the reason.
+    expect(v.knownBad.split(':')[0]).toBe(v.noStanding.split(':')[0])
+    expect(v.notForTarget).toContain(':')
+    for (const text of [v.noStanding, v.knownBad, v.notForTarget]) expect(text.length).toBeLessThanOrEqual(200)
+  })
+
+  it.each(OTHERS)('%s: the confidence percent is labelled as the bot\'s estimate', (code) => {
+    const label = { ru: 'оценка бота', by: 'ацэнка бота', en: 'bot’s estimate', tr: 'botun tahmini' }[code]!
+    for (const line of Object.values(LOCALES[code]!.why.confidence)) expect(line(94)).toContain(label)
+  })
+
+  it.each(OTHERS)('%s: the observe-only title does not claim the bot acted', (code) => {
+    expect(LOCALES[code]!.why.title).not.toMatch(/вмешался|ўмяшаўся|acted|işlem yaptım/)
+  })
+
+  it.each(OTHERS)('%s: a cancel is not drawn as a failure; the greeting media section is not "gifs" only', (code) => {
+    const L = LOCALES[code]!
+    expect(L.welcome.editor.cancelled).toMatch(/^↩️/)
+    expect(L.extra.editor.cancelled).toMatch(/^↩️/)
+    expect(L.welcome.editor.gifs(2).toLowerCase()).not.toMatch(/gif|гиф|гіф/)
+  })
+
+  it.each(OTHERS)('%s: help names /untrust and what «Not spam» does; quiet mode says no sound and no buttons', (code) => {
+    const L = LOCALES[code]!
+    expect(L.helpText).toContain('/untrust')
+    expect(L.helpText.split('\n').at(-1)).toMatch(/\]<\/b>[^:]*: \S/)
+    expect(L.start.groupHint).toContain('/stats')
+    expect(L.settings.quietHint).toMatch(/звука|гуку|silently|sessiz/)
+  })
+
+  it.each(OTHERS)('%s: no "avatar" or "сторис" in reasons and signals; reputation is not the admin-trust word', (code) => {
+    const L = LOCALES[code]!
+    const texts = [...Object.values(L.reasons), ...Object.values(L.why.signalLabels), L.why.profileReuseEvidence(3)].join('\n')
+    expect(texts).not.toMatch(/аватар|avatar|сторыс|сторис/i)
+    expect(L.stats.repStatus.trusted).not.toMatch(/доверен|даверн|^trusted$|güvenilir/)
+  })
+
+  it.each(OTHERS)('%s: first-seen reads as a phrase for a new account; a roster within a minute does not print "now" as a span', (code) => {
+    const L = LOCALES[code]!
+    const p = L.profile
+    expect(p.firstSeen(p.neverSeen)).toBe(p.firstSeen(p.units.now))
+    expect(p.firstSeen(`3${p.units.d}`)).toContain(`3${p.units.d}`)
+    expect(L.vote.voters.span(p.units.now)).not.toContain(p.units.now)
+  })
+})

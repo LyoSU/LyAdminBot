@@ -13,6 +13,12 @@ const s = (v: number): string => (v === 1 ? '' : 's')
 const NOW = 'now'
 const ago = (span: string): string => (span === NOW ? 'just now' : `${span} ago`)
 
+/** First-seen placeholder: the profile line reads it as a phrase, not a span. */
+const NEVER_SEEN = 'first time'
+
+/** "a photo", "an attachment": the media nouns are inserted after an article. */
+const withArticle = (noun: string): string => `${/^[aeiou]/i.test(noun) ? 'an' : 'a'} ${noun}`
+
 export const en: Locale = {
   languageName: 'English',
 
@@ -27,7 +33,7 @@ export const en: Locale = {
     ].join('\n'),
     liveProof: (chats, spammers, days) =>
       `📊 Right now I guard <b>${n(chats)}</b> chat${s(chats)}: <b>${n(spammers)}</b> spammer${s(spammers)} blocked in ${days} day${s(days)}.`,
-    groupHint: '🛡 I catch spam and ban scammers.\n<code>/settings</code> for admins · <code>/help</code> commands',
+    groupHint: '🛡 I catch spam and ban scammers.\n<code>/settings</code> for admins · <code>/stats</code> numbers · <code>/help</code> commands',
     addToGroupButton: '➕ Add to group',
     helpButton: '❓ Commands',
     langButton: '🌐 Language'
@@ -35,7 +41,7 @@ export const en: Locale = {
   arrivals: {
     button: '👥 Newcomers',
     title: '👥 <b>Who joined the chat this week</b>',
-    empty: 'The bot has not seen anyone join this chat this week.',
+    empty: 'The bot has not noticed any new members in this chat this week.',
     silent: 'silent',
     spoke: (count) => `wrote: ${count}`,
     suspect: 'joined alongside a spammer',
@@ -56,7 +62,7 @@ export const en: Locale = {
   },
   cohort: {
     title: (count, spammer) => `👥 <b>${count} similar ${count === 1 ? 'newcomer' : 'newcomers'} joined alongside the spammer ${spammer}</b>`,
-    hint: 'Similar profile, joined around the same time, no messages yet. The bot has not touched anyone — an admin decides.',
+    hint: 'Similar profile, joined around the same time, no messages yet. The bot has not restricted anyone — an admin decides.',
     banButton: (count) => `🚫 Ban ${count}`,
     keepButton: 'Keep',
     banned: (done, total, admin) => `🚫 Banned ${done} of ${total} newcomer${s(total)} who joined alongside the spammer · ${admin}`,
@@ -67,12 +73,12 @@ export const en: Locale = {
   chatActions: {
     button: '🧾 Recent actions',
     title: '🧾 <b>What the bot did in this chat</b>',
-    empty: 'Nothing yet: the bot has not acted on anyone in this chat.',
+    empty: 'Empty for now: the bot has not done anything in this chat yet.',
     footer: '“Why?” opens the evidence, and “Not spam” if the bot got it wrong.'
   },
 
   ownRestrictions: {
-    title: '🧾 <b>What I did about you</b>',
+    title: '🧾 <b>My decisions about you</b>',
     ago,
     endsIn: (span) => `ends in ${span}`,
     ended: 'already over',
@@ -81,7 +87,7 @@ export const en: Locale = {
     unknownChat: 'untitled chat',
     footer: [
       'These were automatic decisions by the bot, not by the admins.',
-      "If I got it wrong, write to an admin of that chat: they can undo it with one tap.",
+      'If I got it wrong, write to an admin of that chat: an admin can undo it with one tap.',
       'Restrictions with a term lift by themselves.'
     ].join('\n'),
     whyButton: (n) => `Why? · ${n}`
@@ -100,10 +106,10 @@ export const en: Locale = {
     '<b>Admins:</b>',
     '/settings — settings panel (opens in PM, all buttons there)',
     '/banan /kick /del — moderation as a reply',
-    '/check — user card with buttons (trust, etc.)',
+    '/check — user card with a trust button · /untrust — revoke trust',
     '/welcome — newcomer greetings · /extra, /extras — triggers',
     '',
-    'Every notice carries a <b>why?</b> link with the full decision card. Admins also get <b>[✅ Not spam]</b>.'
+    'Every notice carries a <b>why?</b> link with the full decision card. Admins also get <b>[✅ Not spam]</b>: it undoes the decision and adds the person to the chat’s trusted list.'
   ].join('\n'),
 
   writeFailed: '⚠️ Not saved — try again.',
@@ -113,7 +119,7 @@ export const en: Locale = {
   lang: {
     pickerTitle: 'Pick a language:',
     saved: 'Done, English it is',
-    openInPm: 'Pick your own language in a PM with me.',
+    openInPm: 'Pick your own language in a private chat with the bot — tap the button.',
     openButton: '🌐 Pick a language'
   },
 
@@ -148,10 +154,10 @@ export const en: Locale = {
   notification: {
     compact: (action, userLabel) => `${action} · ${userLabel}`,
     whyLink: 'why?',
-    whyButton: '🤨 Why?',
+    whyButton: 'ℹ️ Why?',
     notSpamButton: '✅ Not spam',
-    overrideDone: 'Done, reverted. User is back and trusted in this chat now.',
-    overridePartial: 'Reverted, but not everything went through. Try again, or check my rights.',
+    overrideDone: 'Undone: the restriction is lifted and the account is now trusted in this chat.',
+    overridePartial: '⚠️ Only partly undone: could not lift the restriction or add to the trusted list. Check my rights and tap again.',
     overrideAlreadyDone: 'Already reverted.',
     adminOnly: 'Chat admins only.',
     missingRights: ({ deleteBlocked, senderBlocked, accounts }) => {
@@ -171,60 +177,60 @@ export const en: Locale = {
   reasons: {
     job_scam: 'looks like a job scam',
     crypto_scam: 'crypto scam',
-    gambling_promo: 'casino/betting promo',
+    gambling_promo: 'casino or betting promo',
     adult_promo: '18+ promo',
-    ad_network: 'ad placement offer',
+    ad_network: 'selling ads and ad placements',
     flirt_bait: 'flirt bait',
     phishing: 'phishing link',
     channel_promo: 'unsolicited channel promo',
     guest_bot_promo: 'promo through a bot called in by mention',
-    flood: 'flood / mass posting',
-    prompt_injection: 'attempted moderation hijack',
+    flood: 'flood or mass posting',
+    prompt_injection: 'an attempt to get past the anti-spam check',
     other_spam: 'spam',
     known_spam_signature: 'matches confirmed spam',
     semantic_spam_match: 'very similar to known spam',
     velocity_exceeded: 'same message across multiple chats',
     custom_deny: 'blocked by a chat rule',
     scam_flag_new: 'Telegram flagged the account as scam',
-    external_ban_new: 'account is in spammer databases',
+    external_ban_new: 'account is in spam databases',
     shared_profile_photo: 'the same profile photo is on several other accounts',
-    external_high_factor_new: 'account is in spammer databases',
-    edit_injected_promo: 'message was edited to insert promo',
-    edit_injected_invisibles: 'invisible characters inserted by an edit',
-    private_invite_new: 'private invite from a new account',
-    identity_churn_promo: 'frequent renames + promo content',
-    nsfw_promo_profile: 'the profile itself is an advert (explicit media + linked promo)',
+    external_high_factor_new: 'account is in spam databases',
+    edit_injected_promo: 'promo added while editing',
+    edit_injected_invisibles: 'invisible characters added while editing',
+    private_invite_new: 'invite to a private chat from a new account',
+    identity_churn_promo: 'frequent renames and promo',
+    nsfw_promo_profile: 'the profile works as an advert: explicit photos or videos and a channel on the profile',
     hidden_url_new: 'deceptive link from a newcomer',
-    low_information: 'not enough information, observing',
+    low_information: 'not enough information — only watching for now',
     low_information_profile: 'little text, but a suspicious profile',
-    low_information_profile_unreachable: 'suspicious profile, but the check could not be sent — observing',
-    reported_unreachable: 'the account was reported and the check could not be sent — paused for an hour',
-    profile_farm_unreachable: 'the profile picture is an advert and the check could not be sent — paused for an hour',
-    content_unconfirmed: 'suspicious profile, message content unconfirmed',
+    low_information_profile_unreachable: 'suspicious profile, but the check could not be sent — only watching for now',
+    reported_unreachable: 'the account was reported and the check could not be sent — restricted for an hour',
+    profile_farm_unreachable: 'the profile photo itself is an advert and the check could not be sent — restricted for an hour',
+    content_unconfirmed: 'suspicious profile, but the text itself was not confirmed as spam',
     admin_report: 'an admin reported this as spam',
     trusted_report: 'a trusted member reported this as spam',
     community_vote: 'the community voted: spam',
     forward_blacklist: 'forwarded from a known spam source',
     record_ban_elsewhere: 'account already banned in another chat over spam databases or a Telegram flag — banned here before its first message',
     content_ban_elsewhere: 'account banned in another chat for spam — banned here before its first message',
-    listed_arrival: 'on arrival: account is in spammer databases or flagged by Telegram',
+    listed_arrival: 'on arrival: account is in spam databases or flagged by Telegram',
     arrival_look: 'a silent newcomer whose profile looks like a spam network',
     arrived_with_spammer: 'joined alongside a spammer and looks like it — banned by an admin',
-    admin_arrival_ban: 'an admin banned this newcomer from the newcomers list'
+    admin_arrival_ban: 'banned by an admin from the newcomers list'
   },
   reasonFallback: 'suspicious activity',
 
   why: {
-    title: '🛡 Why I acted',
+    title: '🛡 The bot is only watching',
     inChat: (chatTitle) => `in ${chatTitle}`,
     confidence: {
-      high: (percent) => `🔴 Very likely spam · ${percent}%`,
-      medium: (percent) => `🟠 Probably spam · ${percent}%`,
-      low: (percent) => `🟡 Possibly spam · ${percent}%`
+      high: (percent) => `🔴 Very likely spam · bot’s estimate ${percent}%`,
+      medium: (percent) => `🟠 Probably spam · bot’s estimate ${percent}%`,
+      low: (percent) => `🟡 Possibly spam · bot’s estimate ${percent}%`
     },
     noticedTitle: 'What I noticed:',
     profileReuseEvidence: (accounts) =>
-      `same avatar on ${accounts} other ${accounts === 1 ? 'account' : 'accounts'}`,
+      `same profile photo on ${accounts} other ${accounts === 1 ? 'account' : 'accounts'}`,
     profileMediaEvidence: (score) => `explicit profile photo · score ${score}`,
     externalBanEvidence: (sources, when) => [
       'in spam databases',
@@ -240,7 +246,7 @@ export const en: Locale = {
       private_invite_in_bio: 'a private-channel invite in the bio',
       contact_in_bio: 'an off-platform contact in the bio',
       personal_channel: 'a channel linked on the profile',
-      promo_in_linked_channel: 'the linked channel is itself an advert',
+      promo_in_linked_channel: 'the linked channel carries ads',
       promo_in_message_link: 'the link leads to an advert channel',
       restricted_for_spam: 'Telegram restricted them for spam',
       just_joined: 'joined and posted right away',
@@ -249,56 +255,56 @@ export const en: Locale = {
       scam_flag: 'Telegram flagged the account as a scam',
       fake_flag: 'Telegram flagged the account as fake',
       restricted_flag: 'the account is restricted by Telegram',
-      sleeper_awakened: 'a dormant account suddenly active',
+      sleeper_awakened: 'a long-inactive account suddenly started posting',
       fresh_account: 'the account may be brand new',
-      new_globally: 'has no standing in our chats yet',
-      new_in_chat: 'has no standing in this chat yet',
-      identity_churn_24h: 'frequent name / photo changes',
-      avatar_recently_set: 'the avatar was set within the last few days',
-      prior_spam_detections: 'caught spamming before',
+      new_globally: 'new to our chats',
+      new_in_chat: 'new to this chat',
+      identity_churn_24h: 'frequent name or profile photo changes',
+      avatar_recently_set: 'the profile photo was set within the last few days',
+      prior_spam_detections: 'this account has sent spam before',
       unofficial_client_risk: 'posted from an unofficial app',
-      forward_hidden_user: 'forwarded from a hidden account',
+      forward_hidden_user: 'forwarded from an author who hides their profile',
       forward_source_suspicious: 'forwarded from a suspicious source',
       hidden_url: 'a disguised link',
       external_url: 'an external link',
       url_shortener: 'a shortened link',
-      private_invite_link: 'a private invite link',
-      bot_deeplink: 'a bot-launch link',
+      private_invite_link: 'an invite to a private chat',
+      bot_deeplink: 'a link that starts a bot',
       messenger_contact_link: 'a contact on another messenger',
-      many_url_buttons: 'several link buttons',
+      many_url_buttons: 'several buttons with links',
       phone_number: 'a phone number',
-      cashtag: 'a crypto / ticker mention',
+      cashtag: 'a coin or stock mentioned with $',
       long_text: 'a long post',
       invisible_in_word: 'invisible characters hidden inside words',
-      mixed_script_word: 'mixed alphabets inside a word',
+      mixed_script_word: 'letters from different alphabets in one word',
       greek_homoglyph_word: 'Greek letters standing in for look-alikes inside a word',
       foreign_script: 'written in a script this chat does not use',
       custom_emoji_heavy: 'many premium emoji',
       paid_media: 'paid media content',
       giveaway_media: 'a giveaway',
-      story_share: 'a shared story',
+      story_share: 'a forwarded story',
       unknown_media: 'an unrecognized attachment',
       guest_bot_delivery: 'sent through a bot called in by mention',
       edited_message: 'the message was edited',
-      edit_injected_invisibles: 'invisible characters inserted by an edit',
-      edit_injected_link: 'a link was added by an edit',
+      edit_injected_invisibles: 'invisible characters added while editing',
+      edit_injected_link: 'a link added while editing',
       moderation_flagged: '18+ text or photo',
-      sole_avatar_replaced: 'a single, recently set profile photo on an old account',
+      sole_avatar_replaced: 'an old account whose only profile photo was set recently',
       avatar_shared_with_account: 'same profile photo on one other account',
       avatar_shared_with_accounts: 'same profile photo on several accounts',
       nsfw_avatar: '18+ profile photo',
       suggestive_profile_media: 'suggestive photo or video in the profile',
-      nsfw_stories: '18+ story',
-      nsfw_linked_channel: '18+ on the linked channel picture',
+      nsfw_stories: '18+ in stories',
+      nsfw_linked_channel: '18+ in the linked channel’s photo',
       promo_in_name: 'promo in the account name',
       invisible_in_name: 'invisible characters in the name',
       signature_candidate_match: 'resembles known spam',
-      vector_similar_spam: 'semantically close to spam',
+      vector_similar_spam: 'similar in meaning to known spam',
       velocity_repeats: 'same text posted repeatedly',
       velocity_wave: 'same text from several accounts',
       bot_mention: 'mentions a bot',
       sender_burst: 'a run of messages from one account',
-      burst_grey_repeat: 'a run with several already-suspicious messages'
+      burst_grey_repeat: 'several messages in the run already looked suspicious'
     },
     decidedBy: {
       custom_rule: 'chat rule',
@@ -316,15 +322,16 @@ export const en: Locale = {
       abstain: 'no decision',
       error: 'error'
     },
-    expired: 'This decision has expired — no details left.',
-    appeal: 'If this is a mistake, message an admin of that chat — an admin can undo it.'
+    expired: 'The details of this decision are no longer kept.',
+    appeal: 'If this is a mistake, message an admin of this chat — an admin can undo the decision.'
   },
 
   profile: {
     title: '👤 Profile',
     openButton: '👤 Profile',
     accountAge: (age) => `account ${age}`,
-    firstSeen: (seen) => `here ${seen}`,
+    // A span under a minute is a first sighting too: "known to the bot for now" is not English.
+    firstSeen: (seen) => (seen === NEVER_SEEN || seen === NOW ? 'new to the bot' : `known to the bot for ${seen}`),
     activity: (messages, chats) =>
       [
         ...(messages === null ? [] : [`${messages} message${messages === 1 ? '' : 's'}`]),
@@ -341,7 +348,7 @@ export const en: Locale = {
     promoInBio: 'promo in bio',
     personalChannel: 'linked channel',
     unknownAge: 'of unknown age',
-    neverSeen: 'first time',
+    neverSeen: NEVER_SEEN,
     units: { now: NOW, m: 'm', h: 'h', d: 'd', mo: 'mo', y: 'y' },
     checkNeedReply: 'Reply to a user’s message with /check.',
     notFound: 'Could not fetch the profile.'
@@ -349,22 +356,22 @@ export const en: Locale = {
 
   vote: {
     prompt: ({ userLabel, textPreview, media, whyLink }) =>
-      `🤔 <b>Is this spam?</b> Message from ${userLabel}`
+      `🤔 <b>Is this spam?</b> Posted by ${userLabel}`
       + (media ? ` · 📎 ${media}` : '')
       + (whyLink ? ` · ${whyLink}` : '')
       + `\n${textPreview}`,
     promptNoText: (userLabel, what, whyLink) =>
       (what
-        ? `🤔 <b>Is this spam?</b> Message from ${userLabel} — no text, just a ${what}.`
-        : `🤔 <b>Is this spam?</b> Message from ${userLabel} — no text.`)
+        ? `🤔 <b>Is this spam?</b> Posted by ${userLabel} · no text, just ${withArticle(what)}`
+        : `🤔 <b>Is this spam?</b> Posted by ${userLabel} · no text`)
       + (whyLink ? ` · ${whyLink}` : ''),
     media: {
       photo: 'photo', sticker: 'sticker', video: 'video',
-      voice: 'voice message', file: 'file', other: 'attachment'
+      voice: 'voice or audio message', file: 'file', other: 'attachment'
     },
     redacted: { link: '[link]', mention: '[@mention]', invite: '[invite]' },
     spamButton: (count) => `🗑 Spam (${count})`,
-    hamButton: (count) => `👌 Fine (${count})`,
+    hamButton: (count) => `✅ Not spam (${count})`,
     counted: 'Vote counted.',
     enforcement: {
       done: 'Deleted, author restricted.',
@@ -373,32 +380,32 @@ export const en: Locale = {
       failed: '⚠️ Could neither delete the message nor restrict the author.'
     },
     resolvedSpam: ({ who, enforcement, whyLink }) =>
-      (who ? `🗑 The community says the message from ${who} is spam.` : '🗑 The community says spam.')
-      + (enforcement ? ` ${enforcement}` : '')
+      '🗑 The community decided: spam' + (who ? ` · ${who}` : '')
+      + (enforcement ? `. ${enforcement}` : '')
       + (whyLink ? ` · ${whyLink}` : ''),
     resolvedHam: ({ who, whyLink }) =>
-      (who ? `👌 The community says the message from ${who} is fine.` : '👌 The community says it is fine.')
+      '✅ The community decided: not spam' + (who ? ` · ${who}` : '')
       + (whyLink ? ` · ${whyLink}` : ''),
     alreadyEnded: 'This vote is already closed.',
     voters: {
       button: '👥 Who voted',
-      title: (spam, ham) => `👥 <b>Vote</b> · spam ${spam} : ${ham} fine`,
+      title: (spam, ham) => `👥 <b>Vote</b> · spam ${spam} : ${ham} not spam`,
       spamGroup: '🗑 Spam',
-      hamGroup: '👌 Fine',
+      hamGroup: '✅ Not spam',
       adminMark: 'admin',
       changedMark: 'changed their vote',
-      span: (span) => `⏱ first to last ballot: ${span}`,
+      span: (span) => (span === NOW ? '⏱ all votes came within a minute' : `⏱ first to last ballot: ${span}`),
       more: (count) => `…and ${count} more`,
       nobody: 'Nobody voted in time.',
-      notForTarget: 'This vote is about you.',
-      noStanding: 'Voting is for members who have settled in.',
-      knownBad: 'Your ballot does not count here.'
+      notForTarget: 'This vote is about you: you cannot vote in it or see who voted.',
+      noStanding: 'Vote not counted: voting is for members who have been in the chat for at least a week and posted 10+ messages here (or 50+ across the bot’s chats), or who have been here over a year.',
+      knownBad: 'Vote not counted: this account has sent spam before.'
     }
   },
 
   report: {
     needReply: 'Use /report as a reply to a message, or name the person: /report @username, /report 123456789, or pick them from the list with @.',
-    notFound: (who) => `I have not seen ${who} in this chat. Reply to one of their messages or pick them from the list with @.`,
+    notFound: (who) => `Not found in this chat: ${who}. Reply to one of their messages or pick them from the list with @.`,
     notInChat: 'That person is no longer in the chat.',
     cantReportAdmin: 'Admins cannot be reported.',
     rateLimited: 'Too many reports. Wait a few minutes.',
@@ -424,7 +431,7 @@ export const en: Locale = {
     chatLine: (checked, spammers, deletes) =>
       `📬 ${n(checked)} checked · 🚫 ${n(spammers)} spammer${s(spammers)} · 🧹 ${n(deletes)} removed`,
     chatLastSpam: (span) => `Last spam: ${ago(span)}`,
-    chatClean: '✨ Not a single spam message in that time.',
+    chatClean: '✨ The bot found no spam in that time.',
     unavailable: '📊 The numbers are out of reach right now, try again a bit later.',
     button: '📊 Bot stats'
   },
@@ -434,9 +441,9 @@ export const en: Locale = {
     inChat: (count, chatTitle) => chatTitle ? `Messages in ${chatTitle}: ${count}` : `Messages in this chat: ${count}`,
     global: (count) => `Messages everywhere: ${count}`,
     reputation: (score, status) => `Reputation: ${score} (${status})`,
-    repStatus: { trusted: 'trusted', neutral: 'neutral', suspicious: 'suspicious', restricted: 'restricted' },
+    repStatus: { trusted: 'reliable', neutral: 'neutral', suspicious: 'suspicious', restricted: 'restricted' },
     bananCaught: (count) => `Bananas caught: ${count} 🍌`,
-    openInPm: 'Stats are on the way to your PM.',
+    openInPm: 'Your stats are in a private chat with the bot — tap the button.',
     openButton: '📊 My stats'
   },
 
@@ -456,7 +463,7 @@ export const en: Locale = {
   untrust: {
     success: (name) => `🔓 Trust revoked for ${name}. Their messages go through the checks again.`,
     needReply: 'Reply to the message of whoever you want to untrust with /untrust.',
-    notTrusted: (name) => `${name} was not in the trusted list anyway.`
+    notTrusted: (name) => `ℹ️ ${name} is not on the trusted list — nothing to revoke.`
   },
 
   trust: {
@@ -474,13 +481,13 @@ export const en: Locale = {
     enabled: '👋 Greetings on.',
     disabled: '👋 Greetings off.',
     textSet: '✅ Greeting text saved. %name% is substituted.',
-    gifSet: '✅ Greeting gif saved.',
+    gifSet: '✅ Greeting media saved.',
     usage: [
       '/welcome — toggle on/off',
       '/welcome <text with %name%> — set the greeting',
       'reply to a gif with /welcome — set the gif'
     ].join('\n'),
-    limit: '⚠️ Limit reached — remove something in settings first.',
+    limit: '⚠️ Cannot add more: the limit is reached. Remove something in settings first.',
     duplicate: 'ℹ️ Already added.',
     tooLong: '⚠️ Text too long (max 1000 characters).',
     saveFailed: '⚠️ Could not save.',
@@ -492,25 +499,25 @@ export const en: Locale = {
       enable: '🔔 Enable',
       disable: '🔕 Disable',
       texts: (n) => `📝 Texts (${n})`,
-      gifs: (n) => `🎞 Gifs (${n})`,
+      gifs: (n) => `🎞 Media (${n})`,
       preview: '👁 Preview',
       textsTitle: (n, max) => `📝 <b>Greeting texts</b> (${n}/${max})`,
       textsItem: (i, preview) => `${i}. ${preview}`,
       textsEmpty: '📝 <b>Greeting texts</b>\n\nEmpty for now. Add the first — you can use <code>%name%</code> for the newcomer’s name.',
       addText: '➕ Add text',
-      gifsTitle: (n, max) => `🎞 <b>Greeting gifs</b> (${n}/${max})`,
-      gifsItem: (i) => `${i}. 🎞 gif #${i}`,
-      gifsEmpty: '🎞 <b>Greeting gifs</b>\n\nEmpty for now. Add the first — send a gif, video or photo.',
-      addGif: '➕ Add gif',
+      gifsTitle: (n, max) => `🎞 <b>Greeting media</b> (${n}/${max})`,
+      gifsItem: (i) => `${i}. 🎞 media #${i}`,
+      gifsEmpty: '🎞 <b>Greeting media</b>\n\nEmpty for now. Send a gif, video or photo.',
+      addGif: '➕ Add media',
       promptText: '📝 Send the greeting text in one message.\nYou can include <code>%name%</code> — I’ll substitute the newcomer’s name.\n\n/cancel to abort.',
       promptGif: '🎞 Send a gif, video or photo in one message.\n\n/cancel to abort.',
       added: '✅ Added.',
-      cancelled: '❌ Cancelled.',
-      invalidGif: '⚠️ That’s not media. Send a gif, video or photo.',
+      cancelled: '↩️ Cancelled.',
+      invalidGif: '⚠️ This needs a gif, video or photo — send one of those.',
       removed: '🗑 Removed.',
       removeMissing: 'That one is already gone — refreshed the list.',
       expired: '⌛ That took too long. Open the editor again.',
-      previewEmpty: 'Nothing to show yet — add a text or a gif.'
+      previewEmpty: 'Nothing to show yet — add a text, gif, video or photo.'
     }
   },
 
@@ -526,16 +533,16 @@ export const en: Locale = {
     listEmpty: 'No triggers here yet.',
     editor: {
       title: (n, max) =>
-        `#️⃣ <b>Triggers</b> (${n})\n\nType <code>#name</code> in the chat and the bot sends the saved reply.\nMax fires per message: ${max}.`,
+        `#️⃣ <b>Triggers</b> (${n})\n\nType <code>#name</code> in the chat and the bot sends the saved reply.\nLimit: up to ${max} per message.`,
       item: (i, icon, name) => `${i}. ${icon} #${name}`,
       empty: '#️⃣ <b>Triggers</b>\n\nEmpty for now. Add the first — a name plus text or media.',
       add: '➕ Add trigger',
-      maxLabel: (n) => `Max: ${n}`,
+      maxLabel: (n) => `Limit: ${n}`,
       promptName: '#️⃣ Send the trigger name (without #), one word.\n\n/cancel to abort.',
-      promptContent: (name) => `Now send the content for <code>#${name}</code> — text or media (gif/photo/video).\n\n/cancel to abort.`,
+      promptContent: (name) => `Now send what the bot should reply to <code>#${name}</code> with: text, a gif, photo or video.\n\n/cancel to abort.`,
       added: (name) => `✅ Trigger #${name} saved.`,
-      cancelled: '❌ Cancelled.',
-      invalidName: '⚠️ The name must be one word, no spaces (letters/digits/_).',
+      cancelled: '↩️ Cancelled.',
+      invalidName: '⚠️ The name is one word: letters, digits or _, no spaces.',
       removed: '🗑 Removed.'
     }
   },
@@ -556,11 +563,11 @@ export const en: Locale = {
     button: '🙋 I am human',
     passed: 'Done, go ahead.',
     retry: 'Could not lift the restriction. Tap again.',
-    notForYou: 'This button is not for you.'
+    notForYou: 'This button is for another member.'
   },
 
   settings: {
-    openInPm: 'Settings are available in private messages.',
+    openInPm: 'Settings are in a private chat with the bot — tap the button.',
     openInPmButton: '⚙️ Open settings',
     title: '⚙️ <b>Anti-spam settings</b>',
     preset: 'Mode',
@@ -568,9 +575,9 @@ export const en: Locale = {
     captcha: 'Captcha for newcomers',
     voting: 'Community voting',
     enabled: 'Anti-spam',
-    banDatabase: 'Spammer databases',
+    banDatabase: 'Spam databases',
     quiet: 'Quiet mode',
-    quietHint: '🤫 Notices about confident actions disappear after 5 s. Everything the bot did is under “🧾 Recent actions”. Votes are unaffected.',
+    quietHint: '🤫 Notices about confident actions arrive silently, without buttons, and disappear after 5 s. Everything the bot did is under “🧾 Recent actions”. Votes are unaffected.',
     banan: 'Banan duration',
     language: 'Bot language in this chat',
     languageSaved: 'Chat language updated',

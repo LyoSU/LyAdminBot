@@ -23,6 +23,9 @@ const plural = (n: number, one: string, few: string, many: string): string => {
 const NOW = 'только что'
 const ago = (span: string): string => (span === NOW ? NOW : `${span} назад`)
 
+/** First-seen placeholder: the profile line reads it as a phrase, not a span. */
+const NEVER_SEEN = 'впервые'
+
 export const ru: Locale = {
   languageName: 'Русский',
 
@@ -36,9 +39,9 @@ export const ru: Locale = {
       'Добавь в группу → дай права админа → готово.'
     ].join('\n'),
     liveProof: (chats, spammers, days) =>
-      `📊 Сейчас держу <b>${groupDigits(chats)}</b> ${plural(chats, 'чат', 'чата', 'чатов')}: ` +
+      `📊 Сейчас защищаю <b>${groupDigits(chats)}</b> ${plural(chats, 'чат', 'чата', 'чатов')}: ` +
       `<b>${groupDigits(spammers)}</b> ${plural(spammers, 'спамер заблокирован', 'спамера заблокированы', 'спамеров заблокировано')} за ${days} ${plural(days, 'день', 'дня', 'дней')}.`,
-    groupHint: '🛡 Ловлю спам, баню мошенников.\n<code>/settings</code> для админов · <code>/help</code> команды',
+    groupHint: '🛡 Ловлю спам, баню мошенников.\n<code>/settings</code> для админов · <code>/stats</code> цифры · <code>/help</code> команды',
     addToGroupButton: '➕ Добавить в группу',
     helpButton: '❓ Команды',
     langButton: '🌐 Язык'
@@ -46,7 +49,7 @@ export const ru: Locale = {
   arrivals: {
     button: '👥 Новые участники',
     title: '👥 <b>Кто пришёл в чат за неделю</b>',
-    empty: 'За неделю бот не видел ни одного входа в этот чат.',
+    empty: 'За неделю бот не заметил в этом чате новых участников.',
     silent: 'молчит',
     spoke: (count) => `сообщений: ${count}`,
     suspect: 'вход вместе со спамером',
@@ -66,8 +69,8 @@ export const ru: Locale = {
     banned: (count) => `Забанено: ${count}`
   },
   cohort: {
-    title: (count, spammer) => `👥 <b>Вместе со спамером ${spammer} ${plural(count, 'пришёл', 'пришли', 'пришло')} ещё ${count} ${plural(count, 'похожий новичок', 'похожих новичка', 'похожих новичков')}</b>`,
-    hint: 'Похожий профиль, вход в то же время, ни одного сообщения. Бот никого не трогал — решает админ.',
+    title: (count, spammer) => `👥 <b>Вместе со спамером ${plural(count, 'пришёл', 'пришли', 'пришло')} ещё ${count} ${plural(count, 'похожий новичок', 'похожих новичка', 'похожих новичков')}</b>\nСпамер: ${spammer}`,
+    hint: 'Похожий профиль, вход в то же время, ни одного сообщения. Бот никого не ограничивал — решает админ.',
     banButton: (count) => `🚫 Забанить ${count}`,
     keepButton: 'Оставить',
     banned: (done, total, admin) => `🚫 Забанено ${done} из ${total} ${plural(total, 'новичка', 'новичков', 'новичков')}, пришедших вместе со спамером · ${admin}`,
@@ -78,12 +81,12 @@ export const ru: Locale = {
   chatActions: {
     button: '🧾 Последние действия',
     title: '🧾 <b>Последние действия бота в чате</b>',
-    empty: 'Пока ничего: в этом чате бот ещё никого не трогал.',
+    empty: 'Пока пусто: в этом чате бот ещё ничего не делал.',
     footer: '«За что?» открывает доказательства и кнопку «Не спам», если бот ошибся.'
   },
 
   ownRestrictions: {
-    title: '🧾 <b>Что я делал в отношении тебя</b>',
+    title: '🧾 <b>Мои решения о тебе</b>',
     ago,
     endsIn: (span) => `истечёт через ${span}`,
     ended: 'уже истекло',
@@ -92,7 +95,7 @@ export const ru: Locale = {
     unknownChat: 'чат без названия',
     footer: [
       'Это автоматические решения бота, а не администраторов.',
-      'Если я ошибся — напиши админу того чата: он может отменить это одним нажатием.',
+      'Если я ошибся — напиши админу того чата: админ может отменить это одним нажатием.',
       'Ограничения на срок снимаются сами.'
     ].join('\n'),
     whyButton: (n) => `За что? · ${n}`
@@ -111,10 +114,10 @@ export const ru: Locale = {
     '<b>Админам:</b>',
     '/settings — панель настроек (откроется в ЛС, дальше всё кнопками)',
     '/banan /kick /del — модерация ответом',
-    '/check — карточка пользователя с кнопками (доверие и т.д.)',
+    '/check — карточка пользователя с кнопкой доверия · /untrust — снять доверие',
     '/welcome — приветствие новичков · /extra, /extras — триггеры',
     '',
-    'В каждом уведомлении есть ссылка <b>за что?</b> — там вся карточка решения. Админам ещё и <b>[✅ Не спам]</b>.'
+    'В каждом уведомлении есть ссылка <b>за что?</b> — там вся карточка решения. Админам ещё и <b>[✅ Не спам]</b>: отменяет решение и добавляет человека в доверенные чата.'
   ].join('\n'),
 
   writeFailed: '⚠️ Не сохранил — попробуй ещё раз.',
@@ -124,7 +127,7 @@ export const ru: Locale = {
   lang: {
     pickerTitle: 'Выбери язык:',
     saved: 'Готово, теперь по-русски',
-    openInPm: 'Язык для себя выберешь в личных.',
+    openInPm: 'Свой язык выберешь в личном чате с ботом — жми кнопку.',
     openButton: '🌐 Выбрать язык'
   },
 
@@ -159,10 +162,10 @@ export const ru: Locale = {
   notification: {
     compact: (action, userLabel) => `${action} · ${userLabel}`,
     whyLink: 'за что?',
-    whyButton: '🤨 За что?',
+    whyButton: 'ℹ️ За что?',
     notSpamButton: '✅ Не спам',
-    overrideDone: 'Ок, отменил. Юзер разблокирован и теперь в доверенных этого чата.',
-    overridePartial: 'Отменил, но не всё удалось применить. Попробуй ещё раз или проверь мои права.',
+    overrideDone: 'Отменено: ограничение снято, аккаунт теперь в доверенных этого чата.',
+    overridePartial: '⚠️ Отменено не полностью: не удалось снять ограничение или добавить в доверенные. Проверь мои права и нажми ещё раз.',
     overrideAlreadyDone: 'Уже отменено.',
     adminOnly: 'Только для админов этого чата.',
     missingRights: ({ deleteBlocked, senderBlocked, accounts }) => {
@@ -175,67 +178,67 @@ export const ru: Locale = {
       if (deleteBlocked && !senderBlocked) {
         return '⚠️ Спамеров блокирую, но их сообщения удалить не могу — нет права «Удалять сообщения».'
       }
-      return `⚠️ Нашёл спам, но нет прав что-либо сделать. Дайте мне права «Удалять сообщения» и «Блокировать пользователей».${left}`
+      return `⚠️ Нашёл спам, но нет прав что-либо сделать. Дай мне права «Удалять сообщения» и «Блокировать пользователей».${left}`
     }
   },
 
   reasons: {
-    job_scam: 'похоже на мошенническую «вакансию»',
+    job_scam: 'похоже на мошенническое предложение работы',
     crypto_scam: 'криптомошенничество',
-    gambling_promo: 'реклама казино/ставок',
+    gambling_promo: 'реклама казино или ставок',
     adult_promo: 'реклама 18+',
-    ad_network: 'продажа рекламы/размещений',
+    ad_network: 'продажа рекламы и размещений',
     flirt_bait: 'флирт-приманка',
     phishing: 'фишинговая ссылка',
     channel_promo: 'непрошеная реклама канала',
     guest_bot_promo: 'реклама через бота, вызванного упоминанием',
-    flood: 'флуд/массовая рассылка',
-    prompt_injection: 'попытка обмануть модерацию',
+    flood: 'флуд или массовая рассылка',
+    prompt_injection: 'попытка обойти антиспам-проверку',
     other_spam: 'спам',
     known_spam_signature: 'совпадение с подтверждённым спамом',
     semantic_spam_match: 'очень похоже на известный спам',
     velocity_exceeded: 'то же сообщение в нескольких чатах подряд',
     custom_deny: 'запрещено правилом чата',
     scam_flag_new: 'Telegram пометил аккаунт как мошеннический',
-    external_ban_new: 'аккаунт в базах спамеров',
+    external_ban_new: 'аккаунт в спам-базах',
     shared_profile_photo: 'то же фото профиля ещё на нескольких аккаунтах',
-    external_high_factor_new: 'аккаунт в базах спамеров',
-    edit_injected_promo: 'реклама добавлена редактированием',
-    edit_injected_invisibles: 'невидимые символы вставлены редактированием',
-    private_invite_new: 'закрытое приглашение от нового аккаунта',
-    identity_churn_promo: 'частая смена имени + реклама',
-    nsfw_promo_profile: 'профиль сам является рекламой (откровенное медиа + канал в профиле)',
+    external_high_factor_new: 'аккаунт в спам-базах',
+    edit_injected_promo: 'реклама добавлена при редактировании',
+    edit_injected_invisibles: 'невидимые символы добавлены при редактировании',
+    private_invite_new: 'приглашение в закрытый чат от нового аккаунта',
+    identity_churn_promo: 'частая смена имени и реклама',
+    nsfw_promo_profile: 'профиль работает как реклама: откровенные фото или видео и канал в профиле',
     hidden_url_new: 'скрытая ссылка от новичка',
-    low_information: 'мало информации, наблюдаем',
+    low_information: 'недостаточно информации — пока только наблюдение',
     low_information_profile: 'мало текста, но профиль подозрительный',
-    low_information_profile_unreachable: 'профиль подозрительный, но проверку отправить не удалось — наблюдаем',
-    reported_unreachable: 'на аккаунт пожаловались, а проверку отправить не удалось — пауза на час',
-    profile_farm_unreachable: 'реклама прямо на аватарке, а проверку отправить не удалось — пауза на час',
-    content_unconfirmed: 'подозрительный профиль, но содержание не подтверждено',
+    low_information_profile_unreachable: 'профиль подозрительный, но проверку отправить не удалось — пока только наблюдение',
+    reported_unreachable: 'на аккаунт пожаловались, а проверку отправить не удалось — ограничен на час',
+    profile_farm_unreachable: 'реклама прямо в фото профиля, а проверку отправить не удалось — ограничен на час',
+    content_unconfirmed: 'профиль подозрительный, но сам текст как спам не подтверждён',
     admin_report: 'жалоба админа: спам',
     trusted_report: 'жалоба доверенного участника: спам',
     community_vote: 'сообщество проголосовало: спам',
     forward_blacklist: 'переслано из известного спам-источника',
     record_ban_elsewhere: 'аккаунт уже забанен в другом чате по спам-базам или пометке Telegram — здесь забанен ещё до первого сообщения',
     content_ban_elsewhere: 'аккаунт забанен в другом чате за спам — здесь забанен ещё до первого сообщения',
-    listed_arrival: 'при входе: аккаунт в базах спамеров или помечен Telegram',
+    listed_arrival: 'при входе: аккаунт в спам-базах или помечен Telegram',
     arrival_look: 'новичок молчит, а профиль похож на спам-сеть',
     arrived_with_spammer: 'вход вместе со спамером, похожий профиль — забанил админ',
-    admin_arrival_ban: 'админ забанил новичка из списка новых участников'
+    admin_arrival_ban: 'забанен админом из списка новых участников'
   },
   reasonFallback: 'подозрительная активность',
 
   why: {
-    title: '🛡 Почему я вмешался',
+    title: '🛡 Бот только наблюдает',
     inChat: (chatTitle) => `в чате ${chatTitle}`,
     confidence: {
-      high: (percent) => `🔴 Очень похоже на спам · ${percent}%`,
-      medium: (percent) => `🟠 Вероятно спам · ${percent}%`,
-      low: (percent) => `🟡 Возможно спам · ${percent}%`
+      high: (percent) => `🔴 Очень похоже на спам · оценка бота ${percent}%`,
+      medium: (percent) => `🟠 Вероятно спам · оценка бота ${percent}%`,
+      low: (percent) => `🟡 Возможно спам · оценка бота ${percent}%`
     },
     noticedTitle: 'Что я заметил:',
     profileReuseEvidence: (accounts) =>
-      `та же аватарка ещё на ${accounts} ${plural(accounts, 'аккаунте', 'аккаунтах', 'аккаунтах')}`,
+      `то же фото профиля ещё на ${accounts} ${plural(accounts, 'аккаунте', 'аккаунтах', 'аккаунтах')}`,
     profileMediaEvidence: (score) => `откровенное фото в профиле · оценка ${score}`,
     externalBanEvidence: (sources, when) => [
       'в спам-базах',
@@ -251,7 +254,7 @@ export const ru: Locale = {
       private_invite_in_bio: 'приглашение в закрытый канал в био',
       contact_in_bio: 'контакт вне Telegram в био',
       personal_channel: 'канал привязан к профилю',
-      promo_in_linked_channel: 'канал из профиля рекламирует сам себя',
+      promo_in_linked_channel: 'в канале из профиля — реклама',
       promo_in_message_link: 'ссылка ведёт на рекламный канал',
       restricted_for_spam: 'Telegram ограничил за спам',
       just_joined: 'пишет сразу после входа в чат',
@@ -260,56 +263,56 @@ export const ru: Locale = {
       scam_flag: 'Telegram пометил аккаунт как мошеннический',
       fake_flag: 'Telegram пометил аккаунт как фейковый',
       restricted_flag: 'аккаунт ограничен Telegram',
-      sleeper_awakened: 'спящий аккаунт внезапно ожил',
+      sleeper_awakened: 'давно неактивный аккаунт вдруг начал писать',
       fresh_account: 'аккаунт может быть совсем новым',
-      new_globally: 'в наших чатах ещё без доверия',
-      new_in_chat: 'в этом чате ещё без доверия',
-      identity_churn_24h: 'частая смена имени / фото',
-      avatar_recently_set: 'аватар поставлен на днях',
-      prior_spam_detections: 'раньше уже ловили на спаме',
+      new_globally: 'новый в наших чатах',
+      new_in_chat: 'новый в этом чате',
+      identity_churn_24h: 'частая смена имени или фото профиля',
+      avatar_recently_set: 'фото профиля поставлено на днях',
+      prior_spam_detections: 'от аккаунта уже был спам раньше',
       unofficial_client_risk: 'отправлено из неофициального приложения',
-      forward_hidden_user: 'переслано от скрытого аккаунта',
+      forward_hidden_user: 'переслано от автора, который скрыл свой профиль',
       forward_source_suspicious: 'переслано из подозрительного источника',
       hidden_url: 'замаскированная ссылка',
       external_url: 'внешняя ссылка',
       url_shortener: 'сокращённая ссылка',
-      private_invite_link: 'закрытая пригласительная ссылка',
-      bot_deeplink: 'ссылка-запуск бота',
+      private_invite_link: 'приглашение в закрытый чат',
+      bot_deeplink: 'ссылка, которая запускает бота',
       messenger_contact_link: 'контакт в другом мессенджере',
-      many_url_buttons: 'несколько ссылок-кнопок',
+      many_url_buttons: 'несколько кнопок со ссылками',
       phone_number: 'номер телефона',
-      cashtag: 'упоминание криптовалюты / тикера',
+      cashtag: 'упоминание монеты или акции через $',
       long_text: 'длинный текст',
       invisible_in_word: 'невидимые символы внутри слов',
-      mixed_script_word: 'смесь алфавитов в слове',
+      mixed_script_word: 'буквы разных алфавитов в одном слове',
       greek_homoglyph_word: 'греческие буквы вместо похожих на них в слове',
       foreign_script: 'написано непривычной для чата письменностью',
       custom_emoji_heavy: 'много премиум-эмодзи',
       paid_media: 'платный медиаконтент',
       giveaway_media: 'розыгрыш',
-      story_share: 'репост истории',
+      story_share: 'пересланная история',
       unknown_media: 'нераспознанное вложение',
       guest_bot_delivery: 'отправлено через бота, вызванного упоминанием',
       edited_message: 'сообщение отредактировано',
-      edit_injected_invisibles: 'невидимые символы вставлены редактированием',
-      edit_injected_link: 'ссылка добавлена редактированием',
+      edit_injected_invisibles: 'невидимые символы добавлены при редактировании',
+      edit_injected_link: 'ссылка добавлена при редактировании',
       moderation_flagged: '18+ в тексте или фото',
-      sole_avatar_replaced: 'единственное фото профиля, поставленное недавно на старом аккаунте',
+      sole_avatar_replaced: 'старый аккаунт, единственное фото профиля поставлено недавно',
       avatar_shared_with_account: 'то же фото профиля ещё на одном аккаунте',
       avatar_shared_with_accounts: 'то же фото профиля на нескольких аккаунтах',
-      nsfw_avatar: '18+ на аватарке',
+      nsfw_avatar: '18+ в фото профиля',
       suggestive_profile_media: 'полуоткровенное фото или видео в профиле',
       nsfw_stories: '18+ в историях',
-      nsfw_linked_channel: '18+ на аватарке канала из профиля',
+      nsfw_linked_channel: '18+ в фото канала из профиля',
       promo_in_name: 'реклама в имени аккаунта',
       invisible_in_name: 'невидимые символы в имени',
       signature_candidate_match: 'похоже на известный спам',
-      vector_similar_spam: 'семантически близко к спаму',
+      vector_similar_spam: 'по смыслу похоже на известный спам',
       velocity_repeats: 'тот же текст повторяется',
       velocity_wave: 'тот же текст с нескольких аккаунтов',
       bot_mention: 'упоминание бота',
       sender_burst: 'серия сообщений от одного аккаунта',
-      burst_grey_repeat: 'серия, где несколько сообщений уже выглядели подозрительно'
+      burst_grey_repeat: 'несколько сообщений серии уже выглядели подозрительно'
     },
     decidedBy: {
       custom_rule: 'правило чата',
@@ -327,7 +330,7 @@ export const ru: Locale = {
       abstain: 'без решения',
       error: 'ошибка'
     },
-    expired: 'Это решение уже устарело — деталей не осталось.',
+    expired: 'Детали этого решения больше не хранятся.',
     appeal: 'Если это ошибка — напиши админу этого чата: админ может отменить решение.'
   },
 
@@ -335,7 +338,9 @@ export const ru: Locale = {
     title: '👤 Профиль',
     openButton: '👤 Профиль',
     accountAge: (age) => `аккаунт ${age}`,
-    firstSeen: (seen) => `у нас ${seen}`,
+    // "известен боту <span>" agrees with the "аккаунт" that opens the line; a span
+    // under a minute is a first sighting too, and "известен боту только что" is not.
+    firstSeen: (seen) => (seen === NEVER_SEEN || seen === NOW ? 'бот видит впервые' : `известен боту ${seen}`),
     activity: (messages, chats) =>
       [
         ...(messages === null ? [] : [`${messages} ${plural(messages, 'сообщение', 'сообщения', 'сообщений')}`]),
@@ -352,7 +357,7 @@ export const ru: Locale = {
     promoInBio: 'реклама в био',
     personalChannel: 'привязанный канал',
     unknownAge: 'неизвестного возраста',
-    neverSeen: 'впервые',
+    neverSeen: NEVER_SEEN,
     units: { now: NOW, m: 'м', h: 'ч', d: 'д', mo: 'мес', y: 'г' },
     checkNeedReply: 'Сделай /check ответом на сообщение пользователя.',
     notFound: 'Не удалось получить профиль.'
@@ -360,22 +365,22 @@ export const ru: Locale = {
 
   vote: {
     prompt: ({ userLabel, textPreview, media, whyLink }) =>
-      `🤔 <b>Это спам?</b> Сообщение от ${userLabel}`
+      `🤔 <b>Это спам?</b> Автор: ${userLabel}`
       + (media ? ` · 📎 ${media}` : '')
       + (whyLink ? ` · ${whyLink}` : '')
       + `\n${textPreview}`,
     promptNoText: (userLabel, what, whyLink) =>
       (what
-        ? `🤔 <b>Это спам?</b> Сообщение от ${userLabel} — без текста, только ${what}.`
-        : `🤔 <b>Это спам?</b> Сообщение от ${userLabel} — без текста.`)
+        ? `🤔 <b>Это спам?</b> Автор: ${userLabel} · без текста, только ${what}`
+        : `🤔 <b>Это спам?</b> Автор: ${userLabel} · без текста`)
       + (whyLink ? ` · ${whyLink}` : ''),
     media: {
       photo: 'фото', sticker: 'стикер', video: 'видео',
-      voice: 'аудио', file: 'файл', other: 'вложение'
+      voice: 'голосовое или аудио', file: 'файл', other: 'вложение'
     },
     redacted: { link: '[ссылка]', mention: '[@упоминание]', invite: '[приглашение]' },
     spamButton: (count) => `🗑 Спам (${count})`,
-    hamButton: (count) => `👌 Норм (${count})`,
+    hamButton: (count) => `✅ Не спам (${count})`,
     counted: 'Голос засчитан.',
     enforcement: {
       done: 'Удалено, автор ограничен.',
@@ -384,32 +389,33 @@ export const ru: Locale = {
       failed: '⚠️ Не удалось ни удалить сообщение, ни ограничить автора.'
     },
     resolvedSpam: ({ who, enforcement, whyLink }) =>
-      (who ? `🗑 Сообщество решило: сообщение от ${who} — спам.` : '🗑 Сообщество решило: спам.')
-      + (enforcement ? ` ${enforcement}` : '')
+      // The name follows a "·", never "от": a display name cannot be declined.
+      '🗑 Сообщество решило: спам' + (who ? ` · ${who}` : '')
+      + (enforcement ? `. ${enforcement}` : '')
       + (whyLink ? ` · ${whyLink}` : ''),
     resolvedHam: ({ who, whyLink }) =>
-      (who ? `👌 Сообщество решило: сообщение от ${who} — не спам.` : '👌 Сообщество решило: не спам.')
+      '✅ Сообщество решило: не спам' + (who ? ` · ${who}` : '')
       + (whyLink ? ` · ${whyLink}` : ''),
     alreadyEnded: 'Голосование уже закрыто.',
     voters: {
       button: '👥 Кто голосовал',
-      title: (spam, ham) => `👥 <b>Голосование</b> · спам ${spam} : ${ham} норм`,
+      title: (spam, ham) => `👥 <b>Голосование</b> · спам ${spam} : ${ham} не спам`,
       spamGroup: '🗑 Спам',
-      hamGroup: '👌 Норм',
+      hamGroup: '✅ Не спам',
       adminMark: 'админ',
       changedMark: 'голос изменён',
-      span: (span) => `⏱ от первого до последнего голоса: ${span}`,
+      span: (span) => (span === NOW ? '⏱ все голоса — меньше чем за минуту' : `⏱ от первого до последнего голоса: ${span}`),
       more: (count) => `…и ещё ${count}`,
       nobody: 'Никто не успел проголосовать.',
-      notForTarget: 'Это голосование о тебе.',
-      noStanding: 'Голосуют те, кто уже освоился в чате.',
-      knownBad: 'Твой голос здесь не считается.'
+      notForTarget: 'Это голосование о тебе: в нём ты не голосуешь и не видишь, кто голосовал.',
+      noStanding: 'Голос не засчитан: голосуют те, кто в чате не меньше недели и написал здесь от 10 сообщений (или от 50 во всех чатах с ботом), либо кто в чате больше года.',
+      knownBad: 'Голос не засчитан: с этого аккаунта уже приходил спам.'
     }
   },
 
   report: {
     needReply: 'Сделай /report ответом на сообщение или укажи человека: /report @ник, /report 123456789, либо выбери его через @ из списка.',
-    notFound: (who) => `Не видел ${who} в этом чате. Ответь на сообщение этого человека или выбери его через @ из списка.`,
+    notFound: (who) => `Не нашёл в этом чате: ${who}. Ответь на сообщение этого человека или выбери его через @ из списка.`,
     notInChat: 'Этого человека уже нет в чате.',
     cantReportAdmin: 'На админов жаловаться нельзя.',
     rateLimited: 'Слишком много жалоб. Подожди пару минут.',
@@ -435,7 +441,7 @@ export const ru: Locale = {
     chatLine: (checked, spammers, deletes) =>
       `📬 ${groupDigits(checked)} проверено · 🚫 ${groupDigits(spammers)} ${plural(spammers, 'спамер', 'спамера', 'спамеров')} · 🧹 ${groupDigits(deletes)} удалено`,
     chatLastSpam: (span) => `Последний спам: ${ago(span)}`,
-    chatClean: '✨ За это время — ни одного спама.',
+    chatClean: '✨ За это время бот не обнаружил спама.',
     unavailable: '📊 Цифры сейчас недоступны, попробуй чуть позже.',
     button: '📊 Статистика бота'
   },
@@ -445,9 +451,9 @@ export const ru: Locale = {
     inChat: (count, chatTitle) => chatTitle ? `Сообщений в чате ${chatTitle}: ${count}` : `Сообщений в этом чате: ${count}`,
     global: (count) => `Сообщений всего: ${count}`,
     reputation: (score, status) => `Репутация: ${score} (${status})`,
-    repStatus: { trusted: 'доверенный', neutral: 'нейтральный', suspicious: 'подозрительный', restricted: 'ограниченный' },
+    repStatus: { trusted: 'надёжный', neutral: 'нейтральный', suspicious: 'подозрительный', restricted: 'ограниченный' },
     bananCaught: (count) => `Бананов поймано: ${count} 🍌`,
-    openInPm: 'Статистика придёт в личку.',
+    openInPm: 'Твоя статистика — в личном чате с ботом, жми кнопку.',
     openButton: '📊 Моя статистика'
   },
 
@@ -467,7 +473,7 @@ export const ru: Locale = {
   untrust: {
     success: (name) => `🔓 Доверие снято: ${name}. Сообщения снова проходят проверку.`,
     needReply: 'Ответь командой /untrust на сообщение того, с кого хочешь снять доверие.',
-    notTrusted: (name) => `${name} и так не в списке доверенных.`
+    notTrusted: (name) => `ℹ️ ${name} не в списке доверенных — снимать нечего.`
   },
 
   trust: {
@@ -485,13 +491,13 @@ export const ru: Locale = {
     enabled: '👋 Приветствия включены.',
     disabled: '👋 Приветствия выключены.',
     textSet: '✅ Текст приветствия сохранён. Подстановка %name% работает.',
-    gifSet: '✅ Гифка для приветствия сохранена.',
+    gifSet: '✅ Медиа для приветствия сохранено.',
     usage: [
       '/welcome — включить/выключить',
       '/welcome <текст с %name%> — задать приветствие',
       'ответь гифкой на /welcome — задать гифку'
     ].join('\n'),
-    limit: '⚠️ Достигнут лимит — сначала удали что-то в настройках.',
+    limit: '⚠️ Больше добавить нельзя: лимит исчерпан. Сначала удали что-то в настройках.',
     duplicate: 'ℹ️ Это уже добавлено.',
     tooLong: '⚠️ Текст слишком длинный (макс. 1000 символов).',
     saveFailed: '⚠️ Не удалось сохранить.',
@@ -503,25 +509,25 @@ export const ru: Locale = {
       enable: '🔔 Включить',
       disable: '🔕 Выключить',
       texts: (n) => `📝 Тексты (${n})`,
-      gifs: (n) => `🎞 Гифки (${n})`,
+      gifs: (n) => `🎞 Медиа (${n})`,
       preview: '👁 Предпросмотр',
       textsTitle: (n, max) => `📝 <b>Тексты приветствия</b> (${n}/${max})`,
       textsItem: (i, preview) => `${i}. ${preview}`,
       textsEmpty: '📝 <b>Тексты приветствия</b>\n\nПока пусто. Добавь первый — можно с <code>%name%</code> для имени новичка.',
       addText: '➕ Добавить текст',
-      gifsTitle: (n, max) => `🎞 <b>Гифки приветствия</b> (${n}/${max})`,
-      gifsItem: (i) => `${i}. 🎞 гифка #${i}`,
-      gifsEmpty: '🎞 <b>Гифки приветствия</b>\n\nПока пусто. Добавь первую — пришли гифку, видео или фото.',
-      addGif: '➕ Добавить гифку',
+      gifsTitle: (n, max) => `🎞 <b>Медиа для приветствия</b> (${n}/${max})`,
+      gifsItem: (i) => `${i}. 🎞 медиа #${i}`,
+      gifsEmpty: '🎞 <b>Медиа для приветствия</b>\n\nПока пусто. Пришли гифку, видео или фото.',
+      addGif: '➕ Добавить медиа',
       promptText: '📝 Пришли текст приветствия одним сообщением.\nМожно вставить <code>%name%</code> — подставлю имя новичка.\n\n/cancel — отмена.',
       promptGif: '🎞 Пришли гифку, видео или фото одним сообщением.\n\n/cancel — отмена.',
       added: '✅ Добавлено.',
-      cancelled: '❌ Отменено.',
-      invalidGif: '⚠️ Это не медиа. Пришли гифку, видео или фото.',
+      cancelled: '↩️ Отменено.',
+      invalidGif: '⚠️ Здесь нужна гифка, видео или фото — пришли что-то одно.',
       removed: '🗑 Удалено.',
       removeMissing: 'Этого уже нет — обновил список.',
       expired: '⌛ Время вышло. Открой редактор ещё раз.',
-      previewEmpty: 'Пока нечего показать — добавь текст или гифку.'
+      previewEmpty: 'Пока нечего показать — добавь текст, гифку, видео или фото.'
     }
   },
 
@@ -537,16 +543,16 @@ export const ru: Locale = {
     listEmpty: 'Здесь пока нет триггеров.',
     editor: {
       title: (n, max) =>
-        `#️⃣ <b>Триггеры</b> (${n})\n\nНапиши <code>#название</code> в чате — бот пришлёт сохранённое.\nМакс. срабатываний на сообщение: ${max}.`,
+        `#️⃣ <b>Триггеры</b> (${n})\n\nНапиши <code>#название</code> в чате — бот пришлёт сохранённое.\nЛимит ответов на одно сообщение: ${max}.`,
       item: (i, icon, name) => `${i}. ${icon} #${name}`,
       empty: '#️⃣ <b>Триггеры</b>\n\nПока пусто. Добавь первый — название + текст или медиа.',
       add: '➕ Добавить триггер',
-      maxLabel: (n) => `Макс: ${n}`,
+      maxLabel: (n) => `Лимит: ${n}`,
       promptName: '#️⃣ Введи название триггера (без #), одним словом.\n\n/cancel — отмена.',
-      promptContent: (name) => `Теперь пришли содержимое для <code>#${name}</code> — текст или медиа (гифка/фото/видео).\n\n/cancel — отмена.`,
+      promptContent: (name) => `Теперь пришли, чем бот будет отвечать на <code>#${name}</code>: текст, гифку, фото или видео.\n\n/cancel — отмена.`,
       added: (name) => `✅ Триггер #${name} сохранён.`,
-      cancelled: '❌ Отменено.',
-      invalidName: '⚠️ Название — одно слово без пробелов (буквы/цифры/_).',
+      cancelled: '↩️ Отменено.',
+      invalidName: '⚠️ Название — одно слово: буквы, цифры или _, без пробелов.',
       removed: '🗑 Удалено.'
     }
   },
@@ -567,21 +573,21 @@ export const ru: Locale = {
     button: '🙋 Я человек',
     passed: 'Готово, пиши.',
     retry: 'Не удалось снять ограничение. Нажми ещё раз.',
-    notForYou: 'Эта кнопка не для тебя.'
+    notForYou: 'Эта кнопка для другого участника.'
   },
 
   settings: {
-    openInPm: 'Настройки доступны в личных сообщениях.',
+    openInPm: 'Настройки — в личном чате с ботом, жми кнопку.',
     openInPmButton: '⚙️ Открыть настройки',
     title: '⚙️ <b>Настройки антиспама</b>',
     preset: 'Режим',
-    presets: { soft: 'Мягкий', standard: 'Стандарт', strict: 'Строгий' },
+    presets: { soft: 'Мягкий', standard: 'Стандартный', strict: 'Строгий' },
     captcha: 'Капча для новичков',
     voting: 'Голосование сообщества',
     enabled: 'Антиспам',
-    banDatabase: 'Базы спамеров',
+    banDatabase: 'Спам-базы',
     quiet: 'Тихий режим',
-    quietHint: '🤫 Уведомления об уверенных действиях исчезают через 5 с. Всё, что сделал бот, — в «🧾 Последние действия». Голосования остаются.',
+    quietHint: '🤫 Уведомления об уверенных действиях приходят без звука и кнопок и исчезают через 5 с. Всё, что сделал бот, — в «🧾 Последние действия». Голосования остаются.',
     banan: 'Длительность банана',
     language: 'Язык бота в чате',
     languageSaved: 'Язык чата обновлён',

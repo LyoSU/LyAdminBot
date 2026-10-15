@@ -12,6 +12,9 @@ const n = (v: number): string => groupDigits(v, '.')
 const NOW = 'şimdi'
 const ago = (span: string): string => (span === NOW ? 'az önce' : `${span} önce`)
 
+/** First-seen placeholder: the profile line reads it as a phrase, not a span. */
+const NEVER_SEEN = 'ilk kez'
+
 export const tr: Locale = {
   languageName: 'Türkçe',
 
@@ -26,7 +29,7 @@ export const tr: Locale = {
     ].join('\n'),
     liveProof: (chats, spammers, days) =>
       `📊 Şu anda <b>${n(chats)}</b> sohbeti koruyorum: ${days} günde <b>${n(spammers)}</b> spam hesabını engelledim.`,
-    groupHint: '🛡 Spam yakalarım ve dolandırıcıları yasaklarım.\n<code>/settings</code> yöneticiler için · <code>/help</code> komutlar',
+    groupHint: '🛡 Spam yakalarım ve dolandırıcıları yasaklarım.\n<code>/settings</code> yöneticiler için · <code>/stats</code> sayılar · <code>/help</code> komutlar',
     addToGroupButton: '➕ Gruba ekle',
     helpButton: '❓ Komutlar',
     langButton: '🌐 Dil'
@@ -34,7 +37,7 @@ export const tr: Locale = {
   arrivals: {
     button: '👥 Yeni üyeler',
     title: '👥 <b>Bu hafta sohbete kim katıldı</b>',
-    empty: 'Bot bu hafta bu sohbete kimsenin katıldığını görmedi.',
+    empty: 'Bot bu hafta bu sohbette yeni üye fark etmedi.',
     silent: 'sessiz',
     spoke: (count) => `yazdı: ${count}`,
     suspect: 'bir spamcıyla birlikte katıldı',
@@ -55,7 +58,7 @@ export const tr: Locale = {
   },
   cohort: {
     title: (count, spammer) => `👥 <b>Spamcı ${spammer} ile birlikte ${count} benzer yeni üye katıldı</b>`,
-    hint: 'Aynı tür profil, aynı zamanda katıldılar, henüz bir şey yazmadılar. Bot onlara dokunmadı — karar yöneticinin.',
+    hint: 'Aynı tür profil, aynı zamanda katıldılar, henüz bir şey yazmadılar. Bot kimseyi kısıtlamadı — karar yöneticinin.',
     banButton: (count) => `🚫 ${count} kişiyi yasakla`,
     keepButton: 'Bırak',
     banned: (done, total, admin) => `🚫 Spamcıyla katılan ${total} yeni üyeden ${done} tanesi yasaklandı · ${admin}`,
@@ -66,7 +69,7 @@ export const tr: Locale = {
   chatActions: {
     button: '🧾 Son işlemler',
     title: '🧾 <b>Botun bu sohbetteki son işlemleri</b>',
-    empty: 'Henüz bir şey yok: bot bu sohbette kimseye işlem yapmadı.',
+    empty: 'Henüz boş: bot bu sohbette henüz hiçbir işlem yapmadı.',
     footer: '“Neden?” kanıtı ve bot yanıldıysa “Spam değil” düğmesini açar.'
   },
 
@@ -80,7 +83,7 @@ export const tr: Locale = {
     unknownChat: 'adsız sohbet',
     footer: [
       'Bunlar yöneticilerin değil, botun otomatik kararlarıdır.',
-      'Yanıldıysam o sohbetin bir yöneticisine yaz: tek dokunuşla geri alabilir.',
+      'Yanıldıysam o sohbetin bir yöneticisine yaz: yönetici bunu tek dokunuşla geri alabilir.',
       'Süreli kısıtlamalar kendiliğinden kalkar.'
     ].join('\n'),
     whyButton: (n) => `Neden? · ${n}`
@@ -99,10 +102,10 @@ export const tr: Locale = {
     '<b>Yöneticiler:</b>',
     '/settings — ayarlar paneli (PM’de açılır, gerisi butonlarla)',
     '/banan /kick /del — yanıt olarak moderasyon',
-    '/check — butonlu kullanıcı kartı (güven vb.)',
+    '/check — güven butonlu kullanıcı kartı · /untrust — güveni kaldır',
     '/welcome — yeni üye karşılama · /extra, /extras — tetikleyiciler',
     '',
-    'Her bildirimde tam karar kartına giden bir <b>neden?</b> bağlantısı var. Yöneticiler ayrıca <b>[✅ Spam değil]</b> görür.'
+    'Her bildirimde tam karar kartına giden bir <b>neden?</b> bağlantısı var. Yöneticiler ayrıca <b>[✅ Spam değil]</b> görür: kararı geri alır ve kişiyi sohbetin güvenilir listesine ekler.'
   ].join('\n'),
 
   writeFailed: '⚠️ Kaydedilmedi — tekrar dene.',
@@ -112,7 +115,7 @@ export const tr: Locale = {
   lang: {
     pickerTitle: 'Bir dil seç:',
     saved: 'Tamam, Türkçe olsun',
-    openInPm: 'Kendi dilini benimle özelden seç.',
+    openInPm: 'Kendi dilini botla özel sohbette seçebilirsin — düğmeye dokun.',
     openButton: '🌐 Dil seç'
   },
 
@@ -147,10 +150,10 @@ export const tr: Locale = {
   notification: {
     compact: (action, userLabel) => `${action} · ${userLabel}`,
     whyLink: 'neden?',
-    whyButton: '🤨 Neden?',
+    whyButton: 'ℹ️ Neden?',
     notSpamButton: '✅ Spam değil',
-    overrideDone: 'Tamam, geri alındı. Kullanıcı geri döndü ve artık bu sohbette güveniliyor.',
-    overridePartial: 'Geri aldım, ama her şey uygulanamadı. Tekrar dene veya yetkilerimi kontrol et.',
+    overrideDone: 'Geri alındı: kısıtlama kaldırıldı, hesap artık bu sohbetin güvenilir listesinde.',
+    overridePartial: '⚠️ Tamamen geri alınamadı: kısıtlama kaldırılamadı ya da güvenilir listesine eklenemedi. Yetkilerimi kontrol et ve tekrar dokun.',
     overrideAlreadyDone: 'Zaten geri alınmış.',
     adminOnly: 'Yalnızca sohbet yöneticileri.',
     missingRights: ({ deleteBlocked, senderBlocked, accounts }) => {
@@ -168,17 +171,17 @@ export const tr: Locale = {
   },
 
   reasons: {
-    job_scam: 'iş dolandırıcılığına benziyor',
+    job_scam: 'dolandırıcı bir iş teklifine benziyor',
     crypto_scam: 'kripto dolandırıcılığı',
-    gambling_promo: 'kumarhane/bahis reklamı',
+    gambling_promo: 'kumarhane veya bahis reklamı',
     adult_promo: '18+ içerik reklamı',
-    ad_network: 'reklam yerleştirme teklifi',
+    ad_network: 'reklam ve reklam yeri satışı',
     flirt_bait: 'flört tuzağı',
     phishing: 'oltalama bağlantısı',
     channel_promo: 'istenmeyen kanal reklamı',
     guest_bot_promo: 'bahsedilerek çağrılan bir bot üzerinden reklam',
-    flood: 'flood / toplu gönderim',
-    prompt_injection: 'moderasyonu ele geçirme girişimi',
+    flood: 'flood veya toplu gönderim',
+    prompt_injection: 'anti-spam kontrolünü atlatma girişimi',
     other_spam: 'spam',
     known_spam_signature: 'doğrulanmış spam ile eşleşiyor',
     semantic_spam_match: 'bilinen spam’e çok benziyor',
@@ -188,18 +191,18 @@ export const tr: Locale = {
     external_ban_new: 'hesap spam veritabanlarında',
     shared_profile_photo: 'aynı profil fotoğrafı başka birkaç hesapta da var',
     external_high_factor_new: 'hesap spam veritabanlarında',
-    edit_injected_promo: 'mesaj, reklam eklemek için düzenlendi',
-    edit_injected_invisibles: 'düzenlemeyle görünmez karakter eklendi',
-    private_invite_new: 'yeni bir hesaptan özel davet',
-    identity_churn_promo: 'sık ad değişikliği + reklam içeriği',
-    nsfw_promo_profile: 'profilin kendisi bir reklam (müstehcen içerik + bağlı kanal)',
+    edit_injected_promo: 'düzenleme sırasında reklam eklendi',
+    edit_injected_invisibles: 'düzenleme sırasında görünmez karakter eklendi',
+    private_invite_new: 'yeni bir hesaptan özel sohbete davet',
+    identity_churn_promo: 'sık ad değişikliği ve reklam',
+    nsfw_promo_profile: 'profil reklam gibi çalışıyor: müstehcen fotoğraf veya video ve profilde bir kanal',
     hidden_url_new: 'yeni gelen birinden aldatıcı bağlantı',
-    low_information: 'yeterli bilgi yok, izleniyor',
+    low_information: 'yeterli bilgi yok — şimdilik yalnızca izleniyor',
     low_information_profile: 'metin az, ama profil şüpheli',
-    low_information_profile_unreachable: 'profil şüpheli, ama doğrulama gönderilemedi — izleniyor',
-    reported_unreachable: 'şikâyet edilen profile doğrulama iletilemedi — bir saat duraklatıldı',
-    profile_farm_unreachable: 'profil fotoğrafının kendisi reklam ve doğrulama iletilemedi — bir saat duraklatıldı',
-    content_unconfirmed: 'şüpheli profil, mesaj içeriği doğrulanmadı',
+    low_information_profile_unreachable: 'profil şüpheli, ama doğrulama gönderilemedi — şimdilik yalnızca izleniyor',
+    reported_unreachable: 'hesap şikâyet edildi ve doğrulama gönderilemedi — bir saatliğine kısıtlandı',
+    profile_farm_unreachable: 'profil fotoğrafının kendisi reklam ve doğrulama gönderilemedi — bir saatliğine kısıtlandı',
+    content_unconfirmed: 'profil şüpheli, ama metnin kendisi spam olarak doğrulanmadı',
     admin_report: 'bir yönetici bunu spam olarak bildirdi',
     trusted_report: 'güvenilir bir üye bunu spam olarak bildirdi',
     community_vote: 'topluluk oyladı: spam',
@@ -209,17 +212,17 @@ export const tr: Locale = {
     listed_arrival: 'girişte: hesap spam veritabanlarında veya Telegram tarafından işaretli',
     arrival_look: 'sessiz yeni üyenin profili bir spam ağına benziyor',
     arrived_with_spammer: 'bir spamcıyla birlikte katıldı ve ona benziyor — yönetici yasakladı',
-    admin_arrival_ban: 'yönetici bu yeni üyeyi yeni üyeler listesinden yasakladı'
+    admin_arrival_ban: 'yeni üyeler listesinden yönetici tarafından yasaklandı'
   },
   reasonFallback: 'şüpheli etkinlik',
 
   why: {
-    title: '🛡 Neden işlem yaptım',
+    title: '🛡 Bot yalnızca izliyor',
     inChat: (chatTitle) => `${chatTitle} sohbetinde`,
     confidence: {
-      high: (percent) => `🔴 Büyük olasılıkla spam · ${percent}%`,
-      medium: (percent) => `🟠 Muhtemelen spam · ${percent}%`,
-      low: (percent) => `🟡 Spam olabilir · ${percent}%`
+      high: (percent) => `🔴 Büyük olasılıkla spam · botun tahmini %${percent}`,
+      medium: (percent) => `🟠 Muhtemelen spam · botun tahmini %${percent}`,
+      low: (percent) => `🟡 Spam olabilir · botun tahmini %${percent}`
     },
     noticedTitle: 'Fark ettiklerim:',
     profileReuseEvidence: (accounts) => `aynı profil fotoğrafı ${accounts} hesapta daha`,
@@ -238,7 +241,7 @@ export const tr: Locale = {
       private_invite_in_bio: 'biyografide özel kanal davetiyesi',
       contact_in_bio: 'biyografide Telegram dışı iletişim bilgisi',
       personal_channel: 'profilde bağlı bir kanal',
-      promo_in_linked_channel: 'profildeki kanalın kendisi bir reklam',
+      promo_in_linked_channel: 'profildeki kanalda reklam var',
       promo_in_message_link: 'bağlantı bir reklam kanalına gidiyor',
       restricted_for_spam: 'Telegram spam nedeniyle kısıtladı',
       just_joined: 'katılır katılmaz hemen yazdı',
@@ -247,56 +250,56 @@ export const tr: Locale = {
       scam_flag: 'Telegram hesabı dolandırıcı olarak işaretledi',
       fake_flag: 'Telegram hesabı sahte olarak işaretledi',
       restricted_flag: 'hesap Telegram tarafından kısıtlanmış',
-      sleeper_awakened: 'uykudaki bir hesap aniden aktif oldu',
+      sleeper_awakened: 'uzun süredir sessiz bir hesap aniden yazmaya başladı',
       fresh_account: 'hesap çok yeni olabilir',
-      new_globally: 'sohbetlerimizde henüz güven kazanmamış',
-      new_in_chat: 'bu sohbette henüz güven kazanmamış',
-      identity_churn_24h: 'sık ad / fotoğraf değişikliği',
-      avatar_recently_set: 'avatar son günlerde ayarlandı',
-      prior_spam_detections: 'daha önce spam yaparken yakalandı',
+      new_globally: 'sohbetlerimizde yeni',
+      new_in_chat: 'bu sohbette yeni',
+      identity_churn_24h: 'sık ad veya profil fotoğrafı değişikliği',
+      avatar_recently_set: 'profil fotoğrafı son günlerde konuldu',
+      prior_spam_detections: 'bu hesaptan daha önce de spam geldi',
       unofficial_client_risk: 'resmi olmayan bir uygulamadan gönderildi',
-      forward_hidden_user: 'gizli bir hesaptan iletildi',
+      forward_hidden_user: 'profilini gizleyen birinden iletildi',
       forward_source_suspicious: 'şüpheli bir kaynaktan iletildi',
       hidden_url: 'gizlenmiş bir bağlantı',
       external_url: 'harici bir bağlantı',
       url_shortener: 'kısaltılmış bir bağlantı',
-      private_invite_link: 'özel bir davet bağlantısı',
-      bot_deeplink: 'bot başlatma bağlantısı',
+      private_invite_link: 'özel bir sohbete davet',
+      bot_deeplink: 'bir botu başlatan bağlantı',
       messenger_contact_link: 'başka bir mesajlaşma uygulamasındaki bir iletişim',
-      many_url_buttons: 'birden fazla bağlantı düğmesi',
+      many_url_buttons: 'bağlantılı birkaç düğme',
       phone_number: 'bir telefon numarası',
-      cashtag: 'kripto / hisse senedi sembolü',
+      cashtag: '$ ile coin veya hisse adı',
       long_text: 'uzun bir gönderi',
       invisible_in_word: 'kelimelerin içinde gizli görünmez karakterler',
-      mixed_script_word: 'bir kelimenin içinde karışık alfabeler',
+      mixed_script_word: 'tek kelimede farklı alfabelerden harfler',
       greek_homoglyph_word: 'bir kelimede benzerlerinin yerine geçen Yunan harfleri',
       foreign_script: 'bu sohbette kullanılmayan bir yazı sistemi',
       custom_emoji_heavy: 'çok sayıda premium emoji',
       paid_media: 'ücretli medya içeriği',
       giveaway_media: 'bir çekiliş',
-      story_share: 'paylaşılan bir hikaye',
+      story_share: 'iletilmiş bir hikâye',
       unknown_media: 'tanınmayan bir ek',
       guest_bot_delivery: 'bahsedilerek çağrılan bir bot üzerinden gönderildi',
       edited_message: 'mesaj düzenlendi',
-      edit_injected_invisibles: 'düzenlemeyle görünmez karakter eklendi',
-      edit_injected_link: 'düzenlemeyle bağlantı eklendi',
+      edit_injected_invisibles: 'düzenleme sırasında görünmez karakter eklendi',
+      edit_injected_link: 'düzenleme sırasında bağlantı eklendi',
       moderation_flagged: 'metin veya fotoğrafta 18+ içerik',
-      sole_avatar_replaced: 'eski bir hesapta yeni konulmuş tek profil fotoğrafı',
+      sole_avatar_replaced: 'eski hesap, tek profil fotoğrafı yakın zamanda konuldu',
       avatar_shared_with_account: 'aynı profil fotoğrafı başka bir hesapta',
       avatar_shared_with_accounts: 'aynı profil fotoğrafı birkaç hesapta',
       nsfw_avatar: '18+ profil fotoğrafı',
       suggestive_profile_media: 'müstehcene yakın profil içeriği',
-      nsfw_stories: '18+ hikaye',
+      nsfw_stories: 'hikâyelerde 18+ içerik',
       nsfw_linked_channel: 'profildeki kanalın fotoğrafında 18+ içerik',
       promo_in_name: 'hesap adında reklam',
       invisible_in_name: 'adda görünmez karakterler',
       signature_candidate_match: 'bilinen spama benziyor',
-      vector_similar_spam: 'anlamca spama yakın',
+      vector_similar_spam: 'anlamca bilinen spama benziyor',
       velocity_repeats: 'aynı metin tekrar tekrar gönderildi',
       velocity_wave: 'aynı metin birkaç hesaptan',
       bot_mention: 'bot bahsi',
       sender_burst: 'tek hesaptan gelen mesaj dizisi',
-      burst_grey_repeat: 'birkaç mesajı zaten şüpheli görünen dizi'
+      burst_grey_repeat: 'dizideki birkaç mesaj zaten şüpheli görünüyordu'
     },
     decidedBy: {
       custom_rule: 'sohbet kuralı',
@@ -314,15 +317,16 @@ export const tr: Locale = {
       abstain: 'karar yok',
       error: 'hata'
     },
-    expired: 'Bu kararın süresi doldu — ayrıntı kalmadı.',
-    appeal: 'Bu bir hataysa o sohbetin bir yöneticisine yaz — yönetici kararı geri alabilir.'
+    expired: 'Bu kararın ayrıntıları artık saklanmıyor.',
+    appeal: 'Bu bir hataysa bu sohbetin bir yöneticisine yaz — yönetici kararı geri alabilir.'
   },
 
   profile: {
     title: '👤 Profil',
     openButton: '👤 Profil',
     accountAge: (age) => `hesap ${age}`,
-    firstSeen: (seen) => `burada ${seen}`,
+    // A span under a minute is a first sighting too, not a tenure.
+    firstSeen: (seen) => (seen === NEVER_SEEN || seen === NOW ? 'bot ilk kez görüyor' : `bot ${seen} süredir tanıyor`),
     activity: (messages, chats) =>
       [
         ...(messages === null ? [] : [`${messages} mesaj`]),
@@ -339,7 +343,7 @@ export const tr: Locale = {
     promoInBio: 'biyografide reklam',
     personalChannel: 'bağlı kanal',
     unknownAge: 'yaşı bilinmiyor',
-    neverSeen: 'ilk kez',
+    neverSeen: NEVER_SEEN,
     units: { now: NOW, m: 'dk', h: 'sa', d: 'g', mo: 'ay', y: 'yıl' },
     checkNeedReply: 'Bir kullanıcının mesajına /check ile yanıt ver.',
     notFound: 'Profil alınamadı.'
@@ -347,22 +351,22 @@ export const tr: Locale = {
 
   vote: {
     prompt: ({ userLabel, textPreview, media, whyLink }) =>
-      `🤔 <b>Bu spam mı?</b> ${userLabel} adlı kullanıcıdan mesaj`
+      `🤔 <b>Bu spam mı?</b> Gönderen: ${userLabel}`
       + (media ? ` · 📎 ${media}` : '')
       + (whyLink ? ` · ${whyLink}` : '')
       + `\n${textPreview}`,
     promptNoText: (userLabel, what, whyLink) =>
       (what
-        ? `🤔 <b>Bu spam mı?</b> ${userLabel} kişisinden gelen mesajda metin yok, yalnızca ${what} var.`
-        : `🤔 <b>Bu spam mı?</b> ${userLabel} kişisinden gelen mesajda metin yok.`)
+        ? `🤔 <b>Bu spam mı?</b> Gönderen: ${userLabel} · metin yok, yalnızca ${what}`
+        : `🤔 <b>Bu spam mı?</b> Gönderen: ${userLabel} · metin yok`)
       + (whyLink ? ` · ${whyLink}` : ''),
     media: {
       photo: 'fotoğraf', sticker: 'çıkartma', video: 'video',
-      voice: 'sesli mesaj', file: 'dosya', other: 'ek'
+      voice: 'sesli mesaj veya ses kaydı', file: 'dosya', other: 'ek'
     },
     redacted: { link: '[bağlantı]', mention: '[@kullanıcı]', invite: '[davet]' },
     spamButton: (count) => `🗑 Spam (${count})`,
-    hamButton: (count) => `👌 Sorun yok (${count})`,
+    hamButton: (count) => `✅ Spam değil (${count})`,
     counted: 'Oy sayıldı.',
     enforcement: {
       done: 'Mesaj silindi, yazar kısıtlandı.',
@@ -371,26 +375,27 @@ export const tr: Locale = {
       failed: '⚠️ Ne mesaj silinebildi ne de yazar kısıtlanabildi.'
     },
     resolvedSpam: ({ who, enforcement, whyLink }) =>
-      (who ? `🗑 Topluluk ${who} kişisinin mesajına spam dedi.` : '🗑 Topluluk spam diyor.')
-      + (enforcement ? ` ${enforcement}` : '')
+      // The name follows a "·": a suffix cannot be attached to a display name.
+      '🗑 Topluluk karar verdi: spam' + (who ? ` · ${who}` : '')
+      + (enforcement ? `. ${enforcement}` : '')
       + (whyLink ? ` · ${whyLink}` : ''),
     resolvedHam: ({ who, whyLink }) =>
-      (who ? `👌 Topluluk ${who} kişisinin mesajında sorun görmedi.` : '👌 Topluluk sorun olmadığını söylüyor.')
+      '✅ Topluluk karar verdi: spam değil' + (who ? ` · ${who}` : '')
       + (whyLink ? ` · ${whyLink}` : ''),
     alreadyEnded: 'Bu oylama zaten kapandı.',
     voters: {
       button: '👥 Kim oy verdi',
-      title: (spam, ham) => `👥 <b>Oylama</b> · spam ${spam} : ${ham} temiz`,
+      title: (spam, ham) => `👥 <b>Oylama</b> · spam ${spam} : ${ham} spam değil`,
       spamGroup: '🗑 Spam',
-      hamGroup: '👌 Temiz',
+      hamGroup: '✅ Spam değil',
       adminMark: 'yönetici',
       changedMark: 'oyunu değiştirdi',
-      span: (span) => `⏱ ilk oydan son oya: ${span}`,
+      span: (span) => (span === NOW ? '⏱ tüm oylar bir dakikadan kısa sürede geldi' : `⏱ ilk oydan son oya: ${span}`),
       more: (count) => `…ve ${count} kişi daha`,
       nobody: 'Kimse zamanında oy vermedi.',
-      notForTarget: 'Bu oylama seninle ilgili.',
-      noStanding: 'Oy verme, sohbete yerleşmiş üyeler içindir.',
-      knownBad: 'Oyun burada sayılmıyor.'
+      notForTarget: 'Bu oylama seninle ilgili: bu oylamada oy veremez, kimin oy verdiğini de göremezsin.',
+      noStanding: 'Oy sayılmadı: en az bir haftadır sohbette olup burada en az 10 mesaj (ya da botun sohbetlerinde en az 50 mesaj) yazanlar veya bir yıldan uzun süredir sohbette olanlar oy verebilir.',
+      knownBad: 'Oy sayılmadı: bu hesaptan daha önce spam geldi.'
     }
   },
 
@@ -422,7 +427,7 @@ export const tr: Locale = {
     chatLine: (checked, spammers, deletes) =>
       `📬 ${n(checked)} kontrol · 🚫 ${n(spammers)} spam hesabı · 🧹 ${n(deletes)} silindi`,
     chatLastSpam: (span) => `Son spam: ${ago(span)}`,
-    chatClean: '✨ Bu süre boyunca tek bir spam yok.',
+    chatClean: '✨ Bot bu süre boyunca spam tespit etmedi.',
     unavailable: '📊 Sayılara şu an ulaşamıyorum, biraz sonra tekrar dene.',
     button: '📊 Bot istatistikleri'
   },
@@ -432,9 +437,9 @@ export const tr: Locale = {
     inChat: (count, chatTitle) => chatTitle ? `${chatTitle} sohbetindeki mesajlar: ${count}` : `Bu sohbetteki mesajlar: ${count}`,
     global: (count) => `Her yerdeki mesajlar: ${count}`,
     reputation: (score, status) => `İtibar: ${score} (${status})`,
-    repStatus: { trusted: 'güvenilir', neutral: 'nötr', suspicious: 'şüpheli', restricted: 'kısıtlı' },
+    repStatus: { trusted: 'olumlu', neutral: 'nötr', suspicious: 'şüpheli', restricted: 'kısıtlı' },
     bananCaught: (count) => `Yakalanan muzlar: ${count} 🍌`,
-    openInPm: 'İstatistikler PM’ine yolda.',
+    openInPm: 'İstatistiklerin botla özel sohbette — düğmeye dokun.',
     openButton: '📊 İstatistiklerim'
   },
 
@@ -454,7 +459,7 @@ export const tr: Locale = {
   untrust: {
     success: (name) => `🔓 ${name} için güven geri alındı. Mesajları yeniden kontrollerden geçecek.`,
     needReply: 'Güvenini geri almak istediğin kişinin mesajına /untrust ile yanıt ver.',
-    notTrusted: (name) => `${name} zaten güvenilir listesinde değildi.`
+    notTrusted: (name) => `ℹ️ ${name} güvenilir listesinde değil — kaldırılacak bir şey yok.`
   },
 
   trust: {
@@ -472,13 +477,13 @@ export const tr: Locale = {
     enabled: '👋 Karşılama mesajları açık.',
     disabled: '👋 Karşılama mesajları kapalı.',
     textSet: '✅ Karşılama metni kaydedildi. %name% yerine geçirilir.',
-    gifSet: '✅ Karşılama gif’i kaydedildi.',
+    gifSet: '✅ Karşılama medyası kaydedildi.',
     usage: [
       '/welcome — aç/kapat',
       '/welcome <%name% içeren metin> — karşılamayı ayarla',
       'bir gif’e /welcome ile yanıt ver — gif’i ayarla'
     ].join('\n'),
-    limit: '⚠️ Limite ulaşıldı — önce ayarlardan bir şey sil.',
+    limit: '⚠️ Daha fazla eklenemez: limit doldu. Önce ayarlardan bir şey sil.',
     duplicate: 'ℹ️ Zaten eklendi.',
     tooLong: '⚠️ Metin çok uzun (en fazla 1000 karakter).',
     saveFailed: '⚠️ Kaydedilemedi.',
@@ -490,25 +495,25 @@ export const tr: Locale = {
       enable: '🔔 Aç',
       disable: '🔕 Kapat',
       texts: (n) => `📝 Metinler (${n})`,
-      gifs: (n) => `🎞 Gifler (${n})`,
+      gifs: (n) => `🎞 Medya (${n})`,
       preview: '👁 Önizle',
       textsTitle: (n, max) => `📝 <b>Karşılama metinleri</b> (${n}/${max})`,
       textsItem: (i, preview) => `${i}. ${preview}`,
       textsEmpty: '📝 <b>Karşılama metinleri</b>\n\nHenüz boş. İlkini ekle — yeni üyenin adı için <code>%name%</code> kullanabilirsin.',
       addText: '➕ Metin ekle',
-      gifsTitle: (n, max) => `🎞 <b>Karşılama gifleri</b> (${n}/${max})`,
-      gifsItem: (i) => `${i}. 🎞 gif #${i}`,
-      gifsEmpty: '🎞 <b>Karşılama gifleri</b>\n\nHenüz boş. İlkini ekle — bir gif, video veya fotoğraf gönder.',
-      addGif: '➕ Gif ekle',
+      gifsTitle: (n, max) => `🎞 <b>Karşılama medyası</b> (${n}/${max})`,
+      gifsItem: (i) => `${i}. 🎞 medya #${i}`,
+      gifsEmpty: '🎞 <b>Karşılama medyası</b>\n\nHenüz boş. Bir gif, video veya fotoğraf gönder.',
+      addGif: '➕ Medya ekle',
       promptText: '📝 Karşılama metnini tek mesajda gönder.\n<code>%name%</code> ekleyebilirsin — yeni üyenin adını koyarım.\n\nİptal için /cancel.',
       promptGif: '🎞 Bir gif, video veya fotoğraf tek mesajda gönder.\n\nİptal için /cancel.',
       added: '✅ Eklendi.',
-      cancelled: '❌ İptal edildi.',
-      invalidGif: '⚠️ Bu bir medya değil. Bir gif, video veya fotoğraf gönder.',
+      cancelled: '↩️ İptal edildi.',
+      invalidGif: '⚠️ Burada gif, video veya fotoğraf gerekiyor — bunlardan birini gönder.',
       removed: '🗑 Silindi.',
       removeMissing: 'O zaten yok — listeyi yeniledim.',
       expired: '⌛ Süre doldu. Düzenleyiciyi yeniden aç.',
-      previewEmpty: 'Gösterilecek bir şey yok — metin veya gif ekle.'
+      previewEmpty: 'Gösterilecek bir şey yok — metin, gif, video veya fotoğraf ekle.'
     }
   },
 
@@ -524,16 +529,16 @@ export const tr: Locale = {
     listEmpty: 'Burada henüz tetikleyici yok.',
     editor: {
       title: (n, max) =>
-        `#️⃣ <b>Tetikleyiciler</b> (${n})\n\nSohbette <code>#ad</code> yaz, bot kayıtlıyı gönderir.\nMesaj başına en fazla: ${max}.`,
+        `#️⃣ <b>Tetikleyiciler</b> (${n})\n\nSohbette <code>#ad</code> yaz, bot kayıtlıyı gönderir.\nLimit: mesaj başına en fazla ${max} yanıt.`,
       item: (i, icon, name) => `${i}. ${icon} #${name}`,
       empty: '#️⃣ <b>Tetikleyiciler</b>\n\nHenüz boş. İlkini ekle — ad + metin veya medya.',
       add: '➕ Tetikleyici ekle',
-      maxLabel: (n) => `Maks: ${n}`,
+      maxLabel: (n) => `Limit: ${n}`,
       promptName: '#️⃣ Tetikleyici adını (# olmadan) tek kelime gönder.\n\nİptal için /cancel.',
-      promptContent: (name) => `Şimdi <code>#${name}</code> için içeriği gönder — metin veya medya (gif/foto/video).\n\nİptal için /cancel.`,
+      promptContent: (name) => `Şimdi botun <code>#${name}</code> için vereceği yanıtı gönder: metin, gif, fotoğraf veya video.\n\nİptal için /cancel.`,
       added: (name) => `✅ #${name} tetikleyicisi kaydedildi.`,
-      cancelled: '❌ İptal edildi.',
-      invalidName: '⚠️ Ad tek kelime olmalı, boşluksuz (harf/rakam/_).',
+      cancelled: '↩️ İptal edildi.',
+      invalidName: '⚠️ Ad tek kelime olmalı: harf, rakam veya _, boşluksuz.',
       removed: '🗑 Silindi.'
     }
   },
@@ -554,11 +559,11 @@ export const tr: Locale = {
     button: '🙋 Ben insanım',
     passed: 'Tamam, devam edebilirsin.',
     retry: 'Kısıtlama kaldırılamadı. Tekrar dokun.',
-    notForYou: 'Bu düğme senin için değil.'
+    notForYou: 'Bu düğme başka bir üye için.'
   },
 
   settings: {
-    openInPm: 'Ayarlar özel mesajlarda mevcuttur.',
+    openInPm: 'Ayarlar botla özel sohbette — düğmeye dokun.',
     openInPmButton: '⚙️ Ayarları aç',
     title: '⚙️ <b>Anti-spam ayarları</b>',
     preset: 'Mod',
@@ -568,7 +573,7 @@ export const tr: Locale = {
     enabled: 'Anti-spam',
     banDatabase: 'Spam veritabanları',
     quiet: 'Sessiz mod',
-    quietHint: '🤫 Emin olunan işlemlerle ilgili bildirimler 5 sn sonra silinir. Botun yaptığı her şey “🧾 Son işlemler” altında. Oylamalar etkilenmez.',
+    quietHint: '🤫 Emin olunan işlemlerle ilgili bildirimler sessiz ve düğmesiz gelir, 5 sn sonra silinir. Botun yaptığı her şey “🧾 Son işlemler” altında. Oylamalar etkilenmez.',
     banan: 'Banan süresi',
     language: 'Bu sohbette bot dili',
     languageSaved: 'Sohbet dili güncellendi',
