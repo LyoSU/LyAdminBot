@@ -109,7 +109,7 @@ export const en: Locale = {
     '/check — user card with a trust button · /untrust — revoke trust',
     '/welcome — newcomer greeting · /extra, /extras — triggers',
     '',
-    'Every notice carries a <b>why?</b> link with the full decision card. Admins also get <b>[✅ Not spam]</b>: it undoes the decision and adds the person to the chat’s trusted list.'
+    'Every notice carries a <b>why?</b> link with the full decision card. Admins also get the <b>“✅ Not spam”</b> button: it undoes the decision and adds the person to this chat’s trusted list.'
   ].join('\n'),
 
   writeFailed: '⚠️ Not saved — try again.',
@@ -162,7 +162,7 @@ export const en: Locale = {
     adminOnly: 'Only admins of this chat can do this.',
     missingRights: ({ deleteBlocked, senderBlocked, accounts }) => {
       const left = accounts > 0
-        ? ` Because of this, ${accounts} account${accounts === 1 ? '' : 's'} stayed in the chat over the last day.`
+        ? ` Over the last day I could not remove ${accounts} account${accounts === 1 ? '' : 's'}.`
         : ''
       if (senderBlocked && !deleteBlocked) {
         return `⚠️ I delete the spam, but I cannot ban the spammers — I am missing the "Ban users" right.${left}`
@@ -170,7 +170,7 @@ export const en: Locale = {
       if (deleteBlocked && !senderBlocked) {
         return '⚠️ I can ban the spammers, but I cannot delete their messages — I am missing the "Delete messages" right.'
       }
-      return `⚠️ I found spam, but I have no rights to act on it. Please grant me the "Delete messages" and "Ban users" rights.${left}`
+      return `⚠️ I found spam, but I cannot do anything about it — I am missing the "Delete messages" and "Ban users" rights.${left}`
     }
   },
 
@@ -231,7 +231,8 @@ export const en: Locale = {
     noticedTitle: 'What I noticed:',
     profileReuseEvidence: (accounts) =>
       `same profile photo on ${accounts} other ${accounts === 1 ? 'account' : 'accounts'}`,
-    profileMediaEvidence: (score) => `explicit profile photo · score ${score}`,
+    // The pipeline writes the model's 0..1 score; the card shows percents.
+    profileMediaEvidence: (score) => `explicit profile photo · score ${Math.round(Number(score) * 100)}%`,
     externalBanEvidence: (sources, when) => [
       'in spam databases',
       ...(sources > 1 ? [`${sources} sources`] : []),
@@ -256,7 +257,7 @@ export const en: Locale = {
       fake_flag: 'Telegram flagged the account as fake',
       restricted_flag: 'the account is restricted by Telegram',
       sleeper_awakened: 'a long-inactive account suddenly started posting',
-      fresh_account: 'the account may be brand new',
+      fresh_account: 'possibly a brand-new account',
       new_globally: 'new to our chats',
       new_in_chat: 'new to this chat',
       identity_churn_24h: 'frequent name or profile photo changes',
@@ -320,7 +321,9 @@ export const en: Locale = {
       burst: 'one-account burst analysis',
       score: 'signal score',
       abstain: 'no decision',
-      error: 'error'
+      error: 'error',
+      join_screen: 'check on joining',
+      captcha_ignored: 'check ignored'
     },
     expired: 'The details of this decision are no longer kept.',
     appeal: 'If this is a mistake, message an admin of this chat — an admin can undo the decision.'
@@ -374,8 +377,8 @@ export const en: Locale = {
     hamButton: (count) => `✅ Not spam (${count})`,
     counted: 'Vote counted.',
     enforcement: {
-      done: 'Deleted, author restricted.',
-      deletedOnly: 'Deleted, but the author could not be restricted.',
+      done: 'Message deleted, author restricted.',
+      deletedOnly: 'Message deleted, but the author could not be restricted.',
       mutedOnly: 'Author restricted, but the message could not be deleted.',
       failed: '⚠️ Could neither delete the message nor restrict the author.'
     },
@@ -409,8 +412,8 @@ export const en: Locale = {
     notInChat: 'That person is no longer in the chat.',
     cantReportAdmin: 'Admins cannot be reported.',
     rateLimited: 'Too many reports. Wait a few minutes.',
-    accepted: 'Got it, thanks.',
-    oneAtATime: 'Several people joined in that one message. Reply to a message from the person you are reporting.',
+    accepted: 'Report received, thanks.',
+    oneAtATime: 'That is the join message for several people. Reply to a message from the person you are reporting.',
     voteClosed: 'The vote on this message is already closed. An admin can still decide.',
     channelSender: 'This was posted as a channel. Only an admin can block a channel.'
   },
@@ -491,7 +494,7 @@ export const en: Locale = {
     duplicate: 'ℹ️ Already added.',
     tooLong: '⚠️ Text too long (max 1000 characters).',
     saveFailed: '⚠️ Could not save.',
-    surgeAlert: (count, riskCount) => `⚠️ Surge of newcomers: ${count} member${s(count)}, ${riskCount} of them suspicious`,
+    surgeAlert: (count, riskCount) => `⚠️ Surge of newcomers: ${count} member${s(count)}, ${riskCount} of them with a suspicious profile`,
     defaultGreeting: (name) => `👋 Welcome, ${name}!`,
     editor: {
       title: (state, nTexts, nGifs) =>
@@ -526,7 +529,7 @@ export const en: Locale = {
     deleted: (name) => `🗑 Deleted #${name}`,
     notFound: (name) => `No such trigger: #${name}`,
     usage: [
-      '/extra name (replying to a message) — saves it under #name',
+      '/extra name (replying to a message) — saves that message under #name',
       '/extra name (no reply) — deletes the trigger'
     ].join('\n'),
     listTitle: '📂 Saved triggers:',
@@ -577,7 +580,7 @@ export const en: Locale = {
     enabled: 'Anti-spam',
     banDatabase: 'Spam databases',
     quiet: 'Quiet mode',
-    quietHint: '🤫 Notices about confident actions arrive silently, without buttons, and disappear after 5 s. Everything the bot did is under “🧾 Recent actions”. Votes are unaffected.',
+    quietHint: '🤫 Notices about confident actions arrive silently, without buttons, and disappear after 5 s. Everything the bot did is under “🧾 Recent actions”. Votes and uncertain decisions show as usual.',
     banan: 'Banan duration',
     language: 'Bot language in this chat',
     languageSaved: 'Chat language updated',

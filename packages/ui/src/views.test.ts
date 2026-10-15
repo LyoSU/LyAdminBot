@@ -1776,8 +1776,8 @@ describe('ru number agreement', () => {
 
   it('missingRights: the verb agrees with the account count', () => {
     checkAgreement((n) => ru.notification.missingRights({ deleteBlocked: false, senderBlocked: true, accounts: n }), {
-      1: 'остался 1 аккаунт.', 2: 'осталось 2 аккаунта.', 5: 'осталось 5 аккаунтов.',
-      11: 'осталось 11 аккаунтов.', 21: 'остался 21 аккаунт.', 22: 'осталось 22 аккаунта.'
+      1: 'убрать 1 аккаунт.', 2: 'убрать 2 аккаунта.', 5: 'убрать 5 аккаунтов.',
+      11: 'убрать 11 аккаунтов.', 21: 'убрать 21 аккаунт.', 22: 'убрать 22 аккаунта.'
     })
   })
 
@@ -1831,9 +1831,9 @@ describe('ru number agreement', () => {
 
   it('surgeAlert: members and suspects agree', () => {
     checkAgreement((n) => ru.welcome.surgeAlert(n, n), {
-      1: '1 участник, из них 1 подозрительный', 2: '2 участника, из них 2 подозрительных',
-      5: '5 участников, из них 5 подозрительных', 11: '11 участников, из них 11 подозрительных',
-      21: '21 участник, из них 21 подозрительный', 22: '22 участника, из них 22 подозрительных'
+      1: '1 участник, из них 1 — с', 2: '2 участника, из них 2 — с',
+      5: '5 участников, из них 5 — с', 11: '11 участников, из них 11 — с',
+      21: '21 участник, из них 21 — с', 22: '22 участника, из них 22 — с'
     })
   })
 })
@@ -1843,8 +1843,8 @@ describe('by number agreement', () => {
 
   it('missingRights: the verb agrees with the account count', () => {
     checkAgreement((n) => by.notification.missingRights({ deleteBlocked: false, senderBlocked: true, accounts: n }), {
-      1: 'застаўся 1 акаўнт.', 2: 'засталося 2 акаўнты.', 5: 'засталося 5 акаўнтаў.',
-      11: 'засталося 11 акаўнтаў.', 21: 'застаўся 21 акаўнт.', 22: 'засталося 22 акаўнты.'
+      1: 'прыбраць 1 акаўнт.', 2: 'прыбраць 2 акаўнты.', 5: 'прыбраць 5 акаўнтаў.',
+      11: 'прыбраць 11 акаўнтаў.', 21: 'прыбраць 21 акаўнт.', 22: 'прыбраць 22 акаўнты.'
     })
   })
 
@@ -1898,9 +1898,9 @@ describe('by number agreement', () => {
 
   it('surgeAlert: members and suspects agree', () => {
     checkAgreement((n) => by.welcome.surgeAlert(n, n), {
-      1: '1 удзельнік, з іх 1 падазроны', 2: '2 удзельнікі, з іх 2 падазроныя',
-      5: '5 удзельнікаў, з іх 5 падазроных', 11: '11 удзельнікаў, з іх 11 падазроных',
-      21: '21 удзельнік, з іх 21 падазроны', 22: '22 удзельнікі, з іх 22 падазроныя'
+      1: '1 удзельнік, з іх 1 — з', 2: '2 удзельнікі, з іх 2 — з',
+      5: '5 удзельнікаў, з іх 5 — з', 11: '11 удзельнікаў, з іх 11 — з',
+      21: '21 удзельнік, з іх 21 — з', 22: '22 удзельнікі, з іх 22 — з'
     })
   })
 })
@@ -1913,7 +1913,7 @@ describe('en number agreement', () => {
   }
 
   it('every counted phrase takes the singular at 1 and the plural otherwise', () => {
-    agrees((n) => en.notification.missingRights({ deleteBlocked: false, senderBlocked: true, accounts: n }), ' 1 account stayed', ' # accounts stayed')
+    agrees((n) => en.notification.missingRights({ deleteBlocked: false, senderBlocked: true, accounts: n }), ' remove 1 account.', ' remove # accounts.')
     agrees((n) => en.cohort.title(n, 'X'), '1 similar newcomer joined', '# similar newcomers joined')
     agrees((n) => en.cohort.banned(1, n, 'A'), 'of 1 newcomer who', 'of # newcomers who')
     agrees((n) => en.arrivals.confirmAll(n), '1</b> newcomer who has not', '#</b> newcomers who have not')
@@ -2187,7 +2187,7 @@ describe('ru, by, en and tr mirror the second uk copy audit', () => {
   it.each(OTHERS)('%s: help names /untrust and what «Not spam» does; quiet mode says no sound and no buttons', (code) => {
     const L = LOCALES[code]!
     expect(L.helpText).toContain('/untrust')
-    expect(L.helpText.split('\n').at(-1)).toMatch(/\]<\/b>[^:]*: \S/)
+    expect(L.helpText.split('\n').at(-1)).toMatch(/[»”]<\/b>[^:]*: \S/)
     expect(L.start.groupHint).toContain('/stats')
     expect(L.settings.quietHint).toMatch(/звука|гуку|silently|sessiz/)
   })
@@ -2205,5 +2205,49 @@ describe('ru, by, en and tr mirror the second uk copy audit', () => {
     expect(p.firstSeen(p.neverSeen)).toBe(p.firstSeen(p.units.now))
     expect(p.firstSeen(`3${p.units.d}`)).toContain(`3${p.units.d}`)
     expect(L.vote.voters.span(p.units.now)).not.toContain(p.units.now)
+  })
+})
+
+/**
+ * The third uk copy audit (2026-10-15) changed what several lines say, not
+ * only how; the other locales kept the old meaning until this pass.
+ */
+describe('ru, by, en and tr mirror the third uk copy audit', () => {
+  const OTHERS = ['ru', 'by', 'en', 'tr']
+
+  it.each(Object.keys(LOCALES))('%s: the admin footer names every decision stage uk names', (code) => {
+    expect(Object.keys(LOCALES[code]!.why.decidedBy).sort()).toEqual(Object.keys(uk.why.decidedBy).sort())
+  })
+
+  it.each(OTHERS)('%s: the both-rights notice names the two missing rights and the count of accounts not removed', (code) => {
+    const L = LOCALES[code]!
+    const quoted = /[«"]([^»"]+)[»"]/
+    const both = L.notification.missingRights({ deleteBlocked: true, senderBlocked: true, accounts: 7 })
+    const deleteRight = quoted.exec(L.notification.missingRights({ deleteBlocked: true, senderBlocked: false, accounts: 0 }))![1]!
+    const banRight = quoted.exec(L.notification.missingRights({ deleteBlocked: false, senderBlocked: true, accounts: 0 }))![1]!
+    expect(both).toContain(deleteRight)
+    expect(both).toContain(banRight)
+    expect(both).toContain('7')
+    // The audit replaced a request for rights with a statement of what is missing.
+    expect(both).not.toMatch(/Дай|Please|Lütfen/)
+  })
+
+  it.each(OTHERS)('%s: the explicit profile photo score is a percent', (code) => {
+    const line = LOCALES[code]!.why.profileMediaEvidence('0.57')
+    expect(line).toMatch(/57%|%57/)
+    expect(line).not.toContain('0.57')
+  })
+
+  it.each(OTHERS)('%s: the surge alert calls the profile suspicious, not the members', (code) => {
+    expect(LOCALES[code]!.welcome.surgeAlert(10, 3)).toMatch(/проф[иі]л|profil/i)
+  })
+
+  it.each(OTHERS)('%s: a vote receipt says it was the message that was deleted', (code) => {
+    const e = LOCALES[code]!.vote.enforcement
+    for (const line of [e.done, e.deletedOnly]) expect(line).toMatch(/Сообщение|Паведамленне|Message|Mesaj/)
+  })
+
+  it.each(OTHERS)('%s: the quiet-mode hint says uncertain decisions still show', (code) => {
+    expect(LOCALES[code]!.settings.quietHint).toMatch(/неуверенные|няўпэўненыя|uncertain|emin olunmayan/)
   })
 })

@@ -31,12 +31,12 @@ describe('en copy audit', () => {
     const banBlocked = (accounts: number): string =>
       en.notification.missingRights({ deleteBlocked: false, senderBlocked: true, accounts })
     expect(banBlocked(0)).toContain('cannot ban the spammers')
-    expect(banBlocked(0)).not.toContain('stayed in the chat')
-    expect(banBlocked(1)).toContain(' 1 account stayed ')
-    expect(banBlocked(21)).toContain(' 21 accounts stayed ')
+    expect(banBlocked(0)).not.toContain('could not remove')
+    expect(banBlocked(1)).toContain(' could not remove 1 account.')
+    expect(banBlocked(21)).toContain(' could not remove 21 accounts.')
     const both = en.notification.missingRights({ deleteBlocked: true, senderBlocked: true, accounts: 5 })
     expect(both).toContain('I found spam')
-    expect(both).toContain('5 accounts stayed')
+    expect(both).toContain('could not remove 5 accounts')
   })
 
   it('groups thousands in the personal stats', () => {

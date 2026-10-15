@@ -105,7 +105,7 @@ export const tr: Locale = {
     '/check — güven düğmeli kullanıcı kartı · /untrust — güveni kaldır',
     '/welcome — yeni üye karşılama · /extra, /extras — tetikleyiciler',
     '',
-    'Her bildirimde tam karar kartına giden bir <b>neden?</b> bağlantısı var. Yöneticiler ayrıca <b>[✅ Spam değil]</b> görür: kararı geri alır ve kişiyi sohbetin güvenilir listesine ekler.'
+    'Her bildirimde tam karar kartına giden bir <b>neden?</b> bağlantısı var. Yöneticiler ayrıca <b>“✅ Spam değil”</b> düğmesini görür: kararı geri alır ve kişiyi bu sohbetin güvenilir listesine ekler.'
   ].join('\n'),
 
   writeFailed: '⚠️ Kaydedilmedi — tekrar dene.',
@@ -158,7 +158,7 @@ export const tr: Locale = {
     adminOnly: 'Yalnızca sohbet yöneticileri.',
     missingRights: ({ deleteBlocked, senderBlocked, accounts }) => {
       const left = accounts > 0
-        ? ` Bu yüzden bugün ${accounts} hesap sohbette kaldı.`
+        ? ` Son bir günde ${accounts} hesabı çıkaramadım.`
         : ''
       if (senderBlocked && !deleteBlocked) {
         return `⚠️ Spam mesajları siliyorum ama spam gönderenleri çıkaramıyorum — "Kullanıcıları engelle" yetkim yok.${left}`
@@ -166,7 +166,7 @@ export const tr: Locale = {
       if (deleteBlocked && !senderBlocked) {
         return '⚠️ Spam gönderenleri engelleyebiliyorum ama mesajlarını silemiyorum — "Mesajları sil" yetkim yok.'
       }
-      return `⚠️ Spam yakaladım ama hiçbir şey yapmaya yetkim yok. Lütfen bana "Mesajları sil" ve "Kullanıcıları engelle" yetkilerini ver.${left}`
+      return `⚠️ Spam yakaladım ama hiçbir şey yapamıyorum — "Mesajları sil" ve "Kullanıcıları engelle" yetkilerim yok.${left}`
     }
   },
 
@@ -226,7 +226,8 @@ export const tr: Locale = {
     },
     noticedTitle: 'Fark ettiklerim:',
     profileReuseEvidence: (accounts) => `aynı profil fotoğrafı ${accounts} hesapta daha`,
-    profileMediaEvidence: (score) => `müstehcen profil fotoğrafı · puan ${score}`,
+    // The pipeline writes the model's 0..1 score; the card shows percents.
+    profileMediaEvidence: (score) => `müstehcen profil fotoğrafı · puan %${Math.round(Number(score) * 100)}`,
     externalBanEvidence: (sources, when) => [
       'spam veritabanlarında',
       ...(sources > 1 ? [`${sources} kaynak`] : []),
@@ -315,7 +316,9 @@ export const tr: Locale = {
       burst: 'tek hesaptan gelen mesaj dizisinin analizi',
       score: 'sinyal puanı',
       abstain: 'karar yok',
-      error: 'hata'
+      error: 'hata',
+      join_screen: 'katılım kontrolü',
+      captcha_ignored: 'kontrol yok sayıldı'
     },
     expired: 'Bu kararın ayrıntıları artık saklanmıyor.',
     appeal: 'Bu bir hataysa bu sohbetin bir yöneticisine yaz — yönetici kararı geri alabilir.'
@@ -405,8 +408,8 @@ export const tr: Locale = {
     notInChat: 'Bu kişi artık sohbette değil.',
     cantReportAdmin: 'Yöneticiler şikâyet edilemez.',
     rateLimited: 'Çok fazla şikâyet. Birkaç dakika bekle.',
-    accepted: 'Anlaşıldı, teşekkürler.',
-    oneAtATime: 'Burada aynı anda birden fazla kişi katıldı. Şikâyet ettiğin kişinin mesajına yanıt ver.',
+    accepted: 'Şikâyetini aldım, teşekkürler.',
+    oneAtATime: 'Bu, birden fazla kişinin katıldığını bildiren mesaj. Şikâyet ettiğin kişinin mesajına yanıt ver.',
     voteClosed: 'Bu mesajla ilgili oylama kapandı. Kararı bir yönetici verebilir.',
     channelSender: 'Bu bir kanal adına gönderildi. Kanalı yalnızca bir yönetici engelleyebilir.'
   },
@@ -487,7 +490,7 @@ export const tr: Locale = {
     duplicate: 'ℹ️ Zaten eklendi.',
     tooLong: '⚠️ Metin çok uzun (en fazla 1000 karakter).',
     saveFailed: '⚠️ Kaydedilemedi.',
-    surgeAlert: (count, riskCount) => `⚠️ Yeni üye akını: ${count} üye, bunlardan ${riskCount} kişi şüpheli`,
+    surgeAlert: (count, riskCount) => `⚠️ Yeni üye akını: ${count} üye, bunlardan ${riskCount} kişi şüpheli profilli`,
     defaultGreeting: (name) => `👋 Hoş geldin, ${name}!`,
     editor: {
       title: (state, nTexts, nGifs) =>
@@ -573,7 +576,7 @@ export const tr: Locale = {
     enabled: 'Anti-spam',
     banDatabase: 'Spam veritabanları',
     quiet: 'Sessiz mod',
-    quietHint: '🤫 Botun emin olduğu işlemlerin bildirimleri sessiz ve düğmesiz gelir, 5 sn sonra silinir. Yaptığı her şey “🧾 Son işlemler” altında. Oylamalar etkilenmez.',
+    quietHint: '🤫 Botun emin olduğu işlemlerin bildirimleri sessiz ve düğmesiz gelir, 5 sn sonra silinir. Yaptığı her şey “🧾 Son işlemler” altında. Oylamalar ve emin olunmayan kararlar her zamanki gibi gösterilir.',
     banan: 'Banan süresi',
     language: 'Bu sohbette bot dili',
     languageSaved: 'Sohbet dili güncellendi',
