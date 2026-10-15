@@ -96,7 +96,7 @@ export const ru: Locale = {
     footer: [
       'Это автоматические решения бота, а не администраторов.',
       'Если я ошибся — напиши админу того чата: админ может отменить это одним нажатием.',
-      'Ограничения на срок снимаются сами.'
+      'Временные ограничения снимаются сами.'
     ].join('\n'),
     whyButton: (n) => `За что? · ${n}`
   },
@@ -154,7 +154,7 @@ export const ru: Locale = {
   actions: {
     captcha: '👋 проверка',
     delete: '🧹 сообщение удалено',
-    kick: '🚪 кик из чата',
+    kick: '🚪 выгнали из чата',
     mute: '🔇 мут',
     ban: '🔨 бан'
   },
@@ -224,7 +224,7 @@ export const ru: Locale = {
     listed_arrival: 'при входе: аккаунт в спам-базах или помечен Telegram',
     arrival_look: 'новичок молчит, а профиль похож на спам-сеть',
     arrived_with_spammer: 'вход вместе со спамером, похожий профиль — забанил админ',
-    admin_arrival_ban: 'забанен админом из списка новых участников'
+    admin_arrival_ban: 'забанено админом из списка новых участников'
   },
   reasonFallback: 'подозрительная активность',
 
@@ -285,7 +285,7 @@ export const ru: Locale = {
       long_text: 'длинный текст',
       invisible_in_word: 'невидимые символы внутри слов',
       mixed_script_word: 'буквы разных алфавитов в одном слове',
-      greek_homoglyph_word: 'греческие буквы вместо похожих на них в слове',
+      greek_homoglyph_word: 'греческие буквы-двойники в слове',
       foreign_script: 'написано непривычной для чата письменностью',
       custom_emoji_heavy: 'много премиум-эмодзи',
       paid_media: 'платный медиаконтент',
@@ -358,7 +358,7 @@ export const ru: Locale = {
     personalChannel: 'привязанный канал',
     unknownAge: 'неизвестного возраста',
     neverSeen: NEVER_SEEN,
-    units: { now: NOW, m: 'м', h: 'ч', d: 'д', mo: 'мес', y: 'г' },
+    units: { now: NOW, m: 'мин', h: 'ч', d: 'д', mo: 'мес', y: 'г' },
     checkNeedReply: 'Сделай /check ответом на сообщение пользователя.',
     notFound: 'Не удалось получить профиль.'
   },
@@ -559,7 +559,7 @@ export const ru: Locale = {
 
   banan: {
     success: (name, duration) => `🍌 ${name} получает банан на ${duration}`,
-    lifted: (name) => `🍌 ${name} лишается банана`,
+    lifted: (name) => `🍌 ${name} больше без банана`,
     self: (name, duration) => `🍌 ${name} берёт себе банан на ${duration}. Уважаю`,
     needReply: 'Сделай /banan ответом на сообщение, или /banan без реплая для себя.',
     undoButton: '↩️ Отменить',
