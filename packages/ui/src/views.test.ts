@@ -1264,7 +1264,7 @@ describe('whyView on an account-screen verdict', () => {
 
   it('reads the profile-media evidence in the reader’s language', () => {
     const text = whyView(uk, screened({ reasonEvidence: 'profile media, sexual 0.57' }))
-    expect(text).toContain('оцінка 0.57')
+    expect(text).toContain('оцінка 57%')
     expect(text).not.toContain('sexual')
   })
 
@@ -1681,8 +1681,8 @@ describe('uk number agreement', () => {
 
   it('missingRights: the verb agrees with the account count', () => {
     check((n) => uk.notification.missingRights({ deleteBlocked: false, senderBlocked: true, accounts: n }), {
-      1: 'лишився 1 акаунт.', 2: 'лишилося 2 акаунти.', 5: 'лишилося 5 акаунтів.',
-      11: 'лишилося 11 акаунтів.', 21: 'лишився 21 акаунт.', 22: 'лишилося 22 акаунти.'
+      1: 'прибрати 1 акаунт.', 2: 'прибрати 2 акаунти.', 5: 'прибрати 5 акаунтів.',
+      11: 'прибрати 11 акаунтів.', 21: 'прибрати 21 акаунт.', 22: 'прибрати 22 акаунти.'
     })
   })
 
@@ -1734,8 +1734,8 @@ describe('uk number agreement', () => {
 
   it('surgeAlert: members and suspects agree', () => {
     check((n) => uk.welcome.surgeAlert(n, n), {
-      1: '1 учасник, з них 1 підозрілий', 2: '2 учасники, з них 2 підозрілі', 5: '5 учасників, з них 5 підозрілих',
-      11: '11 учасників, з них 11 підозрілих', 21: '21 учасник, з них 21 підозрілий', 22: '22 учасники, з них 22 підозрілі'
+      1: '1 учасник, з них 1 — з', 2: '2 учасники, з них 2 — з', 5: '5 учасників, з них 5 — з',
+      11: '11 учасників, з них 11 — з', 21: '21 учасник, з них 21 — з', 22: '22 учасники, з них 22 — з'
     })
   })
 })
