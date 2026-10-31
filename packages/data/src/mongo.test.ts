@@ -2113,7 +2113,7 @@ describe('arrivals — who joined which chat this week', () => {
           finds.push(filter)
           return {
             toArray: async () => [
-              { _id: 'carried-200', chatId: -200, messageId: 55 },
+              { _id: 'carried-200', chatId: -200, messageId: 55, reasonCode: 'content_ban_elsewhere' },
               { _id: 'carried-300', chatId: -300, messageId: 0 },
               { _id: 'older-200', chatId: -200, messageId: 12 },
               { _id: 'carried-400', chatId: -400, messageId: 0 }
@@ -2126,9 +2126,9 @@ describe('arrivals — who joined which chat this week', () => {
         }
       }
     }, { carriedContentBans: MongoStore.prototype.carriedContentBans }) as unknown as MongoStore
-    expect(await store.carriedContentBans(7, -100)).toEqual([{ chatId: -200, messageId: 55 }])
+    expect(await store.carriedContentBans(7, -100)).toEqual([{ chatId: -200, messageId: 55, reasonCode: 'content_ban_elsewhere' }])
     expect(finds[0]).toEqual({
-      userId: 7, reasonCode: 'content_ban_elsewhere', action: 'ban',
+      userId: 7, reasonCode: { $in: ['content_ban_elsewhere', 'vote_ban_elsewhere'] }, action: 'ban',
       'meta.carriedFrom': -100, 'execution.applied': true
     })
     expect(finds[1]).toEqual({

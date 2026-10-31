@@ -77,7 +77,7 @@ import { ArrivalLog, arrivalMessageIds } from './arrival-log.js'
 import { JOIN_LINE_GRACE_MS, JoinWitness } from './join-witness.js'
 import {
   arrivalShapeOf, cohortSiblings, COHORT_AUTO_BAN, splitDeleted, COHORT_WINDOW_MS, recordBanTargets, REMOVED_ARRIVAL_OUTCOMES, isShadowCarryAct,
-  isContentCarryAct, chatsJoinedWithin, MULTI_JOIN_MIN_CHATS, MULTI_JOIN_WINDOW_MS
+  isContentCarryAct, isVoteCarryResolution, chatsJoinedWithin, MULTI_JOIN_MIN_CHATS, MULTI_JOIN_WINDOW_MS
 } from './arrival-cohort.js'
 import { CaptchaGates, memberGone, planRestoredGate, type CaptchaGate } from './captcha-gate.js'
 import { IGNORED_CAPTCHA_ESCALATION_MS, wouldEscalateAfterIgnoredCaptcha } from './recidivism-shadow.js'
@@ -2161,7 +2161,9 @@ const restoreFalsePositive = async (params: {
   // Not awaited: up to ten unbans must not hold the toast of the button that
   // asked for this one. The source room's own arrival is settled too, so a
   // later carry or cohort no longer reads the account as removed from it.
-  if (verdict?.action === 'ban') {
+  // A vote-confirmed carry (`vote_ban_elsewhere`) rests on a ruling whose own
+  // enforcement was a mute, so a mute withdrawn here withdraws it too.
+  if (verdict && (verdict.action === 'ban' || removesSender(verdict.action))) {
     void store.noteArrivalOutcome(params.chatId, params.userId, 'restored').catch(() => { /* no row is fine */ })
     void liftCarriedBans({
       fromChatId: params.chatId, userId: params.userId, byUserId: params.byUserId, source: params.source
@@ -4225,13 +4227,18 @@ const RECORD_BAN_CARRY_TTL_MS = 60 * 60 * 1000
  * and with the source chat in the row, so a correction there lifts it here
  * (`liftCarriedBans`). Keyed apart from the record carry so neither swallows
  * the other's walk: their guards differ, and so can their targets.
+ *
+ * `kind: 'vote'` is the third carry, since 2026-10-31: a spam vote that silenced
+ * the account (`isVoteCarryResolution`). Same guards, same undo, its own reason
+ * code so a reader can tell who concluded it.
  */
 const propagateRecordBan = async (
   fromChatId: number, target: { id: number; displayName: string }, signals: Signal[],
-  content?: { messagesGlobal: number | null; pSpam: number }
+  content?: { messagesGlobal: number | null; pSpam: number; kind?: 'content' | 'vote' }
 ): Promise<void> => {
   const now = Date.now()
-  const reason = content === undefined ? 'record_ban_elsewhere' : 'content_ban_elsewhere'
+  const reason = content === undefined ? 'record_ban_elsewhere'
+    : content.kind === 'vote' ? 'vote_ban_elsewhere' : 'content_ban_elsewhere'
   const key = `${reason}:${target.id}`
   const last = recordBansCarried.get(key)
   if (last !== undefined && now - last < RECORD_BAN_CARRY_TTL_MS) return
@@ -4303,7 +4310,7 @@ const liftCarriedBans = async (correction: {
   const since = new Date(Date.now() - ARRIVAL_TTL_DAYS * 86400_000)
   const byAdmin = new Set((await store.arrivalsOf(userId, since).catch(() => []))
     .filter((a) => a.outcome === 'banned_by_admin').map((a) => a.chatId))
-  for (const { chatId, messageId } of carried) {
+  for (const { chatId, messageId, reasonCode } of carried) {
     if (byAdmin.has(chatId)) {
       log.info('carried_ban_kept', { from: fromChatId, chatId, userId, reason: 'banned_by_admin' })
       continue
@@ -4323,7 +4330,7 @@ const liftCarriedBans = async (correction: {
       await store.recordOverride({
         chatId, messageId, userId, adminId: correction.byUserId, source: correction.source,
         verdict: {
-          decidedBy: 'join_screen', ruleId: null, reasonCode: 'content_ban_elsewhere',
+          decidedBy: 'join_screen', ruleId: null, reasonCode,
           pSpam: 1, action: 'ban', signals: [], meta: { carriedFrom: fromChatId, correctedIn: fromChatId }
         }
       }).catch(() => { /* the unban is what matters */ })
@@ -7827,6 +7834,27 @@ const wireCallbacks = (): void => {
       const subjectId = Number(vote['targetUserId'] ?? 0)
       const subjectLabel = String(vote['targetLabel'] ?? '')
       const closingVerdict = await recallVerdict(chatId, messageId)
+      /**
+       * A spam ruling that silenced the account is a ruling about the account,
+       * so the other chats it sits silent in are told too instead of asking
+       * their own admins the same question (`isVoteCarryResolution`). Never
+       * awaited and never allowed to throw: the receipt below must go out.
+       */
+      if (enforced !== undefined && subjectId > 0 && isVoteCarryResolution({
+        outcome: tally.outcome, decidedBy: tally.decidedBy,
+        reasonCode: closingVerdict?.reasonCode ?? null, accountRemoved: enforced.muted
+      })) {
+        void (async () => {
+          const doc = await store.getUserDoc(subjectId).catch(() => null)
+          const history = userDocToHistory(doc as never, 0)
+          // pSpam 1: the room's confirmation is what is carried, so the target
+          // chat's ban bar (a bar for a machine's reading) is met by definition;
+          // trust, standing and the chat's own switches still refuse.
+          await propagateRecordBan(chatId, { id: subjectId, displayName: subjectLabel }, closingVerdict?.signals ?? [], {
+            messagesGlobal: history?.messagesGlobal ?? null, pSpam: 1, kind: 'vote'
+          })
+        })().catch(() => { /* best-effort */ })
+      }
       const receipt = voteResult(await groupLocale(chatId), {
         chatId, messageId,
         userId: subjectId > 0 ? subjectId : null,

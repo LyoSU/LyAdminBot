@@ -11,7 +11,7 @@
  * The shape is what comes free with the join — no profile request — and is
  * recorded as facts, never as the name.
  */
-import { dominantScript } from '@lyadmin/core'
+import { dominantScript, IMITABLE_REASON_CODES } from '@lyadmin/core'
 import { predictRegistrationUnix } from '@lyadmin/adapters'
 import type { ArrivalShape } from '@lyadmin/data'
 
@@ -121,6 +121,56 @@ export const isShadowCarryAct = (
 export const isContentCarryAct = (
   act: { decidedBy: string; action: string; messageId: number; applied: boolean; needsVote: boolean }
 ): boolean => isShadowCarryAct(act) && act.action === 'ban' && !act.needsVote
+
+/**
+ * Reason codes whose spam vote is a conclusion about the ACCOUNT, and so is
+ * carried as a ban to the chats it sits silent in.
+ *
+ * Vote outcomes by the verdict's reason code, spam:ham, over the 30 days to
+ * 2026-10-31 (resolved votes): job_scam 422:5, shared_profile_photo 230:5,
+ * adult_promo 45:5, guest_bot_promo 30:2, crypto_scam 26:3 — a ham share of
+ * 1–10 %, and what they name (a recruiter, a photo shared by a farm, an escort
+ * ad) is not something a member does by accident. The codes left out are the
+ * ones the same measure puts at 20–27 % ham: other_spam 176:48, channel_promo
+ * 69:21, flirt_bait 56:12, flood 39:14 — a verdict on a message, where the
+ * account may just have had a bad minute. `ad_network` (27:1) is excluded for
+ * the other reason: it is imitable (`IMITABLE_REASON_CODES`), an act members
+ * also perform, and the pipeline's own ceiling already treats it as one. Codes
+ * with no measurement (phishing, gambling_promo, prompt_injection) stay out
+ * until they have one.
+ */
+export const VOTE_CARRY_REASON_CODES: ReadonlySet<string> = new Set([
+  'job_scam', 'shared_profile_photo', 'adult_promo', 'guest_bot_promo', 'crypto_scam'
+])
+
+/**
+ * Whether a resolved vote is carried, as a ban, to the chats the account joined
+ * this week and has not been removed from.
+ *
+ * Production 2026-10-31: one account with a profile photo shared by eight
+ * others and an invite link in its bio posted in several of our chats; each
+ * muted it and opened a vote, and admins confirmed spam in one chat and then
+ * again, for the same account, in the next — a person's confirmation was not
+ * reused anywhere else.
+ *
+ * Only a settled spam ruling that silenced the ACCOUNT: `accountRemoved` is
+ * what the enforcement reported (the mute landed), not that the message went —
+ * a delete alone is a finding about the message. An expiry never gets here by
+ * `decidedBy: null`: nobody ruled, and `expiryOutcome` already refuses to treat
+ * a tally below the quorum as a verdict.
+ */
+export const isVoteCarryResolution = (r: {
+  outcome: string
+  decidedBy: string | null
+  reasonCode: string | null
+  accountRemoved: boolean
+}): boolean =>
+  r.outcome === 'spam'
+  && (r.decidedBy === 'quorum' || r.decidedBy === 'admin')
+  && r.accountRemoved
+  && r.reasonCode !== null
+  && VOTE_CARRY_REASON_CODES.has(r.reasonCode)
+  && !IMITABLE_REASON_CODES.has(r.reasonCode)
 
 /**
  * An account seen joining this many of our chats inside this window is

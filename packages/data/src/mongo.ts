@@ -410,6 +410,8 @@ export const ensureUniqueIndex = async (
 }
 
 /** Sender-removing actions — the ones that take the account out of the room. */
+/** Reason codes a carried ban is written under: a content ban and a vote-confirmed one. */
+const CARRIED_BAN_REASON_CODES = ['content_ban_elsewhere', 'vote_ban_elsewhere']
 const REMOVAL_ACTIONS = ['kick', 'mute', 'ban']
 /** Everything that touched a message or its sender at all. */
 const PUNISHING_ACTIONS = [...REMOVAL_ACTIONS, 'delete']
@@ -2960,7 +2962,7 @@ export class MongoStore {
 
   /**
    * The bans a content ban was carried to from `fromChatId` that a correction
-   * there may lift — the applied `content_ban_elsewhere` ban rows with that
+   * there may lift — the applied `content_ban_elsewhere` / `vote_ban_elsewhere` ban rows with that
    * `carriedFrom` (the carry's skip rows carry it too, and lifted nothing).
    *
    * Only where that ban is still the LAST removal of the account in its chat:
@@ -2970,15 +2972,15 @@ export class MongoStore {
    */
   async carriedContentBans(
     userId: number, fromChatId: number
-  ): Promise<{ chatId: number; messageId: number }[]> {
+  ): Promise<{ chatId: number; messageId: number; reasonCode: string }[]> {
     const docs = await this.decisions.find(
       {
-        userId, reasonCode: 'content_ban_elsewhere', action: 'ban',
+        userId, reasonCode: { $in: CARRIED_BAN_REASON_CODES }, action: 'ban',
         'meta.carriedFrom': fromChatId, 'execution.applied': true
       },
-      { projection: { chatId: 1, messageId: 1, createdAt: 1 }, sort: { createdAt: -1 } }
+      { projection: { chatId: 1, messageId: 1, reasonCode: 1, createdAt: 1 }, sort: { createdAt: -1 } }
     ).toArray()
-    const out: { chatId: number; messageId: number }[] = []
+    const out: { chatId: number; messageId: number; reasonCode: string }[] = []
     const seen = new Set<number>()
     for (const d of docs) {
       const chatId = Number(d['chatId'])
@@ -2989,7 +2991,7 @@ export class MongoStore {
         { sort: { createdAt: -1 }, projection: { _id: 1 } }
       )
       if (last !== null && String(last['_id']) === String(d['_id'])) {
-        out.push({ chatId, messageId: Number(d['messageId'] ?? 0) })
+        out.push({ chatId, messageId: Number(d['messageId'] ?? 0), reasonCode: String(d['reasonCode']) })
       }
     }
     return out

@@ -226,6 +226,7 @@ export const en: Locale = {
     forward_blacklist: 'forwarded from a known spam source',
     record_ban_elsewhere: 'the account was already banned in another chat because it is in spam databases or flagged by Telegram — banned here before its first message',
     content_ban_elsewhere: 'the account was banned in another chat for spam — banned here before its first message',
+    vote_ban_elsewhere: 'the account was banned in another chat for spam confirmed by a vote — banned here before its first message',
     listed_arrival: 'on joining: the account is in spam databases or flagged by Telegram',
     arrival_look: 'a silent newcomer whose profile looks like a spam network',
     arrived_with_spammer: 'joined alongside a spammer, with a similar profile — banned by an admin',

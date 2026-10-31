@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  arrivalShapeOf, chatsJoinedWithin, cohortSiblings, isContentCarryAct, isShadowCarryAct, MULTI_JOIN_MIN_CHATS, recordBanTargets, sameShape, splitDeleted, type CohortArrival, type JoinerFacts
+  arrivalShapeOf, chatsJoinedWithin, cohortSiblings, isContentCarryAct, isShadowCarryAct, isVoteCarryResolution, MULTI_JOIN_MIN_CHATS, recordBanTargets, sameShape, splitDeleted, VOTE_CARRY_REASON_CODES, type CohortArrival, type JoinerFacts
 } from './arrival-cohort.js'
 import type { ArrivalShape } from '@lyadmin/data'
 
@@ -202,6 +202,36 @@ describe('chatsJoinedWithin', () => {
     const two = [{ chatId: -1, at: at(1) }, { chatId: -2, at: at(0.5) }, { chatId: -1, at: at(0) }]
     expect(chatsJoinedWithin(two, now) >= MULTI_JOIN_MIN_CHATS).toBe(false)
     expect(chatsJoinedWithin([...two, { chatId: -3, at: at(0) }], now) >= MULTI_JOIN_MIN_CHATS).toBe(true)
+  })
+})
+
+describe('isVoteCarryResolution', () => {
+  const vote = { outcome: 'spam', decidedBy: 'quorum', reasonCode: 'job_scam', accountRemoved: true }
+
+  it('carries a settled spam vote that silenced the account, on an account-level reason', () => {
+    for (const decidedBy of ['quorum', 'admin']) {
+      for (const reasonCode of VOTE_CARRY_REASON_CODES) {
+        expect(isVoteCarryResolution({ ...vote, decidedBy, reasonCode })).toBe(true)
+      }
+    }
+  })
+
+  it('never carries an expiry, a ham ruling, or a vote whose enforcement left the account alone', () => {
+    expect(isVoteCarryResolution({ ...vote, decidedBy: null })).toBe(false)
+    expect(isVoteCarryResolution({ ...vote, decidedBy: 'expiry' })).toBe(false)
+    expect(isVoteCarryResolution({ ...vote, outcome: 'ham' })).toBe(false)
+    expect(isVoteCarryResolution({ ...vote, outcome: 'pending' })).toBe(false)
+    expect(isVoteCarryResolution({ ...vote, accountRemoved: false })).toBe(false)
+  })
+
+  it('leaves the message-level and imitable reasons, and anything unknown', () => {
+    for (const reasonCode of [
+      'flood', 'other_spam', 'channel_promo', 'flirt_bait', 'ad_network', 'phishing', 'admin_report',
+      'community_vote', 'unsure', ''
+    ]) {
+      expect(isVoteCarryResolution({ ...vote, reasonCode })).toBe(false)
+    }
+    expect(isVoteCarryResolution({ ...vote, reasonCode: null })).toBe(false)
   })
 })
 

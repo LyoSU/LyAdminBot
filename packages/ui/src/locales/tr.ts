@@ -222,6 +222,7 @@ export const tr: Locale = {
     forward_blacklist: 'bilinen bir spam kaynağından iletildi',
     record_ban_elsewhere: 'hesap spam veritabanları veya Telegram işareti nedeniyle başka bir sohbette zaten yasaklandı — burada ilk mesajından önce yasaklandı',
     content_ban_elsewhere: 'hesap başka bir sohbette spam nedeniyle yasaklandı — burada ilk mesajından önce yasaklandı',
+    vote_ban_elsewhere: 'hesap başka bir sohbette oylamayla onaylanan spam nedeniyle yasaklandı — burada ilk mesajından önce yasaklandı',
     listed_arrival: 'girişte: hesap spam veritabanlarında ya da Telegram onu işaretlemiş',
     arrival_look: 'sessiz yeni üyenin profili bir spam ağına benziyor',
     arrived_with_spammer: 'bir spamcıyla birlikte katıldı ve ona benziyor — yönetici yasakladı',
