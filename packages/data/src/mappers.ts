@@ -99,6 +99,13 @@ export interface UserDoc {
      * before 2026-07-31, which reads as zero.
      */
     spamMessages?: number
+    /**
+     * Messages with no words at all (a sticker, a GIF, a picture without a
+     * caption). Written by `MongoStore.touchUser` and subtracted like
+     * `spamMessages`: standing is earned by what the pipeline could read.
+     * Absent before 2026-10-31, which reads as zero.
+     */
+    wordlessMessages?: number
   }
   reputation?: {
     score?: number
@@ -240,7 +247,7 @@ export const userDocToHistory = (
     // benefit of the doubt. `totalMessages` is incremented before the verdict
     // exists (the count is an input to it), so the subtraction has to happen
     // here — see `MongoStore.adjustSpamMessages`.
-    messagesGlobal: Math.max(0, (stats.totalMessages ?? 0) - (stats.spamMessages ?? 0)),
+    messagesGlobal: Math.max(0, (stats.totalMessages ?? 0) - (stats.spamMessages ?? 0) - (stats.wordlessMessages ?? 0)),
     groupsActive: stats.groupsActive ?? 0,
     spamDetections: stats.spamDetections ?? 0,
     reputationStatus: doc.reputation?.status ?? 'neutral',

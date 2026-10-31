@@ -195,9 +195,19 @@ const NAMESPACE_NOT_FOUND = 26
  * the ballot bar. They must not be able to disagree about what a message is
  * worth. Never negative: the two counters are moved by separate writers and a
  * negative standing would read as worse than a stranger's.
+ *
+ * Wordless messages earn nothing either (2026-10-31). A sticker or a GIF with
+ * no caption gives every text stage nothing to read and used to collect a
+ * trust discount besides, so it passed clean and counted: an account silent
+ * for its first week then posted the same sticker every seven minutes, and
+ * the tenth one made it an established regular — a full bypass of the
+ * pipeline, earned in seventy minutes by messages nobody had read. Pictures
+ * are still judged; they just buy no standing.
  */
-const standingFrom = (stats: { messagesCount?: number; spamMessages?: number } | undefined): number =>
-  Math.max(0, (stats?.messagesCount ?? 0) - (stats?.spamMessages ?? 0))
+const standingFrom = (
+  stats: { messagesCount?: number; spamMessages?: number; wordlessMessages?: number } | undefined
+): number =>
+  Math.max(0, (stats?.messagesCount ?? 0) - (stats?.spamMessages ?? 0) - (stats?.wordlessMessages ?? 0))
 
 /**
  * Create a TTL index, tolerating an already-present index on the same key with
@@ -882,8 +892,8 @@ export class MongoStore {
     if (!group) return empty
     const member = await this.groupMembers.findOne(
       { group: group['_id'], telegram_id: telegramId },
-      { projection: { 'stats.messagesCount': 1, 'stats.spamMessages': 1, 'banan.num': 1 } }
-    ) as { stats?: { messagesCount?: number; spamMessages?: number }; banan?: { num?: number } } | null
+      { projection: { 'stats.messagesCount': 1, 'stats.spamMessages': 1, 'stats.wordlessMessages': 1, 'banan.num': 1 } }
+    ) as { stats?: { messagesCount?: number; spamMessages?: number; wordlessMessages?: number }; banan?: { num?: number } } | null
     if (!member) return empty
     return {
       messagesCount: member.stats?.messagesCount ?? 0,
@@ -1312,13 +1322,17 @@ export class MongoStore {
     await this.burstWindows.deleteOne({ _id: key } as never)
   }
 
-  /** Track first-seen + global message counters (additive to v1 fields). */
-  async touchUser(telegramId: number): Promise<void> {
+  /**
+   * Track first-seen + global message counters (additive to v1 fields).
+   * `wordless`: the message carried no text at all, so it earns no standing —
+   * see `standingFrom`.
+   */
+  async touchUser(telegramId: number, wordless = false): Promise<void> {
     await this.users.updateOne(
       { telegram_id: telegramId },
       {
         $setOnInsert: { telegram_id: telegramId, 'globalStats.firstSeen': new Date() },
-        $inc: { 'globalStats.totalMessages': 1 }
+        $inc: { 'globalStats.totalMessages': 1, ...(wordless ? { 'globalStats.wordlessMessages': 1 } : {}) }
       },
       { upsert: true }
     )
@@ -1407,7 +1421,12 @@ export class MongoStore {
           'stats.joinedAt': now,
           'stats.firstMessageAt': now
         },
-        $inc: { 'stats.messagesCount': 1, 'stats.textTotal': Math.max(0, textLength) },
+        // A message with no text earns no standing (`standingFrom`); the raw
+        // traffic counter above still counts it for /stats.
+        $inc: {
+          'stats.messagesCount': 1, 'stats.textTotal': Math.max(0, textLength),
+          ...(textLength <= 0 ? { 'stats.wordlessMessages': 1 } : {})
+        },
         // v1 (mongoose) maintained this and v2 did not, which made the field
         // mean "last seen" for old rows and nothing at all for new ones. The
         // dormancy sweep asks `updatedAt < cutoff` and Mongo does not match a
@@ -1420,10 +1439,10 @@ export class MongoStore {
       {
         upsert: true,
         returnDocument: 'before',
-        projection: { 'stats.messagesCount': 1, 'stats.spamMessages': 1 }
+        projection: { 'stats.messagesCount': 1, 'stats.spamMessages': 1, 'stats.wordlessMessages': 1 }
       }
     )
-    const stats = (before as { stats?: { messagesCount?: number; spamMessages?: number } } | null)?.stats
+    const stats = (before as { stats?: { messagesCount?: number; spamMessages?: number; wordlessMessages?: number } } | null)?.stats
     return standingFrom(stats)
   }
 

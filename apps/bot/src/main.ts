@@ -6110,7 +6110,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
 
   // ── user snapshot ───────────────────────────────────────────────────
   const memberCount = await timed('mongo', async () => {
-    await store.touchUser(sender.id).catch(() => { /* counters are best-effort */ })
+    await store.touchUser(sender.id, normalized.text.length === 0).catch(() => { /* counters are best-effort */ })
     if (userSender) {
       const name = [userSender.firstName, userSender.lastName ?? ''].join(' ').trim()
       await store.recordIdentity(sender.id, name, userSender.username ?? '')

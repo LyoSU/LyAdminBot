@@ -121,6 +121,14 @@ describe('userDocToHistory', () => {
     expect(Math.round((NOW / 1000 - history.firstSeenUnix!) / 86400)).toBe(900)
   })
 
+  it('global standing leaves out spam and wordless messages', () => {
+    const history = userDocToHistory({
+      telegram_id: 42,
+      globalStats: { totalMessages: 60, spamMessages: 5, wordlessMessages: 20 }
+    }, 0, NOW)!
+    expect(history.messagesGlobal).toBe(35)
+  })
+
   it('still says nothing when neither date is there', () => {
     expect(userDocToHistory({ telegram_id: 42, globalStats: { totalMessages: 9 } }, 0, NOW)!
       .firstSeenUnix).toBeNull()

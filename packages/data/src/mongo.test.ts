@@ -130,6 +130,27 @@ describe('touchMember — what counts as standing', () => {
     const { store } = memberStore(undefined)
     expect(await store.touchMember(-100, 42, 30)).toBe(0)
   })
+
+  it('wordless messages buy no standing', async () => {
+    // Eighteen stickers and nothing else: traffic, not participation.
+    const { store } = memberStore({ messagesCount: 18, wordlessMessages: 18 })
+    expect(await store.touchMember(-100, 42, 0)).toBe(0)
+  })
+
+  it('counts a message with no text as wordless, and only that one', async () => {
+    const { store, writes } = memberStore({ messagesCount: 3 })
+    await store.touchMember(-100, 42, 0)
+    await store.touchMember(-100, 42, 12)
+    expect(writes[0]?.['$inc']).toMatchObject({ 'stats.messagesCount': 1, 'stats.wordlessMessages': 1 })
+    expect(writes[1]?.['$inc']).not.toHaveProperty('stats.wordlessMessages')
+  })
+
+  it('subtracts spam and wordless messages together, never below zero', async () => {
+    const { store } = memberStore({ messagesCount: 20, spamMessages: 4, wordlessMessages: 6 })
+    expect(await store.touchMember(-100, 42, 30)).toBe(10)
+    const { store: worse } = memberStore({ messagesCount: 5, spamMessages: 4, wordlessMessages: 6 })
+    expect(await worse.touchMember(-100, 42, 30)).toBe(0)
+  })
 })
 
 /**
