@@ -6782,6 +6782,9 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       // standing in the chat overruled it — the one branch whose cost is a
       // judgement call rather than a measurement, so it has to be countable.
       cappedStanding: verdict.meta['cappedStanding'] ?? undefined,
+      // Set when a reason people confirm (`VOTE_SKIP_REASON_CODES`) acted without a
+      // ballot; counts the overrides of exactly these acts.
+      voteSkipped: verdict.meta['voteSkipped'] ?? undefined,
       llmKey: verdict.meta['llmKey'] ?? undefined,
       // The model is an environment variable, so it changes between restarts
       // with nothing in the data to say so (2026-08-07).

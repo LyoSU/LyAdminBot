@@ -212,6 +212,36 @@ const IMITABLE = ['channel_promo', 'ad_network', 'flood'] as const satisfies
 export const IMITABLE_REASON_CODES: ReadonlySet<string> = new Set(IMITABLE)
 
 /**
+ * Reason codes whose capped verdict resolves the account without opening a
+ * vote, because the community's own answer to the vote is not in doubt.
+ *
+ * Measured over the 30 days to 2026-10-31, from `pipeline_labels`: how people
+ * answered the ballots these reasons opened, spam against ham.
+ *
+ *   job_scam               422 : 5    98.8 %
+ *   shared_profile_photo   230 : 5    97.9 %
+ *
+ * The next codes down are `adult_promo` at 45 : 5 (90 %) and the vague
+ * `other_spam` at 176 : 48 (78 %), so the line is not arbitrary: 97 % with at
+ * least 200 labels is a bar only these two clear. The cost of the vote was
+ * visible in the same window: in a 5 h sample 8 of 8 admin-resolved ballots
+ * were spam by hand, and 7 of 11 expired ballots had no voter at all, so the
+ * message was gone and the account stayed.
+ *
+ * What this relaxes, and nothing else: the sole-witness ceiling on the
+ * classifier's `job_scam` word, and the one-hour hold on a farm-shaped
+ * `shared_profile_photo`. Every guard about WHO the sender is still applies at
+ * the call sites (trusted, standing, not new, a reply).
+ *
+ * To be re-measured, not trusted: add a code only when it clears both numbers,
+ * and drop one the day its ham share passes 3 %. The override is countable by
+ * `voteSkipped` on the verdict meta.
+ */
+export const VOTE_SKIP_MIN_AGREEMENT = 0.97
+export const VOTE_SKIP_MIN_LABELS = 200
+export const VOTE_SKIP_REASON_CODES: ReadonlySet<string> = new Set(['job_scam', 'shared_profile_photo'])
+
+/**
  * Whether a verdict is firm enough to be remembered AGAINST THE ACCOUNT rather
  * than only against the message.
  *

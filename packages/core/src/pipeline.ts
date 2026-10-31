@@ -38,7 +38,8 @@ import {
 } from './signals/registry.js'
 import {
   decideAction, isEnforcementAction, removesSender, mayAskCaptcha, isChannelSenderId,
-  IMITABLE_REASON_CODES, PRESET_THRESHOLDS, captchaBlockers,
+  IMITABLE_REASON_CODES, PRESET_THRESHOLDS, captchaBlockers, TIMED_BAN_SECONDS,
+  VOTE_SKIP_REASON_CODES,
   type PolicyDecision, type PolicyInput
 } from './policy.js'
 import { burstBlob, burstSignals } from './signals/burst.js'
@@ -737,6 +738,33 @@ export const evaluateMessage = async (
      * every mute. The ballot is kept: it is the only road to a lasting removal.
      */
     if (isFarmShapedProfile(verdict.signals) && accountScreenUnasked(blockers) === 'hold') {
+      /**
+       * Where nobody can be asked, the hold used to end in a ballot, and
+       * ballots on this reason are answered spam 230 to 5 (97.9 %, 30 days to
+       * 2026-10-31; the farm-shaped hold itself showed 9 spam, 7 expired, 0
+       * ham). The expired ones are the cost: the hold lifts after an hour and
+       * the account stays. So here, and only here, the hold becomes the timed
+       * ban a spam ballot would have produced, with the ordinary "Why?" and
+       * undo path. The two branches below keep their vote on purpose: a
+       * captcha is a question a person answers with one tap, and `observe` is
+       * the chat's own switch being off, neither is a farm we could not ask.
+       * The model read and cleared the message, which is why the trigger is
+       * the profile's shape (a recent picture that sits on other accounts; 672
+       * innocent accounts held none) and never the sentence. The classifier's
+       * low pSpam is therefore irrelevant here by construction: this verdict
+       * is built by the floor from the score's facts, and keys on the reason
+       * code the pipeline records.
+       */
+      if (mayResolveWithoutVote({ ...verdict, reasonCode: 'shared_profile_photo' })) {
+        meta['voteSkipped'] = 'shared_profile_photo'
+        return {
+          ...verdict,
+          action: 'ban' as VerdictAction,
+          needsVote: false,
+          banDurationSeconds: TIMED_BAN_SECONDS,
+          reasonCode: 'shared_profile_photo'
+        }
+      }
       return {
         ...verdict,
         action: 'mute' as VerdictAction,
@@ -782,10 +810,53 @@ export const evaluateMessage = async (
     return verdict
   }
 
+  /**
+   * Whether a capped verdict on a reason people confirm may skip the vote.
+   * See `VOTE_SKIP_REASON_CODES` for the numbers; this is the sender side.
+   *
+   * Every condition is a way the sender is not the population the numbers
+   * describe, and each fails closed:
+   *  - trusted in this chat: the policy already capped them at delete + vote
+   *    on purpose, the contested case. Never relaxed.
+   *  - standing (`established_user`, `trusted_reputation`, an admin's vouch):
+   *    the chat's own history speaks for them; the message evidence alone does
+   *    not settle that, as `capImitableAct` found.
+   *  - not new here: the ballots measured were mostly newcomers', and the
+   *    ceiling this relaxes exists for somebody the chat already knows.
+   *  - an answer to somebody: a reply costs the other person one tap, and the
+   *    2026-08-27 reading of replies is the only unfavourable one on record.
+   * Admins and the bot itself never reach this far; the executor refuses them.
+   */
+  const mayResolveWithoutVote = (verdict: Verdict): boolean =>
+    VOTE_SKIP_REASON_CODES.has(verdict.reasonCode) &&
+    // The per-message classifier only. The session pile and the burst blob are
+    // the weakest input in the pipeline (no line that meant anything alone) and
+    // were not what the ballots measured; their own ceilings stand.
+    (verdict.decidedBy === 'llm' || verdict.decidedBy === 'llm_cached') &&
+    isNewish(input) &&
+    !isTrusted(input) &&
+    !hasSenderStanding(verdict.signals) &&
+    !isInExchange(verdict.signals)
+
   const capSoleWitness = (verdict: Verdict, score: number): Verdict => {
     if (!isEnforcementAction(verdict.action)) return verdict
     if (score >= LLM_SOLE_WITNESS_SCORE) return verdict
     if (contentEvidence(verdict.signals).total >= LLM_SOLE_WITNESS_MIN_EVIDENCE) return verdict
+    /**
+     * `job_scam` on the classifier's word alone is the one sole-witness case
+     * the community has already priced: 422 of 427 ballots it opened ended
+     * spam over the 30 days to 2026-10-31, and 0 reversals in 765 acts the
+     * fortnight to 2026-10-14. The verdict stands as the policy made it (the
+     * timed ban or mute, or the delete a trusted sender is capped at, which
+     * `mayResolveWithoutVote` excludes anyway) and no vote is added.
+     * `shared_profile_photo` is not handled here: it never reaches this stage
+     * as an act, the floor builds it; see `floorNetworkFact`.
+     */
+    if (verdict.reasonCode === 'job_scam' && mayResolveWithoutVote(verdict)) {
+      meta['voteSkipped'] = verdict.reasonCode
+      meta['cappedSoleWitnessLifted'] = true
+      return verdict
+    }
     if (!removesSender(verdict.action)) {
       // A deletion on the model's word alone still gets the question, but the
       // mark belongs to whichever cap took the removal away, if any did.

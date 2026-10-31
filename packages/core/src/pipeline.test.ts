@@ -5,7 +5,10 @@ import type {
 } from './types.js'
 import type { BurstEntry, BurstPort, ModerationResult, PipelinePorts, SessionPort } from './ports.js'
 import { evaluateMessage, LLM_SOLE_WITNESS_SCORE, otherSpamObserveShadow, PROFILE_HOLD_SECONDS } from './pipeline.js'
-import { isEnforcementAction, removesSender, PRESET_THRESHOLDS } from './policy.js'
+import {
+  isEnforcementAction, removesSender, PRESET_THRESHOLDS, TIMED_BAN_SECONDS, VOTE_SKIP_REASON_CODES,
+  VOTE_SKIP_MIN_AGREEMENT, VOTE_SKIP_MIN_LABELS
+} from './policy.js'
 import { contentEvidence, mayRemoveSender } from './score.js'
 
 // ── fixtures ──────────────────────────────────────────────────────────
@@ -198,11 +201,42 @@ describe('evaluateMessage — a clean reading does not unfind a farm', () => {
       enrichment: { avatarDhash: 'ff00ff00ff00ff00' }
     }), { profileMedia: farm, llm: cleared })
     expect(v.signals.map((s) => s.name)).toContain('avatar_recently_set')
-    expect(v.action).toBe('mute')
-    expect(v.banDurationSeconds).toBe(PROFILE_HOLD_SECONDS)
-    expect(v.needsVote).toBe(true)
+    // Since 2026-10-31 the hold is the timed ban the ballot would have ended in
+    // (`VOTE_SKIP_REASON_CODES`): 230 spam to 5 ham, and the expired ones left
+    // the account standing once the hour was up.
+    expect(v.action).toBe('ban')
+    expect(v.banDurationSeconds).toBe(TIMED_BAN_SECONDS)
+    expect(v.needsVote).toBe(false)
     expect(v.reasonCode).toBe('shared_profile_photo')
+    expect(v.meta['voteSkipped']).toBe('shared_profile_photo')
     expect(v.meta['captchaBlockedBy']).toBe('sender_not_participant')
+  })
+
+  it('never bans a sender who is trusted here', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'Увімкніть людність під час війни' },
+      user: { ...newcomer, isParticipant: false, avatars: { count: 1, latestSetDaysAgo: 2 } },
+      policy: { trustedUserIds: [makeUser().id] },
+      enrichment: { avatarDhash: 'ff00ff00ff00ff00' }
+    }), { profileMedia: farm, llm: cleared })
+    expect(removesSender(v.action)).toBe(false)
+    expect(v.meta['voteSkipped']).toBeUndefined()
+  })
+
+  it('does not skip the vote for a sender who is not new here', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'Увімкніть людність під час війни' },
+      user: {
+        isParticipant: false, avatars: { count: 1, latestSetDaysAgo: 2 },
+        messagesInChat: 8, messagesGlobal: 40, localAgeDays: 400
+      },
+      enrichment: { avatarDhash: 'ff00ff00ff00ff00' }
+    }), { profileMedia: farm, llm: cleared })
+    if (v.reasonCode === 'shared_profile_photo') {
+      expect(v.needsVote).toBe(true)
+      expect(v.meta['voteSkipped']).toBeUndefined()
+    }
+    expect(v.meta['voteSkipped']).toBeUndefined()
   })
 
   it('an old picture shared by many is still only put to the chat, and says what shut the gate', async () => {
@@ -697,7 +731,7 @@ describe('evaluateMessage — abstain & session', () => {
       llm: {
         classify: async () => {
           calls += 1
-          return { pSpam, reasonCode: 'job_scam', evidence: null, cached: false }
+          return { pSpam, reasonCode: 'adult_promo', evidence: null, cached: false }
         }
       }
     })
@@ -1852,8 +1886,16 @@ describe('evaluateMessage — an act members also perform (2026-08-07 audit)', (
     expect(removesSender(v.action)).toBe(false)
   })
 
-  it('a job scam is not an imitable act — but alone, the model still only deletes', async () => {
+  it('a job scam is not an imitable act — and people confirm it, so the model alone acts', async () => {
     const v = await evaluateMessage(promoInput(), llmSaying('job_scam'))
+    expect(v.meta['cappedImitable']).toBeUndefined()
+    expect(v.action).toBe('ban')
+    expect(v.needsVote).toBe(false)
+    expect(v.meta['voteSkipped']).toBe('job_scam')
+  })
+
+  it('an adult promo is not an imitable act — but alone, the model still only deletes', async () => {
+    const v = await evaluateMessage(promoInput(), llmSaying('adult_promo'))
     expect(v.meta['cappedImitable']).toBeUndefined()
     // Not this ceiling: the sole-witness one (`LLM_SOLE_WITNESS_SCORE`).
     expect(v.action).toBe('delete')
@@ -3903,7 +3945,7 @@ describe('evaluateMessage — the classifier as sole witness', () => {
   // model's word is the entire case.
   const plain = { text: 'Потрібні люди на склад, оплата щодня, пишіть в особисті' }
   const accusing = {
-    classify: async () => ({ pSpam: 0.97, reasonCode: 'job_scam', evidence: null, cached: false })
+    classify: async () => ({ pSpam: 0.97, reasonCode: 'adult_promo', evidence: null, cached: false })
   }
 
   it('keeps a removal on the model alone down to delete plus a question', async () => {
@@ -3912,9 +3954,10 @@ describe('evaluateMessage — the classifier as sole witness', () => {
     expect(v.decidedBy).toBe('llm')
     expect(v.action).toBe('delete')
     expect(v.needsVote).toBe(true)
-    expect(v.reasonCode).toBe('job_scam')
+    expect(v.reasonCode).toBe('adult_promo')
     expect(v.meta['cappedSoleWitness']).toBe(true)
     expect(v.meta['cappedFrom']).toBe('ban')
+    expect(v.meta['voteSkipped']).toBeUndefined()
   })
 
   it('lets the model remove the sender when another stage points at the message', async () => {
@@ -4329,5 +4372,96 @@ describe('media_only discount is earned by a clean look', () => {
   it('is kept for an established sender, whose images are never fetched', async () => {
     const v = await run({}, { check: async () => modClean })
     expect(has(v)).toBe(true)
+  })
+})
+
+describe('evaluateMessage — reasons people confirm act without a vote (2026-10-31)', () => {
+  // Newness only, no link, no repeat: the model's word is the entire case, so
+  // the sole-witness ceiling is what used to hold every one of these.
+  const plain = { text: 'Потрібні люди на склад, оплата щодня, пишіть в особисті' }
+  const saying = (reasonCode: string): PipelinePorts => ({
+    llm: { classify: async () => ({ pSpam: 0.97, reasonCode, evidence: null, cached: false }) }
+  })
+
+  it('pins the bar the codes were chosen by', () => {
+    expect(VOTE_SKIP_MIN_AGREEMENT).toBe(0.97)
+    expect(VOTE_SKIP_MIN_LABELS).toBe(200)
+    expect([...VOTE_SKIP_REASON_CODES].sort()).toEqual(['job_scam', 'shared_profile_photo'])
+  })
+
+  it('a capped job_scam acts as the policy decided, with no vote', async () => {
+    const v = await evaluateMessage(makeInput({ msg: plain, user: newcomer }), saying('job_scam'))
+    expect(v.meta['scorePSpam']).toBeLessThan(LLM_SOLE_WITNESS_SCORE)
+    expect(v.action).toBe('ban')
+    expect(v.banDurationSeconds).toBe(TIMED_BAN_SECONDS)
+    expect(v.needsVote).toBe(false)
+    expect(v.reasonCode).toBe('job_scam')
+    expect(v.meta['voteSkipped']).toBe('job_scam')
+    expect(v.meta['cappedSoleWitness']).toBeUndefined()
+    expect(v.meta['cappedFrom']).toBeUndefined()
+  })
+
+  it.each(['other_spam', 'adult_promo', 'channel_promo', 'flirt_bait', 'flood'])(
+    'a capped %s still deletes and votes',
+    async (code) => {
+      const v = await evaluateMessage(makeInput({ msg: plain, user: newcomer }), saying(code))
+      expect(v.action).toBe('delete')
+      expect(v.needsVote).toBe(true)
+      expect(v.meta['voteSkipped']).toBeUndefined()
+    }
+  )
+
+  it('a trusted sender is unchanged: delete and ask', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: plain, user: newcomer, policy: { trustedUserIds: [makeUser().id] }
+    }), saying('job_scam'))
+    // The trusted exit answers before any stage, a stronger guard than the cap.
+    expect(removesSender(v.action)).toBe(false)
+    expect(v.meta['voteSkipped']).toBeUndefined()
+  })
+
+  it('a sender the signals vouch for is unchanged: capped, vote kept', async () => {
+    // Enough volume for `established_user`, too little local tenure for the
+    // established-regular exit, so the ladder still runs.
+    const v = await evaluateMessage(makeInput({
+      msg: plain,
+      user: { messagesGlobal: 60, messagesInChat: 8, localAgeDays: 3 }
+    }), saying('job_scam'))
+    expect(v.signals.some((s) => s.name === 'established_user')).toBe(true)
+    expect(removesSender(v.action)).toBe(false)
+    expect(v.meta['voteSkipped']).toBeUndefined()
+  })
+
+  it('a regular of the chat never reaches the ladder at all', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { text: 'та отож, я теж так думаю' },
+      user: { messagesInChat: 400, messagesGlobal: 900, localAgeDays: 900 }
+    }), saying('job_scam'))
+    expect(v.reasonCode).toBe('established_regular')
+    expect(v.meta['voteSkipped']).toBeUndefined()
+  })
+
+  it('an answer to somebody is unchanged', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { ...plain, replyTo: { messageId: 5, userId: 77, isBot: false, text: 'Хто знає, де тут шукати роботу?' } as never },
+      user: newcomer
+    }), saying('job_scam'))
+    if (v.signals.some((s) => s.name === 'is_reply')) {
+      expect(v.meta['voteSkipped']).toBeUndefined()
+    }
+  })
+
+  it('the session pile keeps its own ceiling for the same reason code', async () => {
+    const ports: PipelinePorts = {
+      session: {
+        append: async () => ({ combinedText: 'пиши мені\nв особисті\nзаробіток\nвід 500$\nна день', count: 5 }),
+        reset: async () => { /* noop */ }
+      },
+      llm: { classify: async () => ({ pSpam: 0.9, reasonCode: 'job_scam', evidence: null, cached: false }) }
+    }
+    const v = await evaluateMessage(makeInput({ msg: { text: 'на день усім хто напише' }, user: newcomer }), ports)
+    expect(v.decidedBy).toBe('session')
+    expect(v.needsVote).toBe(true)
+    expect(v.meta['voteSkipped']).toBeUndefined()
   })
 })
