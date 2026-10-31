@@ -262,18 +262,35 @@ export const downloadMessageImageBase64 = async (
    * `pickMessageImage` before anything is fetched. */
   media: unknown,
   maxBytes = 2 * 1024 * 1024
-): Promise<string | null> => {
+): Promise<string | null> => (await downloadMessageImage(tg, media, maxBytes))?.base64 ?? null
+
+/**
+ * The same download, saying which picture it was: `photo:file`,
+ * `sticker:file`, `sticker:thumb:128x128`, `video:thumb:320x180`.
+ *
+ * Recorded with the verdict because a stand-in is not the thing itself
+ * (2026-10-31): a vision model handed a 128 px thumbnail of an animated
+ * sticker cannot read the words on it, and without this the row could not say
+ * whether a weak answer came from the model or from the picture it was given.
+ */
+export const downloadMessageImage = async (
+  tg: Pick<TelegramClient, 'downloadAsBuffer'>,
+  media: unknown,
+  maxBytes = 2 * 1024 * 1024
+): Promise<{ base64: string; source: string } | null> => {
   try {
     if (!media) return null
     const shape = media as ImageSourceMedia
     const pick = pickMessageImage(shape, maxBytes)
     if (pick === null) return null
+    const thumb = pick.kind === 'thumbnail' ? shape.thumbnails?.[pick.index] : undefined
     const location = pick.kind === 'file'
       ? (media as Parameters<TelegramClient['downloadAsBuffer']>[0])
-      : (shape.thumbnails?.[pick.index] as unknown as Parameters<TelegramClient['downloadAsBuffer']>[0])
+      : (thumb as unknown as Parameters<TelegramClient['downloadAsBuffer']>[0])
     const buffer = await tg.downloadAsBuffer(location)
     if (buffer.byteLength === 0 || buffer.byteLength > maxBytes) return null
-    return Buffer.from(buffer).toString('base64')
+    const source = thumb ? `${shape.type}:thumb:${thumb.width}x${thumb.height}` : `${shape.type}:file`
+    return { base64: Buffer.from(buffer).toString('base64'), source }
   } catch {
     return null
   }

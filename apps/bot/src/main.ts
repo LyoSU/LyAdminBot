@@ -29,7 +29,7 @@ import {
 import {
   TelegramGateway, applyVerdict, buildUserSnapshot, buildChannelSnapshot, withLiveFacts, normalizeMessage,
   editBaselineOf, classifyEditDelivery,
-  fetchUserProfile, userHasProfilePhoto, downloadMessageImageBase64, downloadAvatarBase64, downloadStoriesBase64, rawPhotoToBase64,
+  fetchUserProfile, userHasProfilePhoto, downloadMessageImage, downloadAvatarBase64, downloadStoriesBase64, rawPhotoToBase64,
   fetchExternalBan, sourcesToQuery, resolveMentionKinds, shouldScanChannelSender,
   createChatDescriptionCache, fetchChatDescription, fetchChatMemberCount, findChatMemberByUsername,
   createTmePreviewResolver,
@@ -6341,9 +6341,10 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
   // even earned the `media_only` trust discount. The helper picks the file
   // (static sticker) or the largest still thumbnail (animated/video sticker,
   // GIF, video), under the same byte cap as a photo.
-  const photoBase64 = newish
-    ? await downloadMessageImageBase64(gateway.tg, message.media)
+  const messageImage = newish
+    ? await downloadMessageImage(gateway.tg, message.media)
     : null
+  const photoBase64 = messageImage?.base64 ?? null
 
   // Profile media — newish senders only (this gate is what makes
   // nsfw_avatar/nsfw_stories new-account signals). Avatar reuses bytes cached
@@ -6575,6 +6576,9 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       ? await store.hasPriorSenderRemoval(chat.id, sender.id, message.id).catch(() => false)
       : false
   )
+  // Persisted with the decision, so a weak answer on a picture can be read
+  // against what the picture was.
+  if (messageImage) verdict.meta['messageImage'] = messageImage.source
   if (verdict !== judged) {
     log.info('channel_recidivist', {
       chatId: chat.id, chat: chat.title ?? undefined, userId: sender.id,
@@ -6842,6 +6846,8 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       // Set when a reason people confirm (`VOTE_SKIP_REASON_CODES`) acted without a
       // ballot; counts the overrides of exactly these acts.
       voteSkipped: verdict.meta['voteSkipped'] ?? undefined,
+      // Which picture vision and moderation were shown — see `downloadMessageImage`.
+      image: messageImage?.source,
       llmKey: verdict.meta['llmKey'] ?? undefined,
       // The model is an environment variable, so it changes between restarts
       // with nothing in the data to say so (2026-08-07).

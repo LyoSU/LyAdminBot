@@ -187,6 +187,40 @@ describe('buildSystemPrompt — how repetition may be read', () => {
   })
 })
 
+describe('the attached image is the message (2026-10-31)', () => {
+  /**
+   * A wordless advert sticker came back `unsure`: the prompt said the fenced
+   * text was the only thing judged, and the fence held "(no text)", so the
+   * image the model was sent had no standing as evidence.
+   */
+  it('judges the attached image together with the fenced text', () => {
+    const prompt = buildSystemPrompt('FENCE')
+    expect(prompt).toContain('ATTACHED IMAGE')
+    expect(prompt).toContain('A message with')
+    expect(prompt).not.toMatch(/fenced content is the ONLY thing you judge/)
+  })
+
+  it('names the attached image in the message facts, by its kind', () => {
+    const sticker = asText(buildUserContent(makeInput({
+      msg: { text: '', attachments: [{ kind: 'sticker', fileUniqueId: 'u1' }] },
+      enrichment: { photoBase64: 'AAAA' }
+    }), 'C'))
+    expect(sticker).toContain('the attached image is the sticker this message shows')
+    const gif = asText(buildUserContent(makeInput({
+      msg: { text: '', attachments: [{ kind: 'animation', fileUniqueId: 'u2' }] },
+      enrichment: { photoBase64: 'AAAA' }
+    }), 'C'))
+    expect(gif).toContain('the first frame of the attached media')
+  })
+
+  it('says nothing of an image when none was attached', () => {
+    const text = asText(buildUserContent(makeInput({
+      msg: { text: '', attachments: [{ kind: 'sticker', fileUniqueId: 'u1' }] }
+    }), 'C'))
+    expect(text).not.toContain('the attached image is')
+  })
+})
+
 describe('buildUserContent — message facts', () => {
   it('exposes hidden link destinations', () => {
     const text = asText(buildUserContent(makeInput({

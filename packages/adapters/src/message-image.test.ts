@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { downloadMessageImageBase64, pickMessageImage } from './enrich.js'
+import { downloadMessageImage, downloadMessageImageBase64, pickMessageImage } from './enrich.js'
 
 describe('pickMessageImage', () => {
   const thumb = (type: string, w: number, h: number, isVideo = false) => ({ type, width: w, height: h, isVideo })
@@ -64,6 +64,16 @@ describe('downloadMessageImageBase64', () => {
     const out = await downloadMessageImageBase64(tgReturning(new Uint8Array([1, 2, 3]), seen), animated)
     expect(out).toBe(Buffer.from([1, 2, 3]).toString('base64'))
     expect(seen[0]).toBe((animated as unknown as { thumbnails: unknown[] }).thumbnails[0])
+  })
+
+  // What the check actually looked at goes on the decision: a thumbnail of an
+  // animated sticker can be too small to read, and only this says so afterwards.
+  it('names the picture it took — whole file or which thumbnail', async () => {
+    const thumb = await downloadMessageImage(tgReturning(new Uint8Array([1])), animated)
+    expect(thumb?.source).toBe('sticker:thumb:320x320')
+    const still = { type: 'sticker', sourceType: 'static', mimeType: 'image/webp', fileSize: 1000 } as unknown as Media
+    const whole = await downloadMessageImage(tgReturning(new Uint8Array([1])), still)
+    expect(whole?.source).toBe('sticker:file')
   })
 
   it('returns null over the byte cap', async () => {
