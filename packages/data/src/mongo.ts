@@ -409,9 +409,9 @@ export const ensureUniqueIndex = async (
   }
 }
 
-/** Sender-removing actions — the ones that take the account out of the room. */
 /** Reason codes a carried ban is written under: a content ban and a vote-confirmed one. */
 const CARRIED_BAN_REASON_CODES = ['content_ban_elsewhere', 'vote_ban_elsewhere']
+/** Sender-removing actions — the ones that take the account out of the room. */
 const REMOVAL_ACTIONS = ['kick', 'mute', 'ban']
 /** Everything that touched a message or its sender at all. */
 const PUNISHING_ACTIONS = [...REMOVAL_ACTIONS, 'delete']

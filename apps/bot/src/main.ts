@@ -2163,7 +2163,7 @@ const restoreFalsePositive = async (params: {
   // later carry or cohort no longer reads the account as removed from it.
   // A vote-confirmed carry (`vote_ban_elsewhere`) rests on a ruling whose own
   // enforcement was a mute, so a mute withdrawn here withdraws it too.
-  if (verdict && (verdict.action === 'ban' || removesSender(verdict.action))) {
+  if (verdict && removesSender(verdict.action)) {
     void store.noteArrivalOutcome(params.chatId, params.userId, 'restored').catch(() => { /* no row is fine */ })
     void liftCarriedBans({
       fromChatId: params.chatId, userId: params.userId, byUserId: params.byUserId, source: params.source
