@@ -719,6 +719,9 @@ const applyIgnoredCaptcha = async (
     removed = await gateway.tg.deleteMessagesById(chatId, [gate.triggerMessageId])
       .then(() => true).catch(() => false)
   }
+  if (held && gate.triggerMessageId !== null) {
+    void sweepRepeats(chatId, userId, gate.triggerMessageId, 'captcha_ignored').catch(() => { /* best-effort */ })
+  }
   log.info('captcha_ignored', { chatId, userId, held, removed })
   // The unanswered end of the funnel. `wentPublic` is what says whether the
   // silence was measured against a prompt the member could actually see.
@@ -1813,6 +1816,34 @@ interface VoteEnforcement {
  * 2026-08-23 they no longer can (see `VOTE_LEARN_STATUS`) and promotion is left
  * to a second, independent chat reporting the same text.
  */
+/**
+ * When a sender is removed for a message, the copies of that message they
+ * posted before it go too.
+ *
+ * Added 2026-10-31. The sweep beside the verdict (`senderLog.purgeTargets`)
+ * keeps ten minutes and only what the pipeline already scored as grey, which
+ * is right for a conversation and blind to flood: one account posted the same
+ * sticker every seven minutes for two and a half hours, each copy scored
+ * clean on its own, and when the account was finally muted only the last one
+ * came down. A copy of the very message the person was removed for is not a
+ * judgement call. Two or more earlier copies within a day, from the decision
+ * rows, so it does not depend on the process having stayed up.
+ */
+const REPEAT_SWEEP_WINDOW_MS = 24 * 60 * 60 * 1000
+const REPEAT_SWEEP_MIN_COPIES = 2
+const sweepRepeats = async (
+  chatId: number, userId: number, messageId: number, why: string, contentKey?: string
+): Promise<number> => {
+  const ids = await store.repeatsOf({
+    chatId, userId, messageId, contentKey, since: new Date(Date.now() - REPEAT_SWEEP_WINDOW_MS),
+    minCopies: REPEAT_SWEEP_MIN_COPIES, max: 100
+  }).catch(() => [] as number[])
+  if (ids.length === 0) return 0
+  const applied = await gateway.tg.deleteMessagesById(chatId, ids).then(() => true).catch(() => false)
+  log.info('repeat_sweep', { chatId, userId, trigger: messageId, messages: ids.length, applied, why })
+  return applied ? ids.length : 0
+}
+
 const enforceVoteSpam = async (vote: {
   chatId: number
   messageId: number
@@ -1897,6 +1928,7 @@ firstRuling = true): Promise<VoteEnforcement> => {
    */
   if (muted) await dropGate(vote.chatId, vote.targetUserId, 'vote_spam')
   if (muted) void surfaceCohort(vote.chatId, { id: vote.targetUserId, displayName: null }).catch(() => { /* best-effort */ })
+  if (muted) void sweepRepeats(vote.chatId, vote.targetUserId, vote.messageId, 'vote_spam').catch(() => { /* best-effort */ })
   // The ruling is the confirmation, whether or not Telegram let the mute through.
   void shadowCopyCluster(vote.chatId, vote.targetUserId, learnSource).catch(() => { /* measurement only */ })
   /**
@@ -6670,6 +6702,9 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
         action: verdict.action, minPSpam: BURST_GREY_FLOOR
       })
     }
+    // Not counted into `retroPurged`: that number is the run the incident card
+    // reports, and the copies may predate it by hours.
+    void sweepRepeats(chat.id, sender.id, message.id, `enforced:${verdict.action}`, baselineNow.contentKey).catch(() => { /* best-effort */ })
   }
 
   /**

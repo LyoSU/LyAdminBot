@@ -1730,6 +1730,36 @@ export class MongoStore {
    *
    * Reads the index `{ chatId, messageId, createdAt }` that already exists.
    */
+  /**
+   * The sender's other copies of one message in one chat since `since`: the
+   * rows whose `editBaseline.contentKey` equals the trigger's, which for a
+   * wordless message is the attached file itself and for text is the text.
+   *
+   * Empty unless there are at least `minCopies` of them. One repeat is how a
+   * person resends a sticker; a run of the same thing is flood, and it is what
+   * the sweep on removal is for (`sweepRepeats` in the bot). At most `max` ids,
+   * newest first — a delete call takes a hundred.
+   *
+   * Reads the index `{ chatId, userId, createdAt }` that already exists.
+   */
+  async repeatsOf(params: {
+    chatId: number; userId: number; messageId: number; since: Date; minCopies: number; max: number
+    /** The trigger's key when the caller has it — its own row may not be written yet. */
+    contentKey?: string | undefined
+  }): Promise<number[]> {
+    const key = params.contentKey ?? (await this.getEditBaseline(params.chatId, params.messageId))?.contentKey
+    if (typeof key !== 'string' || key === '') return []
+    const docs = await this.decisions.find(
+      {
+        chatId: params.chatId, userId: params.userId, createdAt: { $gte: params.since },
+        'editBaseline.contentKey': key, messageId: { $gt: 0, $ne: params.messageId }
+      },
+      { projection: { messageId: 1 }, sort: { createdAt: -1 } }
+    ).toArray()
+    const ids = [...new Set(docs.map((d) => Number(d['messageId'])).filter((id) => id > 0))]
+    return ids.length >= params.minCopies ? ids.slice(0, params.max) : []
+  }
+
   async getEditBaseline(chatId: number, messageId: number): Promise<EditBaseline | null> {
     const doc = await this.decisions.findOne(
       { chatId, messageId, editBaseline: { $exists: true } },

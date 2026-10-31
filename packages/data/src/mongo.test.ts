@@ -2541,3 +2541,52 @@ describe('copy clusters (shadow)', () => {
     expect(store.calls).toHaveLength(1)
   })
 })
+
+describe('repeatsOf — copies of the message a sender was removed for', () => {
+  const since = new Date('2026-10-31T00:00:00Z')
+  const storeWith = (rows: { messageId: number }[], baselineKey: string | null = 'k1') => {
+    const finds: Record<string, unknown>[] = []
+    const store = Object.assign({
+      decisions: {
+        find: (filter: Record<string, unknown>) => {
+          finds.push(filter)
+          return { toArray: async () => rows }
+        }
+      },
+      getEditBaseline: async () => (baselineKey === null ? null : { contentKey: baselineKey })
+    }, { repeatsOf: MongoStore.prototype.repeatsOf }) as unknown as MongoStore
+    return { store, finds }
+  }
+  const params = { chatId: -100, userId: 7, messageId: 50, since, minCopies: 2, max: 100 }
+
+  it('returns the earlier copies, keyed on the trigger\'s content', async () => {
+    const { store, finds } = storeWith([{ messageId: 49 }, { messageId: 41 }, { messageId: 33 }])
+    expect(await store.repeatsOf(params)).toEqual([49, 41, 33])
+    expect(finds[0]).toEqual({
+      chatId: -100, userId: 7, createdAt: { $gte: since },
+      'editBaseline.contentKey': 'k1', messageId: { $gt: 0, $ne: 50 }
+    })
+  })
+
+  it('a single earlier copy is a resend, not flood', async () => {
+    const { store } = storeWith([{ messageId: 49 }])
+    expect(await store.repeatsOf(params)).toEqual([])
+  })
+
+  it('collapses re-judged rows of one message and caps the batch', async () => {
+    const { store } = storeWith([{ messageId: 49 }, { messageId: 49 }, { messageId: 41 }, { messageId: 33 }])
+    expect(await store.repeatsOf({ ...params, max: 2 })).toEqual([49, 41])
+  })
+
+  it('prefers the caller\'s key, since the trigger\'s own row may not exist yet', async () => {
+    const { store, finds } = storeWith([{ messageId: 49 }, { messageId: 41 }], null)
+    expect(await store.repeatsOf({ ...params, contentKey: 'live' })).toEqual([49, 41])
+    expect(finds[0]?.['editBaseline.contentKey']).toBe('live')
+  })
+
+  it('without any key there is nothing to match', async () => {
+    const { store, finds } = storeWith([{ messageId: 49 }, { messageId: 41 }], null)
+    expect(await store.repeatsOf(params)).toEqual([])
+    expect(finds).toHaveLength(0)
+  })
+})
