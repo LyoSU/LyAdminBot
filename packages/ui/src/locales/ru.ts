@@ -66,15 +66,22 @@ export const ru: Locale = {
     confirmAll: (count) => `Забанить <b>${count}</b> ${plural(count, 'новичка, который ещё ничего не написал', 'новичков, которые ещё ничего не написали', 'новичков, которые ещё ничего не написали')}?`,
     confirmYes: '🚫 Да, забанить',
     cancel: 'Отмена',
-    banned: (count) => `Забанено: ${count}`
+    banned: (count) => `Забанено новичков: ${count}`
   },
   cohort: {
     title: (count, spammer) => `👥 <b>Вместе со спамером ${plural(count, 'пришёл', 'пришли', 'пришло')} ещё ${count} ${plural(count, 'похожий новичок', 'похожих новичка', 'похожих новичков')}</b>\nСпамер: ${spammer}`,
     hint: 'Похожий профиль, вход в то же время, ни одного сообщения. Бот никого не ограничивал — решает админ.',
     banButton: (count) => `🚫 Забанить ${count}`,
     keepButton: 'Оставить',
-    banned: (done, total, admin) => `🚫 Забанено ${done} из ${total} ${plural(total, 'новичка', 'новичков', 'новичков')}, пришедших вместе со спамером · ${admin}`,
-    kept: (admin) => `✅ Новички оставлены · ${admin}`,
+    // The admin is named after a role word: a display name cannot be declined.
+    banned: (done, total, admin) =>
+      (done === 0
+        ? '⚠️ Не удалось забанить новичков, пришедших вместе со спамером. Проверь моё право «Блокировать пользователей»'
+        : done === total
+          ? `🚫 Забанено новичков, пришедших вместе со спамером: ${done}`
+          : `🚫 Забанено новичков, пришедших вместе со спамером: ${done} из ${total}, остальных не удалось`)
+      + ` · решение админа ${admin}`,
+    kept: (admin) => `✅ Новички, пришедшие вместе со спамером, остаются в чате · решение админа ${admin}`,
     expired: 'Эта карточка уже неактуальна.'
   },
 
@@ -161,6 +168,7 @@ export const ru: Locale = {
 
   notification: {
     compact: (action, userLabel) => `${action} · ${userLabel}`,
+    repeats: (count) => `${count} ${plural(count, 'сообщение', 'сообщения', 'сообщений')}`,
     whyLink: 'за что?',
     whyButton: 'ℹ️ За что?',
     notSpamButton: '✅ Не спам',
@@ -392,12 +400,12 @@ export const ru: Locale = {
       failed: '⚠️ Не удалось ни удалить сообщение, ни ограничить автора.'
     },
     resolvedSpam: ({ who, enforcement, whyLink }) =>
-      // The name follows a "·", never "от": a display name cannot be declined.
-      '🗑 Сообщество решило: спам' + (who ? ` · ${who}` : '')
+      // The name follows a role label, never "от": a display name cannot be declined.
+      '🗑 Сообщество решило: спам' + (who ? `. Автор: ${who}` : '')
       + (enforcement ? `. ${enforcement}` : '')
       + (whyLink ? ` · ${whyLink}` : ''),
     resolvedHam: ({ who, whyLink }) =>
-      '✅ Сообщество решило: не спам' + (who ? ` · ${who}` : '')
+      '✅ Сообщество решило: не спам' + (who ? `. Автор: ${who}` : '')
       + (whyLink ? ` · ${whyLink}` : ''),
     alreadyEnded: 'Голосование уже закрыто.',
     voters: {
@@ -469,7 +477,7 @@ export const ru: Locale = {
   },
 
   kick: {
-    success: (name) => `👋 ${name} больше не в чате.`,
+    success: (name) => `🚪 Выгнали из чата: ${name}`,
     needReply: 'Ответь командой /kick на сообщение того, кого хочешь выгнать.'
   },
 

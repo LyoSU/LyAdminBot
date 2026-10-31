@@ -66,15 +66,22 @@ export const uk: Locale = {
     confirmAll: (count) => `Забанити <b>${count}</b> ${plural(count, 'новачка, який досі нічого не написав', 'новачків, які досі нічого не написали', 'новачків, які досі нічого не написали')}?`,
     confirmYes: '🚫 Так, забанити',
     cancel: 'Скасувати',
-    banned: (count) => `Забанено: ${count}`
+    banned: (count) => `Забанено новачків: ${count}`
   },
   cohort: {
     title: (count, spammer) => `👥 <b>Разом зі спамером ${plural(count, 'прийшов', 'прийшли', 'прийшло')} ще ${count} ${plural(count, 'схожий новачок', 'схожі новачки', 'схожих новачків')}</b>\nСпамер: ${spammer}`,
     hint: 'Схожий профіль, вхід у той самий час, жодного повідомлення. Бот нікого не обмежував — вирішує адмін.',
     banButton: (count) => `🚫 Забанити ${count}`,
     keepButton: 'Лишити',
-    banned: (done, total, admin) => `🚫 Новачків, що прийшли разом зі спамером, забанено: ${done} з ${total} · ${admin}`,
-    kept: (admin) => `✅ Новачки лишаються в чаті · ${admin}`,
+    // The admin is named after a role word: a display name cannot be declined.
+    banned: (done, total, admin) =>
+      (done === 0
+        ? '⚠️ Не вдалося забанити новачків, що прийшли разом зі спамером. Перевір моє право «Блокувати користувачів»'
+        : done === total
+          ? `🚫 Забанено новачків, що прийшли разом зі спамером: ${done}`
+          : `🚫 Забанено новачків, що прийшли разом зі спамером: ${done} з ${total}, решту не вдалося`)
+      + ` · рішення адміна ${admin}`,
+    kept: (admin) => `✅ Новачків, що прийшли разом зі спамером, лишено в чаті · рішення адміна ${admin}`,
     expired: 'Ця картка вже неактуальна.'
   },
 
@@ -161,6 +168,7 @@ export const uk: Locale = {
 
   notification: {
     compact: (action, userLabel) => `${action} · ${userLabel}`,
+    repeats: (count) => `${count} ${plural(count, 'повідомлення', 'повідомлення', 'повідомлень')}`,
     whyLink: 'за що?',
     whyButton: 'ℹ️ За що?',
     notSpamButton: '✅ Не спам',
@@ -393,12 +401,12 @@ export const uk: Locale = {
       failed: '⚠️ Не вдалося ні видалити повідомлення, ні обмежити автора.'
     },
     resolvedSpam: ({ who, enforcement, whyLink }) =>
-      // The name follows a "·", never "від": a display name cannot be declined.
-      '🗑 Спільнота вирішила: спам' + (who ? ` · ${who}` : '')
+      // The name follows a role label, never "від": a display name cannot be declined.
+      '🗑 Спільнота вирішила: спам' + (who ? `. Автор: ${who}` : '')
       + (enforcement ? `. ${enforcement}` : '')
       + (whyLink ? ` · ${whyLink}` : ''),
     resolvedHam: ({ who, whyLink }) =>
-      '✅ Спільнота вирішила: не спам' + (who ? ` · ${who}` : '')
+      '✅ Спільнота вирішила: не спам' + (who ? `. Автор: ${who}` : '')
       + (whyLink ? ` · ${whyLink}` : ''),
     alreadyEnded: 'Голосування вже закрите.',
     voters: {
@@ -470,7 +478,7 @@ export const uk: Locale = {
   },
 
   kick: {
-    success: (name) => `👋 ${name} більше не в чаті.`,
+    success: (name) => `🚪 Вигнано з чату: ${name}`,
     needReply: 'Зроби /kick відповіддю на повідомлення того, кого хочеш вигнати.'
   },
 

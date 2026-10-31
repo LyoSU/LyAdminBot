@@ -183,6 +183,8 @@ export interface Locale {
   /** One-line compact moderation notice: {action} {user}. */
   notification: {
     compact: (action: string, userLabel: string) => string
+    /** How many messages one notice covers, when a run of them was edited into it. */
+    repeats: (count: number) => string
     /**
      * Inline "why?" link inside the compact line — the primary route to the
      * explanation. Reads as running text, not as a label on a button, because

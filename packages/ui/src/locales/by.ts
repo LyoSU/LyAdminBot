@@ -66,15 +66,22 @@ export const by: Locale = {
     confirmAll: (count) => `Забаніць <b>${count}</b> ${plural(count, 'навічка, які яшчэ нічога не напісаў', 'навічкоў, якія яшчэ нічога не напісалі', 'навічкоў, якія яшчэ нічога не напісалі')}?`,
     confirmYes: '🚫 Так, забаніць',
     cancel: 'Скасаваць',
-    banned: (count) => `Забанена: ${count}`
+    banned: (count) => `Забанена навічкоў: ${count}`
   },
   cohort: {
     title: (count, spammer) => `👥 <b>Разам са спамерам ${plural(count, 'прыйшоў', 'прыйшлі', 'прыйшло')} яшчэ ${count} ${plural(count, 'падобны навічок', 'падобныя навічкі', 'падобных навічкоў')}</b>\nСпамер: ${spammer}`,
     hint: 'Падобны профіль, уваход у той самы час, ніводнага паведамлення. Бот нікога не абмяжоўваў — вырашае адмін.',
     banButton: (count) => `🚫 Забаніць ${count}`,
     keepButton: 'Пакінуць',
-    banned: (done, total, admin) => `🚫 Забанена ${done} з ${total} ${plural(total, 'навічка', 'навічкоў', 'навічкоў')}, што прыйшлі разам са спамерам · ${admin}`,
-    kept: (admin) => `✅ Навічкоў пакінута · ${admin}`,
+    // The admin is named after a role word: a display name cannot be declined.
+    banned: (done, total, admin) =>
+      (done === 0
+        ? '⚠️ Не ўдалося забаніць навічкоў, што прыйшлі разам са спамерам. Правер маё права «Блакаваць карыстальнікаў»'
+        : done === total
+          ? `🚫 Забанена навічкоў, што прыйшлі разам са спамерам: ${done}`
+          : `🚫 Забанена навічкоў, што прыйшлі разам са спамерам: ${done} з ${total}, астатніх не ўдалося`)
+      + ` · рашэнне адміна ${admin}`,
+    kept: (admin) => `✅ Навічкі, што прыйшлі разам са спамерам, застаюцца ў чаце · рашэнне адміна ${admin}`,
     expired: 'Гэтая картка ўжо неактуальная.'
   },
 
@@ -161,6 +168,7 @@ export const by: Locale = {
 
   notification: {
     compact: (action, userLabel) => `${action} · ${userLabel}`,
+    repeats: (count) => `${count} ${plural(count, 'паведамленне', 'паведамленні', 'паведамленняў')}`,
     whyLink: 'за што?',
     whyButton: 'ℹ️ За што?',
     notSpamButton: '✅ Не спам',
@@ -392,12 +400,12 @@ export const by: Locale = {
       failed: '⚠️ Не ўдалося ні выдаліць паведамленне, ні абмежаваць аўтара.'
     },
     resolvedSpam: ({ who, enforcement, whyLink }) =>
-      // The name follows a "·", never "ад": a display name cannot be declined.
-      '🗑 Супольнасць вырашыла: спам' + (who ? ` · ${who}` : '')
+      // The name follows a role label, never "ад": a display name cannot be declined.
+      '🗑 Супольнасць вырашыла: спам' + (who ? `. Аўтар: ${who}` : '')
       + (enforcement ? `. ${enforcement}` : '')
       + (whyLink ? ` · ${whyLink}` : ''),
     resolvedHam: ({ who, whyLink }) =>
-      '✅ Супольнасць вырашыла: не спам' + (who ? ` · ${who}` : '')
+      '✅ Супольнасць вырашыла: не спам' + (who ? `. Аўтар: ${who}` : '')
       + (whyLink ? ` · ${whyLink}` : ''),
     alreadyEnded: 'Галасаванне ўжо закрыта.',
     voters: {
@@ -469,7 +477,7 @@ export const by: Locale = {
   },
 
   kick: {
-    success: (name) => `👋 ${name} больш не ў чаце.`,
+    success: (name) => `🚪 Выгнана з чата: ${name}`,
     needReply: 'Зрабі /kick адказам на паведамленне таго, каго хочаш выгнаць.'
   },
 

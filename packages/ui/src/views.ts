@@ -535,9 +535,8 @@ export const whyDeepLink = (
  * mean eight cards, which is the chat reading our bookkeeping instead of the
  * conversation.
  *
- * The count is rendered as a bare "×N" and deliberately not routed through the
- * locale — it is a numeral, and every language in `LOCALES` writes it the same
- * way. The words around it are localised as before.
+ * The count names what it counts ("4 messages"): a bare "×4" read as four
+ * mutes, four hours or four people.
  */
 export const compactNotification = (
   locale: Locale,
@@ -564,7 +563,7 @@ export const compactNotification = (
   }
   const repeats = options.incidentCount ?? 1
   const line = locale.notification.compact(locale.actions[action], subjectMention(locale, target.userId, target.userLabel, nameIsPromo(verdict))) +
-    (repeats > 1 ? ` · ×${repeats}` : '')
+    (repeats > 1 ? ` · ${locale.notification.repeats(repeats)}` : '')
   if (!options.botUsername) {
     return {
       text: line,

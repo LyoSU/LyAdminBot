@@ -87,9 +87,13 @@ describe('compactNotification', () => {
     expect(view.buttons.flat().some((b) => b.url !== undefined)).toBe(false)
   })
 
-  it('the inline link sits after the repeat count, so the run count reads first', () => {
+  it('the inline link sits after the repeat count, and the count names what it counts', () => {
     const view = compactNotification(uk, makeVerdict(), target, { botUsername: 'LyAdminBot', incidentCount: 4 })
-    expect(view.text).toMatch(/×4 · <a href=/)
+    expect(view.text).toMatch(/ · 4 повідомлення · <a href=/)
+    expect(view.text).not.toContain('×')
+    for (const [n, word] of [[2, 'повідомлення'], [5, 'повідомлень'], [21, 'повідомлення'], [11, 'повідомлень']] as const) {
+      expect(uk.notification.repeats(n)).toBe(`${n} ${word}`)
+    }
   })
 
   it('an attacker-controlled name cannot break out into the why link', () => {
@@ -1819,10 +1823,6 @@ describe('ru number agreement', () => {
       11: 'пришло ещё 11 похожих новичков', 21: 'пришёл ещё 21 похожий новичок', 22: 'пришли ещё 22 похожих новичка'
     })
     expect(ru.cohort.hint).not.toMatch(/пришли|писали/)
-    checkAgreement((n) => ru.cohort.banned(1, n, 'A'), {
-      1: 'из 1 новичка,', 2: 'из 2 новичков,', 5: 'из 5 новичков,',
-      11: 'из 11 новичков,', 21: 'из 21 новичка,', 22: 'из 22 новичков,'
-    })
   })
 
   it('confirmAll: the relative clause agrees with one versus many', () => {
@@ -1886,10 +1886,6 @@ describe('by number agreement', () => {
       11: 'прыйшло яшчэ 11 падобных навічкоў', 21: 'прыйшоў яшчэ 21 падобны навічок', 22: 'прыйшлі яшчэ 22 падобныя навічкі'
     })
     expect(by.cohort.hint).not.toMatch(/прыйшлі|пісалі/)
-    checkAgreement((n) => by.cohort.banned(1, n, 'A'), {
-      1: 'з 1 навічка,', 2: 'з 2 навічкоў,', 5: 'з 5 навічкоў,',
-      11: 'з 11 навічкоў,', 21: 'з 21 навічка,', 22: 'з 22 навічкоў,'
-    })
   })
 
   it('confirmAll: the relative clause agrees with one versus many', () => {
@@ -1947,7 +1943,7 @@ describe('en number agreement', () => {
   it('every counted phrase takes the singular at 1 and the plural otherwise', () => {
     agrees((n) => en.notification.missingRights({ deleteBlocked: false, senderBlocked: true, accounts: n }), ' remove 1 account.', ' remove # accounts.')
     agrees((n) => en.cohort.title(n, 'X'), '1 similar newcomer joined', '# similar newcomers joined')
-    agrees((n) => en.cohort.banned(1, n, 'A'), 'of 1 newcomer who', 'of # newcomers who')
+    agrees((n) => en.cohort.banned(n, n, 'A'), 'Banned 1 newcomer who', 'Banned # newcomers who')
     agrees((n) => en.arrivals.confirmAll(n), '1</b> newcomer who has not', '#</b> newcomers who have not')
     agrees((n) => en.botStats.window(n), 'Over the last day:', 'Over the last # days:')
     agrees((n) => en.botStats.checked(n), '1</b> message checked', '#</b> messages checked')
@@ -2032,12 +2028,12 @@ describe('uk never declines a substituted name', () => {
     expect(text).not.toMatch(PREPOSITION_BEFORE_NAME)
   })
 
-  it('names the vote author after a colon and resolves with "· name"', () => {
+  it('names the vote author after a colon, in the ballot and in the result alike', () => {
     expect(uk.vote.prompt({ userLabel: NAME, textPreview: 'x', media: null, whyLink: null })).toContain(`Автор: ${NAME}`)
-    expect(uk.vote.resolvedSpam({ who: NAME, enforcement: null, whyLink: null })).toBe(`🗑 Спільнота вирішила: спам · ${NAME}`)
+    expect(uk.vote.resolvedSpam({ who: NAME, enforcement: null, whyLink: null })).toBe(`🗑 Спільнота вирішила: спам. Автор: ${NAME}`)
     expect(uk.vote.resolvedSpam({ who: NAME, enforcement: uk.vote.enforcement.done, whyLink: null }))
-      .toBe(`🗑 Спільнота вирішила: спам · ${NAME}. ${uk.vote.enforcement.done}`)
-    expect(uk.vote.resolvedHam({ who: NAME, whyLink: 'за що?' })).toBe(`✅ Спільнота вирішила: не спам · ${NAME} · за що?`)
+      .toBe(`🗑 Спільнота вирішила: спам. Автор: ${NAME}. ${uk.vote.enforcement.done}`)
+    expect(uk.vote.resolvedHam({ who: NAME, whyLink: 'за що?' })).toBe(`✅ Спільнота вирішила: не спам. Автор: ${NAME} · за що?`)
     expect(uk.cohort.title(1, NAME)).toContain(`\nСпамер: ${NAME}`)
   })
 
@@ -2104,9 +2100,23 @@ describe('uk second copy audit', () => {
   it('cohort.banned: the count follows a colon, so no noun has to agree with it', () => {
     for (const n of [1, 2, 5, 11, 21, 22]) {
       const text = uk.cohort.banned(n, n, 'Адмін')
-      expect(text, `n=${n}`).toContain(`забанено: ${n} з ${n} · Адмін`)
+      expect(text, `n=${n}`).toBe(`🚫 Забанено новачків, що прийшли разом зі спамером: ${n} · рішення адміна Адмін`)
       expect(text, `n=${n}`).not.toMatch(/\d+ новачк/)
     }
+  })
+
+  it('cohort results name the deciding admin by role, never as a bare name after "·"', () => {
+    for (const locale of Object.values(LOCALES)) {
+      const c = locale.cohort
+      for (const text of [c.banned(3, 3, 'ADM'), c.banned(2, 3, 'ADM'), c.banned(0, 3, 'ADM'), c.kept('ADM')]) {
+        expect(text).not.toMatch(/· ADM$/)
+        expect(text).toMatch(/ADM$/)
+      }
+      // A full ban states the count alone; "N of N" reads as a riddle.
+      expect(c.banned(3, 3, 'ADM')).not.toMatch(/3 (з|из|of) 3|3 yeni üyeden 3/)
+      expect(c.banned(0, 3, 'ADM')).toMatch(/^⚠️/)
+    }
+    expect(uk.cohort.banned(2, 3, 'A')).toContain('2 з 3, решту не вдалося')
   })
 
   it('the forgotten-verdict text fits a callback alert', () => {
@@ -2171,7 +2181,7 @@ describe('ru, by, en and tr mirror the second uk copy audit', () => {
     expect(all).not.toContain('👌')
   })
 
-  it.each(OTHERS)('%s: the ballot and receipts put the name after a label or a "·", not after a preposition', (code) => {
+  it.each(OTHERS)('%s: the ballot and receipts put the name after a role label, not after a preposition', (code) => {
     const L = LOCALES[code]!
     for (const text of [
       L.vote.prompt({ userLabel: NAME, textPreview: 'x', media: null, whyLink: null }),
@@ -2179,8 +2189,8 @@ describe('ru, by, en and tr mirror the second uk copy audit', () => {
       L.vote.promptNoText(NAME, null, null)
     ]) expect(text).toMatch(new RegExp(`(: |Posted by )${NAME}`))
     expect(L.vote.resolvedSpam({ who: NAME, enforcement: L.vote.enforcement.done, whyLink: null }))
-      .toContain(` · ${NAME}. ${L.vote.enforcement.done}`)
-    expect(L.vote.resolvedHam({ who: NAME, whyLink: 'w' })).toMatch(new RegExp(` · ${NAME} · w$`))
+      .toMatch(new RegExp(`(: |Posted by )${NAME}\\. ${L.vote.enforcement.done}$`))
+    expect(L.vote.resolvedHam({ who: NAME, whyLink: 'w' })).toMatch(new RegExp(`(: |Posted by )${NAME} · w$`))
     expect(L.vote.promptNoText(NAME, 'x', 'w')).not.toContain('. ·')
   })
 

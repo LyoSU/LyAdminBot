@@ -58,15 +58,21 @@ export const en: Locale = {
     confirmAll: (count) => `Ban <b>${count}</b> ${count === 1 ? 'newcomer who has' : 'newcomers who have'} not written anything yet?`,
     confirmYes: '🚫 Yes, ban',
     cancel: 'Cancel',
-    banned: (count) => `Banned: ${count}`
+    banned: (count) => `Banned ${count} newcomer${s(count)}`
   },
   cohort: {
     title: (count, spammer) => `👥 <b>${count} similar ${count === 1 ? 'newcomer' : 'newcomers'} joined alongside the spammer ${spammer}</b>`,
     hint: 'Similar profile, joined around the same time, no messages yet. The bot has not restricted anyone — an admin decides.',
     banButton: (count) => `🚫 Ban ${count}`,
     keepButton: 'Let them stay',
-    banned: (done, total, admin) => `🚫 Banned ${done} of ${total} newcomer${s(total)} who joined alongside the spammer · ${admin}`,
-    kept: (admin) => `✅ The newcomers stay in the chat · ${admin}`,
+    banned: (done, total, admin) =>
+      (done === 0
+        ? '⚠️ Could not ban the newcomers who joined alongside the spammer. Check my "Ban users" right'
+        : done === total
+          ? `🚫 Banned ${done} newcomer${s(done)} who joined alongside the spammer`
+          : `🚫 Banned ${done} of ${total} newcomers who joined alongside the spammer, could not ban the rest`)
+      + ` · admin's call: ${admin}`,
+    kept: (admin) => `✅ The newcomers who joined alongside the spammer stay in the chat · admin's call: ${admin}`,
     expired: 'This card is out of date.'
   },
 
@@ -153,6 +159,7 @@ export const en: Locale = {
 
   notification: {
     compact: (action, userLabel) => `${action} · ${userLabel}`,
+    repeats: (count) => `${count} message${s(count)}`,
     whyLink: 'why?',
     whyButton: 'ℹ️ Why?',
     notSpamButton: '✅ Not spam',
@@ -383,11 +390,11 @@ export const en: Locale = {
       failed: '⚠️ Could neither delete the message nor restrict the author.'
     },
     resolvedSpam: ({ who, enforcement, whyLink }) =>
-      '🗑 The community decided: spam' + (who ? ` · ${who}` : '')
+      '🗑 The community decided: spam' + (who ? `. Posted by ${who}` : '')
       + (enforcement ? `. ${enforcement}` : '')
       + (whyLink ? ` · ${whyLink}` : ''),
     resolvedHam: ({ who, whyLink }) =>
-      '✅ The community decided: not spam' + (who ? ` · ${who}` : '')
+      '✅ The community decided: not spam' + (who ? `. Posted by ${who}` : '')
       + (whyLink ? ` · ${whyLink}` : ''),
     alreadyEnded: 'This vote is already closed.',
     voters: {
@@ -459,7 +466,7 @@ export const en: Locale = {
   },
 
   kick: {
-    success: (name) => `👋 ${name} was kicked from the chat.`,
+    success: (name) => `🚪 ${name} was kicked from the chat.`,
     needReply: 'Reply with /kick to a message from the person you want to remove.'
   },
 

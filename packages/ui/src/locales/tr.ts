@@ -54,15 +54,21 @@ export const tr: Locale = {
     confirmAll: (count) => `Henüz hiçbir şey yazmamış <b>${count}</b> yeni üye yasaklansın mı?`,
     confirmYes: '🚫 Evet, yasakla',
     cancel: 'İptal',
-    banned: (count) => `Yasaklandı: ${count}`
+    banned: (count) => `${count} yeni üye yasaklandı`
   },
   cohort: {
     title: (count, spammer) => `👥 <b>Spamcı ${spammer} ile birlikte ${count} benzer yeni üye katıldı</b>`,
     hint: 'Benzer profiller, aynı anda katıldılar, henüz bir şey yazmadılar. Bot kimseyi kısıtlamadı — karar yöneticinin.',
     banButton: (count) => `🚫 ${count} kişiyi yasakla`,
     keepButton: 'Kalsınlar',
-    banned: (done, total, admin) => `🚫 Spamcıyla katılan ${total} yeni üyeden ${done} kişi yasaklandı · ${admin}`,
-    kept: (admin) => `✅ Yeni üyeler sohbette kalıyor · ${admin}`,
+    banned: (done, total, admin) =>
+      (done === 0
+        ? '⚠️ Spamcıyla birlikte katılan yeni üyeler yasaklanamadı. "Kullanıcıları engelle" yetkimi kontrol et'
+        : done === total
+          ? `🚫 Spamcıyla birlikte katılan ${done} yeni üye yasaklandı`
+          : `🚫 Spamcıyla birlikte katılan ${total} yeni üyeden ${done} kişi yasaklandı, diğerleri yasaklanamadı`)
+      + ` · yönetici kararı: ${admin}`,
+    kept: (admin) => `✅ Spamcıyla birlikte katılan yeni üyeler sohbette kalıyor · yönetici kararı: ${admin}`,
     expired: 'Bu kart artık güncel değil.'
   },
 
@@ -149,6 +155,7 @@ export const tr: Locale = {
 
   notification: {
     compact: (action, userLabel) => `${action} · ${userLabel}`,
+    repeats: (count) => `${count} mesaj`,
     whyLink: 'neden?',
     whyButton: 'ℹ️ Neden?',
     notSpamButton: '✅ Spam değil',
@@ -378,12 +385,12 @@ export const tr: Locale = {
       failed: '⚠️ Ne mesaj silinebildi ne de yazar kısıtlanabildi.'
     },
     resolvedSpam: ({ who, enforcement, whyLink }) =>
-      // The name follows a "·": a suffix cannot be attached to a display name.
-      '🗑 Topluluk karar verdi: spam' + (who ? ` · ${who}` : '')
+      // The name follows a role label: a suffix cannot be attached to a display name.
+      '🗑 Topluluk karar verdi: spam' + (who ? `. Gönderen: ${who}` : '')
       + (enforcement ? `. ${enforcement}` : '')
       + (whyLink ? ` · ${whyLink}` : ''),
     resolvedHam: ({ who, whyLink }) =>
-      '✅ Topluluk karar verdi: spam değil' + (who ? ` · ${who}` : '')
+      '✅ Topluluk karar verdi: spam değil' + (who ? `. Gönderen: ${who}` : '')
       + (whyLink ? ` · ${whyLink}` : ''),
     alreadyEnded: 'Bu oylama zaten kapandı.',
     voters: {
@@ -455,7 +462,7 @@ export const tr: Locale = {
   },
 
   kick: {
-    success: (name) => `👋 ${name} sohbetten atıldı.`,
+    success: (name) => `🚪 ${name} sohbetten atıldı.`,
     needReply: 'Atmak istediğin kişinin mesajına /kick ile yanıt ver.'
   },
 
