@@ -200,6 +200,17 @@ describe('the attached image is the message (2026-10-31)', () => {
     expect(prompt).not.toMatch(/fenced content is the ONLY thing you judge/)
   })
 
+  /**
+   * The first evening of the rule above: one chat, which had seen no
+   * flirt-bait verdict in 14 days, saw four in eleven minutes, three of them
+   * on photos of their senders, and an admin undid one within five minutes.
+   */
+  it('a picture of a person is no flirt-bait without a lure', () => {
+    const prompt = buildSystemPrompt('FENCE')
+    expect(prompt).toContain('A photo of a person')
+    expect(prompt).toContain('flirt-bait only with a lure in the message')
+  })
+
   it('names the attached image in the message facts, by its kind', () => {
     const sticker = asText(buildUserContent(makeInput({
       msg: { text: '', attachments: [{ kind: 'sticker', fileUniqueId: 'u1' }] },
