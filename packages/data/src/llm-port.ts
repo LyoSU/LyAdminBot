@@ -58,6 +58,7 @@
  * briefing" (clustered fresh confirmed spam) as dynamic few-shot context,
  * so the model always knows what is circulating THIS week.
  */
+import { sniffImageMime } from './image-mime.js'
 import { randomBytes, createHash } from 'node:crypto'
 import type { EvaluationInput, LlmPort, LlmVerdict, MessageObservations } from '@lyadmin/core'
 import { extractBioSignals, isDistinctive, LLM_REASON_CODES, toWellFormed, truncate } from '@lyadmin/core'
@@ -983,6 +984,6 @@ export const buildUserContent = (
 
   return [
     { type: 'text', text },
-    { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${photo}` } }
+    { type: 'image_url', image_url: { url: `data:${sniffImageMime(photo)};base64,${photo}` } }
   ]
 }

@@ -190,6 +190,95 @@ export const downloadPhotoBase64 = async (
   }
 }
 
+/**
+ * The slice of an mtcute media object that decides which picture to fetch.
+ * Structural on purpose: the choice is pure and testable without a client.
+ */
+export interface ImageSourceMedia {
+  type: string
+  mimeType?: string
+  sourceType?: string
+  fileSize?: number | null
+  thumbnails?: ReadonlyArray<{ type: string; isVideo: boolean; width: number; height: number }>
+}
+
+/** Thumbnail kinds that are not a picture a vision model can read: a ~100 px
+ * blurred strip and a vector outline. */
+const UNUSABLE_THUMB_TYPES = new Set(['i', 'j'])
+
+/**
+ * Which file to download for "what does this message show", or null when the
+ * kind carries no still image.
+ *
+ * Production 2026-10-31: an account posted an explicit advert sticker every few
+ * minutes and was never looked at, because only `photo` reached vision and
+ * moderation. A static sticker is itself a webp, so it is fetched whole; an
+ * animated (tgs) or video (webm) sticker, a GIF/animation and a video are not
+ * images at all, so the largest still thumbnail stands in for the first frame.
+ * Video-type thumbnails (mp4 previews) are skipped for the same reason.
+ */
+export const pickMessageImage = (
+  media: ImageSourceMedia | null | undefined,
+  maxBytes: number
+): { kind: 'file' } | { kind: 'thumbnail'; index: number } | null => {
+  if (!media) return null
+  if (media.type === 'photo') return { kind: 'file' }
+  if (media.type !== 'sticker' && media.type !== 'video') return null
+
+  const isStaticImage = media.type === 'sticker' &&
+    (media.sourceType === undefined || media.sourceType === 'static') &&
+    media.mimeType === 'image/webp'
+  // An unknown size is allowed through; the post-download check still caps it.
+  if (isStaticImage && !(typeof media.fileSize === 'number' && media.fileSize > maxBytes)) {
+    return { kind: 'file' }
+  }
+
+  const thumbs = media.thumbnails ?? []
+  let best = -1
+  let bestArea = -1
+  thumbs.forEach((t, index) => {
+    if (t.isVideo || UNUSABLE_THUMB_TYPES.has(t.type)) return
+    const area = Number.isFinite(t.width) && Number.isFinite(t.height) ? t.width * t.height : 0
+    if (area > bestArea) {
+      best = index
+      bestArea = area
+    }
+  })
+  return best >= 0 ? { kind: 'thumbnail', index: best } : null
+}
+
+/**
+ * Base64 of the first still image a message shows — photo, static sticker, or
+ * the thumbnail of an animated sticker / GIF / video — or null.
+ *
+ * Null on every failure (no usable image, too large, download error) and never
+ * a throw: this feeds the moderation path, where a missing picture must mean
+ * "no answer" and not a failed message. Bytes may be jpeg or webp; the ports
+ * sniff the real format when they label the data URL.
+ */
+export const downloadMessageImageBase64 = async (
+  tg: Pick<TelegramClient, 'downloadAsBuffer'>,
+  /** Any message media; kinds that are not downloadable files are rejected by
+   * `pickMessageImage` before anything is fetched. */
+  media: unknown,
+  maxBytes = 2 * 1024 * 1024
+): Promise<string | null> => {
+  try {
+    if (!media) return null
+    const shape = media as ImageSourceMedia
+    const pick = pickMessageImage(shape, maxBytes)
+    if (pick === null) return null
+    const location = pick.kind === 'file'
+      ? (media as Parameters<TelegramClient['downloadAsBuffer']>[0])
+      : (shape.thumbnails?.[pick.index] as unknown as Parameters<TelegramClient['downloadAsBuffer']>[0])
+    const buffer = await tg.downloadAsBuffer(location)
+    if (buffer.byteLength === 0 || buffer.byteLength > maxBytes) return null
+    return Buffer.from(buffer).toString('base64')
+  } catch {
+    return null
+  }
+}
+
 /** Wrap a raw TL photo into a downloadable Photo and return it as base64. */
 export const rawPhotoToBase64 = async (
   tg: TelegramClient,

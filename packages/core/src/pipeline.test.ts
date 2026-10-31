@@ -4285,3 +4285,49 @@ describe('evaluateMessage — the guest-bot caller is on the record', () => {
       .toEqual([plain.action, plain.reasonCode, plain.pSpam, plain.needsVote])
   })
 })
+
+describe('media_only discount is earned by a clean look', () => {
+  const sticker = [{ kind: 'sticker' as const, fileUniqueId: 'u1' }]
+  const run = (
+    over: Parameters<typeof makeInput>[0],
+    moderation?: PipelinePorts['moderation']
+  ) => evaluateMessage(
+    makeInput({ msg: { text: '', attachments: sticker }, ...over }),
+    moderation ? { moderation } : {}
+  )
+  const has = (v: { signals: { name: string }[] }) => v.signals.some((s) => s.name === 'media_only')
+
+  it('is withheld when the image was flagged', async () => {
+    const v = await run(
+      { user: newcomer, enrichment: { photoBase64: 'AAAA' } },
+      { check: async () => modResult({ sexual: 0.9 }) }
+    )
+    expect(has(v)).toBe(false)
+    expect(v.signals.some((s) => s.name === 'moderation_flagged')).toBe(true)
+  })
+
+  it('is kept when the image was checked and came back clean', async () => {
+    const v = await run({ user: newcomer, enrichment: { photoBase64: 'AAAA' } }, { check: async () => modClean })
+    expect(has(v)).toBe(true)
+  })
+
+  it('is withheld for a newish sender whose image was not checked', async () => {
+    const v = await run({ user: newcomer }, { check: async () => modClean })
+    expect(has(v)).toBe(false)
+  })
+
+  it('is withheld for a newish sender when the port gives no answer', async () => {
+    const v = await run({ user: newcomer, enrichment: { photoBase64: 'AAAA' } }, { check: async () => null })
+    expect(has(v)).toBe(false)
+  })
+
+  it('is kept when there is no moderation port at all', async () => {
+    const v = await run({ user: newcomer })
+    expect(has(v)).toBe(true)
+  })
+
+  it('is kept for an established sender, whose images are never fetched', async () => {
+    const v = await run({}, { check: async () => modClean })
+    expect(has(v)).toBe(true)
+  })
+})

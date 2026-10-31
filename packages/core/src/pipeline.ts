@@ -1973,6 +1973,24 @@ export const evaluateMessage = async (
       signals.push({ name: 'moderation_flagged', evidence: contentHit })
     }
 
+    // `media_only` is a trust discount for a sticker or GIF that says nothing,
+    // and "says nothing" is a claim about a picture nobody had looked at
+    // (2026-10-31: an explicit advert sticker, repeated every few minutes by a
+    // new account, collected -1.5 as if it were a thumbs-up). It is now earned
+    // rather than assumed. Kept: no moderation port (nothing could look), or an
+    // established sender (images are fetched for newish ones only, to bound
+    // cost), or an image that was checked and came back clean. Withheld: the
+    // image was flagged, or a newish sender's image was not checked (download
+    // failed, too large, no usable thumbnail, or the port gave no answer).
+    // Withheld, never inverted: no suspicion is added for an unreadable picture.
+    if (signals.some((s) => s.name === 'media_only')) {
+      const checkedClean = input.enrichment.photoBase64 !== null && moderation !== null
+      if (contentHit !== null || (!checkedClean && isNewish(input))) {
+        for (let i = signals.length - 1; i >= 0; i--) {
+          if (signals[i]!.name === 'media_only') signals.splice(i, 1)
+        }
+      }
+    }
   }
 
   // ── 6. score + LLM escalation ───────────────────────────────────────

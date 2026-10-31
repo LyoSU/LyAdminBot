@@ -29,7 +29,7 @@ import {
 import {
   TelegramGateway, applyVerdict, buildUserSnapshot, buildChannelSnapshot, withLiveFacts, normalizeMessage,
   editBaselineOf, classifyEditDelivery,
-  fetchUserProfile, userHasProfilePhoto, downloadPhotoBase64, downloadAvatarBase64, downloadStoriesBase64, rawPhotoToBase64,
+  fetchUserProfile, userHasProfilePhoto, downloadMessageImageBase64, downloadAvatarBase64, downloadStoriesBase64, rawPhotoToBase64,
   fetchExternalBan, sourcesToQuery, resolveMentionKinds, shouldScanChannelSender,
   createChatDescriptionCache, fetchChatDescription, fetchChatMemberCount, findChatMemberByUsername,
   createTmePreviewResolver,
@@ -6208,8 +6208,14 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
   // to vision or to moderation: ten images is ten times the bill for a marginal
   // gain, and their captions — which is where albums carry their text — are
   // merged into the judged message either way.
-  const photoBase64 = newish && message.media?.type === 'photo'
-    ? await downloadPhotoBase64(gateway.tg, message.media)
+  //
+  // Stickers, GIFs and videos too (2026-10-31): they used to be skipped, so an
+  // explicit advert sticker repeated every few minutes was never looked at and
+  // even earned the `media_only` trust discount. The helper picks the file
+  // (static sticker) or the largest still thumbnail (animated/video sticker,
+  // GIF, video), under the same byte cap as a photo.
+  const photoBase64 = newish
+    ? await downloadMessageImageBase64(gateway.tg, message.media)
     : null
 
   // Profile media — newish senders only (this gate is what makes
