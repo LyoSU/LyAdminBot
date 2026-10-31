@@ -279,8 +279,16 @@ export const extractMessageSignals = (msg: NormalizedMessage): Signal[] => {
    * once any of it is present: an arrow over a hidden private invite is not a
    * reaction, and a bare `t.me/+…` is not merely an internal pointer
    * (2026-09-23 review). Withheld, never inverted — no suspicion is added here.
+   *
+   * `edited_message` alone is not among them: it says the sender pressed edit,
+   * not that the message says or carries anything. What an edit can add — a
+   * link, a mention, invisible characters — has a signal of its own above.
+   * Counting the bare flag took the discount from every edited reaction:
+   * 2026-10-31, two photo replies passed clean, then their senders' edits
+   * seconds later, same text and same picture, scored 0.62→0.82 and
+   * 0.23→0.62 with nothing new in them, and both were removed.
    */
-  const hasSuspicious = signals.length > 0
+  const hasSuspicious = signals.some((s) => s.name !== 'edited_message')
 
   // ── trust signals ──────────────────────────────────────────────────
 

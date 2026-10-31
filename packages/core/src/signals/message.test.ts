@@ -383,6 +383,20 @@ describe('extractMessageSignals — suspicious signals', () => {
     })
     expect(names(benignEdit)).not.toContain('edit_injected_link')
   })
+
+  it('an edit that adds nothing keeps the nothing-to-read discounts (2026-10-31)', () => {
+    const short = names(makeMsg({ isEdit: true, text: 'уже сплю' }))
+    expect(short).toContain('edited_message')
+    expect(short).toContain('short_message')
+    expect(names(makeMsg({ isEdit: true, text: '🥹' }))).toContain('emoji_only')
+    // What an edit injects still withholds them.
+    const injected = names(makeMsg({
+      isEdit: true, text: 'глянь',
+      editDelta: { injectedUrls: 1, injectedMentions: 0, injectedInvisibles: 0 }
+    }))
+    expect(injected).toContain('edit_injected_link')
+    expect(injected).not.toContain('short_message')
+  })
 })
 
 describe('extractMessageSignals — trust signals (negative)', () => {
