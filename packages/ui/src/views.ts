@@ -69,8 +69,8 @@ export const callbackData = {
     `wel:${chatId}:${action}${arg !== '' ? `:${arg}` : ''}`,
   extras: (chatId: number, action: string, arg = ''): string =>
     `ext:${chatId}:${action}${arg !== '' ? `:${arg}` : ''}`,
-  /** An admin's answer to a cohort card; `key` names the card, not the people on it. */
-  cohort: (chatId: number, key: string, act: 'ban' | 'keep'): string => `coh:${chatId}:${key}:${act}`
+  /** An admin's answer to a cohort card or notice; `key` names it, not the people on it. */
+  cohort: (chatId: number, key: string, act: 'ban' | 'keep' | 'undo'): string => `coh:${chatId}:${key}:${act}`
 }
 
 /** For app-layer strings that interpolate user-controlled text into HTML. */
@@ -255,6 +255,19 @@ export const cohortCard = (
     ]]
   }
 }
+
+/**
+ * The notice that replaced the card once the bot began banning the cohort
+ * itself: one line and, when the notice keeps its keyboard, one undo for all
+ * of them. Never names anybody — each ban has its own row in the recent
+ * actions with its "Why?" and its undo.
+ */
+export const cohortNotice = (
+  locale: Locale, chatId: number, key: string, count: number, withUndo = true
+): ViewMessage => ({
+  text: escapeHtml(locale.cohort.autoBanned(count)),
+  buttons: withUndo ? [[{ text: locale.cohort.undoButton, data: callbackData.cohort(chatId, key, 'undo') }]] : []
+})
 
 export interface ArrivalEntry {
   userId: number

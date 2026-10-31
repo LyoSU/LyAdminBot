@@ -73,6 +73,9 @@ export const en: Locale = {
           : `🚫 Banned ${done} of ${total} newcomers who joined alongside the spammer, could not ban the rest`)
       + `. Admin's call: ${admin}`,
     kept: (admin) => `✅ The newcomers who joined alongside the spammer stay in the chat. Admin's call: ${admin}`,
+    autoBanned: (count) => `🚫 Banned ${count} ${count === 1 ? 'newcomer' : 'newcomers'} who joined alongside the spammer`,
+    undoButton: '↩️ Undo',
+    undone: (done, total, admin) => `↩️ Unbanned ${done} of ${total}. Admin's call: ${admin}`,
     expired: 'This card is out of date.'
   },
 
@@ -226,6 +229,7 @@ export const en: Locale = {
     listed_arrival: 'on joining: the account is in spam databases or flagged by Telegram',
     arrival_look: 'a silent newcomer whose profile looks like a spam network',
     arrived_with_spammer: 'joined alongside a spammer, with a similar profile — banned by an admin',
+    arrived_with_spammer_auto: 'joined alongside a spammer, with a similar profile — banned by the bot',
     admin_arrival_ban: 'banned by an admin from the newcomers list'
   },
   reasonFallback: 'suspicious activity',

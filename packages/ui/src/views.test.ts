@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Verdict, SignalName, BotStats, ChatStats } from '@lyadmin/core'
-import { callbackData, captchaPrompt, chatActionsView, chatArrivalsView, cohortCard, CHAT_ACTIONS_SHOWN, ownRestrictionsView, OWN_RESTRICTIONS_SHOWN, type OwnRestrictionEntry, startCard, statsCard, compactNotification, startGroupHint, langPanel, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, userProfileCard, userProfileLines, votePrompt, voterListView, voteResult, VOTERS_SHOWN_MAX, whyCard, whyDeepLink, whyView, welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor, LOCALES, type UserFacts } from './views.js'
+import { callbackData, captchaPrompt, chatActionsView, chatArrivalsView, cohortCard, cohortNotice, CHAT_ACTIONS_SHOWN, ownRestrictionsView, OWN_RESTRICTIONS_SHOWN, type OwnRestrictionEntry, startCard, statsCard, compactNotification, startGroupHint, langPanel, parseCallback, resolveLocale, settingsDeepLink, settingsPanel, topList, userProfileCard, userProfileLines, votePrompt, voterListView, voteResult, VOTERS_SHOWN_MAX, whyCard, whyDeepLink, whyView, welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor, LOCALES, type UserFacts } from './views.js'
 import { uk } from './locales/uk.js'
 
 const makeVerdict = (overrides: Partial<Verdict> = {}): Verdict => ({
@@ -1641,6 +1641,42 @@ describe('cohortCard — newcomers who arrived beside a spammer, for the admins 
       const view = cohortCard(locale, -1, 'k', 's', [{ userId: 1, label: 'a' }, { userId: 2, label: 'b' }])
       expect(view.text.length).toBeGreaterThan(0)
       expect(locale.cohort.banned(1, 2, 'x')).toContain('1')
+    }
+  })
+})
+
+describe('cohortNotice — the bot banned a spammer\'s look-alikes, with one undo', () => {
+  it('is one line with the count and no names, in every locale', () => {
+    for (const locale of Object.values(LOCALES)) {
+      const view = cohortNotice(locale, -1, 'k', 3)
+      expect(view.text).toContain('3')
+      expect(view.text).not.toContain('\n')
+      expect(view.text).not.toContain('<a ')
+      expect(locale.cohort.undoButton.length).toBeGreaterThan(0)
+      expect(locale.cohort.undone(2, 3, 'x')).toContain('2')
+      expect(locale.reasons['arrived_with_spammer_auto']).toBeTruthy()
+    }
+  })
+
+  it('carries the notice key in its single undo button, within the 64-byte cap', () => {
+    const view = cohortNotice(uk, -1001234567890, 'k123', 4)
+    const data = view.buttons.flat().map((b) => ('data' in b ? b.data : ''))
+    expect(data).toEqual(['coh:-1001234567890:k123:undo'])
+    expect(Buffer.byteLength(data[0]!)).toBeLessThanOrEqual(64)
+    expect(parseCallback(data[0]!)).toEqual({ kind: 'coh', parts: ['-1001234567890', 'k123', 'undo'] })
+  })
+
+  it('drops the keyboard when the notice is quiet', () => {
+    expect(cohortNotice(uk, -1, 'k', 2, false).buttons).toEqual([])
+  })
+
+  it('reads the count the way each language counts', () => {
+    expect(LOCALES.en!.cohort.autoBanned(1)).toBe('🚫 Banned 1 newcomer who joined alongside the spammer')
+    expect(LOCALES.en!.cohort.autoBanned(2)).toContain('newcomers')
+    for (const n of [1, 2, 5, 11, 21, 22]) {
+      for (const code of ['uk', 'ru', 'by']) {
+        expect(LOCALES[code]!.cohort.autoBanned(n)).toMatch(new RegExp(`: ${n}$`))
+      }
     }
   })
 })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  arrivalShapeOf, chatsJoinedWithin, cohortSiblings, isContentCarryAct, isShadowCarryAct, MULTI_JOIN_MIN_CHATS, recordBanTargets, sameShape, type CohortArrival, type JoinerFacts
+  arrivalShapeOf, chatsJoinedWithin, cohortSiblings, isContentCarryAct, isShadowCarryAct, MULTI_JOIN_MIN_CHATS, recordBanTargets, sameShape, splitDeleted, type CohortArrival, type JoinerFacts
 } from './arrival-cohort.js'
 import type { ArrivalShape } from '@lyadmin/data'
 
@@ -89,6 +89,21 @@ describe('sameShape', () => {
   })
 })
 
+describe('splitDeleted', () => {
+  it('separates the accounts Telegram deleted, keeping order', () => {
+    expect(splitDeleted([
+      { userId: 1, deleted: false }, { userId: 2, deleted: true }, { userId: 3, deleted: false }, { userId: 4, deleted: true }
+    ])).toEqual({ deleted: [2, 4], live: [1, 3] })
+  })
+
+  it('is total: every member lands in exactly one list, and none is a no-op', () => {
+    expect(splitDeleted([])).toEqual({ deleted: [], live: [] })
+    const members = Array.from({ length: 30 }, (_, i) => ({ userId: i, deleted: i % 3 === 0 }))
+    const { deleted, live } = splitDeleted(members)
+    expect([...deleted, ...live].sort((a, b) => a - b)).toEqual(members.map((m) => m.userId))
+  })
+})
+
 describe('cohortSiblings', () => {
   const shape: ArrivalShape = {
     username: false, photo: false, lastName: true, premium: false, script: 'cyrillic', registeredUnix: 1_780_000_000
@@ -115,6 +130,11 @@ describe('cohortSiblings', () => {
       arrival(6, 1, { outcome: 'gated' })
     ]
     expect(cohortSiblings(spammer, rows).map((a) => a.userId)).toEqual([6])
+  })
+
+  it('leaves out an account an admin already restored: the undo is the last word', () => {
+    const rows = [spammer, arrival(2, 1, { outcome: 'restored' }), arrival(3, 2)]
+    expect(cohortSiblings(spammer, rows).map((a) => a.userId)).toEqual([3])
   })
 
   it('caps the card', () => {

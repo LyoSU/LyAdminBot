@@ -186,10 +186,41 @@ export interface CohortArrival {
 }
 
 /**
+ * Whether the bot bans a confirmed spammer's silent look-alikes itself, with
+ * an undo, instead of asking the admins first. Flip to `false` to bring back
+ * the card ("N similar newcomers — ban / keep") with nothing else changed.
+ *
+ * Until 2026-10-31 this was a card, on the reasoning that they had done
+ * nothing and resembling a spammer is a reason to ask. A read-only replay of
+ * the 7 days of arrivals: 784 newcomers matched as siblings of 1108
+ * bot-removed accounts; 559 (71 %) were later punished by the pipeline itself
+ * anyway, 15 posted any clean message (14 one or two, 1 three or more) and
+ * none ever became an established regular. Since 2026-10-23 admins banned 165
+ * of them from the card and reversed none, and every answered card in a 5
+ * hour sample was "ban all" — the card cost an admin a tap for an answer that
+ * never varied, and the wait is when the batch posts its advert.
+ */
+export const COHORT_AUTO_BAN = true
+
+/**
+ * Splits a cohort by whether Telegram already deleted the account. A deleted
+ * account cannot post; it is removed without being named on anything. An
+ * account whose profile could not be read stays with the live ones.
+ */
+export const splitDeleted = (
+  members: readonly { userId: number; deleted: boolean }[]
+): { deleted: number[]; live: number[] } => ({
+  deleted: members.filter((m) => m.deleted).map((m) => m.userId),
+  live: members.filter((m) => !m.deleted).map((m) => m.userId)
+})
+
+/**
  * The newcomers who came into a chat beside an account now confirmed as a
- * spammer and look like it — candidates for an admin to look at, never for the
- * bot to remove. The spammer was confirmed on what IT did; they have done
- * nothing, and resembling it is a reason to ask, not a finding.
+ * spammer and look like it — the candidates `surfaceCohort` bans (see
+ * `COHORT_AUTO_BAN` for the measurement), or puts on a card when that is off.
+ * Resembling a spammer is not a finding about the account, so the ban is
+ * undoable, and an admin's undo (outcome `restored`) takes the account out of
+ * every later cohort.
  *
  * Only arrivals the bot had never seen speak anywhere, and not already taken
  * from the chat. Whether they have spoken HERE since is the caller's to check,
@@ -208,7 +239,7 @@ export const cohortSiblings = (
       a.userId !== spammer.userId &&
       Math.abs(a.at.getTime() - t) <= windowMs &&
       (a.messagesGlobalAtJoin ?? 0) === 0 &&
-      (a.outcome === null || !REMOVED_ARRIVAL_OUTCOMES.has(a.outcome)) &&
+      (a.outcome === null || (!REMOVED_ARRIVAL_OUTCOMES.has(a.outcome) && a.outcome !== 'restored')) &&
       sameShape(a.shape, spammer.shape))
     .sort((x, y) => Math.abs(x.at.getTime() - t) - Math.abs(y.at.getTime() - t))
     .slice(0, max)

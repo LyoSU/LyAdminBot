@@ -69,6 +69,9 @@ export const tr: Locale = {
           : `🚫 Spamcıyla birlikte katılan ${total} yeni üyeden ${done} kişi yasaklandı, diğerleri yasaklanamadı`)
       + `. Yönetici kararı: ${admin}`,
     kept: (admin) => `✅ Spamcıyla birlikte katılan yeni üyeler sohbette kalıyor. Yönetici kararı: ${admin}`,
+    autoBanned: (count) => `🚫 Spamcıyla birlikte katılan ${count} yeni üye yasaklandı`,
+    undoButton: '↩️ Geri al',
+    undone: (done, total, admin) => `↩️ ${total} yeni üyeden ${done} kişinin yasağı kaldırıldı. Yönetici kararı: ${admin}`,
     expired: 'Bu kart artık güncel değil.'
   },
 
@@ -222,6 +225,7 @@ export const tr: Locale = {
     listed_arrival: 'girişte: hesap spam veritabanlarında ya da Telegram onu işaretlemiş',
     arrival_look: 'sessiz yeni üyenin profili bir spam ağına benziyor',
     arrived_with_spammer: 'bir spamcıyla birlikte katıldı ve ona benziyor — yönetici yasakladı',
+    arrived_with_spammer_auto: 'bir spamcıyla birlikte katıldı ve ona benziyor — bot yasakladı',
     admin_arrival_ban: 'yönetici yeni üyeler listesinden yasakladı'
   },
   reasonFallback: 'şüpheli etkinlik',

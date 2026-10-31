@@ -80,6 +80,11 @@ export interface Locale {
     /** Replaces the card after an admin banned them; `admin` is already escaped. */
     banned: (done: number, total: number, admin: string) => string
     kept: (admin: string) => string
+    /** The notice that replaced the card (2026-10-31): one line, no names. */
+    autoBanned: (count: number) => string
+    undoButton: string
+    /** Replaces the notice after an admin undid it; `admin` is already escaped. */
+    undone: (done: number, total: number, admin: string) => string
     /** Tapped on a card the bot no longer holds (restart, or already handled). */
     expired: string
   }

@@ -46,7 +46,7 @@ import {
   type NormalizedExtra, type PendingEntry
 } from '@lyadmin/data'
 import {
-  captchaPrompt, chatActionsView, chatArrivalsView, ARRIVALS_SHOWN, arrivalBannable, arrivalSilent, type ArrivalEntry, cohortCard, CHAT_ACTIONS_SHOWN, compactNotification, escapeHtml as escapeName, helpView,
+  captchaPrompt, chatActionsView, chatArrivalsView, ARRIVALS_SHOWN, arrivalBannable, arrivalSilent, type ArrivalEntry, cohortCard, cohortNotice, CHAT_ACTIONS_SHOWN, compactNotification, escapeHtml as escapeName, helpView,
   langPanel, langPicker, parseCallback, resolveLocale, settingsDeepLink, settingsPanel,
   nameIsPromo, ownRestrictionsView, OWN_RESTRICTIONS_SHOWN, startCard, startGroupHint, statsCard, topList, userMention, userProfileCard, votePrompt, voteResult,
   voterListView, whyCard, whyView,
@@ -76,7 +76,7 @@ import { IncidentTracker, SenderMessageLog, incidentPowerFor, correctionOwns, ty
 import { ArrivalLog, arrivalMessageIds } from './arrival-log.js'
 import { JOIN_LINE_GRACE_MS, JoinWitness } from './join-witness.js'
 import {
-  arrivalShapeOf, cohortSiblings, COHORT_WINDOW_MS, recordBanTargets, REMOVED_ARRIVAL_OUTCOMES, isShadowCarryAct,
+  arrivalShapeOf, cohortSiblings, COHORT_AUTO_BAN, splitDeleted, COHORT_WINDOW_MS, recordBanTargets, REMOVED_ARRIVAL_OUTCOMES, isShadowCarryAct,
   isContentCarryAct, chatsJoinedWithin, MULTI_JOIN_MIN_CHATS, MULTI_JOIN_WINDOW_MS
 } from './arrival-cohort.js'
 import { CaptchaGates, memberGone, planRestoredGate, type CaptchaGate } from './captcha-gate.js'
@@ -4459,16 +4459,20 @@ const cohortChecked = new Map<string, number>()
 const COHORT_CARD_TTL_MS = 6 * 60 * 60 * 1000
 
 /**
- * An account in this chat is now a confirmed spammer: name the newcomers who
- * came in beside it, look like it, and have not said anything — to the chat's
- * admins, on a card with one "ban them" button.
+ * An account in this chat is now a confirmed spammer: find the newcomers who
+ * came in beside it, look like it, and have not said anything, and ban them
+ * with one notice and an undo (`COHORT_AUTO_BAN`), or — with that off — name
+ * them to the chat's admins on a card with one "ban them" button.
  *
- * Added 2026-09-27, when a chat's admins were banning such joiners by hand or
- * waiting for them to post. The bot does not ban them itself. They have done nothing; resembling a spammer and
- * arriving with it is a reason to ask a person, which is also where
- * `account-verdict.ts` draws the line for anybody who has said nothing. What
- * it saves the admin is the finding: which of this week's silent joiners
- * belong with the one that just spammed.
+ * Added 2026-09-27 as a card, when a chat's admins were banning such joiners
+ * by hand or waiting for them to post. Made automatic 2026-10-31 on the
+ * measurement in `COHORT_AUTO_BAN`: 71 % of the matched were punished anyway,
+ * 15 of 784 ever posted a clean message, none became a regular, and the card
+ * was answered "ban all" every time. Every ban is its own decision row
+ * (`cohort_auto`), so each has its "Why?" and its undo, and an undo is an
+ * override — which is how a wrong cohort would show up.
+ *
+ * Accounts Telegram already deleted are removed without being named anywhere.
  */
 const surfaceCohort = async (chatId: number, spammer: { id: number; displayName: string | null }): Promise<void> => {
   // One look per spammer per chat: a run of its messages, each removed, and a
@@ -4498,7 +4502,9 @@ const surfaceCohort = async (chatId: number, spammer: { id: number; displayName:
   const members: number[] = []
   for (const sibling of cohortSiblings(spammerRow, rows.filter((r) => !onLiveCard.has(r.userId)))) {
     const facts = await chatMemberFacts(chatId, sibling.userId)
-    if (facts.isParticipant === false || facts.isAdmin) continue
+    if (facts.isParticipant === false || facts.isAdmin || sibling.userId === selfId) continue
+    // An admin's undo trusts the account (`ovr`), and a trusted one is never a suspect.
+    if (policy.trustedUserIds.includes(sibling.userId)) continue
     const stats = await store.getMemberStats(chatId, sibling.userId).catch(() => null)
     if ((stats?.messagesCount ?? 0) > 0) continue
     members.push(sibling.userId)
@@ -4506,17 +4512,56 @@ const surfaceCohort = async (chatId: number, spammer: { id: number; displayName:
   log.info('cohort_checked', { chatId, spammerId: spammer.id, arrivals: rows.length, members: members.length })
   if (members.length === 0) return
 
+  const users = await getUsersEach(fetchUser, [spammer.id, ...members])
+  const names = new Map<number, string>()
+  const deletedIds = new Set<number>()
+  for (const u of users) {
+    if (!(u instanceof User)) continue
+    names.set(u.id, u.displayName)
+    if (u.isDeleted) deletedIds.add(u.id)
+  }
+  const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
+
+  if (COHORT_AUTO_BAN) {
+    const { deleted, live } = splitDeleted(members.map((userId) => ({ userId, deleted: deletedIds.has(userId) })))
+    const banned: { deleted: number[]; live: number[] } = { deleted: [], live: [] }
+    for (const [kind, ids] of [['deleted', deleted], ['live', live]] as const) {
+      for (const userId of ids) {
+        const done = await banNewcomer(chatId, userId, {
+          ruleId: 'cohort_auto', reasonCode: 'arrived_with_spammer_auto',
+          signals: [{ name: 'arrived_with_spammer' }],
+          meta: { spammerId: spammer.id, ...(kind === 'deleted' ? { deleted: true } : {}) }
+        }, 'removed')
+        if (done) banned[kind].push(userId)
+      }
+    }
+    log.info('cohort_auto', {
+      chatId, spammerId: spammer.id, matched: members.length,
+      deleted: banned.deleted.length, banned: banned.live.length,
+      failed: members.length - banned.deleted.length - banned.live.length
+    })
+    // The deleted are nobody to tell the chat about.
+    if (banned.live.length === 0) return
+    const key = (++cohortCardSeq).toString(36)
+    cohortCards.set(key, { chatId, spammerId: spammer.id, userIds: banned.live, expiresAt: now + COHORT_CARD_TTL_MS })
+    // A quiet chat gets its quiet notice: seconds, no sound, no buttons — the
+    // undo is then each ban's own row in the recent actions.
+    const delivery = noticeDelivery(policy, { needsVote: false }, NOTIFY_TTL_COMPACT_MS, selfUsername ?? null)
+    const notice = cohortNotice(locale, chatId, key, banned.live.length, delivery.buttons)
+    const sent = await tgSendText(chatId, viewHtml(notice.text), {
+      ...(delivery.buttons ? { replyMarkup: toKeyboard(notice.buttons) } : {}),
+      disableWebPreview: true, silent: delivery.silent
+    }).catch(() => null)
+    if (sent) scheduleDelete(chatId, sent.id, delivery.ttlMs, 'cohort_card')
+    return
+  }
+
   for (const id of members) cohortSuspects.set(`${chatId}:${id}`, now + COHORT_WINDOW_MS)
   if (cohortSuspects.size > COHORT_SUSPECTS_MAX) {
     for (const [key, until] of cohortSuspects) if (until <= now) cohortSuspects.delete(key)
   }
-
-  const users = await getUsersEach(fetchUser, [spammer.id, ...members])
-  const names = new Map<number, string>()
-  for (const u of users) if (u instanceof User) names.set(u.id, u.displayName)
   const key = (++cohortCardSeq).toString(36)
   cohortCards.set(key, { chatId, spammerId: spammer.id, userIds: members, expiresAt: now + COHORT_CARD_TTL_MS })
-  const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
   const view = cohortCard(locale, chatId, key,
     spammer.displayName ?? names.get(spammer.id) ?? locale.hiddenName(spammer.id),
     members.map((id) => ({ userId: id, label: names.get(id) ?? null })))
@@ -4528,14 +4573,17 @@ const surfaceCohort = async (chatId: number, spammer: { id: number; displayName:
 }
 
 /**
- * An admin banning a newcomer from a card or the arrivals screen: the person
- * goes, their join line goes with them, and one decision row records a
- * person's decision on the grounds it was offered — so the ban has a "Why?"
- * and an undo like any other. Never an admin; false when Telegram refused.
+ * Banning a newcomer on the grounds of a card, the arrivals screen or the
+ * cohort rule: the person goes, their join line goes with them, and one
+ * decision row records the decision on the grounds it was made — so the ban
+ * has a "Why?" and an undo like any other. `outcome` is what the arrival row
+ * reads afterwards: an admin's tap is `banned_by_admin`, the bot's own
+ * `cohort_auto` is `removed`. Never an admin; false when Telegram refused.
  */
-const adminBanNewcomer = async (
+const banNewcomer = async (
   chatId: number, userId: number,
-  how: { ruleId: string; reasonCode: string; signals: Signal[]; meta: Record<string, string | number | boolean> }
+  how: { ruleId: string; reasonCode: string; signals: Signal[]; meta: Record<string, string | number | boolean> },
+  outcome: 'banned_by_admin' | 'removed'
 ): Promise<boolean> => {
   if (userId === selfId || await isChatAdmin(chatId, userId)) return false
   const banned = await gateway.moderationActions.ban(chatId, userId, TIMED_BAN_SECONDS)
@@ -4543,7 +4591,7 @@ const adminBanNewcomer = async (
   if (!banned) return false
   cohortSuspects.delete(`${chatId}:${userId}`)
   await dropGate(chatId, userId, how.ruleId)
-  await store.noteArrivalOutcome(chatId, userId, 'banned_by_admin').catch(() => { /* no row */ })
+  await store.noteArrivalOutcome(chatId, userId, outcome).catch(() => { /* no row */ })
   const arrival = arrivals.take(chatId, userId)
   if (arrival && arrival.subjects === 1) {
     const ids = arrivalMessageIds(arrival)
@@ -4562,6 +4610,11 @@ const adminBanNewcomer = async (
   log.info('admin_newcomer_ban', { chatId, userId, rule: how.ruleId })
   return true
 }
+
+const adminBanNewcomer = (
+  chatId: number, userId: number,
+  how: Parameters<typeof banNewcomer>[2]
+): Promise<boolean> => banNewcomer(chatId, userId, how, 'banned_by_admin')
 
 /**
  * The arrivals screen, read fresh on every open: this week's joins, whether
@@ -4611,6 +4664,27 @@ const answerCohortCard = async (
   cohortCards.delete(key)
   const groupLoc = await groupLocale(chatId)
   const adminLabel = escapeName(admin.displayName)
+  if (act === 'undo') {
+    // The bot's own cohort ban, taken back: each person goes through the same
+    // correction an admin's "Not spam" runs, so each is an override on record
+    // (what makes a wrong cohort measurable) and each ends up trusted.
+    let lifted = 0
+    for (const userId of card.userIds) {
+      const result = await restoreFalsePositive({
+        chatId, messageId: 0, userId, byUserId: admin.id, source: 'admin'
+      })
+      if (!result.lifted) continue
+      lifted++
+      await store.addTrustedUser(chatId, userId, { by: admin.id, via: 'override' }).catch(() => { /* best-effort */ })
+    }
+    log.info('cohort_undone', { chatId, by: admin.id, lifted, members: card.userIds.length })
+    await tgEditMessage({
+      chatId, message: cardMessageId,
+      text: viewHtml(groupLoc.cohort.undone(lifted, card.userIds.length, adminLabel)), replyMarkup: toKeyboard([])
+    }).catch(() => { /* gone */ })
+    scheduleDelete(chatId, cardMessageId, NOTIFY_TTL_COMPACT_MS, 'cohort_card')
+    return null
+  }
   if (act !== 'ban') {
     for (const id of card.userIds) cohortSuspects.delete(`${chatId}:${id}`)
     log.info('cohort_kept', { chatId, by: admin.id, members: card.userIds.length })
