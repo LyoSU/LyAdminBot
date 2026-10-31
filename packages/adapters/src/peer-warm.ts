@@ -21,7 +21,15 @@
  *    the same route `findChatMemberByUsername` already takes for a handle the
  *    cache has forgotten. Only for a person: a channel sender is no member.
  *
- * Neither failing is final — the action is still attempted, and its own error
+ * 3. the chat's most recent members, when asked for — for a newcomer the bot
+ *    has nothing else on: no message, and no name either, because the name is
+ *    fetched with the same hash. Telegram lists the latest joiners first, so an
+ *    account that joined in the last days is there; one call files them all,
+ *    and the rest of a batch then reads `cached`. Added 2026-10-31: a cohort
+ *    ban matched two newcomers who had joined before a deploy, and both bans
+ *    failed.
+ *
+ * None failing is final — the action is still attempted, and its own error
  * is what gets reported. What this returns says which route, if any, filled the
  * cache, so a mute that still fails can be told apart from one that never had a
  * chance.
@@ -34,7 +42,7 @@ export interface PeerWarmTransport {
   getMessages: (chatId: number, messageIds: number[]) => Promise<unknown>
   getChatMembers: (
     chatId: number,
-    params: { type: 'all'; query: string; limit: number }
+    params: { type: 'all'; query: string; limit: number } | { type: 'recent'; limit: number }
   ) => Promise<ReadonlyArray<{ user: { id: number } }>>
 }
 
@@ -42,9 +50,10 @@ export interface PeerWarmTransport {
  * - `cached`: the account was already addressable; nothing was asked.
  * - `message`: the message the decision is about put it there.
  * - `members`: the chat's member search did.
+ * - `recent`: the chat's recent-members list did.
  * - `unresolved`: neither did; the action will most likely fail.
  */
-export type PeerWarmSource = 'cached' | 'message' | 'members' | 'unresolved'
+export type PeerWarmSource = 'cached' | 'message' | 'members' | 'recent' | 'unresolved'
 
 export interface PeerWarmResult {
   source: PeerWarmSource
@@ -54,6 +63,9 @@ export interface PeerWarmResult {
 
 /** How many members a name search may return before we give up on it. */
 const MEMBER_SEARCH_LIMIT = 50
+
+/** Telegram's page size for a member list, and the most a bot sees of it. */
+const RECENT_MEMBERS_LIMIT = 200
 
 /**
  * The search term for a stored display name: its first word.
@@ -77,6 +89,8 @@ export const warmPeer = async (tg: PeerWarmTransport, params: {
   messageId: number | null
   /** The display name stored with the decision, for the member search. */
   nameHint?: string | null | undefined
+  /** Fall back to the recent-members list — for someone who has just joined. */
+  recentMembers?: boolean
 }): Promise<PeerWarmResult> => {
   if (await isCached(tg, params.userId)) return { source: 'cached', error: undefined }
   let error: unknown
@@ -94,6 +108,16 @@ export const warmPeer = async (tg: PeerWarmTransport, params: {
       const found = await tg.getChatMembers(params.chatId, { type: 'all', query: term, limit: MEMBER_SEARCH_LIMIT })
       if (found.some((m) => m.user.id === params.userId) && await isCached(tg, params.userId)) {
         return { source: 'members', error: undefined }
+      }
+    } catch (err) {
+      error ??= err
+    }
+  }
+  if (params.recentMembers === true && params.userId > 0) {
+    try {
+      const found = await tg.getChatMembers(params.chatId, { type: 'recent', limit: RECENT_MEMBERS_LIMIT })
+      if (found.some((m) => m.user.id === params.userId) && await isCached(tg, params.userId)) {
+        return { source: 'recent', error: undefined }
       }
     } catch (err) {
       error ??= err

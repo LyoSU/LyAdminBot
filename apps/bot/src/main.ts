@@ -4540,6 +4540,11 @@ const surfaceCohort = async (chatId: number, spammer: { id: number; displayName:
   }
   const members: number[] = []
   for (const sibling of cohortSiblings(spammerRow, rows.filter((r) => !onLiveCard.has(r.userId)))) {
+    // A sibling who joined before the last deploy is no longer addressable, and
+    // a newcomer who never wrote leaves nothing to recover it from but the
+    // member list — without this the membership check below and the ban both
+    // fail on it. The first call files the recent joiners; the rest read cached.
+    await warmPeer(gateway.tg, { chatId, userId: sibling.userId, messageId: null, recentMembers: true })
     const facts = await chatMemberFacts(chatId, sibling.userId)
     if (facts.isParticipant === false || facts.isAdmin || sibling.userId === selfId) continue
     // An admin's undo trusts the account (`ovr`), and a trusted one is never a suspect.
@@ -4624,9 +4629,19 @@ const banNewcomer = async (
   how: { ruleId: string; reasonCode: string; signals: Signal[]; meta: Record<string, string | number | boolean> },
   outcome: 'banned_by_admin' | 'removed'
 ): Promise<boolean> => {
-  if (userId === selfId || await isChatAdmin(chatId, userId)) return false
+  if (userId === selfId) return false
+  // Before the admin check, which asks Telegram by the same hash.
+  const peer = await warmPeer(gateway.tg, { chatId, userId, messageId: null, recentMembers: true })
+  if (await isChatAdmin(chatId, userId)) return false
   const banned = await gateway.moderationActions.ban(chatId, userId, TIMED_BAN_SECONDS)
-    .then(() => true).catch(() => false)
+    .then(() => true).catch((err: unknown) => {
+      // Until 2026-10-31 a refusal here was only a count in `cohort_auto`.
+      log.warn('newcomer_ban_failed', {
+        chatId, userId, rule: how.ruleId, error: telegramErrorName(err), peer: peer.source,
+        ...(peer.error === undefined ? {} : { peerError: telegramErrorName(peer.error) })
+      })
+      return false
+    })
   if (!banned) return false
   cohortSuspects.delete(`${chatId}:${userId}`)
   await dropGate(chatId, userId, how.ruleId)

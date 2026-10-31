@@ -95,6 +95,33 @@ describe('warmPeer', () => {
   })
 })
 
+describe('warmPeer — a newcomer with nothing to go on (2026-10-31)', () => {
+  it('finds a recent joiner in the recent-members list', async () => {
+    const { tg, getChatMembers } = makeTransport({ members: [7, USER] })
+    const res = await warmPeer(tg, { chatId: CHAT, userId: USER, messageId: null, recentMembers: true })
+    expect(res).toEqual({ source: 'recent', error: undefined })
+    expect(getChatMembers).toHaveBeenCalledWith(CHAT, { type: 'recent', limit: 200 })
+  })
+
+  it('files the whole list, so the next of a batch is already cached', async () => {
+    const { tg, getChatMembers } = makeTransport({ members: [USER, 9001] })
+    await warmPeer(tg, { chatId: CHAT, userId: USER, messageId: null, recentMembers: true })
+    const next = await warmPeer(tg, { chatId: CHAT, userId: 9001, messageId: null, recentMembers: true })
+    expect(next.source).toBe('cached')
+    expect(getChatMembers).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports the list failing, and never asks it unless told to', async () => {
+    const boom = new Error('CHAT_ADMIN_REQUIRED')
+    const failing = makeTransport({ membersThrows: boom })
+    expect(await warmPeer(failing.tg, { chatId: CHAT, userId: USER, messageId: null, recentMembers: true }))
+      .toEqual({ source: 'unresolved', error: boom })
+    const quiet = makeTransport({ members: [USER] })
+    await warmPeer(quiet.tg, { chatId: CHAT, userId: USER, messageId: null })
+    expect(quiet.getChatMembers).not.toHaveBeenCalled()
+  })
+})
+
 describe('memberSearchTerm', () => {
   it('takes the first word of any whitespace-separated name', () => {
     expect(memberSearchTerm('A\tB')).toBe('A')
