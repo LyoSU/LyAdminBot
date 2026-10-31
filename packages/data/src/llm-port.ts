@@ -285,6 +285,33 @@ const profileClass = (input: EvaluationInput): string => {
   return bio || businessTexts.some((t) => t.trim().length > 0) ? 'bio' : '-'
 }
 
+/**
+ * An edit known to have added nothing: no link, no mention, no invisible
+ * character. Such an edit is not said to the model and does not key a new
+ * question — the model cannot see what the earlier version said, so "this was
+ * edited" told it only that somebody pressed a button, and with a picture
+ * attached (never cached until 2026-10-31) the same message was asked twice
+ * and answered differently. An edit whose delta nobody remembered (`null`) is
+ * not bare: it may have added anything.
+ */
+const isBareEdit = (msg: EvaluationInput['message']): boolean => {
+  const d = msg.editDelta
+  return msg.isEdit && d !== null &&
+    d.injectedUrls === 0 && d.injectedMentions === 0 && d.injectedInvisibles === 0
+}
+
+/**
+ * Which picture the model was shown, by Telegram's identity of the stored file:
+ * equal only for the same upload, so a replaced photo is a new question and a
+ * re-sent one is not. Null when any attachment has no identity — then the
+ * picture cannot be named and the answer is not cached, as before.
+ */
+const pictureKeyOf = (input: EvaluationInput): string | null => {
+  const ids = input.message.attachments.map((a) => a.fileUniqueId)
+  if (ids.length === 0 || ids.some((id) => id === null)) return null
+  return (ids as string[]).sort().join(',')
+}
+
 export const contextDigest = (input: EvaluationInput): string => {
   const msg = input.message
   const links = msg.urls.map((u) => `${u.hidden ? 'h' : 'v'}:${u.target}`).sort().join(',')
@@ -310,7 +337,7 @@ export const contextDigest = (input: EvaluationInput): string => {
     msg.forward?.kind ?? '-',
     msg.attachments.map((a) => a.kind).sort().join(','),
     msg.guestBot ? 'guest' : '-',
-    msg.isEdit ? 'edit' : '-',
+    msg.isEdit && !isBareEdit(msg) ? 'edit' : '-',
     // Three states, not two. A channel comment has `replyTo: null`, so this slot
     // used to read '-' for it — identical to a standalone message, and identical
     // across comments under completely different posts. The post is quoted in
@@ -367,9 +394,14 @@ export const promptFingerprint = (): string =>
 export const cacheKeyFor = (
   model: string, input: EvaluationInput, observed?: MessageObservations
 ): string | null => {
-  // Photo bytes are not part of the key, so a verdict that looked at an image
-  // cannot be reused for anything.
-  if (input.enrichment.photoBase64 !== null) return null
+  /**
+   * A verdict that looked at a picture is reusable only for that picture. Until
+   * 2026-10-31 it was never reused at all, and over 14 days 65 pictures with the
+   * same text were put to the model more than once; 9 came back with opposite
+   * answers, 6 of those the same message asked again after an edit.
+   */
+  const picture = input.enrichment.photoBase64 !== null ? pictureKeyOf(input) : null
+  if (input.enrichment.photoBase64 !== null && picture === null) return null
 
   // Homoglyph rotation defeated this cache outright: seven visually identical
   // adverts differing by one substituted letter each were seven separate paid
@@ -390,7 +422,9 @@ export const cacheKeyFor = (
    * reasoning `contextDigest` already applies to standing.
    */
   const repeated = observed?.repetition ? 'rep' : '-'
-  return sha(`${model}:${promptFingerprint()}:${contextDigest(input)}:${repeated}:${keyText}`)
+  // Appended only with a picture, so every text-only key stays byte-identical.
+  const image = picture !== null ? `:img:${picture}` : ''
+  return sha(`${model}:${promptFingerprint()}:${contextDigest(input)}:${repeated}${image}:${keyText}`)
 }
 
 export class OpenRouterLlmPort implements LlmPort {
@@ -977,7 +1011,7 @@ export const buildUserContent = (
   if (msg.guestBot) {
     facts.push(`delivered by guest bot ${untrusted(`@${msg.guestBot.botUsername ?? msg.guestBot.botId}`, 34)}`)
   }
-  if (msg.isEdit) {
+  if (msg.isEdit && !isBareEdit(msg)) {
     const d = msg.editDelta
     const injected = d && (d.injectedUrls > 0 || d.injectedMentions > 0 || d.injectedInvisibles > 0)
       ? ` — the edit injected ${d.injectedUrls} url(s), ${d.injectedMentions} mention(s), ${d.injectedInvisibles} invisible char(s)`

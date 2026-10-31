@@ -426,6 +426,46 @@ describe('llm cache identity', () => {
   })
 })
 
+describe('llm cache — pictures and bare edits (2026-10-31)', () => {
+  const photo = (uid: string | null, o: { text?: string; isEdit?: boolean; delta?: { injectedUrls: number; injectedMentions: number; injectedInvisibles: number } | null } = {}) =>
+    makeInput({
+      msg: {
+        text: o.text ?? 'косплей', attachments: [{ kind: 'photo', fileUniqueId: uid }],
+        isEdit: o.isEdit ?? false, editDelta: o.delta ?? null
+      },
+      enrichment: { photoBase64: 'AAAA' }
+    })
+  const none = { injectedUrls: 0, injectedMentions: 0, injectedInvisibles: 0 }
+
+  it('the same picture with the same words is the same question', () => {
+    expect(cacheKeyFor('m', photo('u1'))).not.toBeNull()
+    expect(cacheKeyFor('m', photo('u1'))).toBe(cacheKeyFor('m', photo('u1')))
+  })
+
+  it('another picture, or the same one with other words, is not', () => {
+    expect(cacheKeyFor('m', photo('u2'))).not.toBe(cacheKeyFor('m', photo('u1')))
+    expect(cacheKeyFor('m', photo('u1', { text: 'інше' }))).not.toBe(cacheKeyFor('m', photo('u1')))
+  })
+
+  it('a picture that cannot be named is not cached', () => {
+    expect(cacheKeyFor('m', photo(null))).toBeNull()
+  })
+
+  it('a bare edit asks the question the original did', () => {
+    expect(cacheKeyFor('m', photo('u1', { isEdit: true, delta: none }))).toBe(cacheKeyFor('m', photo('u1')))
+    expect(asText(buildUserContent(photo('u1', { isEdit: true, delta: none }), 'C'))).not.toContain('EDIT')
+  })
+
+  it('an edit that added something, or one nobody remembered, is still its own question', () => {
+    const injected = photo('u1', { isEdit: true, delta: { ...none, injectedUrls: 1 } })
+    const unknown = photo('u1', { isEdit: true, delta: null })
+    expect(cacheKeyFor('m', injected)).not.toBe(cacheKeyFor('m', photo('u1')))
+    expect(cacheKeyFor('m', unknown)).not.toBe(cacheKeyFor('m', photo('u1')))
+    expect(asText(buildUserContent(injected, 'C'))).toContain('the edit injected 1 url(s)')
+    expect(asText(buildUserContent(unknown, 'C'))).toContain('this is an EDIT')
+  })
+})
+
 describe('buildSystemPrompt — quoted material belongs to someone else', () => {
   const unwrapped = (): string => buildSystemPrompt('C').replace(/\s+/g, ' ')
 
