@@ -335,6 +335,24 @@ describe('extractUserSignals — suspicious', () => {
       .toContain('promo_in_name')
   })
 
+  it('a handle beside other words is promo, wherever it sits (2026-10-31)', () => {
+    for (const displayName of ['tung @traiboy', '代发👉@xxin7👈Direct advertising', '@spamchan пиши']) {
+      expect(names(makeUser({ username: 'person', displayName })), displayName).toContain('promo_in_name')
+    }
+  })
+
+  it('not a nickname, an email or the own handle written short (2026-10-31)', () => {
+    for (const [displayName, username] of [
+      ['@Vovan', 'Vovancik82'], // own handle, short
+      ['@Furman', 'evgenio1994'], // the whole name is one nickname
+      ['Andrew @Doberman@', 'nstwhite'], // decoration between two @s
+      ['allan03@gmail.com', null], // an email address
+      ['Aung @7894321', null] // no handle starts with a digit
+    ] as const) {
+      expect(names(makeUser({ username, displayName })), displayName).not.toContain('promo_in_name')
+    }
+  })
+
   it('carries the offending fragment as evidence', () => {
     const signal = extractUserSignals(makeUser({ displayName: 'Робота t.me/+jobs' }))
       .find((s) => s.name === 'promo_in_name')

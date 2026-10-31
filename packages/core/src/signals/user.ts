@@ -228,8 +228,24 @@ const hasVolumeForStanding = (user: UserSnapshot): boolean =>
 const INVISIBLE_IN_NAME_REGEX =
   /[\u2060\u200B\u00AD\uFEFF\u202D\u202E\u180E]/
 
-/** A foreign @handle embedded in a display name (not the user's own). */
-const HANDLE_IN_NAME_REGEX = /@([a-z0-9_]{5,32})\b/gi
+/**
+ * A foreign @handle embedded in a display name (not the user's own), shaped as
+ * Telegram allows one: a letter first. Not the middle of an email address
+ * (a letter, digit, dot or underscore before the `@`), and not a word between
+ * two `@`s, which is decoration rather than an address.
+ */
+const HANDLE_IN_NAME_REGEX = /(?<![\p{L}\p{N}_.@])@([a-z][a-z0-9_]{4,31})(?![\p{L}\p{N}_@])/giu
+
+/**
+ * Whether a handle in the name is the account's own, written short or long:
+ * one is the start of the other (`@name` for `name1994`). The prefix is at
+ * least five characters, the shortest a handle can be.
+ */
+const isOwnHandle = (handle: string, own: string | null): boolean => {
+  if (own === null) return false
+  const h = handle.toLowerCase()
+  return h === own || own.startsWith(h) || h.startsWith(own)
+}
 
 /**
  * Promo carried by the identity itself — "Заробіток 💰 t.me/+abc" as a display
@@ -238,7 +254,12 @@ const HANDLE_IN_NAME_REGEX = /@([a-z0-9_]{5,32})\b/gi
  * sender is, not about the message, so scoring keeps it soft-shape.
  *
  * A handle matching the user's OWN username is ignored: duplicating your
- * handle into your display name is common and harmless.
+ * handle into your display name is common and harmless. So is a name that is
+ * nothing but one `@Nickname` — a nickname written the way handles are, with
+ * no words around it to advertise it. Measured 2026-10-31: of 23 accounts the
+ * signal fired on in 14 days, the three whose whole name was one handle, and
+ * the two whose name was an email address, all wrote ordinary messages;
+ * every advertised handle sat beside other words.
  */
 const findNamePromo = (user: UserSnapshot): string | null => {
   const ownHandle = user.username?.toLowerCase() ?? null
@@ -260,8 +281,10 @@ const findNamePromo = (user: UserSnapshot): string | null => {
       if (classifyUrl(token).kind === 'shortener') return token
     }
 
+    const wholeName = field.trim()
     for (const [, handle] of field.matchAll(HANDLE_IN_NAME_REGEX)) {
-      if (handle && handle.toLowerCase() !== ownHandle) return `@${handle}`
+      if (!handle || isOwnHandle(handle, ownHandle) || wholeName === `@${handle}`) continue
+      return `@${handle}`
     }
   }
   return null
