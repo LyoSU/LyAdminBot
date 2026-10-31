@@ -1112,6 +1112,18 @@ export const evaluateMessage = async (
   if (input.enrichment.personalChannelId !== null) {
     signals.push({ name: 'personal_channel' })
   }
+  // The same wordless file on a timer: the one repetition no text stage sees.
+  const cadence = input.enrichment.mediaCadence ?? null
+  if (cadence !== null) {
+    signals.push({
+      name: 'repeated_media_cadence',
+      evidence: `${cadence.copies} copies, every ~${cadence.meanGapSec}s (cv ${cadence.cv})`
+    })
+    // A picture sent on a timer is not a reaction, whatever it shows.
+    for (let i = signals.length - 1; i >= 0; i--) {
+      if (signals[i]!.name === 'media_only') signals.splice(i, 1)
+    }
+  }
   // Written in a script the chat does not use. Every stage below this line is
   // calibrated on the chat's own language, so against an alien script they are
   // all blind at once and none of their silences means anything.

@@ -3084,6 +3084,29 @@ export class MongoStore {
     return { times: [...first.values()], typed }
   }
 
+  /**
+   * When this sender posted copies of one message in this chat since `since`:
+   * the first decision row per message whose `editBaseline.contentKey` is
+   * `contentKey`, oldest first. Feeds `trailingMetronome` for wordless media.
+   */
+  async copyTimes(
+    chatId: number, userId: number, contentKey: string, since: Date, limit = 20
+  ): Promise<number[]> {
+    const docs = await this.decisions.find(
+      {
+        chatId, userId, createdAt: { $gte: since }, messageId: { $gt: 0 },
+        'editBaseline.contentKey': contentKey
+      },
+      { projection: { messageId: 1, createdAt: 1 }, sort: { createdAt: -1 }, limit }
+    ).toArray()
+    const first = new Map<number, number>()
+    for (const d of docs) {
+      const id = Number(d['messageId'])
+      if (d['createdAt'] instanceof Date) first.set(id, Math.min(first.get(id) ?? Infinity, d['createdAt'].getTime()))
+    }
+    return [...first.values()].sort((a, b) => a - b)
+  }
+
   async recentRestrictionsOf(userId: number, limit = 5): Promise<OwnRestriction[]> {
     const docs = await this.decisions.find(
       { userId, action: { $in: [...SENDER_REMOVAL_ACTIONS] }, 'execution.applied': true },

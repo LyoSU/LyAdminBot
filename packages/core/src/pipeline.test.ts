@@ -4329,6 +4329,38 @@ describe('evaluateMessage — the guest-bot caller is on the record', () => {
   })
 })
 
+describe('repeated_media_cadence — the same file on a timer (2026-10-31)', () => {
+  const sticker = [{ kind: 'sticker' as const, fileUniqueId: 'u1' }]
+  const cadence = { copies: 8, meanGapSec: 420, cv: 0.07 }
+  const names = (v: { signals: { name: string }[] }) => v.signals.map((s) => s.name)
+
+  it('is raised, and takes the reaction discount away', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { text: '', attachments: sticker }, user: newcomer, enrichment: { mediaCadence: cadence }
+    }), {})
+    expect(names(v)).toContain('repeated_media_cadence')
+    expect(names(v)).not.toContain('media_only')
+    expect(v.signals.find((s) => s.name === 'repeated_media_cadence')?.evidence).toBe('8 copies, every ~420s (cv 0.07)')
+  })
+
+  it('moves a newcomer\'s sticker out of the clean band, short of removing them', async () => {
+    const quiet = await evaluateMessage(makeInput({ msg: { text: '', attachments: sticker }, user: newcomer }), {})
+    const timed = await evaluateMessage(makeInput({
+      msg: { text: '', attachments: sticker }, user: newcomer, enrichment: { mediaCadence: cadence }
+    }), {})
+    expect(quiet.action).toBe('none')
+    expect(timed.action).not.toBe('none')
+    expect(['ban', 'kick', 'mute']).not.toContain(timed.action)
+  })
+
+  it('without a cadence nothing changes', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { text: '', attachments: sticker }, user: newcomer, enrichment: { mediaCadence: null }
+    }), {})
+    expect(names(v)).not.toContain('repeated_media_cadence')
+  })
+})
+
 describe('media_only discount is earned by a clean look', () => {
   const sticker = [{ kind: 'sticker' as const, fileUniqueId: 'u1' }]
   const run = (

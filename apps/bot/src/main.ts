@@ -21,7 +21,7 @@ import {
   accountScreenAllowed, accountScreenRemoves, accountScreenUnasked, hardVerdictSourceOf, PRESET_THRESHOLDS,
   captchaBlockers, TIMED_BAN_SECONDS, VOTE_WINDOW_SECONDS, LLM_CLEARANCE_TTL_MS, expiryOutcome,
   createProfileRecheckQueue, profileRecheckOutcome, wantsProfileRecheck,
-  PROFILE_RECHECK_DELAYS_MS, PROFILE_RECHECK_MAX_PENDING, metronomeShape, joinRequestVerdict,
+  PROFILE_RECHECK_DELAYS_MS, PROFILE_RECHECK_MAX_PENDING, metronomeShape, trailingMetronome, joinRequestVerdict,
   type AccountAction, type CaptchaBlocker,
   type BotStats, type ChannelPreview, type ChatStats, type EditBaseline, type EvaluationInput, type ForwardOrigin,
   type MediaCategory, type PipelinePorts, type Signal, type UserSnapshot, type Verdict, type VoteBallot
@@ -6315,6 +6315,20 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       )
     : buildChannelSnapshot(channelSender!, history)
 
+  /**
+   * A wordless message re-posted on a timer (`repeated_media_cadence`). Its
+   * own row is not written yet, so this delivery's instant joins the copies
+   * already recorded. One indexed read, and only for messages without words —
+   * the only ones `burst` and `velocity` cannot see.
+   */
+  const mediaCadence = normalized.text.length === 0 && normalized.attachments.length > 0 &&
+    typeof baselineNow.contentKey === 'string'
+    ? await store.copyTimes(chat.id, sender.id, baselineNow.contentKey, new Date(Date.now() - METRONOME_WINDOW_MS))
+      .then((times) => trailingMetronome([...times, Date.now()]))
+      .then((shape) => (shape === null ? null : { copies: shape.messages, meanGapSec: shape.meanGapSec, cv: shape.cv }))
+      .catch(() => null)
+    : null
+
   // Photo for LLM vision — only when a newish user posts media.
   //
   // The FIRST part's photo, for an album. The other parts' images are not sent
@@ -6541,7 +6555,8 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
        */
       avatarDhash: avatarBase64 === null ? null : avatarDhashOf(avatarBase64),
       storyBase64,
-      llmClearedAgoMs: userSender ? clearanceAgoMs(chat.id, userSender.id) : null
+      llmClearedAgoMs: userSender ? clearanceAgoMs(chat.id, userSender.id) : null,
+      mediaCadence
     }
   }
 

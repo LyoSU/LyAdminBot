@@ -386,6 +386,22 @@ export const SIGNALS = {
    */
   velocity_repeats: { weight: 1.5, kind: 'evidence' },
   /**
+   * The same wordless file, re-posted by this account on a steady timer: six
+   * or more copies, intervals of 20 s to an hour, spread under a quarter of
+   * their mean (`trailingMetronome`).
+   *
+   * The media twin of `velocity_repeats`, for what no text stage can see. Over
+   * the 14 days to 2026-10-31, of the accounts that re-sent one file at least
+   * six times: on that timer, 5 — none had ever written a word, none had been
+   * stopped; irregularly, 162 — 144 of them with ten or more clean text
+   * messages. People repeat a favourite sticker; they do not do it every seven
+   * minutes for hours. Firsthand, so `evidence`, and one notch under the
+   * sender-removal bar for the same reason as `velocity_repeats`: alone it
+   * takes the message down or asks a captcha, and a moderation hit on the
+   * picture is what makes it cost the chat.
+   */
+  repeated_media_cadence: { weight: 1.8, kind: 'evidence' },
+  /**
    * Several accounts posted the same text. Decisive about THIS message and
    * deliberately short of the bar for removing the person who sent it: the same
    * shape is produced by a coordinated campaign and by a line going round a

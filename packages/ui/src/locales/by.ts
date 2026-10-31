@@ -326,6 +326,7 @@ export const by: Locale = {
       signature_candidate_match: 'падобна на вядомы спам',
       vector_similar_spam: 'па змесце падобна на вядомы спам',
       velocity_repeats: 'той самы тэкст паўтараецца',
+      repeated_media_cadence: 'той самы файл адпраўляецца па таймеры',
       velocity_wave: 'той самы тэкст з некалькіх акаўнтаў',
       bot_mention: 'згадка бота',
       sender_burst: 'серыя паведамленняў ад аднаго акаўнта',

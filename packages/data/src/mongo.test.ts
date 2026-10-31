@@ -2590,3 +2590,30 @@ describe('repeatsOf — copies of the message a sender was removed for', () => {
     expect(finds).toHaveLength(0)
   })
 })
+
+describe('copyTimes — when the copies of one message arrived', () => {
+  it('returns the first sighting of each message, oldest first, keyed on the content', async () => {
+    const finds: Record<string, unknown>[] = []
+    const t = (m: number) => new Date(Date.UTC(2026, 9, 31, 15, m))
+    const store = Object.assign({
+      decisions: {
+        find: (filter: Record<string, unknown>) => {
+          finds.push(filter)
+          return {
+            toArray: async () => [
+              { messageId: 30, createdAt: t(21) },
+              { messageId: 20, createdAt: t(14) },
+              { messageId: 20, createdAt: t(15) },
+              { messageId: 10, createdAt: t(7) }
+            ]
+          }
+        }
+      }
+    }, { copyTimes: MongoStore.prototype.copyTimes }) as unknown as MongoStore
+    const since = t(0)
+    expect(await store.copyTimes(-100, 7, 'k1', since)).toEqual([t(7), t(14), t(21)].map((d) => d.getTime()))
+    expect(finds[0]).toEqual({
+      chatId: -100, userId: 7, createdAt: { $gte: since }, messageId: { $gt: 0 }, 'editBaseline.contentKey': 'k1'
+    })
+  })
+})

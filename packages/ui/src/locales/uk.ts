@@ -327,6 +327,7 @@ export const uk: Locale = {
       signature_candidate_match: 'схоже на відомий спам',
       vector_similar_spam: 'за змістом схоже на відомий спам',
       velocity_repeats: 'той самий текст повторюється',
+      repeated_media_cadence: 'той самий файл надсилається за таймером',
       velocity_wave: 'той самий текст із кількох акаунтів',
       bot_mention: 'згадка бота',
       sender_burst: 'серія повідомлень від одного акаунта',

@@ -30,6 +30,26 @@ export interface MetronomeShape {
  * Duplicate instants collapse first: an album or an edit is one act, not a
  * zero-length interval.
  */
+/**
+ * The cadence of the most recent unbroken run in `times`, or null.
+ *
+ * `metronomeShape` reads the whole series, so one gap outside the bounds — a
+ * pause for lunch, an hour off — voids hours of a perfectly steady timer. A
+ * script that keeps posting is judged on what it is doing now: walk back from
+ * the newest copy while each interval stays inside the bounds, and read only
+ * that run.
+ */
+export const trailingMetronome = (times: readonly number[]): MetronomeShape | null => {
+  const sorted = [...new Set(times)].sort((a, b) => a - b)
+  let start = sorted.length - 1
+  while (start > 0) {
+    const gap = sorted[start]! - sorted[start - 1]!
+    if (gap < METRONOME_MIN_GAP_MS || gap > METRONOME_MAX_GAP_MS) break
+    start--
+  }
+  return metronomeShape(sorted.slice(start))
+}
+
 export const metronomeShape = (times: readonly number[]): MetronomeShape | null => {
   const sorted = [...new Set(times)].sort((a, b) => a - b)
   if (sorted.length < METRONOME_MIN_MESSAGES) return null

@@ -442,6 +442,12 @@ export interface Enrichment {
    * skip the call when there is nothing new to read — see `LLM_CLEARANCE_TTL_MS`.
    */
   llmClearedAgoMs?: number | null
+  /**
+   * The sender re-posting this very wordless message (same file) on a steady
+   * timer in this chat — see `trailingMetronome`. Null when it is not, or when
+   * the message has words. Read from the decision rows by the app layer.
+   */
+  mediaCadence?: { copies: number; meanGapSec: number; cv: number } | null
 }
 
 // ─────────────────────── chat policy ───────────────────────

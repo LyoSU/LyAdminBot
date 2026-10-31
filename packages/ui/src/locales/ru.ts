@@ -326,6 +326,7 @@ export const ru: Locale = {
       signature_candidate_match: 'похоже на известный спам',
       vector_similar_spam: 'по смыслу похоже на известный спам',
       velocity_repeats: 'тот же текст повторяется',
+      repeated_media_cadence: 'тот же файл отправляется по таймеру',
       velocity_wave: 'тот же текст с нескольких аккаунтов',
       bot_mention: 'упоминание бота',
       sender_burst: 'серия сообщений от одного аккаунта',

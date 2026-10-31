@@ -312,6 +312,7 @@ export const tr: Locale = {
       signature_candidate_match: 'bilinen spama benziyor',
       vector_similar_spam: 'anlamca bilinen spama benziyor',
       velocity_repeats: 'aynı metin tekrar tekrar gönderildi',
+      repeated_media_cadence: 'aynı dosya zamanlayıcıyla tekrar gönderildi',
       velocity_wave: 'aynı metin birkaç hesaptan',
       bot_mention: 'mesajda bir bottan bahsediliyor',
       sender_burst: 'tek hesaptan gelen mesaj dizisi',

@@ -317,6 +317,7 @@ export const en: Locale = {
       signature_candidate_match: 'resembles known spam',
       vector_similar_spam: 'similar in meaning to known spam',
       velocity_repeats: 'same text posted repeatedly',
+      repeated_media_cadence: 'same file posted on a timer',
       velocity_wave: 'same text from several accounts',
       bot_mention: 'mentions a bot',
       sender_burst: 'a burst of messages from one account',
