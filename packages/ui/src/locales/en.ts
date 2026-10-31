@@ -33,7 +33,7 @@ export const en: Locale = {
     ].join('\n'),
     liveProof: (chats, spammers, days) =>
       `📊 Right now I guard <b>${n(chats)}</b> chat${s(chats)}: <b>${n(spammers)}</b> spammer${s(spammers)} blocked in ${days} day${s(days)}.`,
-    groupHint: '🛡 I catch spam and ban scammers.\n<code>/settings</code> for admins · <code>/stats</code> numbers · <code>/help</code> commands',
+    groupHint: '🛡 I catch spam and ban scammers.\n<code>/settings</code> for admins, <code>/stats</code> numbers, <code>/help</code> commands',
     addToGroupButton: '➕ Add to group',
     helpButton: '❓ Commands',
     langButton: '🌐 Language'
@@ -71,8 +71,8 @@ export const en: Locale = {
         : done === total
           ? `🚫 Banned ${done} newcomer${s(done)} who joined alongside the spammer`
           : `🚫 Banned ${done} of ${total} newcomers who joined alongside the spammer, could not ban the rest`)
-      + ` · admin's call: ${admin}`,
-    kept: (admin) => `✅ The newcomers who joined alongside the spammer stay in the chat · admin's call: ${admin}`,
+      + `. Admin's call: ${admin}`,
+    kept: (admin) => `✅ The newcomers who joined alongside the spammer stay in the chat. Admin's call: ${admin}`,
     expired: 'This card is out of date.'
   },
 
@@ -96,7 +96,7 @@ export const en: Locale = {
       'If I got it wrong, write to an admin of that chat: an admin can undo it with one tap.',
       'Time-limited restrictions end on their own.'
     ].join('\n'),
-    whyButton: (n) => `Why? · ${n}`
+    whyButton: (n) => `${n}. Why?`
   },
 
   helpText: [
@@ -106,14 +106,17 @@ export const en: Locale = {
     '<b>Everyone:</b>',
     '/report — report spam (as a reply, or /report @username or id)',
     '/stats — how much spam I have caught',
-    '/mystats — my stats · /top, /top_banan — leaderboards',
+    '/mystats — my stats',
+    '/top, /top_banan — leaderboards',
     '/lang — language',
     '',
     '<b>Admins:</b>',
     '/settings — settings panel (opens in a private chat, everything there is buttons)',
     '/banan /kick /del — moderation as a reply',
-    '/check — user card with a trust button · /untrust — revoke trust',
-    '/welcome — newcomer greeting · /extra, /extras — triggers',
+    '/check — user card with a trust button',
+    '/untrust — revoke trust',
+    '/welcome — newcomer greeting',
+    '/extra, /extras — triggers',
     '',
     'Every notice carries a <b>why?</b> link with the full decision card. Admins also get the <b>“✅ Not spam”</b> button: it undoes the decision and adds the person to this chat’s trusted list.'
   ].join('\n'),
@@ -158,7 +161,7 @@ export const en: Locale = {
   },
 
   notification: {
-    compact: (action, userLabel) => `${action} · ${userLabel}`,
+    compact: (action, userLabel) => `${action}: ${userLabel}`,
     repeats: (count) => `${count} message${s(count)}`,
     whyLink: 'why?',
     whyButton: 'ℹ️ Why?',
@@ -231,20 +234,20 @@ export const en: Locale = {
     title: '🛡 The bot is only watching',
     inChat: (chatTitle) => `in ${chatTitle}`,
     confidence: {
-      high: (percent) => `🔴 Very likely spam · bot’s estimate ${percent}%`,
-      medium: (percent) => `🟠 Probably spam · bot’s estimate ${percent}%`,
-      low: (percent) => `🟡 Possibly spam · bot’s estimate ${percent}%`
+      high: (percent) => `🔴 Very likely spam (bot’s estimate ${percent}%)`,
+      medium: (percent) => `🟠 Probably spam (bot’s estimate ${percent}%)`,
+      low: (percent) => `🟡 Possibly spam (bot’s estimate ${percent}%)`
     },
     noticedTitle: 'What I noticed:',
     profileReuseEvidence: (accounts) =>
       `same profile photo on ${accounts} other ${accounts === 1 ? 'account' : 'accounts'}`,
     // The pipeline writes the model's 0..1 score; the card shows percents.
-    profileMediaEvidence: (score) => `explicit profile photo · score ${Math.round(Number(score) * 100)}%`,
+    profileMediaEvidence: (score) => `explicit profile photo, score ${Math.round(Number(score) * 100)}%`,
     externalBanEvidence: (sources, when) => [
       'in spam databases',
       ...(sources > 1 ? [`${sources} sources`] : []),
       ...(when ? [ago(when)] : [])
-    ].join(' · '),
+    ].join(', '),
     signalLabels: {
       external_ban: 'the account is in spam databases',
       external_repeat_offender: 'listed in spam databases more than once',
@@ -346,14 +349,14 @@ export const en: Locale = {
       [
         ...(messages === null ? [] : [`${messages} message${messages === 1 ? '' : 's'}`]),
         `${chats} chat${chats === 1 ? '' : 's'}`
-      ].join(' · '),
+      ].join(', '),
     reputation: (status) => `reputation: ${status}`,
     premium: 'Premium',
     externalBan: (when, offenses) => [
       'in spam databases',
       ...(when ? [`banned ${ago(when)}`] : []),
       ...(offenses > 1 ? [`${offenses} offences`] : [])
-    ].join(' · '),
+    ].join(', '),
     justJoined: (span) => (span === NOW ? 'joined the chat just now' : `in the chat only ${span}`),
     promoInBio: 'promo in bio',
     personalChannel: 'linked channel',
@@ -367,14 +370,14 @@ export const en: Locale = {
   vote: {
     prompt: ({ userLabel, textPreview, media, whyLink }) =>
       `🤔 <b>Is this spam?</b> Posted by ${userLabel}`
-      + (media ? ` · 📎 ${media}` : '')
-      + (whyLink ? ` · ${whyLink}` : '')
+      + (media ? `, 📎 ${media}` : '')
+      + (whyLink ? ` (${whyLink})` : '')
       + `\n${textPreview}`,
     promptNoText: (userLabel, what, whyLink) =>
       (what
-        ? `🤔 <b>Is this spam?</b> Posted by ${userLabel} · no text, just ${withArticle(what)}`
-        : `🤔 <b>Is this spam?</b> Posted by ${userLabel} · no text`)
-      + (whyLink ? ` · ${whyLink}` : ''),
+        ? `🤔 <b>Is this spam?</b> Posted by ${userLabel}. No text, just ${withArticle(what)}`
+        : `🤔 <b>Is this spam?</b> Posted by ${userLabel}. No text`)
+      + (whyLink ? ` (${whyLink})` : ''),
     media: {
       photo: 'photo', sticker: 'sticker', video: 'video',
       voice: 'voice or audio message', file: 'file', other: 'attachment'
@@ -390,16 +393,14 @@ export const en: Locale = {
       failed: '⚠️ Could neither delete the message nor restrict the author.'
     },
     resolvedSpam: ({ who, enforcement, whyLink }) =>
-      '🗑 The community decided: spam' + (who ? `. Posted by ${who}` : '')
-      + (enforcement ? `. ${enforcement}` : '')
-      + (whyLink ? ` · ${whyLink}` : ''),
+      '🗑 The community decided: spam' + (whyLink ? ` (${whyLink})` : '') + (who ? `. Posted by ${who}` : '')
+      + (enforcement ? `. ${enforcement}` : ''),
     resolvedHam: ({ who, whyLink }) =>
-      '✅ The community decided: not spam' + (who ? `. Posted by ${who}` : '')
-      + (whyLink ? ` · ${whyLink}` : ''),
+      '✅ The community decided: not spam' + (whyLink ? ` (${whyLink})` : '') + (who ? `. Posted by ${who}` : ''),
     alreadyEnded: 'This vote is already closed.',
     voters: {
       button: '👥 Who voted',
-      title: (spam, ham) => `👥 <b>Vote</b> · spam ${spam} : ${ham} not spam`,
+      title: (spam, ham) => `👥 <b>Vote:</b> spam ${spam}, not spam ${ham}`,
       spamGroup: '🗑 Spam',
       hamGroup: '✅ Not spam',
       adminMark: 'admin',
@@ -439,7 +440,7 @@ export const en: Locale = {
     corrections: (percent) => `✅ Admins overturned ${decimal1(percent, '.')}% of my decisions`,
     chatHeader: (title, days) => `🛡 <b>${title}</b> over ${days} day${s(days)}`,
     chatLine: (checked, spammers, deletes) =>
-      `📬 ${n(checked)} checked · 🚫 ${n(spammers)} spammer${s(spammers)} · 🧹 ${n(deletes)} removed`,
+      `📬 ${n(checked)} checked, 🚫 ${n(spammers)} spammer${s(spammers)}, 🧹 ${n(deletes)} removed`,
     chatLastSpam: (span) => `Last spam: ${ago(span)}`,
     chatClean: '✨ The bot found no spam in that time.',
     unavailable: '📊 I cannot show the numbers right now. Try again a bit later.',
@@ -483,8 +484,8 @@ export const en: Locale = {
     removed: 'Trust revoked.',
     grantedBy: (who, span, via) =>
       `✅ Trusted by ${who}, ${ago(span)}` +
-      (via === 'override' ? ' · reversed a bot decision' : via === 'vote' ? ' · by an admin’s vote' : ''),
-    grantUnknown: '✅ Trusted · who granted it and when was not recorded'
+      (via === 'override' ? ' (reversed a bot decision)' : via === 'vote' ? ' (by an admin’s vote)' : ''),
+    grantUnknown: '✅ Trusted (who granted it and when was not recorded)'
   },
 
   welcome: {
@@ -505,7 +506,7 @@ export const en: Locale = {
     defaultGreeting: (name) => `👋 Welcome, ${name}!`,
     editor: {
       title: (state, nTexts, nGifs) =>
-        `👋 <b>Newcomer greeting</b>\n\nStatus: ${state}\nTexts: ${nTexts} · GIFs: ${nGifs}\n\nIf there are several, the bot picks one at random each time.`,
+        `👋 <b>Newcomer greeting</b>\n\nStatus: ${state}\nTexts: ${nTexts}, GIFs: ${nGifs}\n\nIf there are several, the bot picks one at random each time.`,
       enable: '🔔 Enable',
       disable: '🔕 Disable',
       texts: (n) => `📝 Texts (${n})`,

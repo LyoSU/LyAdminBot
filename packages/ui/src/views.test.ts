@@ -15,7 +15,7 @@ const target = { chatId: -100123, messageId: 7, userId: 42, userLabel: 'Іван
 describe('compactNotification', () => {
   it('is exactly one line with two buttons', () => {
     const view = compactNotification(uk, makeVerdict(), target)
-    expect(view.text).toBe('🔇 мут · <a href="tg://user?id=42">Іван</a>')
+    expect(view.text).toBe('🔇 мут: <a href="tg://user?id=42">Іван</a>')
     expect(view.text).not.toContain('\n')
     expect(view.buttons[0]).toHaveLength(2)
   })
@@ -89,7 +89,7 @@ describe('compactNotification', () => {
 
   it('the inline link sits after the repeat count, and the count names what it counts', () => {
     const view = compactNotification(uk, makeVerdict(), target, { botUsername: 'LyAdminBot', incidentCount: 4 })
-    expect(view.text).toMatch(/ · 4 повідомлення · <a href=/)
+    expect(view.text).toMatch(/: <a href="tg:\/\/user\?id=42">Іван<\/a>, 4 повідомлення \(<a href=/)
     expect(view.text).not.toContain('×')
     for (const [n, word] of [[2, 'повідомлення'], [5, 'повідомлень'], [21, 'повідомлення'], [11, 'повідомлень']] as const) {
       expect(uk.notification.repeats(n)).toBe(`${n} ${word}`)
@@ -173,7 +173,7 @@ describe('whyCard', () => {
       signals: [{ name: 'external_ban' }],
       reasonEvidence: 'external_ban:2:4'
     }), target, { canOverride: true })
-    expect(view.text).toContain('<blockquote>у спам-базах · 2 джерела · 4д тому</blockquote>')
+    expect(view.text).toContain('<blockquote>у спам-базах, 2 джерела, 4д тому</blockquote>')
     expect(view.text).not.toMatch(/lols|cas/i)
   })
 
@@ -218,7 +218,7 @@ describe('whyCard', () => {
       canOverride: true, chatTitle: 'Наш чат'
     })
     const lines = view.text.split('\n').filter((l) => l !== '')
-    expect(lines[0]).toBe(`<b>${uk.actions.delete} · <a href="tg://user?id=42">Іван</a></b>`)
+    expect(lines[0]).toBe(`<b>${uk.actions.delete}: <a href="tg://user?id=42">Іван</a></b>`)
     expect(lines[1]).toBe('<i>у чаті Наш чат</i>')
     // Evidence above the confidence line — the reader judges the text first.
     expect(view.text.indexOf('<blockquote>')).toBeLessThan(view.text.indexOf('93%'))
@@ -231,7 +231,7 @@ describe('whyCard', () => {
     expect(month.text.split('\n')[0]).toContain('1міс')
     // No duration on the verdict → the bare action, never a stray "0".
     const plain = whyCard(uk, makeVerdict({ action: 'mute' }), target, { canOverride: true })
-    expect(plain.text.split('\n')[0]).toBe(`<b>${uk.actions.mute} · <a href="tg://user?id=42">Іван</a></b>`)
+    expect(plain.text.split('\n')[0]).toBe(`<b>${uk.actions.mute}: <a href="tg://user?id=42">Іван</a></b>`)
   })
 
   it('names the chat only when it was given one', () => {
@@ -335,11 +335,11 @@ describe('userProfileLines', () => {
   it('declines the counts it prints (a card that writes "1 чатів" reads as a machine)', () => {
     const line = (m: number, c: number): string =>
       userProfileLines(uk, facts({ messagesGlobal: m, groupsActive: c })).join('\n')
-    expect(line(1, 1)).toContain('1 повідомлення · 1 чат')
-    expect(line(3, 2)).toContain('3 повідомлення · 2 чати')
-    expect(line(26, 8)).toContain('26 повідомлень · 8 чатів')
+    expect(line(1, 1)).toContain('1 повідомлення, 1 чат')
+    expect(line(3, 2)).toContain('3 повідомлення, 2 чати')
+    expect(line(26, 8)).toContain('26 повідомлень, 8 чатів')
     // The teens all take the many form, however they end.
-    expect(line(11, 21)).toContain('11 повідомлень · 21 чат')
+    expect(line(11, 21)).toContain('11 повідомлень, 21 чат')
   })
 
   it('humanizes spans (account ~years, just-joined minutes)', () => {
@@ -709,7 +709,7 @@ describe('votePrompt', () => {
       chatId: -1, messageId: 1, userLabel: 'Іра', textPreview: '', media: null
     }, { spam: 0, ham: 0, outcome: 'pending' })
     expect(view.text).not.toContain('""')
-    expect(view.text).toContain('без тексту')
+    expect(view.text).toContain('Без тексту')
   })
 
   it('names the medium alongside the text, not only instead of it', () => {
@@ -798,7 +798,7 @@ describe('votePrompt', () => {
       chatId: -1, messageId: 1, userLabel: 'Іра', textPreview: 'https://evil.example/a'
     }, { spam: 0, ham: 0, outcome: 'pending' })
     expect(view.text).toContain('<blockquote')
-    expect(view.text).not.toContain('без тексту')
+    expect(view.text).not.toMatch(/без тексту/i)
     expect(view.text).not.toContain('evil.example')
   })
 
@@ -2033,12 +2033,12 @@ describe('uk never declines a substituted name', () => {
     expect(uk.vote.resolvedSpam({ who: NAME, enforcement: null, whyLink: null })).toBe(`🗑 Спільнота вирішила: спам. Автор: ${NAME}`)
     expect(uk.vote.resolvedSpam({ who: NAME, enforcement: uk.vote.enforcement.done, whyLink: null }))
       .toBe(`🗑 Спільнота вирішила: спам. Автор: ${NAME}. ${uk.vote.enforcement.done}`)
-    expect(uk.vote.resolvedHam({ who: NAME, whyLink: 'за що?' })).toBe(`✅ Спільнота вирішила: не спам. Автор: ${NAME} · за що?`)
+    expect(uk.vote.resolvedHam({ who: NAME, whyLink: 'за що?' })).toBe(`✅ Спільнота вирішила: не спам (за що?). Автор: ${NAME}`)
     expect(uk.cohort.title(1, NAME)).toContain(`\nСпамер: ${NAME}`)
   })
 
-  it('a no-text ballot does not leave a full stop before the "· за що?" link', () => {
-    expect(uk.vote.promptNoText(NAME, 'стікер', 'за що?')).not.toContain('. ·')
+  it('a no-text ballot does not leave a full stop before the "(за що?)" link', () => {
+    expect(uk.vote.promptNoText(NAME, 'стікер', 'за що?')).not.toContain('. (')
   })
 })
 
@@ -2069,7 +2069,7 @@ describe('uk second copy audit', () => {
   })
 
   it('the confidence line says the percent is the bot\'s estimate', () => {
-    expect(uk.why.confidence.high(94)).toBe('🔴 Дуже схоже на спам · оцінка бота 94%')
+    expect(uk.why.confidence.high(94)).toBe('🔴 Дуже схоже на спам (оцінка бота 94%)')
     expect(whyView(uk, makeVerdict())).toContain('оцінка бота 93%')
   })
 
@@ -2100,16 +2100,16 @@ describe('uk second copy audit', () => {
   it('cohort.banned: the count follows a colon, so no noun has to agree with it', () => {
     for (const n of [1, 2, 5, 11, 21, 22]) {
       const text = uk.cohort.banned(n, n, 'Адмін')
-      expect(text, `n=${n}`).toBe(`🚫 Забанено новачків, що прийшли разом зі спамером: ${n} · рішення адміна Адмін`)
+      expect(text, `n=${n}`).toBe(`🚫 Забанено новачків, що прийшли разом зі спамером: ${n}. Рішення адміна: Адмін`)
       expect(text, `n=${n}`).not.toMatch(/\d+ новачк/)
     }
   })
 
-  it('cohort results name the deciding admin by role, never as a bare name after "·"', () => {
+  it('cohort results name the deciding admin by role, never as a bare name', () => {
     for (const locale of Object.values(LOCALES)) {
       const c = locale.cohort
       for (const text of [c.banned(3, 3, 'ADM'), c.banned(2, 3, 'ADM'), c.banned(0, 3, 'ADM'), c.kept('ADM')]) {
-        expect(text).not.toMatch(/· ADM$/)
+        expect(text).not.toMatch(/·/)
         expect(text).toMatch(/ADM$/)
       }
       // A full ban states the count alone; "N of N" reads as a riddle.
@@ -2190,8 +2190,8 @@ describe('ru, by, en and tr mirror the second uk copy audit', () => {
     ]) expect(text).toMatch(new RegExp(`(: |Posted by )${NAME}`))
     expect(L.vote.resolvedSpam({ who: NAME, enforcement: L.vote.enforcement.done, whyLink: null }))
       .toMatch(new RegExp(`(: |Posted by )${NAME}\\. ${L.vote.enforcement.done}$`))
-    expect(L.vote.resolvedHam({ who: NAME, whyLink: 'w' })).toMatch(new RegExp(`(: |Posted by )${NAME} · w$`))
-    expect(L.vote.promptNoText(NAME, 'x', 'w')).not.toContain('. ·')
+    expect(L.vote.resolvedHam({ who: NAME, whyLink: 'w' })).toMatch(new RegExp(` \\(w\\)\\. [^.]*(: |Posted by )${NAME}$`))
+    expect(L.vote.promptNoText(NAME, 'x', 'w')).not.toContain('. (')
   })
 
   it('en puts the right article before the media noun', () => {

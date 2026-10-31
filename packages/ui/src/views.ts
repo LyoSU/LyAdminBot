@@ -197,7 +197,7 @@ export const ownRestrictionsView = (
   const lines = [o.title, '']
   shown.forEach((entry, i) => {
     const where = escapeHtml(entry.chatTitle ?? o.unknownChat)
-    lines.push(`${i + 1}. <b>${escapeHtml(locale.actions[entry.action])}</b> · ${where}`)
+    lines.push(`${i + 1}. <b>${escapeHtml(locale.actions[entry.action])}</b>, ${where}`)
     const state = entry.overturned
       ? o.overturned
       : entry.action === 'kick'
@@ -210,7 +210,7 @@ export const ownRestrictionsView = (
             })()
     const ago = o.ago(humanSpan(locale, Math.max(0, (options.now - entry.at.getTime()) / 1000)))
     const detail = [reasonText(locale, entry.reasonCode), ago, ...(state === null ? [] : [state])]
-    lines.push(`<i>${escapeHtml(detail.join(' · '))}</i>`)
+    lines.push(`<i>${escapeHtml(detail.join(', '))}</i>`)
   })
   lines.push('', escapeHtml(o.footer))
 
@@ -320,7 +320,7 @@ export const chatArrivalsView = (
       : null
     const spoke = entry.messagesInChat === null ? null : entry.messagesInChat === 0 ? a.silent : a.spoke(entry.messagesInChat)
     const detail = [ago, ...(spoke ? [spoke] : []), ...(outcome ? [outcome] : []), ...(entry.suspect ? [a.suspect] : [])]
-    lines.push(`<i>${escapeHtml(detail.join(' · '))}</i>`)
+    lines.push(`<i>${escapeHtml(detail.join(', '))}</i>`)
   })
   lines.push('', escapeHtml(a.footer))
 
@@ -375,10 +375,10 @@ export const chatActionsView = (
   const lines = [locale.chatActions.title, '']
   shown.forEach((entry, i) => {
     const who = escapeHtml(entry.userLabel ?? locale.hiddenName(entry.userId))
-    lines.push(`${i + 1}. <b>${escapeHtml(locale.actions[entry.action])}</b> · ${who}`)
+    lines.push(`${i + 1}. <b>${escapeHtml(locale.actions[entry.action])}</b>: ${who}`)
     const ago = o.ago(humanSpan(locale, Math.max(0, (options.now - entry.at.getTime()) / 1000)))
     const detail = [reasonText(locale, entry.reasonCode), ago, ...(entry.overturned ? [o.overturned] : [])]
-    lines.push(`<i>${escapeHtml(detail.join(' · '))}</i>`)
+    lines.push(`<i>${escapeHtml(detail.join(', '))}</i>`)
   })
   lines.push('', escapeHtml(locale.chatActions.footer))
 
@@ -563,7 +563,7 @@ export const compactNotification = (
   }
   const repeats = options.incidentCount ?? 1
   const line = locale.notification.compact(locale.actions[action], subjectMention(locale, target.userId, target.userLabel, nameIsPromo(verdict))) +
-    (repeats > 1 ? ` · ${locale.notification.repeats(repeats)}` : '')
+    (repeats > 1 ? `, ${locale.notification.repeats(repeats)}` : '')
   if (!options.botUsername) {
     return {
       text: line,
@@ -575,7 +575,7 @@ export const compactNotification = (
   }
   const url = whyDeepLink(options.botUsername, target.chatId, target.messageId, target.userId)
   return {
-    text: `${line} · <a href="${url}">${locale.notification.whyLink}</a>`,
+    text: `${line} (<a href="${url}">${locale.notification.whyLink}</a>)`,
     buttons: [[notSpam]]
   }
 }
@@ -588,7 +588,7 @@ export interface WhyOptions {
    */
   html?: boolean
   /**
-   * Append the technical footer (decidedBy · ruleId + raw signal codes).
+   * Append the technical footer (decidedBy, ruleId + raw signal codes).
    * Admins only — it is developer-facing noise for everyone else.
    */
   technical?: boolean
@@ -823,7 +823,7 @@ export const whyView = (locale: Locale, verdict: Verdict, options: WhyOptions = 
       : nameIsPromo(verdict) && typeof context.userId === 'number'
         ? locale.hiddenName(context.userId)
         : context.userLabel
-  lines.push(who === null ? b(esc(headline)) : b(`${esc(headline)} · ${who}`))
+  lines.push(who === null ? b(esc(headline)) : b(`${esc(headline)}: ${who}`))
   if (context.chatTitle) lines.push(dim(esc(locale.why.inChat(context.chatTitle))))
 
   // The evidence, before our reading of it. `truncate` rather than `.slice`:
@@ -864,7 +864,7 @@ export const whyView = (locale: Locale, verdict: Verdict, options: WhyOptions = 
      * Only a lowercase ASCII marker at the very start, so it cannot reach a
      * quoted fragment, a URL, or anything anybody typed.
      */
-    const evidence = whole ?? (named === null ? raw : `${named} · ${raw.replace(/^[a-z]+:\s+/, '')}`)
+    const evidence = whole ?? (named === null ? raw : `${named}: ${raw.replace(/^[a-z]+:\s+/, '')}`)
     const quote = esc(truncate(evidence, 300))
     lines.push('', asHtml ? quoteBlock(quote) : `"${quote}"`)
   }
@@ -951,7 +951,7 @@ export const whyTechnicalFooter = (
   const dim = asHtml ? (s: string): string => `<i>${s}</i>` : (s: string): string => s
   const decidedBy = locale.why.decidedBy[verdict.decidedBy] ?? verdict.decidedBy
   const codes = verdict.signals.map((s) => s.name).filter(isSuspicionSignal).slice(0, 8)
-  const lines = [dim(esc(`${decidedBy}${verdict.ruleId ? ` · ${verdict.ruleId}` : ''}`))]
+  const lines = [dim(esc(`${decidedBy}${verdict.ruleId ? `, ${verdict.ruleId}` : ''}`))]
   if (codes.length > 0) lines.push(dim(esc(codes.join(', '))))
   return lines.join('\n')
 }
@@ -1013,14 +1013,14 @@ export const userProfileLines = (locale: Locale, facts: UserFacts, options: { ht
   // two similarly named accounts is exactly what /check is opened for.
   const handle = facts.username
     ? asHtml
-      ? ` · <a href="https://t.me/${encodeURIComponent(facts.username)}">@${escapeHtml(facts.username)}</a>`
-      : ` · @${facts.username}`
+      ? `, <a href="https://t.me/${encodeURIComponent(facts.username)}">@${escapeHtml(facts.username)}</a>`
+      : `, @${facts.username}`
     : ''
   if (facts.displayName) {
     const named = asHtml
       ? userMention(facts.userId, facts.displayName)
       : escapeHtml(facts.displayName)
-    lines.push(`👤 ${asHtml ? `<b>${named}</b>` : b(named)}${handle} · ${code(String(facts.userId))}`)
+    lines.push(`👤 ${asHtml ? `<b>${named}</b>` : b(named)}${handle}, ${code(String(facts.userId))}`)
   } else {
     lines.push(b(p.title))
     lines.push(`${code(String(facts.userId))}${handle}`)
@@ -1036,7 +1036,7 @@ export const userProfileLines = (locale: Locale, facts: UserFacts, options: { ht
     facts.joinedAgoSeconds ?? 0
   )
   const seen = tenureSeconds > 0 ? humanSpan(locale, tenureSeconds) : p.neverSeen
-  lines.push(`${p.accountAge(age)} · ${p.firstSeen(seen)}`)
+  lines.push(`${p.accountAge(age)}, ${p.firstSeen(seen)}`)
 
   // Activity and reputation on one line: they answer the same question ("is
   // this a member or an arrival?"), and every line spent here is a line the
@@ -1045,7 +1045,7 @@ export const userProfileLines = (locale: Locale, facts: UserFacts, options: { ht
     p.activity(facts.messagesGlobal, facts.groupsActive),
     p.reputation(locale.stats.repStatus[facts.reputationStatus]),
     ...(facts.premium ? [p.premium] : [])
-  ].join(' · '))
+  ].join(', '))
 
   // Risk flags grouped under a blank line, so the "who" block reads apart
   // from the "what's wrong" block.
@@ -1068,7 +1068,7 @@ export const userProfileLines = (locale: Locale, facts: UserFacts, options: { ht
   const extras: string[] = []
   if (facts.promoInBio) extras.push(p.promoInBio)
   if (facts.personalChannel) extras.push(p.personalChannel)
-  if (extras.length > 0) risk.push(`⚠️ ${extras.join(' · ')}`)
+  if (extras.length > 0) risk.push(`⚠️ ${extras.join(', ')}`)
 
   if (risk.length > 0) lines.push('', ...risk)
 
@@ -1201,7 +1201,7 @@ export const topList = (
     const name = e.username && USERNAME_RE.test(e.username)
       ? `<a href="https://t.me/${e.username}">${escapeHtml(e.name)}</a>`
       : escapeHtml(e.name)
-    return `${badge} ${name} · ${e.value} ${unit(e.value)}`
+    return `${badge} ${name}: ${e.value} ${unit(e.value)}`
   })
   return { text: [title, '', ...lines].join('\n'), buttons: [] }
 }
@@ -1260,10 +1260,10 @@ export const settingsPanel = (locale: Locale, chatId: number, state: SettingsSta
   const onOff = (v: boolean): string => (v ? locale.settings.on : locale.settings.off)
   const presetLabel = locale.settings.presets[state.preset]
   const mark = (preset: SettingsState['preset']): string =>
-    state.preset === preset ? `· ${locale.settings.presets[preset]} ·` : locale.settings.presets[preset]
+    state.preset === preset ? `✓ ${locale.settings.presets[preset]}` : locale.settings.presets[preset]
 
   const bananRow: ButtonSpec[] = BANAN_PRESETS.map((sec) => ({
-    text: state.bananDefaultSeconds === sec ? `· ${bananLabel(locale, sec)} ·` : bananLabel(locale, sec),
+    text: state.bananDefaultSeconds === sec ? `✓ ${bananLabel(locale, sec)}` : bananLabel(locale, sec),
     data: callbackData.settings(chatId, 'banan_default', String(sec))
   }))
 
@@ -1322,7 +1322,7 @@ export const langPanel = (locale: Locale, chatId: number, currentLocale: string)
   const rows: ButtonSpec[][] = []
   for (let i = 0; i < codes.length; i += 2) {
     rows.push(codes.slice(i, i + 2).map((code) => ({
-      text: currentLocale === code ? `· ${langName(code)} ·` : langName(code),
+      text: currentLocale === code ? `✓ ${langName(code)}` : langName(code),
       data: callbackData.settings(chatId, 'lang', code)
     })))
   }
@@ -1591,7 +1591,7 @@ const voterLine = (locale: Locale, voter: VoterEntry, format: VoterListFormat): 
   // escaped — the same rule `viewHtml` enforces for every other user string.
   const raw = voter.label ?? String(voter.userId)
   const name = format === 'html' ? userMention(voter.userId, raw) : raw
-  return marks.length > 0 ? ` • ${name} · ${marks.join(' · ')}` : ` • ${name}`
+  return marks.length > 0 ? ` • ${name} (${marks.join(', ')})` : ` • ${name}`
 }
 
 const voterGroup = (

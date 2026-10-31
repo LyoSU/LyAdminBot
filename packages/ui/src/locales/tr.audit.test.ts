@@ -68,7 +68,7 @@ describe('tr copy audit', () => {
   })
 
   it('profile activity reads "N sohbette", no plural after the number', () => {
-    expect(tr.profile.activity(5, 3)).toBe('5 mesaj · 3 sohbette')
+    expect(tr.profile.activity(5, 3)).toBe('5 mesaj, 3 sohbette')
     expect(tr.profile.activity(null, 1)).toBe('1 sohbette')
   })
 

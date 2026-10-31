@@ -29,7 +29,7 @@ export const tr: Locale = {
     ].join('\n'),
     liveProof: (chats, spammers, days) =>
       `📊 Şu anda <b>${n(chats)}</b> sohbeti koruyorum: ${days} günde <b>${n(spammers)}</b> spam hesabını engelledim.`,
-    groupHint: '🛡 Spam yakalarım ve dolandırıcıları yasaklarım.\n<code>/settings</code> yöneticiler için · <code>/stats</code> sayılar · <code>/help</code> komutlar',
+    groupHint: '🛡 Spam yakalarım ve dolandırıcıları yasaklarım.\n<code>/settings</code> yöneticiler için, <code>/stats</code> sayılar, <code>/help</code> komutlar',
     addToGroupButton: '➕ Gruba ekle',
     helpButton: '❓ Komutlar',
     langButton: '🌐 Dil'
@@ -67,8 +67,8 @@ export const tr: Locale = {
         : done === total
           ? `🚫 Spamcıyla birlikte katılan ${done} yeni üye yasaklandı`
           : `🚫 Spamcıyla birlikte katılan ${total} yeni üyeden ${done} kişi yasaklandı, diğerleri yasaklanamadı`)
-      + ` · yönetici kararı: ${admin}`,
-    kept: (admin) => `✅ Spamcıyla birlikte katılan yeni üyeler sohbette kalıyor · yönetici kararı: ${admin}`,
+      + `. Yönetici kararı: ${admin}`,
+    kept: (admin) => `✅ Spamcıyla birlikte katılan yeni üyeler sohbette kalıyor. Yönetici kararı: ${admin}`,
     expired: 'Bu kart artık güncel değil.'
   },
 
@@ -92,7 +92,7 @@ export const tr: Locale = {
       'Yanıldıysam o sohbetin bir yöneticisine yaz: yönetici bunu tek dokunuşla geri alabilir.',
       'Süreli kısıtlamalar kendiliğinden kalkar.'
     ].join('\n'),
-    whyButton: (n) => `Neden? · ${n}`
+    whyButton: (n) => `${n}. Neden?`
   },
 
   helpText: [
@@ -102,14 +102,17 @@ export const tr: Locale = {
     '<b>Herkes:</b>',
     '/report — spam şikâyeti (yanıt olarak ya da /report @kullanıcı veya id)',
     '/stats — şimdiye kadar ne kadar spam yakaladım',
-    '/mystats — istatistiğim · /top, /top_banan — sıralamalar',
+    '/mystats — istatistiğim',
+    '/top, /top_banan — sıralamalar',
     '/lang — dil',
     '',
     '<b>Yöneticiler:</b>',
     '/settings — ayarlar paneli (özel sohbette açılır, gerisi düğmelerle)',
     '/banan /kick /del — yanıt olarak moderasyon',
-    '/check — güven düğmeli kullanıcı kartı · /untrust — güveni kaldır',
-    '/welcome — yeni üye karşılama · /extra, /extras — tetikleyiciler',
+    '/check — güven düğmeli kullanıcı kartı',
+    '/untrust — güveni kaldır',
+    '/welcome — yeni üye karşılama',
+    '/extra, /extras — tetikleyiciler',
     '',
     'Her bildirimde tam karar kartına giden bir <b>neden?</b> bağlantısı var. Yöneticiler ayrıca <b>“✅ Spam değil”</b> düğmesini görür: kararı geri alır ve kişiyi bu sohbetin güvenilir listesine ekler.'
   ].join('\n'),
@@ -154,7 +157,7 @@ export const tr: Locale = {
   },
 
   notification: {
-    compact: (action, userLabel) => `${action} · ${userLabel}`,
+    compact: (action, userLabel) => `${action}: ${userLabel}`,
     repeats: (count) => `${count} mesaj`,
     whyLink: 'neden?',
     whyButton: 'ℹ️ Neden?',
@@ -227,19 +230,19 @@ export const tr: Locale = {
     title: '🛡 Bot yalnızca izliyor',
     inChat: (chatTitle) => `${chatTitle} sohbetinde`,
     confidence: {
-      high: (percent) => `🔴 Büyük olasılıkla spam · botun tahmini %${percent}`,
-      medium: (percent) => `🟠 Muhtemelen spam · botun tahmini %${percent}`,
-      low: (percent) => `🟡 Spam olabilir · botun tahmini %${percent}`
+      high: (percent) => `🔴 Büyük olasılıkla spam (botun tahmini %${percent})`,
+      medium: (percent) => `🟠 Muhtemelen spam (botun tahmini %${percent})`,
+      low: (percent) => `🟡 Spam olabilir (botun tahmini %${percent})`
     },
     noticedTitle: 'Fark ettiklerim:',
     profileReuseEvidence: (accounts) => `aynı profil fotoğrafı ${accounts} hesapta daha`,
     // The pipeline writes the model's 0..1 score; the card shows percents.
-    profileMediaEvidence: (score) => `müstehcen profil fotoğrafı · puan %${Math.round(Number(score) * 100)}`,
+    profileMediaEvidence: (score) => `müstehcen profil fotoğrafı, puan %${Math.round(Number(score) * 100)}`,
     externalBanEvidence: (sources, when) => [
       'spam veritabanlarında',
       ...(sources > 1 ? [`${sources} kaynak`] : []),
       ...(when ? [ago(when)] : [])
-    ].join(' · '),
+    ].join(', '),
     signalLabels: {
       external_ban: 'hesap spam veritabanlarında',
       external_repeat_offender: 'spam veritabanlarında birden fazla kez listelenmiş',
@@ -341,14 +344,14 @@ export const tr: Locale = {
       [
         ...(messages === null ? [] : [`${messages} mesaj`]),
         `${chats} sohbette`
-      ].join(' · '),
+      ].join(', '),
     reputation: (status) => `itibar: ${status}`,
     premium: 'Premium',
     externalBan: (when, offenses) => [
       'spam veritabanlarında',
       ...(when ? [`${ago(when)} yasaklandı`] : []),
       ...(offenses > 1 ? [`${offenses} ihlal`] : [])
-    ].join(' · '),
+    ].join(', '),
     justJoined: (span) => (span === NOW ? 'sohbete az önce katıldı' : `sohbete katılalı yalnızca ${span}`),
     promoInBio: 'biyografide reklam',
     personalChannel: 'bağlı kanal',
@@ -362,14 +365,14 @@ export const tr: Locale = {
   vote: {
     prompt: ({ userLabel, textPreview, media, whyLink }) =>
       `🤔 <b>Bu spam mı?</b> Gönderen: ${userLabel}`
-      + (media ? ` · 📎 ${media}` : '')
-      + (whyLink ? ` · ${whyLink}` : '')
+      + (media ? `, 📎 ${media}` : '')
+      + (whyLink ? ` (${whyLink})` : '')
       + `\n${textPreview}`,
     promptNoText: (userLabel, what, whyLink) =>
       (what
-        ? `🤔 <b>Bu spam mı?</b> Gönderen: ${userLabel} · metin yok, yalnızca ${what}`
-        : `🤔 <b>Bu spam mı?</b> Gönderen: ${userLabel} · metin yok`)
-      + (whyLink ? ` · ${whyLink}` : ''),
+        ? `🤔 <b>Bu spam mı?</b> Gönderen: ${userLabel}. Metin yok, yalnızca ${what}`
+        : `🤔 <b>Bu spam mı?</b> Gönderen: ${userLabel}. Metin yok`)
+      + (whyLink ? ` (${whyLink})` : ''),
     media: {
       photo: 'fotoğraf', sticker: 'çıkartma', video: 'video',
       voice: 'sesli mesaj veya ses kaydı', file: 'dosya', other: 'ek'
@@ -386,16 +389,14 @@ export const tr: Locale = {
     },
     resolvedSpam: ({ who, enforcement, whyLink }) =>
       // The name follows a role label: a suffix cannot be attached to a display name.
-      '🗑 Topluluk karar verdi: spam' + (who ? `. Gönderen: ${who}` : '')
-      + (enforcement ? `. ${enforcement}` : '')
-      + (whyLink ? ` · ${whyLink}` : ''),
+      '🗑 Topluluk karar verdi: spam' + (whyLink ? ` (${whyLink})` : '') + (who ? `. Gönderen: ${who}` : '')
+      + (enforcement ? `. ${enforcement}` : ''),
     resolvedHam: ({ who, whyLink }) =>
-      '✅ Topluluk karar verdi: spam değil' + (who ? `. Gönderen: ${who}` : '')
-      + (whyLink ? ` · ${whyLink}` : ''),
+      '✅ Topluluk karar verdi: spam değil' + (whyLink ? ` (${whyLink})` : '') + (who ? `. Gönderen: ${who}` : ''),
     alreadyEnded: 'Bu oylama zaten kapandı.',
     voters: {
       button: '👥 Kim oy verdi',
-      title: (spam, ham) => `👥 <b>Oylama</b> · spam ${spam} : ${ham} spam değil`,
+      title: (spam, ham) => `👥 <b>Oylama:</b> spam ${spam}, spam değil ${ham}`,
       spamGroup: '🗑 Spam',
       hamGroup: '✅ Spam değil',
       adminMark: 'yönetici',
@@ -433,9 +434,9 @@ export const tr: Locale = {
     reasonLine: (name, count) => `• ${name} — ${n(count)}`,
     memory: (signatures) => `🧠 Hafızamda ${n(signatures)} spam imzası var`,
     corrections: (percent) => `✅ Yöneticilerin geri aldığı kararlarım: %${decimal1(percent)}`,
-    chatHeader: (title, days) => `🛡 <b>${title}</b> · son ${days} gün`,
+    chatHeader: (title, days) => `🛡 <b>${title}</b>, son ${days} gün`,
     chatLine: (checked, spammers, deletes) =>
-      `📬 ${n(checked)} kontrol · 🚫 ${n(spammers)} spam hesabı · 🧹 ${n(deletes)} silindi`,
+      `📬 ${n(checked)} kontrol, 🚫 ${n(spammers)} spam hesabı, 🧹 ${n(deletes)} silindi`,
     chatLastSpam: (span) => `Son spam: ${ago(span)}`,
     chatClean: '✨ Bot bu süre boyunca spam tespit etmedi.',
     unavailable: '📊 Sayılara şu an ulaşamıyorum, biraz sonra tekrar dene.',
@@ -479,8 +480,8 @@ export const tr: Locale = {
     removed: 'Güven kaldırıldı.',
     grantedBy: (who, span, via) =>
       `✅ Güven veren: ${who}, ${ago(span)}` +
-      (via === 'override' ? ' · botun kararını geri aldı' : via === 'vote' ? ' · yönetici oyuyla' : ''),
-    grantUnknown: '✅ Güvenilir · güveni kimin ne zaman verdiği kayıtlı değil'
+      (via === 'override' ? ' (botun kararını geri aldı)' : via === 'vote' ? ' (yönetici oyuyla)' : ''),
+    grantUnknown: '✅ Güvenilir (güveni kimin ne zaman verdiği kayıtlı değil)'
   },
 
   welcome: {
@@ -501,7 +502,7 @@ export const tr: Locale = {
     defaultGreeting: (name) => `👋 Hoş geldin, ${name}!`,
     editor: {
       title: (state, nTexts, nGifs) =>
-        `👋 <b>Yeni üye karşılaması</b>\n\nDurum: ${state}\nMetin: ${nTexts} · GIF: ${nGifs}\n\nBirden fazlaysa bot her seferinde rastgele birini seçer.`,
+        `👋 <b>Yeni üye karşılaması</b>\n\nDurum: ${state}\nMetin: ${nTexts}, GIF: ${nGifs}\n\nBirden fazlaysa bot her seferinde rastgele birini seçer.`,
       enable: '🔔 Aç',
       disable: '🔕 Kapat',
       texts: (n) => `📝 Metinler (${n})`,

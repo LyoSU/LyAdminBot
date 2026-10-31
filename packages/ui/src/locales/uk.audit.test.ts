@@ -25,7 +25,7 @@ describe('uk copy audit (2026-10-15)', () => {
   })
 
   it('prints the explicit-photo score as a percent, like the confidence line', () => {
-    expect(uk.why.profileMediaEvidence('0.87')).toBe('відверте фото в профілі · оцінка 87%')
+    expect(uk.why.profileMediaEvidence('0.87')).toBe('відверте фото в профілі, оцінка 87%')
     expect(uk.why.profileMediaEvidence('1.00')).toContain('100%')
   })
 

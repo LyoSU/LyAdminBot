@@ -41,7 +41,7 @@ export const by: Locale = {
     liveProof: (chats, spammers, days) =>
       `📊 Зараз абараняю <b>${groupDigits(chats)}</b> ${plural(chats, 'чат', 'чаты', 'чатаў')}: ` +
       `<b>${groupDigits(spammers)}</b> ${plural(spammers, 'спамер заблакаваны', 'спамеры заблакаваны', 'спамераў заблакавана')} за ${days} ${plural(days, 'дзень', 'дні', 'дзён')}.`,
-    groupHint: '🛡 Лаўлю спам, баню махляроў.\n<code>/settings</code> для адмінаў · <code>/stats</code> лічбы · <code>/help</code> каманды',
+    groupHint: '🛡 Лаўлю спам, баню махляроў.\n<code>/settings</code> для адмінаў, <code>/stats</code> лічбы, <code>/help</code> каманды',
     addToGroupButton: '➕ Дадаць у групу',
     helpButton: '❓ Каманды',
     langButton: '🌐 Мова'
@@ -80,8 +80,8 @@ export const by: Locale = {
         : done === total
           ? `🚫 Забанена навічкоў, што прыйшлі разам са спамерам: ${done}`
           : `🚫 Забанена навічкоў, што прыйшлі разам са спамерам: ${done} з ${total}, астатніх не ўдалося`)
-      + ` · рашэнне адміна ${admin}`,
-    kept: (admin) => `✅ Навічкі, што прыйшлі разам са спамерам, застаюцца ў чаце · рашэнне адміна ${admin}`,
+      + `. Рашэнне адміна: ${admin}`,
+    kept: (admin) => `✅ Навічкі, што прыйшлі разам са спамерам, застаюцца ў чаце. Рашэнне адміна: ${admin}`,
     expired: 'Гэтая картка ўжо неактуальная.'
   },
 
@@ -105,7 +105,7 @@ export const by: Locale = {
       'Калі я памыліўся — напішы адміну таго чата: адмін можа адмяніць гэта адным націскам.',
       'Часовыя абмежаванні здымаюцца самі.'
     ].join('\n'),
-    whyButton: (n) => `За што? · ${n}`
+    whyButton: (n) => `${n}. За што?`
   },
 
   helpText: [
@@ -115,14 +115,17 @@ export const by: Locale = {
     '<b>Усім:</b>',
     '/report — скарга на спам (у адказ, або /report @нік ці id)',
     '/stats — колькі спаму я ўжо злавіў',
-    '/mystats — мая статыстыка · /top, /top_banan — рэйтынгі',
+    '/mystats — мая статыстыка',
+    '/top, /top_banan — рэйтынгі',
     '/lang — мова',
     '',
     '<b>Адмінам:</b>',
     '/settings — панэль налад (у ПП, далей усё кнопкамі)',
     '/banan /kick /del — мадэрацыя ў адказ',
-    '/check — картка карыстальніка з кнопкай даверу · /untrust — зняць давер',
-    '/welcome — прывітанне навічкоў · /extra, /extras — трыгеры',
+    '/check — картка карыстальніка з кнопкай даверу',
+    '/untrust — зняць давер',
+    '/welcome — прывітанне навічкоў',
+    '/extra, /extras — трыгеры',
     '',
     'У кожным паведамленні ёсць спасылка <b>за што?</b> — там уся картка рашэння. Адмінам яшчэ і кнопка <b>«✅ Не спам»</b>: адмяняе рашэнне і дадае чалавека ў даверныя гэтага чата.'
   ].join('\n'),
@@ -167,7 +170,7 @@ export const by: Locale = {
   },
 
   notification: {
-    compact: (action, userLabel) => `${action} · ${userLabel}`,
+    compact: (action, userLabel) => `${action}: ${userLabel}`,
     repeats: (count) => `${count} ${plural(count, 'паведамленне', 'паведамленні', 'паведамленняў')}`,
     whyLink: 'за што?',
     whyButton: 'ℹ️ За што?',
@@ -240,20 +243,20 @@ export const by: Locale = {
     title: '🛡 Бот толькі назірае',
     inChat: (chatTitle) => `у чаце ${chatTitle}`,
     confidence: {
-      high: (percent) => `🔴 Вельмі падобна на спам · ацэнка бота ${percent}%`,
-      medium: (percent) => `🟠 Імаверна спам · ацэнка бота ${percent}%`,
-      low: (percent) => `🟡 Магчыма спам · ацэнка бота ${percent}%`
+      high: (percent) => `🔴 Вельмі падобна на спам (ацэнка бота ${percent}%)`,
+      medium: (percent) => `🟠 Імаверна спам (ацэнка бота ${percent}%)`,
+      low: (percent) => `🟡 Магчыма спам (ацэнка бота ${percent}%)`
     },
     noticedTitle: 'Што я заўважыў:',
     profileReuseEvidence: (accounts) =>
       `тое ж фота профілю яшчэ на ${accounts} ${plural(accounts, 'акаўнце', 'акаўнтах', 'акаўнтах')}`,
     // The pipeline writes the model's 0..1 score; the card shows percents.
-    profileMediaEvidence: (score) => `адкрытае фота ў профілі · ацэнка ${Math.round(Number(score) * 100)}%`,
+    profileMediaEvidence: (score) => `адкрытае фота ў профілі, ацэнка ${Math.round(Number(score) * 100)}%`,
     externalBanEvidence: (sources, when) => [
       'у спам-базах',
       ...(sources > 1 ? [`${sources} ${plural(sources, 'крыніца', 'крыніцы', 'крыніц')}`] : []),
       ...(when ? [ago(when)] : [])
-    ].join(' · '),
+    ].join(', '),
     signalLabels: {
       external_ban: 'акаўнт у спам-базах',
       external_repeat_offender: 'некалькі разоў у спам-базах',
@@ -356,14 +359,14 @@ export const by: Locale = {
       [
         ...(messages === null ? [] : [`${messages} ${plural(messages, 'паведамленне', 'паведамленні', 'паведамленняў')}`]),
         `${chats} ${plural(chats, 'чат', 'чаты', 'чатаў')}`
-      ].join(' · '),
+      ].join(', '),
     reputation: (status) => `статус: ${status}`,
     premium: 'Premium',
     externalBan: (when, offenses) => [
       'у спам-базах',
       ...(when ? [`бан ${ago(when)}`] : []),
       ...(offenses > 1 ? [`${offenses} ${plural(offenses, 'парушэнне', 'парушэнні', 'парушэнняў')}`] : [])
-    ].join(' · '),
+    ].join(', '),
     justJoined: (span) => (span === NOW ? 'у чаце толькі што' : `у чаце ўсяго ${span}`),
     promoInBio: 'рэклама ў біо',
     personalChannel: 'прывязаны канал',
@@ -377,14 +380,14 @@ export const by: Locale = {
   vote: {
     prompt: ({ userLabel, textPreview, media, whyLink }) =>
       `🤔 <b>Гэта спам?</b> Аўтар: ${userLabel}`
-      + (media ? ` · 📎 ${media}` : '')
-      + (whyLink ? ` · ${whyLink}` : '')
+      + (media ? `, 📎 ${media}` : '')
+      + (whyLink ? ` (${whyLink})` : '')
       + `\n${textPreview}`,
     promptNoText: (userLabel, what, whyLink) =>
       (what
-        ? `🤔 <b>Гэта спам?</b> Аўтар: ${userLabel} · без тэксту, толькі ${what}`
-        : `🤔 <b>Гэта спам?</b> Аўтар: ${userLabel} · без тэксту`)
-      + (whyLink ? ` · ${whyLink}` : ''),
+        ? `🤔 <b>Гэта спам?</b> Аўтар: ${userLabel}. Без тэксту, толькі ${what}`
+        : `🤔 <b>Гэта спам?</b> Аўтар: ${userLabel}. Без тэксту`)
+      + (whyLink ? ` (${whyLink})` : ''),
     media: {
       photo: 'фота', sticker: 'стыкер', video: 'відэа',
       voice: 'галасавое ці аўдыя', file: 'файл', other: 'укладанне'
@@ -401,16 +404,14 @@ export const by: Locale = {
     },
     resolvedSpam: ({ who, enforcement, whyLink }) =>
       // The name follows a role label, never "ад": a display name cannot be declined.
-      '🗑 Супольнасць вырашыла: спам' + (who ? `. Аўтар: ${who}` : '')
-      + (enforcement ? `. ${enforcement}` : '')
-      + (whyLink ? ` · ${whyLink}` : ''),
+      '🗑 Супольнасць вырашыла: спам' + (whyLink ? ` (${whyLink})` : '') + (who ? `. Аўтар: ${who}` : '')
+      + (enforcement ? `. ${enforcement}` : ''),
     resolvedHam: ({ who, whyLink }) =>
-      '✅ Супольнасць вырашыла: не спам' + (who ? `. Аўтар: ${who}` : '')
-      + (whyLink ? ` · ${whyLink}` : ''),
+      '✅ Супольнасць вырашыла: не спам' + (whyLink ? ` (${whyLink})` : '') + (who ? `. Аўтар: ${who}` : ''),
     alreadyEnded: 'Галасаванне ўжо закрыта.',
     voters: {
       button: '👥 Хто галасаваў',
-      title: (spam, ham) => `👥 <b>Галасаванне</b> · спам ${spam} : ${ham} не спам`,
+      title: (spam, ham) => `👥 <b>Галасаванне:</b> спам ${spam}, не спам ${ham}`,
       spamGroup: '🗑 Спам',
       hamGroup: '✅ Не спам',
       adminMark: 'адмін',
@@ -450,7 +451,7 @@ export const by: Locale = {
     corrections: (percent) => `✅ Адміны скасавалі ${decimal1(percent)}% маіх рашэнняў`,
     chatHeader: (title, days) => `🛡 <b>${title}</b> за ${days} ${plural(days, 'дзень', 'дні', 'дзён')}`,
     chatLine: (checked, spammers, deletes) =>
-      `📬 ${groupDigits(checked)} праверана · 🚫 ${groupDigits(spammers)} ${plural(spammers, 'спамер', 'спамеры', 'спамераў')} · 🧹 ${groupDigits(deletes)} выдалена`,
+      `📬 ${groupDigits(checked)} праверана, 🚫 ${groupDigits(spammers)} ${plural(spammers, 'спамер', 'спамеры', 'спамераў')}, 🧹 ${groupDigits(deletes)} выдалена`,
     chatLastSpam: (span) => `Апошні спам: ${ago(span)}`,
     chatClean: '✨ За гэты час бот не выявіў спаму.',
     unavailable: '📊 Лічбы зараз недаступныя, паспрабуй крыху пазней.',
@@ -494,8 +495,8 @@ export const by: Locale = {
     removed: 'Зняў давер.',
     grantedBy: (who, span, via) =>
       `✅ Давер ад ${who}, ${ago(span)}` +
-      (via === 'override' ? ' · адмена рашэння бота' : via === 'vote' ? ' · голас адміна' : ''),
-    grantUnknown: '✅ Ёсць давер · ад каго і калі — не запісана'
+      (via === 'override' ? ' (адмена рашэння бота)' : via === 'vote' ? ' (голас адміна)' : ''),
+    grantUnknown: '✅ Ёсць давер, але хто і калі яго даў, не запісана'
   },
 
   welcome: {
@@ -516,7 +517,7 @@ export const by: Locale = {
     defaultGreeting: (name) => `👋 Вітаем, ${name}!`,
     editor: {
       title: (state, nTexts, nGifs) =>
-        `👋 <b>Прывітанне навічкоў</b>\n\nСтан: ${state}\nТэкстаў: ${nTexts} · Гіфак: ${nGifs}\n\nКалі іх некалькі — бот штораз бярэ выпадковы.`,
+        `👋 <b>Прывітанне навічкоў</b>\n\nСтан: ${state}\nТэкстаў: ${nTexts}, гіфак: ${nGifs}\n\nКалі іх некалькі — бот штораз бярэ выпадковы.`,
       enable: '🔔 Уключыць',
       disable: '🔕 Выключыць',
       texts: (n) => `📝 Тэксты (${n})`,
