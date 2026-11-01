@@ -2185,8 +2185,21 @@ describe('arrivals — who joined which chat this week', () => {
     expect(row).toEqual({
       chatId: -100, userId: 7, joinMessageId: 0, at,
       shape: { username: false, photo: false, lastName: false, premium: false, script: null, registeredUnix: null },
-      messagesGlobalAtJoin: null, outcome: null
+      messagesGlobalAtJoin: null, outcome: null, accessHash: null
     })
+  })
+
+  // 2026-11-01: a cohort ban could not reach three newcomers who joined before a
+  // deploy; the hash the join carried is what makes them addressable again.
+  it('keeps the access hash the join carried, and a rejoin without one keeps the old', async () => {
+    const store = arrivalsStore()
+    await store.recordArrival({ chatId: -100, userId: 7, joinMessageId: 55, at, shape, messagesGlobalAtJoin: null, accessHash: '-123456789' })
+    await store.recordArrival({ chatId: -100, userId: 7, joinMessageId: 56, at, shape, messagesGlobalAtJoin: null, accessHash: null })
+    expect((store.updates[0]!.update as { $set: Record<string, unknown> }).$set['accessHash']).toBe('-123456789')
+    expect((store.updates[1]!.update as { $set: Record<string, unknown> }).$set).not.toHaveProperty('accessHash')
+    const read = arrivalsStore([{ chatId: -100, userId: 7, at, accessHash: '-123456789' }])
+    const [row] = await read.recentArrivalsIn(-100, at)
+    expect(row!.accessHash).toBe('-123456789')
   })
 })
 

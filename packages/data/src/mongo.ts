@@ -2848,7 +2848,9 @@ export class MongoStore {
           joinMessageId: arrival.joinMessageId,
           at: arrival.at,
           shape: arrival.shape,
-          messagesGlobalAtJoin: arrival.messagesGlobalAtJoin
+          messagesGlobalAtJoin: arrival.messagesGlobalAtJoin,
+          // A rejoin without one keeps the old hash: it is the bot's, not the join's.
+          ...(typeof arrival.accessHash === 'string' ? { accessHash: arrival.accessHash } : {})
         },
         $unset: { outcome: '' }
       },
@@ -3192,6 +3194,13 @@ export interface ArrivalRecord {
   messagesGlobalAtJoin: number | null
   /** What was concluded about this arrival, when anything was. */
   outcome: string | null
+  /**
+   * The account's access hash as the join handed it to us (decimal `Long`),
+   * absent when it came as a min user or was never written. The peer cache the
+   * bot addresses accounts by does not survive a deploy, and a newcomer who
+   * never wrote leaves nothing else to recover it from — see `warmPeer`.
+   */
+  accessHash?: string | null
 }
 
 const arrivalKey = (chatId: number, userId: number): string => `${chatId}:${userId}`
@@ -3212,7 +3221,8 @@ const docToArrival = (d: Document): ArrivalRecord => {
       registeredUnix: typeof shape.registeredUnix === 'number' ? shape.registeredUnix : null
     },
     messagesGlobalAtJoin: typeof d['messagesGlobalAtJoin'] === 'number' ? d['messagesGlobalAtJoin'] : null,
-    outcome: typeof d['outcome'] === 'string' ? d['outcome'] : null
+    outcome: typeof d['outcome'] === 'string' ? d['outcome'] : null,
+    accessHash: typeof d['accessHash'] === 'string' ? d['accessHash'] : null
   }
 }
 

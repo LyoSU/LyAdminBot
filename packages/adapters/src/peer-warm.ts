@@ -21,7 +21,13 @@
  *    the same route `findChatMemberByUsername` already takes for a handle the
  *    cache has forgotten. Only for a person: a channel sender is no member.
  *
- * 3. the chat's most recent members, when asked for — for a newcomer the bot
+ * 3. the access hash the join handed us, when the caller kept one — asked back
+ *    with `users.getUsers`, which answers a bot that names the right hash and
+ *    files the full account. Exact and one call, so it goes before the list
+ *    below. Added 2026-11-01: a cohort ban still missed three newcomers who had
+ *    joined a day or two before a deploy and were no longer among the latest
+ *    200 joiners of a large chat.
+ * 4. the chat's most recent members, when asked for — for a newcomer the bot
  *    has nothing else on: no message, and no name either, because the name is
  *    fetched with the same hash. Telegram lists the latest joiners first, so an
  *    account that joined in the last days is there; one call files them all,
@@ -34,7 +40,7 @@
  * cache, so a mute that still fails can be told apart from one that never had a
  * chance.
  */
-import type { TelegramClient } from '@mtcute/node'
+import { Long, type TelegramClient, type tl } from '@mtcute/node'
 
 /** The slice of the client this needs. */
 export interface PeerWarmTransport {
@@ -44,16 +50,18 @@ export interface PeerWarmTransport {
     chatId: number,
     params: { type: 'all'; query: string; limit: number } | { type: 'recent'; limit: number }
   ) => Promise<ReadonlyArray<{ user: { id: number } }>>
+  getUsers: (ids: tl.TypeInputPeer[]) => Promise<unknown>
 }
 
 /**
  * - `cached`: the account was already addressable; nothing was asked.
  * - `message`: the message the decision is about put it there.
  * - `members`: the chat's member search did.
+ * - `stored`: the access hash the caller kept did.
  * - `recent`: the chat's recent-members list did.
  * - `unresolved`: neither did; the action will most likely fail.
  */
-export type PeerWarmSource = 'cached' | 'message' | 'members' | 'recent' | 'unresolved'
+export type PeerWarmSource = 'cached' | 'message' | 'members' | 'stored' | 'recent' | 'unresolved'
 
 export interface PeerWarmResult {
   source: PeerWarmSource
@@ -89,6 +97,8 @@ export const warmPeer = async (tg: PeerWarmTransport, params: {
   messageId: number | null
   /** The display name stored with the decision, for the member search. */
   nameHint?: string | null | undefined
+  /** The access hash kept from the account's join, read only when it is needed. */
+  storedAccessHash?: () => Promise<string | null>
   /** Fall back to the recent-members list — for someone who has just joined. */
   recentMembers?: boolean
 }): Promise<PeerWarmResult> => {
@@ -108,6 +118,17 @@ export const warmPeer = async (tg: PeerWarmTransport, params: {
       const found = await tg.getChatMembers(params.chatId, { type: 'all', query: term, limit: MEMBER_SEARCH_LIMIT })
       if (found.some((m) => m.user.id === params.userId) && await isCached(tg, params.userId)) {
         return { source: 'members', error: undefined }
+      }
+    } catch (err) {
+      error ??= err
+    }
+  }
+  if (params.storedAccessHash !== undefined && params.userId > 0) {
+    try {
+      const hash = await params.storedAccessHash()
+      if (hash !== null) {
+        await tg.getUsers([{ _: 'inputPeerUser', userId: params.userId, accessHash: Long.fromString(hash) }])
+        if (await isCached(tg, params.userId)) return { source: 'stored', error: undefined }
       }
     } catch (err) {
       error ??= err

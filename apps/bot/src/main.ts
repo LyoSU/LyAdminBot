@@ -1895,7 +1895,8 @@ firstRuling = true): Promise<VoteEnforcement> => {
    * `MtPeerNotFoundError` this way.
    */
   const peer = await warmPeer(gateway.tg, {
-    chatId: vote.chatId, userId: vote.targetUserId, messageId: vote.messageId, nameHint: vote.targetLabel
+    chatId: vote.chatId, userId: vote.targetUserId, messageId: vote.messageId, nameHint: vote.targetLabel,
+    storedAccessHash: () => keptAccessHash(vote.targetUserId)
   })
   const deleted = await gateway.moderationActions.deleteMessage(vote.chatId, vote.messageId)
     .then(() => true).catch((err: unknown) => { failure.deleted = telegramErrorName(err); return false })
@@ -4544,7 +4545,10 @@ const surfaceCohort = async (chatId: number, spammer: { id: number; displayName:
     // a newcomer who never wrote leaves nothing to recover it from but the
     // member list — without this the membership check below and the ban both
     // fail on it. The first call files the recent joiners; the rest read cached.
-    await warmPeer(gateway.tg, { chatId, userId: sibling.userId, messageId: null, recentMembers: true })
+    await warmPeer(gateway.tg, {
+      chatId, userId: sibling.userId, messageId: null,
+      storedAccessHash: async () => sibling.accessHash ?? null, recentMembers: true
+    })
     const facts = await chatMemberFacts(chatId, sibling.userId)
     if (facts.isParticipant === false || facts.isAdmin || sibling.userId === selfId) continue
     // An admin's undo trusts the account (`ovr`), and a trusted one is never a suspect.
@@ -4624,6 +4628,15 @@ const surfaceCohort = async (chatId: number, spammer: { id: number; displayName:
  * reads afterwards: an admin's tap is `banned_by_admin`, the bot's own
  * `cohort_auto` is `removed`. Never an admin; false when Telegram refused.
  */
+/**
+ * The access hash this week's join of the account handed us, from any chat —
+ * a hash belongs to the bot, not to the chat — or null. For `warmPeer`.
+ */
+const keptAccessHash = async (userId: number): Promise<string | null> => {
+  const rows = await store.arrivalsOf(userId, new Date(Date.now() - ARRIVAL_TTL_DAYS * 86400_000))
+  return rows.find((r) => typeof r.accessHash === 'string')?.accessHash ?? null
+}
+
 const banNewcomer = async (
   chatId: number, userId: number,
   how: { ruleId: string; reasonCode: string; signals: Signal[]; meta: Record<string, string | number | boolean> },
@@ -4631,7 +4644,9 @@ const banNewcomer = async (
 ): Promise<boolean> => {
   if (userId === selfId) return false
   // Before the admin check, which asks Telegram by the same hash.
-  const peer = await warmPeer(gateway.tg, { chatId, userId, messageId: null, recentMembers: true })
+  const peer = await warmPeer(gateway.tg, {
+    chatId, userId, messageId: null, storedAccessHash: () => keptAccessHash(userId), recentMembers: true
+  })
   if (await isChatAdmin(chatId, userId)) return false
   const banned = await gateway.moderationActions.ban(chatId, userId, TIMED_BAN_SECONDS)
     .then(() => true).catch((err: unknown) => {
@@ -5210,7 +5225,9 @@ const recordArrivals = async (chat: Chat, joiners: User[], joinMessageId: number
         hasPhoto: joiner.photo !== null,
         isPremium: joiner.isPremium
       }, nowUnix),
-      messagesGlobalAtJoin: history?.messagesGlobal ?? null
+      messagesGlobalAtJoin: history?.messagesGlobal ?? null,
+      // A min user's hash is not one we may address it by.
+      accessHash: joiner.raw.min === true ? null : joiner.raw.accessHash?.toString() ?? null
     }).then(async () => {
       // A join request this process screened (2026-10-14): its answer goes on
       // the arrival, where whatever later becomes of the account is written.

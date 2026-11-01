@@ -16,6 +16,8 @@ const makeTransport = (opts: {
   messageThrows?: Error
   members?: number[]
   membersThrows?: Error
+  /** The access hash Telegram accepts for USER; any other is answered with nothing. */
+  validHash?: string
 }) => {
   const cache = new Set(opts.known ?? [])
   const getMessages = vi.fn(async () => {
@@ -29,12 +31,17 @@ const makeTransport = (opts: {
     for (const m of found) cache.add(m.user.id)
     return found
   })
+  const getUsers = vi.fn(async (ids: Array<{ userId: number; accessHash: { toString: () => string } }>) => {
+    for (const id of ids) if (id.accessHash.toString() === opts.validHash) cache.add(id.userId)
+    return ids.map(() => null)
+  })
   const tg = {
     storage: { peers: { getById: vi.fn(async (id: number) => cache.has(id) ? { _: 'inputPeerUser' } : null) } },
     getMessages,
-    getChatMembers
+    getChatMembers,
+    getUsers
   }
-  return { tg: tg as unknown as PeerWarmTransport, getMessages, getChatMembers }
+  return { tg: tg as unknown as PeerWarmTransport, getMessages, getChatMembers, getUsers }
 }
 
 describe('warmPeer', () => {
@@ -119,6 +126,47 @@ describe('warmPeer — a newcomer with nothing to go on (2026-10-31)', () => {
     const quiet = makeTransport({ members: [USER] })
     await warmPeer(quiet.tg, { chatId: CHAT, userId: USER, messageId: null })
     expect(quiet.getChatMembers).not.toHaveBeenCalled()
+  })
+})
+
+// 2026-11-01: three cohort siblings joined a day or two before a deploy, never
+// wrote, and had dropped out of a large chat's latest 200 joiners.
+describe('warmPeer — the access hash kept from the join', () => {
+  const HASH = '-8070450532247928832'
+
+  it('asks the account back by its kept hash, before the members list', async () => {
+    const { tg, getUsers, getChatMembers } = makeTransport({ validHash: HASH, members: [USER] })
+    const storedAccessHash = vi.fn(async () => HASH)
+    const res = await warmPeer(tg, { chatId: CHAT, userId: USER, messageId: null, storedAccessHash, recentMembers: true })
+    expect(res).toEqual({ source: 'stored', error: undefined })
+    expect(getUsers.mock.calls[0]![0]![0]).toMatchObject({ _: 'inputPeerUser', userId: USER })
+    expect(getUsers.mock.calls[0]![0]![0]!.accessHash.toString()).toBe(HASH)
+    expect(getChatMembers).not.toHaveBeenCalled()
+  })
+
+  it('reads the store only when the cache does not have the account', async () => {
+    const { tg } = makeTransport({ known: [USER] })
+    const storedAccessHash = vi.fn(async () => HASH)
+    expect((await warmPeer(tg, { chatId: CHAT, userId: USER, messageId: null, storedAccessHash })).source).toBe('cached')
+    expect(storedAccessHash).not.toHaveBeenCalled()
+  })
+
+  it('falls through to the members list when no hash was kept, or Telegram refuses it', async () => {
+    const none = makeTransport({ members: [USER] })
+    const a = await warmPeer(none.tg, { chatId: CHAT, userId: USER, messageId: null, storedAccessHash: async () => null, recentMembers: true })
+    expect(a.source).toBe('recent')
+    expect(none.getUsers).not.toHaveBeenCalled()
+    const stale = makeTransport({ validHash: '1', members: [USER] })
+    expect((await warmPeer(stale.tg, { chatId: CHAT, userId: USER, messageId: null, storedAccessHash: async () => HASH, recentMembers: true })).source).toBe('recent')
+  })
+
+  it('reports a failing store read or a malformed hash and goes on', async () => {
+    const boom = new Error('store down')
+    const { tg } = makeTransport({ members: [USER] })
+    expect(await warmPeer(tg, { chatId: CHAT, userId: USER, messageId: null, storedAccessHash: async () => { throw boom } }))
+      .toEqual({ source: 'unresolved', error: boom })
+    const bad = await warmPeer(tg, { chatId: CHAT, userId: USER, messageId: null, storedAccessHash: async () => 'not-a-number', recentMembers: true })
+    expect(bad.source).toBe('recent')
   })
 })
 

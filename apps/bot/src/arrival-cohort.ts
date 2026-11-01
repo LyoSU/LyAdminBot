@@ -276,11 +276,11 @@ export const splitDeleted = (
  * from the chat. Whether they have spoken HERE since is the caller's to check,
  * because the arrival row does not know. Nearest in time first.
  */
-export const cohortSiblings = (
+export const cohortSiblings = <T extends CohortArrival>(
   spammer: CohortArrival,
-  arrivals: readonly CohortArrival[],
+  arrivals: readonly T[],
   options: { windowMs?: number; max?: number } = {}
-): CohortArrival[] => {
+): T[] => {
   const windowMs = options.windowMs ?? COHORT_WINDOW_MS
   const max = options.max ?? COHORT_MAX
   const t = spammer.at.getTime()
