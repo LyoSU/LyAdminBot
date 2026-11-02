@@ -212,6 +212,26 @@ const IMITABLE = ['channel_promo', 'ad_network', 'flood'] as const satisfies
 export const IMITABLE_REASON_CODES: ReadonlySet<string> = new Set(IMITABLE)
 
 /**
+ * Reasons that say a message promotes something without naming a harm, on which
+ * a kick waits for the chat's answer.
+ *
+ * A kick with a vote removes the sender first and asks afterwards, and what the
+ * chat answers then lands on somebody already gone. 14 days of production to
+ * 2026-11-02, 89 such kicks: 8 reversed, and all 8 under these two reasons
+ * (`other_spam` 5 of 18, `private_invite_new` 3 of 3), against 0 of 68 under the
+ * rest. The acts behind them are ones members perform: a survey, a listing, a
+ * news post signed with its channel's invite.
+ *
+ * Only the kick moves. Below it the message was only ever deleted; above it no
+ * vote is asked, so there is no answer to wait for. The message still goes, and
+ * a chat that answers "spam" still gets the sender restricted.
+ */
+export const ASK_BEFORE_KICK_REASON_CODES: ReadonlySet<string> = new Set([
+  'other_spam' satisfies LlmReasonCode,
+  'private_invite_new'
+])
+
+/**
  * Reason codes whose capped verdict resolves the account without opening a
  * vote, because the community's own answer to the vote is not in doubt.
  *

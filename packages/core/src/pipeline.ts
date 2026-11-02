@@ -38,7 +38,7 @@ import {
 } from './signals/registry.js'
 import {
   decideAction, isEnforcementAction, removesSender, mayAskCaptcha, isChannelSenderId,
-  IMITABLE_REASON_CODES, PRESET_THRESHOLDS, captchaBlockers, TIMED_BAN_SECONDS,
+  ASK_BEFORE_KICK_REASON_CODES, IMITABLE_REASON_CODES, PRESET_THRESHOLDS, captchaBlockers, TIMED_BAN_SECONDS,
   VOTE_SKIP_REASON_CODES,
   type PolicyDecision, type PolicyInput
 } from './policy.js'
@@ -510,7 +510,14 @@ export const evaluateMessage = async (
     decideAction(policyInputFor(pSpam, signals))
 
   const finalize = (draft: VerdictDraft, signals: Signal[], decision?: PolicyDecision): Verdict => {
-    const policyDecision = decision ?? policyFor(draft.pSpam, signals)
+    const decided = decision ?? policyFor(draft.pSpam, signals)
+    const askFirst = decided.action === 'kick' && decided.needsVote &&
+      ASK_BEFORE_KICK_REASON_CODES.has(draft.reasonCode)
+    const policyDecision: PolicyDecision = askFirst ? { ...decided, action: 'delete' } : decided
+    if (askFirst) {
+      meta['cappedFrom'] = 'kick'
+      meta['cappedAskFirst'] = draft.reasonCode
+    }
     meta['portErrors'] = portErrors
     if (portMs.length > 0) meta['portMs'] = portMs.join(',')
     /**

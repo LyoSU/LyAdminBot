@@ -6871,6 +6871,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       // believing its reason, this one because it believes it and still will not
       // remove somebody over an act members also perform.
       cappedImitable: verdict.meta['cappedImitable'] ?? undefined,
+      cappedAskFirst: verdict.meta['cappedAskFirst'] ?? undefined,
       // Present only when the message evidence WAS sufficient and the sender's
       // standing in the chat overruled it — the one branch whose cost is a
       // judgement call rather than a measurement, so it has to be countable.

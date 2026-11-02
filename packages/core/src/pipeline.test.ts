@@ -2544,6 +2544,67 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
     expect(v.reasonCode).toBe('content_unconfirmed')
   })
 
+  // 14 days to 2026-11-02: every kick-with-vote reversed was one of these two
+  // reasons; the sender was gone before the chat answered.
+  describe('a kick waits for the chat on a reason that names no harm', () => {
+    const newcomer = { predictedAgeDays: 1500, localAgeDays: 0, messagesGlobal: 0, messagesInChat: 0 }
+    const signedPost = {
+      msg: {
+        text: 'Довгий допис про подію в місті, підписаний каналом. '.repeat(4),
+        urls: [{ visible: 'канал', target: 'https://t.me/+abcdefghijklmno', hidden: true }],
+        entities: []
+      },
+      user: newcomer,
+      policy: { preset: 'soft' as const }
+    }
+    const llmSays = (reasonCode: string, pSpam: number) => ({
+      llm: { classify: async () => ({ pSpam, reasonCode, evidence: null, cached: false }) }
+    })
+    const ad = {
+      msg: {
+        text: 'Однокімнатна квартира з готовим ремонтом, готова до проживання, усі подробиці за телефоном +380671234567 або на сайті https://example.com/flat',
+        urls: [{ visible: 'https://example.com/flat', target: 'https://example.com/flat', hidden: false }]
+      },
+      user: newcomer
+    }
+
+    it('the model\'s other_spam deletes and asks, and says what it would have done', async () => {
+      const v = await evaluateMessage(makeInput(ad), llmSays('other_spam', 0.8))
+      expect(v.reasonCode).toBe('other_spam')
+      expect(v.action).toBe('delete')
+      expect(v.needsVote).toBe(true)
+      expect(v.meta['cappedFrom']).toBe('kick')
+      expect(v.meta['cappedAskFirst']).toBe('other_spam')
+    })
+
+    it('a reason that names the harm still kicks at the same score', async () => {
+      const v = await evaluateMessage(makeInput(ad), llmSays('job_scam', 0.8))
+      expect(v.action).toBe('kick')
+      expect(v.needsVote).toBe(true)
+      expect(v.meta['cappedAskFirst']).toBeUndefined()
+    })
+
+    it('above the vote band nothing waits: no answer is coming', async () => {
+      const v = await evaluateMessage(makeInput(ad), llmSays('other_spam', 0.9))
+      expect(v.action).toBe('mute')
+      expect(v.needsVote).toBe(false)
+      expect(v.meta['cappedAskFirst']).toBeUndefined()
+    })
+
+    it('with voting off the kick stands: there is nobody to wait for', async () => {
+      const v = await evaluateMessage(makeInput({ ...ad, policy: { votingEnabled: false } }), llmSays('other_spam', 0.8))
+      expect(v.action).toBe('kick')
+      expect(v.needsVote).toBe(false)
+    })
+
+    it('the invite rule, where a soft chat would kick, only deletes and asks', async () => {
+      const v = await evaluateMessage(makeInput(signedPost), {})
+      expect(v.ruleId).toBe('private_invite_new')
+      expect(v.action).toBe('delete')
+      expect(v.needsVote).toBe(true)
+    })
+  })
+
   it('an account verdict keeps its reach — the cap is about message evidence', async () => {
     // A ban-database listing says nothing about the message and is not supposed
     // to: capping it on message evidence would silently disable the rule.
