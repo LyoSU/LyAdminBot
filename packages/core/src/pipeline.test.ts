@@ -2603,6 +2603,70 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
       expect(v.action).toBe('delete')
       expect(v.needsVote).toBe(true)
     })
+
+    // 14 days to 2026-11-05: chats with a not-spam majority answered 18 : 5 on
+    // these reasons, so the message waits for the vote there.
+    describe('a chat that keeps answering not-spam holds the delete', () => {
+      const ports = (reasonCode: string, rulings: { ham: number; spam: number }) => ({
+        ...llmSays(reasonCode, 0.8),
+        chatRulings: { rulings: async () => rulings }
+      })
+
+      it('leaves the message up, still asks, and says on what count', async () => {
+        const v = await evaluateMessage(makeInput(ad), ports('other_spam', { ham: 3, spam: 1 }))
+        expect(v.reasonCode).toBe('other_spam')
+        expect(v.action).toBe('observe')
+        expect(v.needsVote).toBe(true)
+        expect(v.requireCaptcha).toBe(false)
+        expect(v.meta['heldChatRuling']).toBe('3:1')
+        expect(v.meta['cappedFrom']).toBe('kick')
+      })
+
+      it.each([
+        ['one answer is no pattern', { ham: 1, spam: 0 }],
+        ['a tie is no majority', { ham: 2, spam: 2 }],
+        ['a chat that answers spam', { ham: 2, spam: 5 }]
+      ])('deletes when %s', async (_name, rulings) => {
+        const v = await evaluateMessage(makeInput(ad), ports('other_spam', rulings))
+        expect(v.action).toBe('delete')
+        expect(v.meta['heldChatRuling']).toBeUndefined()
+      })
+
+      it('a reason that names the harm is not the chat\'s to tolerate', async () => {
+        const v = await evaluateMessage(makeInput(ad), ports('job_scam', { ham: 9, spam: 0 }))
+        expect(v.action).toBe('kick')
+        expect(v.meta['heldChatRuling']).toBeUndefined()
+      })
+
+      it('outside evidence keeps the delete and spares the read', async () => {
+        let reads = 0
+        const v = await evaluateMessage(
+          makeInput({ ...ad, enrichment: { personalChannelId: 7 } }),
+          { ...llmSays('other_spam', 0.8), chatRulings: { rulings: async () => { reads++; return { ham: 9, spam: 0 } } } }
+        )
+        expect(v.signals.map((s) => s.name)).toContain('personal_channel')
+        expect(v.action).toBe('delete')
+        expect(reads).toBe(0)
+      })
+
+      it('a failed read leaves the delete and is recorded', async () => {
+        const v = await evaluateMessage(makeInput(ad), {
+          ...llmSays('other_spam', 0.8),
+          chatRulings: { rulings: async () => { throw new Error('down') } }
+        })
+        expect(v.action).toBe('delete')
+        expect(v.meta['portError_chat_rulings']).toBe(true)
+      })
+
+      it('with voting off nothing would ever take the message down', async () => {
+        const v = await evaluateMessage(
+          makeInput({ ...ad, policy: { votingEnabled: false } }),
+          ports('other_spam', { ham: 9, spam: 0 })
+        )
+        expect(v.action).not.toBe('observe')
+        expect(v.meta['heldChatRuling']).toBeUndefined()
+      })
+    })
   })
 
   it('an account verdict keeps its reach — the cap is about message evidence', async () => {

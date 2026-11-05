@@ -299,7 +299,13 @@ export interface ProfileMediaPort {
   } | null>
 }
 
+/** How people in this chat ruled on `CHAT_RULED_REASON_CODES` messages lately. */
+export interface ChatRulingsPort {
+  rulings(chatId: number): Promise<{ ham: number; spam: number }>
+}
+
 export interface PipelinePorts {
+  chatRulings?: ChatRulingsPort
   signatures?: SignaturePort
   velocity?: VelocityPort
   vectors?: VectorPort

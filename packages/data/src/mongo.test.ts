@@ -2415,6 +2415,24 @@ describe('forgetLlmVerdict', () => {
   })
 })
 
+describe('chatRulings', () => {
+  it('counts each answer within one chat, these reasons and the window', async () => {
+    const filters: Record<string, unknown>[] = []
+    const store = {
+      labels: {
+        countDocuments: async (filter: Record<string, unknown>) => {
+          filters.push(filter)
+          return filter['label'] === 'ham' ? 3 : 1
+        }
+      }
+    } as unknown as MongoStore
+    const since = new Date('2026-08-07T00:00:00Z')
+    const rulings = await MongoStore.prototype.chatRulings.call(store, -100, ['other_spam'], since)
+    expect(rulings).toEqual({ ham: 3, spam: 1 })
+    expect(filters).toContainEqual({ chatId: -100, label: 'ham', reasonCode: { $in: ['other_spam'] }, createdAt: { $gte: since } })
+  })
+})
+
 describe('recordLabel', () => {
   const labelStore = () => {
     const rows = new Map<string, Record<string, unknown>>()

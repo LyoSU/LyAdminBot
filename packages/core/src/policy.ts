@@ -26,6 +26,7 @@
  *    noise; below it, a second opinion is worth the prompt.
  *  - NaN / out-of-range pSpam fails safe to observe (never to action).
  */
+import type { SignalName } from './signals/registry.js'
 import type { StrictnessPreset, Verdict, VerdictAction, ChatKind } from './types.js'
 
 export interface PolicyInput {
@@ -230,6 +231,46 @@ export const ASK_BEFORE_KICK_REASON_CODES: ReadonlySet<string> = new Set([
   'other_spam' satisfies LlmReasonCode,
   'private_invite_new'
 ])
+
+/**
+ * Reasons on which a chat's own past answers decide whether a message waits for
+ * its vote, instead of being deleted first.
+ *
+ * 14 days to 2026-11-05, 576 classifier deletes on these two reasons: people
+ * answered 59 not-spam and 90 spam, and the text does not separate the two (the
+ * same kind of offer went 2 : 8 across chats). What does is the chat. Replayed
+ * with each delete seeing only labels older than itself, chats with a not-spam
+ * majority answered 18 : 5, chats with a spam majority 28 : 75.
+ *
+ * Holding also needs `OUTSIDE_EVIDENCE_SIGNALS` to be silent, which brings it to
+ * 27 messages in the fortnight across 7 chats: 14 not-spam, 2 spam, 11 no answer.
+ * Those 11 stay up unless a vote removes them, which is the price of the rule.
+ * The signal list was picked on the same rows; `heldChatRuling` on the verdict
+ * meta is there to measure the rule on rows it has not seen.
+ */
+export const CHAT_RULED_REASON_CODES: ReadonlySet<string> = new Set([
+  'other_spam' satisfies LlmReasonCode,
+  'channel_promo' satisfies LlmReasonCode
+])
+export const CHAT_RULING_WINDOW_DAYS = 90
+export const CHAT_RULING_MIN_HAM = 2
+
+/** Whether a chat has said, more often than not, that these messages belong there. */
+export const chatToleratesAct = (rulings: { ham: number; spam: number }): boolean =>
+  rulings.ham >= CHAT_RULING_MIN_HAM && rulings.ham > rulings.spam
+
+/**
+ * What says a message is a campaign whatever the chat tolerates: a copy we have
+ * seen, an account made for this, or a profile that exists to promote. On these
+ * delete rows people answered 15 not-spam to 52 spam, without them 44 to 38.
+ */
+export const OUTSIDE_EVIDENCE_SIGNALS: ReadonlySet<string> = new Set([
+  'signature_candidate_match', 'vector_similar_spam', 'fresh_account', 'personal_channel',
+  'prior_spam_detections', 'external_ban', 'fresh_external_ban', 'avatar_recently_set',
+  'sole_avatar_replaced', 'avatar_shared_with_account', 'avatar_shared_with_accounts',
+  'private_invite_in_bio', 'promo_in_linked_channel', 'custom_emoji_heavy', 'mixed_script_word',
+  'url_shortener', 'internal_link_only', 'invisible_in_name'
+] satisfies SignalName[])
 
 /**
  * Reason codes whose capped verdict resolves the account without opening a

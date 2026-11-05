@@ -38,7 +38,8 @@ import {
 } from './signals/registry.js'
 import {
   decideAction, isEnforcementAction, removesSender, mayAskCaptcha, isChannelSenderId,
-  ASK_BEFORE_KICK_REASON_CODES, IMITABLE_REASON_CODES, PRESET_THRESHOLDS, captchaBlockers, TIMED_BAN_SECONDS,
+  ASK_BEFORE_KICK_REASON_CODES, CHAT_RULED_REASON_CODES, IMITABLE_REASON_CODES, OUTSIDE_EVIDENCE_SIGNALS,
+  PRESET_THRESHOLDS, captchaBlockers, chatToleratesAct, TIMED_BAN_SECONDS,
   VOTE_SKIP_REASON_CODES,
   type PolicyDecision, type PolicyInput
 } from './policy.js'
@@ -992,6 +993,27 @@ export const evaluateMessage = async (
   }
 
   /**
+   * Leave the message up and only ask, in a chat whose people keep answering
+   * that this kind of message belongs there — see `CHAT_RULED_REASON_CODES`.
+   *
+   * Only a delete that already asks: a removal or a mute above it was priced on
+   * other grounds, and with no vote nothing would ever take the message down.
+   * Applied last, so it reads what the caps left. The store is read only here,
+   * and a failed read leaves the delete as it was.
+   */
+  const holdOnChatRuling = async (verdict: Verdict): Promise<Verdict> => {
+    if (verdict.action !== 'delete' || !verdict.needsVote) return verdict
+    if (!CHAT_RULED_REASON_CODES.has(verdict.reasonCode)) return verdict
+    if (verdict.signals.some((s) => OUTSIDE_EVIDENCE_SIGNALS.has(s.name))) return verdict
+    if (!ports.chatRulings) return verdict
+    const rulings = await safe('chat_rulings', () => ports.chatRulings!.rulings(input.message.chatId))
+    if (rulings === null || !chatToleratesAct(rulings)) return verdict
+    if (meta['cappedFrom'] === undefined) meta['cappedFrom'] = verdict.action
+    meta['heldChatRuling'] = `${rulings.ham}:${rulings.spam}`
+    return { ...verdict, action: 'observe' as VerdictAction, requireCaptcha: false }
+  }
+
+  /**
    * A window stage may never enforce on `flood`, whoever sent it.
    *
    * This one is not calibration. `flood` is a description of this stage's
@@ -1510,7 +1532,7 @@ export const evaluateMessage = async (
          */
         const { pSpam: sessionScore } = scoreSignals(signals)
         if (meta['scorePSpam'] === undefined) meta['scorePSpam'] = Number(sessionScore.toFixed(4))
-        return stampLlmShadow(capVouchedWindow(capWindowFlood(capSoleWitness(capImitableAct(finalize(
+        return stampLlmShadow(await holdOnChatRuling(capVouchedWindow(capWindowFlood(capSoleWitness(capImitableAct(finalize(
           {
             pSpam: llmVerdict.pSpam,
             decidedBy: 'session',
@@ -1519,7 +1541,7 @@ export const evaluateMessage = async (
             reasonEvidence: llmVerdict.evidence
           },
           signals
-        )), sessionScore))), window.combinedText)
+        )), sessionScore)))), window.combinedText)
       }
     }
     return null
@@ -2235,7 +2257,7 @@ export const evaluateMessage = async (
        *
        * `capUnearnedRemoval` is the wrong instrument here — see the session path.
        */
-      return stampLlmShadow(floorNetworkFact(capSoleWitness(capImitableAct(finalize(
+      return stampLlmShadow(await holdOnChatRuling(floorNetworkFact(capSoleWitness(capImitableAct(finalize(
         {
           pSpam: llmVerdict.pSpam,
           decidedBy: llmVerdict.cached ? 'llm_cached' : 'llm',
@@ -2244,7 +2266,7 @@ export const evaluateMessage = async (
           reasonEvidence: llmVerdict.evidence
         },
         signals
-      )), scorePSpam), scorePSpam), text)
+      )), scorePSpam), scorePSpam)), text)
     }
     llmNeededButUnavailable = true
   }

@@ -20,6 +20,7 @@ import {
   accountVerdict, hasBanGradeAccountVerdict, extractUserSignals, PROFILE_EVIDENCE_SIGNALS,
   accountScreenAllowed, accountScreenRemoves, accountScreenUnasked, hardVerdictSourceOf, PRESET_THRESHOLDS,
   captchaBlockers, TIMED_BAN_SECONDS, VOTE_WINDOW_SECONDS, LLM_CLEARANCE_TTL_MS, expiryOutcome,
+  CHAT_RULED_REASON_CODES, CHAT_RULING_WINDOW_DAYS,
   createProfileRecheckQueue, profileRecheckOutcome, wantsProfileRecheck,
   PROFILE_RECHECK_DELAYS_MS, PROFILE_RECHECK_MAX_PENDING, metronomeShape, trailingMetronome, joinRequestVerdict,
   type AccountAction, type CaptchaBlocker,
@@ -121,6 +122,11 @@ const vectorPort = config.qdrantUrl && config.openaiApiKey
 
 const buildPorts = (): PipelinePorts => {
   const ports: PipelinePorts = {
+    chatRulings: {
+      rulings: (chatId) => store.chatRulings(
+        chatId, [...CHAT_RULED_REASON_CODES], new Date(Date.now() - CHAT_RULING_WINDOW_DAYS * 86_400_000)
+      )
+    },
     signatures: signaturePort,
     velocity: velocityPort,
     session: sessionPort,
@@ -6872,6 +6878,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       // remove somebody over an act members also perform.
       cappedImitable: verdict.meta['cappedImitable'] ?? undefined,
       cappedAskFirst: verdict.meta['cappedAskFirst'] ?? undefined,
+      heldChatRuling: verdict.meta['heldChatRuling'] ?? undefined,
       // Present only when the message evidence WAS sufficient and the sender's
       // standing in the chat overruled it — the one branch whose cost is a
       // judgement call rather than a measurement, so it has to be countable.

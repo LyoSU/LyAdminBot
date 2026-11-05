@@ -1868,6 +1868,15 @@ export class MongoStore {
     }, { upsert: true })
   }
 
+  /** How people in one chat ruled on messages decided under these reasons. */
+  async chatRulings(chatId: number, reasonCodes: readonly string[], since: Date): Promise<{ ham: number; spam: number }> {
+    const count = (label: 'ham' | 'spam'): Promise<number> => this.labels.countDocuments({
+      chatId, label, reasonCode: { $in: [...reasonCodes] }, createdAt: { $gte: since }
+    })
+    const [ham, spam] = await Promise.all([count('ham'), count('spam')])
+    return { ham, spam }
+  }
+
   /** The stored preview of a decided message, for a ruling made after a restart. */
   async getDecisionText(chatId: number, messageId: number): Promise<string | null> {
     const doc = await this.decisions.findOne(
