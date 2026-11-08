@@ -115,9 +115,8 @@ export const en: Locale = {
     '',
     '<b>Admins:</b>',
     '/settings — settings panel (opens in a private chat, everything there is buttons)',
-    '/banan /kick /del — moderation as a reply',
-    '/check — user card with a trust button',
-    '/untrust — revoke trust',
+    '/mod — as a reply: an action panel only you see (delete, mute, kick, profile)',
+    '/banan /kick /del /check /untrust — the same as separate commands',
     '/welcome — newcomer greeting',
     '/extra, /extras — triggers',
     '',
@@ -148,6 +147,7 @@ export const en: Locale = {
     del: 'Delete a message (reply)',
     untrust: 'Revoke trust (reply)',
     check: 'Look up a profile (reply)',
+    mod: 'Actions on a message (reply)',
     top: 'Most active members',
     topBanan: 'Banana leaderboard',
     extras: 'Saved triggers',
@@ -475,6 +475,23 @@ export const en: Locale = {
   kick: {
     success: (name) => `🚪 ${name} was kicked from the chat.`,
     needReply: 'Reply with /kick to a message from the person you want to remove.'
+  },
+
+  mod: {
+    title: (who) => `🛠 Moderate: ${who}`,
+    needReply: 'Reply to a message with /mod to see what you can do with it.',
+    limited: 'This is an admin or a channel — mute and kick are not available.',
+    deleteButton: '🗑 Delete',
+    profileButton: '🔍 Profile',
+    muteButton: (duration) => `🍌 Mute ${duration}`,
+    unmuteButton: '🔓 Unmute',
+    kickButton: '🚪 Kick',
+    closeButton: 'Done',
+    deleted: '✓ deleted',
+    muted: '✓ muted',
+    unmuted: '✓ unmuted',
+    kicked: '✓ kicked',
+    failed: 'That did not work — the bot may lack admin rights.'
   },
 
   untrust: {

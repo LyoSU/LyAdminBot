@@ -34,9 +34,13 @@ describe('command menu', () => {
     }
   })
 
-  it('gives an admin the help they lose to the narrower scope', () => {
+  it('gives admins one moderation door, plus the help they lose to the narrower scope', () => {
     // Telegram serves the admins' list INSTEAD of the members' one.
-    expect(menu('botCommandScopeChatAdmins').map((c) => c.command)).toContain('help')
+    expect(menu('botCommandScopeChatAdmins')).toEqual([
+      { command: 'mod', ephemeral: true },
+      { command: 'settings', ephemeral: true },
+      { command: 'help', ephemeral: true }
+    ])
   })
 
   it('keeps the members menu short and led by /report', () => {

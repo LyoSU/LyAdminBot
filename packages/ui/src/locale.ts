@@ -176,6 +176,7 @@ export interface Locale {
     del: string
     untrust: string
     check: string
+    mod: string
     top: string
     topBanan: string
     extras: string
@@ -535,6 +536,33 @@ export interface Locale {
   kick: {
     success: (name: string) => string
     needReply: string
+  }
+
+  /**
+   * /mod — the admin's action panel on a replied-to message, whispered to the
+   * admin alone. One entry point for what used to take five reply commands.
+   */
+  mod: {
+    /** Panel header (HTML); `who` is a ready mention or a chat title. */
+    title: (who: string) => string
+    /** /mod sent without a reply. */
+    needReply: string
+    /** Under the header when the author is an admin or not a person. */
+    limited: string
+    deleteButton: string
+    profileButton: string
+    /** `duration` is formatted already (e.g. "10 хв"). */
+    muteButton: (duration: string) => string
+    unmuteButton: string
+    kickButton: string
+    closeButton: string
+    /** Status marks, joined into one line under the quote once done. */
+    deleted: string
+    muted: string
+    unmuted: string
+    kicked: string
+    /** Toast when Telegram refused the action. */
+    failed: string
   }
 
   /** /untrust — admin revokes the auto-trust granted by an override. */

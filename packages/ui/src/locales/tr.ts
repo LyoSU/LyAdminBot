@@ -111,9 +111,8 @@ export const tr: Locale = {
     '',
     '<b>Yöneticiler:</b>',
     '/settings — ayarlar paneli (özel sohbette açılır, gerisi düğmelerle)',
-    '/banan /kick /del — yanıt olarak moderasyon',
-    '/check — güven düğmeli kullanıcı kartı',
-    '/untrust — güveni kaldır',
+    '/mod — yanıt olarak: yalnızca senin gördüğün işlem paneli (sil, sustur, at, profil)',
+    '/banan /kick /del /check /untrust — aynısı ayrı komutlarla',
     '/welcome — yeni üye karşılama',
     '/extra, /extras — tetikleyiciler',
     '',
@@ -144,6 +143,7 @@ export const tr: Locale = {
     del: 'Mesajı sil (yanıt)',
     untrust: 'Güveni kaldır (yanıt)',
     check: 'Profili görüntüle (yanıt)',
+    mod: 'Mesajla ilgili işlemler (yanıt olarak)',
     top: 'En aktif üyeler',
     topBanan: 'Muz sıralaması',
     extras: 'Kayıtlı tetikleyiciler',
@@ -471,6 +471,23 @@ export const tr: Locale = {
   kick: {
     success: (name) => `🚪 ${name} sohbetten atıldı.`,
     needReply: 'Atmak istediğin kişinin mesajına /kick ile yanıt ver.'
+  },
+
+  mod: {
+    title: (who) => `🛠 Moderasyon: ${who}`,
+    needReply: 'Bir mesaja yanıt olarak /mod yaz, onunla ne yapabileceğini göstereyim.',
+    limited: 'Bu bir yönetici ya da kanal — susturma ve atma kullanılamaz.',
+    deleteButton: '🗑 Sil',
+    profileButton: '🔍 Profil',
+    muteButton: (duration) => `🍌 ${duration} sustur`,
+    unmuteButton: '🔓 Susturmayı kaldır',
+    kickButton: '🚪 At',
+    closeButton: 'Tamam',
+    deleted: '✓ silindi',
+    muted: '✓ susturuldu',
+    unmuted: '✓ susturma kaldırıldı',
+    kicked: '✓ atıldı',
+    failed: 'Olmadı — botun yönetici yetkileri eksik olabilir.'
   },
 
   untrust: {

@@ -51,6 +51,14 @@ export const callbackData = {
   // Trust toggle on the /check card; flag = make-trusted (1) or untrust (0).
   trust: (chatId: number, userId: number, makeTrusted: boolean): string =>
     `tr:${chatId}:${userId}:${makeTrusted ? '1' : '0'}`,
+  /**
+   * A /mod panel button. `done` is the panel's state (MOD_DONE bits), carried
+   * by every button so a tap re-renders the panel with no store behind it.
+   * `userId` is 0 when the author is not a person. ≤ 64 bytes: the widest
+   * values (-100… chat, 10-digit ids) come to about fifty.
+   */
+  mod: (chatId: number, messageId: number, userId: number, act: ModAct, done: number): string =>
+    `md:${chatId}:${messageId}:${userId}:${act}:${done}`,
   vote: (chatId: number, messageId: number, choice: 'spam' | 'ham'): string =>
     `vt:${chatId}:${messageId}:${choice === 'spam' ? 's' : 'h'}`,
   /** Roster of a resolved question, whispered to whoever asks. */
@@ -1723,3 +1731,74 @@ export const captchaPrompt = (
     data: callbackData.captcha(target.chatId, target.userId)
   }]]
 })
+
+/**
+ * /mod panel actions: d delete · m / M mute for the shorter / longer term ·
+ * u lift the mute · k kick · p open the profile · x close the panel.
+ */
+export type ModAct = 'd' | 'm' | 'M' | 'u' | 'k' | 'p' | 'x'
+
+/** What a /mod panel has already done, as bits — see `callbackData.mod`. */
+export const MOD_DONE = { deleted: 1, muted: 2, kicked: 4 } as const
+
+export interface ModPanelInput {
+  chatId: number
+  messageId: number
+  /** The author when a person; null for a channel or an anonymous admin. */
+  author: { id: number; label: string } | null
+  /** Shown when `author` is null — the channel's or chat's title. */
+  senderTitle: string
+  /** The message as written; quoted short and with links defused. */
+  text: string
+  /** False for an admin, a bot or a non-person: delete and profile only. */
+  canPunish: boolean
+  /** Formatted labels of the two mute terms, shorter first. */
+  muteLabels: [string, string]
+  done: number
+}
+
+/**
+ * The admin's ephemeral action panel on one message.
+ *
+ * Laid out by how often each act is reached for: delete, then the two mutes
+ * and the kick on one row, then the profile and the way out. A done act's
+ * button goes and its mark joins the status line, so one panel carries a
+ * whole sequence — delete, then kick — with no second /mod. Once the author
+ * is out there is nothing left to do to them, and only what remains shows.
+ */
+export const modPanel = (locale: Locale, p: ModPanelInput): ViewMessage => {
+  const has = (bit: number): boolean => (p.done & bit) !== 0
+  const data = (act: ModAct): string =>
+    callbackData.mod(p.chatId, p.messageId, p.author?.id ?? 0, act, p.done)
+  const who = p.author ? userMention(p.author.id, p.author.label) : escapeHtml(p.senderTitle)
+  const quote = p.text.trim() === '' ? '' : escapeHtml(truncate(redactLinks(p.text.trim(), locale.vote.redacted), 160))
+
+  const marks = [
+    has(MOD_DONE.deleted) ? locale.mod.deleted : null,
+    has(MOD_DONE.kicked) ? locale.mod.kicked : has(MOD_DONE.muted) ? locale.mod.muted : null
+  ].filter((m): m is string => m !== null)
+
+  const lines = [
+    locale.mod.title(who),
+    ...(quote ? [`<blockquote>${quote}</blockquote>`] : []),
+    ...(p.canPunish ? [] : [`<i>${escapeHtml(locale.mod.limited)}</i>`]),
+    ...(marks.length > 0 ? [marks.join(' · ')] : [])
+  ]
+
+  const buttons: ButtonSpec[][] = []
+  if (!has(MOD_DONE.deleted)) buttons.push([{ text: locale.mod.deleteButton, data: data('d') }])
+  if (p.canPunish && !has(MOD_DONE.kicked)) {
+    buttons.push(has(MOD_DONE.muted)
+      ? [{ text: locale.mod.unmuteButton, data: data('u') }, { text: locale.mod.kickButton, data: data('k') }]
+      : [
+          { text: locale.mod.muteButton(p.muteLabels[0]), data: data('m') },
+          { text: locale.mod.muteButton(p.muteLabels[1]), data: data('M') },
+          { text: locale.mod.kickButton, data: data('k') }
+        ])
+  }
+  buttons.push([
+    ...(p.author ? [{ text: locale.mod.profileButton, data: data('p') }] : []),
+    { text: locale.mod.closeButton, data: data('x') }
+  ])
+  return { text: lines.join('\n'), buttons }
+}

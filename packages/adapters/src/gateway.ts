@@ -280,20 +280,25 @@ export class TelegramGateway {
     chatId: number,
     receiverId: number,
     text: InputText,
-    params: { replyMarkup?: ReplyMarkup; replyToEphemeral?: number } = {}
+    params: { replyMarkup?: ReplyMarkup; replyToEphemeral?: number; replyTo?: number } = {}
   ): Promise<number> {
     const sent = await this.tg.sendEphemeralMessage(chatId, receiverId, text, {
       ...(params.replyMarkup !== undefined ? { replyMarkup: params.replyMarkup } : {}),
+      ...(params.replyTo !== undefined ? { replyTo: params.replyTo } : {}),
       ...(params.replyToEphemeral !== undefined ? { replyToEphemeral: params.replyToEphemeral } : {})
     })
     return sent.id
   }
 
-  /** Replace the keyboard of an ephemeral message (a toggled button). */
-  async editEphemeralMarkup(
-    chatId: number, receiverId: number, messageId: number, replyMarkup: ReplyMarkup
+  /** Edit an ephemeral message in place: its keyboard, and its text when given. */
+  async editEphemeral(
+    chatId: number, receiverId: number, messageId: number,
+    params: { text?: InputText; replyMarkup: ReplyMarkup }
   ): Promise<void> {
-    await this.tg.editEphemeralMessage({ chatId, receiverId, messageId, replyMarkup })
+    await this.tg.editEphemeralMessage({
+      chatId, receiverId, messageId, replyMarkup: params.replyMarkup,
+      ...(params.text !== undefined ? { text: params.text } : {})
+    })
   }
 
   /** Remove an ephemeral message early; it expires on its own regardless. */

@@ -4,7 +4,7 @@
  * only assembly, the per-message flow, and callback handling.
  */
 import { createHash } from 'node:crypto'
-import { BotKeyboard, Chat, User, html, type Message } from '@mtcute/node'
+import { BotKeyboard, Chat, User, html, type EphemeralCallbackQuery, type Message } from '@mtcute/node'
 import {
   evaluateMessage, tallyVotes, extractBioSignals, BIO_PROMO_SIGNALS,
   isEnforcementAction, countsAsDetection,
@@ -52,7 +52,7 @@ import {
   nameIsPromo, ownRestrictionsView, OWN_RESTRICTIONS_SHOWN, startCard, startGroupHint, statsCard, topList, userMention, userProfileCard, votePrompt, voteResult,
   voterListView, whyCard, whyView,
   welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor,
-  LOCALES, type Locale, type UserFacts, type ViewMessage
+  LOCALES, MOD_DONE, modPanel, type Locale, type UserFacts, type ViewMessage
 } from '@lyadmin/ui'
 import { loadConfig } from './config.js'
 import { JoinRequestLedger, createScreenLimiter } from './join-request.js'
@@ -2696,29 +2696,48 @@ const handleBanan = async (message: Message, chat: Chat, caller: User, arg: stri
   if (!explicit) {
     const member = await gateway.tg.getChatMember({ chatId: chat.id, userId: target.id }).catch(() => null)
     if (member?.status === 'restricted') {
-      await gateway.tg.restrictChatMember({ chatId: chat.id, userId: target.id, restrictions: {} })
-        .catch(() => { /* ok */ })
       await dropCommand()
-      log.info('banan_lifted', { chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName, by: caller.id, byName: caller.displayName })
-      await tgSendText(chat.id, viewHtml(locale.banan.lifted(userMention(target.id, target.displayName))))
-        .catch(() => { /* non-fatal */ })
+      await adminUnmute(chat, caller, target, locale)
       return
     }
   }
 
+  await adminMute(chat, caller, target, seconds, locale)
+  await dropCommand()
+}
+
+/**
+ * An admin's mute of `target`, with the chat's notice and its undo button.
+ * Shared by `/banan` and the `/mod` panel, so a mute reads the same whichever
+ * way the admin reached for it. False when Telegram refused it.
+ */
+const adminMute = async (
+  chat: Chat, caller: User, target: User, seconds: number, locale: Locale
+): Promise<boolean> => {
   const ok = await gateway.moderationActions.mute(chat.id, target.id, seconds)
     .then(() => true).catch(() => false)
-  await dropCommand()
-  if (!ok) return
+  if (!ok) return false
   // A pending captcha's button clears every restriction, this mute included —
   // the target could undo an admin's /banan with one tap (2026-09-23 review).
   await dropGate(chat.id, target.id, 'banan')
   log.info('banan', { chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName, by: caller.id, byName: caller.displayName, kind: 'admin', seconds })
   rememberBananLabel(chat.id, target.id, target.displayName)
+  const human = formatDuration(seconds, locale.banan.units)
   const sent = await tgSendText(chat.id, viewHtml(locale.banan.success(userMention(target.id, target.displayName), human)), {
     replyMarkup: toKeyboard([[{ text: locale.banan.undoButton, data: `un:${chat.id}:${target.id}` }]])
   }).catch(() => null)
   if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'banan')
+  return true
+}
+
+/** An admin lifts `target`'s mute, and the chat is told. */
+const adminUnmute = async (chat: Chat, caller: User, target: User, locale: Locale): Promise<boolean> => {
+  const ok = await gateway.tg.restrictChatMember({ chatId: chat.id, userId: target.id, restrictions: {} })
+    .then(() => true).catch(() => false)
+  log.info('banan_lifted', { chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName, by: caller.id, byName: caller.displayName })
+  await tgSendText(chat.id, viewHtml(locale.banan.lifted(userMention(target.id, target.displayName))))
+    .catch(() => { /* non-fatal */ })
+  return ok
 }
 
 /**
@@ -2738,11 +2757,8 @@ const handleKick = async (message: Message, chat: Chat, caller: User): Promise<v
   const target = replied.sender
   if (!(target instanceof User) || target.isBot || target.id === selfId) return
   if (await isChatAdmin(chat.id, target.id)) return
-  // The same kick the verdicts use, so the ban half carries its safety expiry.
-  let kickError = ''
-  const ok = await gateway.moderationActions.kick(chat.id, target.id)
-    .then(() => true).catch((err: unknown) => { kickError = String(err); return false })
-  if (!ok) {
+  const kickError = await adminKick(chat, caller, target, locale)
+  if (kickError !== null) {
     // Answered, not dropped: the admin asked for this. The command stays until
     // the reply goes with it (`answerMissingRightsCommand`).
     if (failureKind(`kick: ${kickError}`) === 'rights') {
@@ -2756,9 +2772,22 @@ const handleKick = async (message: Message, chat: Chat, caller: User): Promise<v
     return
   }
   await dropCommand()
+}
+
+/**
+ * An admin's kick of `target`, and the chat's notice. The same kick the
+ * verdicts use, so the ban half carries its safety expiry. Returns Telegram's
+ * refusal, or null when it went through.
+ */
+const adminKick = async (chat: Chat, caller: User, target: User, locale: Locale): Promise<string | null> => {
+  let kickError: string | null = null
+  await gateway.moderationActions.kick(chat.id, target.id)
+    .catch((err: unknown) => { kickError = String(err) })
+  if (kickError !== null) return kickError
   log.info('kick', { chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName, by: caller.id })
   const sent = await tgSendText(chat.id, viewHtml(locale.kick.success(userMention(target.id, target.displayName)))).catch(() => null)
   if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'kick')
+  return null
 }
 
 /**
@@ -2843,11 +2872,6 @@ const trustGrantView = async (
   }
 }
 
-/**
- * /check — admin looks up the profile of the replied-to user. Builds a LIVE
- * snapshot (history + getFullUser + external-ban + join time) and renders the
- * profile card. Reply required; admin-only; the card auto-deletes.
- */
 /** The `/check` profile card for `target`, shared by the visible and the ephemeral answer. */
 const checkCard = async (chat: Chat, target: User, caller: User, locale: Locale): Promise<ViewMessage> => {
   const facts = await buildLiveFacts(chat.id, target)
@@ -2862,6 +2886,11 @@ const checkCard = async (chat: Chat, target: User, caller: User, locale: Locale)
   })
 }
 
+/**
+ * /check — admin looks up the profile of the replied-to user. Builds a LIVE
+ * snapshot (history + getFullUser + external-ban + join time) and renders the
+ * profile card. Reply required; admin-only; the card auto-deletes.
+ */
 const handleCheck = async (message: Message, chat: Chat, caller: User): Promise<void> => {
   const locale = await groupLocale(chat.id)
   if (!(await isChatAdmin(chat.id, caller.id))) return
@@ -2910,11 +2939,16 @@ const applyTrustToggle = async (
  * answer that does not point at its question still answers it.
  */
 const whisperAnswer = async (
-  chatId: number, receiverId: number, view: ViewMessage, replyToEphemeral: number
+  chatId: number, receiverId: number, view: ViewMessage,
+  replyTo: { toEphemeral?: number; toMessage?: number } = {}
 ): Promise<void> => {
   const markup = view.buttons.length > 0 ? { replyMarkup: toKeyboard(view.buttons) } : {}
+  const replyParams = {
+    ...(replyTo.toEphemeral !== undefined ? { replyToEphemeral: replyTo.toEphemeral } : {}),
+    ...(replyTo.toMessage !== undefined ? { replyTo: replyTo.toMessage } : {})
+  }
   const send = (text: Parameters<typeof gateway.sendEphemeral>[2], reply: boolean): Promise<number> =>
-    gateway.sendEphemeral(chatId, receiverId, text, { ...markup, ...(reply ? { replyToEphemeral } : {}) })
+    gateway.sendEphemeral(chatId, receiverId, text, { ...markup, ...(reply ? replyParams : {}) })
   const text = viewHtml(view.text)
   try {
     await send(text, true)
@@ -2951,7 +2985,7 @@ const handleEphemeralCommand = async (command: EphemeralCommand): Promise<void> 
   }
   const locale = await localeFor(sender.id, sender.language)
   const answer = (view: ViewMessage): Promise<void> =>
-    whisperAnswer(chat.id, sender.id, view, command.messageId)
+    whisperAnswer(chat.id, sender.id, view, { toEphemeral: command.messageId })
   log.info('ephemeral_command', { chatId: chat.id, userId: sender.id, name: cmd.name })
 
   switch (cmd.name) {
@@ -2988,9 +3022,7 @@ const handleEphemeralCommand = async (command: EphemeralCommand): Promise<void> 
         await answer({ text: locale.notification.adminOnly, buttons: [] })
         return
       }
-      const replied = command.replyToMessageId === null
-        ? null
-        : (await gateway.tg.getMessages(chat.id, [command.replyToMessageId]).catch(() => []))[0] ?? null
+      const replied = await messageById(chat.id, command.replyToMessageId)
       if (!replied || !(replied.sender instanceof User)) {
         await answer({ text: locale.profile.checkNeedReply, buttons: [] })
         return
@@ -2998,7 +3030,242 @@ const handleEphemeralCommand = async (command: EphemeralCommand): Promise<void> 
       await answer(await checkCard(chat, replied.sender, sender, locale))
       return
     }
+    case 'mod':
+      if (!(await isChatAdmin(chat.id, sender.id))) {
+        await answer({ text: locale.notification.adminOnly, buttons: [] })
+        return
+      }
+      await openModPanel(chat, sender, await messageById(chat.id, command.replyToMessageId), locale,
+        { toEphemeral: command.messageId })
+      return
   }
+}
+
+/** One chat message by id, or null — gone, never there, or not ours to read. */
+const messageById = async (chatId: number, messageId: number | null): Promise<Message | null> =>
+  messageId === null
+    ? null
+    : (await gateway.tg.getMessages(chatId, [messageId]).catch(() => []))[0] ?? null
+
+// ── /mod: the admin's action panel ──────────────────────────────────────────
+
+const DAY_SECONDS = 24 * 60 * 60
+const WEEK_SECONDS = 7 * DAY_SECONDS
+
+/**
+ * The panel's two mute terms: the chat's own `/banan` default, so the first
+ * button does what the admin already expects of a banana, and one clearly
+ * longer step for the case the default was too kind.
+ */
+const modMuteTerms = async (chatId: number): Promise<[number, number]> => {
+  const doc = await store.getGroupDoc(chatId).catch(() => null)
+  const shorter = Number((doc as { settings?: { banan?: { default?: number } } } | null)
+    ?.settings?.banan?.default) || 600
+  const longer = shorter < DAY_SECONDS ? DAY_SECONDS : shorter < WEEK_SECONDS ? WEEK_SECONDS : shorter * 4
+  return [shorter, longer]
+}
+
+/** What a panel is about: the message's author and its words. */
+interface ModSubject {
+  author: User | null
+  /** The sending chat's title when the author is not a person. */
+  title: string
+  text: string
+}
+
+/**
+ * Subjects of open panels, by chat and message. Held so the quote survives
+ * the message's own deletion — the panel's first button removes exactly the
+ * thing it quotes. A restart loses this and the panel falls back to reading
+ * the message again, then to the author alone; nothing here is a record.
+ */
+const modSubjects = new Map<string, { subject: ModSubject; at: number }>()
+const MOD_SUBJECT_TTL_MS = 60 * 60 * 1000
+
+const rememberModSubject = (chatId: number, messageId: number, subject: ModSubject): void => {
+  const now = Date.now()
+  for (const [key, entry] of modSubjects) {
+    if (now - entry.at > MOD_SUBJECT_TTL_MS) modSubjects.delete(key)
+  }
+  modSubjects.set(`${chatId}:${messageId}`, { subject, at: now })
+}
+
+const modSubjectOf = (message: Message): ModSubject => {
+  const sender = message.sender
+  return {
+    author: sender instanceof User ? sender : null,
+    title: sender.displayName,
+    text: message.text ?? ''
+  }
+}
+
+const loadModSubject = async (chatId: number, messageId: number, userId: number): Promise<ModSubject | null> => {
+  const cached = modSubjects.get(`${chatId}:${messageId}`)
+  if (cached) return cached.subject
+  const message = await messageById(chatId, messageId)
+  if (message) return modSubjectOf(message)
+  if (userId === 0) return null
+  const [author] = await gateway.tg.getUsers([userId]).catch(() => [null])
+  return author ? { author, title: '', text: '' } : null
+}
+
+/** Whether the panel may offer a mute or a kick against this author at all. */
+const modCanPunish = async (chatId: number, author: User | null): Promise<boolean> =>
+  author !== null && !author.isBot && author.id !== selfId && !(await isChatAdmin(chatId, author.id))
+
+const renderModPanel = async (
+  chat: Chat, messageId: number, subject: ModSubject, done: number, locale: Locale
+): Promise<ViewMessage> => {
+  const [shorter, longer] = await modMuteTerms(chat.id)
+  return modPanel(locale, {
+    chatId: chat.id,
+    messageId,
+    author: subject.author ? { id: subject.author.id, label: subject.author.displayName } : null,
+    senderTitle: subject.title,
+    text: subject.text,
+    canPunish: await modCanPunish(chat.id, subject.author),
+    muteLabels: [formatDuration(shorter, locale.banan.units), formatDuration(longer, locale.banan.units)],
+    done
+  })
+}
+
+/**
+ * Open a panel on `replied` for `caller`, who is already known to be an admin.
+ * Opens with the mute already marked when the author sits restricted, so the
+ * panel offers to lift it rather than to stack a second one.
+ */
+const openModPanel = async (
+  chat: Chat, caller: User, replied: Message | null, locale: Locale,
+  replyTo: { toEphemeral?: number; toMessage?: number }
+): Promise<void> => {
+  if (!replied) {
+    await whisperAnswer(chat.id, caller.id, { text: locale.mod.needReply, buttons: [] }, replyTo)
+    return
+  }
+  const subject = modSubjectOf(replied)
+  rememberModSubject(chat.id, replied.id, subject)
+  let done = 0
+  if (subject.author && await modCanPunish(chat.id, subject.author)) {
+    const member = await gateway.tg.getChatMember({ chatId: chat.id, userId: subject.author.id }).catch(() => null)
+    if (member?.status === 'restricted') done |= MOD_DONE.muted
+  }
+  log.info('mod_panel', { chatId: chat.id, chat: chat.title ?? undefined, by: caller.id, messageId: replied.id, userId: subject.author?.id })
+  await whisperAnswer(chat.id, caller.id, await renderModPanel(chat, replied.id, subject, done, locale), replyTo)
+}
+
+/**
+ * `/mod` sent as an ordinary message — a client that does not send menu
+ * commands ephemerally, or one typed by hand. The command goes from the chat
+ * and the panel is whispered all the same, replying to the message it is
+ * about. A member typing it is ignored, like every admin command.
+ */
+const handleModCommand = async (message: Message, chat: Chat, caller: User): Promise<void> => {
+  if (!(await isChatAdmin(chat.id, caller.id))) return
+  await gateway.tg.deleteMessagesById(chat.id, [message.id]).catch(() => { /* no rights */ })
+  const replied = await gateway.fetchRepliedMessage(message)
+  const locale = await localeFor(caller.id, caller.language)
+  await openModPanel(chat, caller, replied, locale, replied ? { toMessage: replied.id } : {})
+}
+
+/**
+ * A tap on a panel button. Every act re-checks that the tapper is an admin
+ * and that the author may be punished — the payload is forgeable, and an
+ * author can be promoted between the panel opening and the tap.
+ *
+ * The panel speaks the admin's language; what the act announces to the chat
+ * speaks the group's, exactly as `/banan` and `/kick` do.
+ */
+const answerModTap = async (query: EphemeralCallbackQuery, parts: string[]): Promise<void> => {
+  const [chatIdRaw = '', messageIdRaw = '', userIdRaw = '', act = '', doneRaw = ''] = parts
+  const chatId = Number(chatIdRaw)
+  const messageId = Number(messageIdRaw)
+  const userId = Number(userIdRaw)
+  let done = Number(doneRaw) || 0
+  const toast = (text?: string, alert = false): Promise<void> =>
+    gateway.tg.answerCallbackQuery(query.id, text === undefined ? {} : { text, alert })
+      .then(() => undefined).catch(() => { /* expired */ })
+  if (!Number.isSafeInteger(chatId) || !Number.isSafeInteger(messageId) || !Number.isSafeInteger(userId)) {
+    await toast()
+    return
+  }
+  const locale = await localeFor(query.user.id, query.user.language)
+  if (!(await isChatAdmin(chatId, query.user.id))) {
+    await toast(locale.notification.adminOnly, true)
+    return
+  }
+  if (act === 'x') {
+    await gateway.removeEphemeralPrompt(chatId, query.user.id, query.messageId).catch(() => { /* expired */ })
+    await toast()
+    return
+  }
+  const chat = query.chat instanceof Chat ? query.chat : await gateway.tg.getChat(chatId).catch(() => null)
+  const subject = await loadModSubject(chatId, messageId, userId)
+  if (!chat || !subject) {
+    await toast(locale.mod.failed, true)
+    return
+  }
+  const author = subject.author
+
+  if (act === 'p') {
+    if (author) await whisperAnswer(chatId, query.user.id, await checkCard(chat, author, query.user, locale))
+    await toast()
+    return
+  }
+
+  const chatLocale = await groupLocale(chatId)
+  let mark: string | null = null
+  if (act === 'd') {
+    const ok = await gateway.tg.deleteMessagesById(chatId, [messageId]).then(() => true).catch(() => false)
+    if (ok) {
+      done |= MOD_DONE.deleted
+      mark = locale.mod.deleted
+      log.info('mod_delete', { chatId, messageId, by: query.user.id, userId: author?.id })
+    }
+  } else if (act === 'm' || act === 'M' || act === 'u' || act === 'k') {
+    if (!author || !(await modCanPunish(chatId, author))) {
+      await toast(locale.mod.limited, true)
+      return
+    }
+    if (act === 'u') {
+      if (await adminUnmute(chat, query.user, author, chatLocale)) {
+        done &= ~MOD_DONE.muted
+        mark = locale.mod.unmuted
+      }
+    } else if (act === 'k') {
+      const error = await adminKick(chat, query.user, author, chatLocale)
+      if (error === null) {
+        done |= MOD_DONE.kicked
+        mark = locale.mod.kicked
+      } else {
+        log.warn('kick_failed', { chatId, userId: author.id, error: telegramErrorName(error), via: 'mod' })
+      }
+    } else {
+      const [shorter, longer] = await modMuteTerms(chatId)
+      if (await adminMute(chat, query.user, author, act === 'm' ? shorter : longer, chatLocale)) {
+        done |= MOD_DONE.muted
+        mark = locale.mod.muted
+      }
+    }
+  } else {
+    await toast()
+    return
+  }
+
+  if (mark === null) {
+    await toast(locale.mod.failed, true)
+    return
+  }
+  const view = await renderModPanel(chat, messageId, subject, done, locale)
+  const text = viewHtml(view.text)
+  const replyMarkup = toKeyboard(view.buttons)
+  await gateway.editEphemeral(chatId, query.user.id, query.messageId, { text, replyMarkup })
+    .catch(async (err: unknown) => {
+      if (!hasMention(text) || !MENTION_REJECTED.test(String(err))) return
+      await gateway.editEphemeral(chatId, query.user.id, query.messageId, {
+        text: withoutMentions(text as RichText), replyMarkup
+      }).catch(() => { /* expired */ })
+    })
+  await toast(mark)
 }
 
 /** /del — admin deletes the replied-to message (and the command). */
@@ -6097,6 +6364,10 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       await handleDelete(message, chat, userSender)
       return
     }
+    if (bare('mod')) {
+      await handleModCommand(message, chat, userSender)
+      return
+    }
     if (bare('mystats') && selfUsername) {
       const locale = await groupLocale(chat.id)
       await sendView(message, {
@@ -8257,10 +8528,14 @@ const wireCallbacks = (): void => {
       }
       const makeTrusted = flagRaw === '1'
       const flipped = await applyTrustToggle(chatId, userId, makeTrusted, query.user.id, locale)
-      await gateway.editEphemeralMarkup(chatId, query.user.id, query.messageId, flipped)
+      await gateway.editEphemeral(chatId, query.user.id, query.messageId, { replyMarkup: flipped })
         .catch(() => { /* expired */ })
       await gateway.tg.answerCallbackQuery(query.id, { text: makeTrusted ? locale.trust.added : locale.trust.removed })
         .catch(() => { /* ok */ })
+      return
+    }
+    if (kind === 'md') {
+      await answerModTap(query, parts)
       return
     }
     if (kind !== 'cap') {

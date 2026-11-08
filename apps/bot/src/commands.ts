@@ -27,7 +27,7 @@ type CommandKey = keyof Locale['commands']
 const SLASH_NAME: Record<CommandKey, string> = {
   start: 'start', help: 'help', lang: 'lang', mystats: 'mystats', stats: 'stats',
   report: 'report', settings: 'settings', banan: 'banan', kick: 'kick',
-  del: 'del', untrust: 'untrust', check: 'check', top: 'top',
+  del: 'del', untrust: 'untrust', check: 'check', mod: 'mod', top: 'top',
   topBanan: 'top_banan', extras: 'extras', welcome: 'welcome', ping: 'ping'
 }
 
@@ -56,12 +56,16 @@ export const SCOPES: { scope: tl.TypeBotCommandScope; keys: CommandKey[]; group:
   /**
    * Admins. Telegram resolves the narrowest scope, so this list REPLACES the
    * members' one for an admin rather than adding to it — `help` is repeated
-   * here for that reason. Moderation first, in the order of how often it is
-   * reached for, then the panel.
+   * here for that reason.
+   *
+   * `/mod` is the one moderation entry: reply to a message, get a panel only
+   * the admin sees, act from its buttons. The reply commands it replaces
+   * (`del`, `banan`, `kick`, `check`, `untrust`) still work when typed — they
+   * are muscle memory for long-time admins — but the menu shows one door.
    */
   {
     scope: { _: 'botCommandScopeChatAdmins' },
-    keys: ['del', 'banan', 'kick', 'check', 'untrust', 'settings', 'help'],
+    keys: ['mod', 'settings', 'help'],
     group: true
   }
 ]

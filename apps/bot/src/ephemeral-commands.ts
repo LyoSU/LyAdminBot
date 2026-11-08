@@ -13,12 +13,15 @@
  * update. A command flagged in the menu and missing from the router is a
  * command that silently stopped working, and the test pins the two together.
  *
+ * `/mod` is in: the panel is the admin's alone, and what it DOES — a mute, a
+ * kick — is announced to the chat by the act itself, not by the command.
+ *
  * What stays out: anything that changes the chat (`banan`, `kick`, `del`,
  * `untrust`) — the members should see the moderation happen — and `/report`,
  * which is a public act by decision of 2026-11-08.
  */
 export const EPHEMERAL_COMMANDS: ReadonlySet<string> = new Set([
-  'help', 'stats', 'mystats', 'check', 'settings', 'lang', 'start'
+  'help', 'stats', 'mystats', 'check', 'settings', 'lang', 'start', 'mod'
 ])
 
 export const isEphemeralCommand = (name: string): boolean => EPHEMERAL_COMMANDS.has(name)
