@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createUpdateDedup, deliveryKey } from './update-dedup.js'
+import { createUpdateDedup, deliveryKey, ephemeralDeliveryKey } from './update-dedup.js'
 
 const at = (t: { ms: number }, maxEntries = 1000, ttlMs = 60_000) =>
   createUpdateDedup({ maxEntries, ttlMs, now: () => t.ms })
@@ -85,5 +85,26 @@ describe('createUpdateDedup', () => {
     // 1 and 2 were evicted, so they read as new again; 5 is still remembered.
     expect(dedup.claim(deliveryKey(-100, 1, false, null))).toBe(true)
     expect(dedup.claim(deliveryKey(-100, 5, false, null))).toBe(false)
+  })
+})
+
+describe('ephemeralDeliveryKey', () => {
+  it('collapses a redelivered ephemeral command', () => {
+    const dedup = createUpdateDedup()
+    const at = new Date('2026-11-08T11:34:55Z')
+    expect(dedup.claim(ephemeralDeliveryKey(-100, 7, 3, at))).toBe(true)
+    expect(dedup.claim(ephemeralDeliveryKey(-100, 7, 3, new Date(at.getTime())))).toBe(false)
+  })
+
+  it('lets a reused ephemeral id through as a new command', () => {
+    // Telegram hands the id out again once the first message has expired.
+    const dedup = createUpdateDedup()
+    expect(dedup.claim(ephemeralDeliveryKey(-100, 7, 3, new Date('2026-11-08T11:00:00Z')))).toBe(true)
+    expect(dedup.claim(ephemeralDeliveryKey(-100, 7, 3, new Date('2026-11-08T11:05:00Z')))).toBe(true)
+    expect(dedup.claim(ephemeralDeliveryKey(-100, 8, 3, new Date('2026-11-08T11:05:00Z')))).toBe(true)
+  })
+
+  it('never collides with an ordinary message key', () => {
+    expect(ephemeralDeliveryKey(-100, 7, 42, new Date(0))).not.toBe(deliveryKey(-100, 42, false, null))
   })
 })

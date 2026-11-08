@@ -18,7 +18,7 @@ import {
 import { Dispatcher, type CallbackQueryContext } from '@mtcute/dispatcher'
 import type { ModerationActions } from './executor.js'
 import { moderationActionsOver } from './moderation-actions.js'
-import { createUpdateDedup, deliveryKey } from './update-dedup.js'
+import { createUpdateDedup, deliveryKey, ephemeralDeliveryKey } from './update-dedup.js'
 import { isContentEdit } from './edit-updates.js'
 import {
   botApiMediaKind, resendStoredMedia, sendMediaByFileId, type ResendResult
@@ -251,8 +251,9 @@ export class TelegramGateway {
    * A separate update type (`updateNewEphemeralMessage`) — `onMessage` never
    * sees these, so a command flagged ephemeral in the menu and not handled here
    * would simply stop working. Serialized through the chat queue like ordinary
-   * messages. Not deduplicated: ephemeral ids are reused once a message expires,
-   * so a seen-id set would eventually swallow a fresh command.
+   * messages, and deduplicated: gap recovery redelivers these too. The key
+   * carries the sender and the date, because an ephemeral id is reused once
+   * its message expires — see `ephemeralDeliveryKey`.
    */
   onEphemeralCommand(handler: (command: EphemeralCommand) => Promise<void>): void {
     this.dispatcher.onNewEphemeralMessage(async (msg) => {
@@ -260,6 +261,11 @@ export class TelegramGateway {
       const chat = msg.chat
       const sender = msg.sender
       if (!(chat instanceof ChatPeer) || !(sender instanceof UserPeer)) return
+      if (!this.dedup.claim(ephemeralDeliveryKey(chat.id, sender.id, msg.id, msg.date))) {
+        this.duplicatesDropped += 1
+        this.duplicateSink({ chatId: chat.id, messageId: msg.id, isEdit: false, total: this.duplicatesDropped })
+        return
+      }
       const header = msg.replyTo
       const replyToMessageId = header?._ === 'messageReplyHeader' ? header.replyToMsgId ?? null : null
       const command: EphemeralCommand = {

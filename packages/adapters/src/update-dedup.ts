@@ -85,6 +85,22 @@ export const deliveryKey = (
   ? `e:${chatId}:${messageId}:${editDate ? editDate.getTime() : 0}`
   : `n:${chatId}:${messageId}`
 
+/**
+ * Key for an ephemeral delivery — a command a member sent so only the bot sees it.
+ *
+ * Redelivered like any update (production 2026-11-08: one `/help` answered
+ * twice, three seconds apart). Its id alone cannot be the key, because Telegram
+ * reuses an ephemeral id once the message expires or is deleted; the sender
+ * and the send date make a reused id a different key, while a redelivered copy
+ * carries the same date and collapses.
+ */
+export const ephemeralDeliveryKey = (
+  chatId: number,
+  senderId: number,
+  ephemeralId: number,
+  date: Date
+): string => `x:${chatId}:${senderId}:${ephemeralId}:${date.getTime()}`
+
 export const createUpdateDedup = (options: UpdateDedupOptions = {}): UpdateDedup => {
   const maxEntries = options.maxEntries ?? UPDATE_DEDUP_MAX_ENTRIES
   const ttlMs = options.ttlMs ?? UPDATE_DEDUP_TTL_MS
