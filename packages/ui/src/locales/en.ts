@@ -472,6 +472,11 @@ export const en: Locale = {
     bananUnit: () => '🍌'
   },
 
+  mutedYou: {
+    text: (chat, term) => `🔇 You can’t post in “${chat}” for ${term}: your message looked like spam to me.\nIf I got it wrong, ask the chat’s admins. The details are in a private chat with me.`,
+    button: 'Why?'
+  },
+
   kick: {
     success: (name) => `🚪 ${name} was kicked from the chat.`,
     needReply: 'Reply with /kick to a message from the person you want to remove.'
@@ -532,6 +537,7 @@ export const en: Locale = {
         `👋 <b>Newcomer greeting</b>\n\nStatus: ${state}\nTexts: ${nTexts}, GIFs: ${nGifs}\n\nIf there are several, the bot picks one at random each time.`,
       enable: '🔔 Enable',
       disable: '🔕 Disable',
+      privateButton: (on) => on ? '👤 Only the newcomer sees it: yes' : '👤 Only the newcomer sees it: no',
       texts: (n) => `📝 Texts (${n})`,
       gifs: (n) => `🎞 Media (${n})`,
       preview: '👁 Preview',

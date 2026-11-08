@@ -52,7 +52,7 @@ import {
   nameIsPromo, ownRestrictionsView, OWN_RESTRICTIONS_SHOWN, startCard, startGroupHint, statsCard, topList, userMention, userProfileCard, votePrompt, voteResult,
   voterListView, whyCard, whyView,
   welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor,
-  LOCALES, MOD_DONE, modPanel, type Locale, type UserFacts, type ViewMessage
+  LOCALES, MOD_DONE, modPanel, whyDeepLink, type Locale, type UserFacts, type ViewMessage
 } from '@lyadmin/ui'
 import { loadConfig } from './config.js'
 import { JoinRequestLedger, createScreenLimiter } from './join-request.js'
@@ -1569,6 +1569,19 @@ const NOTIFY_TTL_REFUSAL_MS = 60 * 1000
 const answerAndClear = async (
   message: Message, chatId: number, text: string, source: string
 ): Promise<void> => {
+  /**
+   * Said to the one person it concerns (2026-11-08). The command itself goes
+   * at once: a refusal means it did nothing, and the ephemeral answer needs
+   * nothing in the chat to stand on. A whisper Telegram refuses — an old
+   * client, a sender that is a channel — falls back to the visible pair below.
+   */
+  const sender = message.sender
+  if (sender instanceof User &&
+      await whisperAnswer(chatId, sender.id, { text, buttons: [] }, { toMessage: message.id })) {
+    await gateway.tg.deleteMessagesById(chatId, [message.id]).catch(() => { /* no rights */ })
+    log.info('refusal_whispered', { chatId, userId: sender.id, source })
+    return
+  }
   const sent = await tgReplyText(message, viewHtml(text))
     .catch(() => null) // no rights to speak here, or the command is already gone
   scheduleDelete(chatId, message.id, NOTIFY_TTL_REFUSAL_MS, `${source}:cmd`)
@@ -2347,7 +2360,7 @@ const renderLangPanel = async (locale: Locale, chatId: number): Promise<ViewMess
 // ── Welcome / extras editor sub-screens (rendered fresh from Mongo) ─────────
 const renderWelcomeEditor = async (locale: Locale, chatId: number): Promise<ViewMessage> => {
   const w = await store.getWelcome(chatId).catch(() => ({ enable: false, texts: [], gifs: [] }))
-  return forChat(locale, chatId, welcomeEditor(locale, chatId, { enable: w.enable, textsCount: w.texts.length, gifsCount: w.gifs.length }))
+  return forChat(locale, chatId, welcomeEditor(locale, chatId, { enable: w.enable, private: 'private' in w && w.private, textsCount: w.texts.length, gifsCount: w.gifs.length }))
 }
 const renderWelcomeTexts = async (locale: Locale, chatId: number, page: number): Promise<ViewMessage> => {
   const w = await store.getWelcome(chatId).catch(() => ({ texts: [] as string[] }))
@@ -2941,7 +2954,7 @@ const applyTrustToggle = async (
 const whisperAnswer = async (
   chatId: number, receiverId: number, view: ViewMessage,
   replyTo: { toEphemeral?: number; toMessage?: number } = {}
-): Promise<void> => {
+): Promise<boolean> => {
   const markup = view.buttons.length > 0 ? { replyMarkup: toKeyboard(view.buttons) } : {}
   const replyParams = {
     ...(replyTo.toEphemeral !== undefined ? { replyToEphemeral: replyTo.toEphemeral } : {}),
@@ -2952,17 +2965,17 @@ const whisperAnswer = async (
   const text = viewHtml(view.text)
   try {
     await send(text, true)
-    return
+    return true
   } catch (err) {
     if (hasMention(text) && MENTION_REJECTED.test(String(err))) {
       log.warn('mention_flattened', { op: 'whisper_answer', error: String(err) })
-      await send(withoutMentions(text as RichText), false).catch(() => { /* gone */ })
-      return
+      return await send(withoutMentions(text as RichText), false).then(() => true).catch(() => false)
     }
     log.warn('whisper_answer_retry', { chatId, error: String(err) })
   }
-  await send(text, false).catch((err: unknown) => {
+  return await send(text, false).then(() => true).catch((err: unknown) => {
     log.warn('whisper_answer_failed', { chatId, error: String(err) })
+    return false
   })
 }
 
@@ -2984,8 +2997,9 @@ const handleEphemeralCommand = async (command: EphemeralCommand): Promise<void> 
     return
   }
   const locale = await localeFor(sender.id, sender.language)
-  const answer = (view: ViewMessage): Promise<void> =>
-    whisperAnswer(chat.id, sender.id, view, { toEphemeral: command.messageId })
+  const answer = async (view: ViewMessage): Promise<void> => {
+    await whisperAnswer(chat.id, sender.id, view, { toEphemeral: command.messageId })
+  }
   log.info('ephemeral_command', { chatId: chat.id, userId: sender.id, name: cmd.name })
 
   switch (cmd.name) {
@@ -3038,6 +3052,28 @@ const handleEphemeralCommand = async (command: EphemeralCommand): Promise<void> 
       await openModPanel(chat, sender, await messageById(chat.id, command.replyToMessageId), locale,
         { toEphemeral: command.messageId })
       return
+  }
+}
+
+/**
+ * Tell a member, privately, that the pipeline muted them: for how long, and
+ * where to read why. The button opens the same "why?" card the admins get,
+ * which already speaks to its subject (`viewerIsSubject`). Their language,
+ * not the group's — nobody else reads it.
+ */
+const tellMuted = async (
+  chat: Chat, member: User, messageId: number, seconds: number | null
+): Promise<void> => {
+  const locale = await localeFor(member.id, member.language)
+  const term = formatDuration(seconds ?? MUTE_DURATION_SECONDS, locale.banan.units)
+  const view: ViewMessage = {
+    text: locale.mutedYou.text(escapeName(chat.title ?? ''), term),
+    buttons: selfUsername
+      ? [[{ text: locale.mutedYou.button, url: whyDeepLink(selfUsername, chat.id, messageId, member.id) }]]
+      : []
+  }
+  if (await whisperAnswer(chat.id, member.id, view)) {
+    log.info('muted_told', { chatId: chat.id, userId: member.id, messageId })
   }
 }
 
@@ -5783,6 +5819,10 @@ const handleWelcomeGreeting = async (message: Message, chat: Chat, joiners: User
   // nothing. %name% is our placeholder, substituted after escaping.
   const body = buildWelcomeGreeting(template, names, locale.welcome.defaultGreeting(names))
   const gif = pickRandom(welcome.gifs)
+  if (welcome.private) {
+    await greetPrivately(chat, joiners, template, gif, locale, message.id)
+    return
+  }
   const sentIds = gif
     ? await replayMedia(chat.id, gif, { caption: body, replyTo: message.id, tag: 'welcome_send_failed' })
     : await tgSendText(chat.id, viewHtml(body), { replyTo: message.id })
@@ -5800,6 +5840,37 @@ const handleWelcomeGreeting = async (message: Message, chat: Chat, joiners: User
     chatId: chat.id, chat: chat.title ?? undefined,
     messageId: message.id, joiners: joiners.map((j) => j.id)
   })
+}
+
+/**
+ * The greeting as an ephemeral message per newcomer: each sees their own,
+ * nobody else sees any. Nothing lands in the chat, so there is no timer to
+ * set and no greeting for the arrival purge to take down.
+ *
+ * One per person rather than one naming everybody: an ephemeral message has a
+ * single receiver. The gif is tried first; a file id the MTProto side cannot
+ * send (see media-resend.ts — no Bot API fallback exists for an ephemeral
+ * message) costs the picture, never the words. Telegram does not promise
+ * delivery to somebody offline, which for a greeting is an acceptable loss.
+ */
+const greetPrivately = async (
+  chat: Chat, joiners: User[], template: string | null | undefined, gif: string | null | undefined,
+  locale: Locale, joinMessageId: number
+): Promise<void> => {
+  for (const joiner of joiners) {
+    const name = `<b>${escapeName(joiner.displayName)}</b>`
+    const text = viewHtml(buildWelcomeGreeting(template, name, locale.welcome.defaultGreeting(name)))
+    const sent = (gif
+      ? await gateway.sendEphemeral(chat.id, joiner.id, text, { media: gif, replyTo: joinMessageId })
+        .then(() => true).catch(() => false)
+      : false) ||
+      await gateway.sendEphemeral(chat.id, joiner.id, text, { replyTo: joinMessageId })
+        .then(() => true).catch((err: unknown) => {
+          log.warn('welcome_send_failed', { chatId: chat.id, kind: 'private', err: String(err) })
+          return false
+        })
+    if (sent) log.info('welcome', { chatId: chat.id, chat: chat.title ?? undefined, messageId: joinMessageId, joiners: [joiner.id], private: true })
+  }
 }
 
 /** Map an add-list rejection reason to a localized one-liner. */
@@ -7763,6 +7834,13 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       disableWebPreview: true, silent: delivery.silent
     }).catch(() => null)
     if (sent) scheduleDelete(chat.id, sent.id, delivery.ttlMs, `mod_event:${verdict.action}`)
+    // The member is still here and can read the chat; until now all they
+    // learned was that typing stopped working. Not with a captcha: that prompt
+    // is already a whisper to them, and it says how to get out.
+    if (!live && userSender && executed.action === 'mute' && result.applied && !result.captchaRequired) {
+      void tellMuted(chat, userSender, message.id, executed.banDurationSeconds)
+        .catch(() => { /* best-effort */ })
+    }
     if (live) {
       // The run continues under its own count; only the notice is new.
       if (sent) incidents.attachCard(chat.id, sender.id, sent.id, delivery.buttons)
@@ -7972,6 +8050,11 @@ const wireCallbacks = (): void => {
         if (action === 'toggle') {
           const cur = await store.getWelcome(chatId).catch(() => ({ enable: false }))
           const ok = await store.setWelcomeEnabled(chatId, !cur.enable)
+            .then(() => true).catch(() => false)
+          if (!ok) { await query.answer({ text: locale.writeFailed, alert: true }); return }
+        } else if (action === 'priv') {
+          const cur = await store.getWelcome(chatId).catch(() => ({ private: false }))
+          const ok = await store.setWelcomePrivate(chatId, !cur.private)
             .then(() => true).catch(() => false)
           if (!ok) { await query.answer({ text: locale.writeFailed, alert: true }); return }
         } else if (action === 'tdel') {

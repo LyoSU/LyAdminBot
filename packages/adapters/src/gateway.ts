@@ -280,9 +280,11 @@ export class TelegramGateway {
     chatId: number,
     receiverId: number,
     text: InputText,
-    params: { replyMarkup?: ReplyMarkup; replyToEphemeral?: number; replyTo?: number } = {}
+    params: { replyMarkup?: ReplyMarkup; replyToEphemeral?: number; replyTo?: number; media?: string } = {}
   ): Promise<number> {
     const sent = await this.tg.sendEphemeralMessage(chatId, receiverId, text, {
+      // A stored file id, sent as whatever kind it names.
+      ...(params.media !== undefined ? { media: { type: 'auto' as const, file: params.media } } : {}),
       ...(params.replyMarkup !== undefined ? { replyMarkup: params.replyMarkup } : {}),
       ...(params.replyTo !== undefined ? { replyTo: params.replyTo } : {}),
       ...(params.replyToEphemeral !== undefined ? { replyToEphemeral: params.replyToEphemeral } : {})

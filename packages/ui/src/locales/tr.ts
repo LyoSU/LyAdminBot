@@ -468,6 +468,11 @@ export const tr: Locale = {
     bananUnit: () => '🍌'
   },
 
+  mutedYou: {
+    text: (chat, term) => `🔇 “${chat}” sohbetine ${term} boyunca yazamazsın: mesajın bana spam gibi geldi.\nYanıldıysam sohbetin yöneticilerine yaz. Ayrıntılar benimle özel sohbette.`,
+    button: 'Neden?'
+  },
+
   kick: {
     success: (name) => `🚪 ${name} sohbetten atıldı.`,
     needReply: 'Atmak istediğin kişinin mesajına /kick ile yanıt ver.'
@@ -528,6 +533,7 @@ export const tr: Locale = {
         `👋 <b>Yeni üye karşılaması</b>\n\nDurum: ${state}\nMetin: ${nTexts}, GIF: ${nGifs}\n\nBirden fazlaysa bot her seferinde rastgele birini seçer.`,
       enable: '🔔 Aç',
       disable: '🔕 Kapat',
+      privateButton: (on) => on ? '👤 Yalnızca yeni üye görür: evet' : '👤 Yalnızca yeni üye görür: hayır',
       texts: (n) => `📝 Metinler (${n})`,
       gifs: (n) => `🎞 Medya (${n})`,
       preview: '👁 Önizle',

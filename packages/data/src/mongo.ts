@@ -984,18 +984,30 @@ export class MongoStore {
   // ── welcome messages (off by default) ───────────────────────────────
 
   /** Welcome config for a chat (v1 settings.welcome shape). */
-  async getWelcome(chatId: number): Promise<{ enable: boolean; texts: string[]; gifs: string[]; timer: number }> {
+  async getWelcome(chatId: number): Promise<{ enable: boolean; private: boolean; texts: string[]; gifs: string[]; timer: number }> {
     const group = await this.groups.findOne(
       { group_id: chatId },
       { projection: { 'settings.welcome': 1 } }
-    ) as { settings?: { welcome?: { enable?: boolean; texts?: unknown[]; gifs?: unknown[]; timer?: number } } } | null
+    ) as { settings?: { welcome?: { enable?: boolean; private?: boolean; texts?: unknown[]; gifs?: unknown[]; timer?: number } } } | null
     const w = group?.settings?.welcome
     return {
       enable: w?.enable === true,
+      // Absent on every chat configured before 2026-11-08: those keep the
+      // public greeting they chose.
+      private: w?.private === true,
       texts: (w?.texts ?? []).filter((t): t is string => typeof t === 'string' && t.length > 0),
       gifs: (w?.gifs ?? []).filter((g): g is string => typeof g === 'string' && g.length > 0),
       timer: Number.isFinite(Number(w?.timer)) && Number(w?.timer) > 0 ? Number(w?.timer) : 60
     }
+  }
+
+  /** Greet each newcomer with an ephemeral message only they see. */
+  async setWelcomePrivate(chatId: number, value: boolean): Promise<void> {
+    await this.groups.updateOne(
+      { group_id: chatId },
+      { $set: { 'settings.welcome.private': value }, $setOnInsert: { group_id: chatId } },
+      { upsert: true }
+    )
   }
 
   async setWelcomeEnabled(chatId: number, enable: boolean): Promise<void> {

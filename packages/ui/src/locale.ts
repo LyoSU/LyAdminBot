@@ -565,6 +565,17 @@ export interface Locale {
     failed: string
   }
 
+  /**
+   * Whispered to a member the pipeline just muted: they are still in the chat
+   * and can read it, and until now they only found they could not type.
+   */
+  mutedYou: {
+    /** `chat` is an escaped title, `term` a formatted span. */
+    text: (chat: string, term: string) => string
+    /** URL button into the PM, where `/start` lists what was done and why. */
+    button: string
+  }
+
   /** /untrust — admin revokes the auto-trust granted by an override. */
   untrust: {
     success: (name: string) => string
@@ -612,6 +623,8 @@ export interface Locale {
       title: (state: string, nTexts: number, nGifs: number) => string
       enable: string
       disable: string
+      /** Toggle for greeting each newcomer privately instead of the whole chat. */
+      privateButton: (on: boolean) => string
       texts: (n: number) => string
       gifs: (n: number) => string
       preview: string

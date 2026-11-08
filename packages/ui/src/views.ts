@@ -1390,7 +1390,7 @@ const paginate = <T>(
 export const welcomeEditor = (
   locale: Locale,
   chatId: number,
-  state: { enable: boolean; textsCount: number; gifsCount: number }
+  state: { enable: boolean; textsCount: number; gifsCount: number; private?: boolean }
 ): ViewMessage => {
   const e = locale.welcome.editor
   const stateStr = state.enable ? locale.settings.on : locale.settings.off
@@ -1399,6 +1399,10 @@ export const welcomeEditor = (
       text: state.enable ? e.disable : e.enable,
       data: callbackData.welcome(chatId, 'toggle')
     }],
+    // Only while greetings are on: with them off, who would see one is moot.
+    ...(state.enable
+      ? [[{ text: e.privateButton(state.private === true), data: callbackData.welcome(chatId, 'priv') }]]
+      : []),
     [
       { text: e.texts(state.textsCount), data: callbackData.welcome(chatId, 'texts') },
       { text: e.gifs(state.gifsCount), data: callbackData.welcome(chatId, 'gifs') }
