@@ -26,7 +26,15 @@ COPY packages/data/package.json packages/data/
 COPY packages/ui/package.json packages/ui/
 COPY apps/bot/package.json apps/bot/
 COPY tools/replay/package.json tools/replay/
-RUN pnpm install --frozen-lockfile
+# better-sqlite3 downloads a prebuilt binary from GitHub releases and compiles
+# from source only when that fails. The slim image has no compiler, so a GitHub
+# outage failed every deploy (2026-11-08: the download timed out). The toolchain
+# is installed, used and purged in this one layer, so the image does not grow.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3 make g++ \
+ && pnpm install --frozen-lockfile \
+ && apt-get purge -y --auto-remove python3 make g++ \
+ && rm -rf /var/lib/apt/lists/*
 
 COPY . .
 
