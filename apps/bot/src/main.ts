@@ -35,7 +35,7 @@ import {
   createChatDescriptionCache, fetchChatDescription, fetchChatMemberCount, findChatMemberByUsername,
   createTmePreviewResolver,
   avatarDhashOf, MUTE_DURATION_SECONDS, warmPeer,
-  type ExternalBanCacheView, type IncomingMessage, type JoinRequestFacts
+  type EphemeralCommand, type ExternalBanCacheView, type IncomingMessage, type JoinRequestFacts
 } from '@lyadmin/adapters'
 import {
   MongoStore, MongoSignaturePort, MongoForwardPort, QdrantVectorPort,
@@ -86,6 +86,7 @@ import { COPY_CLUSTER_WINDOW_MS, copyClusterKey, copySiblings, isCopyClusterTrig
 import { DuplicateTally } from './duplicate-tally.js'
 import { getUsersEach } from './users-each.js'
 import { parseCommand } from './command.js'
+import { isEphemeralCommand } from './ephemeral-commands.js'
 import { parseReportTarget } from './report-target.js'
 import { noticeDelivery } from './quiet.js'
 
@@ -2847,6 +2848,20 @@ const trustGrantView = async (
  * snapshot (history + getFullUser + external-ban + join time) and renders the
  * profile card. Reply required; admin-only; the card auto-deletes.
  */
+/** The `/check` profile card for `target`, shared by the visible and the ephemeral answer. */
+const checkCard = async (chat: Chat, target: User, caller: User, locale: Locale): Promise<ViewMessage> => {
+  const facts = await buildLiveFacts(chat.id, target)
+  log.info('check', { chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName, by: caller.id })
+  const checkDoc = await store.getGroupDoc(chat.id).catch(() => null)
+  const checkPolicy = groupDocToChatPolicy(checkDoc as never)
+  const checkTrusted = checkPolicy.trustedUserIds.includes(target.id)
+  return userProfileCard(locale, facts, {
+    chatId: chat.id,
+    isTrusted: checkTrusted,
+    grant: checkTrusted ? await trustGrantView(checkDoc, target.id) : null
+  })
+}
+
 const handleCheck = async (message: Message, chat: Chat, caller: User): Promise<void> => {
   const locale = await groupLocale(chat.id)
   if (!(await isChatAdmin(chat.id, caller.id))) return
@@ -2859,22 +2874,131 @@ const handleCheck = async (message: Message, chat: Chat, caller: User): Promise<
     if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'check')
     return
   }
-  const target = replied.sender
-
-  const facts = await buildLiveFacts(chat.id, target)
-  log.info('check', { chatId: chat.id, chat: chat.title ?? undefined, userId: target.id, user: target.displayName, by: caller.id })
-  const checkDoc = await store.getGroupDoc(chat.id).catch(() => null)
-  const checkPolicy = groupDocToChatPolicy(checkDoc as never)
-  const checkTrusted = checkPolicy.trustedUserIds.includes(target.id)
-  const card = userProfileCard(locale, facts, {
-    chatId: chat.id,
-    isTrusted: checkTrusted,
-    grant: checkTrusted ? await trustGrantView(checkDoc, target.id) : null
-  })
+  const card = await checkCard(chat, replied.sender, caller, locale)
   const sent = await tgSendText(chat.id, viewHtml(card.text), {
     ...(card.buttons.length > 0 ? { replyMarkup: toKeyboard(card.buttons) } : {})
   }).catch(() => null)
   if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'check')
+}
+
+/**
+ * The profile card's trust button, pressed: store the grant or revoke it and
+ * return the card's keyboard flipped to the opposite action. Both the visible
+ * and the ephemeral card call this; where the card lives is the caller's.
+ */
+const applyTrustToggle = async (
+  chatId: number, userId: number, makeTrusted: boolean, by: number, locale: Locale
+): Promise<ReturnType<typeof toKeyboard>> => {
+  if (makeTrusted) await store.addTrustedUser(chatId, userId, { by, via: 'toggle' }).catch(() => { /* best-effort */ })
+  else await store.removeTrustedUser(chatId, userId).catch(() => { /* best-effort */ })
+  log.info('trust', { chatId, userId, by, trusted: makeTrusted })
+  return toKeyboard([[{
+    text: makeTrusted ? locale.trust.untrustButton : locale.trust.button,
+    data: `tr:${chatId}:${userId}:${makeTrusted ? '0' : '1'}`
+  }]])
+}
+
+/**
+ * An answer only `receiverId` sees, replying to the ephemeral command it
+ * answers. Under the same mention rule as `tgSendText`: the check card names
+ * the account it is about, and a mention Telegram cannot resolve rejects the
+ * whole message.
+ *
+ * The reply is dropped on a second try rather than the answer: Telegram takes
+ * a reply to an ephemeral message only for seconds after it was sent, and a
+ * command that waited behind a busy chat queue has outlived that window. An
+ * answer that does not point at its question still answers it.
+ */
+const whisperAnswer = async (
+  chatId: number, receiverId: number, view: ViewMessage, replyToEphemeral: number
+): Promise<void> => {
+  const markup = view.buttons.length > 0 ? { replyMarkup: toKeyboard(view.buttons) } : {}
+  const send = (text: Parameters<typeof gateway.sendEphemeral>[2], reply: boolean): Promise<number> =>
+    gateway.sendEphemeral(chatId, receiverId, text, { ...markup, ...(reply ? { replyToEphemeral } : {}) })
+  const text = viewHtml(view.text)
+  try {
+    await send(text, true)
+    return
+  } catch (err) {
+    if (hasMention(text) && MENTION_REJECTED.test(String(err))) {
+      log.warn('mention_flattened', { op: 'whisper_answer', error: String(err) })
+      await send(withoutMentions(text as RichText), false).catch(() => { /* gone */ })
+      return
+    }
+    log.warn('whisper_answer_retry', { chatId, error: String(err) })
+  }
+  await send(text, false).catch((err: unknown) => {
+    log.warn('whisper_answer_failed', { chatId, error: String(err) })
+  })
+}
+
+/**
+ * A command a member sent ephemerally (see ephemeral-commands.ts). Answered
+ * the same way, in the asker's own language — nobody else reads it, so the
+ * group's language has no claim on it.
+ *
+ * Permissions are checked here exactly as on the visible path: the menu flag
+ * is a client hint, and any command can be sent by hand.
+ */
+const handleEphemeralCommand = async (command: EphemeralCommand): Promise<void> => {
+  const { chat, sender } = command
+  if (chat.chatType !== 'supergroup' && chat.chatType !== 'group') return
+  if (sender.isBot) return
+  const cmd = parseCommand(command.text, selfUsername)
+  if (!cmd || !isEphemeralCommand(cmd.name)) {
+    log.info('ephemeral_command_ignored', { chatId: chat.id, userId: sender.id, name: cmd?.name ?? null })
+    return
+  }
+  const locale = await localeFor(sender.id, sender.language)
+  const answer = (view: ViewMessage): Promise<void> =>
+    whisperAnswer(chat.id, sender.id, view, command.messageId)
+  log.info('ephemeral_command', { chatId: chat.id, userId: sender.id, name: cmd.name })
+
+  switch (cmd.name) {
+    case 'help':
+      await answer(helpView(locale))
+      return
+    case 'start':
+      await answer(startGroupHint(locale, selfUsername ?? undefined))
+      return
+    case 'stats':
+      await answer(await renderStatsCard(locale, chat.id))
+      return
+    // In a group the visible answer was a button into the PM, so the numbers
+    // would not be read out in front of everybody. Nobody else reads this one.
+    case 'mystats':
+      await answer({ text: await renderMyStats(locale, sender.id, chat.id), buttons: [] })
+      return
+    case 'settings':
+      if (selfUsername) await answer(settingsDeepLink(locale, selfUsername, chat.id))
+      return
+    case 'lang':
+      if (!selfUsername) return
+      await answer(await isChatAdmin(chat.id, sender.id)
+        ? settingsDeepLink(locale, selfUsername, chat.id)
+        : {
+          text: locale.lang.openInPm,
+          buttons: [[{ text: locale.lang.openButton, url: `https://t.me/${selfUsername}?start=lang` }]]
+        })
+      return
+    case 'check': {
+      // Said, not swallowed: the visible path's silence was there to keep the
+      // chat clean, and there is no chat to keep clean here.
+      if (!(await isChatAdmin(chat.id, sender.id))) {
+        await answer({ text: locale.notification.adminOnly, buttons: [] })
+        return
+      }
+      const replied = command.replyToMessageId === null
+        ? null
+        : (await gateway.tg.getMessages(chat.id, [command.replyToMessageId]).catch(() => []))[0] ?? null
+      if (!replied || !(replied.sender instanceof User)) {
+        await answer({ text: locale.profile.checkNeedReply, buttons: [] })
+        return
+      }
+      await answer(await checkCard(chat, replied.sender, sender, locale))
+      return
+    }
+  }
 }
 
 /** /del — admin deletes the replied-to message (and the command). */
@@ -7689,14 +7813,7 @@ const wireCallbacks = (): void => {
         return
       }
       const makeTrusted = flagRaw === '1'
-      if (makeTrusted) await store.addTrustedUser(chatId, userId, { by: query.user.id, via: 'toggle' }).catch(() => { /* best-effort */ })
-      else await store.removeTrustedUser(chatId, userId).catch(() => { /* best-effort */ })
-      log.info('trust', { chatId, userId, by: query.user.id, trusted: makeTrusted })
-      // Flip the card's single button to the opposite action (markup-only edit).
-      const flipped = toKeyboard([[{
-        text: makeTrusted ? locale.trust.untrustButton : locale.trust.button,
-        data: `tr:${chatId}:${userId}:${makeTrusted ? '0' : '1'}`
-      }]])
+      const flipped = await applyTrustToggle(chatId, userId, makeTrusted, query.user.id, locale)
       // Edit where the card IS, not where the user is: this same card is now
       // opened from the PM "Why?" card, and editing by the group's chatId there
       // addressed a message id that does not exist in that chat — the button
@@ -8119,7 +8236,39 @@ const wireCallbacks = (): void => {
   // anything else reaching here is not something we put on screen.
   gateway.onEphemeralCallbackQuery(async (query) => {
     const { kind, parts } = parseCallback(query.dataStr)
-    if (kind !== 'cap') return
+    /**
+     * The trust button of a `/check` card that was answered ephemerally. Same
+     * rule and same store write as the visible card's; only the edit differs,
+     * because an ephemeral message is edited by receiver, not by chat history.
+     */
+    if (kind === 'tr') {
+      const [chatIdRaw = '', userIdRaw = '', flagRaw = ''] = parts
+      const chatId = Number(chatIdRaw)
+      const userId = Number(userIdRaw)
+      const locale = await localeFor(query.user.id, query.user.language)
+      if (!Number.isFinite(chatId) || !Number.isFinite(userId)) {
+        await gateway.tg.answerCallbackQuery(query.id, {}).catch(() => { /* ok */ })
+        return
+      }
+      if (!(await isChatAdmin(chatId, query.user.id))) {
+        await gateway.tg.answerCallbackQuery(query.id, { text: locale.notification.adminOnly, alert: true })
+          .catch(() => { /* ok */ })
+        return
+      }
+      const makeTrusted = flagRaw === '1'
+      const flipped = await applyTrustToggle(chatId, userId, makeTrusted, query.user.id, locale)
+      await gateway.editEphemeralMarkup(chatId, query.user.id, query.messageId, flipped)
+        .catch(() => { /* expired */ })
+      await gateway.tg.answerCallbackQuery(query.id, { text: makeTrusted ? locale.trust.added : locale.trust.removed })
+        .catch(() => { /* ok */ })
+      return
+    }
+    if (kind !== 'cap') {
+      // Any other button on an ephemeral answer. Answered so the tapper's
+      // client does not spin on it until Telegram gives up.
+      await gateway.tg.answerCallbackQuery(query.id, {}).catch(() => { /* ok */ })
+      return
+    }
     const [chatIdRaw = '', userIdRaw = ''] = parts
     const chatId = Number(chatIdRaw)
     const userId = Number(userIdRaw)
@@ -8158,6 +8307,7 @@ const main = async (): Promise<void> => {
   const restoredGates = await restoreCaptchaGates()
 
   gateway.onMessage(handleMessage)
+  gateway.onEphemeralCommand(handleEphemeralCommand)
   // Detached: the grace wait must not hold up the updates behind it.
   gateway.onMemberJoin(async (chat, user) => { void handleMemberJoin(chat, user).catch(() => { /* best-effort */ }) })
   // Shadow only (2026-10-14): fire-and-forget like the member update, so a

@@ -11,7 +11,8 @@
  * tested offline. Integration breakage here is caught by the test group.
  */
 import {
-  BotKeyboard, TelegramClient, html, type InputText,
+  BotKeyboard, TelegramClient, html, Chat as ChatPeer, User as UserPeer,
+  type InputText, type ReplyMarkup,
   type Chat, type ChatMemberUpdate, type EphemeralCallbackQuery, type Message, type User
 } from '@mtcute/node'
 import { Dispatcher, type CallbackQueryContext } from '@mtcute/dispatcher'
@@ -67,6 +68,17 @@ export interface JoinRequestFacts {
   /** The bio as the update carries it; null when empty. */
   bio: string | null
   date: Date
+}
+
+/** A slash command a member sent as an ephemeral message in a group. */
+export interface EphemeralCommand {
+  chat: Chat
+  sender: User
+  text: string
+  /** Ephemeral id of the command — what an answer replies to. */
+  messageId: number
+  /** The ordinary chat message the command replies to, if any. */
+  replyToMessageId: number | null
 }
 
 const ALBUM_BUFFER_MS = 600
@@ -230,6 +242,58 @@ export class TelegramGateway {
       }
     )
     return sent.id
+  }
+
+  /**
+   * Commands a member sent as ephemeral messages: only they and the bot see
+   * the `/command`, so the question itself leaves nothing in the chat.
+   *
+   * A separate update type (`updateNewEphemeralMessage`) — `onMessage` never
+   * sees these, so a command flagged ephemeral in the menu and not handled here
+   * would simply stop working. Serialized through the chat queue like ordinary
+   * messages. Not deduplicated: ephemeral ids are reused once a message expires,
+   * so a seen-id set would eventually swallow a fresh command.
+   */
+  onEphemeralCommand(handler: (command: EphemeralCommand) => Promise<void>): void {
+    this.dispatcher.onNewEphemeralMessage(async (msg) => {
+      if (msg.isOutgoing) return
+      const chat = msg.chat
+      const sender = msg.sender
+      if (!(chat instanceof ChatPeer) || !(sender instanceof UserPeer)) return
+      const header = msg.replyTo
+      const replyToMessageId = header?._ === 'messageReplyHeader' ? header.replyToMsgId ?? null : null
+      const command: EphemeralCommand = {
+        chat, sender, text: msg.text, messageId: msg.id, replyToMessageId
+      }
+      this.enqueue(chat.id, () => handler(command))
+    })
+  }
+
+  /**
+   * An ephemeral answer with any keyboard, url buttons included — the prompt
+   * above builds callback-only rows because a captcha has nothing else.
+   * `replyToEphemeral` ties the answer to the ephemeral command it answers;
+   * Telegram accepts that reply only within seconds of the command, which an
+   * immediate answer is.
+   */
+  async sendEphemeral(
+    chatId: number,
+    receiverId: number,
+    text: InputText,
+    params: { replyMarkup?: ReplyMarkup; replyToEphemeral?: number } = {}
+  ): Promise<number> {
+    const sent = await this.tg.sendEphemeralMessage(chatId, receiverId, text, {
+      ...(params.replyMarkup !== undefined ? { replyMarkup: params.replyMarkup } : {}),
+      ...(params.replyToEphemeral !== undefined ? { replyToEphemeral: params.replyToEphemeral } : {})
+    })
+    return sent.id
+  }
+
+  /** Replace the keyboard of an ephemeral message (a toggled button). */
+  async editEphemeralMarkup(
+    chatId: number, receiverId: number, messageId: number, replyMarkup: ReplyMarkup
+  ): Promise<void> {
+    await this.tg.editEphemeralMessage({ chatId, receiverId, messageId, replyMarkup })
   }
 
   /** Remove an ephemeral message early; it expires on its own regardless. */
