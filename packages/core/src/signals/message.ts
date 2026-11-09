@@ -84,6 +84,21 @@ const HASHTAG_REGEX = /#[\p{L}\p{N}_]+/gu
  * side of this line.
  */
 const GROUPED_THOUSANDS_REGEX = /(?<![+\d])\b[1-9]\d{0,2}(?:[ .,\u00A0]\d{3}){2,}\b/g
+/**
+ * A sum with its currency beside it, in groups of three \u2014 down to ONE group,
+ * which `GROUPED_THOUSANDS_REGEX` leaves alone because a bare `93 123` may be
+ * the start of a phone. The currency settles it: nobody writes a unit after a
+ * number to dial. Without this, a four-digit year written straight before a
+ * one-group price joined it into a ten-digit run (2026-11-09: a listing muted
+ * with `phone_number` as its only content evidence, 1.2 of it). A trunk `0`
+ * or a `+` never starts a match, so a phone followed by a price stays a phone.
+ */
+const MONEY_REGEX = new RegExp(
+  '(?:[$\u20AC\u00A3\u20B4\u20BD]\\s?)?(?<![+\\d])\\b[1-9]\\d{0,2}(?:[ .,\\u00A0]\\d{3})+(?:[.,]\\d{1,2})?\\s?' +
+  '(?:[$\u20AC\u00A3\u20B4\u20BD]|(?:\u0433\u0440\u043D|uah|usd|eur|\u0434\u043E\u043B|\u0440\u0443\u0431|\u0442\u0438\u0441|\u043C\u043B\u043D)(?!\\p{L}))' +
+  '|[$\u20AC\u00A3\u20B4\u20BD]\\s?(?<![+\\d])\\b[1-9]\\d{0,2}(?:[ .,\\u00A0]\\d{3})+\\b',
+  'giu'
+)
 /** E.164 caps a dialable number at fifteen digits; a payment card has 16–19. */
 const PHONE_MAX_DIGITS = 15
 
@@ -91,6 +106,7 @@ export const hasPhoneNumber = (text: string): boolean => {
   const residue = withoutUrls(text)
     .replace(DATE_OR_TIME_REGEX, ' ')
     .replace(HASHTAG_REGEX, ' ')
+    .replace(MONEY_REGEX, ' ')
     .replace(GROUPED_THOUSANDS_REGEX, ' ')
   const runs = residue.match(new RegExp(PHONE_REGEX.source, 'g')) ?? []
   return runs.some((run) => run.replace(/\D/g, '').length <= PHONE_MAX_DIGITS)

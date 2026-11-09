@@ -174,6 +174,36 @@ describe('extractMessageSignals — suspicious signals', () => {
     }
   })
 
+  it('REGRESSION: a year written straight before a price is not a number to dial', () => {
+    // A one-group sum is not read off as grouped thousands, so a four-digit
+    // year before it joined the two into a ten-digit run (2026-11-09: a mute
+    // whose only content evidence was this signal). The currency beside the
+    // sum is what says it is money.
+    for (const text of [
+      'авто 2019 295 000 $ • 13 658 500 грн',
+      'авто 2021 45 500 $',
+      'модель 2018 $ 12 500 стан ідеальний',
+      'квартира 2020 р. 1 850 000 грн',
+      'ремонт 2015 32 000 грн, торг',
+      'ціна 2024 18 900 €',
+      'з 2017 року 120 000 тис. км'
+    ]) {
+      expect(names(makeMsg({ text })), text).not.toContain('phone_number')
+    }
+  })
+
+  it('a phone stays a phone when a price sits beside it', () => {
+    for (const text of [
+      'ціна 295 000 $, тел 067 123 45 67',
+      'тел 0671234567 ціна 45 500 грн',
+      '+380 99 123 45 67 25 000 грн',
+      '093 709 51 27 7 000 грн',
+      'ціна 12 000 грн 0961234567'
+    ]) {
+      expect(names(makeMsg({ text })), text).toContain('phone_number')
+    }
+  })
+
   it('the classes read off before the phone check leave a phone beside them', () => {
     for (const text of [
       'збір 12.09.2026 14:00, дзвоніть 067 123 45 67',
