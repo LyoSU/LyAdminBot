@@ -174,19 +174,24 @@ describe('extractMessageSignals — suspicious signals', () => {
     }
   })
 
-  it('REGRESSION: a year written straight before a price is not a number to dial', () => {
-    // A one-group sum is not read off as grouped thousands, so a four-digit
-    // year before it joined the two into a ten-digit run (2026-11-09: a mute
-    // whose only content evidence was this signal). The currency beside the
-    // sum is what says it is money.
+  it('REGRESSION: numbers written side by side are not one number to dial', () => {
+    // Separators glued a year and a price into a ten-digit run (2026-11-09: a
+    // mute whose only content evidence was this signal). A currency is not
+    // what tells them apart — half the prices in a chat are written without
+    // one. A separated phone starts with `+`, a trunk `0`/`8 0` or `380`;
+    // several numbers in a row start however their first number does.
     for (const text of [
       'авто 2019 295 000 $ • 13 658 500 грн',
-      'авто 2021 45 500 $',
-      'модель 2018 $ 12 500 стан ідеальний',
-      'квартира 2020 р. 1 850 000 грн',
-      'ремонт 2015 32 000 грн, торг',
-      'ціна 2024 18 900 €',
-      'з 2017 року 120 000 тис. км'
+      'авто 2021 45 500',
+      'модель 2018 12 500 стан ідеальний',
+      'квартира 2020 р. 1 850 000',
+      'ремонт 2015 32 000, торг',
+      'речі для дівчинки 134-140-146, стан 4/4',
+      'сервер 170.168.20.17 27057',
+      'CVE-2026-109618 / CVE-2026-109619',
+      'картка 4149 0393 1234 5678',
+      'IBAN UA21 3223 1300 0002 6007 2335 6600 1',
+      'бюджет 800 0000 000 0000 гривень'
     ]) {
       expect(names(makeMsg({ text })), text).not.toContain('phone_number')
     }
@@ -198,7 +203,10 @@ describe('extractMessageSignals — suspicious signals', () => {
       'тел 0671234567 ціна 45 500 грн',
       '+380 99 123 45 67 25 000 грн',
       '093 709 51 27 7 000 грн',
-      'ціна 12 000 грн 0961234567'
+      'ціна 12 000 грн 0961234567',
+      'кв. 9 0505717283',
+      'тел 380 97 469 27 24',
+      'тел 380974692724'
     ]) {
       expect(names(makeMsg({ text })), text).toContain('phone_number')
     }

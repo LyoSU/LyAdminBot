@@ -61,8 +61,27 @@ const RECENT_REPLY_MAX_AGE_SECONDS = 3600
  * dates, above it every national format we care about. At most two separator
  * characters may sit between two digits, which admits `+38 (067) 123-45-67`
  * (`" ("` and `") "`) while a range's `" - "` breaks the run in two.
+ *
+ * A run WITH separators also has to start the way a number to dial starts: a
+ * `+`, a trunk `0`, a trunk `8` set apart before the `0`, or the country code
+ * `380`. An `8` straight onto a `0` is a figure (`800 0000 …`); written
+ * unbroken, a trunk-8 number is read by the digit rule anyway.
+ * Separators are what make several numbers written side by side look like one
+ * — a year and a price, a list of sizes, an IP, an id — and the digit count
+ * cannot tell them apart. Over the 14 days to 2026-11-09 every separated phone
+ * in production previews (about seventy distinct) started that way, and the
+ * four runs that did not were never phones; one of them muted a member, the
+ * signal being the whole of the content evidence. An unbroken run keeps the
+ * digit rule alone: no separator, nothing could have been glued together.
+ *
+ * The same gluing works from the other side — a phone and the price after it
+ * make one run of seventeen digits — so a separated phone is the run's first
+ * nine to fifteen digits ending at a separator, not the whole run. It starts
+ * where the run starts and never mid-run, or the `0` of a card's inner group
+ * would begin a phone.
  */
-export const PHONE_REGEX = /(?:\+|\b)\d(?:[ ().-]{0,2}\d){8,}\b/
+export const PHONE_REGEX =
+  /\+?\b\d{9,}\b|(?<!\d[ ().-]{0,2})(?:\+|\b(?=0|8[ (]{1,2}0|38[ (]?0))\d(?:[ ().-]{0,2}\d){8,14}\b/
 
 /**
  * Digit runs that carry a shape of their own, read off before the phone check
@@ -84,21 +103,6 @@ const HASHTAG_REGEX = /#[\p{L}\p{N}_]+/gu
  * side of this line.
  */
 const GROUPED_THOUSANDS_REGEX = /(?<![+\d])\b[1-9]\d{0,2}(?:[ .,\u00A0]\d{3}){2,}\b/g
-/**
- * A sum with its currency beside it, in groups of three \u2014 down to ONE group,
- * which `GROUPED_THOUSANDS_REGEX` leaves alone because a bare `93 123` may be
- * the start of a phone. The currency settles it: nobody writes a unit after a
- * number to dial. Without this, a four-digit year written straight before a
- * one-group price joined it into a ten-digit run (2026-11-09: a listing muted
- * with `phone_number` as its only content evidence, 1.2 of it). A trunk `0`
- * or a `+` never starts a match, so a phone followed by a price stays a phone.
- */
-const MONEY_REGEX = new RegExp(
-  '(?:[$\u20AC\u00A3\u20B4\u20BD]\\s?)?(?<![+\\d])\\b[1-9]\\d{0,2}(?:[ .,\\u00A0]\\d{3})+(?:[.,]\\d{1,2})?\\s?' +
-  '(?:[$\u20AC\u00A3\u20B4\u20BD]|(?:\u0433\u0440\u043D|uah|usd|eur|\u0434\u043E\u043B|\u0440\u0443\u0431|\u0442\u0438\u0441|\u043C\u043B\u043D)(?!\\p{L}))' +
-  '|[$\u20AC\u00A3\u20B4\u20BD]\\s?(?<![+\\d])\\b[1-9]\\d{0,2}(?:[ .,\\u00A0]\\d{3})+\\b',
-  'giu'
-)
 /** E.164 caps a dialable number at fifteen digits; a payment card has 16–19. */
 const PHONE_MAX_DIGITS = 15
 
@@ -106,7 +110,6 @@ export const hasPhoneNumber = (text: string): boolean => {
   const residue = withoutUrls(text)
     .replace(DATE_OR_TIME_REGEX, ' ')
     .replace(HASHTAG_REGEX, ' ')
-    .replace(MONEY_REGEX, ' ')
     .replace(GROUPED_THOUSANDS_REGEX, ' ')
   const runs = residue.match(new RegExp(PHONE_REGEX.source, 'g')) ?? []
   return runs.some((run) => run.replace(/\D/g, '').length <= PHONE_MAX_DIGITS)
