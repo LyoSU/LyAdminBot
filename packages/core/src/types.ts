@@ -171,6 +171,13 @@ export interface UserSnapshot {
  *    with the bot. `groupsActive` only sees the chats where the account has
  *    WRITTEN; this sees the ones it merely sits in.
  *
+ *  - `starsLevel`, `starGifts`: the account's star rating level (negative for
+ *    an account Telegram itself marked down) and how many gifts its profile
+ *    shows, both on `users.getFullUser`. Added 2026-11-10 because 1 787 of the
+ *    2 427 accounts punished that week never joined the chat they wrote in,
+ *    so nothing learned at a join describes them; money spent on an account
+ *    is a fact the profile carries wherever it writes.
+ *
  * Tried and dropped 2026-11-10: the registration month, the phone country and
  * the dates of the last name and photo change, which layer 228 carries in
  * `userFull.settings`. They arrived on 0 of 181 712 decision rows in the 14
@@ -185,6 +192,33 @@ export interface UserSnapshot {
 export interface AccountTelemetry {
   photoDcId: number | null
   commonChatsCount: number | null
+  starsLevel?: number | null
+  starGifts?: number | null
+}
+
+/**
+ * What a message carries about itself that nothing here reads yet — recorded,
+ * not weighed, under the same discipline as `AccountTelemetry`.
+ *
+ *  - `senderTagged`, `boosts`: the chat gave this sender a tag, or the sender
+ *    boosted the chat. Both are on the message, so they hold for an account
+ *    that comments without ever joining.
+ *  - `externalReply`: the message answers something that lives in ANOTHER
+ *    chat, whose content rides in the reply header and is not fetched by the
+ *    reply lookup — so today it is judged without what it shows. The value is
+ *    the kind of the origin; `hidden` when Telegram names no peer.
+ *  - `externalReplyMedia`: that foreign message carried media.
+ *  - `quoteLength`: characters of quoted text shown above the message. The
+ *    sender picks the quote, and none of it is read.
+ *  - `viaBot`: sent through an inline bot.
+ */
+export interface MessageTelemetry {
+  senderTagged: boolean
+  boosts: number | null
+  externalReply: 'user' | 'channel' | 'chat' | 'hidden' | null
+  externalReplyMedia: boolean
+  quoteLength: number | null
+  viaBot: boolean
 }
 
 /** A mention from the message after resolution (adapters/enrich). */
@@ -270,6 +304,8 @@ export interface NormalizedMessage {
    * bot-ness itself (guest bots are often legitimate).
    */
   guestBot: { botId: number; botUsername: string | null; callerId: number | null } | null
+  /** Facts recorded, not weighed — see `MessageTelemetry`. */
+  telemetry?: MessageTelemetry
 }
 
 /**

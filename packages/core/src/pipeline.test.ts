@@ -4180,6 +4180,44 @@ describe('evaluateMessage — a clean reading stands for a day', () => {
   })
 })
 
+describe('evaluateMessage — facts recorded before they are weighed', () => {
+  const quiet = {
+    senderTagged: false, boosts: null, externalReply: null,
+    externalReplyMedia: false, quoteLength: null, viaBot: false
+  } as const
+  const KEYS = ['starsLevel', 'starGifts', 'senderTagged', 'boosts', 'extReply', 'extReplyMedia', 'quoteLen', 'viaBot']
+
+  it('writes what the message and the profile carried, and decides nothing by it', async () => {
+    const facts = {
+      msg: { telemetry: { senderTagged: true, boosts: 3, externalReply: 'channel', externalReplyMedia: true, quoteLength: 40, viaBot: true } },
+      user: { ...newcomer, telemetry: { photoDcId: null, commonChatsCount: null, starsLevel: -1, starGifts: 4 } }
+    } as const
+    const v = await evaluateMessage(makeInput(facts), {})
+    expect(v.meta).toMatchObject({
+      starsLevel: -1, starGifts: 4, senderTagged: true, boosts: 3,
+      extReply: 'channel', extReplyMedia: true, quoteLen: 40, viaBot: true
+    })
+    const plain = await evaluateMessage(makeInput({ user: newcomer }), {})
+    expect(v.action).toBe(plain.action)
+    expect(v.reasonCode).toBe(plain.reasonCode)
+    expect(v.decidedBy).toBe(plain.decidedBy)
+  })
+
+  it('keeps a level of zero and drops every absent or empty value', async () => {
+    const v = await evaluateMessage(makeInput({
+      msg: { telemetry: { ...quiet, boosts: 0, quoteLength: 0 } },
+      user: { ...newcomer, telemetry: { photoDcId: null, commonChatsCount: null, starsLevel: 0, starGifts: 0 } }
+    }), {})
+    expect(v.meta['starsLevel']).toBe(0)
+    for (const key of KEYS.filter((k) => k !== 'starsLevel')) expect(v.meta).not.toHaveProperty(key)
+  })
+
+  it('writes nothing when the adapter recorded nothing', async () => {
+    const v = await evaluateMessage(makeInput({ user: newcomer }), {})
+    for (const key of KEYS) expect(v.meta).not.toHaveProperty(key)
+  })
+})
+
 describe('evaluateMessage — the shape of a name is written down', () => {
   it('records the shape and never the name', async () => {
     const v = await evaluateMessage(makeInput({

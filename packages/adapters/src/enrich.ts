@@ -56,6 +56,12 @@ export interface UserProfileEnrichment {
    */
   commonChatsCount: number | null
   /**
+   * `userFull.stars_rating.level` (may be negative) and `stargifts_count`.
+   * Telemetry for now; null when the profile does not carry them.
+   */
+  starsLevel: number | null
+  starGifts: number | null
+  /**
    * The newest avatar, already fetched by the photos.getUserPhotos call below.
    *
    * Handing it back matters: the caller used to follow this function with
@@ -75,7 +81,7 @@ export const fetchUserProfile = async (
   const result: UserProfileEnrichment = {
     bio: null, businessTexts: [], avatars: null, unofficialClientRisk: null,
     personalChannelId: null, linkedChannel: null, latestAvatar: null,
-    commonChatsCount: null
+    commonChatsCount: null, starsLevel: null, starGifts: null
   }
 
   let inputUser: tl.RawInputUser | null = null
@@ -98,6 +104,8 @@ export const fetchUserProfile = async (
     result.unofficialClientRisk = full.fullUser.unofficialSecurityRisk ?? false
     result.personalChannelId = full.fullUser.personalChannelId ?? null
     result.commonChatsCount = full.fullUser.commonChatsCount ?? null
+    result.starsLevel = full.fullUser.starsRating?.level ?? null
+    result.starGifts = full.fullUser.stargiftsCount ?? null
 
     const intro = full.fullUser.businessIntro
     if (intro) {

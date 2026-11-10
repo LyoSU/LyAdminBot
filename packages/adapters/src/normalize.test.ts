@@ -663,3 +663,44 @@ describe('shouldScanChannelSender', () => {
     expect(shouldScanChannelSender(facts({ isChannelPost: true }))).toBe(false)
   })
 })
+
+describe('message telemetry', () => {
+  it('records nothing remarkable for a plain message', () => {
+    expect(normalizeMessage(makeMessage()).telemetry).toEqual({
+      senderTagged: false, boosts: null, externalReply: null,
+      externalReplyMedia: false, quoteLength: null, viaBot: false
+    })
+  })
+
+  it('records a tag, boosts and an inline bot from the message itself', () => {
+    const n = normalizeMessage(makeMessage({ fromRank: 'helper', fromBoostsApplied: 2, viaBotId: 99 }))
+    expect(n.telemetry).toMatchObject({ senderTagged: true, boosts: 2, viaBot: true })
+  })
+
+  it.each([
+    [{ _: 'peerUser', userId: 5 }, 'user'],
+    [{ _: 'peerChannel', channelId: 5 }, 'channel'],
+    [{ _: 'peerChat', chatId: 5 }, 'chat'],
+    [undefined, 'hidden']
+  ] as const)('names the origin of an external reply (%#)', (fromId, kind) => {
+    const n = normalizeMessage(makeMessage({
+      replyTo: {
+        _: 'messageReplyHeader',
+        replyFrom: { _: 'messageFwdHeader', date: 1, ...(fromId ? { fromId } : { fromName: 'x' }) },
+        replyMedia: { _: 'messageMediaPhoto' },
+        quote: true,
+        quoteText: 'four'
+      }
+    }))
+    expect(n.telemetry).toMatchObject({ externalReply: kind, externalReplyMedia: true, quoteLength: 4 })
+    // No lookup answered, so it is still not a reply the core may discount.
+    expect(n.replyTo).toBeNull()
+  })
+
+  it('keeps a quote inside the chat apart from an external reply', () => {
+    const n = normalizeMessage(makeMessage({
+      replyTo: { _: 'messageReplyHeader', replyToMsgId: 7, quote: true, quoteText: 'abc' }
+    }))
+    expect(n.telemetry).toMatchObject({ externalReply: null, externalReplyMedia: false, quoteLength: 3 })
+  })
+})

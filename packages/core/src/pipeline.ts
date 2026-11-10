@@ -419,6 +419,17 @@ export const evaluateMessage = async (
   if (telemetry) {
     if (telemetry.photoDcId !== null) meta['photoDc'] = telemetry.photoDcId
     if (telemetry.commonChatsCount !== null) meta['commonChats'] = telemetry.commonChatsCount
+    if (typeof telemetry.starsLevel === 'number') meta['starsLevel'] = telemetry.starsLevel
+    if (typeof telemetry.starGifts === 'number' && telemetry.starGifts > 0) meta['starGifts'] = telemetry.starGifts
+  }
+  const carried = input.message.telemetry
+  if (carried) {
+    if (carried.senderTagged) meta['senderTagged'] = true
+    if (carried.boosts !== null && carried.boosts > 0) meta['boosts'] = carried.boosts
+    if (carried.externalReply !== null) meta['extReply'] = carried.externalReply
+    if (carried.externalReplyMedia) meta['extReplyMedia'] = true
+    if (carried.quoteLength !== null && carried.quoteLength > 0) meta['quoteLen'] = carried.quoteLength
+    if (carried.viaBot) meta['viaBot'] = true
   }
   // The shape, never the name — see `name-shape.ts`.
   const nameShape = nameShapeOf(input.user.displayName, input.user.username)

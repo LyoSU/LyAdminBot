@@ -11,7 +11,7 @@ import { createHash } from 'node:crypto'
 import type { Message } from '@mtcute/node'
 import { Chat, User } from '@mtcute/node'
 import type { tl } from '@mtcute/node'
-import type { EditBaseline, MessageAttachmentInfo, NormalizedMessage } from '@lyadmin/core'
+import type { EditBaseline, MessageAttachmentInfo, MessageTelemetry, NormalizedMessage } from '@lyadmin/core'
 import { truncate } from '@lyadmin/core'
 
 export interface NormalizeContext {
@@ -484,6 +484,36 @@ const mergeContent = (parts: readonly MessageContent[]): MessageContent => {
   return merged
 }
 
+// ── telemetry ─────────────────────────────────────────────────────────
+
+/**
+ * The recorded-not-weighed facts of one raw message — see `MessageTelemetry`.
+ *
+ * Reads the reply header and never the lookup: an external reply is exactly
+ * the case where the lookup has nothing to return.
+ */
+export const messageTelemetryOf = (raw: tl.RawMessage): MessageTelemetry => {
+  const header = raw.replyTo?._ === 'messageReplyHeader' ? raw.replyTo : null
+  const origin = header?.replyFrom
+  let externalReply: MessageTelemetry['externalReply'] = null
+  if (origin) {
+    const from = origin.fromId
+    externalReply = from?._ === 'peerUser' ? 'user'
+      : from?._ === 'peerChannel' ? 'channel'
+        : from?._ === 'peerChat' ? 'chat'
+          : 'hidden'
+  }
+  const media = header?.replyMedia
+  return {
+    senderTagged: typeof raw.fromRank === 'string' && raw.fromRank.length > 0,
+    boosts: raw.fromBoostsApplied ?? null,
+    externalReply,
+    externalReplyMedia: media !== undefined && media._ !== 'messageMediaEmpty',
+    quoteLength: typeof header?.quoteText === 'string' ? header.quoteText.length : null,
+    viaBot: raw.viaBotId !== undefined
+  }
+}
+
 // ── main ──────────────────────────────────────────────────────────────
 
 export const normalizeMessage = (msg: Message, ctx: NormalizeContext = {}): NormalizedMessage => {
@@ -597,6 +627,7 @@ export const normalizeMessage = (msg: Message, ctx: NormalizeContext = {}): Norm
     channelComment,
     editDelta,
     customEmoji,
-    guestBot
+    guestBot,
+    ...(raw ? { telemetry: messageTelemetryOf(raw) } : {})
   }
 }

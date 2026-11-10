@@ -32,6 +32,8 @@ export interface UserProfileFacts {
   arrivedWithSpammer?: boolean
   /** Recorded, not weighed — see `AccountTelemetry`. */
   commonChatsCount?: number | null
+  starsLevel?: number | null
+  starGifts?: number | null
 }
 
 /**
@@ -43,7 +45,9 @@ const telemetryOf = (
   sender: User, profile: UserProfileFacts | null
 ): AccountTelemetry => ({
   photoDcId: sender.photo?.raw.dcId ?? null,
-  commonChatsCount: profile?.commonChatsCount ?? null
+  commonChatsCount: profile?.commonChatsCount ?? null,
+  starsLevel: profile?.starsLevel ?? null,
+  starGifts: profile?.starGifts ?? null
 })
 
 /**
