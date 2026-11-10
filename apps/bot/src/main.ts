@@ -409,6 +409,30 @@ const rememberChatTitle = (chatId: number, title: string | null | undefined): vo
     if (firstKey !== undefined) chatTitles.delete(firstKey)
   }
 }
+/**
+ * The same facts, kept on the chat's row — see `MongoStore.noteChatIdentity`.
+ *
+ * One write per chat per change, not per message: the last thing written is
+ * remembered here, and a failed write forgets it so the next message retries.
+ * The linked channel is learned from a comment and carried forward, so an
+ * ordinary message after it does not read as a change.
+ */
+const chatIdentities = new Map<number, { key: string; linkedChatId: number | null }>()
+const noteChatIdentity = (
+  chat: { id: number; title: string | null; username: string | null },
+  observedLinkedChatId: number | null
+): void => {
+  const linkedChatId = observedLinkedChatId ?? chatIdentities.get(chat.id)?.linkedChatId ?? null
+  const key = JSON.stringify([chat.title, chat.username, linkedChatId])
+  if (chatIdentities.get(chat.id)?.key === key) return
+  chatIdentities.set(chat.id, { key, linkedChatId })
+  if (chatIdentities.size > 2000) {
+    const firstKey = chatIdentities.keys().next().value
+    if (firstKey !== undefined) chatIdentities.delete(firstKey)
+  }
+  store.noteChatIdentity(chat.id, { title: chat.title, username: chat.username, linkedChatId })
+    .catch(() => { chatIdentities.delete(chat.id) })
+}
 const chatTitleFor = async (chatId: number): Promise<string | null> => {
   const known = chatTitles.get(chatId)
   if (known) return known
@@ -7001,6 +7025,10 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
 
   // Free while the flow is here anyway; the PM "Why?" card reads it later.
   rememberChatTitle(chat.id, chat.title)
+  noteChatIdentity(
+    { id: chat.id, title: chat.title ?? null, username: chat.username ?? null },
+    normalized.channelComment && replied?.sender instanceof Chat ? replied.sender.id : null
+  )
 
   const input: EvaluationInput = {
     message: normalized,

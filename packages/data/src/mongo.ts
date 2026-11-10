@@ -1394,6 +1394,38 @@ export class MongoStore {
   }
 
   /**
+   * What a chat is called and what it hangs under (v1 `groups` fields).
+   *
+   * v1 kept these and v2 did not, so by 2026-11-10 the rows v2 had created
+   * carried an id and nothing else: 144 of 846 chats, two of the three busiest
+   * among them, could be neither named nor told apart from a discussion chat
+   * when reading production.
+   *
+   * The title and handle come off the chat object and are authoritative, so a
+   * handle that is gone is removed. The linked channel is only ever OBSERVED,
+   * on a comment under one of its posts, so its absence here says nothing and
+   * never clears what an earlier call wrote.
+   */
+  async noteChatIdentity(
+    chatId: number,
+    facts: { title: string | null; username: string | null; linkedChatId?: number | null }
+  ): Promise<void> {
+    const set: Record<string, unknown> = { updatedAt: new Date() }
+    if (facts.title) set['title'] = truncate(facts.title, 255)
+    if (facts.username) set['username'] = facts.username
+    if (typeof facts.linkedChatId === 'number') set['linked_chat_id'] = facts.linkedChatId
+    await this.groups.updateOne(
+      { group_id: chatId },
+      {
+        $set: set,
+        $setOnInsert: { group_id: chatId },
+        ...(facts.username ? {} : { $unset: { username: '' } })
+      },
+      { upsert: true }
+    )
+  }
+
+  /**
    * Per-chat member counters (v1 groupmembers shape). v1 stopped writing
    * these the moment it was switched off, so v2 must maintain them or
    * every user would look like a newcomer forever.

@@ -1278,6 +1278,54 @@ describe('pruneDormantRecords', () => {
   })
 })
 
+describe('noteChatIdentity', () => {
+  const run = async (facts: Parameters<MongoStore['noteChatIdentity']>[1]) => {
+    let call: { filter: unknown; update: Record<string, Record<string, unknown>>; options: unknown } | null = null
+    const store = Object.assign(
+      {
+        groups: {
+          updateOne: async (filter: unknown, update: Record<string, Record<string, unknown>>, options: unknown) => {
+            call = { filter, update, options }
+          }
+        }
+      } as unknown as MongoStore,
+      { noteChatIdentity: MongoStore.prototype.noteChatIdentity }
+    )
+    await store.noteChatIdentity(-100, facts)
+    return call!
+  }
+
+  it('writes the title, handle and linked channel onto the chat row', async () => {
+    const { filter, update, options } = await run({ title: 'Chat', username: 'chat', linkedChatId: -200 })
+    expect(filter).toEqual({ group_id: -100 })
+    expect(update['$set']).toMatchObject({ title: 'Chat', username: 'chat', linked_chat_id: -200 })
+    expect(update['$set']!['updatedAt']).toBeInstanceOf(Date)
+    expect(update['$setOnInsert']).toEqual({ group_id: -100 })
+    expect(update).not.toHaveProperty('$unset')
+    expect(options).toEqual({ upsert: true })
+  })
+
+  it('removes a handle the chat no longer has', async () => {
+    const { update } = await run({ title: 'Chat', username: null })
+    expect(update['$unset']).toEqual({ username: '' })
+    expect(update['$set']).not.toHaveProperty('username')
+  })
+
+  it('never clears a linked channel it merely did not observe', async () => {
+    for (const linkedChatId of [undefined, null]) {
+      const { update } = await run({ title: 'Chat', username: 'chat', ...(linkedChatId === undefined ? {} : { linkedChatId }) })
+      expect(update['$set']).not.toHaveProperty('linked_chat_id')
+      expect(JSON.stringify(update['$unset'] ?? {})).not.toContain('linked_chat_id')
+    }
+  })
+
+  it('keeps the stored title when the chat object carried none, and bounds a long one', async () => {
+    expect((await run({ title: null, username: null })).update['$set']).not.toHaveProperty('title')
+    const long = (await run({ title: 'x'.repeat(1000), username: null })).update['$set']!['title'] as string
+    expect(long.length).toBeLessThanOrEqual(255)
+  })
+})
+
 describe('touchMember', () => {
   it('stamps updatedAt, or nothing it writes is ever prunable', async () => {
     // v1 (mongoose) maintained this field and v2 did not, so it meant "last
