@@ -247,10 +247,32 @@ export const ASK_BEFORE_KICK_REASON_CODES: ReadonlySet<string> = new Set([
  * Those 11 stay up unless a vote removes them, which is the price of the rule.
  * The signal list was picked on the same rows; `heldChatRuling` on the verdict
  * meta is there to measure the rule on rows it has not seen.
+ *
+ * Widened 2026-11-10 from those two to every reason that says "this promotes
+ * something" without naming a harm. The first live rows held 7 messages: 4
+ * answered not-spam, none spam. Replayed over the 14 days to that date with the
+ * rule's own conditions, the two reasons hold 18 not-spam, 2 spam, 14 no answer;
+ * this set holds 24, 2 and 17, the gain being `guest_bot_promo` 2 : 0 : 2,
+ * `flirt_bait` 2 : 0 : 1, `ad_network` 1 : 0 : 0 and one more `channel_promo`
+ * that the wider tally reaches. Small counts, which `heldChatRuling` is there
+ * to keep reading.
+ *
+ * The answers are counted over the same set, so a chat's not-spam on one of
+ * these reasons speaks for the others: the people overruling the classifier
+ * are saying what belongs in their chat, not grading one label.
+ *
+ * Left out on purpose: the reasons that name a harm (`job_scam`, `phishing`,
+ * `crypto_scam`, `adult_promo`, `gambling_promo`, `prompt_injection`). A held
+ * message nobody votes on stays up, and that price is acceptable for an advert,
+ * not for a phishing link; `job_scam` is also answered spam 422 to 5.
  */
 export const CHAT_RULED_REASON_CODES: ReadonlySet<string> = new Set([
   'other_spam' satisfies LlmReasonCode,
-  'channel_promo' satisfies LlmReasonCode
+  'channel_promo' satisfies LlmReasonCode,
+  'guest_bot_promo' satisfies LlmReasonCode,
+  'flirt_bait' satisfies LlmReasonCode,
+  'ad_network' satisfies LlmReasonCode,
+  'flood' satisfies LlmReasonCode
 ])
 export const CHAT_RULING_WINDOW_DAYS = 90
 export const CHAT_RULING_MIN_HAM = 2

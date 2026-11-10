@@ -2632,11 +2632,36 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
         expect(v.meta['heldChatRuling']).toBeUndefined()
       })
 
-      it('a reason that names the harm is not the chat\'s to tolerate', async () => {
-        const v = await evaluateMessage(makeInput(ad), ports('job_scam', { ham: 9, spam: 0 }))
+      // 2026-11-10: every reason that promotes without naming a harm, 24 : 2
+      // on replay against 18 : 2 for the first two.
+      it.each(['channel_promo', 'guest_bot_promo', 'flirt_bait', 'ad_network', 'flood'])(
+        'holds a delete that asks on %s too', async (reasonCode) => {
+          // 0.7 is a delete with a vote on every one of these, no cap needed.
+          const at = (rulings: { ham: number; spam: number }) => evaluateMessage(makeInput(ad), {
+            ...llmSays(reasonCode, 0.7), chatRulings: { rulings: async () => rulings }
+          })
+          const plain = await at({ ham: 0, spam: 0 })
+          expect(plain.action).toBe('delete')
+          expect(plain.needsVote).toBe(true)
+          const held = await at({ ham: 3, spam: 1 })
+          expect(held.action).toBe('observe')
+          expect(held.needsVote).toBe(true)
+          expect(held.reasonCode).toBe(reasonCode)
+          expect(held.meta['heldChatRuling']).toBe('3:1')
+        })
+
+      it('a removal on the same reason is not held: it was priced on other grounds', async () => {
+        const v = await evaluateMessage(makeInput(ad), ports('flirt_bait', { ham: 9, spam: 0 }))
         expect(v.action).toBe('kick')
         expect(v.meta['heldChatRuling']).toBeUndefined()
       })
+
+      it.each(['job_scam', 'phishing', 'crypto_scam', 'adult_promo', 'gambling_promo', 'prompt_injection'])(
+        '%s names the harm and is not the chat\'s to tolerate', async (reasonCode) => {
+          const v = await evaluateMessage(makeInput(ad), ports(reasonCode, { ham: 9, spam: 0 }))
+          expect(v.action).not.toBe('observe')
+          expect(v.meta['heldChatRuling']).toBeUndefined()
+        })
 
       it('outside evidence keeps the delete and spares the read', async () => {
         let reads = 0
