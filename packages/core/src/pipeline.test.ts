@@ -4270,21 +4270,6 @@ describe('otherSpamObserveShadow', () => {
   })
 })
 
-describe('abstain shadow: a mixed-alphabet word from a stranger', () => {
-  it('is stamped and still abstains — the shadow changes nothing', async () => {
-    const v = await evaluateMessage(makeInput({ msg: { text: 'пишu в лс' }, user: newcomer }), {})
-    expect(v.decidedBy).toBe('abstain')
-    expect(v.action).toBe('observe')
-    expect(v.meta['shadowAbstainMixed']).toBe(true)
-  })
-
-  it('is not stamped without the word', async () => {
-    const v = await evaluateMessage(makeInput({ msg: { text: 'пиши в лс' }, user: newcomer }), {})
-    expect(v.decidedBy).toBe('abstain')
-    expect(v.meta['shadowAbstainMixed']).toBeUndefined()
-  })
-})
-
 /**
  * Shadow, 2026-10-14: the farm hold with a chat's captcha switch not read as
  * its answer. Over the 14 days before, 56 farm-shaped accounts whose blockers

@@ -32,16 +32,7 @@ export interface UserProfileFacts {
   arrivedWithSpammer?: boolean
   /** Recorded, not weighed — see `AccountTelemetry`. */
   commonChatsCount?: number | null
-  peerFacts?: {
-    registrationMonth: string | null
-    phoneCountry: string | null
-    nameChangeUnix: number | null
-    photoChangeUnix: number | null
-  } | null
 }
-
-const daysSince = (unix: number | null | undefined, nowUnix: number): number | null =>
-  typeof unix === 'number' && Number.isFinite(unix) ? Math.max(0, (nowUnix - unix) / 86400) : null
 
 /**
  * The free facts, folded for the record. `photo.dcId` rides on every user
@@ -49,14 +40,10 @@ const daysSince = (unix: number | null | undefined, nowUnix: number): number | n
  * profile was enriched at all.
  */
 const telemetryOf = (
-  sender: User, profile: UserProfileFacts | null, nowUnix: number
+  sender: User, profile: UserProfileFacts | null
 ): AccountTelemetry => ({
   photoDcId: sender.photo?.raw.dcId ?? null,
-  commonChatsCount: profile?.commonChatsCount ?? null,
-  registrationMonth: profile?.peerFacts?.registrationMonth ?? null,
-  phoneCountry: profile?.peerFacts?.phoneCountry ?? null,
-  nameChangedDaysAgo: daysSince(profile?.peerFacts?.nameChangeUnix, nowUnix),
-  photoChangedDaysAgo: daysSince(profile?.peerFacts?.photoChangeUnix, nowUnix)
+  commonChatsCount: profile?.commonChatsCount ?? null
 })
 
 /**
@@ -158,7 +145,7 @@ const snapshotOf = (
   avatars: history.avatars,
   nameChurn24h: history.nameChurn24h,
   usernameChurn24h: history.usernameChurn24h,
-  telemetry: telemetryOf(sender, profile, nowUnix)
+  telemetry: telemetryOf(sender, profile)
 })
 
 /**

@@ -419,10 +419,6 @@ export const evaluateMessage = async (
   if (telemetry) {
     if (telemetry.photoDcId !== null) meta['photoDc'] = telemetry.photoDcId
     if (telemetry.commonChatsCount !== null) meta['commonChats'] = telemetry.commonChatsCount
-    if (telemetry.registrationMonth !== null) meta['registeredMonth'] = telemetry.registrationMonth
-    if (telemetry.phoneCountry !== null) meta['phoneCountry'] = telemetry.phoneCountry
-    if (telemetry.nameChangedDaysAgo !== null) meta['nameChangedDaysAgo'] = Math.round(telemetry.nameChangedDaysAgo)
-    if (telemetry.photoChangedDaysAgo !== null) meta['photoChangedDaysAgo'] = Math.round(telemetry.photoChangedDaysAgo)
   }
   // The shape, never the name — see `name-shape.ts`.
   const nameShape = nameShapeOf(input.user.displayName, input.user.username)
@@ -1884,17 +1880,6 @@ export const evaluateMessage = async (
       )
     }
 
-    /**
-     * Shadow only, 2026-10-14: a word of two alphabets from a stranger, which
-     * the gate does not count as obfuscation (only `greek_homoglyph_word` is,
-     * because among members such a word is a typo — measured 2026-08-26). Over
-     * the 14 days to this date the stranger-only version would have sent about
-     * one message a day to the classifier and caught 6 accounts the bot first
-     * let through, against 1 that later wrote cleanly. Stamped, not acted on.
-     */
-    if (isStrangerHere(signals) && signals.some((s) => s.name === 'mixed_script_word')) {
-      meta['shadowAbstainMixed'] = true
-    }
     return finalize(
       { pSpam: 0, decidedBy: 'abstain', ruleId: null, reasonCode: 'low_information', reasonEvidence: null },
       signals,

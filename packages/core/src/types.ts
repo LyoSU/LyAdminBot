@@ -170,14 +170,11 @@ export interface UserSnapshot {
  *  - `commonChatsCount`: Telegram's own count of chats this account shares
  *    with the bot. `groupsActive` only sees the chats where the account has
  *    WRITTEN; this sees the ones it merely sits in.
- *  - `registrationMonth` / `phoneCountry`: since 2025 clients show these on a
- *    stranger's profile, and layer 228 carries them in `peerSettings`. Whether
- *    a bot account receives them is exactly what this field will show. If it
- *    does, the id-based age model has an official answer to calibrate against
- *    and the phone country is the cheapest farm separator there is.
- *  - `nameChangedDaysAgo` / `photoChangedDaysAgo`: the same object dates the
- *    last identity change — what `identity_churn_24h` reconstructs from our own
- *    history, and `avatar_recently_set` from a second call.
+ *
+ * Tried and dropped 2026-11-10: the registration month, the phone country and
+ * the dates of the last name and photo change, which layer 228 carries in
+ * `userFull.settings`. They arrived on 0 of 181 712 decision rows in the 14
+ * days to that date: a bot account is not handed them.
  *
  * `flags.premium` is the same kind of fact and is already on the snapshot; it
  * is written to the record alongside these. Measured on the accounts we knew
@@ -188,10 +185,6 @@ export interface UserSnapshot {
 export interface AccountTelemetry {
   photoDcId: number | null
   commonChatsCount: number | null
-  registrationMonth: string | null
-  phoneCountry: string | null
-  nameChangedDaysAgo: number | null
-  photoChangedDaysAgo: number | null
 }
 
 /** A mention from the message after resolution (adapters/enrich). */
@@ -520,8 +513,6 @@ export type DecidedBy =
   | 'forward'         // blacklisted forward source
   | 'signature'
   | 'vector'
-  | 'velocity'
-  | 'moderation'      // OpenAI moderation (NSFW)
   | 'llm'
   | 'llm_cached'
   | 'session'         // session scoring of the accumulated buffer

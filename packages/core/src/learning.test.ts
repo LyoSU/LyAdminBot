@@ -17,8 +17,8 @@ const makeVerdict = (overrides: Partial<Verdict> = {}): Verdict => ({
 const longText = 'x'.repeat(AUTO_LEARN_MIN_LENGTH)
 
 const ALL_STAGES: DecidedBy[] = [
-  'custom_rule', 'deterministic', 'forward', 'signature', 'vector', 'velocity',
-  'moderation', 'llm', 'llm_cached', 'session', 'score', 'abstain', 'error'
+  'custom_rule', 'deterministic', 'forward', 'signature', 'vector',
+  'llm', 'llm_cached', 'session', 'score', 'abstain', 'error'
 ]
 
 describe('shouldAutoLearn', () => {

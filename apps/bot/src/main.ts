@@ -3971,7 +3971,7 @@ type UserProfile = Awaited<ReturnType<typeof fetchUserProfile>>
 const EMPTY_PROFILE: UserProfile = {
   bio: null, businessTexts: [], avatars: null, unofficialClientRisk: null,
   personalChannelId: null, linkedChannel: null, latestAvatar: null,
-  commonChatsCount: null, peerFacts: null
+  commonChatsCount: null
 }
 
 /**
@@ -6813,8 +6813,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
           isParticipant,
           joinedDuringSurge: joinRate.joinedDuringSurge(chat.id, userSender.id),
           arrivedWithSpammer: isCohortSuspect(chat.id, userSender.id),
-          commonChatsCount: profile.commonChatsCount,
-          peerFacts: profile.peerFacts
+          commonChatsCount: profile.commonChatsCount
         }
       )
     : buildChannelSnapshot(channelSender!, history)
