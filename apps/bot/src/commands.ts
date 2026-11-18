@@ -28,7 +28,8 @@ const SLASH_NAME: Record<CommandKey, string> = {
   start: 'start', help: 'help', lang: 'lang', mystats: 'mystats', stats: 'stats',
   report: 'report', settings: 'settings', banan: 'banan', kick: 'kick',
   del: 'del', untrust: 'untrust', check: 'check', mod: 'mod', top: 'top',
-  topBanan: 'top_banan', extras: 'extras', welcome: 'welcome', ping: 'ping'
+  topBanan: 'top_banan', extras: 'extras', welcome: 'welcome', ping: 'ping',
+  rules: 'rules', warn: 'warn'
 }
 
 /**
@@ -52,7 +53,7 @@ export const SCOPES: { scope: tl.TypeBotCommandScope; keys: CommandKey[]; group:
    * the chat tells us about spam we missed, and nearly every false negative
    * correction this bot receives comes through it. The rest are lookups.
    */
-  { scope: { _: 'botCommandScopeChats' }, keys: ['report', 'mystats', 'stats', 'help'], group: true },
+  { scope: { _: 'botCommandScopeChats' }, keys: ['report', 'rules', 'mystats', 'stats', 'help'], group: true },
   /**
    * Admins. Telegram resolves the narrowest scope, so this list REPLACES the
    * members' one for an admin rather than adding to it — `help` is repeated
@@ -65,7 +66,7 @@ export const SCOPES: { scope: tl.TypeBotCommandScope; keys: CommandKey[]; group:
    */
   {
     scope: { _: 'botCommandScopeChatAdmins' },
-    keys: ['mod', 'settings', 'help'],
+    keys: ['mod', 'settings', 'rules', 'help'],
     group: true
   }
 ]

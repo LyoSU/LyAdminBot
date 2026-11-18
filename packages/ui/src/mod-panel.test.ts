@@ -16,14 +16,14 @@ const datas = (p: ModPanelInput): string[] =>
   modPanel(LOCALES['uk']!, p).buttons.flat().map((b) => b.data ?? '')
 
 describe('modPanel', () => {
-  it('leads with delete, then the punishments, then profile and close', () => {
+  it('leads with delete and warn, then the punishments, then profile and close', () => {
     const rows = modPanel(LOCALES['en']!, base).buttons.map((r) => r.map((b) => parseCallback(b.data!).parts[3]))
-    expect(rows).toEqual([['d'], ['m', 'M', 'k'], ['p', 'x']])
+    expect(rows).toEqual([['d', 'w'], ['m', 'M', 'k'], ['p', 'x']])
   })
 
   it('drops a done act and keeps the rest of the sequence on the same panel', () => {
     const afterDelete = modPanel(LOCALES['en']!, { ...base, done: MOD_DONE.deleted })
-    expect(afterDelete.buttons.flat().map((b) => parseCallback(b.data!).parts[3])).toEqual(['m', 'M', 'k', 'p', 'x'])
+    expect(afterDelete.buttons.flat().map((b) => parseCallback(b.data!).parts[3])).toEqual(['w', 'm', 'M', 'k', 'p', 'x'])
     expect(afterDelete.text).toContain(LOCALES['en']!.mod.deleted)
     // Every button carries the new state forward.
     for (const b of afterDelete.buttons.flat()) expect(parseCallback(b.data!).parts[4]).toBe(String(MOD_DONE.deleted))

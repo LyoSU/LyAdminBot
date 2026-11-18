@@ -108,6 +108,8 @@ export const en: Locale = {
     '',
     '<b>Everyone:</b>',
     '/report — report spam (as a reply, or /report @username or id)',
+    '/rules — chat rules',
+    '/warns — how many warnings I have',
     '/stats — how much spam I have caught',
     '/mystats — my stats',
     '/top, /top_banan — leaderboards',
@@ -116,6 +118,7 @@ export const en: Locale = {
     '<b>Admins:</b>',
     '/settings — settings panel (opens in a private chat, everything there is buttons)',
     '/mod — as a reply: an action panel only you see (delete, mute, kick, profile)',
+    '/warn [reason] — as a reply: warn; /unwarn removes it',
     '/banan /kick /del /check /untrust — the same as separate commands',
     '/welcome — newcomer greeting',
     '/extra, /extras — triggers',
@@ -152,7 +155,9 @@ export const en: Locale = {
     topBanan: 'Banana leaderboard',
     extras: 'Saved triggers',
     welcome: 'Newcomer greeting',
-    ping: 'Check whether the bot is alive'
+    ping: 'Check whether the bot is alive',
+    rules: 'Chat rules',
+    warn: 'Warn (in reply)'
   },
 
   actions: {
@@ -207,6 +212,8 @@ export const en: Locale = {
     filter_script: 'a blocked script in the text',
     filter_name: 'a blocked script in the name',
     filter_lock: 'a blocked message type',
+    filter_word: 'a blocked word',
+    filter_flood: 'too many messages in a row',
     scam_flag_new: 'Telegram flagged the account as a scam',
     external_ban_new: 'account is in spam databases',
     shared_profile_photo: 'the same profile photo is on several other accounts',
@@ -496,6 +503,8 @@ export const en: Locale = {
     unmuteButton: '🔓 Unmute',
     kickButton: '🚪 Kick',
     closeButton: 'Done',
+    warnButton: '⚠️ Warn',
+    warned: '⚠️ warned',
     deleted: '✓ deleted',
     muted: '✓ muted',
     unmuted: '✓ unmuted',
@@ -649,7 +658,42 @@ export const en: Locale = {
     locksLine: 'Locked',
     none: 'none',
     actionLine: 'Action for a newcomer',
-    actions: { delete: 'Delete', mute: 'Mute 1 day', ban: 'Ban 30 days' },
+    actions: { delete: 'Delete', warn: 'Warn', mute: 'Mute', ban: 'Ban' },
+    actionsLong: { delete: 'delete', warn: 'delete and warn', mute: 'mute for a day', ban: 'ban for 30 days' },
+    floodLine: 'Anti-flood',
+    floodValue: (messages, seconds) => seconds === 60 ? `${messages}/min` : `${messages}/${seconds}s`,
+    words: {
+      button: (n) => `🚫 Stop words${n > 0 ? ` (${n})` : ''}`,
+      title: '🚫 <b>Stop words</b>',
+      hint: 'A message with one of these words is removed. Whole words, any case, and look-alike letters from other alphabets are caught too. A trailing star matches every ending: <code>earn*</code>.',
+      empty: 'The list is empty.',
+      addButton: '➕ Add',
+      prompt: 'Send the words, one per line or separated by commas. A trailing star matches every ending. /cancel to stop.',
+      added: (n) => `Added: ${n}`,
+      nothingNew: 'Nothing new: these words are already listed or the message was empty.',
+      full: (max) => `The list is full (${max}). Remove something to add more.`,
+      clearButton: '🗑 Clear',
+
+      confirmClear: 'Tap again to clear everything',
+
+      cleared: 'List cleared'
+    },
+    domains: {
+      button: (n) => `✅ Allowed sites${n > 0 ? ` (${n})` : ''}`,
+      title: '✅ <b>Allowed sites</b>',
+      hint: 'These links get through even when links are locked. A site allows its subdomains too: <code>example.com</code>. For Telegram you can allow one channel: <code>t.me/mychannel</code>.',
+      empty: 'The list is empty.',
+      addButton: '➕ Add',
+      prompt: 'Send the sites, one per line or separated by commas. /cancel to stop.',
+      added: (n) => `Added: ${n}`,
+      nothingNew: 'Nothing new: these sites are already listed or are not site addresses.',
+      full: (max) => `The list is full (${max}). Remove something to add more.`,
+      clearButton: '🗑 Clear',
+
+      confirmClear: 'Tap again to clear everything',
+
+      cleared: 'List cleared'
+    },
     scopeLine: 'Applies to',
     scope: { all: 'everyone', newcomers: 'newcomers only' },
     standingNote: 'A member with standing only loses the message: the bot never mutes or bans regulars for breaking a chat rule. Admins and trusted members are never filtered.',
@@ -685,5 +729,39 @@ export const en: Locale = {
       contacts: 'Contacts',
       polls: 'Polls'
     }
+  },
+
+  warn: {
+    settingsButton: '⚠️ Warnings',
+    summary: (limit, action) => `Warnings: ${limit} → ${action}`,
+    title: '⚠️ <b>Warnings</b>',
+    hint: 'An admin warns with /warn in reply to a message, or with the button in /mod. Filters can warn newcomers too. When warnings reach the limit, the bot applies the action and resets the count. Each warning expires after 30 days.',
+    limitLine: 'Limit',
+    actionLine: 'At the limit',
+    actions: { mute: 'mute for a day', kick: 'kick', ban: 'ban for 30 days' },
+    needReply: 'Use /warn in reply to a message. You can add a reason after the command.',
+    warned: (name, count, limit, reason) => `⚠️ ${name}: warning ${count}/${limit}${reason ? ` · ${reason}` : ''}`,
+    limitReached: (name, limit, action) => `⛔ ${name}: ${limit}/${limit} warnings → ${action}`,
+    undoButton: '↩️ Remove',
+    undone: (name) => `↩️ ${name}: warning removed`,
+    nothingToUndo: 'No warnings left',
+    count: (name, count, limit) => count === 0 ? `✅ ${name}: no warnings` : `⚠️ ${name}: ${count}/${limit} warnings`
+  },
+
+  rules: {
+    settingsButton: '📜 Rules',
+    title: '📜 <b>Chat rules</b>',
+    empty: 'No rules yet. Write them and the bot will show them on /rules and with a button on the greeting.',
+    writeButton: '✏️ Write',
+    editButton: '✏️ Edit',
+    deleteButton: '🗑 Delete',
+    inWelcome: 'Button on the greeting',
+    prompt: 'Send the rules as one message. /cancel to stop.',
+    saved: 'Rules saved',
+    deleted: 'Rules deleted',
+    tooLong: (max) => `Too long: up to ${max} characters.`,
+    header: '📜 <b>Chat rules</b>',
+    none: 'This chat has no rules yet.',
+    welcomeButton: '📜 Rules'
   }
 }

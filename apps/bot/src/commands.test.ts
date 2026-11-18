@@ -39,6 +39,7 @@ describe('command menu', () => {
     expect(menu('botCommandScopeChatAdmins')).toEqual([
       { command: 'mod', ephemeral: true },
       { command: 'settings', ephemeral: true },
+      { command: 'rules', ephemeral: false },
       { command: 'help', ephemeral: true }
     ])
   })
@@ -46,6 +47,7 @@ describe('command menu', () => {
   it('keeps the members menu short and led by /report', () => {
     expect(menu('botCommandScopeChats')).toEqual([
       { command: 'report', ephemeral: false },
+      { command: 'rules', ephemeral: false },
       { command: 'mystats', ephemeral: true },
       { command: 'stats', ephemeral: true },
       { command: 'help', ephemeral: true }

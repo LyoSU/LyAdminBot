@@ -7,6 +7,7 @@
  * makes the core replayable offline against production logs.
  */
 import type { ChatFilters } from './filters.js'
+import type { WarnSettings } from './warnings.js'
 import type { SignalName } from './signals/registry.js'
 
 // ───────────────────────── input ─────────────────────────
@@ -478,6 +479,12 @@ export interface Enrichment {
    * the message has words. Read from the decision rows by the app layer.
    */
   mediaCadence?: { copies: number; meanGapSec: number; cv: number } | null
+  /**
+   * Messages this sender posted in this chat inside the chat's flood window,
+   * this one included (an album counts once). Kept by the app layer, and only
+   * when the chat has a flood limit; absent means unknown, never zero.
+   */
+  senderRecentCount?: number | null
 }
 
 // ─────────────────────── chat policy ───────────────────────
@@ -513,8 +520,14 @@ export interface ChatPolicy {
    * sender in this chat. Optional: absent means nothing is worn.
    */
   wornRuleIds?: string[]
-  /** House-rule filters (scripts, locks). Absent means none are on. */
+  /** House-rule filters (scripts, locks, words, flood). Absent means none are on. */
   filters?: ChatFilters
+  /** Warning limit and what it leads to. Absent means the defaults. */
+  warnings?: WarnSettings
+  /** The chat's rules, as the admins wrote them; null when there are none. */
+  rules?: string | null
+  /** Offer the rules on the greeting. */
+  rulesInWelcome?: boolean
 }
 
 // ───────────────────────── signals ─────────────────────────

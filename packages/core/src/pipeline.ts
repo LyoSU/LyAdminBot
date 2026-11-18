@@ -1114,15 +1114,25 @@ export const evaluateMessage = async (
     const filters = input.policy.filters
     const newcomer = isNewish(input)
     const hit = matchFilters(filters, {
-      message: input.message, displayName: input.user.displayName, newcomer
+      message: input.message, displayName: input.user.displayName, newcomer,
+      recentCount: input.enrichment.senderRecentCount ?? null
     })
     if (hit !== null) {
-      const action = filterActionFor(filters.action, {
+      const chosen = filterActionFor(filters.action, {
         newcomer, isChannel: isChannelSenderId(input.user.id)
       })
-      meta['filter'] = hit.kind === 'lock' ? hit.lock : hit.script
-      if (hit.kind !== 'lock') meta['filterShare'] = hit.share
-      if (action !== filters.action) meta['filterCappedFrom'] = filters.action
+      meta['filter'] = hit.kind
+      if (hit.kind === 'lock') meta['filterLock'] = hit.lock
+      if (hit.kind === 'script' || hit.kind === 'name_script') {
+        meta['filterScript'] = hit.script
+        meta['filterShare'] = hit.share
+      }
+      if (hit.kind === 'flood') meta['filterCount'] = hit.count
+      if (chosen !== filters.action) meta['filterCappedFrom'] = filters.action
+      // A warning removes the message like a delete; the app layer adds the
+      // warning and applies the chat's limit, which needs the store.
+      if (chosen === 'warn') meta['filterWarn'] = true
+      const action = chosen === 'warn' ? 'delete' : chosen
       return finalize(
         {
           // Not a spam estimate, and zero so that nothing reading pSpam as one

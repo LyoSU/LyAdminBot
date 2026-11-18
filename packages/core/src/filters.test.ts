@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import type { NormalizedMessage } from './types.js'
 import {
-  DEFAULT_FILTERS, FILTERABLE_SCRIPTS, LOCK_KINDS, filterActionFor, filterReasonCode, filterRuleId,
-  hasActiveFilters, isChatFilterVerdict, matchFilters, normalizeFilters, toggleIn,
+  DEFAULT_FILTERS, FILTERABLE_SCRIPTS, FLOOD_PRESETS, LOCK_KINDS, MAX_WORDS, filterActionFor, filterReasonCode,
+  filterRuleId, hasActiveFilters, isChatFilterVerdict, matchFilters, normalizeDomain, normalizeFilters,
+  normalizeWord, parseEntries, toggleIn,
   type ChatFilters
 } from './filters.js'
 
@@ -192,5 +193,117 @@ describe('properties', () => {
     fc.assert(fc.property(fc.string({ unit: 'binary' }), fc.stringMatching(/^[а-яії ]{1,40}$/), (text, tail) => {
       if (check(f, text) === null) expect(check(f, `${text} ${tail}`)).toBeNull()
     }))
+  })
+})
+
+describe('stop-words', () => {
+  const f = (words: string[]) => filters({ words })
+
+  it('matches a whole word in any case, never inside another word', () => {
+    expect(check(f(['казино']), 'Найкраще КАЗИНО тут')).toEqual({ kind: 'word', word: 'казино' })
+    expect(check(f(['кас']), 'каска на голові')).toBeNull()
+  })
+
+  it('a trailing star takes every ending', () => {
+    expect(check(f(['заробіт*']), 'Швидкий заробіток вдома')).toEqual({ kind: 'word', word: 'заробіт*' })
+    expect(check(f(['заробіт*']), 'про заробітки')).not.toBeNull()
+    expect(check(f(['заробіток']), 'про заробітки')).toBeNull()
+  })
+
+  it('sees through look-alike letters from other alphabets', () => {
+    // Latin a and o standing in for Cyrillic а and о.
+    expect(check(f(['казино']), 'кaзинo без депозиту')).toEqual({ kind: 'word', word: 'казино' })
+  })
+
+  it('matches a phrase across any whitespace', () => {
+    expect(check(f(['легкі гроші']), 'тут легкі\n гроші')).not.toBeNull()
+  })
+
+  it('never throws on regex metacharacters in a stop-word', () => {
+    expect(check(f(['c++', '(x)', '[a]*']), 'пишу на c++ щодня')).toEqual({ kind: 'word', word: 'c++' })
+  })
+})
+
+describe('allowed sites', () => {
+  const links = (domains: string[], url: string) => check(filters({ locks: ['links'], domains }), 'x', {
+    m: { urls: [{ visible: url, target: url, hidden: false }] }
+  })
+
+  it('lets the chat’s own site and its subdomains through', () => {
+    expect(links(['example.com'], 'https://example.com/page')).toBeNull()
+    expect(links(['example.com'], 'https://shop.example.com')).toBeNull()
+    expect(links(['example.com'], 'https://notexample.com')).not.toBeNull()
+  })
+
+  it('a t.me entry allows that channel only', () => {
+    expect(links(['t.me/mychannel'], 'https://t.me/mychannel/12')).toBeNull()
+    expect(links(['t.me/mychannel'], 'https://t.me/otherchannel')).not.toBeNull()
+  })
+
+  it('an allowed link does not hide a forbidden one next to it', () => {
+    expect(check(filters({ locks: ['links'], domains: ['example.com'] }), 'x', {
+      m: { urls: [
+        { visible: 'a', target: 'https://example.com', hidden: false },
+        { visible: 'b', target: 'https://spam.biz', hidden: false }
+      ] }
+    })).not.toBeNull()
+  })
+})
+
+describe('entry normalization', () => {
+  it('words: trimmed, lower-cased, quotes and inner runs of space dropped', () => {
+    expect(normalizeWord('  «Легкі   Гроші» ')).toBe('легкі гроші')
+    expect(normalizeWord('Казино***')).toBe('казино*')
+    expect(normalizeWord('*')).toBeNull()
+    expect(normalizeWord('   ')).toBeNull()
+    expect(normalizeWord('x'.repeat(65))).toBeNull()
+  })
+
+  it('domains: scheme, www, query and deep paths dropped', () => {
+    expect(normalizeDomain('https://www.Example.com/a/b?c=1')).toBe('example.com/a')
+    expect(normalizeDomain('t.me/MyChannel')).toBe('t.me/mychannel')
+    expect(normalizeDomain('example.com')).toBe('example.com')
+    expect(normalizeDomain('not a site')).toBeNull()
+    expect(normalizeDomain('localhost')).toBeNull()
+  })
+
+  it('a pasted list: lines and commas, deduped against itself and the stored list', () => {
+    expect(parseEntries('казино, ставки\nКАЗИНО\n\nбонус', normalizeWord, ['бонус']))
+      .toEqual(['казино', 'ставки'])
+  })
+
+  it('stored lists are normalized and capped on read', () => {
+    const read = normalizeFilters({ words: Array.from({ length: 300 }, (_, i) => `w${i}`), domains: ['Example.com', 'bad'] })
+    expect(read.words).toHaveLength(MAX_WORDS)
+    expect(read.domains).toEqual(['example.com'])
+  })
+})
+
+describe('flood', () => {
+  const flood = filters({ flood: FLOOD_PRESETS[0]! })
+
+  it('fires past the limit, not at it', () => {
+    const limit = FLOOD_PRESETS[0]!.messages
+    const at = (n: number) => matchFilters(flood, { message: msg({ text: 'привіт' }), displayName: 'M', newcomer: true, recentCount: n })
+    expect(at(limit)).toBeNull()
+    expect(at(limit + 1)).toEqual({ kind: 'flood', count: limit + 1 })
+  })
+
+  it('an unknown rate is never a flood', () => {
+    expect(matchFilters(flood, { message: msg({ text: 'x' }), displayName: 'M', newcomer: true })).toBeNull()
+    expect(matchFilters(flood, { message: msg({ text: 'x' }), displayName: 'M', newcomer: true, recentCount: null })).toBeNull()
+  })
+
+  it('only the presets the panel offers survive a read', () => {
+    expect(normalizeFilters({ flood: { messages: 5, seconds: 10 } }).flood).toEqual({ messages: 5, seconds: 10 })
+    expect(normalizeFilters({ flood: { messages: 1, seconds: 1 } }).flood).toBeNull()
+  })
+})
+
+describe('warn action', () => {
+  it('a newcomer is warned; a regular and a channel only lose the message', () => {
+    expect(filterActionFor('warn', { newcomer: true, isChannel: false })).toBe('warn')
+    expect(filterActionFor('warn', { newcomer: false, isChannel: false })).toBe('delete')
+    expect(filterActionFor('warn', { newcomer: true, isChannel: true })).toBe('delete')
   })
 })

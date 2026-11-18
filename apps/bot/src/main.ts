@@ -8,7 +8,9 @@ import { BotKeyboard, Chat, User, html, type EphemeralCallbackQuery, type Messag
 import {
   evaluateMessage, tallyVotes, extractBioSignals, BIO_PROMO_SIGNALS,
   isEnforcementAction, countsAsDetection, isChatFilterVerdict,
-  normalizeFilters, toggleIn, FILTERABLE_SCRIPTS, LOCK_KINDS, FILTER_ACTIONS, type ChatFilters,
+  normalizeFilters, toggleIn, FILTERABLE_SCRIPTS, LOCK_KINDS, FILTER_ACTIONS, FLOOD_PRESETS, type ChatFilters,
+  parseEntries, normalizeWord, normalizeDomain, MAX_WORDS, MAX_DOMAINS,
+  DEFAULT_WARN_SETTINGS, WARN_LIMITS, WARN_LIMIT_ACTIONS, WARN_MUTE_SECONDS, WARN_BAN_SECONDS, warnOutcome,
   countsAgainstSender,
   shouldAutoLearn, autoLearnSource, VOTE_LEARN_STATUS, hasNetworkVoice, conversationLineFor, nsfwProfileHit,
   sexualScore, suggestiveProfileEvidence, profileHasCase,
@@ -50,7 +52,8 @@ import {
 import {
   captchaPrompt, chatActionsView, chatArrivalsView, ARRIVALS_SHOWN, arrivalBannable, arrivalSilent, type ArrivalEntry, cohortCard, cohortNotice, CHAT_ACTIONS_SHOWN, compactNotification, escapeHtml as escapeName, helpView,
   langPanel, langPicker, parseCallback, resolveLocale, settingsDeepLink, settingsPanel,
-  filtersPanel, filterScriptsPanel, filterLocksPanel,
+  filtersPanel, filterScriptsPanel, filterLocksPanel, filterListPanel, entryTag, FILTER_LIST_PAGE,
+  warnPanel, warnNotice, rulesPanel, rulesView,
   nameIsPromo, ownRestrictionsView, OWN_RESTRICTIONS_SHOWN, startCard, startGroupHint, statsCard, topList, userMention, userProfileCard, votePrompt, voteResult,
   voterListView, whyCard, whyView,
   welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor,
@@ -75,6 +78,7 @@ import { sendWithReplyFallback } from './reply-fallback.js'
 import { captchaLift, readMemberRestriction } from './captcha-lift.js'
 import { MemberFactsCache, isAnonymousAdminSender, type MemberFacts } from './member-facts.js'
 import { JOIN_WINDOW_MS, JoinRateTracker } from './join-rate.js'
+import { FloodTracker } from './flood.js'
 import { IncidentTracker, SenderMessageLog, incidentPowerFor, correctionOwns, type Incident } from './incident.js'
 import { ArrivalLog, arrivalMessageIds } from './arrival-log.js'
 import { JOIN_LINE_GRACE_MS, JoinWitness } from './join-witness.js'
@@ -227,6 +231,7 @@ const resolveTmePreview = createTmePreviewResolver()
 
 const ports = buildPorts()
 const joinRate = new JoinRateTracker()
+const floodTracker = new FloodTracker()
 /**
  * One spammer's run of messages, as one event: see `incident.ts` for the ceiling
  * that keeps it safe. Memory-only on purpose — an incident creates no judgement,
@@ -2353,23 +2358,63 @@ const renderSettingsPanel = async (locale: Locale, chatId: number): Promise<View
     // the bot is idle in their chat without waiting for the in-chat notice,
     // which since 2026-10-15 goes out at most twice per blocked state.
     missingRights: rights.knownGap(chatId),
-    filters: policy.filters ?? normalizeFilters(null)
+    filters: policy.filters ?? normalizeFilters(null),
+    warnings: policy.warnings ?? DEFAULT_WARN_SETTINGS
   }))
 }
 
 /** The filters screen or one of its two lists, from a fresh group document. */
-const renderFilters = async (
-  locale: Locale, chatId: number, screen: 'flt' | 'flt_scr' | 'flt_lck'
-): Promise<ViewMessage> => {
+type FilterScreen = 'flt' | 'flt_scr' | 'flt_lck' | 'flt_wl' | 'flt_dl'
+
+/** The chat's filters as stored now — read fresh, never from a screen's state. */
+const currentFilters = async (chatId: number): Promise<ChatFilters> => {
   const groupDoc = await store.getGroupDoc(chatId).catch(() => null)
-  const filters = groupDocToChatPolicy(groupDoc as never).filters ?? normalizeFilters(null)
+  return groupDocToChatPolicy(groupDoc as never).filters ?? normalizeFilters(null)
+}
+
+const renderFilters = async (
+  locale: Locale, chatId: number, screen: FilterScreen, page = 0
+): Promise<ViewMessage> => {
+  const filters = await currentFilters(chatId)
   const view = screen === 'flt_scr'
     ? filterScriptsPanel(locale, chatId, filters)
     : screen === 'flt_lck'
       ? filterLocksPanel(locale, chatId, filters)
-      : filtersPanel(locale, chatId, filters)
+      : screen === 'flt_wl'
+        ? filterListPanel(locale, chatId, 'words', filters.words, page)
+        : screen === 'flt_dl'
+          ? filterListPanel(locale, chatId, 'domains', filters.domains, page)
+          : filtersPanel(locale, chatId, filters)
   return forChat(locale, chatId, view)
 }
+
+/**
+ * Two taps to wipe a list: the first arms, a second within this window clears.
+ * A stop-list an admin spent an evening on must not go on one stray touch.
+ */
+const CLEAR_CONFIRM_MS = 5000
+const armedClears = new Map<string, number>()
+const confirmClear = (key: string): boolean => {
+  const now = Date.now()
+  for (const [k, at] of armedClears) if (now - at > CLEAR_CONFIRM_MS) armedClears.delete(k)
+  if (armedClears.has(key)) { armedClears.delete(key); return true }
+  armedClears.set(key, now)
+  return false
+}
+
+const renderWarnPanel = async (locale: Locale, chatId: number): Promise<ViewMessage> => {
+  const groupDoc = await store.getGroupDoc(chatId).catch(() => null)
+  return forChat(locale, chatId, warnPanel(locale, chatId, groupDocToChatPolicy(groupDoc as never).warnings ?? DEFAULT_WARN_SETTINGS))
+}
+
+const renderRulesPanel = async (locale: Locale, chatId: number): Promise<ViewMessage> => {
+  const groupDoc = await store.getGroupDoc(chatId).catch(() => null)
+  const policy = groupDocToChatPolicy(groupDoc as never)
+  return forChat(locale, chatId, rulesPanel(locale, chatId, policy.rules ?? null, policy.rulesInWelcome !== false))
+}
+
+/** Longest rules text kept: the header and a margin under Telegram's 4096. */
+const RULES_MAX = 3500
 
 /**
  * One tap on a filters screen → the settings after it, or null when the tap
@@ -2387,6 +2432,11 @@ const applyFilterTap = (current: ChatFilters, action: string, value: string): Ch
   if (action === 'flt_a' && has(FILTER_ACTIONS, value)) return { ...current, action: value }
   if (action === 'flt_new') return { ...current, newcomersOnly: !current.newcomersOnly }
   if (action === 'flt_name') return { ...current, nameScripts: !current.nameScripts }
+  if (action === 'flt_fl') {
+    if (value === 'off') return { ...current, flood: null }
+    const limit = FLOOD_PRESETS.find((p) => `${p.messages}-${p.seconds}` === value)
+    return limit === undefined ? null : { ...current, flood: limit }
+  }
   return null
 }
 
@@ -2530,6 +2580,37 @@ const handlePendingInput = async (
     await reply(await promptForChat(locale, entry.chatId, locale.extra.editor.promptContent(escapeName(name))))
     return 'keep'
   }
+  if (entry.type === 'filters.words' || entry.type === 'filters.domains') {
+    const kind = entry.type === 'filters.words' ? 'words' : 'domains'
+    const strings = locale.filters[kind]
+    const max = kind === 'words' ? MAX_WORDS : MAX_DOMAINS
+    const current = await currentFilters(entry.chatId)
+    if (current[kind].length >= max) { await reply(strings.full(max)); return 'consume' }
+    const fresh = parseEntries(text, kind === 'words' ? normalizeWord : normalizeDomain, current[kind])
+      .slice(0, max - current[kind].length)
+    // Nothing usable is a message the admin can correct; the prompt stays open.
+    if (fresh.length === 0) { await reply(strings.nothingNew); return 'keep' }
+    const saved = await store.updateGroupSettings(entry.chatId, {
+      filters: { ...current, [kind]: [...current[kind], ...fresh] }
+    }).then(() => true).catch(() => false)
+    await reply(saved ? strings.added(fresh.length) : locale.writeFailed)
+    if (saved) log.info('settings_changed', { chatId: entry.chatId, by: userId, action: entry.type, added: fresh.length })
+    const total = current[kind].length + fresh.length
+    // Lands on the page holding what was just added.
+    await sendView(message, await renderFilters(locale, entry.chatId, kind === 'words' ? 'flt_wl' : 'flt_dl',
+      Math.floor((total - 1) / FILTER_LIST_PAGE)))
+    return saved ? 'consume' : 'keep'
+  }
+  if (entry.type === 'rules.text') {
+    if (!text) { await reply(locale.rules.prompt); return 'keep' }
+    if (text.length > RULES_MAX) { await reply(locale.rules.tooLong(RULES_MAX)); return 'keep' }
+    const saved = await store.updateGroupSettings(entry.chatId, { rules: text })
+      .then(() => true).catch(() => false)
+    await reply(saved ? locale.rules.saved : locale.writeFailed)
+    if (saved) log.info('settings_changed', { chatId: entry.chatId, by: userId, action: 'rules' })
+    await sendView(message, await renderRulesPanel(locale, entry.chatId))
+    return saved ? 'consume' : 'keep'
+  }
   if (entry.type === 'extra.content') {
     const name = entry.arg ?? ''
     const fileId = mediaFileId(message)
@@ -2600,6 +2681,15 @@ const handlePrivateMessage = async (message: Message): Promise<void> => {
       text: await renderMyStats(locale, sender.id, Number.isFinite(chatId) ? chatId : null),
       buttons: []
     })
+    return
+  }
+  if (payload.startsWith('rules_')) {
+    const chatId = Number(payload.slice('rules_'.length))
+    const groupDoc = Number.isFinite(chatId) ? await store.getGroupDoc(chatId).catch(() => null) : null
+    const rules = groupDocToChatPolicy(groupDoc as never).rules ?? null
+    await sendView(message, rules === null
+      ? { text: locale.rules.none, buttons: [] }
+      : await forChat(locale, chatId, rulesView(locale, rules)))
     return
   }
   if (payload.startsWith('why_')) {
@@ -2817,6 +2907,134 @@ const adminUnmute = async (chat: Chat, caller: User, target: User, locale: Local
  * /kick — admin removes a member (ban then unban, so they can rejoin).
  * Reply required; admins are kick-proof; the notice auto-deletes.
  */
+/**
+ * Give one warning and act on the chat's limit. Returns whether the warning was
+ * recorded. The notice speaks the group's language and respects quiet mode;
+ * at the limit the action replaces the notice, and the count starts over only
+ * once the action has taken hold — a mute Telegram refused leaves the warnings
+ * where they were, so the next one tries again.
+ */
+const issueWarning = async (
+  chat: Chat,
+  target: { id: number; displayName: string },
+  params: { by: number; reason: string | null; source: 'admin' | 'filter' }
+): Promise<boolean> => {
+  const groupDoc = await store.getGroupDoc(chat.id).catch(() => null)
+  const policy = groupDocToChatPolicy(groupDoc as never)
+  const settings = policy.warnings ?? DEFAULT_WARN_SETTINGS
+  const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
+  const count = await store.addWarning({ chatId: chat.id, userId: target.id, ...params }).catch(() => null)
+  if (count === null) return false
+  const name = userMention(target.id, target.displayName)
+  log.info('warn', { chatId: chat.id, userId: target.id, by: params.by, source: params.source, count, limit: settings.limit })
+  const post = async (view: ViewMessage): Promise<void> => {
+    const sent = await tgSendText(chat.id, viewHtml(view.text), {
+      ...(view.buttons.length > 0 ? { replyMarkup: toKeyboard(view.buttons) } : {}),
+      disableWebPreview: true, silent: policy.quietMode === true
+    }).catch(() => null)
+    if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_COMPACT_MS, 'warn')
+  }
+  if (warnOutcome(count, settings) === 'limit') {
+    const acted = await (settings.action === 'mute'
+      ? gateway.moderationActions.mute(chat.id, target.id, WARN_MUTE_SECONDS)
+      : settings.action === 'kick'
+        ? gateway.moderationActions.kick(chat.id, target.id)
+        : gateway.moderationActions.ban(chat.id, target.id, WARN_BAN_SECONDS))
+      .then(() => true)
+      .catch((err: unknown) => {
+        log.warn('warn_limit_failed', { chatId: chat.id, userId: target.id, action: settings.action, error: telegramErrorName(String(err)) })
+        return false
+      })
+    if (acted) {
+      await store.clearWarnings(chat.id, target.id).catch(() => { /* lapses on its own */ })
+      log.info('warn_limit', { chatId: chat.id, userId: target.id, action: settings.action, limit: settings.limit })
+      await post({ text: locale.warn.limitReached(name, settings.limit, locale.warn.actions[settings.action]), buttons: [] })
+      return true
+    }
+  }
+  await post(warnNotice(locale, {
+    chatId: chat.id, userId: target.id, userLabel: target.displayName,
+    count: Math.min(count, settings.limit), limit: settings.limit, reason: params.reason
+  }))
+  return true
+}
+
+/** Who a reply command is about: a person, not a bot, not us, not an admin. */
+const replyTargetOf = async (chat: Chat, replied: Message | null): Promise<User | null> => {
+  const target = replied?.sender
+  if (!(target instanceof User) || target.isBot || target.id === selfId) return null
+  if (await isChatAdmin(chat.id, target.id)) return null
+  return target
+}
+
+/** /warn [reason] — admin, in reply to the message being warned about. */
+const handleWarnCommand = async (message: Message, chat: Chat, caller: User, args: string): Promise<void> => {
+  if (!(await isChatAdmin(chat.id, caller.id))) return
+  const locale = await groupLocale(chat.id)
+  const replied = await gateway.fetchRepliedMessage(message)
+  if (!replied) {
+    await sendView(message, { text: locale.warn.needReply, buttons: [] })
+    return
+  }
+  const target = await replyTargetOf(chat, replied)
+  await gateway.tg.deleteMessagesById(chat.id, [message.id]).catch(() => { /* no rights */ })
+  if (target === null) return
+  const reason = args.trim()
+  await issueWarning(chat, target, { by: caller.id, reason: reason === '' ? null : reason, source: 'admin' })
+}
+
+/** /unwarn — admin lifts the newest warning of the replied-to member. */
+const handleUnwarn = async (message: Message, chat: Chat, caller: User): Promise<void> => {
+  if (!(await isChatAdmin(chat.id, caller.id))) return
+  const locale = await groupLocale(chat.id)
+  const replied = await gateway.fetchRepliedMessage(message)
+  const target = await replyTargetOf(chat, replied)
+  await gateway.tg.deleteMessagesById(chat.id, [message.id]).catch(() => { /* no rights */ })
+  if (target === null) return
+  const removed = await store.removeLastWarning(chat.id, target.id).catch(() => false)
+  log.info('unwarn', { chatId: chat.id, userId: target.id, by: caller.id, removed })
+  const text = removed
+    ? locale.warn.undone(userMention(target.id, target.displayName))
+    : locale.warn.nothingToUndo
+  const sent = await tgSendText(chat.id, viewHtml(text)).catch(() => null)
+  if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'unwarn')
+}
+
+/**
+ * /warns — how many warnings somebody holds: the replied-to member, or the
+ * caller. Open to everybody: every warning was announced in the chat anyway.
+ */
+const handleWarns = async (message: Message, chat: Chat, caller: User): Promise<void> => {
+  const locale = await groupLocale(chat.id)
+  const replied = await gateway.fetchRepliedMessage(message)
+  const subject = replied?.sender instanceof User && !replied.sender.isBot ? replied.sender : caller
+  const groupDoc = await store.getGroupDoc(chat.id).catch(() => null)
+  const settings = groupDocToChatPolicy(groupDoc as never).warnings ?? DEFAULT_WARN_SETTINGS
+  const count = await store.countWarnings(chat.id, subject.id).catch(() => 0)
+  const sent = await tgReplyText(message, viewHtml(
+    locale.warn.count(userMention(subject.id, subject.displayName), count, settings.limit)
+  )).catch(() => null)
+  if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_BANAN_MS, 'warns')
+}
+
+/**
+ * /rules — the chat's rules, posted in the chat. Sent in reply to somebody, it
+ * answers THEM: that is how a member gets pointed at the rules without a word.
+ * The command itself goes, and the answer cleans itself up like /help.
+ */
+const handleRules = async (message: Message, chat: Chat): Promise<void> => {
+  const locale = await groupLocale(chat.id)
+  const groupDoc = await store.getGroupDoc(chat.id).catch(() => null)
+  const rules = groupDocToChatPolicy(groupDoc as never).rules ?? null
+  const view = rules === null ? { text: locale.rules.none, buttons: [] } : rulesView(locale, rules)
+  const replyTo = message.replyToMessage?.id ?? message.id
+  const sent = await tgSendText(chat.id, viewHtml(view.text), { replyTo, disableWebPreview: true }).catch(() => null)
+  if (sent) scheduleDelete(chat.id, sent.id, NOTIFY_TTL_TOP_MS, 'rules')
+  if (replyTo !== message.id) {
+    await gateway.tg.deleteMessagesById(chat.id, [message.id]).catch(() => { /* no rights */ })
+  }
+}
+
 const handleKick = async (message: Message, chat: Chat, caller: User): Promise<void> => {
   const locale = await groupLocale(chat.id)
   if (!(await isChatAdmin(chat.id, caller.id))) return
@@ -3316,6 +3534,15 @@ const answerModTap = async (query: EphemeralCallbackQuery, parts: string[]): Pro
       done |= MOD_DONE.deleted
       mark = locale.mod.deleted
       log.info('mod_delete', { chatId, messageId, by: query.user.id, userId: author?.id })
+    }
+  } else if (act === 'w') {
+    if (!author || !(await modCanPunish(chatId, author))) {
+      await toast(locale.mod.limited, true)
+      return
+    }
+    if (await issueWarning(chat, author, { by: query.user.id, reason: null, source: 'admin' })) {
+      done |= MOD_DONE.warned
+      mark = locale.mod.warned
     }
   } else if (act === 'm' || act === 'M' || act === 'u' || act === 'k') {
     if (!author || !(await modCanPunish(chatId, author))) {
@@ -5879,13 +6106,25 @@ const handleWelcomeGreeting = async (message: Message, chat: Chat, joiners: User
   // nothing. %name% is our placeholder, substituted after escaping.
   const body = buildWelcomeGreeting(template, names, locale.welcome.defaultGreeting(names))
   const gif = pickRandom(welcome.gifs)
+  /**
+   * The rules, one tap away, opened in a PM so the chat is not handed a wall of
+   * text with every arrival. On the text greeting only: a stored GIF is replayed
+   * through a path that carries no buttons.
+   */
+  const policy = groupDocToChatPolicy(groupDoc as never)
+  const rulesButton = policy.rules && policy.rulesInWelcome !== false && selfUsername
+    ? { text: locale.rules.welcomeButton, url: `https://t.me/${selfUsername}?start=rules_${chat.id}` }
+    : null
   if (welcome.private) {
-    await greetPrivately(chat, joiners, template, gif, locale, message.id)
+    await greetPrivately(chat, joiners, template, gif, locale, message.id, rulesButton)
     return
   }
   const sentIds = gif
     ? await replayMedia(chat.id, gif, { caption: body, replyTo: message.id, tag: 'welcome_send_failed' })
-    : await tgSendText(chat.id, viewHtml(body), { replyTo: message.id })
+    : await tgSendText(chat.id, viewHtml(body), {
+      replyTo: message.id,
+      ...(rulesButton ? { replyMarkup: toKeyboard([[rulesButton]]) } : {})
+    })
         .then((m) => [m.id])
         .catch((err) => { log.warn('welcome_send_failed', { chatId: chat.id, kind: 'text', err: String(err) }); return [] })
   for (const id of sentIds) scheduleDelete(chat.id, id, welcome.timer * 1000, 'welcome')
@@ -5915,16 +6154,17 @@ const handleWelcomeGreeting = async (message: Message, chat: Chat, joiners: User
  */
 const greetPrivately = async (
   chat: Chat, joiners: User[], template: string | null | undefined, gif: string | null | undefined,
-  locale: Locale, joinMessageId: number
+  locale: Locale, joinMessageId: number, rulesButton: { text: string; url: string } | null = null
 ): Promise<void> => {
+  const markup = rulesButton ? { replyMarkup: toKeyboard([[rulesButton]]) } : {}
   for (const joiner of joiners) {
     const name = `<b>${escapeName(joiner.displayName)}</b>`
     const text = viewHtml(buildWelcomeGreeting(template, name, locale.welcome.defaultGreeting(name)))
     const sent = (gif
-      ? await gateway.sendEphemeral(chat.id, joiner.id, text, { media: gif, replyTo: joinMessageId })
+      ? await gateway.sendEphemeral(chat.id, joiner.id, text, { media: gif, replyTo: joinMessageId, ...markup })
         .then(() => true).catch(() => false)
       : false) ||
-      await gateway.sendEphemeral(chat.id, joiner.id, text, { replyTo: joinMessageId })
+      await gateway.sendEphemeral(chat.id, joiner.id, text, { replyTo: joinMessageId, ...markup })
         .then(() => true).catch((err: unknown) => {
           log.warn('welcome_send_failed', { chatId: chat.id, kind: 'private', err: String(err) })
           return false
@@ -6481,6 +6721,22 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     }
     if (bare('kick')) {
       await handleKick(message, chat, userSender)
+      return
+    }
+    if (cmd?.name === 'warn') {
+      await handleWarnCommand(message, chat, userSender, cmd.args)
+      return
+    }
+    if (bare('unwarn')) {
+      await handleUnwarn(message, chat, userSender)
+      return
+    }
+    if (bare('warns')) {
+      await handleWarns(message, chat, userSender)
+      return
+    }
+    if (bare('rules')) {
+      await handleRules(message, chat)
       return
     }
     if (bare('untrust')) {
@@ -7126,7 +7382,12 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       avatarDhash: avatarBase64 === null ? null : avatarDhashOf(avatarBase64),
       storyBase64,
       llmClearedAgoMs: userSender ? clearanceAgoMs(chat.id, userSender.id) : null,
-      mediaCadence
+      mediaCadence,
+      // Counted only where the chat set a limit, and never for an edit: an
+      // edit is the same message again, not one more of them.
+      senderRecentCount: policy.filters?.flood && !isEdit
+        ? floodTracker.note(chat.id, sender.id, Date.now(), policy.filters.flood.seconds * 1000)
+        : null
     }
   }
 
@@ -7840,6 +8101,13 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
       log.info('filter_delete', {
         chatId: chat.id, userId: sender.id, messageId: message.id, rule: verdict.ruleId
       })
+      // A filter set to warn: the warning is what tells the member, so this is
+      // the one filter delete that is not silent.
+      if (verdict.meta['filterWarn'] === true && result.deleted === true && userSender) {
+        await issueWarning(chat, userSender, {
+          by: selfId, reason: locale.reasons[verdict.reasonCode] ?? null, source: 'filter'
+        })
+      }
       return
     }
 
@@ -8045,6 +8313,107 @@ const wireCallbacks = (): void => {
         await query.answer({ text: locale.arrivals.banned(banned) })
         return
       }
+      /** Re-render the screen the tap came from, in place. */
+      const editPanel = async (view: ViewMessage): Promise<void> => {
+        await tgEditMessage({
+          chatId: query.user.id, message: query.messageId,
+          text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons)
+        }).catch(() => { /* unchanged → MESSAGE_NOT_MODIFIED, fine */ })
+      }
+      // Stop-words and allowed sites: add asks for the next PM message; remove
+      // checks the entry's fingerprint so a stale button removes nothing.
+      if (action === 'flt_wa' || action === 'flt_da') {
+        const strings = action === 'flt_wa' ? locale.filters.words : locale.filters.domains
+        pendingInput.set(query.user.id, { type: action === 'flt_wa' ? 'filters.words' : 'filters.domains', chatId })
+        await query.answer({})
+        await tgSendText(query.user.id, viewHtml(await promptForChat(locale, chatId, strings.prompt)))
+          .catch(() => { /* PM closed */ })
+        return
+      }
+      if (action === 'flt_wx' || action === 'flt_dx' || action === 'flt_wc' || action === 'flt_dc') {
+        const kind = action.startsWith('flt_w') ? 'words' : 'domains'
+        const strings = locale.filters[kind]
+        const current = await currentFilters(chatId)
+        let next: ChatFilters | null = null
+        let page = 0
+        let toastText: string | undefined
+        if (action.endsWith('x')) {
+          const [indexRaw = '', tag = ''] = value.split('.')
+          const index = Number(indexRaw)
+          const entry = current[kind][index]
+          page = Math.floor(index / FILTER_LIST_PAGE)
+          if (entry !== undefined && entryTag(entry) === tag) {
+            next = { ...current, [kind]: current[kind].filter((_, i) => i !== index) }
+          }
+        } else {
+          if (!confirmClear(`${query.user.id}:${chatId}:${kind}`)) {
+            await query.answer({ text: strings.confirmClear })
+            return
+          }
+          next = { ...current, [kind]: [] }
+          toastText = strings.cleared
+        }
+        if (next !== null) {
+          await store.updateGroupSettings(chatId, { filters: next })
+          log.info('settings_changed', { chatId, by: query.user.id, action })
+        }
+        await editPanel(await renderFilters(locale, chatId, kind === 'words' ? 'flt_wl' : 'flt_dl', page))
+        await query.answer(toastText === undefined ? {} : { text: toastText })
+        return
+      }
+      if (action === 'flt_wl' || action === 'flt_dl') {
+        await editPanel(await renderFilters(locale, chatId, action, Number(value) || 0))
+        await query.answer({})
+        return
+      }
+      // Warnings: the limit and what reaching it does.
+      if (action === 'wrn' || action === 'wrn_n' || action === 'wrn_a') {
+        if (action !== 'wrn') {
+          const groupDoc = await store.getGroupDoc(chatId).catch(() => null)
+          const settings = groupDocToChatPolicy(groupDoc as never).warnings ?? DEFAULT_WARN_SETTINGS
+          const limit = Number(value)
+          const next = action === 'wrn_n' && WARN_LIMITS.includes(limit)
+            ? { ...settings, limit }
+            : action === 'wrn_a' && (WARN_LIMIT_ACTIONS as readonly string[]).includes(value)
+              ? { ...settings, action: value as typeof settings.action }
+              : null
+          if (next !== null && (next.limit !== settings.limit || next.action !== settings.action)) {
+            await store.updateGroupSettings(chatId, { warnings: next })
+            log.info('settings_changed', { chatId, by: query.user.id, action, value })
+          }
+        }
+        await editPanel(await renderWarnPanel(locale, chatId))
+        await query.answer({})
+        return
+      }
+      // Rules: write or edit through the next PM message; delete takes two taps.
+      if (action === 'rul_e') {
+        pendingInput.set(query.user.id, { type: 'rules.text', chatId })
+        await query.answer({})
+        await tgSendText(query.user.id, viewHtml(await promptForChat(locale, chatId, locale.rules.prompt)))
+          .catch(() => { /* PM closed */ })
+        return
+      }
+      if (action === 'rul' || action === 'rul_d' || action === 'rul_w') {
+        let toastText: string | undefined
+        if (action === 'rul_d') {
+          if (!confirmClear(`${query.user.id}:${chatId}:rules`)) {
+            await query.answer({ text: locale.filters.words.confirmClear })
+            return
+          }
+          await store.updateGroupSettings(chatId, { rules: null })
+          log.info('settings_changed', { chatId, by: query.user.id, action })
+          toastText = locale.rules.deleted
+        } else if (action === 'rul_w') {
+          const groupDoc = await store.getGroupDoc(chatId).catch(() => null)
+          const policy = groupDocToChatPolicy(groupDoc as never)
+          await store.updateGroupSettings(chatId, { rulesInWelcome: policy.rulesInWelcome === false })
+          log.info('settings_changed', { chatId, by: query.user.id, action })
+        }
+        await editPanel(await renderRulesPanel(locale, chatId))
+        await query.answer(toastText === undefined ? {} : { text: toastText })
+        return
+      }
       if (action === 'flt' || action === 'flt_scr' || action === 'flt_lck') {
         const view = await renderFilters(locale, chatId, action)
         await tgEditMessage({
@@ -8062,7 +8431,7 @@ const wireCallbacks = (): void => {
         await store.updateGroupSettings(chatId, { filters: next })
         log.info('settings_changed', { chatId, by: query.user.id, action, value: value || undefined })
         // The tap lands back on the screen it was made on.
-        const screen = action === 'flt_s' || action === 'flt_name' ? 'flt_scr' : action === 'flt_l' ? 'flt_lck' : 'flt'
+        const screen: FilterScreen = action === 'flt_s' || action === 'flt_name' ? 'flt_scr' : action === 'flt_l' ? 'flt_lck' : 'flt'
         const view = await renderFilters(locale, chatId, screen)
         await tgEditMessage({
           chatId: query.user.id, message: query.messageId,
@@ -8286,6 +8655,31 @@ const wireCallbacks = (): void => {
       await tgEditMessage({ chatId: query.chat.id, message: query.messageId, replyMarkup: flipped })
         .catch(() => { /* card may be gone */ })
       await query.answer({ text: makeTrusted ? locale.trust.added : locale.trust.removed })
+      return
+    }
+
+    // "Remove" on a warning notice: the newest warning goes, the notice says so.
+    if (kind === 'wrn') {
+      const [chatIdRaw = '', userIdRaw = ''] = parts
+      const chatId = Number(chatIdRaw)
+      const userId = Number(userIdRaw)
+      if (!Number.isSafeInteger(chatId) || !Number.isSafeInteger(userId) || !(await isChatAdmin(chatId, query.user.id))) {
+        await query.answer({ text: locale.notification.adminOnly, alert: true })
+        return
+      }
+      const removed = await store.removeLastWarning(chatId, userId).catch(() => false)
+      log.info('unwarn', { chatId, userId, by: query.user.id, removed, via: 'button' })
+      const chatLocale = await groupLocale(chatId)
+      if (removed) {
+        const label = await gateway.tg.getUsers([userId])
+          .then((users) => users[0]?.displayName ?? chatLocale.hiddenName(userId))
+          .catch(() => chatLocale.hiddenName(userId))
+        await tgEditMessage({
+          chatId, message: query.messageId,
+          text: viewHtml(chatLocale.warn.undone(userMention(userId, label)))
+        }).catch(() => { /* gone */ })
+      }
+      await query.answer(removed ? {} : { text: locale.warn.nothingToUndo })
       return
     }
 

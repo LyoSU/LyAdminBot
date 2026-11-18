@@ -7,10 +7,12 @@
  *  - details live behind [Why?]; raw LLM prose never shown
  *  - settings panel only in PM; group /settings replies with a deep link
  */
-import type { BotStats, ChatStats, ChatFilters, MediaCategory, Verdict, VoterEntry, VoterRoster } from '@lyadmin/core'
+import type {
+  BotStats, ChatStats, ChatFilters, MediaCategory, Verdict, VoterEntry, VoterRoster, WarnSettings
+} from '@lyadmin/core'
 import {
   isSuspicionSignal, redactLinks, truncate, ESTABLISHED_MIN_TENURE_DAYS,
-  FILTERABLE_SCRIPTS, LOCK_KINDS, FILTER_ACTIONS
+  FILTERABLE_SCRIPTS, LOCK_KINDS, FILTER_ACTIONS, FLOOD_PRESETS, WARN_LIMITS, WARN_LIMIT_ACTIONS
 } from '@lyadmin/core'
 import type { Locale } from './locale.js'
 import { uk } from './locales/uk.js'
@@ -81,7 +83,9 @@ export const callbackData = {
   extras: (chatId: number, action: string, arg = ''): string =>
     `ext:${chatId}:${action}${arg !== '' ? `:${arg}` : ''}`,
   /** An admin's answer to a cohort card or notice; `key` names it, not the people on it. */
-  cohort: (chatId: number, key: string, act: 'ban' | 'keep' | 'undo'): string => `coh:${chatId}:${key}:${act}`
+  cohort: (chatId: number, key: string, act: 'ban' | 'keep' | 'undo'): string => `coh:${chatId}:${key}:${act}`,
+  /** Lift the newest warning of `userId` — the button on a warning notice. Admins only. */
+  warnUndo: (chatId: number, userId: number): string => `wrn:${chatId}:${userId}`
 }
 
 /** For app-layer strings that interpolate user-controlled text into HTML. */
@@ -1266,6 +1270,8 @@ export interface SettingsState {
   missingRights?: { deleteBlocked: boolean; senderBlocked: boolean } | null
   /** House-rule filters; absent reads as all off. */
   filters?: ChatFilters
+  /** Warning limit and action; absent hides the line. */
+  warnings?: WarnSettings
 }
 
 const langName = (code: string): string => LOCALES[code]?.languageName ?? code
@@ -1313,7 +1319,13 @@ export const settingsPanel = (locale: Locale, chatId: number, state: SettingsSta
       `${locale.settings.quiet}: ${onOff(state.quietMode)}`,
       `${locale.settings.banan}: ${bananLabel(locale, state.bananDefaultSeconds)}`,
       `${locale.settings.language}: ${langName(state.locale)}`,
-      locale.filters.summary(state.filters?.scripts.length ?? 0, state.filters?.locks.length ?? 0),
+      locale.filters.summary(
+        state.filters?.scripts.length ?? 0,
+        (state.filters?.locks.length ?? 0) + (state.filters?.words.length ?? 0) + (state.filters?.flood ? 1 : 0)
+      ),
+      ...(state.warnings
+        ? [locale.warn.summary(state.warnings.limit, locale.warn.actions[state.warnings.action])]
+        : []),
       // Said where the switch is: an admin who turned it on and then misses the
       // notices has to be told where they went.
       ...(state.quietMode ? ['', locale.settings.quietHint] : [])
@@ -1329,7 +1341,10 @@ export const settingsPanel = (locale: Locale, chatId: number, state: SettingsSta
       [{ text: `${locale.settings.voting}: ${onOff(state.votingEnabled)}`, data: callbackData.settings(chatId, 'toggle_voting') }],
       [{ text: `${locale.settings.banDatabase}: ${onOff(state.externalBanEnabled)}`, data: callbackData.settings(chatId, 'toggle_bandb') }],
       [{ text: `${locale.settings.quiet}: ${onOff(state.quietMode)}`, data: callbackData.settings(chatId, 'toggle_quiet') }],
-      [{ text: locale.filters.button, data: callbackData.settings(chatId, 'flt') }],
+      [
+        { text: locale.filters.button, data: callbackData.settings(chatId, 'flt') },
+        { text: locale.warn.settingsButton, data: callbackData.settings(chatId, 'wrn') }
+      ],
       [
         { text: locale.chatActions.button, data: callbackData.settings(chatId, 'actions') },
         { text: locale.arrivals.button, data: callbackData.settings(chatId, 'arrivals') }
@@ -1338,6 +1353,7 @@ export const settingsPanel = (locale: Locale, chatId: number, state: SettingsSta
       // Welcome + extras editors live behind their own screens.
       [
         { text: locale.settings.welcome, data: callbackData.welcome(chatId, 'open') },
+        { text: locale.rules.settingsButton, data: callbackData.settings(chatId, 'rul') },
         { text: locale.settings.extras, data: callbackData.extras(chatId, 'open') }
       ],
       // Language lives behind its own screen to keep the root panel compact.
@@ -1382,6 +1398,10 @@ export const filtersPanel = (locale: Locale, chatId: number, filters: ChatFilter
   const f = locale.filters
   const named = <T extends string>(items: readonly T[], labels: Record<T, string>): string =>
     items.length === 0 ? f.none : items.map((i) => labels[i]).join(', ')
+  const floodLabel = (limit: ChatFilters['flood']): string =>
+    limit === null ? locale.settings.off : f.floodValue(limit.messages, limit.seconds)
+  const floodKey = (limit: ChatFilters['flood']): string =>
+    limit === null ? 'off' : `${limit.messages}-${limit.seconds}`
   return {
     text: [
       f.title,
@@ -1390,7 +1410,8 @@ export const filtersPanel = (locale: Locale, chatId: number, filters: ChatFilter
       '',
       `${f.scriptsLine}: ${escapeHtml(named(filters.scripts, f.scripts))}`,
       `${f.locksLine}: ${escapeHtml(named(filters.locks, f.locks))}`,
-      `${f.actionLine}: ${f.actions[filters.action]}`,
+      `${f.floodLine}: ${floodLabel(filters.flood)}`,
+      `${f.actionLine}: ${f.actionsLong[filters.action]}`,
       `${f.scopeLine}: ${filters.newcomersOnly ? f.scope.newcomers : f.scope.all}`,
       '',
       `<i>${f.standingNote}</i>`
@@ -1400,6 +1421,16 @@ export const filtersPanel = (locale: Locale, chatId: number, filters: ChatFilter
         { text: f.scriptsButton(filters.scripts.length), data: callbackData.settings(chatId, 'flt_scr') },
         { text: f.locksButton(filters.locks.length), data: callbackData.settings(chatId, 'flt_lck') }
       ],
+      [
+        { text: f.words.button(filters.words.length), data: callbackData.settings(chatId, 'flt_wl') },
+        { text: f.domains.button(filters.domains.length), data: callbackData.settings(chatId, 'flt_dl') }
+      ],
+      // Picked, not cycled: four states read at a glance beat a button that
+      // has to be tapped through to find the one wanted.
+      [null, ...FLOOD_PRESETS].map((limit) => ({
+        text: checked(floodKey(filters.flood) === floodKey(limit), limit === null ? `🌊 ${locale.settings.off}` : floodLabel(limit)),
+        data: callbackData.settings(chatId, 'flt_fl', floodKey(limit))
+      })),
       FILTER_ACTIONS.map((a) => ({
         text: checked(filters.action === a, f.actions[a]),
         data: callbackData.settings(chatId, 'flt_a', a)
@@ -1412,6 +1443,119 @@ export const filtersPanel = (locale: Locale, chatId: number, filters: ChatFilter
     ]
   }
 }
+
+/**
+ * Short fingerprint of a list entry, carried beside its index on a remove
+ * button. The index alone would remove whatever sits there NOW — after another
+ * admin's edit, the wrong word. The handler removes only on a match.
+ */
+export const entryTag = (entry: string): string => {
+  let h = 5381
+  for (const ch of entry) h = ((h * 33) ^ ch.codePointAt(0)!) >>> 0
+  return (h % 1_679_616).toString(36)
+}
+
+export const FILTER_LIST_PAGE = 10
+
+/**
+ * One editable list (stop-words or allowed sites): the entries as text, a
+ * remove button per entry on the current page, add, clear, back. Entries are
+ * shown in the text rather than only on the buttons because a button cuts a
+ * long phrase and the text does not.
+ */
+export const filterListPanel = (
+  locale: Locale,
+  chatId: number,
+  kind: 'words' | 'domains',
+  entries: readonly string[],
+  page = 0
+): ViewMessage => {
+  const strings = locale.filters[kind]
+  const code = kind === 'words' ? 'w' : 'd'
+  const { pageItems, nav } = paginate([...entries], page, FILTER_LIST_PAGE, (p) => callbackData.settings(chatId, `flt_${code}l`, String(p)))
+  const body = entries.length === 0
+    ? `<i>${strings.empty}</i>`
+    : pageItems.map(({ item, index }) => `${index + 1}. <code>${escapeHtml(item)}</code>`).join('\n')
+  const buttons: ButtonSpec[][] = pairs(pageItems.map(({ item, index }) => ({
+    text: `✖ ${ellipsize(item, 24)}`,
+    data: callbackData.settings(chatId, `flt_${code}x`, `${index}.${entryTag(item)}`)
+  })))
+  if (nav.length > 0) buttons.push(nav)
+  buttons.push([
+    { text: strings.addButton, data: callbackData.settings(chatId, `flt_${code}a`) },
+    ...(entries.length > 0 ? [{ text: strings.clearButton, data: callbackData.settings(chatId, `flt_${code}c`) }] : [])
+  ])
+  buttons.push([{ text: locale.settings.back, data: callbackData.settings(chatId, 'flt') }])
+  return { text: `${strings.title}\n\n${strings.hint}\n\n${body}`, buttons }
+}
+
+/** Warning limit and what reaching it does. */
+export const warnPanel = (locale: Locale, chatId: number, settings: WarnSettings): ViewMessage => {
+  const w = locale.warn
+  return {
+    text: [
+      w.title, '', w.hint, '',
+      `${w.limitLine}: ${settings.limit}`,
+      `${w.actionLine}: ${w.actions[settings.action]}`
+    ].join('\n'),
+    buttons: [
+      WARN_LIMITS.map((n) => ({
+        text: checked(settings.limit === n, String(n)),
+        data: callbackData.settings(chatId, 'wrn_n', String(n))
+      })),
+      WARN_LIMIT_ACTIONS.map((a) => ({
+        text: checked(settings.action === a, w.actions[a]),
+        data: callbackData.settings(chatId, 'wrn_a', a)
+      })),
+      [{ text: locale.settings.back, data: callbackData.settings(chatId, 'root') }]
+    ]
+  }
+}
+
+/** The rules editor: the text as the chat will read it, and what can be done to it. */
+export const rulesPanel = (
+  locale: Locale, chatId: number, rules: string | null, inWelcome: boolean
+): ViewMessage => {
+  const r = locale.rules
+  const buttons: ButtonSpec[][] = [[
+    { text: rules === null ? r.writeButton : r.editButton, data: callbackData.settings(chatId, 'rul_e') },
+    ...(rules === null ? [] : [{ text: r.deleteButton, data: callbackData.settings(chatId, 'rul_d') }])
+  ]]
+  if (rules !== null) {
+    buttons.push([{
+      text: `${r.inWelcome}: ${inWelcome ? locale.settings.on : locale.settings.off}`,
+      data: callbackData.settings(chatId, 'rul_w')
+    }])
+  }
+  buttons.push([{ text: locale.settings.back, data: callbackData.settings(chatId, 'root') }])
+  return {
+    text: rules === null
+      ? `${r.title}\n\n<i>${r.empty}</i>`
+      : `${r.title}\n\n${quoteBlock(escapeHtml(rules))}`,
+    buttons
+  }
+}
+
+/** The rules as members read them — on /rules and from the greeting's button. */
+export const rulesView = (locale: Locale, rules: string): ViewMessage => ({
+  text: `${locale.rules.header}\n\n${escapeHtml(rules)}`,
+  buttons: []
+})
+
+/**
+ * A warning, announced in the chat. The undo button is the correction path —
+ * admins only, checked by the handler — and goes away at the limit, where the
+ * action itself is what an admin would reverse.
+ */
+export const warnNotice = (
+  locale: Locale,
+  p: { chatId: number; userId: number; userLabel: string; count: number; limit: number; reason: string | null }
+): ViewMessage => ({
+  text: locale.warn.warned(
+    userMention(p.userId, p.userLabel), p.count, p.limit, p.reason === null ? null : escapeHtml(p.reason)
+  ),
+  buttons: [[{ text: locale.warn.undoButton, data: callbackData.warnUndo(p.chatId, p.userId) }]]
+})
 
 /** Writing systems the chat refuses — a ✓ per script, plus the name toggle. */
 export const filterScriptsPanel = (locale: Locale, chatId: number, filters: ChatFilters): ViewMessage => {
@@ -1833,10 +1977,10 @@ export const captchaPrompt = (
  * /mod panel actions: d delete · m / M mute for the shorter / longer term ·
  * u lift the mute · k kick · p open the profile · x close the panel.
  */
-export type ModAct = 'd' | 'm' | 'M' | 'u' | 'k' | 'p' | 'x'
+export type ModAct = 'd' | 'w' | 'm' | 'M' | 'u' | 'k' | 'p' | 'x'
 
 /** What a /mod panel has already done, as bits — see `callbackData.mod`. */
-export const MOD_DONE = { deleted: 1, muted: 2, kicked: 4 } as const
+export const MOD_DONE = { deleted: 1, muted: 2, kicked: 4, warned: 8 } as const
 
 export interface ModPanelInput {
   chatId: number
@@ -1872,6 +2016,7 @@ export const modPanel = (locale: Locale, p: ModPanelInput): ViewMessage => {
 
   const marks = [
     has(MOD_DONE.deleted) ? locale.mod.deleted : null,
+    has(MOD_DONE.warned) ? locale.mod.warned : null,
     has(MOD_DONE.kicked) ? locale.mod.kicked : has(MOD_DONE.muted) ? locale.mod.muted : null
   ].filter((m): m is string => m !== null)
 
@@ -1883,7 +2028,14 @@ export const modPanel = (locale: Locale, p: ModPanelInput): ViewMessage => {
   ]
 
   const buttons: ButtonSpec[][] = []
-  if (!has(MOD_DONE.deleted)) buttons.push([{ text: locale.mod.deleteButton, data: data('d') }])
+  // Warn sits beside delete: the usual pair is "remove it and tell them".
+  const first: ButtonSpec[] = [
+    ...(has(MOD_DONE.deleted) ? [] : [{ text: locale.mod.deleteButton, data: data('d') }]),
+    ...(p.canPunish && p.author && !has(MOD_DONE.warned) && !has(MOD_DONE.kicked)
+      ? [{ text: locale.mod.warnButton, data: data('w') }]
+      : [])
+  ]
+  if (first.length > 0) buttons.push(first)
   if (p.canPunish && !has(MOD_DONE.kicked)) {
     buttons.push(has(MOD_DONE.muted)
       ? [{ text: locale.mod.unmuteButton, data: data('u') }, { text: locale.mod.kickButton, data: data('k') }]

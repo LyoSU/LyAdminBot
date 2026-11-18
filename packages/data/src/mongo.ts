@@ -8,10 +8,10 @@
  */
 import { MongoClient, ObjectId, type Collection, type Db, type Document } from 'mongodb'
 import type {
-  BotStats, BurstEntry, ChatFilters, ChatStats, EditBaseline, ExecutionRecord, MediaCategory, Verdict, Signal, VoteBallot, VoteEligibility
+  BotStats, BurstEntry, ChatFilters, ChatStats, EditBaseline, WarnSettings, ExecutionRecord, MediaCategory, Verdict, Signal, VoteBallot, VoteEligibility
 } from '@lyadmin/core'
 import {
-  truncate, VOTE_WINDOW_SECONDS, RECENT_VOTERS_WINDOW_DAYS, distinctBallotVoters,
+  truncate, VOTE_WINDOW_SECONDS, WARNING_TTL_DAYS, WARN_REASON_MAX, RECENT_VOTERS_WINDOW_DAYS, distinctBallotVoters,
   type NoVotersShadowStamp
 } from '@lyadmin/core'
 import { normalizeExtra, type NormalizedExtra } from './extras.js'
@@ -473,6 +473,12 @@ export class MongoStore {
   get captchaEvents(): Collection<Document> { return this.collection('pipeline_captcha') }
   /** Open captcha gates, so a button survives a restart — see `saveCaptchaGate`. */
   get captchaGates(): Collection<Document> { return this.collection('pipeline_captcha_gates') }
+  /**
+   * One row per live warning; the TTL on `expiresAt` is the warning's lapse
+   * (`WARNING_TTL_DAYS`). Tiny by nature — a warning is an admin's act or a
+   * filter set to warn, a few per chat per day at most.
+   */
+  get warnings(): Collection<Document> { return this.collection('chat_warnings') }
   /** Resume cursor for the offline CAS signature harvester (tools/cas-harvest). */
   get harvestState(): Collection<Document> { return this.collection('cas_harvest_state') }
   // Persistent moderation state (survives restarts; TTL-expired).
@@ -779,6 +785,13 @@ export class MongoStore {
     // scans the collection on every message. Sparse: documents written before
     // the field existed only gain it when they are next seen.
     await this.spamSignatures.createIndex({ foldedHash: 1 }, { sparse: true })
+    // Warnings: hygiene, never a reason to stay out of every chat (2026-08-26).
+    await ensureTtlIndex(this.warnings, { expiresAt: 1 }, 0).catch((err: unknown) => {
+      console.warn(`[mongo] chat_warnings TTL index not in place (${(err as Error).message}); will retry next boot`)
+    })
+    await this.warnings.createIndex({ chatId: 1, userId: 1, createdAt: -1 }).catch((err: unknown) => {
+      console.warn(`[mongo] chat_warnings.chatId+userId index not in place (${(err as Error).message}); will retry next boot`)
+    })
 
     /**
      * Profile-media hashes. The TTL is on `lastSeenAt`, so a picture still in
@@ -2502,6 +2515,48 @@ export class MongoStore {
    * Settings-panel writes. Maps v2 panel state onto the v1-compatible
    * fields that groupDocToChatPolicy reads back, so v1 and v2 stay in sync.
    */
+  /**
+   * Add a warning and return how many live ones the member now holds. Counted
+   * after the insert, so two warnings racing each other both see the total.
+   */
+  async addWarning(params: {
+    chatId: number; userId: number; by: number; reason: string | null; source: 'admin' | 'filter'
+  }): Promise<number> {
+    const now = new Date()
+    await this.warnings.insertOne({
+      chatId: params.chatId,
+      userId: params.userId,
+      by: params.by,
+      reason: params.reason === null ? null : truncate(params.reason, WARN_REASON_MAX),
+      source: params.source,
+      createdAt: now,
+      expiresAt: new Date(now.getTime() + WARNING_TTL_DAYS * 86400_000)
+    })
+    return this.countWarnings(params.chatId, params.userId)
+  }
+
+  /**
+   * Live warnings. `expiresAt` is checked here as well as by the TTL: the TTL
+   * monitor runs once a minute and may be late, the panel must not be.
+   */
+  async countWarnings(chatId: number, userId: number): Promise<number> {
+    return this.warnings.countDocuments({ chatId, userId, expiresAt: { $gt: new Date() } })
+  }
+
+  /** Lift the newest live warning. True when there was one. */
+  async removeLastWarning(chatId: number, userId: number): Promise<boolean> {
+    const last = await this.warnings.findOneAndDelete(
+      { chatId, userId, expiresAt: { $gt: new Date() } },
+      { sort: { createdAt: -1 } }
+    )
+    return last !== null
+  }
+
+  /** Start over — after the limit was applied, or on an admin's reset. */
+  async clearWarnings(chatId: number, userId: number): Promise<void> {
+    await this.warnings.deleteMany({ chatId, userId })
+  }
+
   async updateGroupSettings(chatId: number, patch: {
     enabled?: boolean
     confidenceThreshold?: number
@@ -2512,9 +2567,16 @@ export class MongoStore {
     bananDefault?: number
     locale?: string
     filters?: ChatFilters
+    warnings?: WarnSettings
+    /** The chat's rules; null removes them. */
+    rules?: string | null
+    rulesInWelcome?: boolean
   }): Promise<void> {
     const set: Record<string, unknown> = {}
     if (patch.filters !== undefined) set['settings.filters'] = patch.filters
+    if (patch.warnings !== undefined) set['settings.warnings'] = patch.warnings
+    if (patch.rules !== undefined) set['settings.rules'] = patch.rules
+    if (patch.rulesInWelcome !== undefined) set['settings.rulesInWelcome'] = patch.rulesInWelcome
     if (patch.enabled !== undefined) set['settings.openaiSpamCheck.enabled'] = patch.enabled
     if (patch.confidenceThreshold !== undefined) set['settings.openaiSpamCheck.confidenceThreshold'] = patch.confidenceThreshold
     if (patch.captchaEnabled !== undefined) set['settings.captcha.enabled'] = patch.captchaEnabled

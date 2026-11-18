@@ -7,8 +7,32 @@
  *  - no country flags anywhere (language names are plain text)
  */
 import type {
-  VerdictAction, SuspicionSignalName, MediaCategory, FilterableScript, LockKind, FilterAction
+  VerdictAction, SuspicionSignalName, MediaCategory, FilterableScript, LockKind, FilterAction,
+  WarnLimitAction
 } from '@lyadmin/core'
+
+/** Strings for one editable list in PM (stop-words, allowed sites). */
+export interface ListEditorStrings {
+  /** Opening button, with how many entries there are. */
+  button: (count: number) => string
+  title: string
+  hint: string
+  empty: string
+  addButton: string
+  /** Prompt for the next PM message (HTML). */
+  prompt: string
+  /** Toast/reply after an add: how many entries were new. */
+  added: (count: number) => string
+  /** The message held nothing usable, or only entries already on the list. */
+  nothingNew: string
+  /** The list is at its cap; `max` is the cap. */
+  full: (max: number) => string
+  clearButton: string
+  /** Toast on the first tap of clear: a second tap within seconds confirms. */
+  confirmClear: string
+  /** Toast after a clear. */
+  cleared: string
+}
 
 export interface Locale {
   /** Language name in its own language, NO flag emoji. */
@@ -184,6 +208,8 @@ export interface Locale {
     extras: string
     welcome: string
     ping: string
+    rules: string
+    warn: string
   }
 
   actions: Record<Exclude<VerdictAction, 'none' | 'observe'>, string>
@@ -558,7 +584,9 @@ export interface Locale {
     unmuteButton: string
     kickButton: string
     closeButton: string
+    warnButton: string
     /** Status marks, joined into one line under the quote once done. */
+    warned: string
     deleted: string
     muted: string
     unmuted: string
@@ -769,9 +797,15 @@ export interface Locale {
     scriptsLine: string
     locksLine: string
     none: string
-    /** What a hit does to a newcomer. */
+    /** What a hit does to a newcomer: short button labels, and the panel's long form. */
     actionLine: string
     actions: Record<FilterAction, string>
+    actionsLong: Record<FilterAction, string>
+    /** Flood limit: the line's label and one preset's label. */
+    floodLine: string
+    floodValue: (messages: number, seconds: number) => string
+    words: ListEditorStrings
+    domains: ListEditorStrings
     /** Who the filters apply to — a toggle button and its two states. */
     scopeLine: string
     scope: { all: string; newcomers: string }
@@ -785,5 +819,48 @@ export interface Locale {
     locksHint: string
     scripts: Record<FilterableScript, string>
     locks: Record<LockKind, string>
+  }
+
+  /** Warnings: /warn, the /mod panel, a filter set to warn. */
+  warn: {
+    /** Settings-panel button and status line. */
+    settingsButton: string
+    summary: (limit: number, action: string) => string
+    title: string
+    hint: string
+    limitLine: string
+    actionLine: string
+    /** What the limit leads to; long form for the panel and the notice. */
+    actions: Record<WarnLimitAction, string>
+    needReply: string
+    /** Chat notice (HTML). `name` is a ready mention, `reason` pre-escaped or null. */
+    warned: (name: string, count: number, limit: number, reason: string | null) => string
+    limitReached: (name: string, limit: number, action: string) => string
+    undoButton: string
+    undone: (name: string) => string
+    nothingToUndo: string
+    /** /warns answer (HTML). */
+    count: (name: string, count: number, limit: number) => string
+  }
+
+  /** The chat's rules: PM editor, /rules, the greeting's button. */
+  rules: {
+    settingsButton: string
+    title: string
+    empty: string
+    writeButton: string
+    editButton: string
+    deleteButton: string
+    inWelcome: string
+    prompt: string
+    saved: string
+    deleted: string
+    tooLong: (max: number) => string
+    /** Header over the rules wherever they are shown (HTML). */
+    header: string
+    /** /rules in a chat that has none. */
+    none: string
+    /** The greeting's button. */
+    welcomeButton: string
   }
 }

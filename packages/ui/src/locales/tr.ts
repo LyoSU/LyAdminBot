@@ -104,6 +104,8 @@ export const tr: Locale = {
     '',
     '<b>Herkes:</b>',
     '/report — spam şikâyeti (yanıt olarak ya da /report @kullanıcı veya id)',
+    '/rules — sohbet kuralları',
+    '/warns — kaç uyarım var',
     '/stats — şimdiye kadar ne kadar spam yakaladım',
     '/mystats — istatistiğim',
     '/top, /top_banan — sıralamalar',
@@ -112,6 +114,7 @@ export const tr: Locale = {
     '<b>Yöneticiler:</b>',
     '/settings — ayarlar paneli (özel sohbette açılır, gerisi düğmelerle)',
     '/mod — yanıt olarak: yalnızca senin gördüğün işlem paneli (sil, sustur, at, profil)',
+    '/warn [sebep] — yanıt olarak: uyarı; /unwarn kaldırır',
     '/banan /kick /del /check /untrust — aynısı ayrı komutlarla',
     '/welcome — yeni üye karşılama',
     '/extra, /extras — tetikleyiciler',
@@ -148,7 +151,9 @@ export const tr: Locale = {
     topBanan: 'Muz sıralaması',
     extras: 'Kayıtlı tetikleyiciler',
     welcome: 'Yeni üye karşılamaları',
-    ping: 'Botun çalıştığını kontrol et'
+    ping: 'Botun çalıştığını kontrol et',
+    rules: 'Sohbet kuralları',
+    warn: 'Uyar (yanıt olarak)'
   },
 
   actions: {
@@ -203,6 +208,8 @@ export const tr: Locale = {
     filter_script: 'metinde yasaklı yazı sistemi',
     filter_name: 'adda yasaklı yazı sistemi',
     filter_lock: 'yasaklı mesaj türü',
+    filter_word: 'yasaklı kelime',
+    filter_flood: 'art arda çok fazla mesaj',
     scam_flag_new: 'Telegram bu hesabı dolandırıcı olarak işaretledi',
     external_ban_new: 'hesap spam veritabanlarında',
     shared_profile_photo: 'aynı profil fotoğrafı başka birkaç hesapta da var',
@@ -492,6 +499,8 @@ export const tr: Locale = {
     unmuteButton: '🔓 Susturmayı kaldır',
     kickButton: '🚪 At',
     closeButton: 'Tamam',
+    warnButton: '⚠️ Uyar',
+    warned: '⚠️ uyarıldı',
     deleted: '✓ silindi',
     muted: '✓ susturuldu',
     unmuted: '✓ susturma kaldırıldı',
@@ -645,7 +654,42 @@ export const tr: Locale = {
     locksLine: 'Kilitli',
     none: 'yok',
     actionLine: 'Yeni üyeye işlem',
-    actions: { delete: 'Sil', mute: '1 gün sustur', ban: '30 gün yasakla' },
+    actions: { delete: 'Sil', warn: 'Uyar', mute: 'Sustur', ban: 'Yasakla' },
+    actionsLong: { delete: 'sil', warn: 'sil ve uyar', mute: '1 gün sustur', ban: '30 gün yasakla' },
+    floodLine: 'Flood koruması',
+    floodValue: (messages, seconds) => seconds === 60 ? `${messages}/dk` : `${messages}/${seconds} sn`,
+    words: {
+      button: (n) => `🚫 Yasaklı kelimeler${n > 0 ? ` (${n})` : ''}`,
+      title: '🚫 <b>Yasaklı kelimeler</b>',
+      hint: 'Bu kelimelerden birini içeren mesaj silinir. Büyük/küçük harf fark etmez, tam kelime aranır, başka alfabelerden benzer harfler de yakalanır. Sondaki yıldız tüm ekleri yakalar: <code>kazan*</code>.',
+      empty: 'Liste boş.',
+      addButton: '➕ Ekle',
+      prompt: 'Kelimeleri gönder: her biri yeni satırda ya da virgülle ayrılmış. Sondaki yıldız tüm ekleri yakalar. Vazgeçmek için /cancel.',
+      added: (n) => `Eklendi: ${n}`,
+      nothingNew: 'Yeni bir şey yok: bu kelimeler zaten listede ya da mesaj boş.',
+      full: (max) => `Liste dolu (${max}). Yeni eklemek için bir şey sil.`,
+      clearButton: '🗑 Temizle',
+
+      confirmClear: 'Hepsini temizlemek için tekrar dokun',
+
+      cleared: 'Liste temizlendi'
+    },
+    domains: {
+      button: (n) => `✅ İzinli siteler${n > 0 ? ` (${n})` : ''}`,
+      title: '✅ <b>İzinli siteler</b>',
+      hint: 'Bağlantılar kilitliyken bile bu bağlantılar geçer. Bir site alt alan adlarına da izin verir: <code>example.com</code>. Telegram için tek bir kanala izin verebilirsin: <code>t.me/mychannel</code>.',
+      empty: 'Liste boş.',
+      addButton: '➕ Ekle',
+      prompt: 'Siteleri gönder: her biri yeni satırda ya da virgülle ayrılmış. Vazgeçmek için /cancel.',
+      added: (n) => `Eklendi: ${n}`,
+      nothingNew: 'Yeni bir şey yok: bu siteler zaten listede ya da site adresi değil.',
+      full: (max) => `Liste dolu (${max}). Yeni eklemek için bir şey sil.`,
+      clearButton: '🗑 Temizle',
+
+      confirmClear: 'Hepsini temizlemek için tekrar dokun',
+
+      cleared: 'Liste temizlendi'
+    },
     scopeLine: 'Kimlere',
     scope: { all: 'herkese', newcomers: 'yalnızca yeni üyelere' },
     standingNote: 'Eski üye yalnızca mesajını kaybeder: bot, sohbet kuralı yüzünden müdavimleri susturmaz ya da yasaklamaz. Yöneticiler ve güvenilir üyeler filtrelenmez.',
@@ -681,5 +725,39 @@ export const tr: Locale = {
       contacts: 'Kişiler',
       polls: 'Anketler'
     }
+  },
+
+  warn: {
+    settingsButton: '⚠️ Uyarılar',
+    summary: (limit, action) => `Uyarılar: ${limit} → ${action}`,
+    title: '⚠️ <b>Uyarılar</b>',
+    hint: 'Yönetici bir mesaja yanıt olarak /warn ile ya da /mod içindeki düğmeyle uyarır. Filtreler de yeni üyeleri uyarabilir. Uyarılar sınıra ulaşınca bot işlemi uygular ve sayacı sıfırlar. Her uyarı 30 gün sonra düşer.',
+    limitLine: 'Sınır',
+    actionLine: 'Sınırda',
+    actions: { mute: '1 gün sustur', kick: 'çıkar', ban: '30 gün yasakla' },
+    needReply: '/warn komutunu bir mesaja yanıt olarak kullan. Sebebi komuttan sonra yazabilirsin.',
+    warned: (name, count, limit, reason) => `⚠️ ${name}: uyarı ${count}/${limit}${reason ? ` · ${reason}` : ''}`,
+    limitReached: (name, limit, action) => `⛔ ${name}: ${limit}/${limit} uyarı → ${action}`,
+    undoButton: '↩️ Kaldır',
+    undone: (name) => `↩️ ${name}: uyarı kaldırıldı`,
+    nothingToUndo: 'Uyarı kalmadı',
+    count: (name, count, limit) => count === 0 ? `✅ ${name}: uyarı yok` : `⚠️ ${name}: ${count}/${limit} uyarı`
+  },
+
+  rules: {
+    settingsButton: '📜 Kurallar',
+    title: '📜 <b>Sohbet kuralları</b>',
+    empty: 'Henüz kural yok. Yazarsan bot onları /rules ile ve karşılama mesajındaki düğmeyle gösterir.',
+    writeButton: '✏️ Yaz',
+    editButton: '✏️ Düzenle',
+    deleteButton: '🗑 Sil',
+    inWelcome: 'Karşılamada düğme',
+    prompt: 'Kuralları tek bir mesaj olarak gönder. Vazgeçmek için /cancel.',
+    saved: 'Kurallar kaydedildi',
+    deleted: 'Kurallar silindi',
+    tooLong: (max) => `Çok uzun: en fazla ${max} karakter.`,
+    header: '📜 <b>Sohbet kuralları</b>',
+    none: 'Bu sohbette henüz kural yok.',
+    welcomeButton: '📜 Kurallar'
   }
 }

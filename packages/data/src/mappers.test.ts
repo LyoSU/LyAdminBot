@@ -26,7 +26,21 @@ describe('groupDocToChatPolicy', () => {
     expect(groupDocToChatPolicy({ group_id: 1 }).filters).toMatchObject({ scripts: [], locks: [], action: 'delete' })
     expect(groupDocToChatPolicy({
       group_id: 1, settings: { filters: { scripts: ['arabic', 'nope'], locks: ['gifs'], action: 'mute', newcomersOnly: true } }
-    }).filters).toEqual({ scripts: ['arabic'], nameScripts: false, locks: ['gifs'], action: 'mute', newcomersOnly: true })
+    }).filters).toEqual({
+      scripts: ['arabic'], nameScripts: false, locks: ['gifs'], words: [], domains: [], flood: null,
+      action: 'mute', newcomersOnly: true
+    })
+  })
+
+  it('reads warnings and rules: defaults when absent, blank rules as none', () => {
+    const bare = groupDocToChatPolicy({ group_id: 1 })
+    expect(bare.warnings).toEqual({ limit: 3, action: 'mute' })
+    expect(bare.rules).toBeNull()
+    expect(bare.rulesInWelcome).toBe(true)
+    const set = groupDocToChatPolicy({
+      group_id: 1, settings: { warnings: { limit: 5, action: 'ban' }, rules: '  ', rulesInWelcome: false }
+    })
+    expect(set).toMatchObject({ warnings: { limit: 5, action: 'ban' }, rules: null, rulesInWelcome: false })
   })
 
   it('maps a real-shaped group document', () => {

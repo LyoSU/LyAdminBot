@@ -69,7 +69,8 @@ describe('evaluateMessage — chat filters', () => {
       action: 'ban', decidedBy: 'chat_filter', reasonCode: 'filter_script',
       ruleId: 'filter:script:arabic', needsVote: false, banDurationSeconds: TIMED_BAN_SECONDS, pSpam: 0
     })
-    expect(v.meta['filter']).toBe('arabic')
+    expect(v.meta['filter']).toBe('script')
+    expect(v.meta['filterScript']).toBe('arabic')
   })
 
   it('takes only the message from a member with standing, and says it capped', async () => {
@@ -114,5 +115,37 @@ describe('evaluateMessage — chat filters', () => {
       user: regular
     }), {})
     expect(v.decidedBy).not.toBe('chat_filter')
+  })
+})
+
+describe('evaluateMessage — flood and warnings', () => {
+  it('a newcomer past the flood limit gets the chat’s action', async () => {
+    const i = input({ flood: { messages: 5, seconds: 10 }, action: 'mute' }, { user: newcomer })
+    i.enrichment = { ...i.enrichment, senderRecentCount: 6 }
+    const v = await evaluateMessage(i, noPorts)
+    expect(v).toMatchObject({ action: 'mute', reasonCode: 'filter_flood', ruleId: 'filter:flood' })
+    expect(v.meta['filterCount']).toBe(6)
+  })
+
+  it('warn deletes and asks the app layer for a warning — for a newcomer only', async () => {
+    const forNewcomer = await evaluateMessage(input({ words: ['казино'], action: 'warn' }, {
+      msg: { text: 'найкраще казино' }, user: newcomer
+    }), noPorts)
+    expect(forNewcomer).toMatchObject({ action: 'delete', reasonCode: 'filter_word', ruleId: 'filter:word' })
+    expect(forNewcomer.meta['filterWarn']).toBe(true)
+
+    const forRegular = await evaluateMessage(input({ words: ['казино'], action: 'warn' }, {
+      msg: { text: 'найкраще казино' }, user: regular
+    }), noPorts)
+    expect(forRegular.action).toBe('delete')
+    expect(forRegular.meta['filterWarn']).toBeUndefined()
+  })
+
+  it('the stop-word itself never reaches the rule id', async () => {
+    const v = await evaluateMessage(input({ words: ['секретнеслово'] }, {
+      msg: { text: 'тут секретнеслово' }, user: newcomer
+    }), noPorts)
+    expect(v.ruleId).toBe('filter:word')
+    expect(JSON.stringify(v.meta)).not.toContain('секретнеслово')
   })
 })
