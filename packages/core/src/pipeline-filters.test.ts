@@ -89,14 +89,16 @@ describe('evaluateMessage — chat filters', () => {
     expect(v).toMatchObject({ action: 'delete', decidedBy: 'chat_filter', reasonCode: 'filter_lock' })
   })
 
-  it('leaves trusted members alone', async () => {
+  it('binds a member on the chat\'s trusted list: trust is "not a spammer", not "above the rules"', async () => {
     const v = await evaluateMessage(input({ scripts: ['arabic'] }, {
-      msg: { text: farsi }, user: newcomer, policy: { trustedUserIds: [42] }
-    }), {})
-    expect(v.decidedBy).not.toBe('chat_filter')
+      msg: { text: farsi },
+      user: { messagesInChat: 500, messagesGlobal: 2000, localAgeDays: 900 },
+      policy: { trustedUserIds: [42] }
+    }), noPorts)
+    expect(v).toMatchObject({ action: 'delete', decidedBy: 'chat_filter', reasonCode: 'filter_script' })
   })
 
-  it('binds a member the network trusts by volume: only the chat\'s own list exempts', async () => {
+  it('binds a member the network trusts by volume', async () => {
     const v = await evaluateMessage(input({ scripts: ['arabic'] }, {
       msg: { text: farsi },
       user: { messagesInChat: 500, messagesGlobal: 2000, localAgeDays: 900, reputationStatus: 'trusted' }

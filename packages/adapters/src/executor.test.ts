@@ -147,6 +147,24 @@ describe('applyVerdict', () => {
     expect(actions.calls).toEqual(['delete', 'ban'])
   })
 
+  it('trust is no pass from the chat\'s own house rules', async () => {
+    const actions = makeActions()
+    const result = await applyVerdict(
+      makeVerdict({ action: 'delete', pSpam: 0, decidedBy: 'chat_filter', reasonCode: 'filter_script' }),
+      target, { ...noGuards, senderIsTrusted: true }, actions)
+    expect(result.applied).toBe(true)
+    expect(actions.calls).toEqual(['delete'])
+  })
+
+  it('admins stay above the house rules', async () => {
+    const actions = makeActions()
+    const result = await applyVerdict(
+      makeVerdict({ action: 'delete', pSpam: 0, decidedBy: 'chat_filter', reasonCode: 'filter_script' }),
+      target, { ...noGuards, senderIsAdmin: true }, actions)
+    expect(result.skippedReason).toBe('senderIsAdmin')
+    expect(actions.calls).toEqual([])
+  })
+
   it('trust yields to Telegram\'s own account-integrity finding', async () => {
     // The file's principle is that trust shields against OUR judgement and not
     // against somebody else's finding. `unofficial_client_risk` is Telegram's

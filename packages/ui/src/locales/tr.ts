@@ -692,7 +692,7 @@ export const tr: Locale = {
     },
     scopeLine: 'Kimlere',
     scope: { all: 'herkese', newcomers: 'yalnızca yeni üyelere' },
-    standingNote: 'Eski üye yalnızca mesajını kaybeder: bot, sohbet kuralı yüzünden müdavimleri susturmaz ya da yasaklamaz. Yöneticiler ve güvenilir üyeler filtrelenmez.',
+    standingNote: 'Eski üye yalnızca mesajını kaybeder: bot, sohbet kuralı yüzünden müdavimleri susturmaz ya da yasaklamaz. Yalnızca yöneticiler filtrelenmez.',
     scriptsTitle: '🔤 <b>Yasaklı diller</b>',
     scriptsHint: 'Harflerinin yarısından fazlası seçili yazı sisteminde olan mesaj silinir. Bağlantılar, @bahsetmeler ve emojiler sayılmaz; metindeki tek yabancı kelime tetiklemez.',
     nameScripts: 'Yeni üyenin adını da kontrol et',

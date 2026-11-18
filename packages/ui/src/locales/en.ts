@@ -696,7 +696,7 @@ export const en: Locale = {
     },
     scopeLine: 'Applies to',
     scope: { all: 'everyone', newcomers: 'newcomers only' },
-    standingNote: 'A member with standing only loses the message: the bot never mutes or bans regulars for breaking a chat rule. Admins and trusted members are never filtered.',
+    standingNote: 'A member with standing only loses the message: the bot never mutes or bans regulars for breaking a chat rule. Only admins are never filtered.',
     scriptsTitle: '🔤 <b>Blocked languages</b>',
     scriptsHint: 'A message is removed when more than half of its letters are in a selected script. Links, @mentions and emoji do not count, so one foreign word in your language will not trigger it.',
     nameScripts: 'Also check a newcomer’s name',

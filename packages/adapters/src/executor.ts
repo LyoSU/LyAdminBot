@@ -8,7 +8,7 @@
  * chat-trusted users. The pipeline also guards these — defense in depth.
  */
 import type { Verdict } from '@lyadmin/core'
-import { OVERRIDES_CHAT_TRUST_SIGNALS } from '@lyadmin/core'
+import { OVERRIDES_CHAT_TRUST_SIGNALS, isChatFilterVerdict } from '@lyadmin/core'
 
 export interface ExecutionTarget {
   chatId: number
@@ -127,7 +127,10 @@ export const applyVerdict = async (
   // against a Telegram scam flag or an external ban listing. That is exactly
   // the sold/compromised long-time account from the threat model
   // (2026-07-30 review).
-  if (guards.senderIsTrusted && !hasHardAccountVerdict(verdict)) {
+  // Nor is it a pass from the chat's own house rules: a filter is the admins'
+  // rule, not our judgement, and the list grows by ham votes and overrides that
+  // say "not a spammer", never "may break the rules" (2026-11-18).
+  if (guards.senderIsTrusted && !hasHardAccountVerdict(verdict) && !isChatFilterVerdict(verdict)) {
     result.skippedReason = 'senderIsTrusted'
     return result
   }

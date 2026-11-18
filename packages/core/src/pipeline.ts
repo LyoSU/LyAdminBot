@@ -1107,12 +1107,13 @@ export const evaluateMessage = async (
   // House rules the admins switched on: a script the chat refuses, a kind of
   // message it does not accept. After custom rules, so an admin's ALLOW still
   // wins; before the established-regular exempt, because a house rule binds
-  // regulars too (they only lose the message, see `filterActionFor`). Only the
-  // chat's own trusted list is exempt: `reputationStatus` is earned by volume
-  // across every chat, so honouring it here exempted most regulars of a busy
-  // chat from the house rule its admins had just switched on (2026-11-18).
-  // No port runs, nothing is learned — `isChatFilterVerdict`.
-  if (hasActiveFilters(input.policy.filters) && !input.policy.trustedUserIds.includes(input.user.id)) {
+  // regulars too (they only lose the message, see `filterActionFor`). Nobody
+  // is exempt here but admins, whom the executor skips: trust — by volume
+  // across the network or on the chat's list — says "not a spammer", and
+  // honouring it let most regulars of a busy chat past the house rule its
+  // admins had just switched on (2026-11-18). No port runs, nothing is
+  // learned — `isChatFilterVerdict`.
+  if (hasActiveFilters(input.policy.filters)) {
     const filters = input.policy.filters
     const newcomer = isNewish(input)
     const hit = matchFilters(filters, {
