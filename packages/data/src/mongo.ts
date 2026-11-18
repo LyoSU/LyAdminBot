@@ -8,7 +8,7 @@
  */
 import { MongoClient, ObjectId, type Collection, type Db, type Document } from 'mongodb'
 import type {
-  BotStats, BurstEntry, ChatStats, EditBaseline, ExecutionRecord, MediaCategory, Verdict, Signal, VoteBallot, VoteEligibility
+  BotStats, BurstEntry, ChatFilters, ChatStats, EditBaseline, ExecutionRecord, MediaCategory, Verdict, Signal, VoteBallot, VoteEligibility
 } from '@lyadmin/core'
 import {
   truncate, VOTE_WINDOW_SECONDS, RECENT_VOTERS_WINDOW_DAYS, distinctBallotVoters,
@@ -2511,8 +2511,10 @@ export class MongoStore {
     quiet?: boolean
     bananDefault?: number
     locale?: string
+    filters?: ChatFilters
   }): Promise<void> {
     const set: Record<string, unknown> = {}
+    if (patch.filters !== undefined) set['settings.filters'] = patch.filters
     if (patch.enabled !== undefined) set['settings.openaiSpamCheck.enabled'] = patch.enabled
     if (patch.confidenceThreshold !== undefined) set['settings.openaiSpamCheck.confidenceThreshold'] = patch.confidenceThreshold
     if (patch.captchaEnabled !== undefined) set['settings.captcha.enabled'] = patch.captchaEnabled

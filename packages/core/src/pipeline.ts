@@ -30,6 +30,9 @@ import { extractLinkedChannelSignals } from './signals/channel.js'
 import { applyDeterministicRules } from './rules.js'
 import { parseCustomRule, customRuleMatches } from './custom-rules.js'
 import {
+  hasActiveFilters, matchFilters, filterActionFor, filterReasonCode, filterRuleId
+} from './filters.js'
+import {
   scoreSignals, hasDecisiveSignal, mayRemoveSender, hasSenderStanding, isInExchange,
   isStrangerHere, contentEvidence
 } from './score.js'
@@ -1098,6 +1101,49 @@ export const evaluateMessage = async (
       },
       []
     )
+  }
+
+  // ── 1a. chat filters ────────────────────────────────────────────────
+  // House rules the admins switched on: a script the chat refuses, a kind of
+  // message it does not accept. After custom rules, so an admin's ALLOW still
+  // wins; before the established-regular exempt, because a house rule binds
+  // regulars too (they only lose the message, see `filterActionFor`). Trusted
+  // members are exempt the way they are from everything an admin did not
+  // single out. No port runs, nothing is learned — `isChatFilterVerdict`.
+  if (hasActiveFilters(input.policy.filters) && !isTrusted(input)) {
+    const filters = input.policy.filters
+    const newcomer = isNewish(input)
+    const hit = matchFilters(filters, {
+      message: input.message, displayName: input.user.displayName, newcomer
+    })
+    if (hit !== null) {
+      const action = filterActionFor(filters.action, {
+        newcomer, isChannel: isChannelSenderId(input.user.id)
+      })
+      meta['filter'] = hit.kind === 'lock' ? hit.lock : hit.script
+      if (hit.kind !== 'lock') meta['filterShare'] = hit.share
+      if (action !== filters.action) meta['filterCappedFrom'] = filters.action
+      return finalize(
+        {
+          // Not a spam estimate, and zero so that nothing reading pSpam as one
+          // — the forward reputation, the burst history, the retro sweep's
+          // floor — mistakes a broken house rule for an advert.
+          pSpam: 0,
+          decidedBy: 'chat_filter',
+          ruleId: filterRuleId(hit),
+          reasonCode: filterReasonCode(hit),
+          reasonEvidence: text.length > 0 ? truncate(text, 300) : null
+        },
+        [],
+        {
+          action,
+          needsVote: false,
+          // Timed, like every ban not grounded in somebody else's verdict on
+          // the account: a house rule broken once heals by itself.
+          banDurationSeconds: action === 'ban' ? TIMED_BAN_SECONDS : null
+        }
+      )
+    }
   }
 
   // Extracting signals is pure and free — only the ports cost anything — so the

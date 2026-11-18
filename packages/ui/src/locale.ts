@@ -6,7 +6,9 @@
  *  - reason CODES are localized here; raw LLM text never reaches users
  *  - no country flags anywhere (language names are plain text)
  */
-import type { VerdictAction, SuspicionSignalName, MediaCategory } from '@lyadmin/core'
+import type {
+  VerdictAction, SuspicionSignalName, MediaCategory, FilterableScript, LockKind, FilterAction
+} from '@lyadmin/core'
 
 export interface Locale {
   /** Language name in its own language, NO flag emoji. */
@@ -746,5 +748,42 @@ export interface Locale {
     on: string
     off: string
     back: string
+  }
+
+  /**
+   * House-rule filters (PM, behind the settings panel): writing systems the
+   * chat refuses and kinds of message it does not accept.
+   */
+  filters: {
+    /** Root-panel button. */
+    button: string
+    /** Root-panel status line: off, or how many of each family are on. */
+    summary: (scripts: number, locks: number) => string
+    /** Screen header (HTML) and the one paragraph saying what filters are. */
+    title: string
+    intro: string
+    /** Buttons that open the two lists, with how many entries are on. */
+    scriptsButton: (on: number) => string
+    locksButton: (on: number) => string
+    /** Lines on the filters screen naming what is on; `none` when nothing is. */
+    scriptsLine: string
+    locksLine: string
+    none: string
+    /** What a hit does to a newcomer. */
+    actionLine: string
+    actions: Record<FilterAction, string>
+    /** Who the filters apply to — a toggle button and its two states. */
+    scopeLine: string
+    scope: { all: string; newcomers: string }
+    /** Said under the action: members with standing only lose the message. */
+    standingNote: string
+    scriptsTitle: string
+    scriptsHint: string
+    /** Toggle: also judge a newcomer's display name. */
+    nameScripts: string
+    locksTitle: string
+    locksHint: string
+    scripts: Record<FilterableScript, string>
+    locks: Record<LockKind, string>
   }
 }

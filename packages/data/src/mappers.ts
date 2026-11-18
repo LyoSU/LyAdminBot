@@ -5,6 +5,7 @@
 import type {
   ChatPolicy, ExternalBanFacts, ExternalBanSource, StrictnessPreset
 } from '@lyadmin/core'
+import { normalizeFilters } from '@lyadmin/core'
 
 /** Loose shape of the v1 `groups` document (only the fields we read). */
 export interface GroupDoc {
@@ -15,6 +16,11 @@ export interface GroupDoc {
     banDatabase?: boolean
     /** v2-only: confident notices leave the chat quickly. Default false. */
     quiet?: boolean
+    /**
+     * v2-only: house-rule filters (`filters.ts` in core). Stored as written
+     * by the panel and normalized on every read — see `normalizeFilters`.
+     */
+    filters?: unknown
     /** Opt-in reaction-based moderation (off by default). */
     openaiSpamCheck?: {
       enabled?: boolean
@@ -79,6 +85,7 @@ export const groupDocToChatPolicy = (doc: GroupDoc | null): ChatPolicy => {
     votingEnabled: doc?.settings?.voting?.enabled ?? true,
     externalBanEnabled: doc?.settings?.banDatabase ?? true,
     quietMode: doc?.settings?.quiet ?? false,
+    filters: normalizeFilters(doc?.settings?.filters),
     customRules: spam?.customRules ?? [],
     trustedUserIds: spam?.trustedUsers ?? []
   }

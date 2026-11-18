@@ -141,6 +141,37 @@ export const dominantScript = (text: string): ScriptName | null => {
 }
 
 /**
+ * How much of the text is written in any of `blocked`, for a chat that has
+ * chosen to refuse those writing systems.
+ *
+ * A SUM over the blocked set rather than the dominant script: Japanese mixes
+ * kana with Han inside every sentence, so a chat that blocks both must see one
+ * Japanese message as 100 % blocked, not as two minorities that each fall short
+ * of half. `content` is in the weighted units of `informativeLength`, so a bar
+ * on it asks the same amount of meaning of an alphabet and of a logography.
+ * `top` is the blocked script carrying the most letters — the one to name.
+ */
+export const blockedScriptShare = (
+  text: string,
+  blocked: ReadonlySet<ScriptName>
+): { share: number; content: number; top: ScriptName | null } => {
+  const counts = scriptCounts(text)
+  let total = 0
+  let hit = 0
+  let content = 0
+  let top: ScriptName | null = null
+  let topCount = 0
+  for (const [script, n] of counts) {
+    total += n
+    if (!blocked.has(script)) continue
+    hit += n
+    content += n * (SCRIPT_DENSITY[script] ?? 1)
+    if (n > topCount) { top = script; topCount = n }
+  }
+  return { share: total === 0 ? 0 : hit / total, content, top }
+}
+
+/**
  * Length of `text` in units of content rather than codepoints. Non-letters
  * count one apiece, as before — only the scripts where a codepoint means more
  * than a letter are weighted up.

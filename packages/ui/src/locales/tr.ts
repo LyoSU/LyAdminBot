@@ -200,6 +200,9 @@ export const tr: Locale = {
     semantic_spam_match: 'bilinen spama çok benziyor',
     velocity_exceeded: 'aynı mesaj birden çok sohbette',
     custom_deny: 'bir sohbet kuralıyla engellendi',
+    filter_script: 'metinde yasaklı yazı sistemi',
+    filter_name: 'adda yasaklı yazı sistemi',
+    filter_lock: 'yasaklı mesaj türü',
     scam_flag_new: 'Telegram bu hesabı dolandırıcı olarak işaretledi',
     external_ban_new: 'hesap spam veritabanlarında',
     shared_profile_photo: 'aynı profil fotoğrafı başka birkaç hesapta da var',
@@ -320,6 +323,7 @@ export const tr: Locale = {
     },
     decidedBy: {
       custom_rule: 'sohbet kuralı',
+      chat_filter: 'sohbet filtresi',
       deterministic: 'kesin kural',
       signature: 'imza veritabanı',
       vector: 'anlamsal arama',
@@ -626,5 +630,56 @@ export const tr: Locale = {
     on: 'Açık',
     off: 'Kapalı',
     back: '‹ Geri'
+  },
+
+  filters: {
+    button: '🧹 Filtreler',
+    summary: (scripts, locks) => scripts + locks === 0
+      ? 'Filtreler: kapalı'
+      : `Filtreler: diller ${scripts}, kilitler ${locks}`,
+    title: '🧹 <b>Filtreler</b>',
+    intro: 'Botun harfiyen uyguladığı sohbet kuralları: yasaklı yazı sistemi veya mesaj türü spam olmasa da silinir.',
+    scriptsButton: (on) => `🔤 Diller${on > 0 ? ` (${on})` : ''}`,
+    locksButton: (on) => `🔒 Kilitler${on > 0 ? ` (${on})` : ''}`,
+    scriptsLine: 'Diller',
+    locksLine: 'Kilitli',
+    none: 'yok',
+    actionLine: 'Yeni üyeye işlem',
+    actions: { delete: 'Sil', mute: '1 gün sustur', ban: '30 gün yasakla' },
+    scopeLine: 'Kimlere',
+    scope: { all: 'herkese', newcomers: 'yalnızca yeni üyelere' },
+    standingNote: 'Eski üye yalnızca mesajını kaybeder: bot, sohbet kuralı yüzünden müdavimleri susturmaz ya da yasaklamaz. Yöneticiler ve güvenilir üyeler filtrelenmez.',
+    scriptsTitle: '🔤 <b>Yasaklı diller</b>',
+    scriptsHint: 'Harflerinin yarısından fazlası seçili yazı sisteminde olan mesaj silinir. Bağlantılar, @bahsetmeler ve emojiler sayılmaz; metindeki tek yabancı kelime tetiklemez.',
+    nameScripts: 'Yeni üyenin adını da kontrol et',
+    locksTitle: '🔒 <b>Kilitler</b>',
+    locksHint: 'Seçili mesaj türleri silinir. “Kimlere: yalnızca yeni üyelere” ile birlikte bu bir deneme süresidir: yeni üyeler yerleşene kadar bağlantı veya medya paylaşamaz.',
+    scripts: {
+      arabic: 'Arapça, Farsça',
+      han: 'Çince',
+      kana: 'Japonca',
+      hangul: 'Korece',
+      hebrew: 'İbranice',
+      devanagari: 'Hintçe',
+      thai: 'Tayca',
+      armenian: 'Ermenice',
+      georgian: 'Gürcüce',
+      greek: 'Yunanca'
+    },
+    locks: {
+      links: 'Bağlantılar',
+      tg_links: 't.me bağlantıları',
+      forwards: 'İletilenler',
+      channel_forwards: 'Kanaldan iletilenler',
+      buttons: 'Butonlar',
+      media: 'Fotoğraf, video, dosya',
+      stickers: 'Çıkartmalar',
+      gifs: 'GIF',
+      voice: 'Sesli mesajlar',
+      video_notes: 'Görüntülü mesajlar',
+      stories: 'Hikâyeler',
+      contacts: 'Kişiler',
+      polls: 'Anketler'
+    }
   }
 }

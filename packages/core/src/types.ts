@@ -6,6 +6,7 @@
  * everything the pipeline needs arrives in these structures. This is what
  * makes the core replayable offline against production logs.
  */
+import type { ChatFilters } from './filters.js'
 import type { SignalName } from './signals/registry.js'
 
 // ───────────────────────── input ─────────────────────────
@@ -512,6 +513,8 @@ export interface ChatPolicy {
    * sender in this chat. Optional: absent means nothing is worn.
    */
   wornRuleIds?: string[]
+  /** House-rule filters (scripts, locks). Absent means none are on. */
+  filters?: ChatFilters
 }
 
 // ───────────────────────── signals ─────────────────────────
@@ -545,6 +548,12 @@ export type VerdictAction =
 
 export type DecidedBy =
   | 'custom_rule'
+  /**
+   * A filter the chat's admins switched on (`filters.ts`): a house rule, not a
+   * finding that the message is spam. Kept apart from `custom_rule` because
+   * that one teaches signatures and this one must not.
+   */
+  | 'chat_filter'
   | 'deterministic'   // rule with measured precision
   | 'forward'         // blacklisted forward source
   | 'signature'

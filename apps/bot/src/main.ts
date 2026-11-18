@@ -7,7 +7,8 @@ import { createHash } from 'node:crypto'
 import { BotKeyboard, Chat, User, html, type EphemeralCallbackQuery, type Message } from '@mtcute/node'
 import {
   evaluateMessage, tallyVotes, extractBioSignals, BIO_PROMO_SIGNALS,
-  isEnforcementAction, countsAsDetection,
+  isEnforcementAction, countsAsDetection, isChatFilterVerdict,
+  normalizeFilters, toggleIn, FILTERABLE_SCRIPTS, LOCK_KINDS, FILTER_ACTIONS, type ChatFilters,
   countsAgainstSender,
   shouldAutoLearn, autoLearnSource, VOTE_LEARN_STATUS, hasNetworkVoice, conversationLineFor, nsfwProfileHit,
   sexualScore, suggestiveProfileEvidence, profileHasCase,
@@ -49,6 +50,7 @@ import {
 import {
   captchaPrompt, chatActionsView, chatArrivalsView, ARRIVALS_SHOWN, arrivalBannable, arrivalSilent, type ArrivalEntry, cohortCard, cohortNotice, CHAT_ACTIONS_SHOWN, compactNotification, escapeHtml as escapeName, helpView,
   langPanel, langPicker, parseCallback, resolveLocale, settingsDeepLink, settingsPanel,
+  filtersPanel, filterScriptsPanel, filterLocksPanel,
   nameIsPromo, ownRestrictionsView, OWN_RESTRICTIONS_SHOWN, startCard, startGroupHint, statsCard, topList, userMention, userProfileCard, votePrompt, voteResult,
   voterListView, whyCard, whyView,
   welcomeEditor, welcomeTextsScreen, welcomeGifsScreen, extrasEditor,
@@ -2350,8 +2352,42 @@ const renderSettingsPanel = async (locale: Locale, chatId: number): Promise<View
     // Only what a refusal proved: an admin opening settings should learn why
     // the bot is idle in their chat without waiting for the in-chat notice,
     // which since 2026-10-15 goes out at most twice per blocked state.
-    missingRights: rights.knownGap(chatId)
+    missingRights: rights.knownGap(chatId),
+    filters: policy.filters ?? normalizeFilters(null)
   }))
+}
+
+/** The filters screen or one of its two lists, from a fresh group document. */
+const renderFilters = async (
+  locale: Locale, chatId: number, screen: 'flt' | 'flt_scr' | 'flt_lck'
+): Promise<ViewMessage> => {
+  const groupDoc = await store.getGroupDoc(chatId).catch(() => null)
+  const filters = groupDocToChatPolicy(groupDoc as never).filters ?? normalizeFilters(null)
+  const view = screen === 'flt_scr'
+    ? filterScriptsPanel(locale, chatId, filters)
+    : screen === 'flt_lck'
+      ? filterLocksPanel(locale, chatId, filters)
+      : filtersPanel(locale, chatId, filters)
+  return forChat(locale, chatId, view)
+}
+
+/**
+ * One tap on a filters screen → the settings after it, or null when the tap
+ * names nothing we offer (a stale or forged button). Values are checked against
+ * the catalogues, never trusted from the callback: the button carries a string.
+ */
+const applyFilterTap = (current: ChatFilters, action: string, value: string): ChatFilters | null => {
+  const has = <T extends string>(all: readonly T[], v: string): v is T => (all as readonly string[]).includes(v)
+  if (action === 'flt_s' && has(FILTERABLE_SCRIPTS, value)) {
+    return { ...current, scripts: toggleIn(FILTERABLE_SCRIPTS, current.scripts, value) }
+  }
+  if (action === 'flt_l' && has(LOCK_KINDS, value)) {
+    return { ...current, locks: toggleIn(LOCK_KINDS, current.locks, value) }
+  }
+  if (action === 'flt_a' && has(FILTER_ACTIONS, value)) return { ...current, action: value }
+  if (action === 'flt_new') return { ...current, newcomersOnly: !current.newcomersOnly }
+  if (action === 'flt_name') return { ...current, nameScripts: !current.nameScripts }
+  return null
 }
 
 /**
@@ -7224,7 +7260,7 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
   if (result.applied && removesSender(verdict.action)) {
     await dropGate(chat.id, sender.id, `enforced:${verdict.action}`)
     void store.noteArrivalOutcome(chat.id, sender.id, 'removed').catch(() => { /* no row is fine */ })
-    if (userSender && !verdict.needsVote) {
+    if (userSender && !verdict.needsVote && !isChatFilterVerdict(verdict)) {
       void surfaceCohort(chat.id, userSender).catch(() => { /* best-effort */ })
     }
     // The account's record, not this message, is what carries to its other
@@ -7235,7 +7271,8 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
   }
 
   let retroPurged = 0
-  if (result.applied && removesSender(verdict.action)) {
+  // A filter judged this one message; what the sender wrote before it stands.
+  if (result.applied && removesSender(verdict.action) && !isChatFilterVerdict(verdict)) {
     const targets = senderLog.purgeTargets(chat.id, sender.id, {
       except: message.id, minPSpam: BURST_GREY_FLOOR
     })
@@ -7496,7 +7533,10 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
   // standing debit nor the account record follows from it. `countsAgainstSender`
   // carries the distinction between "Telegram would not let us" (still counts)
   // and "we decided not to" (does not).
-  if (isEnforcementAction(verdict.action) && countsAgainstSender(result.skippedReason)) {
+  // Not for a chat filter: a house rule broken is not spam sent, and a sticker
+  // in a sticker-free chat must not cost anybody their standing elsewhere.
+  if (isEnforcementAction(verdict.action) && countsAgainstSender(result.skippedReason) &&
+      !isChatFilterVerdict(verdict)) {
     await store.adjustSpamMessages(chat.id, sender.id, 1)
       .catch(() => { /* counters are best-effort */ })
     // One chat, one detection — the same rule the vote path has always kept,
@@ -7670,7 +7710,9 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
    * reposted seven times in a chat where the ban could not be executed cost
    * seven separate model calls and left nothing behind.
    */
-  if (enforced) {
+  // A chat filter teaches nothing: its knowledge is shared across every chat,
+  // and one chat refusing Chinese says nothing about Chinese anywhere else.
+  if (enforced && !isChatFilterVerdict(verdict)) {
     void learnFromAutoVerdict(verdict, normalized.text, chat.id)
     // Forwarded spam builds the long-term reputation of its origin.
     if (normalized.forward && verdict.pSpam >= 0.9) {
@@ -7786,6 +7828,20 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     // report above, and an override is only offered on a message something
     // actually happened to.
     if (normalized.forward) rememberForward(chat.id, message.id, normalized.forward)
+
+    /**
+     * A filter's plain delete goes without a word, the way every lock in every
+     * group bot works: a card per removed sticker would make the filter louder
+     * than what it filters. The act is still recorded and listed under the
+     * chat's recent actions. A mute or a ban is announced as usual — removing a
+     * person is never silent.
+     */
+    if (isChatFilterVerdict(verdict) && executed.action === 'delete') {
+      log.info('filter_delete', {
+        chatId: chat.id, userId: sender.id, messageId: message.id, rule: verdict.ruleId
+      })
+      return
+    }
 
     // Both arguments describe what happened, not what was decided. A run whose
     // bans keep failing still deserves ONE card rather than one per message, and
@@ -7987,6 +8043,32 @@ const wireCallbacks = (): void => {
           text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons)
         }).catch(() => { /* unchanged → MESSAGE_NOT_MODIFIED, fine */ })
         await query.answer({ text: locale.arrivals.banned(banned) })
+        return
+      }
+      if (action === 'flt' || action === 'flt_scr' || action === 'flt_lck') {
+        const view = await renderFilters(locale, chatId, action)
+        await tgEditMessage({
+          chatId: query.user.id, message: query.messageId,
+          text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons)
+        }).catch(() => { /* unchanged → MESSAGE_NOT_MODIFIED, fine */ })
+        await query.answer({})
+        return
+      }
+      if (action.startsWith('flt_')) {
+        const groupDoc = await store.getGroupDoc(chatId).catch(() => null)
+        const current = groupDocToChatPolicy(groupDoc as never).filters ?? normalizeFilters(null)
+        const next = applyFilterTap(current, action, value)
+        if (next === null) { await query.answer({}); return }
+        await store.updateGroupSettings(chatId, { filters: next })
+        log.info('settings_changed', { chatId, by: query.user.id, action, value: value || undefined })
+        // The tap lands back on the screen it was made on.
+        const screen = action === 'flt_s' || action === 'flt_name' ? 'flt_scr' : action === 'flt_l' ? 'flt_lck' : 'flt'
+        const view = await renderFilters(locale, chatId, screen)
+        await tgEditMessage({
+          chatId: query.user.id, message: query.messageId,
+          text: viewHtml(view.text), replyMarkup: toKeyboard(view.buttons)
+        }).catch(() => { /* unchanged → MESSAGE_NOT_MODIFIED, fine */ })
+        await query.answer({})
         return
       }
       if (action === 'lang_open' || action === 'root' || action === 'actions' || action === 'arrivals' || action === 'arr_all') {

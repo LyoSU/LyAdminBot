@@ -7,8 +7,11 @@
  *  - details live behind [Why?]; raw LLM prose never shown
  *  - settings panel only in PM; group /settings replies with a deep link
  */
-import type { BotStats, ChatStats, MediaCategory, Verdict, VoterEntry, VoterRoster } from '@lyadmin/core'
-import { isSuspicionSignal, redactLinks, truncate, ESTABLISHED_MIN_TENURE_DAYS } from '@lyadmin/core'
+import type { BotStats, ChatStats, ChatFilters, MediaCategory, Verdict, VoterEntry, VoterRoster } from '@lyadmin/core'
+import {
+  isSuspicionSignal, redactLinks, truncate, ESTABLISHED_MIN_TENURE_DAYS,
+  FILTERABLE_SCRIPTS, LOCK_KINDS, FILTER_ACTIONS
+} from '@lyadmin/core'
 import type { Locale } from './locale.js'
 import { uk } from './locales/uk.js'
 import { en } from './locales/en.js'
@@ -914,7 +917,9 @@ export const whyView = (locale: Locale, verdict: Verdict, options: WhyOptions = 
    * when a score decided, and otherwise let the reason speak for itself.
    */
   const showsBand =
-    verdict.meta['flooredNetworkFact'] !== true && verdict.decidedBy !== 'join_screen'
+    verdict.meta['flooredNetworkFact'] !== true && verdict.decidedBy !== 'join_screen' &&
+    // A chat filter enforces a house rule; it never estimated anything.
+    verdict.decidedBy !== 'chat_filter'
   if (showsBand) {
     const pct = Math.round(verdict.pSpam * 100)
     const confidence = verdict.pSpam >= 0.85
@@ -1259,6 +1264,8 @@ export interface SettingsState {
    * known. Shown as one line at the top of the panel.
    */
   missingRights?: { deleteBlocked: boolean; senderBlocked: boolean } | null
+  /** House-rule filters; absent reads as all off. */
+  filters?: ChatFilters
 }
 
 const langName = (code: string): string => LOCALES[code]?.languageName ?? code
@@ -1306,6 +1313,7 @@ export const settingsPanel = (locale: Locale, chatId: number, state: SettingsSta
       `${locale.settings.quiet}: ${onOff(state.quietMode)}`,
       `${locale.settings.banan}: ${bananLabel(locale, state.bananDefaultSeconds)}`,
       `${locale.settings.language}: ${langName(state.locale)}`,
+      locale.filters.summary(state.filters?.scripts.length ?? 0, state.filters?.locks.length ?? 0),
       // Said where the switch is: an admin who turned it on and then misses the
       // notices has to be told where they went.
       ...(state.quietMode ? ['', locale.settings.quietHint] : [])
@@ -1321,6 +1329,7 @@ export const settingsPanel = (locale: Locale, chatId: number, state: SettingsSta
       [{ text: `${locale.settings.voting}: ${onOff(state.votingEnabled)}`, data: callbackData.settings(chatId, 'toggle_voting') }],
       [{ text: `${locale.settings.banDatabase}: ${onOff(state.externalBanEnabled)}`, data: callbackData.settings(chatId, 'toggle_bandb') }],
       [{ text: `${locale.settings.quiet}: ${onOff(state.quietMode)}`, data: callbackData.settings(chatId, 'toggle_quiet') }],
+      [{ text: locale.filters.button, data: callbackData.settings(chatId, 'flt') }],
       [
         { text: locale.chatActions.button, data: callbackData.settings(chatId, 'actions') },
         { text: locale.arrivals.button, data: callbackData.settings(chatId, 'arrivals') }
@@ -1351,6 +1360,90 @@ export const langPanel = (locale: Locale, chatId: number, currentLocale: string)
   return {
     text: `🌐 <b>${locale.settings.language}</b>\n\n${langName(currentLocale)}`,
     buttons: rows
+  }
+}
+
+// ── PM filters (opened from /settings) ─────────────────────────────────────
+
+const checked = (on: boolean, label: string): string => (on ? `✓ ${label}` : label)
+
+/** Pairs per row: the labels are short and the lists are long. */
+const pairs = (buttons: ButtonSpec[]): ButtonSpec[][] => {
+  const rows: ButtonSpec[][] = []
+  for (let i = 0; i < buttons.length; i += 2) rows.push(buttons.slice(i, i + 2))
+  return rows
+}
+
+/**
+ * The filters screen: what is on, what a hit does, to whom. The two lists live
+ * one tap further so that this screen stays a summary an admin reads at a glance.
+ */
+export const filtersPanel = (locale: Locale, chatId: number, filters: ChatFilters): ViewMessage => {
+  const f = locale.filters
+  const named = <T extends string>(items: readonly T[], labels: Record<T, string>): string =>
+    items.length === 0 ? f.none : items.map((i) => labels[i]).join(', ')
+  return {
+    text: [
+      f.title,
+      '',
+      f.intro,
+      '',
+      `${f.scriptsLine}: ${escapeHtml(named(filters.scripts, f.scripts))}`,
+      `${f.locksLine}: ${escapeHtml(named(filters.locks, f.locks))}`,
+      `${f.actionLine}: ${f.actions[filters.action]}`,
+      `${f.scopeLine}: ${filters.newcomersOnly ? f.scope.newcomers : f.scope.all}`,
+      '',
+      `<i>${f.standingNote}</i>`
+    ].join('\n'),
+    buttons: [
+      [
+        { text: f.scriptsButton(filters.scripts.length), data: callbackData.settings(chatId, 'flt_scr') },
+        { text: f.locksButton(filters.locks.length), data: callbackData.settings(chatId, 'flt_lck') }
+      ],
+      FILTER_ACTIONS.map((a) => ({
+        text: checked(filters.action === a, f.actions[a]),
+        data: callbackData.settings(chatId, 'flt_a', a)
+      })),
+      [{
+        text: `${f.scopeLine}: ${filters.newcomersOnly ? f.scope.newcomers : f.scope.all}`,
+        data: callbackData.settings(chatId, 'flt_new')
+      }],
+      [{ text: locale.settings.back, data: callbackData.settings(chatId, 'root') }]
+    ]
+  }
+}
+
+/** Writing systems the chat refuses — a ✓ per script, plus the name toggle. */
+export const filterScriptsPanel = (locale: Locale, chatId: number, filters: ChatFilters): ViewMessage => {
+  const f = locale.filters
+  return {
+    text: `${f.scriptsTitle}\n\n${f.scriptsHint}`,
+    buttons: [
+      ...pairs(FILTERABLE_SCRIPTS.map((script) => ({
+        text: checked(filters.scripts.includes(script), f.scripts[script]),
+        data: callbackData.settings(chatId, 'flt_s', script)
+      }))),
+      [{
+        text: `${f.nameScripts}: ${filters.nameScripts ? locale.settings.on : locale.settings.off}`,
+        data: callbackData.settings(chatId, 'flt_name')
+      }],
+      [{ text: locale.settings.back, data: callbackData.settings(chatId, 'flt') }]
+    ]
+  }
+}
+
+/** Kinds of message the chat does not accept. */
+export const filterLocksPanel = (locale: Locale, chatId: number, filters: ChatFilters): ViewMessage => {
+  const f = locale.filters
+  return {
+    text: `${f.locksTitle}\n\n${f.locksHint}`,
+    buttons: [
+      ...pairs(LOCK_KINDS.map((lock) => ({
+        text: checked(filters.locks.includes(lock), f.locks[lock]),
+        data: callbackData.settings(chatId, 'flt_l', lock)
+      }))),
+      [{ text: locale.settings.back, data: callbackData.settings(chatId, 'flt') }]
+    ]
   }
 }
 

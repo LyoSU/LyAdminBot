@@ -22,6 +22,13 @@ describe('presetToThreshold', () => {
 })
 
 describe('groupDocToChatPolicy', () => {
+  it('reads filters normalized: off when absent, unknown entries dropped', () => {
+    expect(groupDocToChatPolicy({ group_id: 1 }).filters).toMatchObject({ scripts: [], locks: [], action: 'delete' })
+    expect(groupDocToChatPolicy({
+      group_id: 1, settings: { filters: { scripts: ['arabic', 'nope'], locks: ['gifs'], action: 'mute', newcomersOnly: true } }
+    }).filters).toEqual({ scripts: ['arabic'], nameScripts: false, locks: ['gifs'], action: 'mute', newcomersOnly: true })
+  })
+
   it('maps a real-shaped group document', () => {
     const policy = groupDocToChatPolicy({
       group_id: -100,

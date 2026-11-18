@@ -204,6 +204,9 @@ export const en: Locale = {
     semantic_spam_match: 'very similar to known spam',
     velocity_exceeded: 'the same message posted in several chats in a row',
     custom_deny: 'blocked by a chat rule',
+    filter_script: 'a blocked script in the text',
+    filter_name: 'a blocked script in the name',
+    filter_lock: 'a blocked message type',
     scam_flag_new: 'Telegram flagged the account as a scam',
     external_ban_new: 'account is in spam databases',
     shared_profile_photo: 'the same profile photo is on several other accounts',
@@ -325,6 +328,7 @@ export const en: Locale = {
     },
     decidedBy: {
       custom_rule: 'chat rule',
+      chat_filter: 'chat filter',
       deterministic: 'hard rule',
       signature: 'signature database',
       vector: 'semantic search',
@@ -630,5 +634,56 @@ export const en: Locale = {
     on: 'On',
     off: 'Off',
     back: '‹ Back'
+  },
+
+  filters: {
+    button: '🧹 Filters',
+    summary: (scripts, locks) => scripts + locks === 0
+      ? 'Filters: off'
+      : `Filters: languages ${scripts}, locks ${locks}`,
+    title: '🧹 <b>Filters</b>',
+    intro: 'Chat rules the bot applies to the letter: a blocked script or message type is removed even when it is not spam.',
+    scriptsButton: (on) => `🔤 Languages${on > 0 ? ` (${on})` : ''}`,
+    locksButton: (on) => `🔒 Locks${on > 0 ? ` (${on})` : ''}`,
+    scriptsLine: 'Languages',
+    locksLine: 'Locked',
+    none: 'none',
+    actionLine: 'Action for a newcomer',
+    actions: { delete: 'Delete', mute: 'Mute 1 day', ban: 'Ban 30 days' },
+    scopeLine: 'Applies to',
+    scope: { all: 'everyone', newcomers: 'newcomers only' },
+    standingNote: 'A member with standing only loses the message: the bot never mutes or bans regulars for breaking a chat rule. Admins and trusted members are never filtered.',
+    scriptsTitle: '🔤 <b>Blocked languages</b>',
+    scriptsHint: 'A message is removed when more than half of its letters are in a selected script. Links, @mentions and emoji do not count, so one foreign word in your language will not trigger it.',
+    nameScripts: 'Also check a newcomer’s name',
+    locksTitle: '🔒 <b>Locks</b>',
+    locksHint: 'Selected message types are removed. With “Applies to: newcomers only” this is a probation: new members cannot post links or media until they have standing.',
+    scripts: {
+      arabic: 'Arabic, Farsi',
+      han: 'Chinese',
+      kana: 'Japanese',
+      hangul: 'Korean',
+      hebrew: 'Hebrew',
+      devanagari: 'Hindi',
+      thai: 'Thai',
+      armenian: 'Armenian',
+      georgian: 'Georgian',
+      greek: 'Greek'
+    },
+    locks: {
+      links: 'Links',
+      tg_links: 't.me links',
+      forwards: 'Forwards',
+      channel_forwards: 'Channel forwards',
+      buttons: 'Buttons',
+      media: 'Photos, videos, files',
+      stickers: 'Stickers',
+      gifs: 'GIFs',
+      voice: 'Voice messages',
+      video_notes: 'Video messages',
+      stories: 'Stories',
+      contacts: 'Contacts',
+      polls: 'Polls'
+    }
   }
 }
