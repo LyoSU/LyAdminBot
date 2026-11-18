@@ -8,7 +8,7 @@ import { BotKeyboard, Chat, User, html, type EphemeralCallbackQuery, type Messag
 import {
   evaluateMessage, tallyVotes, extractBioSignals, BIO_PROMO_SIGNALS,
   isEnforcementAction, countsAsDetection, isChatFilterVerdict,
-  normalizeFilters, toggleIn, FILTERABLE_SCRIPTS, LOCK_KINDS, FILTER_ACTIONS, FLOOD_PRESETS, type ChatFilters,
+  normalizeFilters, hasActiveFilters, toggleIn, FILTERABLE_SCRIPTS, LOCK_KINDS, FILTER_ACTIONS, FLOOD_PRESETS, type ChatFilters,
   parseEntries, normalizeWord, normalizeDomain, MAX_WORDS, MAX_DOMAINS,
   DEFAULT_WARN_SETTINGS, WARN_LIMITS, WARN_LIMIT_ACTIONS, WARN_MUTE_SECONDS, WARN_BAN_SECONDS, warnOutcome,
   countsAgainstSender,
@@ -6853,7 +6853,9 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
     await fireExtras(message, chat, rawText).catch(() => { /* extras are best-effort */ })
   }
 
-  if (!policy.enabled) return
+  // The chat's house rules stand above the antispam: switching the antispam
+  // off leaves them on, and the pipeline runs them before its own gate.
+  if (!policy.enabled && !hasActiveFilters(policy.filters)) return
 
   // Telegram has refused us both message removal and sender actions here, so
   // there is no verdict we could act on. Keep asking the admins for rights, but

@@ -1080,40 +1080,24 @@ export const evaluateMessage = async (
       { action: 'none', needsVote: false, banDurationSeconds: null }
     )
 
-  // ── 1. gates ────────────────────────────────────────────────────────
-
-  if (!input.policy.enabled) return none('abstain', 'spam_check_disabled')
-
   const text = input.message.text ?? ''
-  for (const [index, raw] of input.policy.customRules.entries()) {
+  const allowedByAdmin = input.policy.customRules.some((raw) => {
     const rule = parseCustomRule(raw)
-    if (!rule || !customRuleMatches(text, rule.pattern)) continue
-    if (rule.kind === 'allow') {
-      return none('custom_rule', 'custom_allow')
-    }
-    return finalize(
-      {
-        pSpam: CUSTOM_DENY_PSPAM,
-        decidedBy: 'custom_rule',
-        ruleId: `custom:${index}`,
-        reasonCode: 'custom_deny',
-        reasonEvidence: rule.pattern
-      },
-      []
-    )
-  }
+    return rule !== null && rule.kind === 'allow' && customRuleMatches(text, rule.pattern)
+  })
 
-  // ── 1a. chat filters ────────────────────────────────────────────────
+  // ── 0. chat filters ─────────────────────────────────────────────────
   // House rules the admins switched on: a script the chat refuses, a kind of
-  // message it does not accept. After custom rules, so an admin's ALLOW still
-  // wins; before the established-regular exempt, because a house rule binds
-  // regulars too (they only lose the message, see `filterActionFor`). Nobody
-  // is exempt here but admins, whom the executor skips: trust — by volume
-  // across the network or on the chat's list — says "not a spammer", and
-  // honouring it let most regulars of a busy chat past the house rule its
-  // admins had just switched on (2026-11-18). No port runs, nothing is
-  // learned — `isChatFilterVerdict`.
-  if (hasActiveFilters(input.policy.filters)) {
+  // message it does not accept. They stand above the antispam, not inside it:
+  // first, and with the antispam switched off too, so no exemption the
+  // antispam grows later can reach them. Only an admin's ALLOW rule wins, and
+  // a house rule binds regulars too (they only lose the message, see
+  // `filterActionFor`). Nobody else is exempt but admins, whom the executor
+  // skips: trust — by volume across the network or on the chat's list — says
+  // "not a spammer", and honouring it let most regulars of a busy chat past
+  // the house rule its admins had just switched on (2026-11-18). No port
+  // runs, nothing is learned — `isChatFilterVerdict`.
+  if (hasActiveFilters(input.policy.filters) && !allowedByAdmin) {
     const filters = input.policy.filters
     const newcomer = isNewish(input)
     const hit = matchFilters(filters, {
@@ -1162,6 +1146,28 @@ export const evaluateMessage = async (
   // Extracting signals is pure and free — only the ports cost anything — so the
   // message half is read before the exempt below rather than after it.
   const messageSignals = extractMessageSignals(input.message)
+
+  // ── 1. gates ────────────────────────────────────────────────────────
+
+  if (!input.policy.enabled) return none('abstain', 'spam_check_disabled')
+
+  for (const [index, raw] of input.policy.customRules.entries()) {
+    const rule = parseCustomRule(raw)
+    if (!rule || !customRuleMatches(text, rule.pattern)) continue
+    if (rule.kind === 'allow') {
+      return none('custom_rule', 'custom_allow')
+    }
+    return finalize(
+      {
+        pSpam: CUSTOM_DENY_PSPAM,
+        decidedBy: 'custom_rule',
+        ruleId: `custom:${index}`,
+        reasonCode: 'custom_deny',
+        reasonEvidence: rule.pattern
+      },
+      []
+    )
+  }
 
   // ── 1b. established-regular fast path ───────────────────────────────
   // Runs AFTER custom rules (an admin DENY/ALLOW always wins) but BEFORE any

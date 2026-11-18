@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import fc from 'fast-check'
 import type {
   ChatPolicy, Enrichment, EvaluationInput, NormalizedChat, NormalizedMessage, UserSnapshot
 } from './types.js'
@@ -113,11 +114,11 @@ describe('evaluateMessage — chat filters', () => {
     expect(v).toMatchObject({ action: 'none', reasonCode: 'custom_allow' })
   })
 
-  it('does nothing when the chat switched the bot off', async () => {
+  it('keeps the house rules on when the chat switched the antispam off', async () => {
     const v = await evaluateMessage(input({ scripts: ['arabic'] }, {
       msg: { text: farsi }, user: newcomer, policy: { enabled: false }
-    }), {})
-    expect(v.action).toBe('none')
+    }), noPorts)
+    expect(v).toMatchObject({ action: 'delete', decidedBy: 'chat_filter' })
   })
 
   it('a message in the chat’s own language passes the filter untouched', async () => {
@@ -157,5 +158,44 @@ describe('evaluateMessage — flood and warnings', () => {
     }), noPorts)
     expect(v.ruleId).toBe('filter:word')
     expect(JSON.stringify(v.meta)).not.toContain('секретнеслово')
+  })
+})
+
+describe('evaluateMessage — house rules stand above the antispam', () => {
+  /**
+   * Whoever the sender is and however the antispam is tuned, a message a filter
+   * catches is removed by the filter. Only an admin's ALLOW rule (here) and an
+   * admin sender (the executor) stand above it. Every exemption the antispam
+   * grows later is a field this generator already varies or must be added to.
+   */
+  it('a filter hit is the verdict for any sender facts and any antispam setting', async () => {
+    const userArb = fc.record({
+      messagesInChat: fc.option(fc.nat(100_000), { nil: null }),
+      messagesGlobal: fc.option(fc.nat(1_000_000), { nil: null }),
+      localAgeDays: fc.option(fc.nat(5_000), { nil: null }),
+      predictedAgeDays: fc.option(fc.nat(5_000), { nil: null }),
+      spamDetections: fc.nat(50),
+      reputationStatus: fc.constantFrom('trusted', 'neutral', 'suspicious', 'restricted') as
+        fc.Arbitrary<UserSnapshot['reputationStatus']>
+    })
+    const policyArb = fc.record({
+      enabled: fc.boolean(),
+      preset: fc.constantFrom('relaxed', 'standard', 'strict') as fc.Arbitrary<ChatPolicy['preset']>,
+      captchaEnabled: fc.boolean(),
+      votingEnabled: fc.boolean(),
+      externalBanEnabled: fc.boolean(),
+      trustedUserIds: fc.constantFrom<number[]>([], [42]),
+      customRules: fc.constantFrom<string[]>([], ['DENY: казино'])
+    })
+    await fc.assert(fc.asyncProperty(
+      userArb, policyArb, fc.constantFrom('delete', 'warn', 'mute', 'ban') as fc.Arbitrary<ChatFilters['action']>,
+      async (user, policy, action) => {
+        const v = await evaluateMessage(input({ scripts: ['arabic'], action }, {
+          msg: { text: farsi }, user, policy
+        }), noPorts)
+        expect(v.decidedBy).toBe('chat_filter')
+        expect(['delete', 'mute', 'ban']).toContain(v.action)
+      }
+    ), { numRuns: 300 })
   })
 })
