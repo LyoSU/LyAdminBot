@@ -45,6 +45,15 @@ describe('script filter', () => {
     expect(check(filters({ scripts: ['han'] }), '好 👍')).toBeNull()
   })
 
+  it('takes a one-word reply written wholly in a blocked script', () => {
+    const arabic = filters({ scripts: ['arabic'] })
+    expect(check(arabic, 'نه')).toMatchObject({ kind: 'script', script: 'arabic' })
+    expect(check(arabic, 'نه 😂')).toMatchObject({ kind: 'script', script: 'arabic' })
+    // A Latin letter beside it means it is not all there is.
+    expect(check(arabic, 'نه a')).toBeNull()
+    expect(check(arabic, 'ن 👍')).toBeNull()
+  })
+
   it('counts two Han characters as enough content', () => {
     expect(check(filters({ scripts: ['han'] }), '你好')).toMatchObject({ kind: 'script', script: 'han' })
   })

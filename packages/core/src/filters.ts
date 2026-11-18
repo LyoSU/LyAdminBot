@@ -194,6 +194,13 @@ export const SCRIPT_FILTER_MIN_SHARE = 0.5
  */
 export const SCRIPT_FILTER_MIN_CONTENT = 4
 
+/**
+ * The bar, in letters, for a message with no letters outside the blocked
+ * scripts: a one-word reply is still written in that script when it is all
+ * there is. A lone character beside an emoji stays below it.
+ */
+export const SCRIPT_FILTER_MIN_LETTERS_PURE = 2
+
 const TG_HOST = /^(?:https?:\/\/)?(?:www\.)?(?:t\.me|telegram\.me|telegram\.dog)(?:\/|$)|^tg:\/\//i
 
 /** Host and first path segment of a link, the shape `normalizeDomain` stores. */
@@ -298,8 +305,9 @@ const scriptHit = (text: string, blockedSet: ReadonlySet<ScriptName>): { script:
   const raw = blockedScriptShare(text, blocked)
   // Named by the script the admin chose: Han swept in with kana is Japanese.
   const top = raw.top === 'han' && !blockedSet.has('han') ? 'kana' : raw.top
-  const { share, content } = raw
-  if (top === null || share <= SCRIPT_FILTER_MIN_SHARE || content < SCRIPT_FILTER_MIN_CONTENT) return null
+  const { share, content, letters } = raw
+  const enough = content >= SCRIPT_FILTER_MIN_CONTENT || (share >= 1 && letters >= SCRIPT_FILTER_MIN_LETTERS_PURE)
+  if (top === null || share <= SCRIPT_FILTER_MIN_SHARE || !enough) return null
   return { script: top, share: Math.round(share * 100) / 100 }
 }
 

@@ -96,6 +96,14 @@ describe('evaluateMessage — chat filters', () => {
     expect(v.decidedBy).not.toBe('chat_filter')
   })
 
+  it('binds a member the network trusts by volume: only the chat\'s own list exempts', async () => {
+    const v = await evaluateMessage(input({ scripts: ['arabic'] }, {
+      msg: { text: farsi },
+      user: { messagesInChat: 500, messagesGlobal: 2000, localAgeDays: 900, reputationStatus: 'trusted' }
+    }), noPorts)
+    expect(v).toMatchObject({ action: 'delete', decidedBy: 'chat_filter', reasonCode: 'filter_script' })
+  })
+
   it('an admin ALLOW rule still wins over a filter', async () => {
     const v = await evaluateMessage(input({ scripts: ['arabic'] }, {
       msg: { text: farsi }, user: newcomer, policy: { customRules: ['ALLOW: سلام'] }

@@ -154,7 +154,7 @@ export const dominantScript = (text: string): ScriptName | null => {
 export const blockedScriptShare = (
   text: string,
   blocked: ReadonlySet<ScriptName>
-): { share: number; content: number; top: ScriptName | null } => {
+): { share: number; content: number; letters: number; top: ScriptName | null } => {
   const counts = scriptCounts(text)
   let total = 0
   let hit = 0
@@ -168,7 +168,7 @@ export const blockedScriptShare = (
     content += n * (SCRIPT_DENSITY[script] ?? 1)
     if (n > topCount) { top = script; topCount = n }
   }
-  return { share: total === 0 ? 0 : hit / total, content, top }
+  return { share: total === 0 ? 0 : hit / total, content, letters: hit, top }
 }
 
 /**
