@@ -153,10 +153,22 @@ const fetchChannelPosts = async (
   }
 }
 
+export interface FetchUserProfileOptions {
+  /**
+   * Also read the posts of the channel on the profile — one more Telegram call
+   * for an account that has one. Off unless asked: only the caller that caches
+   * the profile for a day asks, so the read stays at once per account per day.
+   * The day it shipped (2026-11-22) every caller paid for it, the join screen
+   * and the admin commands included, and none of those keeps the answer.
+   */
+  channelPosts?: boolean
+}
+
 export const fetchUserProfile = async (
   tg: TelegramClient,
   userId: number,
-  nowUnix = Math.floor(Date.now() / 1000)
+  nowUnix = Math.floor(Date.now() / 1000),
+  options: FetchUserProfileOptions = {}
 ): Promise<UserProfileEnrichment> => {
   const result: UserProfileEnrichment = {
     bio: null, businessTexts: [], avatars: null, unofficialClientRisk: null,
@@ -220,9 +232,8 @@ export const fetchUserProfile = async (
           }
         } catch { /* description is a bonus — the title alone still reads */ }
       }
-      // Call 1c: what the channel posts. Same minority of senders, once a day
-      // each (the caller caches the profile).
-      result.channelPosts = await fetchChannelPosts(tg, inputUser, nowUnix)
+      // Call 1c: what the channel posts, for the caller that asked.
+      if (options.channelPosts === true) result.channelPosts = await fetchChannelPosts(tg, inputUser, nowUnix)
     }
   } catch { /* budget item failed — keep going */ }
 

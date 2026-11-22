@@ -748,9 +748,10 @@ const applyIgnoredCaptcha = async (
     await dropGate(chatId, userId, 'left_before_consequence')
     return
   }
+  let heldError: string | null = null
   const held = await gateway.moderationActions
     .mute(chatId, userId, CAPTCHA_IGNORED_MUTE_SECONDS)
-    .then(() => true).catch(() => false)
+    .then(() => true).catch((err: unknown) => { heldError = telegramErrorName(err); return false })
 
   let removed = false
   if (gate.triggerMessageId !== null) {
@@ -760,7 +761,7 @@ const applyIgnoredCaptcha = async (
   if (held && gate.triggerMessageId !== null) {
     void sweepRepeats(chatId, userId, gate.triggerMessageId, 'captcha_ignored').catch(() => { /* best-effort */ })
   }
-  log.info('captcha_ignored', { chatId, userId, held, removed })
+  log.info('captcha_ignored', { chatId, userId, held, removed, ...(heldError === null ? {} : { muteError: heldError }) })
   // The unanswered end of the funnel. `wentPublic` is what says whether the
   // silence was measured against a prompt the member could actually see.
   void store.recordCaptchaEvent({
@@ -4281,7 +4282,7 @@ const profileCache = new Map<number, { profile: UserProfile; expiresAt: number }
 const cachedUserProfile = async (userId: number): Promise<UserProfile> => {
   const hit = profileCache.get(userId)
   if (hit && hit.expiresAt > Date.now()) return hit.profile
-  const profile = await fetchUserProfile(gateway.tg, userId)
+  const profile = await fetchUserProfile(gateway.tg, userId, undefined, { channelPosts: true })
   pruneExpired(profileCache, PROFILE_CACHE_MAX)
   profileCache.set(userId, { profile, expiresAt: Date.now() + PROFILE_CACHE_TTL_MS })
   return profile
@@ -4470,13 +4471,18 @@ const gateAccount = async (params: {
     return { outcome: 'blocked', blockers }
   }
 
+  // Named, like every other refusal: 2026-11-22 this line fired twice for one
+  // account in one chat half an hour apart and said nothing about why.
+  let gateError: string | null = null
   const held = await gateway.moderationActions
     .mute(chat.id, user.id, JOIN_GATE_MUTE_SECONDS)
-    .then(() => true).catch(() => false)
+    .then(() => true).catch((err: unknown) => { gateError = telegramErrorName(err); return false })
   // No gate, no prompt: a question about a door that is not closed asks the
   // member to unlock something already open.
   if (!held) {
-    log.warn('account_gate_failed', { chatId: chat.id, userId: user.id, reason })
+    log.warn('account_gate_failed', {
+      chatId: chat.id, userId: user.id, reason, ...(gateError === null ? {} : { error: gateError })
+    })
     return { outcome: 'failed' }
   }
   log.info('account_gate', {
@@ -4895,10 +4901,12 @@ const banOnRecord = async (p: {
       .then(() => true).catch(() => false)
   if (removed !== null) saw['deleted'] = removed ? 'yes' : 'failed'
 
+  let banError: string | null = null
   const banned = await gateway.moderationActions.ban(chat.id, target.id, TIMED_BAN_SECONDS)
-    .then(() => true).catch(() => false)
+    .then(() => true).catch((err: unknown) => { banError = telegramErrorName(err); return false })
   log.info('account_screen_ban', {
     chatId: chat.id, userId: target.id, applied: banned,
+    ...(banError === null ? {} : { banError }),
     ...(removed !== null ? { deleted: removed, messageId: removeId } : {})
   })
   // The gate this screen may have opened minutes ago is now about somebody

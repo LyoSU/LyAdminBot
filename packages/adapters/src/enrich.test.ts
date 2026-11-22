@@ -102,7 +102,7 @@ describe('fetchUserProfile — the channel on the profile', () => {
         _: 'messages.channelMessages', count: 300,
         messages: [{ _: 'message', id: 2, date: NOW - 86400, message: 'x', entities: [{ _: 'messageEntityUrl' }] }]
       }
-    }, asked), 7, NOW)
+    }, asked), 7, NOW, { channelPosts: true })
     expect(profile.channelPosts).toMatchObject({ fetched: 1, total: 300, withLinks: 1, newestAgeDays: 1 })
     const call = asked.filter(([name]) => name === 'messages.getPersonalChannelHistory')
     expect(call).toHaveLength(1)
@@ -110,9 +110,20 @@ describe('fetchUserProfile — the channel on the profile', () => {
     expect(CHANNEL_POSTS_LIMIT).toBeLessThanOrEqual(20)
   })
 
+  it('does not ask unless the caller asked for the posts', async () => {
+    const asked: Array<[string, unknown]> = []
+    const profile = await fetchUserProfile(tgWith({
+      'users.getFullUser': fullUser(55),
+      'messages.getPersonalChannelHistory': { _: 'messages.channelMessages', count: 1, messages: [] }
+    }, asked), 9, NOW)
+    expect(profile.channelPosts).toBeNull()
+    expect(profile.personalChannelId).toBe(55)
+    expect(asked.map(([name]) => name)).not.toContain('messages.getPersonalChannelHistory')
+  })
+
   it('does not ask when the profile has no channel', async () => {
     const asked: Array<[string, unknown]> = []
-    const profile = await fetchUserProfile(tgWith({ 'users.getFullUser': fullUser() }, asked), 7, NOW)
+    const profile = await fetchUserProfile(tgWith({ 'users.getFullUser': fullUser() }, asked), 7, NOW, { channelPosts: true })
     expect(profile.channelPosts).toBeNull()
     expect(asked.map(([name]) => name)).not.toContain('messages.getPersonalChannelHistory')
   })
@@ -121,19 +132,19 @@ describe('fetchUserProfile — the channel on the profile', () => {
     const refused = await fetchUserProfile(tgWith({
       'users.getFullUser': fullUser(55),
       'messages.getPersonalChannelHistory': new Error('Telegram API error 400: USER_PERSONAL_CHANNEL_MISSING')
-    }), 7, NOW)
+    }), 7, NOW, { channelPosts: true })
     expect(refused.channelPosts).toBeNull()
     expect(refused.personalChannelId).toBe(55)
 
     await fetchUserProfile(tgWith({
       'users.getFullUser': fullUser(55),
       'messages.getPersonalChannelHistory': new Error('Telegram API error 420: FLOOD_WAIT_300')
-    }), 7, NOW)
+    }), 7, NOW, { channelPosts: true })
     const asked: Array<[string, unknown]> = []
     const after = await fetchUserProfile(tgWith({
       'users.getFullUser': fullUser(55),
       'messages.getPersonalChannelHistory': { _: 'messages.channelMessages', count: 1, messages: [] }
-    }, asked), 8, NOW)
+    }, asked), 8, NOW, { channelPosts: true })
     expect(asked.map(([name]) => name)).not.toContain('messages.getPersonalChannelHistory')
     expect(after.channelPosts).toBeNull()
   })
