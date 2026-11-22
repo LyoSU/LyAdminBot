@@ -61,6 +61,8 @@ export interface UserProfileEnrichment {
    */
   starsLevel: number | null
   starGifts: number | null
+  /** The newest posts of the profile's channel, counted — see `summarizeChannelPosts`. */
+  channelPosts: ChannelPostsFacts | null
   /**
    * The newest avatar, already fetched by the photos.getUserPhotos call below.
    *
@@ -73,6 +75,84 @@ export interface UserProfileEnrichment {
   latestAvatar: tl.RawPhoto | null
 }
 
+/**
+ * What the newest posts of a profile's channel look like, in counts.
+ *
+ * A comment that says nothing, from an account dressed for the occasion, is
+ * bait whose payload is the profile; the channel on it is where the payload
+ * sits. `messages.getPersonalChannelHistory` hands a bot those posts (checked
+ * live 2026-11-22: 20 posts a call at most, text, media and entities included,
+ * where `stories.getPeerStories` answers BOT_METHOD_INVALID). Counts only, and
+ * no text: this is recorded to learn what separates the channels of punished
+ * accounts from the rest, before anything reads the posts.
+ */
+export interface ChannelPostsFacts {
+  /** Posts returned by the call (at most `CHANNEL_POSTS_LIMIT`). */
+  fetched: number
+  /** Telegram's count of all posts in the channel, when it gave one. */
+  total: number | null
+  /** Of the fetched: carrying a link, carrying URL buttons, forwarded from elsewhere. */
+  withLinks: number
+  withButtons: number
+  forwarded: number
+  /** Days since the newest fetched post, and days between it and the oldest fetched. */
+  newestAgeDays: number | null
+  spanDays: number | null
+}
+
+export const CHANNEL_POSTS_LIMIT = 20
+
+const LINK_ENTITIES: ReadonlySet<string> = new Set(['messageEntityUrl', 'messageEntityTextUrl'])
+const URL_BUTTONS: ReadonlySet<string> = new Set(['keyboardButtonUrl', 'keyboardButtonUrlAuth', 'keyboardButtonWebView', 'keyboardButtonSimpleWebView'])
+
+export const summarizeChannelPosts = (
+  messages: readonly tl.TypeMessage[], total: number | null, nowUnix: number
+): ChannelPostsFacts => {
+  const posts = messages.filter((m): m is tl.RawMessage => m._ === 'message')
+  const dates = posts.map((m) => m.date).filter((d) => Number.isFinite(d) && d > 0)
+  const newest = dates.length > 0 ? Math.max(...dates) : null
+  const oldest = dates.length > 0 ? Math.min(...dates) : null
+  const buttonsOf = (m: tl.RawMessage): readonly { _: string }[] =>
+    m.replyMarkup?._ === 'replyInlineMarkup' ? m.replyMarkup.rows.flatMap((r) => r.buttons) : []
+  return {
+    fetched: posts.length,
+    total: total !== null && Number.isFinite(total) && total >= posts.length ? total : null,
+    withLinks: posts.filter((m) => (m.entities ?? []).some((e) => LINK_ENTITIES.has(e._))).length,
+    withButtons: posts.filter((m) => buttonsOf(m).some((b) => URL_BUTTONS.has(b._))).length,
+    forwarded: posts.filter((m) => m.fwdFrom !== undefined).length,
+    newestAgeDays: newest !== null ? Math.max(0, Math.floor((nowUnix - newest) / 86400)) : null,
+    spanDays: newest !== null && oldest !== null && posts.length >= 2 ? Math.floor((newest - oldest) / 86400) : null
+  }
+}
+
+/**
+ * A flood wait on this call must not stall the connection moderation shares
+ * (the failure the `latestAvatar` note records for photos.getUserPhotos), so
+ * the call never sleeps on one: it fails, and the read stays off for a while.
+ */
+const CHANNEL_POSTS_PAUSE_MS = 60 * 60 * 1000
+let channelPostsPausedUntil = 0
+
+const fetchChannelPosts = async (
+  tg: TelegramClient, inputUser: tl.RawInputUser, nowUnix: number
+): Promise<ChannelPostsFacts | null> => {
+  if (Date.now() < channelPostsPausedUntil) return null
+  try {
+    const res = await tg.call({
+      _: 'messages.getPersonalChannelHistory',
+      userId: inputUser, limit: CHANNEL_POSTS_LIMIT, maxId: 0, minId: 0, hash: Long.ZERO
+    }, { floodSleepThreshold: 0, maxRetryCount: 0 })
+    if (res._ === 'messages.messagesNotModified') return null
+    const total = res._ === 'messages.messages' ? res.messages.length : res.count
+    return summarizeChannelPosts(res.messages, total, nowUnix)
+  } catch (err) {
+    if (/FLOOD/i.test(err instanceof Error ? err.message : String(err))) {
+      channelPostsPausedUntil = Date.now() + CHANNEL_POSTS_PAUSE_MS
+    }
+    return null // telemetry — a refusal costs nothing but the row
+  }
+}
+
 export const fetchUserProfile = async (
   tg: TelegramClient,
   userId: number,
@@ -81,7 +161,7 @@ export const fetchUserProfile = async (
   const result: UserProfileEnrichment = {
     bio: null, businessTexts: [], avatars: null, unofficialClientRisk: null,
     personalChannelId: null, linkedChannel: null, latestAvatar: null,
-    commonChatsCount: null, starsLevel: null, starGifts: null
+    commonChatsCount: null, starsLevel: null, starGifts: null, channelPosts: null
   }
 
   let inputUser: tl.RawInputUser | null = null
@@ -140,6 +220,9 @@ export const fetchUserProfile = async (
           }
         } catch { /* description is a bonus — the title alone still reads */ }
       }
+      // Call 1c: what the channel posts. Same minority of senders, once a day
+      // each (the caller caches the profile).
+      result.channelPosts = await fetchChannelPosts(tg, inputUser, nowUnix)
     }
   } catch { /* budget item failed — keep going */ }
 

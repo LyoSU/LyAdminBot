@@ -424,6 +424,18 @@ export const evaluateMessage = async (
     if (telemetry.commonChatsCount !== null) meta['commonChats'] = telemetry.commonChatsCount
     if (typeof telemetry.starsLevel === 'number') meta['starsLevel'] = telemetry.starsLevel
     if (typeof telemetry.starGifts === 'number' && telemetry.starGifts > 0) meta['starGifts'] = telemetry.starGifts
+    const posts = telemetry.channelPosts
+    if (posts) {
+      // `pcPosts` is written even at zero: a channel with nothing in it is a
+      // fact about the profile. The rest follow the rule above.
+      meta['pcPosts'] = posts.fetched
+      if (posts.total !== null && posts.total > posts.fetched) meta['pcTotal'] = posts.total
+      if (posts.withLinks > 0) meta['pcLinks'] = posts.withLinks
+      if (posts.withButtons > 0) meta['pcButtons'] = posts.withButtons
+      if (posts.forwarded > 0) meta['pcFwd'] = posts.forwarded
+      if (posts.newestAgeDays !== null) meta['pcNewestDays'] = posts.newestAgeDays
+      if (posts.spanDays !== null) meta['pcSpanDays'] = posts.spanDays
+    }
   }
   const carried = input.message.telemetry
   if (carried) {

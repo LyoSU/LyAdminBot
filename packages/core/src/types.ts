@@ -180,6 +180,13 @@ export interface UserSnapshot {
  *    so nothing learned at a join describes them; money spent on an account
  *    is a fact the profile carries wherever it writes.
  *
+ *  - `channelPosts`: counts over the newest posts of the channel on the
+ *    profile. Added 2026-11-22: a blind sample of 240 messages let through
+ *    that week found the suspicious ones to be filler comments from dressed
+ *    accounts, whose payload is the profile; the channel is the one part of it
+ *    nothing had read. Written as `pcPosts`, `pcTotal`, `pcLinks`,
+ *    `pcButtons`, `pcFwd`, `pcNewestDays`, `pcSpanDays`.
+ *
  * Tried and dropped 2026-11-10: the registration month, the phone country and
  * the dates of the last name and photo change, which layer 228 carries in
  * `userFull.settings`. They arrived on 0 of 181 712 decision rows in the 14
@@ -196,6 +203,15 @@ export interface AccountTelemetry {
   commonChatsCount: number | null
   starsLevel?: number | null
   starGifts?: number | null
+  channelPosts?: {
+    fetched: number
+    total: number | null
+    withLinks: number
+    withButtons: number
+    forwarded: number
+    newestAgeDays: number | null
+    spanDays: number | null
+  } | null
 }
 
 /**

@@ -4243,6 +4243,21 @@ describe('evaluateMessage — facts recorded before they are weighed', () => {
     for (const key of KEYS.filter((k) => k !== 'starsLevel')) expect(v.meta).not.toHaveProperty(key)
   })
 
+  it('writes the counts of the profile channel\'s posts, an empty channel included, and decides nothing by them', async () => {
+    const withPosts = (channelPosts: NonNullable<import('./types.js').AccountTelemetry['channelPosts']>) => evaluateMessage(makeInput({
+      user: { ...newcomer, telemetry: { photoDcId: null, commonChatsCount: null, channelPosts } }
+    }), {})
+    const v = await withPosts({ fetched: 20, total: 340, withLinks: 7, withButtons: 0, forwarded: 2, newestAgeDays: 0, spanDays: 3 })
+    expect(v.meta).toMatchObject({ pcPosts: 20, pcTotal: 340, pcLinks: 7, pcFwd: 2, pcNewestDays: 0, pcSpanDays: 3 })
+    expect(v.meta).not.toHaveProperty('pcButtons')
+    const empty = await withPosts({ fetched: 0, total: 0, withLinks: 0, withButtons: 0, forwarded: 0, newestAgeDays: null, spanDays: null })
+    expect(empty.meta['pcPosts']).toBe(0)
+    for (const key of ['pcTotal', 'pcLinks', 'pcButtons', 'pcFwd', 'pcNewestDays', 'pcSpanDays']) expect(empty.meta).not.toHaveProperty(key)
+    const plain = await evaluateMessage(makeInput({ user: newcomer }), {})
+    expect(plain.meta).not.toHaveProperty('pcPosts')
+    expect([v.action, v.reasonCode, v.decidedBy]).toEqual([plain.action, plain.reasonCode, plain.decidedBy])
+  })
+
   it('writes nothing when the adapter recorded nothing', async () => {
     const v = await evaluateMessage(makeInput({ user: newcomer }), {})
     for (const key of KEYS) expect(v.meta).not.toHaveProperty(key)

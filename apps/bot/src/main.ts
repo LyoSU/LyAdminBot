@@ -4258,7 +4258,7 @@ type UserProfile = Awaited<ReturnType<typeof fetchUserProfile>>
 const EMPTY_PROFILE: UserProfile = {
   bio: null, businessTexts: [], avatars: null, unofficialClientRisk: null,
   personalChannelId: null, linkedChannel: null, latestAvatar: null,
-  commonChatsCount: null, starsLevel: null, starGifts: null
+  commonChatsCount: null, starsLevel: null, starGifts: null, channelPosts: null
 }
 
 /**
@@ -7133,7 +7133,8 @@ const handleMessage = async ({ message, isEdit, albumSiblings }: IncomingMessage
           arrivedWithSpammer: isCohortSuspect(chat.id, userSender.id),
           commonChatsCount: profile.commonChatsCount,
           starsLevel: profile.starsLevel,
-          starGifts: profile.starGifts
+          starGifts: profile.starGifts,
+          channelPosts: profile.channelPosts
         }
       )
     : buildChannelSnapshot(channelSender!, history)

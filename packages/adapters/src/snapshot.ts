@@ -34,6 +34,7 @@ export interface UserProfileFacts {
   commonChatsCount?: number | null
   starsLevel?: number | null
   starGifts?: number | null
+  channelPosts?: AccountTelemetry['channelPosts']
 }
 
 /**
@@ -47,7 +48,8 @@ const telemetryOf = (
   photoDcId: sender.photo?.raw.dcId ?? null,
   commonChatsCount: profile?.commonChatsCount ?? null,
   starsLevel: profile?.starsLevel ?? null,
-  starGifts: profile?.starGifts ?? null
+  starGifts: profile?.starGifts ?? null,
+  channelPosts: profile?.channelPosts ?? null
 })
 
 /**
