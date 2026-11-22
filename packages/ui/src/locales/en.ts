@@ -613,6 +613,10 @@ export const en: Locale = {
   captcha: {
     prompt: (name, minutes) =>
       `👋 ${name}, tap the button${minutes === undefined ? '' : ` within ${minutes} min`} to keep chatting. Quick check that you are not a bot.`,
+    waiting: (name) =>
+      `👋 ${name}, tap the button to write in this chat. Quick check that you are not a bot.`,
+    muted: (name, minutes) =>
+      `🔇 ${name}, the check went unanswered, so you cannot write here for about ${minutes} min. Tap the button and the restriction is lifted at once.`,
     button: '🙋 I am human',
     passed: 'Done, go ahead.',
     retry: 'Could not lift the restriction. Tap again.',

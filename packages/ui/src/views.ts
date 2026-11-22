@@ -1964,9 +1964,21 @@ export const voteResult = (
  */
 export const captchaPrompt = (
   locale: Locale,
-  target: { chatId: number; userId: number; userLabel: string; answerMinutes?: number }
+  target: {
+    chatId: number; userId: number; userLabel: string; answerMinutes?: number
+    /**
+     * `waiting` — put to somebody who was not there to read it, no deadline.
+     * `muted` — the answer window passed; `muteMinutes` is what is left of it.
+     * Absent — the ordinary question with its deadline.
+     */
+    state?: 'waiting' | { muted: number }
+  }
 ): ViewMessage => ({
-  text: locale.captcha.prompt(userMention(target.userId, target.userLabel), target.answerMinutes),
+  text: target.state === 'waiting'
+    ? locale.captcha.waiting(userMention(target.userId, target.userLabel))
+    : target.state !== undefined
+      ? locale.captcha.muted(userMention(target.userId, target.userLabel), Math.max(1, Math.round(target.state.muted)))
+      : locale.captcha.prompt(userMention(target.userId, target.userLabel), target.answerMinutes),
   buttons: [[{
     text: locale.captcha.button,
     data: callbackData.captcha(target.chatId, target.userId)

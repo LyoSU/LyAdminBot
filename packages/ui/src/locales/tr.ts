@@ -609,6 +609,10 @@ export const tr: Locale = {
   captcha: {
     prompt: (name, minutes) =>
       `👋 ${name}, sohbete devam etmek için ${minutes === undefined ? '' : `${minutes} dakika içinde `}düğmeye dokun. Bot olmadığını gösteren hızlı bir kontrol.`,
+    waiting: (name) =>
+      `👋 ${name}, bu sohbette yazmak için düğmeye dokun. Bot olmadığını gösteren hızlı bir kontrol.`,
+    muted: (name, minutes) =>
+      `🔇 ${name}, kontrol yanıtsız kaldı, bu yüzden yaklaşık ${minutes} dakika yazamazsın. Düğmeye dokun, kısıtlama hemen kalkar.`,
     button: '🙋 Ben insanım',
     passed: 'Tamam, devam edebilirsin.',
     retry: 'Kısıtlama kaldırılamadı. Tekrar dokun.',

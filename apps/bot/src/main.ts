@@ -575,6 +575,18 @@ const CAPTCHA_CLEANUP_GRACE_MS = 5 * 1000
  * apart again; the extra ten minutes is slack for a slow consequence, not a
  * policy.
  */
+/**
+ * How long a gate that WAITS for its member holds them — see `deliverCaptcha`,
+ * `mode: 'wait'`.
+ *
+ * Bounded by what is known about the whisper, because the whisper is the only
+ * exit: a test on 2026-11-22 found one still on the receiver's screen and still
+ * editable 45 minutes after it was sent, and nothing longer has been measured.
+ * So the hold lapses on its own inside that time; a member who comes back
+ * later finds no restriction and no question.
+ */
+const WAITING_GATE_MUTE_SECONDS = 30 * 60
+
 const CAPTCHA_TTL_MS =
   CAPTCHA_ANSWER_GRACE_MS + CAPTCHA_IGNORED_MUTE_SECONDS * 1000 + 10 * 60 * 1000
 
@@ -715,7 +727,12 @@ type CaptchaDelivery = 'whispered' | 'visible' | 'undeliverable'
  * only fact established is that an account was asked to tap once and did not.
  */
 const applyIgnoredCaptcha = async (
-  chatId: number, userId: number, gate: CaptchaGate
+  chatId: number, userId: number, gate: CaptchaGate,
+  /**
+   * Rewrite the whisper to say what is now true. Absent on the boot path, which
+   * restores a gate without the member's name or the chat's language.
+   */
+  refreshPrompt?: (muteMinutes: number) => Promise<void>
 ): Promise<void> => {
   // Reached only through `captchas.claimConsequence`, which has already
   // established that this gate is the one in force, has not been answered, has
@@ -760,6 +777,17 @@ const applyIgnoredCaptcha = async (
   }
   if (held && gate.triggerMessageId !== null) {
     void sweepRepeats(chatId, userId, gate.triggerMessageId, 'captcha_ignored').catch(() => { /* best-effort */ })
+  }
+  /**
+   * The prompt still says "tap within two minutes" and the member can no longer
+   * type: whoever comes back reads a deadline that has passed over an input box
+   * that is greyed out, with nothing connecting the two. The button still lifts
+   * the mute (8 such late taps in the 14 days to 2026-11-22), so the text is
+   * made to say so. Only when the mute actually landed.
+   */
+  if (held && refreshPrompt && gate.ephemeralMessageId !== null) {
+    void refreshPrompt(Math.round(CAPTCHA_IGNORED_MUTE_SECONDS / 60))
+      .catch((err: unknown) => { log.info('captcha_prompt_refresh_failed', { chatId, userId, error: telegramErrorName(err) }) })
   }
   log.info('captcha_ignored', { chatId, userId, held, removed, ...(heldError === null ? {} : { muteError: heldError }) })
   // The unanswered end of the funnel. `wentPublic` is what says whether the
@@ -832,13 +860,34 @@ const deliverCaptcha = async (
   userId: number,
   userLabel: string,
   locale: Locale,
-  triggerMessageId: number | null = null
+  triggerMessageId: number | null = null,
+  /**
+   * `wait` — the member was not in the chat when this is put (the gap is known
+   * and longer than `WHISPER_PRESENCE_MS`). The question then carries no
+   * deadline and silence costs nothing: the hold the caller applied lapses by
+   * itself, and the whisper is taken down with it.
+   *
+   * 14 days to 2026-11-22, the deferred arrival look under the two-minute
+   * window: 265 questions, 0 answered, 262 hour-long mutes for not reading a
+   * message in a chat the member had closed half an hour before.
+   */
+  mode: 'ask' | 'wait' = 'ask'
 ): Promise<CaptchaDelivery> => {
   const gate = captchas.issue(chatId, userId, CAPTCHA_TTL_MS)
   gate.triggerMessageId = triggerMessageId
-  const view = captchaPrompt(locale, {
-    chatId, userId, userLabel, answerMinutes: Math.round(CAPTCHA_ANSWER_GRACE_MS / 60_000)
-  })
+  const view = captchaPrompt(locale, mode === 'wait'
+    ? { chatId, userId, userLabel, state: 'waiting' }
+    : { chatId, userId, userLabel, answerMinutes: Math.round(CAPTCHA_ANSWER_GRACE_MS / 60_000) })
+  const promptButtons = view.buttons.map((row) => row.map((b) => ({ text: b.text, data: b.data ?? '' })))
+  /** The whisper, rewritten in place once the member has been muted for silence. */
+  const refreshPrompt = async (muteMinutes: number): Promise<void> => {
+    if (gate.ephemeralMessageId === null || !captchas.isCurrent(gate)) return
+    const muted = captchaPrompt(locale, { chatId, userId, userLabel, state: { muted: muteMinutes } })
+    await gateway.editEphemeral(chatId, userId, gate.ephemeralMessageId, {
+      text: viewHtml(muted.text),
+      replyMarkup: BotKeyboard.inline(promptButtons.map((row) => row.map((b) => BotKeyboard.callback(b.text, b.data))))
+    })
+  }
 
   /**
    * Start the clock on an ignored gate — and only ever from a prompt that left
@@ -858,13 +907,31 @@ const deliverCaptcha = async (
   let consequenceTimer: ReturnType<typeof setTimeout> | null = null
   const armConsequence = (): void => {
     if (consequenceTimer !== null) return
+    if (mode === 'wait') {
+      /**
+       * Nothing is owed by a gate that waits, so the claim is taken now and
+       * nobody else can take it: the live timer is never armed, and a restart
+       * reads the row as already settled (`planRestoredGate` → `punished`)
+       * rather than applying an hour's mute for a silence that was never
+       * being timed. What ends this gate is its own hold lapsing.
+       */
+      captchas.claimConsequence(gate)
+      const lapse = setTimeout(() => {
+        if (gate.answered || !captchas.isCurrent(gate)) return
+        void dropGate(chatId, userId, 'wait_lapsed').catch(() => { /* the prompt goes with the gate's TTL */ })
+      }, WAITING_GATE_MUTE_SECONDS * 1000)
+      lapse.unref?.()
+      consequenceTimer = lapse
+      gate.cancels.push(() => clearTimeout(lapse))
+      return
+    }
     const consequence = setTimeout(() => {
       // `claimConsequence`, not a read of the map: it refuses a gate that was
       // answered, replaced, expired, or already punished, and it takes the
       // right in the same breath — the caller then awaits Telegram, and a
       // second claim arriving during that await must find the door shut.
       if (!captchas.claimConsequence(gate)) return
-      void applyIgnoredCaptcha(chatId, userId, gate)
+      void applyIgnoredCaptcha(chatId, userId, gate, refreshPrompt)
     }, CAPTCHA_ANSWER_GRACE_MS)
     consequence.unref?.()
     consequenceTimer = consequence
@@ -958,7 +1025,7 @@ const deliverCaptcha = async (
 
   if (!config.ephemeralCaptcha) {
     if (!(await postVisible())) return await abandonUndeliverable('visible_prompt_failed')
-    void store.recordCaptchaEvent({ chatId, userId, event: 'delivered', via: 'visible' })
+    void store.recordCaptchaEvent({ chatId, userId, event: 'delivered', via: 'visible', ...(mode === 'wait' ? { reason: 'waiting' } : {}) })
     armConsequence()
     return 'visible'
   }
@@ -967,14 +1034,13 @@ const deliverCaptcha = async (
     // The trigger on the arrival path is the "X joined" line, which the
     // arrival purge may already have removed — see `sendWithReplyFallback`.
     gate.ephemeralMessageId = await sendWithReplyFallback((replyTo) => tgSendEphemeral(
-      chatId, userId, viewHtml(view.text),
-      view.buttons.map((row) => row.map((b) => ({ text: b.text, data: b.data ?? '' }))),
+      chatId, userId, viewHtml(view.text), promptButtons,
       replyTo
     ), gate.triggerMessageId ?? undefined, (reason) => {
       log.info('captcha_reply_dropped', { chatId, userId, via: 'whisper', reason })
     })
-    log.info('captcha_whispered', { chatId, userId })
-    void store.recordCaptchaEvent({ chatId, userId, event: 'delivered', via: 'whisper' })
+    log.info('captcha_whispered', { chatId, userId, ...(mode === 'wait' ? { waiting: true } : {}) })
+    void store.recordCaptchaEvent({ chatId, userId, event: 'delivered', via: 'whisper', ...(mode === 'wait' ? { reason: 'waiting' } : {}) })
     /**
      * A whisper that ARRIVED and went unanswered is answered, and the answer is
      * silence — and somebody has to be listening for it. This call went out
@@ -4493,7 +4559,13 @@ const gateAccount = async (params: {
     ephemeralCaptcha: config.ephemeralCaptcha,
     receiverSeenAgoMs: params.seenAtMs == null ? null : Math.max(Date.now() - params.seenAtMs, 0)
   })
-  if (blockers.length > 0) {
+  /**
+   * Absent and nothing else in the way: the question is still put, as one that
+   * waits. Any other blocker refuses as before — a member who cannot be reached
+   * at all is not reached by waiting longer.
+   */
+  const waiting = blockers.length === 1 && blockers[0] === 'receiver_not_present'
+  if (blockers.length > 0 && !waiting) {
     log.warn('account_gate_blocked', {
       chatId: chat.id, userId: user.id, reason, blockers: blockers.join(',')
     })
@@ -4504,7 +4576,7 @@ const gateAccount = async (params: {
   // account in one chat half an hour apart and said nothing about why.
   let gateError: string | null = null
   const held = await gateway.moderationActions
-    .mute(chat.id, user.id, JOIN_GATE_MUTE_SECONDS)
+    .mute(chat.id, user.id, waiting ? WAITING_GATE_MUTE_SECONDS : JOIN_GATE_MUTE_SECONDS)
     .then(() => true).catch((err: unknown) => { gateError = telegramErrorName(err); return false })
   // No gate, no prompt: a question about a door that is not closed asks the
   // member to unlock something already open.
@@ -4516,14 +4588,16 @@ const gateAccount = async (params: {
   }
   log.info('account_gate', {
     chatId: chat.id, chat: chat.title ?? undefined, userId: user.id, reason,
-    ...(evidence !== null ? { evidence } : {})
+    ...(evidence !== null ? { evidence } : {}), ...(waiting ? { waiting: true } : {})
   })
 
   const locale = resolveLocale((groupDoc as { settings?: { locale?: string } } | null)?.settings?.locale)
   // Replied to something real — Telegram's own join line, or the message that
   // was reported. A whisper with nothing attached reads like a phishing attempt.
+  // A waiting gate has no trigger to take down: nothing was said, and the join
+  // line it replies to is Telegram's own.
   const delivery = await deliverCaptcha(
-    chat.id, user.id, user.displayName, locale, params.replyToMessageId)
+    chat.id, user.id, user.displayName, locale, params.replyToMessageId, waiting ? 'wait' : 'ask')
   /**
    * A question that could not be put is not a gate.
    *
@@ -4553,7 +4627,7 @@ const gateAccount = async (params: {
       signals: [],
       reasonCode: reason,
       reasonEvidence: evidence,
-      meta: {}
+      meta: waiting ? { waiting: true } : {}
     },
     execution: {
       applied: true, deleted: null, skippedReason: null,
@@ -4821,13 +4895,11 @@ const scheduleArrivalLook = (
       return 'done'
     }
     /**
-     * Since 2026-11-22 this comes back `blocked: receiver_not_present` and the
-     * finding is recorded as `gate_blocked` with its signals — nothing is put
-     * to the member. In the 14 days before, this call whispered 265 questions
-     * 30 minutes to 3 hours after the join: none was answered and 262 ended in
-     * an hour's mute. Of the 56 accounts that later wrote, the message path
-     * punished 48 on its own reading of the same profile. Kept as a call, not
-     * removed: a look that runs while the joiner is still here would ask.
+     * Put as a question that WAITS — the gap below is always longer than
+     * `WHISPER_PRESENCE_MS`. Until 2026-11-22 this was the ordinary two-minute
+     * question: 265 of them in 14 days, none answered, 262 closed with an
+     * hour's mute. Of the 56 accounts that later wrote, the message path
+     * punished 48 on its own reading of the same profile.
      */
     const gated = await gateAccount({
       chat, user: joiner, history,

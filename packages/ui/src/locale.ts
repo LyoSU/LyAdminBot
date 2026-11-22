@@ -733,6 +733,18 @@ export interface Locale {
      * absent where the caller does not know it.
      */
     prompt: (name: string, answerMinutes?: number) => string
+    /**
+     * The same question with no deadline: put to a member who was not in the
+     * chat when it was asked, and waiting for them. Must not name a time limit
+     * — nothing happens to somebody who reads it late.
+     */
+    waiting: (name: string) => string
+    /**
+     * What the prompt turns into once the answer window passed and the member
+     * was muted: says so, says roughly for how long, and that the same button
+     * lifts it at once.
+     */
+    muted: (name: string, muteMinutes: number) => string
     button: string
     passed: string
     /**

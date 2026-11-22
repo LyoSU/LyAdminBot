@@ -842,6 +842,30 @@ describe('captchaPrompt', () => {
     expect(view.buttons[0]?.[0]?.data).toBe(callbackData.captcha(-100123, 42))
     expect(parseCallback(callbackData.captcha(-100123, 42))).toEqual({ kind: 'cap', parts: ['-100123', '42'] })
   })
+
+  it('a waiting question names no deadline in any language, and keeps the same button', () => {
+    for (const [code, locale] of Object.entries(LOCALES)) {
+      const asked = captchaPrompt(locale, { chatId: -1, userId: 7, userLabel: 'X', answerMinutes: 2 })
+      const waiting = captchaPrompt(locale, { chatId: -1, userId: 7, userLabel: 'X', answerMinutes: 2, state: 'waiting' })
+      // The only digits allowed are the ones inside the mention's own link.
+      expect(waiting.text.replace(/<a [^>]*>/g, ''), code).not.toMatch(/\d/)
+      expect(waiting.text, code).not.toBe(asked.text)
+      expect(waiting.buttons, code).toEqual(asked.buttons)
+    }
+  })
+
+  it('a muted prompt states how long is left, never less than a minute, and keeps the button that lifts it', () => {
+    for (const [code, locale] of Object.entries(LOCALES)) {
+      const muted = captchaPrompt(locale, { chatId: -1, userId: 7, userLabel: '<i>X</i>', state: { muted: 60 } })
+      expect(muted.text, code).toContain('60')
+      expect(muted.text, code).toContain('&lt;i&gt;X')
+      expect(muted.buttons[0]?.[0]?.data, code).toBe(callbackData.captcha(-1, 7))
+      for (const left of [0, 0.2, -5]) {
+        const text = captchaPrompt(locale, { chatId: -1, userId: 7, userLabel: 'X', state: { muted: left } }).text
+        expect(text.replace(/<a [^>]*>/g, ''), code).toMatch(/\b1\b/)
+      }
+    }
+  })
 })
 
 describe('parseCallback', () => {

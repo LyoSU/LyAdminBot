@@ -357,6 +357,26 @@ describe('CaptchaGates — the consequence survives a restart', () => {
     expect(gates.restore(row({ userId: 8, expiresMs: 199_999 }))).toBeNull()
   })
 
+  it('a gate that waits takes its claim at delivery: no timer and no restart can punish its silence, and a tap still finds it', () => {
+    const time = clock(1_000)
+    const m = marks()
+    const gates = new CaptchaGates(time.now, 2000, m.persistence)
+    const gate = gates.issue(-100, 7, LIFE)
+    gate.ephemeralMessageId = 9
+    expect(gates.claimConsequence(gate)).toBe(true)
+    expect(m.log.some(([, , , patch]) => patch.consequenceApplied === true)).toBe(true)
+    // The live side: nobody else can claim it.
+    expect(gates.claimConsequence(gate)).toBe(false)
+    // The boot side: at any moment before it lapses the row reads as settled.
+    for (const at of [2_000, 121_500, 300_000, gate.expiresMs - 1]) {
+      expect(planRestoredGate(row({ consequenceApplied: true, expiresMs: gate.expiresMs }), at, GRACE, MUTE))
+        .toEqual({ kind: 'skip', reason: 'punished' })
+    }
+    // The button is still the way out.
+    expect(gates.peek(-100, 7)).toBe(gate)
+    expect(gates.isCurrent(gate)).toBe(true)
+  })
+
   it('a tap on a restored gate shuts the door on its consequence', () => {
     const gates = new CaptchaGates(clock(200_000).now)
     const gate = gates.restore(row())!
