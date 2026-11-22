@@ -299,9 +299,9 @@ export interface ProfileMediaPort {
   } | null>
 }
 
-/** How people in this chat ruled on `CHAT_RULED_REASON_CODES` messages lately. */
+/** How people in this chat ruled lately on messages decided under one reason. */
 export interface ChatRulingsPort {
-  rulings(chatId: number): Promise<{ ham: number; spam: number }>
+  rulings(chatId: number, reasonCode: string): Promise<{ ham: number; spam: number }>
 }
 
 export interface PipelinePorts {

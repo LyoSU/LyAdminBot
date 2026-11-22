@@ -2666,13 +2666,44 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
       it('outside evidence keeps the delete and spares the read', async () => {
         let reads = 0
         const v = await evaluateMessage(
-          makeInput({ ...ad, enrichment: { personalChannelId: 7 } }),
+          makeInput({ ...ad, user: { ...newcomer, avatars: { count: 1, latestSetDaysAgo: 2 } } }),
           { ...llmSays('other_spam', 0.8), chatRulings: { rulings: async () => { reads++; return { ham: 9, spam: 0 } } } }
         )
-        expect(v.signals.map((s) => s.name)).toContain('personal_channel')
+        expect(v.signals.map((s) => s.name)).toContain('avatar_recently_set')
         expect(v.action).toBe('delete')
         expect(reads).toBe(0)
       })
+
+      // 14 days to 2026-11-22, deletes carrying it in chats that tolerate the
+      // reason: 10 not-spam to 0 spam. A seller in a market chat has a channel.
+      it('a channel on the profile is not outside evidence', async () => {
+        const v = await evaluateMessage(
+          makeInput({ ...ad, enrichment: { personalChannelId: 7 } }),
+          ports('other_spam', { ham: 3, spam: 1 })
+        )
+        expect(v.signals.map((s) => s.name)).toContain('personal_channel')
+        expect(v.action).toBe('observe')
+        expect(v.meta['heldChatRuling']).toBe('3:1')
+      })
+
+      // The pooled count held 3 not-spam to 6 spam on `guest_bot_promo` and
+      // `ad_network` on the strength of answers given about other adverts.
+      it.each(['other_spam', 'channel_promo', 'guest_bot_promo', 'flirt_bait', 'ad_network', 'flood'])(
+        'asks how the chat ruled on %s itself, not on its neighbours', async (reasonCode) => {
+          const asked: Array<[number, string]> = []
+          const tolerated = 'other_spam'
+          const v = await evaluateMessage(makeInput(ad), {
+            ...llmSays(reasonCode, 0.7),
+            chatRulings: {
+              rulings: async (chatId: number, reason: string) => {
+                asked.push([chatId, reason])
+                return reason === tolerated ? { ham: 9, spam: 0 } : { ham: 0, spam: 4 }
+              }
+            }
+          })
+          expect(asked.map(([, reason]) => reason)).toEqual([reasonCode])
+          expect(v.action).toBe(reasonCode === tolerated ? 'observe' : 'delete')
+        })
 
       it('a failed read leaves the delete and is recorded', async () => {
         const v = await evaluateMessage(makeInput(ad), {

@@ -23,7 +23,7 @@ import {
   accountVerdict, hasBanGradeAccountVerdict, extractUserSignals, PROFILE_EVIDENCE_SIGNALS,
   accountScreenAllowed, accountScreenRemoves, accountScreenUnasked, hardVerdictSourceOf, PRESET_THRESHOLDS,
   captchaBlockers, TIMED_BAN_SECONDS, VOTE_WINDOW_SECONDS, LLM_CLEARANCE_TTL_MS, expiryOutcome,
-  CHAT_RULED_REASON_CODES, CHAT_RULING_WINDOW_DAYS,
+  CHAT_RULING_WINDOW_DAYS,
   createProfileRecheckQueue, profileRecheckOutcome, wantsProfileRecheck,
   PROFILE_RECHECK_DELAYS_MS, PROFILE_RECHECK_MAX_PENDING, metronomeShape, trailingMetronome, joinRequestVerdict,
   type AccountAction, type CaptchaBlocker,
@@ -130,8 +130,8 @@ const vectorPort = config.qdrantUrl && config.openaiApiKey
 const buildPorts = (): PipelinePorts => {
   const ports: PipelinePorts = {
     chatRulings: {
-      rulings: (chatId) => store.chatRulings(
-        chatId, [...CHAT_RULED_REASON_CODES], new Date(Date.now() - CHAT_RULING_WINDOW_DAYS * 86_400_000)
+      rulings: (chatId, reasonCode) => store.chatRulings(
+        chatId, [reasonCode], new Date(Date.now() - CHAT_RULING_WINDOW_DAYS * 86_400_000)
       )
     },
     signatures: signaturePort,

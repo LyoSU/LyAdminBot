@@ -1016,7 +1016,7 @@ export const evaluateMessage = async (
     if (!CHAT_RULED_REASON_CODES.has(verdict.reasonCode)) return verdict
     if (verdict.signals.some((s) => OUTSIDE_EVIDENCE_SIGNALS.has(s.name))) return verdict
     if (!ports.chatRulings) return verdict
-    const rulings = await safe('chat_rulings', () => ports.chatRulings!.rulings(input.message.chatId))
+    const rulings = await safe('chat_rulings', () => ports.chatRulings!.rulings(input.message.chatId, verdict.reasonCode))
     if (rulings === null || !chatToleratesAct(rulings)) return verdict
     if (meta['cappedFrom'] === undefined) meta['cappedFrom'] = verdict.action
     meta['heldChatRuling'] = `${rulings.ham}:${rulings.spam}`

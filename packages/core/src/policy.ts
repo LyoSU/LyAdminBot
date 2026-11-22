@@ -257,9 +257,13 @@ export const ASK_BEFORE_KICK_REASON_CODES: ReadonlySet<string> = new Set([
  * that the wider tally reaches. Small counts, which `heldChatRuling` is there
  * to keep reading.
  *
- * The answers are counted over the same set, so a chat's not-spam on one of
- * these reasons speaks for the others: the people overruling the classifier
- * are saying what belongs in their chat, not grading one label.
+ * Since 2026-11-22 a chat's answers are counted on the reason of the message
+ * in hand and no other. The pooled count let two not-spam answers on one kind
+ * of advert hold every kind: 14 days of live rows held `other_spam` at 19
+ * not-spam to 1 spam, and `guest_bot_promo` and `ad_network` together at 3 to
+ * 6. Replayed over the same 14 days, each row seeing only older labels, the
+ * pooled count holds 27 not-spam, 11 spam, 17 unanswered; the per-reason count
+ * with `personal_channel` taken off the outside evidence holds 31, 7 and 16.
  *
  * Left out on purpose: the reasons that name a harm (`job_scam`, `phishing`,
  * `crypto_scam`, `adult_promo`, `gambling_promo`, `prompt_injection`). A held
@@ -285,9 +289,14 @@ export const chatToleratesAct = (rulings: { ham: number; spam: number }): boolea
  * What says a message is a campaign whatever the chat tolerates: a copy we have
  * seen, an account made for this, or a profile that exists to promote. On these
  * delete rows people answered 15 not-spam to 52 spam, without them 44 to 38.
+ *
+ * `personal_channel` left the list on 2026-11-22. A channel on the profile is
+ * what a seller in a market chat has: in chats that tolerate the reason,
+ * deletes carrying it were answered 10 not-spam to 0 spam over 14 days, and 5
+ * to 10 everywhere else, where this list is not consulted.
  */
 export const OUTSIDE_EVIDENCE_SIGNALS: ReadonlySet<string> = new Set([
-  'signature_candidate_match', 'vector_similar_spam', 'fresh_account', 'personal_channel',
+  'signature_candidate_match', 'vector_similar_spam', 'fresh_account',
   'prior_spam_detections', 'external_ban', 'fresh_external_ban', 'avatar_recently_set',
   'sole_avatar_replaced', 'avatar_shared_with_account', 'avatar_shared_with_accounts',
   'private_invite_in_bio', 'promo_in_linked_channel', 'custom_emoji_heavy', 'mixed_script_word',
