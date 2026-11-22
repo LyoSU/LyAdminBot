@@ -21,6 +21,7 @@ import type {
 } from '@lyadmin/core'
 import { truncate } from '@lyadmin/core'
 import { normalizeHeavy, sha256 } from './hashing.js'
+import { templateIsSpecific } from './signature-port.js'
 import type { VelocityOptions, SessionOptions } from './index.js'
 
 /**
@@ -130,6 +131,10 @@ export const velocityKey = (text: string, options: VelocityCheckOptions = {}): s
   return `x:${sha256(exact)}`
 }
 
+/** Whether `key` is a template key over a text whose template is specific. */
+export const velocityTemplateSpecific = (key: string, text: string): boolean =>
+  key.startsWith('t:') && templateIsSpecific(text)
+
 export class PersistentVelocityPort implements VelocityPort {
   private readonly opts: Required<Omit<VelocityOptions, 'maxTrackedTexts' | 'windowMs'>>
   constructor(private readonly backend: VelocityBackend, options: VelocityOptions = {}) {
@@ -168,11 +173,13 @@ export class PersistentVelocityPort implements VelocityPort {
         ? Math.min(this.opts.soloThreshold, this.opts.countThreshold)
         : this.opts.countThreshold
       const repeats = count >= bar
-      if (!spread && !repeats) return { exceeded: false }
+      const seen = { chats: chatCount, accounts: userCount, templateSpecific: velocityTemplateSpecific(key, text) }
+      if (!spread && !repeats) return { exceeded: false, ...seen }
       return {
         exceeded: true,
         singleAuthor,
-        evidence: `${count} copies in ${chatCount} chats from ${userCount} accounts within window`
+        evidence: `${count} copies in ${chatCount} chats from ${userCount} accounts within window`,
+        ...seen
       }
     } catch {
       return null // backend unavailable → stage unavailable, pipeline continues

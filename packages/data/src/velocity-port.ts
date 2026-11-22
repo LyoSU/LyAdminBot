@@ -6,7 +6,7 @@
 import type {
   EvaluationInput, VelocityCheckOptions, VelocityPort, VelocityResult
 } from '@lyadmin/core'
-import { VELOCITY_WINDOW_MS, velocityKey } from './persistent-ports.js'
+import { VELOCITY_WINDOW_MS, velocityKey, velocityTemplateSpecific } from './persistent-ports.js'
 
 interface WindowEntry {
   chatIds: Set<number>
@@ -93,11 +93,17 @@ export class MemoryVelocityPort implements VelocityPort {
       count >= (singleAuthor
         ? Math.min(this.options.soloThreshold, this.options.countThreshold)
         : this.options.countThreshold)
-    if (!exceeded) return { exceeded: false }
+    const seen = {
+      chats: entry.chatIds.size,
+      accounts: entry.userIds.size,
+      templateSpecific: velocityTemplateSpecific(key, text)
+    }
+    if (!exceeded) return { exceeded: false, ...seen }
     return {
       exceeded: true,
       singleAuthor,
-      evidence: `${count} copies in ${entry.chatIds.size} chats from ${entry.userIds.size} accounts within window`
+      evidence: `${count} copies in ${entry.chatIds.size} chats from ${entry.userIds.size} accounts within window`,
+      ...seen
     }
   }
 

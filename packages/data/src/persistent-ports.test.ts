@@ -53,6 +53,18 @@ describe('PersistentVelocityPort', () => {
     expect(third?.evidence).toContain('3 chats')
   })
 
+  it('reports the spread it holds, exceeded or not, and whether the template names anything', async () => {
+    const port = new PersistentVelocityPort(new FakeVelocityBackend())
+    const first = await port.check(makeInput('thanks, got paid!', 1, 10))
+    expect(first).toEqual({ exceeded: false, chats: 1, accounts: 1, templateSpecific: true })
+    const second = await port.check(makeInput('thanks, got paid!', 2, 11))
+    expect(second).toMatchObject({ exceeded: false, chats: 2, accounts: 2 })
+    // One number is any number: the key exists, the template says nothing.
+    expect((await port.check(makeInput('12345', 1, 10)))?.templateSpecific).toBe(false)
+    // The exact-text key is not a template at all.
+    expect((await port.check(makeInput('ok', 1, 10), { countExactWhenTemplateUnusable: true }))?.templateSpecific).toBe(false)
+  })
+
   it('flags repetition in a single chat past the count threshold', async () => {
     const port = new PersistentVelocityPort(new FakeVelocityBackend(), { countThreshold: 2 })
     const text = 'join my private channel for signals today'

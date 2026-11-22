@@ -31,6 +31,16 @@ export interface VelocityResult {
    */
   singleAuthor?: boolean
   evidence?: string
+  /** Distinct chats and accounts the window holds for this text, this message included. */
+  chats?: number
+  accounts?: number
+  /**
+   * The window keyed on a template that says something of its own: words, or
+   * at least two placeholders. False for a template that is one placeholder
+   * (any number, any link) and for the exact-text key. Absent means unknown and
+   * is read as "not specific".
+   */
+  templateSpecific?: boolean
 }
 
 export interface VelocityCheckOptions {

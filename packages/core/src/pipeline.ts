@@ -157,6 +157,14 @@ export const otherSpamObserveShadow = (
 export { isFarmShapedProfile }
 const SESSION_EVAL_MIN_MESSAGES = 5
 /**
+ * A short text is a wave when the window holds it in this many chats from this
+ * many accounts. Three chats is the window's own spread threshold; one chat is
+ * left out on purpose — measured 2026-11-22, copies inside a single chat were
+ * a game command (167 rows) and a counting thread.
+ */
+export const SHORT_WAVE_MIN_CHATS = 3
+export const SHORT_WAVE_MIN_ACCOUNTS = 2
+/**
  * Up to this many messages into a chat, a sender's unreadable message is worth
  * a classification ON ITS OWN rather than waiting for a pile.
  *
@@ -1727,11 +1735,43 @@ export const evaluateMessage = async (
    */
   const observed: MessageObservations = {}
 
-  const repetition = lowInformation && profileSpoke && ports.velocity
+  /**
+   * And the same nothing from several strangers in several chats is a wave.
+   *
+   * Measured 2026-11-22 over 14 days: the low-information gate abstained
+   * before the window was ever asked, and the window was asked only about a
+   * sender whose profile spoke, and only heard one account repeating itself.
+   * So one short line posted 41 times by 16 new accounts across 10 chats in a
+   * day was judged 41 times as a first message, and nothing acted on any.
+   *
+   * Replayed with the window's own key: among abstained rows from senders new
+   * to the chat or to us, a specific template seen in three chats from more
+   * than one account is about five rows a day — that campaign whole, one more
+   * template of a mention with a code, and some fifteen ordinary remarks in
+   * two weeks. A template that is one placeholder is left out, as it is for
+   * signatures: any number matches any number (81 rows of that alone).
+   *
+   * It decides nothing, exactly like the repeat above: the message stops being
+   * "too little to judge" and goes down the ladder to be read.
+   */
+  const senderIsNew = signals.some((s) => s.name === 'new_in_chat' || s.name === 'new_globally')
+  const repetition = lowInformation && (profileSpoke || senderIsNew) && ports.velocity
     ? await safe('velocity', () =>
-        ports.velocity!.check(input, { countExactWhenTemplateUnusable: true }))
+        ports.velocity!.check(input, profileSpoke ? { countExactWhenTemplateUnusable: true } : {}))
     : null
-  const repeatsItself = repetition?.exceeded === true && repetition.singleAuthor === true
+  const repeatsItself = profileSpoke &&
+    repetition?.exceeded === true && repetition.singleAuthor === true
+  const shortWave = senderIsNew && !repeatsItself &&
+    repetition?.templateSpecific === true &&
+    (repetition.chats ?? 0) >= SHORT_WAVE_MIN_CHATS &&
+    (repetition.accounts ?? 0) >= SHORT_WAVE_MIN_ACCOUNTS
+  if (shortWave) {
+    const evidence = repetition?.evidence ??
+      `the same short text in ${repetition?.chats} chats from ${repetition?.accounts} accounts within window`
+    signals.push({ name: 'velocity_wave', evidence })
+    observed.repetition = evidence
+    meta['shortWave'] = true
+  }
   if (repeatsItself) {
     signals.push({
       name: 'velocity_repeats',
@@ -1743,7 +1783,7 @@ export const evaluateMessage = async (
   // A message in an unfamiliar script is never "too little to judge": whatever
   // it says it says in full, and unlike a bare "@user" it is trivially readable
   // — by the LLM, if by nothing else here.
-  if (foreignScript === null && lowInformation && !repeatsItself) {
+  if (foreignScript === null && lowInformation && !repeatsItself && !shortWave) {
     // The full pile, always. A bare "@someone" as a first message is precisely
     // the noise this gate exists to stop asking the model about, so the
     // shortcut below must not reach in here.

@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest'
+import fc from 'fast-check'
 import type {
   ChannelPreview, ChatPolicy, Enrichment, EvaluationInput, NormalizedChat, NormalizedMessage,
   UserSnapshot, VerdictAction
 } from './types.js'
 import type { BurstEntry, BurstPort, ModerationResult, PipelinePorts, SessionPort } from './ports.js'
-import { evaluateMessage, LLM_SOLE_WITNESS_SCORE, otherSpamObserveShadow, PROFILE_HOLD_SECONDS } from './pipeline.js'
+import {
+  evaluateMessage, LLM_SOLE_WITNESS_SCORE, otherSpamObserveShadow, PROFILE_HOLD_SECONDS,
+  SHORT_WAVE_MIN_ACCOUNTS, SHORT_WAVE_MIN_CHATS
+} from './pipeline.js'
 import {
   isEnforcementAction, removesSender, PRESET_THRESHOLDS, TIMED_BAN_SECONDS, VOTE_SKIP_REASON_CODES,
   VOTE_SKIP_MIN_AGREEMENT, VOTE_SKIP_MIN_LABELS
@@ -3150,6 +3154,67 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
    * profile says nothing keeps every bit of the benefit of the doubt — which is
    * what stops this from becoming a tax on everyone who writes one word.
    */
+  describe('the same short text from several strangers in several chats', () => {
+    const short = { text: 'thanks, got paid!' }
+    const window = (over: Record<string, unknown> = {}) => ({
+      exceeded: true, singleAuthor: false, chats: 3, accounts: 2, templateSpecific: true,
+      evidence: '5 copies in 3 chats from 2 accounts within window', ...over
+    })
+    const judge = (velocity: Record<string, unknown> | null, user: Record<string, unknown> = newcomer) => {
+      const asked: unknown[] = []
+      return evaluateMessage(makeInput({ msg: short, user }), {
+        velocity: { check: async (_input, options) => { asked.push(options); return velocity as never } }
+      }).then((v) => ({ v, asked }))
+    }
+
+    it('is too little to judge while the window holds nothing of it', async () => {
+      const { v, asked } = await judge({ exceeded: false, chats: 1, accounts: 1, templateSpecific: true })
+      expect(v.reasonCode).toBe('low_information')
+      expect(v.meta).not.toHaveProperty('shortWave')
+      // A profile that said nothing does not buy exact-text counting.
+      expect(asked).toEqual([{}])
+    })
+
+    it('stops being too little to judge once it is a wave, and the readers are told', async () => {
+      const { v } = await judge(window())
+      expect(v.reasonCode).not.toBe('low_information')
+      expect(v.signals.map((s) => s.name)).toContain('velocity_wave')
+      expect(v.meta['shortWave']).toBe(true)
+      expect(v.decidedBy).not.toBe('velocity')
+    })
+
+    it('is not a wave below the spread, for one account, or on a template that names nothing', async () => {
+      for (const over of [
+        { chats: 2 }, { accounts: 1 }, { templateSpecific: false }, { templateSpecific: undefined },
+        { chats: undefined }, { accounts: undefined }
+      ]) {
+        const { v } = await judge(window(over))
+        expect(v.reasonCode, JSON.stringify(over)).toBe('low_information')
+        expect(v.signals.map((s) => s.name)).not.toContain('velocity_wave')
+      }
+    })
+
+    it('a window that failed changes nothing', async () => {
+      const { v } = await judge(null)
+      expect(v.reasonCode).toBe('low_information')
+    })
+
+    it('PROPERTY: a wave is raised only at or above both thresholds on a specific template', async () => {
+      await fc.assert(fc.asyncProperty(
+        fc.option(fc.integer({ min: 0, max: 6 }), { nil: undefined }),
+        fc.option(fc.integer({ min: 0, max: 6 }), { nil: undefined }),
+        fc.option(fc.boolean(), { nil: undefined }), fc.boolean(), fc.boolean(),
+        async (chats, accounts, templateSpecific, exceeded, singleAuthor) => {
+          const { v } = await judge({ exceeded, singleAuthor, chats, accounts, templateSpecific })
+          const expected = templateSpecific === true &&
+            (chats ?? 0) >= SHORT_WAVE_MIN_CHATS && (accounts ?? 0) >= SHORT_WAVE_MIN_ACCOUNTS
+          expect(v.meta['shortWave'] === true).toBe(expected)
+          if (!expected) expect(v.reasonCode).toBe('low_information')
+        }
+      ), { numRuns: 60 })
+    })
+  })
+
   it('keeps the discount when the profile carries no charge', async () => {
     const v = await evaluateMessage(makeInput({
       msg: { text: '💗' },
