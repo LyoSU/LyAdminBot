@@ -4572,6 +4572,36 @@ const gateAccount = async (params: {
     return { outcome: 'blocked', blockers }
   }
 
+  /**
+   * Still here, asked of Telegram now — not of the cache.
+   *
+   * A gate is put by looks that run long after the fact that scheduled them,
+   * and the cached membership is from that earlier moment. Production
+   * 2026-11-22: one account joined 12 chats, was banned for its first message
+   * and the ban carried to the other 11 at 18:09; between 18:13 and 18:18 the
+   * arrival looks scheduled at its joins ran in 4 of those chats, restricted
+   * an account the bot had itself just banned there, and failed to whisper
+   * with `USER_NOT_PARTICIPANT`. A timed restriction written over a ban
+   * replaces it, and the undeliverable path then lifts the restriction — so
+   * the question nobody could be asked may have cost the ban.
+   *
+   * Raw answer through `memberGone`, because `MemberFacts` counts `banned` and
+   * `left` as participants. A failed read is not an answer and stops nothing.
+   */
+  const standing = await gateway.tg.getChatMember({ chatId: chat.id, userId: user.id }).catch(() => undefined)
+  if (memberGone(standing)) {
+    memberFacts.invalidate(chat.id, user.id)
+    const banned = (standing as { status?: unknown } | null)?.status === 'banned'
+    log.info('account_gate_blocked', {
+      chatId: chat.id, userId: user.id, reason, fresh: true,
+      blockers: banned ? 'already_banned' : 'sender_not_participant'
+    })
+    // Banned is settled, not unreachable: `blocked` would hand the account to
+    // the caller's hold, which is the same restriction written over the same
+    // ban. Left or never joined is the ordinary unreachable member.
+    return banned ? { outcome: 'skipped' } : { outcome: 'blocked', blockers: ['sender_not_participant'] }
+  }
+
   // Named, like every other refusal: 2026-11-22 this line fired twice for one
   // account in one chat half an hour apart and said nothing about why.
   let gateError: string | null = null
