@@ -497,6 +497,21 @@ export type CaptchaBlocker =
   | 'sender_is_channel'
   | 'sender_not_participant'
   | 'discussion_without_ephemeral'
+  | 'receiver_not_present'
+
+/**
+ * How long after a member's last act in the chat a whisper may still be put
+ * to them — the time they are then given to answer it, and for the same
+ * reason: an ephemeral message is seen by somebody who has the chat open, and
+ * Telegram promises nothing to anyone else.
+ *
+ * Production, 14 days to 2026-11-22: 405 whispers answering a message the
+ * member had just sent — 75 answered, 66 of them within 30 seconds. 265 put by
+ * the deferred arrival look, 30 minutes to 3 hours after the join — 0
+ * answered, 262 muted for an hour as having ignored a question nobody was
+ * there to read. Silence means something only where the question was heard.
+ */
+export const WHISPER_PRESENCE_MS = 2 * 60 * 1000
 
 /**
  * Every reason this question cannot be put, not just the first one.
@@ -539,6 +554,13 @@ export interface CaptchaGateFacts {
   senderIsParticipant?: boolean | null | undefined
   chatKind?: ChatKind | undefined
   ephemeralCaptcha?: boolean | undefined
+  /**
+   * Milliseconds since the member was last seen acting in this chat — a
+   * message, a join. Absent or null when the caller does not know, which
+   * blocks nothing: the message path asks in answer to a message, so it has
+   * no gap to state.
+   */
+  receiverSeenAgoMs?: number | null | undefined
 }
 
 export const captchaBlockers = (input: CaptchaGateFacts): CaptchaBlocker[] => {
@@ -552,6 +574,12 @@ export const captchaBlockers = (input: CaptchaGateFacts): CaptchaBlocker[] => {
   if (input.senderIsParticipant === false) blockers.push('sender_not_participant')
   if (input.chatKind === 'discussion' && input.ephemeralCaptcha !== true) {
     blockers.push('discussion_without_ephemeral')
+  }
+  // Only the whisper depends on the member looking: a visible prompt stays in
+  // the chat until they come back. A gap that is not a number is not a gap.
+  if (input.ephemeralCaptcha === true && typeof input.receiverSeenAgoMs === 'number' &&
+    !(input.receiverSeenAgoMs <= WHISPER_PRESENCE_MS)) {
+    blockers.push('receiver_not_present')
   }
   return blockers
 }

@@ -4447,6 +4447,12 @@ const gateAccount = async (params: {
   evidence: string | null
   /** Message the prompt answers — a join line, or the reported message. */
   replyToMessageId: number | null
+  /**
+   * When the member was last seen acting here (epoch ms), if the caller knows.
+   * A whisper is put only to somebody who is there to read it — see
+   * `WHISPER_PRESENCE_MS`.
+   */
+  seenAtMs?: number | null
 }): Promise<GateOutcome> => {
   const { chat, user, reason, evidence } = params
   const groupDoc = await store.getGroupDoc(chat.id).catch(() => null)
@@ -4484,7 +4490,8 @@ const gateAccount = async (params: {
     userIsNewish: true,
     senderIsChannel: isChannelSenderId(user.id),
     senderIsParticipant: memberFacts.peek(chat.id, user.id)?.isParticipant ?? null,
-    ephemeralCaptcha: config.ephemeralCaptcha
+    ephemeralCaptcha: config.ephemeralCaptcha,
+    receiverSeenAgoMs: params.seenAtMs == null ? null : Math.max(Date.now() - params.seenAtMs, 0)
   })
   if (blockers.length > 0) {
     log.warn('account_gate_blocked', {
@@ -4813,10 +4820,23 @@ const scheduleArrivalLook = (
       }
       return 'done'
     }
+    /**
+     * Since 2026-11-22 this comes back `blocked: receiver_not_present` and the
+     * finding is recorded as `gate_blocked` with its signals — nothing is put
+     * to the member. In the 14 days before, this call whispered 265 questions
+     * 30 minutes to 3 hours after the join: none was answered and 262 ended in
+     * an hour's mute. Of the 56 accounts that later wrote, the message path
+     * punished 48 on its own reading of the same profile. Kept as a call, not
+     * removed: a look that runs while the joiner is still here would ask.
+     */
     const gated = await gateAccount({
       chat, user: joiner, history,
       reason: 'arrival_look', evidence,
-      replyToMessageId: joinMessageId > 0 ? joinMessageId : null
+      replyToMessageId: joinMessageId > 0 ? joinMessageId : null,
+      // This look runs half an hour and three hours after the join, and the
+      // member has not written since (checked above): the join is the last
+      // time anybody saw them here.
+      seenAtMs: joinedAt
     })
     if (gated.outcome === 'blocked') saw['blocked'] = gated.blockers.join(',')
     // `gated` writes its own captcha row; the others are answers of their own.
@@ -6206,15 +6226,26 @@ const greetPrivately = async (
   for (const joiner of joiners) {
     const name = `<b>${escapeName(joiner.displayName)}</b>`
     const text = viewHtml(buildWelcomeGreeting(template, name, locale.welcome.defaultGreeting(name)))
+    // The join line may already be gone — the arrival purge, or a chat that
+    // hides them — and Telegram then refuses the whole send. The reply is a
+    // courtesy; the greeting is the point. See `sendWithReplyFallback`.
+    const whisper = (media: string | undefined): Promise<number> => sendWithReplyFallback(
+      (replyTo) => gateway.sendEphemeral(chat.id, joiner.id, text, {
+        ...(media === undefined ? {} : { media }), ...(replyTo === undefined ? {} : { replyTo }), ...markup
+      }),
+      joinMessageId > 0 ? joinMessageId : undefined,
+      (reason) => { log.info('welcome_reply_dropped', { chatId: chat.id, userId: joiner.id, reason }) }
+    )
     const sent = (gif
-      ? await gateway.sendEphemeral(chat.id, joiner.id, text, { media: gif, replyTo: joinMessageId, ...markup })
-        .then(() => true).catch(() => false)
+      ? await whisper(gif).then(() => true).catch((err: unknown) => {
+        log.warn('welcome_send_failed', { chatId: chat.id, kind: 'private_gif', error: telegramErrorName(err) })
+        return false
+      })
       : false) ||
-      await gateway.sendEphemeral(chat.id, joiner.id, text, { replyTo: joinMessageId, ...markup })
-        .then(() => true).catch((err: unknown) => {
-          log.warn('welcome_send_failed', { chatId: chat.id, kind: 'private', err: String(err) })
-          return false
-        })
+      await whisper(undefined).then(() => true).catch((err: unknown) => {
+        log.warn('welcome_send_failed', { chatId: chat.id, kind: 'private', error: telegramErrorName(err) })
+        return false
+      })
     if (sent) log.info('welcome', { chatId: chat.id, chat: chat.title ?? undefined, messageId: joinMessageId, joiners: [joiner.id], private: true })
   }
 }

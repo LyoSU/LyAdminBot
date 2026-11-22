@@ -5,7 +5,7 @@ import {
   decideAction, isEnforcementAction, countsAsDetection, countsAgainstSender, ENFORCEMENT_ACTIONS,
   PRESET_THRESHOLDS, TIMED_BAN_SECONDS, needsRestitution, restitutionLiftsRestrictions,
   IMITABLE_REASON_CODES, LLM_REASON_CODES, escalateChannelRecidivism,
-  captchaBlockers, mayAskCaptcha,
+  captchaBlockers, mayAskCaptcha, WHISPER_PRESENCE_MS,
   type PolicyInput
 } from './policy.js'
 
@@ -653,5 +653,48 @@ describe('captchaBlockers', () => {
       const input = { ...rest, pSpam } as PolicyInput
       expect(mayAskCaptcha(input)).toBe(captchaBlockers(input).length === 0)
     }))
+  })
+})
+
+describe('captchaBlockers — a whisper is put to somebody who is there', () => {
+  const facts = { captchaEnabled: true, userIsNewish: true, ephemeralCaptcha: true }
+
+  it('asks a member seen a moment ago, and one whose last act is unknown', () => {
+    expect(captchaBlockers({ ...facts, receiverSeenAgoMs: 0 })).toEqual([])
+    expect(captchaBlockers({ ...facts, receiverSeenAgoMs: WHISPER_PRESENCE_MS })).toEqual([])
+    expect(captchaBlockers({ ...facts, receiverSeenAgoMs: null })).toEqual([])
+    expect(captchaBlockers(facts)).toEqual([])
+  })
+
+  it('does not whisper to a member last seen half an hour ago', () => {
+    expect(captchaBlockers({ ...facts, receiverSeenAgoMs: 30 * 60 * 1000 })).toEqual(['receiver_not_present'])
+  })
+
+  it('reads a gap that is not a real number as no proof of presence', () => {
+    expect(captchaBlockers({ ...facts, receiverSeenAgoMs: Number.NaN })).toEqual(['receiver_not_present'])
+    expect(captchaBlockers({ ...facts, receiverSeenAgoMs: Number.POSITIVE_INFINITY })).toEqual(['receiver_not_present'])
+  })
+
+  it('leaves a visible prompt alone: it waits in the chat for whoever comes back', () => {
+    expect(captchaBlockers({ ...facts, ephemeralCaptcha: false, receiverSeenAgoMs: 3 * 60 * 60 * 1000 })).toEqual([])
+  })
+
+  it('PROPERTY: the blocker is monotone in the gap and never displaces another blocker', () => {
+    const gap = fc.oneof(fc.constant(null), fc.constant(undefined), fc.double({ min: 0, max: 1e9, noNaN: true }))
+    fc.assert(fc.property(
+      fc.boolean(), fc.boolean(), fc.constantFrom(true, false, null), gap, fc.double({ min: 0, max: 1e9, noNaN: true }),
+      (captchaEnabled, userIsNewish, senderIsParticipant, receiverSeenAgoMs, extra) => {
+        const base = { captchaEnabled, userIsNewish, senderIsParticipant, ephemeralCaptcha: true }
+        const without = captchaBlockers(base)
+        const withGap = captchaBlockers({ ...base, receiverSeenAgoMs })
+        expect(withGap.filter((b) => b !== 'receiver_not_present')).toEqual(without)
+        if (typeof receiverSeenAgoMs === 'number') {
+          const later = captchaBlockers({ ...base, receiverSeenAgoMs: receiverSeenAgoMs + extra })
+          if (withGap.includes('receiver_not_present')) expect(later).toContain('receiver_not_present')
+          expect(withGap.includes('receiver_not_present')).toBe(receiverSeenAgoMs > WHISPER_PRESENCE_MS)
+        } else {
+          expect(withGap).toEqual(without)
+        }
+      }))
   })
 })
