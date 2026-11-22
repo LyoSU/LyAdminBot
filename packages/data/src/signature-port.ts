@@ -10,6 +10,7 @@ import { truncate, CORROBORATING_CHATS_MIN } from '@lyadmin/core'
 import { isDistinctive, isMachineLearnSource } from '@lyadmin/core'
 import type { MongoStore } from './mongo.js'
 import { computeSignatureHashes, normalizeHeavy } from './hashing.js'
+import type { SignatureHashes } from './hashing.js'
 
 const CONFIRMED_PSPAM = 0.96
 
@@ -29,6 +30,48 @@ const TEMPLATE_PLACEHOLDERS = /_URL_|_NUM_|_CUR_|@_/g
 
 export const templateLiteralLength = (text: string): number =>
   normalizeHeavy(text).replace(TEMPLATE_PLACEHOLDERS, '').replace(/\s+/g, ' ').trim().length
+
+/**
+ * Whether a text's template says anything a stranger's message would not.
+ *
+ * `computeSignatureHashes` refuses a template shorter than five characters, but
+ * it measures the placeholders as text: a message that is nothing but a link
+ * normalizes to `_URL_`, five characters, and so every link-only message shares
+ * one template hash with every other. A signature learned from one address then
+ * matched any address.
+ *
+ * A template carries information in two ways: the words it keeps, and the
+ * arrangement of what it replaced. One placeholder with next to no words has
+ * neither. Several placeholders in a row are an arrangement — a list of
+ * mentions with the handles rotated is a campaign shape, and stays reachable.
+ *
+ * 14 days to 2026-11-22, messages carrying a signature match whose template
+ * keeps under five characters of its own, by how people answered: a single
+ * placeholder 13 not-spam to 11 spam (all of the not-spam a lone link); two or
+ * more placeholders 0 to 20.
+ *
+ * The exact hash still finds the same link posted again, and the stored hashes
+ * are untouched — the collection is shared with v1, only the lookup narrows.
+ */
+const MIN_TEMPLATE_LITERAL_LENGTH = 5
+const MIN_TEMPLATE_PLACEHOLDERS = 2
+
+export const templateIsSpecific = (text: string): boolean =>
+  templateLiteralLength(text) >= MIN_TEMPLATE_LITERAL_LENGTH ||
+  (normalizeHeavy(text).match(TEMPLATE_PLACEHOLDERS)?.length ?? 0) >= MIN_TEMPLATE_PLACEHOLDERS
+
+/**
+ * The layers a text may be looked up by. `match` and `retire` both build their
+ * query here: a signature the lookup cannot reach must not be retired by it,
+ * and one it can reach must be.
+ */
+const lookupLayers = (text: string, hashes: SignatureHashes): { query: Document[]; template: boolean } => {
+  const template = hashes.normalizedHash !== null && templateIsSpecific(text)
+  const query: Document[] = [{ exactHash: hashes.exactHash }]
+  if (template) query.push({ normalizedHash: hashes.normalizedHash })
+  if (hashes.foldedHash) query.push({ foldedHash: hashes.foldedHash })
+  return { query, template }
+}
 
 /**
  * Greeting-length guard. The prod corpus is partly poisoned by velocity
@@ -52,9 +95,7 @@ export class MongoSignaturePort implements SignaturePort {
     const hashes = computeSignatureHashes(text)
     if (!hashes) return null
 
-    const query: Document[] = [{ exactHash: hashes.exactHash }]
-    if (hashes.normalizedHash) query.push({ normalizedHash: hashes.normalizedHash })
-    if (hashes.foldedHash) query.push({ foldedHash: hashes.foldedHash })
+    const { query, template } = lookupLayers(text, hashes)
 
     // The term `learn` writes is enforced here, on the read: nothing else in
     // this repo expires a signature (no TTL index — one would delete retired
@@ -76,8 +117,7 @@ export class MongoSignaturePort implements SignaturePort {
     // normalized hash is a TEMPLATE, and a template's information content is
     // what survives after the placeholders — so that is what gets measured.
     const viaExactHash = doc.exactHash === hashes.exactHash
-    const viaNormalizedHash = hashes.normalizedHash !== null &&
-      doc.normalizedHash === hashes.normalizedHash
+    const viaNormalizedHash = template && doc.normalizedHash === hashes.normalizedHash
     // Reached only after confusables were folded together. The fold is lossy on
     // purpose — that is how it survives a homoglyph rotation — so it may raise a
     // signal and must never decide on its own, whatever the stored status says.
@@ -116,9 +156,7 @@ export class MongoSignaturePort implements SignaturePort {
     if (!hashes) return
     // The same three layers `match` searches, in the same order — a signature
     // reachable by the lookup must be reachable by the retirement.
-    const query: Document[] = [{ exactHash: hashes.exactHash }]
-    if (hashes.normalizedHash) query.push({ normalizedHash: hashes.normalizedHash })
-    if (hashes.foldedHash) query.push({ foldedHash: hashes.foldedHash })
+    const { query } = lookupLayers(text, hashes)
     // Every document the lookup could reach, not the first one found: `match`
     // sorts confirmed first and this had no sort, so an exact-hash candidate
     // could be switched off while a template-hash rule went on deciding.

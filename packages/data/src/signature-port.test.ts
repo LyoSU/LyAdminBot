@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { MongoSignaturePort, templateLiteralLength } from './signature-port.js'
+import fc from 'fast-check'
+import { MongoSignaturePort, templateIsSpecific, templateLiteralLength } from './signature-port.js'
 import { computeSignatureHashes } from './hashing.js'
 import type { MongoStore } from './mongo.js'
 
@@ -308,5 +309,96 @@ describe('MongoSignaturePort.retire', () => {
     const { store, calls } = storeRecording()
     await new MongoSignaturePort(store).retire('   ')
     expect(calls).toHaveLength(0)
+  })
+})
+
+describe('a template that is one placeholder and no words is not looked up', () => {
+  /**
+   * A store holding real documents, answering `findOne` and `updateMany` by the
+   * hash terms of the query — so a test can ask which stored signature a text
+   * reaches, the way Mongo would answer it.
+   */
+  const corpusOf = (...learned: string[]): { store: MongoStore; retired: () => string[] } => {
+    const docs = learned.map((text) => {
+      const h = computeSignatureHashes(text)!
+      return { _id: text, status: 'candidate', exactHash: h.exactHash, normalizedHash: h.normalizedHash, foldedHash: h.foldedHash }
+    })
+    const reached = (filter: Record<string, unknown>): typeof docs => {
+      const or = ((filter['$and'] as Record<string, unknown>[] | undefined)?.[0]?.['$or'] ?? filter['$or']) as Record<string, string>[]
+      return docs.filter((d) => or.some((term) => Object.entries(term).every(([k, v]) => v !== null && (d as Record<string, unknown>)[k] === v)))
+    }
+    const retired: string[] = []
+    const store = {
+      spamSignatures: {
+        findOne: async (f: Record<string, unknown>) => reached(f)[0] ?? null,
+        updateMany: async (f: Record<string, unknown>) => { retired.push(...reached(f).map((d) => d._id)); return { matchedCount: 1 } }
+      }
+    } as unknown as MongoStore
+    return { store, retired: () => retired }
+  }
+
+  const linkA = 'https://shop.example/flats/view/1001/'
+  const linkB = 'https://forms.example/d/e/abcDEF/viewform'
+
+  it('REGRESSION: a signature learned from one link does not match another link', async () => {
+    // Every link-only message normalizes to the same five-character template,
+    // which passed the length floor and hashed alike (found 2026-11-22).
+    const { store } = corpusOf(linkA)
+    const port = new MongoSignaturePort(store)
+    expect(await port.match(linkB)).toBeNull()
+    expect(await port.match('t.me/somewhere')).toBeNull()
+  })
+
+  it('the same link posted again is still found, by its exact text', async () => {
+    const { store } = corpusOf(linkA)
+    expect((await new MongoSignaturePort(store).match(`  ${linkA.toUpperCase()} `))?.signatureId).toBe(linkA)
+  })
+
+  it('a template with words of its own still matches across changed links and numbers', async () => {
+    const { store } = corpusOf('Заробіток від 500$ на день, деталі тут https://a.example/x1')
+    const match = await new MongoSignaturePort(store).match('Заробіток від 900$ на день, деталі тут https://b.example/y2')
+    expect(match?.status).toBe('candidate')
+  })
+
+  it('retiring one link leaves a signature learned from another link alone', async () => {
+    const { store, retired } = corpusOf(linkA, linkB)
+    await new MongoSignaturePort(store).retire(linkB)
+    expect(retired()).toEqual([linkB])
+  })
+
+  it('a list of mentions with the handles rotated still shares its template', async () => {
+    // Several placeholders in a row are an arrangement, and a campaign's shape:
+    // 14 days to 2026-11-22 such matches were answered 0 not-spam to 20 spam.
+    const { store } = corpusOf('@alpha_one @beta_two @gamma_three')
+    expect((await new MongoSignaturePort(store).match('@delta_four @epsilon_five @zeta_six'))?.status).toBe('candidate')
+  })
+
+  it('PROPERTY: two different texts that are each one link, one number or one currency sign never reach each other', async () => {
+    const lone = fc.oneof(
+      fc.webUrl().filter((u) => !/\s/.test(u)),
+      fc.stringMatching(/^t\.me\/[a-z]{3,12}$/),
+      fc.integer({ min: 0, max: 99_999_999 }).map(String),
+      fc.constantFrom('$', '€', '₴')
+    )
+    const padded = fc.tuple(lone, fc.constantFrom('', ' ', '\n', '👉 ', ' ✅')).map(([l, pad]) => pad + l + pad)
+    await fc.assert(fc.asyncProperty(padded, padded, async (a, b) => {
+      fc.pre(computeSignatureHashes(a)?.exactHash !== computeSignatureHashes(b)?.exactHash)
+      expect(templateIsSpecific(a)).toBe(false)
+      const { store } = corpusOf(a)
+      expect(await new MongoSignaturePort(store).match(b)).toBeNull()
+    }), { numRuns: 200 })
+  })
+
+  it('PROPERTY: a text and its copy with every link, number and handle changed still reach each other when the template is specific', async () => {
+    const word = fc.stringMatching(/^[a-zа-яіїє]{5,12}$/)
+    const slot = fc.constantFrom('url', 'num', 'at')
+    const fill = (kind: string, n: number): string => kind === 'url' ? `https://h${'x'.repeat(n % 5)}.example/p` : kind === 'num' ? String(100 + n) : `@user_${'abcdefgh'[n % 8]}`
+    await fc.assert(fc.asyncProperty(fc.array(word, { maxLength: 3 }), fc.array(slot, { minLength: 1, maxLength: 4 }), fc.nat(50), fc.nat(50), async (words, slots, n, m) => {
+      const build = (k: number): string => [...words, ...slots.map((s, i) => fill(s, k + i))].join(' ')
+      const a = build(n), b = build(m)
+      fc.pre(templateIsSpecific(a) && computeSignatureHashes(a)?.normalizedHash !== null)
+      const { store } = corpusOf(a)
+      expect(await new MongoSignaturePort(store).match(b)).not.toBeNull()
+    }), { numRuns: 200 })
   })
 })
