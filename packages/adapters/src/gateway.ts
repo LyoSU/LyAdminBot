@@ -84,6 +84,16 @@ export interface MemberRemovalFacts {
   date: Date
 }
 
+/**
+ * The dispatcher group the removal handler lives in.
+ *
+ * A dispatcher runs ONE handler per update per group — the first that matches —
+ * and the join handler is registered for the same update with no filter. In the
+ * same group the removal handler was dead code: shipped 2026-11-22, it recorded
+ * nothing until it was moved to a group of its own.
+ */
+export const MEMBER_REMOVAL_GROUP = 1
+
 /** The part of a member update `memberRemovalOf` reads. */
 export interface MemberUpdateLike {
   type: string
@@ -229,7 +239,7 @@ export class TelegramGateway {
       } catch (err) {
         this.errorSink(err)
       }
-    })
+    }, MEMBER_REMOVAL_GROUP)
   }
 
   /**
