@@ -2082,6 +2082,18 @@ describe('recentRestrictionsOf — the notice a removed member can reach', () =>
   })
 })
 
+describe('removals — bans and restrictions made by somebody else', () => {
+  it('writes ids, the kind and the time, and nothing else', async () => {
+    const inserted: Array<Record<string, unknown>> = []
+    const store = Object.assign({
+      removals: { insertOne: async (doc: Record<string, unknown>) => { inserted.push(doc) } }
+    } as unknown as MongoStore, { recordRemoval: MongoStore.prototype.recordRemoval })
+    const at = new Date('2026-11-22T12:00:00Z')
+    await store.recordRemoval({ chatId: -100, userId: 7, actorId: 99, actorIsBot: false, kind: 'kicked', at, text: 'x' } as never)
+    expect(inserted).toEqual([{ chatId: -100, userId: 7, actorId: 99, actorIsBot: false, kind: 'kicked', at }])
+  })
+})
+
 describe('arrivals — who joined which chat this week', () => {
   const shape = {
     username: false, photo: true, lastName: true, premium: false, script: 'cyrillic', registeredUnix: 1_780_000_000

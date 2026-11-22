@@ -38,7 +38,7 @@ import {
   createChatDescriptionCache, fetchChatDescription, fetchChatMemberCount, findChatMemberByUsername,
   createTmePreviewResolver,
   avatarDhashOf, MUTE_DURATION_SECONDS, warmPeer,
-  type EphemeralCommand, type ExternalBanCacheView, type IncomingMessage, type JoinRequestFacts
+  type EphemeralCommand, type ExternalBanCacheView, type IncomingMessage, type JoinRequestFacts, type MemberRemovalFacts
 } from '@lyadmin/adapters'
 import {
   MongoStore, MongoSignaturePort, MongoForwardPort, QdrantVectorPort,
@@ -5989,6 +5989,22 @@ const shadowMultiJoin = async (chatId: number, userId: number, at: Date): Promis
 const joinRequests = new JoinRequestLedger()
 const joinRequestScreens = createScreenLimiter()
 
+/**
+ * An admin, or another bot, banned or restricted a member. Recorded and
+ * nothing else — it is the miss count that needs no report button.
+ */
+const handleMemberRemoval = async (removal: MemberRemovalFacts): Promise<void> => {
+  if (removal.actorId === selfId || removal.userId === selfId) return
+  await store.recordRemoval({
+    chatId: removal.chatId,
+    userId: removal.userId,
+    actorId: removal.actorId,
+    actorIsBot: removal.actorIsBot,
+    kind: removal.kind,
+    at: removal.date
+  })
+}
+
 const handleJoinRequest = async (request: JoinRequestFacts): Promise<void> => {
   const { chat, user } = request
   if (chat.chatType !== 'supergroup' && chat.chatType !== 'group') return
@@ -9179,6 +9195,7 @@ const main = async (): Promise<void> => {
   // Shadow only (2026-10-14): fire-and-forget like the member update, so a
   // burst of requests never sits in front of anything else the dispatcher holds.
   gateway.onJoinRequest(async (request) => { void handleJoinRequest(request).catch(() => { /* best-effort */ }) })
+  gateway.onMemberRemoval(async (removal) => { void handleMemberRemoval(removal).catch(() => { /* best-effort */ }) })
   gateway.onError((err) => log.error('handler_error', { err: err instanceof Error ? err : String(err) }))
   // Debug, not warn: a redelivery is the transport working as specified, and
   // the pipeline now absorbs it. It becomes interesting only in bulk, which

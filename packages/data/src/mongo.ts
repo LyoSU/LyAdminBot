@@ -39,6 +39,12 @@ const DECISIONS_TTL_DAYS = 14
  */
 export const ARRIVAL_TTL_DAYS = 7
 const LLM_CACHE_TTL_DAYS = 7
+/**
+ * How long a removal made by somebody else is kept. It is read against the
+ * decision log, which lives 14 days; a week of overlap is enough to ask "had
+ * this account posted here, and what did the pipeline make of it".
+ */
+export const REMOVAL_TTL_DAYS = 7
 
 /**
  * How long a trace-free record is kept before `pruneDormantRecords` drops it.
@@ -501,6 +507,7 @@ export class MongoStore {
   get rightsBlocks(): Collection<Document> { return this.collection('pipeline_rights') }
   /** Who joined which chat this week — see `recordArrival`. */
   get arrivals(): Collection<Document> { return this.collection('pipeline_arrivals') }
+  get removals(): Collection<Document> { return this.collection('pipeline_removals') }
 
   /**
    * Profile-picture hashes, one row per (picture, account).
@@ -838,6 +845,13 @@ export class MongoStore {
       .catch((err: unknown) => {
         console.warn(`[mongo] arrivals_by_user index not built: ${(err as Error).message}`)
       })
+
+    /**
+     * Removals by others: the TTL index and nothing else. The rows are read
+     * offline, a week at a time; an index per question would cost more of the
+     * quota than the scans it saves.
+     */
+    await ensureTtlIndex(this.removals, { at: 1 }, REMOVAL_TTL_DAYS * 86400)
   }
 
   // ── reads used per message ───────────────────────────────────────────
@@ -2986,6 +3000,31 @@ export class MongoStore {
       { _id: arrivalKey(chatId, userId) as never },
       { $set: { multiJoin: stamp } }
     )
+  }
+
+  /**
+   * Somebody other than this bot banned or restricted an account (2026-11-22).
+   *
+   * A measurement, read by nothing in the pipeline: the one record of spam the
+   * pipeline missed that does not depend on anybody pressing a report button.
+   * Ids, the kind and the time only.
+   */
+  async recordRemoval(removal: {
+    chatId: number
+    userId: number
+    actorId: number
+    actorIsBot: boolean
+    kind: 'kicked' | 'restricted'
+    at: Date
+  }): Promise<void> {
+    await this.removals.insertOne({
+      chatId: removal.chatId,
+      userId: removal.userId,
+      actorId: removal.actorId,
+      actorIsBot: removal.actorIsBot,
+      kind: removal.kind,
+      at: removal.at
+    })
   }
 
   /**

@@ -70,6 +70,53 @@ export interface JoinRequestFacts {
   date: Date
 }
 
+/**
+ * Somebody other than this bot removed or restricted a member — plain facts
+ * from the member update, nothing to act on.
+ */
+export interface MemberRemovalFacts {
+  chatId: number
+  userId: number
+  actorId: number
+  /** Another bot did it (a rival filter, a captcha), not a person. */
+  actorIsBot: boolean
+  kind: 'kicked' | 'restricted'
+  date: Date
+}
+
+/** The part of a member update `memberRemovalOf` reads. */
+export interface MemberUpdateLike {
+  type: string
+  isSelf: boolean
+  isSelfMade: boolean
+  date: Date
+  chat: { id: number }
+  user: { id: number; isBot: boolean }
+  actor: { id: number; isBot: boolean; isSelf: boolean }
+}
+
+/**
+ * Reads a member update as "an admin removed this account", or null.
+ *
+ * Null for everything that is not a judgement by somebody else about an
+ * ordinary member: this bot's own bans (they are already in the decision log),
+ * a member restricting themself, updates about this bot, removed bots, and the
+ * demotions, which are about admins.
+ */
+export const memberRemovalOf = (upd: MemberUpdateLike): MemberRemovalFacts | null => {
+  if (upd.type !== 'kicked' && upd.type !== 'restricted') return null
+  if (upd.isSelf || upd.isSelfMade || upd.actor.isSelf) return null
+  if (upd.user.isBot || upd.actor.id === upd.user.id) return null
+  return {
+    chatId: upd.chat.id,
+    userId: upd.user.id,
+    actorId: upd.actor.id,
+    actorIsBot: upd.actor.isBot,
+    kind: upd.type,
+    date: upd.date
+  }
+}
+
 /** A slash command a member sent as an ephemeral message in a group. */
 export interface EphemeralCommand {
   chat: Chat
@@ -163,6 +210,22 @@ export class TelegramGateway {
       if (upd.type !== 'joined' && upd.type !== 'added') return
       try {
         await handler(upd.chat, upd.user)
+      } catch (err) {
+        this.errorSink(err)
+      }
+    })
+  }
+
+  /**
+   * A member was banned or restricted by somebody other than this bot. The
+   * update arrives for free to an admin bot; the app only records it. Not
+   * serialized through the chat queue, for the reason join requests are not.
+   */
+  onMemberRemoval(handler: (removal: MemberRemovalFacts) => Promise<void>): void {
+    this.dispatcher.onChatMemberUpdate(async (upd: ChatMemberUpdate) => {
+      try {
+        const removal = memberRemovalOf(upd)
+        if (removal !== null) await handler(removal)
       } catch (err) {
         this.errorSink(err)
       }
