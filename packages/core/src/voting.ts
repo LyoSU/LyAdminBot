@@ -342,8 +342,29 @@ export const voteEligibility = (voter: VoterStanding): VoteEligibility => {
  */
 export const UNOPPOSED_EXPIRY_MIN_SPAM = 2
 
-export const expiryOutcome = (tally: Pick<VoteTally, 'spam' | 'ham'>): 'delete' | null =>
-  tally.ham === 0 && tally.spam >= UNOPPOSED_EXPIRY_MIN_SPAM ? 'delete' : null
+/**
+ * The same record read the other way: two voters saying "not spam", nobody
+ * saying otherwise, and the window ran out.
+ *
+ * Until 2026-11-22 the expiry heard only one side. Measured over the week to
+ * that day: 182 of 443 questions expired, 30 of them at two "spam" against
+ * none — acted on — and 15 with "not spam" ballots against none, on which
+ * nothing happened: the punishment stood and the chat's answer was thrown
+ * away. Silence must not weigh more for the accuser than for the accused.
+ *
+ * The bar is the same two, not one. A "not spam" resolution is not the cheaper
+ * side here: it files a label the chat's later questions are decided by and
+ * hands standing back, so it needs as many voices as the unopposed removal.
+ */
+export const UNOPPOSED_EXPIRY_MIN_HAM = 2
+
+export type ExpiryOutcome = 'delete' | 'restore'
+
+export const expiryOutcome = (tally: Pick<VoteTally, 'spam' | 'ham'>): ExpiryOutcome | null => {
+  if (tally.ham === 0 && tally.spam >= UNOPPOSED_EXPIRY_MIN_SPAM) return 'delete'
+  if (tally.spam === 0 && tally.ham >= UNOPPOSED_EXPIRY_MIN_HAM) return 'restore'
+  return null
+}
 
 export const voteMayRecordDetection = (learnText: string): boolean =>
   learnText.trim().length > 0

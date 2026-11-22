@@ -1547,7 +1547,29 @@ const expireStaleVotes = async (): Promise<void> => {
       await gateway.tg.deleteMessagesById(vote.chatId, [vote.promptMessageId])
         .catch(() => { /* already gone */ })
     }
-    if (expiryOutcome(tally) === 'delete') {
+    const atExpiry = expiryOutcome(tally)
+    if (atExpiry === 'restore') {
+      // The mirror of the branch below — see `UNOPPOSED_EXPIRY_MIN_HAM`. The
+      // same restitution a "not spam" quorum gets, minus the admin's vouch:
+      // nobody with that authority spoke.
+      const lastHam = vote.ballots.findLast((b) => b.choice === 'ham')
+      const restitution = await restoreFalsePositive({
+        chatId: vote.chatId, messageId: vote.messageId, userId: vote.targetUserId,
+        byUserId: lastHam?.userId ?? selfId, source: 'community_vote'
+      }).catch(() => null)
+      if (restitution !== null && restitution.staleCardMessageId !== null) {
+        await gateway.tg.deleteMessagesById(vote.chatId, [restitution.staleCardMessageId])
+          .catch(() => { /* already gone with its own TTL */ })
+      }
+      const error = restitution === null ? 'restore_threw' : restitution.lifted ? null : 'lift_failed'
+      log.info('vote_expired_unopposed', {
+        chatId: vote.chatId, userId: vote.targetUserId, messageId: vote.messageId,
+        ham: tally.ham, restored: error === null, ...(error === null ? {} : { restoreError: error })
+      })
+      await store.noteExpiredOutcome(vote.chatId, vote.messageId, 'restore', error)
+        .catch(() => { /* the log line above is the fallback record */ })
+    }
+    if (atExpiry === 'delete') {
       // The message only — see `expiryOutcome`. The sender is not touched, the
       // vote does not learn, and the row says what the sweep did and why not.
       const error = await gateway.moderationActions.deleteMessage(vote.chatId, vote.messageId)

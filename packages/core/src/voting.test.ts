@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import {
   tallyVotes, voterRoster, voteEligibility, voteMayRecordDetection, VOTE_TENURE_ALONE_DAYS,
-  expiryOutcome, UNOPPOSED_EXPIRY_MIN_SPAM, reportWeight,
+  expiryOutcome, UNOPPOSED_EXPIRY_MIN_HAM, UNOPPOSED_EXPIRY_MIN_SPAM, reportWeight,
   distinctBallotVoters, noVotersShadowStamp, noVotersShadowOutcome, RECENT_VOTERS_WINDOW_DAYS,
   type VoteBallot, type VoterStanding
 } from './voting.js'
@@ -414,6 +414,34 @@ describe('expiryOutcome', () => {
   it('the tally it reads is per voter, so a repeated tap is still one voter', () => {
     const tally = tallyVotes([b(1, 'spam'), b(1, 'spam'), b(1, 'spam')])
     expect(expiryOutcome(tally)).toBeNull()
+  })
+})
+
+describe('expiryOutcome — the other side of the same silence', () => {
+  it('two unopposed "not spam" voters undo the punishment at expiry', () => {
+    expect(expiryOutcome({ spam: 0, ham: UNOPPOSED_EXPIRY_MIN_HAM })).toBe('restore')
+    expect(expiryOutcome({ spam: 0, ham: 6 })).toBe('restore')
+  })
+
+  it('one "not spam" voter is an opinion too, and one accuser keeps the question unanswered', () => {
+    expect(expiryOutcome({ spam: 0, ham: 1 })).toBeNull()
+    expect(expiryOutcome({ spam: 1, ham: 4 })).toBeNull()
+  })
+
+  it('asks the same number of voices of both sides', () => {
+    expect(UNOPPOSED_EXPIRY_MIN_HAM).toBe(UNOPPOSED_EXPIRY_MIN_SPAM)
+  })
+
+  it('PROPERTY: swapping the sides swaps the outcome, and any disagreement decides nothing', () => {
+    const swapped = { delete: 'restore', restore: 'delete' } as const
+    fc.assert(fc.property(fc.nat(8), fc.nat(8), (spam, ham) => {
+      const here = expiryOutcome({ spam, ham })
+      const there = expiryOutcome({ spam: ham, ham: spam })
+      expect(there).toBe(here === null ? null : swapped[here])
+      if (spam > 0 && ham > 0) expect(here).toBeNull()
+      if (here === 'delete') expect(spam).toBeGreaterThanOrEqual(UNOPPOSED_EXPIRY_MIN_SPAM)
+      if (here === 'restore') expect(ham).toBeGreaterThanOrEqual(UNOPPOSED_EXPIRY_MIN_HAM)
+    }))
   })
 })
 

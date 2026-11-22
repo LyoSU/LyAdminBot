@@ -2130,7 +2130,7 @@ export class MongoStore {
 
   /** What the sweep did with an expired question — see `expiryOutcome`. */
   async noteExpiredOutcome(
-    chatId: number, messageId: number, outcome: 'delete', error: string | null
+    chatId: number, messageId: number, outcome: 'delete' | 'restore', error: string | null
   ): Promise<void> {
     await this.votes.updateOne(
       { chatId, messageId },
