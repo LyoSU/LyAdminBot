@@ -6,7 +6,7 @@ import type {
 } from './types.js'
 import type { BurstEntry, BurstPort, ModerationResult, PipelinePorts, SessionPort } from './ports.js'
 import {
-  evaluateMessage, LLM_SOLE_WITNESS_SCORE, otherSpamObserveShadow, PROFILE_HOLD_SECONDS,
+  evaluateMessage, LLM_GREY_LOW, LLM_SOLE_WITNESS_SCORE, otherSpamObserveShadow, PROFILE_HOLD_SECONDS,
   SHORT_WAVE_MIN_ACCOUNTS, SHORT_WAVE_MIN_CHATS
 } from './pipeline.js'
 import {
@@ -3181,6 +3181,39 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
       expect(v.signals.map((s) => s.name)).toContain('velocity_wave')
       expect(v.meta['shortWave']).toBe(true)
       expect(v.decidedBy).not.toBe('velocity')
+    })
+
+    it('is read by the classifier even when the score stays under the grey floor', async () => {
+      const read: unknown[] = []
+      const llm = { classify: async (_input: unknown, observed: unknown) => {
+        read.push(observed)
+        return { pSpam: 0.05, reasonCode: 'legit_conversation', evidence: null }
+      } }
+      // An established-enough stranger replying: the wave alone leaves the score low.
+      const input = makeInput({ msg: short, user: { ...newcomer, messagesGlobal: 400 } })
+      const v = await evaluateMessage(input, { llm: llm as never, velocity: { check: async () => window() } })
+      expect(v.meta['shortWave']).toBe(true)
+      expect(Number(v.meta['scorePSpam'])).toBeLessThan(LLM_GREY_LOW)
+      expect(read).toHaveLength(1)
+      expect(read[0]).toMatchObject({ repetition: expect.stringContaining('3 chats') })
+      expect(v.decidedBy).toBe('llm')
+      expect(v.action).toBe('none')
+
+      const quiet = await evaluateMessage(input, { llm: llm as never, velocity: { check: async () => window({ chats: 2 }) } })
+      expect(quiet.reasonCode).toBe('low_information')
+      expect(read).toHaveLength(1)
+    })
+
+    it('never enforces on arithmetic when no reader answered, however loud the profile', async () => {
+      const loud = { enrichment: { bio: 'my channel t.me/+AAAAAAAAAAAAAAAA' }, policy: { votingEnabled: true } }
+      for (const llm of [undefined, { classify: async () => null }, { classify: async () => { throw new Error('down') } }]) {
+        const v = await evaluateMessage(makeInput({ msg: short, user: newcomer, ...loud }), {
+          ...(llm ? { llm: llm as never } : {}),
+          velocity: { check: async () => window({ chats: 9, accounts: 30 }) }
+        })
+        expect(v.meta['shortWave']).toBe(true)
+        expect(isEnforcementAction(v.action)).toBe(false)
+      }
     })
 
     it('is not a wave below the spread, for one account, or on a template that names nothing', async () => {

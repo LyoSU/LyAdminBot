@@ -2319,7 +2319,13 @@ export const evaluateMessage = async (
     // can read it is the difference between clearing a message and never
     // having looked at it (2026-07-31).
     foreignScript !== null ||
-    pictureUnderFloor
+    pictureUnderFloor ||
+    // A wave left the low-information gate to be READ. Measured the day it
+    // shipped (2026-11-22): the wave signal lifts a new account's short reply
+    // to 0.31 and an ordinary newcomer's to 0.20, both under the grey floor, so
+    // nearly half of the campaign that motivated it would have walked out of
+    // here as a score nobody read.
+    shortWave
   let llmNeededButUnavailable = false
 
   /**
@@ -2400,7 +2406,11 @@ export const evaluateMessage = async (
   // (unavailable, unconfigured, or — before this branch — it would have cleared
   // the message and returned above). Never delete/mute/ban on shape alone:
   // downgrade to observe. This is the structural fix for the 2026-06-21 FP.
-  if (!decisive && isEnforcementAction(verdict.action)) {
+  // A short wave is here only because no reader answered (it always asks for
+  // one). Its own signal is firsthand evidence and so counts as decisive, which
+  // would let this guard pass a removal of "thanks!" on arithmetic alone — the
+  // one thing the wave was let out of the low-information branch NOT to allow.
+  if ((!decisive || shortWave) && isEnforcementAction(verdict.action)) {
     return {
       ...verdict,
       action: 'observe' as VerdictAction,
