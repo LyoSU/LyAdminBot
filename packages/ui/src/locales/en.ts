@@ -426,7 +426,7 @@ export const en: Locale = {
       more: (count) => `…and ${count} more`,
       nobody: 'Nobody voted in time.',
       notForTarget: 'This vote is about you: you cannot vote in it or see who voted.',
-      noStanding: 'Vote not counted: voting is for members who have been in the chat for at least a week and posted 10+ messages here (or 50+ across the bot’s chats), or who have been here over a year.',
+      noStanding: 'Vote not counted: voting is for members who have been in the chat for at least a week and posted 10+ messages here (or 50+ across the bot’s chats), or who have been here over six months.',
       knownBad: 'Vote not counted: this account has sent spam before.'
     }
   },

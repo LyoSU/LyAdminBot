@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import {
-  tallyVotes, voterRoster, voteEligibility, voteMayRecordDetection, VOTE_TENURE_ALONE_DAYS,
+  tallyVotes, voterRoster, voteEligibility, voteMayRecordDetection, VOTE_TENURE_ALONE_DAYS, VOTE_CHAT_TENURE_ALONE_DAYS,
   expiryOutcome, UNOPPOSED_EXPIRY_MIN_HAM, UNOPPOSED_EXPIRY_MIN_SPAM, reportWeight,
   distinctBallotVoters, noVotersShadowStamp, noVotersShadowOutcome, RECENT_VOTERS_WINDOW_DAYS,
   type VoteBallot, type VoterStanding
@@ -296,6 +296,39 @@ describe('voteEligibility', () => {
       joinedAgoSeconds: VOTE_TENURE_ALONE_DAYS * 86400 }))).toBe('eligible')
     expect(voteEligibility(voter({ messagesInChat: 1, messagesGlobal: 4, localAgeDays: 400 })))
       .toBe('eligible')
+  })
+
+  it('half a year in this chat is standing by itself, on Telegram\'s clock only', () => {
+    const quiet = { messagesInChat: 0, messagesGlobal: 0 }
+    expect(voteEligibility(voter({ ...quiet, localAgeDays: null,
+      joinedAgoSeconds: VOTE_CHAT_TENURE_ALONE_DAYS * 86400 }))).toBe('eligible')
+    expect(voteEligibility(voter({ ...quiet, localAgeDays: 3,
+      joinedAgoSeconds: (VOTE_CHAT_TENURE_ALONE_DAYS - 1) * 86400 }))).toBe('no_standing')
+    // Known to us for half a year somewhere, in this chat since this morning.
+    expect(voteEligibility(voter({ ...quiet, localAgeDays: 200, joinedAgoSeconds: 3600 })))
+      .toBe('no_standing')
+    expect(voteEligibility(voter({ ...quiet, localAgeDays: 200, joinedAgoSeconds: null })))
+      .toBe('no_standing')
+    expect(voteEligibility(voter({ ...quiet, joinedAgoSeconds: 400 * 86400, spamDetections: 2 })))
+      .toBe('known_bad')
+  })
+
+  it('more time in the chat never takes a vote away', () => {
+    fc.assert(fc.property(
+      fc.record({
+        messagesInChat: fc.option(fc.integer({ min: 0, max: 200 }), { nil: null }),
+        messagesGlobal: fc.option(fc.integer({ min: 0, max: 500 }), { nil: null }),
+        localAgeDays: fc.option(fc.double({ min: 0, max: 800, noNaN: true }), { nil: null }),
+        spamDetections: fc.integer({ min: 0, max: 3 })
+      }),
+      fc.integer({ min: 0, max: 800 * 86400 }), fc.integer({ min: 0, max: 800 * 86400 }),
+      (base, a, b) => {
+        const [shorter, longer] = a <= b ? [a, b] : [b, a]
+        const before = voteEligibility(voter({ ...base, joinedAgoSeconds: shorter }))
+        const after = voteEligibility(voter({ ...base, joinedAgoSeconds: longer }))
+        return before !== 'eligible' || after === 'eligible'
+      }
+    ))
   })
 
   it('a year of tenure does not restore a vote to a known-bad account', () => {

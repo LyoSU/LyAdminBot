@@ -287,6 +287,24 @@ const atLeast = (value: number | null, bar: number): boolean =>
  */
 export const VOTE_TENURE_ALONE_DAYS = 365
 
+/**
+ * Half a year in THIS chat, by Telegram's clock, is standing on its own too.
+ *
+ * Measured over the week to 2026-11-23: 155 members were refused for standing
+ * across 26 chats, and 21 of them Telegram dates to 180 days or more in the
+ * chat they were voting in. A chat younger than a year has nobody the year
+ * above can reach, and a quiet one has nobody the volume bar can: one question
+ * collected seven refusals from members of four months and no counted voice.
+ * Of the 24 a 180-day bar on either clock would have admitted, one had ever
+ * been punished by this bot, and that verdict was itself ruled not spam.
+ *
+ * Telegram's clock only, and that is the point of the shorter term. Our own
+ * first-seen date says the account was seen SOMEWHERE; it would let an account
+ * known for six months vote in a chat it joined this morning. The join date is
+ * the cost paid in the chat the ballot is cast in.
+ */
+export const VOTE_CHAT_TENURE_ALONE_DAYS = 180
+
 export const voteEligibility = (voter: VoterStanding): VoteEligibility => {
   if (voter.isTarget) return 'is_target'
   if (voter.isAdmin) return 'eligible'
@@ -294,6 +312,8 @@ export const voteEligibility = (voter: VoterStanding): VoteEligibility => {
 
   const tenure = mergeTenureDays(voter.localAgeDays, voter.joinedAgoSeconds)
   if (tenure !== null && atLeast(tenure, VOTE_TENURE_ALONE_DAYS)) return 'eligible'
+  const inThisChat = voter.joinedAgoSeconds === null ? null : voter.joinedAgoSeconds / 86400
+  if (atLeast(inThisChat, VOTE_CHAT_TENURE_ALONE_DAYS)) return 'eligible'
 
   const volume = atLeast(voter.messagesInChat, ESTABLISHED_MIN_IN_CHAT) ||
     atLeast(voter.messagesGlobal, ESTABLISHED_MIN_MESSAGES)

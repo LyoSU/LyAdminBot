@@ -422,7 +422,7 @@ export const tr: Locale = {
       more: (count) => `…ve ${count} kişi daha`,
       nobody: 'Kimse zamanında oy vermedi.',
       notForTarget: 'Bu oylama seninle ilgili: bu oylamada oy veremez, kimin oy verdiğini de göremezsin.',
-      noStanding: 'Oy sayılmadı: en az bir haftadır sohbette olup burada en az 10 mesaj (ya da botun sohbetlerinde en az 50 mesaj) yazanlar veya bir yıldan uzun süredir sohbette olanlar oy verebilir.',
+      noStanding: 'Oy sayılmadı: en az bir haftadır sohbette olup burada en az 10 mesaj (ya da botun sohbetlerinde en az 50 mesaj) yazanlar veya altı aydan uzun süredir sohbette olanlar oy verebilir.',
       knownBad: 'Oy sayılmadı: bu hesaptan daha önce spam geldi.'
     }
   },
