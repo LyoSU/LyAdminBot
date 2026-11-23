@@ -580,12 +580,21 @@ const CAPTCHA_CLEANUP_GRACE_MS = 5 * 1000
  * `mode: 'wait'`.
  *
  * Bounded by what is known about the whisper, because the whisper is the only
- * exit: a test on 2026-11-22 found one still on the receiver's screen and still
- * editable 45 minutes after it was sent, and nothing longer has been measured.
- * So the hold lapses on its own inside that time; a member who comes back
- * later finds no restriction and no question.
+ * exit. A marker sent 2026-11-22 15:03 UTC was still on the receiver's screen
+ * and still editable 20.5 hours later; nothing longer has been measured. Twelve
+ * hours sits inside that with room to spare.
+ *
+ * It was 30 minutes for its first day, set from a 45-minute measurement, and
+ * that length protected nothing: of 18 such gates, 11 lapsed unanswered and
+ * left the account free before it had written a word — while the accounts the
+ * arrival look flags are, when they do write, punished 48 times in 56 (14 days
+ * to 2026-11-22). A hold that outlasts the account's first message is the
+ * point of asking; a person who returns within the half-day finds the question
+ * and one tap ends it, and one who returns later finds neither.
  */
-const WAITING_GATE_MUTE_SECONDS = 30 * 60
+const WAITING_GATE_MUTE_SECONDS = 12 * 60 * 60
+/** The waiting gate's button must outlive its hold, as `CAPTCHA_TTL_MS` does for the asked one. */
+const WAITING_GATE_TTL_MS = WAITING_GATE_MUTE_SECONDS * 1000 + 10 * 60 * 1000
 
 const CAPTCHA_TTL_MS =
   CAPTCHA_ANSWER_GRACE_MS + CAPTCHA_IGNORED_MUTE_SECONDS * 1000 + 10 * 60 * 1000
@@ -877,7 +886,7 @@ const deliverCaptcha = async (
    */
   mode: 'ask' | 'wait' = 'ask'
 ): Promise<CaptchaDelivery> => {
-  const gate = captchas.issue(chatId, userId, CAPTCHA_TTL_MS)
+  const gate = captchas.issue(chatId, userId, mode === 'wait' ? WAITING_GATE_TTL_MS : CAPTCHA_TTL_MS)
   gate.triggerMessageId = triggerMessageId
   const view = captchaPrompt(locale, mode === 'wait'
     ? { chatId, userId, userLabel, state: 'waiting' }
