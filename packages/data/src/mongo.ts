@@ -688,6 +688,28 @@ export class MongoStore {
     return out
   }
 
+  /**
+   * Whispered prompts of gates that have not run out, whatever state the gate
+   * is in — for the boot path that takes them down when they do (2026-11-23).
+   * Soonest to expire first, so a bounded read keeps the ones that matter next.
+   */
+  async loadCaptchaWhispers(limit: number): Promise<Array<{
+    chatId: number; userId: number; ephemeralMessageId: number; expiresMs: number
+  }>> {
+    const docs = await this.captchaGates.find({
+      expiresAt: { $gt: new Date() },
+      ephemeralMessageId: { $type: 'number' }
+    }).sort({ expiresAt: 1 }).limit(limit).toArray()
+    const out = []
+    for (const doc of docs) {
+      const chatId = doc['chatId'], userId = doc['userId'], id = doc['ephemeralMessageId']
+      if (typeof chatId !== 'number' || typeof userId !== 'number' || typeof id !== 'number') continue
+      if (!(doc['expiresAt'] instanceof Date)) continue
+      out.push({ chatId, userId, ephemeralMessageId: id, expiresMs: doc['expiresAt'].getTime() })
+    }
+    return out
+  }
+
   /** The live persisted gate for this person, or null. Expiry is checked here, not left to the TTL sweeper, which runs once a minute at best. */
   async findCaptchaGate(chatId: number, userId: number): Promise<{ issuedMs: number; expiresMs: number } | null> {
     const doc = await this.captchaGates.findOne({ chatId, userId, expiresAt: { $gt: new Date() } })

@@ -662,6 +662,38 @@ const restoreCaptchaGates = async (): Promise<CaptchaGate[]> => {
 }
 
 /**
+ * Take down, when their gates run out, the whispers a restart orphaned.
+ *
+ * A gate's whisper is removed by the process that issued it — at the answer,
+ * at a drop, or when the gate lapses. A restart loses all three for every gate
+ * it does not restore, and until 2026-11-23 that was left alone on the belief
+ * that a whisper expires by itself. It does not, on any scale that matters: a
+ * marker sent 2026-11-22 was still on the receiver's screen 20.5 hours later.
+ * So a member kept a "confirm you are not a bot" card over a button that had
+ * stopped working — and with the waiting gate now holding for twelve hours,
+ * most of those gates live through a deploy.
+ *
+ * Unconditional at the gate's own expiry: a whisper already removed refuses
+ * the delete and nothing else follows from it, and a newer gate for the same
+ * member has a whisper of its own under a different id.
+ */
+const sweepOrphanedWhispers = async (): Promise<void> => {
+  const rows = await store.loadCaptchaWhispers(CAPTCHA_RESTORE_LIMIT).catch(() => [])
+  let armed = 0
+  for (const row of rows) {
+    // A gate back in memory takes its own prompt down.
+    if (captchas.peek(row.chatId, row.userId)?.ephemeralMessageId === row.ephemeralMessageId) continue
+    const timer = setTimeout(() => {
+      void gateway.removeEphemeralPrompt(row.chatId, row.userId, row.ephemeralMessageId)
+        .catch(() => { /* answered, dropped by hand, or gone */ })
+    }, Math.max(0, row.expiresMs - Date.now()))
+    timer.unref?.()
+    armed += 1
+  }
+  if (armed > 0) log.info('captcha_whispers_orphaned', { armed })
+}
+
+/**
  * Finish what the restart interrupted for one restored gate: drop it if the
  * person left or was removed while we were not listening, otherwise re-arm the
  * consequence for what remains of the 120 s, or apply it now if that moment
@@ -9418,6 +9450,7 @@ const main = async (): Promise<void> => {
   // Detached and bounded (see CAPTCHA_RESTORE_LIMIT): a backlog after a long
   // outage must not hold up readiness, and nothing here can throw.
   void settleRestoredGates(restoredGates)
+  void sweepOrphanedWhispers().catch(() => { /* best-effort */ })
 
   // Clear deletions that came due while we were down, then sweep periodically
   // as the backstop for the in-memory timers.
