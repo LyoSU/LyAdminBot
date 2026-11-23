@@ -107,6 +107,18 @@ describe('applyVerdict', () => {
     expect(result.captchaRequired).toBe(true)
   })
 
+  it('a captcha mute that found a heavier sentence standing offers no button', async () => {
+    // 2026-11-23: nothing of ours was written, so there is nothing a tap may lift.
+    const actions = makeActions()
+    actions.mute = vi.fn(async () => 'stands' as const)
+    const gated = await applyVerdict(makeVerdict({ action: 'captcha' }), target, noGuards, actions)
+    expect(gated.applied).toBe(true)
+    expect(gated.captchaRequired).toBe(false)
+    const deleted = await applyVerdict(makeVerdict({ action: 'delete', requireCaptcha: true }), target, noGuards, actions)
+    expect(deleted.deleted).toBe(true)
+    expect(deleted.captchaRequired).toBe(false)
+  })
+
   it('a captcha whose restriction failed is not announced', async () => {
     // Prompting here would ask the user to unlock a door that never closed.
     const actions = makeActions()

@@ -24,8 +24,20 @@ export interface ExecutionGuards {
 
 export interface ModerationActions {
   deleteMessage(chatId: number, messageId: number): Promise<void>
-  /** Restrict sending for the given duration. */
-  mute(chatId: number, userId: number, untilSeconds: number): Promise<void>
+  /**
+   * Restrict sending for the given duration.
+   *
+   * Resolves `'stands'` when nothing was written because a sentence at least as
+   * heavy is already in force (a ban, a longer mute) — see
+   * `heavierSentenceStands`. The member is silenced either way, so a caller
+   * that only needs "is this person stopped" may ignore the difference; a
+   * caller about to offer a way OUT of the mute must not.
+   *
+   * `replace` writes the mute regardless. It is for a person who has just said
+   * what they want in force — an admin's own mute command, which may well be a
+   * deliberate shortening — never for a consequence the bot derived.
+   */
+  mute(chatId: number, userId: number, untilSeconds: number, opts?: { replace?: boolean }): Promise<void | 'stands'>
   /** Remove from the chat without blocking a rejoin (ban immediately undone). */
   kick(chatId: number, userId: number): Promise<void>
   /** Ban for `untilSeconds`, or permanently when null. */
@@ -145,14 +157,23 @@ export const applyVerdict = async (
     }
   }
 
+  // A captcha mute that found a ban or a longer mute already standing closed
+  // no gate of ours: there is nothing for a button to lift, so none is offered.
+  const gate = async (label: string): Promise<{ ok: boolean; ours: boolean }> => {
+    let stands = false
+    const ok = await attempt(label, async () => {
+      stands = (await actions.mute(target.chatId, target.userId, CAPTCHA_WINDOW_SECONDS)) === 'stands'
+    })
+    return { ok, ours: ok && !stands }
+  }
+
   switch (verdict.action) {
     case 'captcha': {
-      const ok = await attempt('mute', () =>
-        actions.mute(target.chatId, target.userId, CAPTCHA_WINDOW_SECONDS))
-      result.applied = ok
+      const gated = await gate('mute')
+      result.applied = gated.ok
       // Only a gate that actually closed is worth prompting about: a prompt
       // over a failed restriction asks the user to unlock a door that is open.
-      result.captchaRequired = ok
+      result.captchaRequired = gated.ours
       return result
     }
     case 'delete': {
@@ -164,8 +185,7 @@ export const applyVerdict = async (
       // restriction actually took — otherwise the app layer would post a prompt
       // for a user who was never restricted and has nothing to prove.
       if (verdict.requireCaptcha === true) {
-        result.captchaRequired = await attempt('captcha_mute', () =>
-          actions.mute(target.chatId, target.userId, CAPTCHA_WINDOW_SECONDS))
+        result.captchaRequired = (await gate('captcha_mute')).ours
       }
       return result
     }
@@ -179,8 +199,9 @@ export const applyVerdict = async (
       // A verdict that states its own length means it: the hour-long hold is an
       // hour by argument, and applying the default day to it would punish past
       // what the row and the notice both say.
-      result.applied = await attempt('mute', () =>
-        actions.mute(target.chatId, target.userId, verdict.banDurationSeconds ?? MUTE_DURATION_SECONDS))
+      result.applied = await attempt('mute', async () => {
+        await actions.mute(target.chatId, target.userId, verdict.banDurationSeconds ?? MUTE_DURATION_SECONDS)
+      })
       return result
     }
     case 'ban': {

@@ -766,9 +766,13 @@ const applyIgnoredCaptcha = async (
     return
   }
   let heldError: string | null = null
+  // `ours` is false when a ban or a longer mute already stood and nothing was
+  // written: the member is silenced, but not by anything this gate's button lifts.
+  let ours = false
   const held = await gateway.moderationActions
     .mute(chatId, userId, CAPTCHA_IGNORED_MUTE_SECONDS)
-    .then(() => true).catch((err: unknown) => { heldError = telegramErrorName(err); return false })
+    .then((wrote) => { ours = wrote !== 'stands'; return true })
+    .catch((err: unknown) => { heldError = telegramErrorName(err); return false })
 
   let removed = false
   if (gate.triggerMessageId !== null) {
@@ -785,11 +789,11 @@ const applyIgnoredCaptcha = async (
    * the mute (8 such late taps in the 14 days to 2026-11-22), so the text is
    * made to say so. Only when the mute actually landed.
    */
-  if (held && refreshPrompt && gate.ephemeralMessageId !== null) {
+  if (held && ours && refreshPrompt && gate.ephemeralMessageId !== null) {
     void refreshPrompt(Math.round(CAPTCHA_IGNORED_MUTE_SECONDS / 60))
       .catch((err: unknown) => { log.info('captcha_prompt_refresh_failed', { chatId, userId, error: telegramErrorName(err) }) })
   }
-  log.info('captcha_ignored', { chatId, userId, held, removed, ...(heldError === null ? {} : { muteError: heldError }) })
+  log.info('captcha_ignored', { chatId, userId, held, removed, ...(held && !ours ? { stood: true } : {}), ...(heldError === null ? {} : { muteError: heldError }) })
   // The unanswered end of the funnel. `wentPublic` is what says whether the
   // silence was measured against a prompt the member could actually see.
   void store.recordCaptchaEvent({
@@ -2041,7 +2045,11 @@ firstRuling = true): Promise<VoteEnforcement> => {
   const deleted = await gateway.moderationActions.deleteMessage(vote.chatId, vote.messageId)
     .then(() => true).catch((err: unknown) => { failure.deleted = telegramErrorName(err); return false })
   const muted = await gateway.moderationActions.mute(vote.chatId, vote.targetUserId, MUTE_AFTER_VOTE_SECONDS)
-    .then(() => true).catch((err: unknown) => { failure.muted = telegramErrorName(err); return false })
+    .then((wrote) => {
+      // The count this change is read by: how many ballots close over an account already banned.
+      if (wrote === 'stands') log.info('vote_mute_stood', { chatId: vote.chatId, userId: vote.targetUserId, messageId: vote.messageId })
+      return true
+    }).catch((err: unknown) => { failure.muted = telegramErrorName(err); return false })
   if (!deleted || !muted) {
     log.warn('vote_enforce_incomplete', {
       chatId: vote.chatId, userId: vote.targetUserId, messageId: vote.messageId,
@@ -2966,7 +2974,10 @@ const handleBanan = async (message: Message, chat: Chat, caller: User, arg: stri
 const adminMute = async (
   chat: Chat, caller: User, target: User, seconds: number, locale: Locale
 ): Promise<boolean> => {
-  const ok = await gateway.moderationActions.mute(chat.id, target.id, seconds)
+  // `replace`: the admin has just stated the length they want, which may be a
+  // shortening of what stands. The standing-sentence check is for consequences
+  // the bot derives on its own.
+  const ok = await gateway.moderationActions.mute(chat.id, target.id, seconds, { replace: true })
     .then(() => true).catch(() => false)
   if (!ok) return false
   // A pending captcha's button clears every restriction, this mute included —
@@ -4605,9 +4616,17 @@ const gateAccount = async (params: {
   // Named, like every other refusal: 2026-11-22 this line fired twice for one
   // account in one chat half an hour apart and said nothing about why.
   let gateError: string | null = null
+  let stands = false
   const held = await gateway.moderationActions
     .mute(chat.id, user.id, waiting ? WAITING_GATE_MUTE_SECONDS : JOIN_GATE_MUTE_SECONDS)
-    .then(() => true).catch((err: unknown) => { gateError = telegramErrorName(err); return false })
+    .then((wrote) => { stands = wrote === 'stands'; return true })
+    .catch((err: unknown) => { gateError = telegramErrorName(err); return false })
+  // A longer mute already stands (a ban was settled above): the gate closed
+  // nothing of ours, so its button would have nothing it may lift.
+  if (stands) {
+    log.info('account_gate_blocked', { chatId: chat.id, userId: user.id, reason, fresh: true, blockers: 'already_muted' })
+    return { outcome: 'skipped' }
+  }
   // No gate, no prompt: a question about a door that is not closed asks the
   // member to unlock something already open.
   if (!held) {

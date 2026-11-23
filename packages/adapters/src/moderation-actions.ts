@@ -10,11 +10,12 @@
 import { isChannelSenderId } from '@lyadmin/core'
 import type { TelegramClient } from '@mtcute/node'
 import type { ModerationActions } from './executor.js'
+import { readMemberRestriction, type MemberRestriction, type MemberRestrictionAnswer } from './member-restriction.js'
 
 /** The slice of the client these four actions need. */
 export type ModerationTransport = Pick<
   TelegramClient,
-  'deleteMessagesById' | 'restrictChatMember' | 'banChatMember' | 'unbanChatMember'
+  'deleteMessagesById' | 'restrictChatMember' | 'banChatMember' | 'unbanChatMember' | 'getChatMember'
 >
 
 /**
@@ -40,6 +41,42 @@ export const isChannelSender = isChannelSenderId
  * expiry under 30 seconds away as "forever", so the net sits above that.
  */
 export const KICK_BAN_SECONDS = 60
+
+/**
+ * Whether a sentence at least as heavy as the mute about to be written already
+ * stands on the member — in which case the mute must not be written at all.
+ *
+ * `channels.editBanned` does not add a restriction, it REPLACES the member's
+ * banned rights wholesale. A timed mute sent for an account that is banned
+ * turns the ban into that mute; a short mute sent over a longer one shortens
+ * it. Every caller of `mute` acts some time after the fact that made it decide
+ * — a ballot closes hours after it opened, a look runs half an hour after the
+ * join, a captcha window lapses after two minutes — and until 2026-11-23 none
+ * of them asked what had happened to the member in between. 14 days to that
+ * date: 24 ballots opened before the bot banned the same account in the same
+ * chat closed as "spam" after it, and each wrote its six-hour mute over the
+ * ban; 2026-11-22, four arrival looks did the same to a ban carried from
+ * another chat minutes earlier.
+ *
+ *   - a person who is banned stays banned, whatever the two deadlines are: a
+ *     ban is never traded for a mute;
+ *   - a channel is "muted" by a timed ban (see `mute`), so for it the standing
+ *     ban wins only when it lasts at least as long;
+ *   - a full mute that lasts at least as long stands — an admin's indefinite
+ *     mute is not cut down to our hour.
+ *
+ * Not covered: a PARTIAL restriction an admin set (media only, say) is still
+ * replaced by the full mute and gone when that lapses. Putting it back needs a
+ * write after our expiry, which nothing here schedules.
+ */
+export const heavierSentenceStands = (
+  current: MemberRestriction, muteUntilMs: number, channel: boolean
+): boolean => {
+  const outlasts = current.untilMs === null || current.untilMs >= muteUntilMs
+  if (current.status === 'banned') return channel ? outlasts : true
+  if (current.status === 'restricted') return current.allSendBlocked && outlasts
+  return false
+}
 
 export const moderationActionsOver = (tg: ModerationTransport): ModerationActions => ({
   deleteMessage: async (chatId, messageId) => {
@@ -68,9 +105,16 @@ export const moderationActionsOver = (tg: ModerationTransport): ModerationAction
    * not a person. Whoever owns the channel keeps writing under their own
    * account — which a mute, had it worked, would have stopped.
    */
-  mute: async (chatId, userId, untilSeconds) => {
+  mute: async (chatId, userId, untilSeconds, opts) => {
     const until = new Date(Date.now() + untilSeconds * 1000)
-    if (isChannelSender(userId)) {
+    const channel = isChannelSender(userId)
+    // A read that fails stops nothing: the mute is what the caller decided, and
+    // a lookup timeout must not spare an account that is still posting.
+    const current = opts?.replace === true ? null : await tg.getChatMember({ chatId, userId })
+      .then((member) => readMemberRestriction(member as MemberRestrictionAnswer))
+      .catch(() => null)
+    if (current !== null && heavierSentenceStands(current, until.getTime(), channel)) return 'stands'
+    if (channel) {
       await tg.banChatMember({ chatId, participantId: userId, untilDate: until })
       return
     }

@@ -1,9 +1,10 @@
+import fc from 'fast-check'
 import { describe, expect, it, vi } from 'vitest'
 import {
-  isChannelSender, moderationActionsOver, type ModerationTransport
+  heavierSentenceStands, isChannelSender, moderationActionsOver, type ModerationTransport
 } from './moderation-actions.js'
 
-const makeTransport = () => {
+const makeTransport = (standing: unknown = { status: 'member', restrictions: null }) => {
   const calls: Array<{ name: string; args: Record<string, unknown> }> = []
   const record = (name: string) => vi.fn(async (args: Record<string, unknown>) => {
     calls.push({ name, args })
@@ -14,10 +15,22 @@ const makeTransport = () => {
     }),
     restrictChatMember: record('restrictChatMember'),
     banChatMember: record('banChatMember'),
-    unbanChatMember: record('unbanChatMember')
+    unbanChatMember: record('unbanChatMember'),
+    getChatMember: vi.fn(async (): Promise<unknown> => {
+      if (standing instanceof Error) throw standing
+      return standing
+    })
   }
   return { tg: tg as unknown as ModerationTransport, calls, spies: tg }
 }
+
+/** The fifteen send rights, all withheld — the shape `readMemberRestriction` calls a full mute. */
+const ALL_BLOCKED = Object.fromEntries([
+  'canSendMessages', 'canSendMedia', 'canSendStickers', 'canSendGifs', 'canSendGames',
+  'canUseInline', 'canAddWebPreviews', 'canSendPolls', 'canSendPhotos', 'canSendVideos',
+  'canSendRoundVideos', 'canSendAudios', 'canSendVoices', 'canSendFiles', 'canSendText'
+].map((right) => [right, false]))
+const inHours = (h: number): Date => new Date(Date.now() + h * 3600_000)
 
 const USER = 42
 const CHANNEL = -1004497662524
@@ -109,5 +122,80 @@ describe('kick', () => {
     const seconds = (until!.getTime() - before) / 1000
     expect(seconds).toBeGreaterThan(30)
     expect(seconds).toBeLessThanOrEqual(120)
+  })
+})
+
+/**
+ * 2026-11-23: `channels.editBanned` replaces a member's banned rights, so a
+ * mute written for a banned account turns the ban into that mute. 24 ballots in
+ * 14 days closed "spam" over an account banned since they opened.
+ */
+describe('a mute never replaces a heavier sentence', () => {
+  it('leaves a banned person banned and says so', async () => {
+    const { tg, calls } = makeTransport({ status: 'banned', restrictions: { untilDate: null } })
+    expect(await moderationActionsOver(tg).mute(CHAT, USER, 6 * 3600)).toBe('stands')
+    expect(calls).toEqual([])
+  })
+
+  it('leaves a banned person banned even when the ban ends before the mute would', async () => {
+    const { tg, calls } = makeTransport({ status: 'banned', restrictions: { untilDate: inHours(1) } })
+    expect(await moderationActionsOver(tg).mute(CHAT, USER, 6 * 3600)).toBe('stands')
+    expect(calls).toEqual([])
+  })
+
+  it('does not cut an indefinite or longer full mute down to its own length', async () => {
+    for (const untilDate of [null, inHours(48)]) {
+      const { tg, calls } = makeTransport({ status: 'restricted', restrictions: { ...ALL_BLOCKED, untilDate } })
+      expect(await moderationActionsOver(tg).mute(CHAT, USER, 3600)).toBe('stands')
+      expect(calls).toEqual([])
+    }
+  })
+
+  it('extends a shorter full mute, and writes over a partial one', async () => {
+    const shorter = makeTransport({ status: 'restricted', restrictions: { ...ALL_BLOCKED, untilDate: inHours(0.5) } })
+    expect(await moderationActionsOver(shorter.tg).mute(CHAT, USER, 3600)).toBeUndefined()
+    expect(shorter.calls.map((c) => c.name)).toEqual(['restrictChatMember'])
+    const partial = makeTransport({ status: 'restricted', restrictions: { ...ALL_BLOCKED, canSendText: true, untilDate: null } })
+    await moderationActionsOver(partial.tg).mute(CHAT, USER, 3600)
+    expect(partial.calls.map((c) => c.name)).toEqual(['restrictChatMember'])
+  })
+
+  it('mutes when the member cannot be read, or is not there', async () => {
+    for (const standing of [new Error('TIMEOUT'), null]) {
+      const { tg, calls } = makeTransport(standing)
+      expect(await moderationActionsOver(tg).mute(CHAT, USER, 3600)).toBeUndefined()
+      expect(calls.map((c) => c.name)).toEqual(['restrictChatMember'])
+    }
+  })
+
+  it('keeps a channel\'s standing ban only when it lasts at least as long', async () => {
+    const forever = makeTransport({ status: 'banned', restrictions: { untilDate: null } })
+    expect(await moderationActionsOver(forever.tg).mute(CHAT, CHANNEL, 3600)).toBe('stands')
+    expect(forever.calls).toEqual([])
+    const brief = makeTransport({ status: 'banned', restrictions: { untilDate: inHours(0.5) } })
+    await moderationActionsOver(brief.tg).mute(CHAT, CHANNEL, 3600)
+    expect(brief.calls.map((c) => c.name)).toEqual(['banChatMember'])
+  })
+
+  it('writes without looking when a person asked for exactly this', async () => {
+    const { tg, calls, spies } = makeTransport({ status: 'banned', restrictions: { untilDate: null } })
+    await moderationActionsOver(tg).mute(CHAT, USER, 3600, { replace: true })
+    expect(spies.getChatMember).not.toHaveBeenCalled()
+    expect(calls.map((c) => c.name)).toEqual(['restrictChatMember'])
+  })
+
+  it('property: whatever stands, a person\'s ban is kept, and a standing sentence is never shorter than the mute', () => {
+    const until = fc.option(fc.integer({ min: 1, max: 4e12 }), { nil: null })
+    fc.assert(fc.property(
+      fc.constantFrom('banned', 'restricted', 'member', 'left', 'admin', 'creator', 'unknown'),
+      until, fc.boolean(), fc.integer({ min: 1, max: 4e12 }), fc.boolean(),
+      (status, untilMs, allSendBlocked, muteUntilMs, channel) => {
+        const stands = heavierSentenceStands({ status, untilMs, allSendBlocked }, muteUntilMs, channel)
+        if (status === 'banned' && !channel) expect(stands).toBe(true)
+        if (status !== 'banned' && status !== 'restricted') expect(stands).toBe(false)
+        if (stands && !(status === 'banned' && !channel)) expect(untilMs === null || untilMs >= muteUntilMs).toBe(true)
+        if (status === 'restricted' && !allSendBlocked) expect(stands).toBe(false)
+      }
+    ))
   })
 })
