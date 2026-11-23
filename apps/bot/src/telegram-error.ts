@@ -29,3 +29,18 @@ export const telegramErrorName = (err: unknown): string => {
   const klass = /^Mt[A-Za-z]{3,60}Error$/.test(cls) ? cls : null
   return klass ?? 'unknown'
 }
+
+/**
+ * Refusals that name the chat or the receiver, never the message: sending the
+ * same text again without its reply cannot get a different answer.
+ *
+ * Production 2026-11-23: 3 of 10 mute notices in four hours went to senders
+ * who wrote without being members (a channel's comment chat), were refused
+ * with `USER_NOT_PARTICIPANT`, and were sent a second time to be refused again.
+ */
+const RECEIVER_REFUSALS: ReadonlySet<string> = new Set([
+  'USER_NOT_PARTICIPANT', 'CHAT_WRITE_FORBIDDEN', 'CHAT_ADMIN_REQUIRED', 'CHANNEL_PRIVATE', 'USER_IS_BLOCKED'
+])
+
+/** True when no change to the message itself can make this send go through. */
+export const refusesTheReceiver = (err: unknown): boolean => RECEIVER_REFUSALS.has(telegramErrorName(err))

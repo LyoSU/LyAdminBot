@@ -72,7 +72,7 @@ import {
 } from './rights.js'
 import { joinerSource } from './join-action.js'
 import { LlmHealth } from './llm-health.js'
-import { telegramErrorName } from './telegram-error.js'
+import { refusesTheReceiver, telegramErrorName } from './telegram-error.js'
 import { channelReportRoute, reportPath, reportVoteRoute, rulesFirst } from './report-route.js'
 import { sendWithReplyFallback } from './reply-fallback.js'
 import { captchaLift, readMemberRestriction } from './captcha-lift.js'
@@ -3389,6 +3389,12 @@ const whisperAnswer = async (
     if (hasMention(text) && MENTION_REJECTED.test(String(err))) {
       log.warn('mention_flattened', { op: 'whisper_answer', error: String(err) })
       return await send(withoutMentions(text as RichText), false).then(() => true).catch(() => false)
+    }
+    // Not the reply's fault, so not the retry's to fix: the receiver is not in
+    // the chat (a comment written without joining), or the chat is closed to us.
+    if (refusesTheReceiver(err)) {
+      log.info('whisper_answer_refused', { chatId, receiverId, error: telegramErrorName(err) })
+      return false
     }
     log.warn('whisper_answer_retry', { chatId, error: String(err) })
   }

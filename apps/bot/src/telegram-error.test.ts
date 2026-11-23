@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MtArgumentError, MtPeerNotFoundError } from '@mtcute/node'
-import { telegramErrorName } from './telegram-error.js'
+import { refusesTheReceiver, telegramErrorName } from './telegram-error.js'
 
 describe('telegramErrorName', () => {
   it('takes the wire name out of a Telegram API error', () => {
@@ -48,5 +48,19 @@ describe('telegramErrorName', () => {
     expect(telegramErrorName(undefined)).toBe('unknown')
     expect(telegramErrorName({ weird: true })).toBe('unknown')
     expect(telegramErrorName('CHANNEL_PRIVATE')).toBe('CHANNEL_PRIVATE')
+  })
+})
+
+describe('refusesTheReceiver', () => {
+  it('a receiver who is not in the chat is not a reply problem', () => {
+    expect(refusesTheReceiver(new Error('Telegram API error 400: USER_NOT_PARTICIPANT'))).toBe(true)
+    expect(refusesTheReceiver(new Error('Telegram API error 403: CHAT_WRITE_FORBIDDEN'))).toBe(true)
+  })
+
+  it('a refusal that may be about the message is still worth a second try', () => {
+    expect(refusesTheReceiver(new Error('Telegram API error 400: REPLY_MESSAGE_ID_INVALID'))).toBe(false)
+    expect(refusesTheReceiver(new Error('Telegram API error 400: MESSAGE_EMPTY'))).toBe(false)
+    expect(refusesTheReceiver(new Error('socket hang up'))).toBe(false)
+    expect(refusesTheReceiver(null)).toBe(false)
   })
 })
