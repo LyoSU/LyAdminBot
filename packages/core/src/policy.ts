@@ -297,6 +297,18 @@ export const chatToleratesAct = (rulings: { ham: number; spam: number }): boolea
   rulings.ham >= CHAT_RULING_MIN_HAM && rulings.ham > rulings.spam
 
 /**
+ * The same thing seen arriving again, counted by us — not "resembles something
+ * once labelled". `capContentOnReply` leaves a delete in place for these and
+ * only these: of 46 promo-type deletes on replies in the 14 days to
+ * 2026-11-23, the single one a chat confirmed as spam carried one, while the
+ * six that carried similarity alone (a candidate signature, a near vector) were
+ * reversed four times.
+ */
+export const OBSERVED_REPETITION_SIGNALS: ReadonlySet<string> = new Set([
+  'velocity_repeats', 'velocity_wave', 'repeated_media_cadence'
+] satisfies SignalName[])
+
+/**
  * What says a message is a campaign whatever the chat tolerates: a copy we have
  * seen, an account made for this, or a profile that exists to promote. On these
  * delete rows people answered 15 not-spam to 52 spam, without them 44 to 38.

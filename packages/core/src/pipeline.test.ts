@@ -2669,6 +2669,72 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
       })
     })
 
+    // 14 days to 2026-11-23: 61 content deletes on replies, 18 reversed; closed
+    // ballots nine "not spam" to one "spam". Non-replies: 967, 70, 26 to 124.
+    describe('a content verdict on a reply asks the chat before it removes anything', () => {
+      const reply = {
+        ...ad,
+        msg: { ...ad.msg, replyTo: { authorId: 9, isSelf: false, ageSeconds: 60, textPreview: 'а де шукати квартиру?' } }
+      }
+
+      it('the reply stays, the chat is asked, and the row says why', async () => {
+        const v = await evaluateMessage(makeInput(reply), llmSays('channel_promo', 0.9))
+        expect(v.signals.some((s) => s.name === 'is_reply')).toBe(true)
+        expect(v.action).toBe('observe')
+        expect(v.needsVote).toBe(true)
+        expect(v.requireCaptcha).toBe(false)
+        expect(v.meta['cappedReply']).toBe('channel_promo')
+        expect(v.meta['cappedFrom']).toBeDefined()
+      })
+
+      it('the same text that is not a reply is still deleted', async () => {
+        const v = await evaluateMessage(makeInput(ad), llmSays('channel_promo', 0.9))
+        expect(v.action).toBe('delete')
+        expect(v.meta['cappedReply']).toBeUndefined()
+      })
+
+      it('holds for every reason a chat may rule on, and never ends in a removal', async () => {
+        for (const reasonCode of CHAT_RULED_REASON_CODES) {
+          for (const pSpam of [0.8, 0.85, 0.9]) {
+            const v = await evaluateMessage(makeInput(reply), llmSays(reasonCode, pSpam))
+            if (v.meta['cappedReply'] !== undefined) {
+              expect(isEnforcementAction(v.action), `${reasonCode}@${pSpam}`).toBe(false)
+            }
+            expect(v.action === 'delete', `${reasonCode}@${pSpam}`).toBe(false)
+          }
+        }
+      })
+
+      it.each(['job_scam', 'phishing', 'crypto_scam'])('a reason that names a harm (%s) is not held', async (reasonCode) => {
+        const v = await evaluateMessage(makeInput(reply), llmSays(reasonCode, 0.9))
+        expect(v.meta['cappedReply']).toBeUndefined()
+        expect(isEnforcementAction(v.action)).toBe(true)
+      })
+
+      it('a reply seen arriving again keeps the delete', async () => {
+        const v = await evaluateMessage(makeInput(reply), {
+          ...llmSays('channel_promo', 0.9), velocity: { check: async () => ({ exceeded: true, singleAuthor: true }) }
+        })
+        expect(v.signals.some((s) => s.name === 'velocity_repeats')).toBe(true)
+        expect(v.meta['cappedReply']).toBeUndefined()
+        expect(isEnforcementAction(v.action)).toBe(true)
+      })
+
+      it('a reply to the sender\'s own message is not an exchange', async () => {
+        const own = { ...reply, msg: { ...reply.msg, replyTo: { ...reply.msg.replyTo, isSelf: true } } }
+        const v = await evaluateMessage(makeInput(own), llmSays('channel_promo', 0.9))
+        expect(v.meta['cappedReply']).toBeUndefined()
+      })
+
+      it('with voting off the reply is watched, not removed', async () => {
+        const v = await evaluateMessage(makeInput({ ...reply, policy: { votingEnabled: false } }), llmSays('channel_promo', 0.9))
+        if (v.meta['cappedReply'] !== undefined) {
+          expect(v.action).toBe('observe')
+          expect(v.needsVote).toBe(false)
+        }
+      })
+    })
+
     // 14 days to 2026-11-05: chats with a not-spam majority answered 18 : 5 on
     // these reasons, so the message waits for the vote there.
     describe('a chat that keeps answering not-spam holds the delete', () => {

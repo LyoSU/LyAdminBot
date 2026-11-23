@@ -41,7 +41,8 @@ import {
 } from './signals/registry.js'
 import {
   decideAction, isEnforcementAction, removesSender, mayAskCaptcha, isChannelSenderId,
-  ASK_BEFORE_KICK_REASON_CODES, CHAT_RULED_REASON_CODES, COPY_EVIDENCE_SIGNALS, IMITABLE_REASON_CODES, OUTSIDE_EVIDENCE_SIGNALS,
+  ASK_BEFORE_KICK_REASON_CODES, CHAT_RULED_REASON_CODES, COPY_EVIDENCE_SIGNALS, IMITABLE_REASON_CODES, OBSERVED_REPETITION_SIGNALS,
+  OUTSIDE_EVIDENCE_SIGNALS,
   PRESET_THRESHOLDS, captchaBlockers, chatToleratesAct, TIMED_BAN_SECONDS,
   VOTE_SKIP_REASON_CODES,
   type PolicyDecision, type PolicyInput
@@ -1023,6 +1024,43 @@ export const evaluateMessage = async (
   }
 
   /**
+   * A content verdict on a reply asks the chat before it removes anything.
+   *
+   * Production, 14 days to 2026-11-23: the classifier (`llm`, `llm_cached`,
+   * `session`) deleted 61 replies. People reversed 18 of them — 30 %, against
+   * 7 % of the 967 content deletes that were not replies — and of the ballots
+   * that closed, nine said "not spam" and one said "spam", where non-replies
+   * closed 124 to 26 the other way. A reply is half of an exchange and the
+   * classifier is shown the other half as context, not as the thing it rules
+   * on: "yes, write to me in private" is an advert read alone and an answer
+   * read after its question. The trust weight `is_reply` already carries moved
+   * the score and never reached a verdict the model made by itself.
+   *
+   * On the 46 with a promo-type reason the count was 13 reversed, four ballots
+   * "not spam" to one "spam", and that one carried observed repetition — which
+   * is why `OBSERVED_REPETITION_SIGNALS` keep the delete. Harm reasons are left
+   * alone on the line `holdOnChatRuling` draws: a message nobody votes on
+   * stays up, and that is a price for an advert, not for a phishing link.
+   * Only `delete`: a mute or a ban above it was priced on the sender.
+   */
+  const capContentOnReply = (verdict: Verdict): Verdict => {
+    if (verdict.action !== 'delete') return verdict
+    if (verdict.decidedBy !== 'llm' && verdict.decidedBy !== 'llm_cached' && verdict.decidedBy !== 'session') return verdict
+    if (!CHAT_RULED_REASON_CODES.has(verdict.reasonCode)) return verdict
+    if (!verdict.signals.some((sig) => sig.name === 'is_reply')) return verdict
+    if (verdict.signals.some((sig) => OBSERVED_REPETITION_SIGNALS.has(sig.name))) return verdict
+    if (meta['cappedFrom'] === undefined) meta['cappedFrom'] = verdict.action
+    meta['cappedReply'] = verdict.reasonCode
+    return {
+      ...verdict,
+      action: 'observe' as VerdictAction,
+      needsVote: input.policy.votingEnabled,
+      requireCaptcha: false,
+      banDurationSeconds: null
+    }
+  }
+
+  /**
    * A classifier's delete of one message, on a reason that names no harm, from
    * a sender the chat vouches for: the message stays and the chat is asked.
    *
@@ -1668,7 +1706,7 @@ export const evaluateMessage = async (
          */
         const { pSpam: sessionScore } = scoreSignals(signals)
         if (meta['scorePSpam'] === undefined) meta['scorePSpam'] = Number(sessionScore.toFixed(4))
-        return stampLlmShadow(await holdOnChatRuling(capVouchedWindow(capWindowFlood(capSoleWitness(capImitableAct(finalize(
+        return stampLlmShadow(await holdOnChatRuling(capContentOnReply(capVouchedWindow(capWindowFlood(capSoleWitness(capImitableAct(finalize(
           {
             pSpam: llmVerdict.pSpam,
             decidedBy: 'session',
@@ -1677,7 +1715,7 @@ export const evaluateMessage = async (
             reasonEvidence: llmVerdict.evidence
           },
           signals
-        )), sessionScore)))), window.combinedText)
+        )), sessionScore))))), window.combinedText)
       }
     }
     return null
@@ -2420,7 +2458,7 @@ export const evaluateMessage = async (
        *
        * `capUnearnedRemoval` is the wrong instrument here — see the session path.
        */
-      return stampLlmShadow(await holdOnChatRuling(floorNetworkFact(capVouchedPromo(capSoleWitness(capImitableAct(finalize(
+      return stampLlmShadow(await holdOnChatRuling(floorNetworkFact(capVouchedPromo(capContentOnReply(capSoleWitness(capImitableAct(finalize(
         {
           pSpam: llmVerdict.pSpam,
           decidedBy: llmVerdict.cached ? 'llm_cached' : 'llm',
@@ -2429,7 +2467,7 @@ export const evaluateMessage = async (
           reasonEvidence: llmVerdict.evidence
         },
         signals
-      )), scorePSpam)), scorePSpam)), text)
+      )), scorePSpam))), scorePSpam)), text)
     }
     llmNeededButUnavailable = true
   }
