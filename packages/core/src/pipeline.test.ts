@@ -10,10 +10,10 @@ import {
   SHORT_WAVE_MIN_ACCOUNTS, SHORT_WAVE_MIN_CHATS
 } from './pipeline.js'
 import {
-  isEnforcementAction, removesSender, PRESET_THRESHOLDS, TIMED_BAN_SECONDS, VOTE_SKIP_REASON_CODES,
+  CHAT_RULED_REASON_CODES, isEnforcementAction, removesSender, PRESET_THRESHOLDS, TIMED_BAN_SECONDS, VOTE_SKIP_REASON_CODES,
   VOTE_SKIP_MIN_AGREEMENT, VOTE_SKIP_MIN_LABELS
 } from './policy.js'
-import { contentEvidence, mayRemoveSender } from './score.js'
+import { contentEvidence, hasSenderStanding, mayRemoveSender } from './score.js'
 
 // ── fixtures ──────────────────────────────────────────────────────────
 
@@ -2608,6 +2608,67 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
       expect(v.needsVote).toBe(true)
     })
 
+    // 14 days to 2026-11-23: 10 single-message deletes of a vouched sender on a
+    // reason that names no harm — 4 answered not-spam, 0 spam.
+    describe('a sender the chat vouches for is asked about, not deleted, on a reason that names no harm', () => {
+      const regular = { ...ad, user: { messagesGlobal: 60, messagesInChat: 8, localAgeDays: 3 } }
+      // Trusted by the chat and named by a third-party list a year ago: the list
+      // sends the message past `trusted_clean` to the classifier, which is the
+      // production shape — an assistant bot a chat had trusted, 2026-11-21.
+      const trusted = {
+        ...ad,
+        user: { messagesGlobal: 5, messagesInChat: 3, localAgeDays: 30,
+          externalBan: { banned: true, bannedAt: new Date(Date.now() - 400 * 86_400_000), offenses: 1, sources: ['lols' as const] } },
+        policy: { preset: 'soft' as const, trustedUserIds: [makeUser().id] }
+      }
+
+      it.each([['a regular by volume', regular], ['an account an admin trusted', trusted]])(
+        '%s: the message stays, the chat is asked, and the row says why', async (_name, input) => {
+          const v = await evaluateMessage(makeInput(input), llmSays('channel_promo', 0.9))
+          expect(hasSenderStanding(v.signals)).toBe(true)
+          expect(v.action).toBe('observe')
+          expect(v.needsVote).toBe(true)
+          expect(v.requireCaptcha).toBe(false)
+          expect(v.meta['cappedVouchedPromo']).toBe('channel_promo')
+        })
+
+      it('holds for every reason a chat may rule on', async () => {
+        for (const reasonCode of CHAT_RULED_REASON_CODES) {
+          const v = await evaluateMessage(makeInput(regular), llmSays(reasonCode, 0.9))
+          expect(isEnforcementAction(v.action), reasonCode).toBe(false)
+        }
+      })
+
+      it.each(['job_scam', 'phishing', 'crypto_scam'])('a reason that names a harm (%s) is not held', async (reasonCode) => {
+        const v = await evaluateMessage(makeInput(regular), llmSays(reasonCode, 0.9))
+        expect(v.meta['cappedVouchedPromo']).toBeUndefined()
+        expect(isEnforcementAction(v.action)).toBe(true)
+      })
+
+      it('a newcomer with the same advert is still deleted', async () => {
+        const v = await evaluateMessage(makeInput(ad), llmSays('channel_promo', 0.9))
+        expect(v.meta['cappedVouchedPromo']).toBeUndefined()
+        expect(v.action).toBe('delete')
+      })
+
+      it('the same text seen again keeps the delete, whoever\'s account carries it', async () => {
+        const v = await evaluateMessage(makeInput(regular), {
+          ...llmSays('channel_promo', 0.9), velocity: { check: async () => ({ exceeded: true, singleAuthor: true }) }
+        })
+        expect(v.signals.some((s) => s.name === 'velocity_repeats')).toBe(true)
+        expect(v.meta['cappedVouchedPromo']).toBeUndefined()
+        expect(v.action).toBe('delete')
+      })
+
+      it('a regular the chat has caught before keeps no standing to spend', async () => {
+        const v = await evaluateMessage(
+          makeInput({ ...regular, user: { ...regular.user, spamDetections: 2 } }), llmSays('channel_promo', 0.9))
+        if (v.signals.some((s) => s.name === 'prior_spam_detections')) {
+          expect(v.meta['cappedVouchedPromo']).toBeUndefined()
+        }
+      })
+    })
+
     // 14 days to 2026-11-05: chats with a not-spam majority answered 18 : 5 on
     // these reasons, so the message waits for the vote there.
     describe('a chat that keeps answering not-spam holds the delete', () => {
@@ -3730,7 +3791,10 @@ describe('evaluateMessage — a quiet regular of one chat (2026-08-20 report)', 
       makeInput({ msg: promoMsg, user: quietRegular }), llmSaying('channel_promo'))
     expect(v.signals.map((s) => s.name)).toContain('established_user')
     expect(removesSender(v.action)).toBe(false)
-    expect(v.action).toBe('delete')
+    // Delete-and-ask until 2026-11-23; the asking came back 4 not-spam to 0 spam
+    // (see `capVouchedPromo`), so the message now stays while the chat answers.
+    expect(v.action).toBe('observe')
+    expect(v.meta['cappedVouchedPromo']).toBe('channel_promo')
     expect(v.needsVote).toBe(true)
     expect(v.meta['cappedStanding']).toBe(true)
     // The reason survives — the punishment was too much, the reason stands.

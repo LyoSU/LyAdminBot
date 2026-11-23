@@ -41,7 +41,7 @@ import {
 } from './signals/registry.js'
 import {
   decideAction, isEnforcementAction, removesSender, mayAskCaptcha, isChannelSenderId,
-  ASK_BEFORE_KICK_REASON_CODES, CHAT_RULED_REASON_CODES, IMITABLE_REASON_CODES, OUTSIDE_EVIDENCE_SIGNALS,
+  ASK_BEFORE_KICK_REASON_CODES, CHAT_RULED_REASON_CODES, COPY_EVIDENCE_SIGNALS, IMITABLE_REASON_CODES, OUTSIDE_EVIDENCE_SIGNALS,
   PRESET_THRESHOLDS, captchaBlockers, chatToleratesAct, TIMED_BAN_SECONDS,
   VOTE_SKIP_REASON_CODES,
   type PolicyDecision, type PolicyInput
@@ -1018,6 +1018,50 @@ export const evaluateMessage = async (
       ...verdict,
       action: 'observe' as VerdictAction,
       needsVote: input.policy.votingEnabled,
+      banDurationSeconds: null
+    }
+  }
+
+  /**
+   * A classifier's delete of one message, on a reason that names no harm, from
+   * a sender the chat vouches for: the message stays and the chat is asked.
+   *
+   * `capVouchedWindow` gave standing a say over the two window stages and left
+   * the single-message path to the removal ceilings, which stop at `delete`. So
+   * a regular's advert, or an admin-trusted account's answer with links in it,
+   * was still taken down on the model's reading alone. 14 days to 2026-11-23,
+   * 10 such deletes applied across 6 senders and 4 chats: people answered
+   * not-spam on 4, spam on 0, 3 questions lapsed and 3 had none. Five of the ten
+   * were one assistant bot a chat had put on its trusted list, deleted for the
+   * source links its answers end with — three times after the chat had already
+   * said so.
+   *
+   * Only `CHAT_RULED_REASON_CODES`: a held message nobody votes on stays up,
+   * which is acceptable for an advert and not for a phishing link — the same
+   * line `holdOnChatRuling` draws, for the same reason. Only `delete`: anything
+   * heavier was priced on evidence about the sender, and the standing revoker
+   * (`prior_spam_detections`) is the shared one.
+   *
+   * Not `OUTSIDE_EVIDENCE_SIGNALS`, which that hold does consult: those are
+   * facts about an account nobody here knows, and this sender is one somebody
+   * here answered for. What does keep the delete is `COPY_EVIDENCE_SIGNALS` —
+   * the same text seen again is a campaign whoever's account carries it.
+   *
+   * This re-prices a ceiling set on 2026-08-07, when standing on an imitable
+   * reason was made to stop at delete-and-ask. The asking has since answered.
+   */
+  const capVouchedPromo = (verdict: Verdict): Verdict => {
+    if (verdict.action !== 'delete') return verdict
+    if (!CHAT_RULED_REASON_CODES.has(verdict.reasonCode)) return verdict
+    if (!hasSenderStanding(verdict.signals)) return verdict
+    if (verdict.signals.some((sig) => COPY_EVIDENCE_SIGNALS.has(sig.name))) return verdict
+    if (meta['cappedFrom'] === undefined) meta['cappedFrom'] = verdict.action
+    meta['cappedVouchedPromo'] = verdict.reasonCode
+    return {
+      ...verdict,
+      action: 'observe' as VerdictAction,
+      needsVote: input.policy.votingEnabled,
+      requireCaptcha: false,
       banDurationSeconds: null
     }
   }
@@ -2376,7 +2420,7 @@ export const evaluateMessage = async (
        *
        * `capUnearnedRemoval` is the wrong instrument here — see the session path.
        */
-      return stampLlmShadow(await holdOnChatRuling(floorNetworkFact(capSoleWitness(capImitableAct(finalize(
+      return stampLlmShadow(await holdOnChatRuling(floorNetworkFact(capVouchedPromo(capSoleWitness(capImitableAct(finalize(
         {
           pSpam: llmVerdict.pSpam,
           decidedBy: llmVerdict.cached ? 'llm_cached' : 'llm',
@@ -2385,7 +2429,7 @@ export const evaluateMessage = async (
           reasonEvidence: llmVerdict.evidence
         },
         signals
-      )), scorePSpam), scorePSpam)), text)
+      )), scorePSpam)), scorePSpam)), text)
     }
     llmNeededButUnavailable = true
   }

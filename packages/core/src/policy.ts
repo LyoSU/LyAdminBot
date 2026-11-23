@@ -278,6 +278,17 @@ export const CHAT_RULED_REASON_CODES: ReadonlySet<string> = new Set([
   'ad_network' satisfies LlmReasonCode,
   'flood' satisfies LlmReasonCode
 ])
+/**
+ * What says this very message is one of many: the same text seen again, from
+ * this sender or across chats. Standing does not answer that — it is how a
+ * sold or borrowed regular's account is used — so `capVouchedPromo` leaves the
+ * delete in place when any of these is raised. None of the 10 deletes that
+ * hold was measured on (14 days to 2026-11-23) carried one.
+ */
+export const COPY_EVIDENCE_SIGNALS: ReadonlySet<string> = new Set([
+  'velocity_repeats', 'velocity_wave', 'repeated_media_cadence',
+  'signature_candidate_match', 'vector_similar_spam'
+])
 export const CHAT_RULING_WINDOW_DAYS = 90
 export const CHAT_RULING_MIN_HAM = 2
 
