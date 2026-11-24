@@ -10,7 +10,7 @@ import {
   SHORT_WAVE_MIN_ACCOUNTS, SHORT_WAVE_MIN_CHATS
 } from './pipeline.js'
 import {
-  ARRIVAL_EVIDENCE_SIGNALS, CHAT_RULED_REASON_CODES, LONE_WORD_HOLD_BELOW, OBSERVED_REPETITION_SIGNALS, OUTSIDE_EVIDENCE_SIGNALS, isEnforcementAction, removesSender, PRESET_THRESHOLDS, TIMED_BAN_SECONDS, VOTE_SKIP_REASON_CODES,
+  ARRIVAL_EVIDENCE_SIGNALS, CHAT_RULED_REASON_CODES, LONE_WORD_HOLD_BELOW, OBSERVED_REPETITION_SIGNALS, OUTSIDE_EVIDENCE_SIGNALS, SELF_PRESENTATION_SIGNALS, isEnforcementAction, removesSender, PRESET_THRESHOLDS, TIMED_BAN_SECONDS, VOTE_SKIP_REASON_CODES,
   VOTE_SKIP_MIN_AGREEMENT, VOTE_SKIP_MIN_LABELS
 } from './policy.js'
 import { contentEvidence, hasSenderStanding, mayRemoveSender } from './score.js'
@@ -2888,6 +2888,76 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
         expect(v.signals.map((s) => s.name)).toContain('personal_channel')
         expect(v.action).toBe('observe')
         expect(v.meta['heldChatRuling']).toBe('3:1')
+      })
+
+      // 14 days to 2026-11-24, tolerating chats, presentation signals alone on
+      // a sender not arriving: 12 deletes, 8 reversed, none answered spam.
+      describe('how a seller presents themselves is not outside evidence there', () => {
+        const settled = { predictedAgeDays: 1500, localAgeDays: 45, messagesGlobal: 4, messagesInChat: 3 }
+        const dressed = { ...ad, user: { ...settled, avatars: { count: 1, latestSetDaysAgo: 2 } } }
+
+        it('a new picture on a sender already here waits for the vote', async () => {
+          const v = await evaluateMessage(makeInput(dressed), ports('other_spam', { ham: 3, spam: 1 }))
+          expect(v.signals.map((s) => s.name)).toContain('avatar_recently_set')
+          expect(v.action).toBe('observe')
+          expect(v.needsVote).toBe(true)
+          expect(v.meta['heldChatRuling']).toBe('3:1')
+          expect(String(v.meta['heldPresentation'])).toContain('avatar_recently_set')
+        })
+
+        it('the same picture where the chat answers spam is still deleted', async () => {
+          const v = await evaluateMessage(makeInput(dressed), ports('other_spam', { ham: 2, spam: 5 }))
+          expect(v.action).toBe('delete')
+          expect(v.meta['heldPresentation']).toBeUndefined()
+        })
+
+        it('the same picture on a sender who has just arrived is still deleted', async () => {
+          const v = await evaluateMessage(
+            makeInput({ ...ad, user: { ...newcomer, avatars: { count: 1, latestSetDaysAgo: 2 } } }),
+            ports('other_spam', { ham: 9, spam: 0 })
+          )
+          expect(v.signals.some((s) => ARRIVAL_EVIDENCE_SIGNALS.has(s.name))).toBe(true)
+          expect(v.action).toBe('delete')
+        })
+
+        it('a fact about the account beside the picture keeps the delete', async () => {
+          const v = await evaluateMessage(
+            makeInput({ ...dressed, user: { ...dressed.user, spamDetections: 3 } }),
+            ports('other_spam', { ham: 9, spam: 0 })
+          )
+          expect(v.signals.map((s) => s.name)).toContain('prior_spam_detections')
+          expect(v.action).not.toBe('observe')
+        })
+
+        it('holds only when every outside signal raised is a presentation one', async () => {
+          await fc.assert(fc.asyncProperty(
+            fc.record({
+              avatarDays: fc.option(fc.integer({ min: 0, max: 40 }), { nil: undefined }),
+              age: fc.constantFrom(3, 400, 1500),
+              local: fc.constantFrom(0, 5, 45, 200),
+              inChat: fc.integer({ min: 0, max: 8 }),
+              p: fc.constantFrom(0.7, 0.8, 0.9)
+            }),
+            async ({ avatarDays, age, local, inChat, p }) => {
+              const user = {
+                predictedAgeDays: age, localAgeDays: local, messagesGlobal: inChat + 1, messagesInChat: inChat,
+                ...(avatarDays === undefined ? {} : { avatars: { count: 1, latestSetDaysAgo: avatarDays } })
+              }
+              const v = await evaluateMessage(makeInput({ ...ad, user }), {
+                ...llmSays('other_spam', p), chatRulings: { rulings: async () => ({ ham: 9, spam: 0 }) }
+              })
+              const names = v.signals.map((s) => s.name)
+              const arrived = names.some((n) => ARRIVAL_EVIDENCE_SIGNALS.has(n))
+              const hard = names.filter((n) => OUTSIDE_EVIDENCE_SIGNALS.has(n) && (arrived || !SELF_PRESENTATION_SIGNALS.has(n)))
+              if (v.meta['heldChatRuling'] !== undefined) expect(hard).toEqual([])
+              if (v.meta['heldPresentation'] !== undefined) {
+                expect(arrived).toBe(false)
+                expect(v.action).toBe('observe')
+                expect(v.needsVote).toBe(true)
+              }
+            }
+          ), { numRuns: 60 })
+        })
       })
 
       // The pooled count held 3 not-spam to 6 spam on `guest_bot_promo` and

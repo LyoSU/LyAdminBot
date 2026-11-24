@@ -45,6 +45,7 @@ import {
   OUTSIDE_EVIDENCE_SIGNALS,
   ARRIVAL_EVIDENCE_SIGNALS,
   LONE_WORD_HOLD_BELOW,
+  SELF_PRESENTATION_SIGNALS,
   PRESET_THRESHOLDS, captchaBlockers, chatToleratesAct, TIMED_BAN_SECONDS,
   VOTE_SKIP_REASON_CODES,
   type PolicyDecision, type PolicyInput
@@ -1149,16 +1150,23 @@ export const evaluateMessage = async (
    * other grounds, and with no vote nothing would ever take the message down.
    * Applied last, so it reads what the caps left. The store is read only here,
    * and a failed read leaves the delete as it was.
+   *
+   * Outside evidence keeps the delete, except `SELF_PRESENTATION_SIGNALS` on a
+   * sender who is not arriving: in a chat that tolerates the reason those
+   * describe the people it tolerates.
    */
   const holdOnChatRuling = async (verdict: Verdict): Promise<Verdict> => {
     if (verdict.action !== 'delete' || !verdict.needsVote) return verdict
     if (!CHAT_RULED_REASON_CODES.has(verdict.reasonCode)) return verdict
-    if (verdict.signals.some((s) => OUTSIDE_EVIDENCE_SIGNALS.has(s.name))) return verdict
+    const arrived = verdict.signals.some((s) => ARRIVAL_EVIDENCE_SIGNALS.has(s.name))
+    const presentation = arrived ? [] : verdict.signals.filter((s) => SELF_PRESENTATION_SIGNALS.has(s.name))
+    if (verdict.signals.some((s) => OUTSIDE_EVIDENCE_SIGNALS.has(s.name) && !presentation.includes(s))) return verdict
     if (!ports.chatRulings) return verdict
     const rulings = await safe('chat_rulings', () => ports.chatRulings!.rulings(input.message.chatId, verdict.reasonCode))
     if (rulings === null || !chatToleratesAct(rulings)) return verdict
     if (meta['cappedFrom'] === undefined) meta['cappedFrom'] = verdict.action
     meta['heldChatRuling'] = `${rulings.ham}:${rulings.spam}`
+    if (presentation.length > 0) meta['heldPresentation'] = presentation.map((s) => s.name).join(',')
     return { ...verdict, action: 'observe' as VerdictAction, requireCaptcha: false }
   }
 

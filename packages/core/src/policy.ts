@@ -327,6 +327,29 @@ export const OUTSIDE_EVIDENCE_SIGNALS: ReadonlySet<string> = new Set([
 ] satisfies SignalName[])
 
 /**
+ * The part of `OUTSIDE_EVIDENCE_SIGNALS` that describes how a sender presents
+ * themselves — a new picture, decorated text, a channel of their own that
+ * advertises — and not what the account has done or where the text was seen.
+ *
+ * In a chat that tolerates the reason, that is what a seller looks like. 14
+ * days to 2026-11-24, replayed with each row seeing only older answers:
+ * classifier deletes in tolerating chats that `holdOnChatRuling` passed over
+ * for outside evidence numbered 91. With a copy seen or a fact about the
+ * account they were answered 4 not-spam to 7 spam. With these alone and the
+ * sender not arriving: 12 deletes, 8 reversed, none answered spam, 4 unanswered.
+ * With these and an arrival signal: 11, none reversed, 2 answered spam — so a
+ * dressed-up account that has just walked in keeps the delete.
+ *
+ * Ten of the 12 are one chat, which is how tolerance is distributed and why
+ * `heldPresentation` is stamped. Where the chat does not tolerate the reason
+ * this list is not consulted: the same signals there go 1 not-spam to 15 spam.
+ */
+export const SELF_PRESENTATION_SIGNALS: ReadonlySet<string> = new Set([
+  'avatar_recently_set', 'sole_avatar_replaced', 'custom_emoji_heavy',
+  'mixed_script_word', 'promo_in_linked_channel'
+] satisfies SignalName[])
+
+/**
  * What says the sender arrived for this: in the chat for minutes, or an old
  * account that had never spoken anywhere we see until now. With
  * `OUTSIDE_EVIDENCE_SIGNALS` and `OBSERVED_REPETITION_SIGNALS` these are every
