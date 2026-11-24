@@ -94,6 +94,28 @@ const spamText = {
 
 // ── tests ─────────────────────────────────────────────────────────────
 
+describe('evaluateMessage — how long Telegram says the sender has been here', () => {
+  it('stamps whole days once the membership is a month old', async () => {
+    const v = await evaluateMessage(makeInput({ user: { ...newcomer, joinedAgoSeconds: 400.9 * 86_400 } }), {})
+    expect(v.meta['joinedDays']).toBe(400)
+  })
+
+  it('writes nothing for a recent arrival or an unknown date', async () => {
+    for (const joinedAgoSeconds of [null, 0, 40, 29.9 * 86_400]) {
+      const v = await evaluateMessage(makeInput({ user: { ...newcomer, joinedAgoSeconds } }), {})
+      expect(v.meta).not.toHaveProperty('joinedDays')
+    }
+  })
+
+  it('never changes the verdict', async () => {
+    const at = (joinedAgoSeconds: number | null) =>
+      evaluateMessage(makeInput({ msg: spamText, user: { ...newcomer, localAgeDays: 400, joinedAgoSeconds } }), {})
+    const [a, b] = await Promise.all([at(31 * 86_400), at(400 * 86_400)])
+    expect(b.action).toBe(a.action)
+    expect(b.pSpam).toBe(a.pSpam)
+  })
+})
+
 describe('evaluateMessage — the account farm', () => {
   /**
    * The reuse lookup used to live inside `screenProfileMedia` and inherited its

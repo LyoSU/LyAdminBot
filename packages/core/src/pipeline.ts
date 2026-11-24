@@ -312,6 +312,9 @@ const spamModerationHit = (
   return null
 }
 
+/** Below this the join date says nothing the newness signals do not. */
+const JOINED_STAMP_MIN_DAYS = 30
+
 /**
  * How new does a user have to be for ban-eligibility / captcha gating.
  *
@@ -430,6 +433,21 @@ export const evaluateMessage = async (
   // present values are written: the record is the largest collection in a
   // database with a quota, and `null` six times per row is not information.
   if (input.user.flags.premium) meta['premium'] = true
+  /**
+   * How long Telegram says the sender has been in this chat, in whole days,
+   * once that is a month or more.
+   *
+   * A measurement, not a rule. `isNewish` is an OR of two volume terms and a
+   * tenure term, so a member of years who has never written here is treated as
+   * a newcomer on volume alone, and until 2026-11-24 nothing on the row said
+   * how many of the people the bot removes are that. The app layer asks for
+   * the date only while our own record of the sender is younger than the
+   * tenure bar, so the stamp lands on exactly that population.
+   */
+  const joinedSeconds = input.user.joinedAgoSeconds
+  if (joinedSeconds !== null && joinedSeconds >= JOINED_STAMP_MIN_DAYS * 86_400) {
+    meta['joinedDays'] = Math.floor(joinedSeconds / 86_400)
+  }
   const telemetry = input.user.telemetry
   if (telemetry) {
     if (telemetry.photoDcId !== null) meta['photoDc'] = telemetry.photoDcId
