@@ -327,6 +327,22 @@ export const OUTSIDE_EVIDENCE_SIGNALS: ReadonlySet<string> = new Set([
 ] satisfies SignalName[])
 
 /**
+ * What says the sender arrived for this: in the chat for minutes, or an old
+ * account that had never spoken anywhere we see until now. With
+ * `OUTSIDE_EVIDENCE_SIGNALS` and `OBSERVED_REPETITION_SIGNALS` these are every
+ * voice besides the classifier's own that `capLoneWord` listens for.
+ */
+export const ARRIVAL_EVIDENCE_SIGNALS: ReadonlySet<string> = new Set([
+  'just_joined', 'sleeper_awakened'
+] satisfies SignalName[])
+/**
+ * Below this the classifier's reading, with nothing else raised, waits for the
+ * chat — see `capLoneWord`. At and above it the 14 days to 2026-11-24 hold 9
+ * such deletes, 1 reversed, which is no ground to move them.
+ */
+export const LONE_WORD_HOLD_BELOW = 0.95
+
+/**
  * Reason codes whose capped verdict resolves the account without opening a
  * vote, because the community's own answer to the vote is not in doubt.
  *

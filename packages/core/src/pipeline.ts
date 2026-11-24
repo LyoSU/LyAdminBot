@@ -43,6 +43,8 @@ import {
   decideAction, isEnforcementAction, removesSender, mayAskCaptcha, isChannelSenderId,
   ASK_BEFORE_KICK_REASON_CODES, CHAT_RULED_REASON_CODES, COPY_EVIDENCE_SIGNALS, IMITABLE_REASON_CODES, OBSERVED_REPETITION_SIGNALS,
   OUTSIDE_EVIDENCE_SIGNALS,
+  ARRIVAL_EVIDENCE_SIGNALS,
+  LONE_WORD_HOLD_BELOW,
   PRESET_THRESHOLDS, captchaBlockers, chatToleratesAct, TIMED_BAN_SECONDS,
   VOTE_SKIP_REASON_CODES,
   type PolicyDecision, type PolicyInput
@@ -1105,6 +1107,41 @@ export const evaluateMessage = async (
   }
 
   /**
+   * A classifier's delete that nothing else in the pipeline speaks for: the
+   * message stays up and the question the delete already carried is asked.
+   *
+   * 14 days to 2026-11-24, classifier deletes that ask (llm, llm_cached,
+   * session), not replies, on a reason a chat may rule on. Where no outside
+   * evidence, no observed repetition and no arrival signal was raised, and the
+   * verdict sat below `LONE_WORD_HOLD_BELOW`: 53 deletes in 30 chats, 17
+   * reversed (32 %), closed ballots seven not-spam to three spam. Every other
+   * delete on those reasons: 512, 40 reversed (7.8 %), ballots 14 to 85. Both
+   * halves of the fortnight agree (10 of 26, then 5 of 19 without standing).
+   *
+   * Confidence alone does not draw the line: below 0.9 the whole band reverses
+   * at 16 %, and the cell above at 29 to 35 % whichever cut is taken. What does
+   * is that the text is the only thing read, about an account nothing is known
+   * against, and promotion is what a chat rules on.
+   *
+   * Only a delete that already asks: with no vote nothing would take the
+   * message down, and the 17 deletes in the cell that asked nobody have no
+   * answer to measure. A question nobody answers leaves the message up, the
+   * same price `holdOnChatRuling` pays and for the same reasons only.
+   */
+  const capLoneWord = (verdict: Verdict): Verdict => {
+    if (verdict.action !== 'delete' || !verdict.needsVote) return verdict
+    if (verdict.decidedBy !== 'llm' && verdict.decidedBy !== 'llm_cached' && verdict.decidedBy !== 'session') return verdict
+    if (!CHAT_RULED_REASON_CODES.has(verdict.reasonCode)) return verdict
+    if (!(verdict.pSpam < LONE_WORD_HOLD_BELOW)) return verdict
+    const spokenFor = verdict.signals.some((sig) =>
+      OUTSIDE_EVIDENCE_SIGNALS.has(sig.name) || OBSERVED_REPETITION_SIGNALS.has(sig.name) || ARRIVAL_EVIDENCE_SIGNALS.has(sig.name))
+    if (spokenFor) return verdict
+    if (meta['cappedFrom'] === undefined) meta['cappedFrom'] = verdict.action
+    meta['cappedLoneWord'] = verdict.reasonCode
+    return { ...verdict, action: 'observe' as VerdictAction, requireCaptcha: false, banDurationSeconds: null }
+  }
+
+  /**
    * Leave the message up and only ask, in a chat whose people keep answering
    * that this kind of message belongs there — see `CHAT_RULED_REASON_CODES`.
    *
@@ -1706,7 +1743,7 @@ export const evaluateMessage = async (
          */
         const { pSpam: sessionScore } = scoreSignals(signals)
         if (meta['scorePSpam'] === undefined) meta['scorePSpam'] = Number(sessionScore.toFixed(4))
-        return stampLlmShadow(await holdOnChatRuling(capContentOnReply(capVouchedWindow(capWindowFlood(capSoleWitness(capImitableAct(finalize(
+        return stampLlmShadow(await holdOnChatRuling(capLoneWord(capContentOnReply(capVouchedWindow(capWindowFlood(capSoleWitness(capImitableAct(finalize(
           {
             pSpam: llmVerdict.pSpam,
             decidedBy: 'session',
@@ -1715,7 +1752,7 @@ export const evaluateMessage = async (
             reasonEvidence: llmVerdict.evidence
           },
           signals
-        )), sessionScore))))), window.combinedText)
+        )), sessionScore)))))), window.combinedText)
       }
     }
     return null
@@ -2458,7 +2495,7 @@ export const evaluateMessage = async (
        *
        * `capUnearnedRemoval` is the wrong instrument here — see the session path.
        */
-      return stampLlmShadow(await holdOnChatRuling(floorNetworkFact(capVouchedPromo(capContentOnReply(capSoleWitness(capImitableAct(finalize(
+      return stampLlmShadow(await holdOnChatRuling(floorNetworkFact(capLoneWord(capVouchedPromo(capContentOnReply(capSoleWitness(capImitableAct(finalize(
         {
           pSpam: llmVerdict.pSpam,
           decidedBy: llmVerdict.cached ? 'llm_cached' : 'llm',
@@ -2467,7 +2504,7 @@ export const evaluateMessage = async (
           reasonEvidence: llmVerdict.evidence
         },
         signals
-      )), scorePSpam))), scorePSpam)), text)
+      )), scorePSpam)))), scorePSpam)), text)
     }
     llmNeededButUnavailable = true
   }

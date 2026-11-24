@@ -10,7 +10,7 @@ import {
   SHORT_WAVE_MIN_ACCOUNTS, SHORT_WAVE_MIN_CHATS
 } from './pipeline.js'
 import {
-  CHAT_RULED_REASON_CODES, isEnforcementAction, removesSender, PRESET_THRESHOLDS, TIMED_BAN_SECONDS, VOTE_SKIP_REASON_CODES,
+  ARRIVAL_EVIDENCE_SIGNALS, CHAT_RULED_REASON_CODES, LONE_WORD_HOLD_BELOW, OBSERVED_REPETITION_SIGNALS, OUTSIDE_EVIDENCE_SIGNALS, isEnforcementAction, removesSender, PRESET_THRESHOLDS, TIMED_BAN_SECONDS, VOTE_SKIP_REASON_CODES,
   VOTE_SKIP_MIN_AGREEMENT, VOTE_SKIP_MIN_LABELS
 } from './policy.js'
 import { contentEvidence, hasSenderStanding, mayRemoveSender } from './score.js'
@@ -2666,6 +2666,79 @@ describe('evaluateMessage — content-confirmation cap (2026-07-30 FP)', () => {
         if (v.signals.some((s) => s.name === 'prior_spam_detections')) {
           expect(v.meta['cappedVouchedPromo']).toBeUndefined()
         }
+      })
+    })
+
+    // 14 days to 2026-11-24: 53 classifier deletes nothing else spoke for, 17
+    // reversed, ballots seven "not spam" to three "spam". All others: 512, 40.
+    describe('a classifier delete that nothing else speaks for waits for the chat', () => {
+      // Seen for six weeks, a handful of messages: past the sleeper window and
+      // short of standing, so neither an arrival signal nor `capVouchedPromo`.
+      const known = { ...ad, user: { predictedAgeDays: 1500, localAgeDays: 45, messagesGlobal: 4, messagesInChat: 3 } }
+      const raised = (v: { signals: readonly { name: string }[] }, names: ReadonlySet<string>) =>
+        v.signals.some((s) => names.has(s.name))
+
+      it('the message stays, the chat is asked, and the row says why', async () => {
+        const v = await evaluateMessage(makeInput(known), llmSays('channel_promo', 0.9))
+        expect(raised(v, ARRIVAL_EVIDENCE_SIGNALS)).toBe(false)
+        expect(raised(v, OUTSIDE_EVIDENCE_SIGNALS)).toBe(false)
+        expect(hasSenderStanding(v.signals)).toBe(false)
+        expect(v.action).toBe('observe')
+        expect(v.needsVote).toBe(true)
+        expect(v.requireCaptcha).toBe(false)
+        expect(v.meta['cappedLoneWord']).toBe('channel_promo')
+        expect(v.meta['cappedFrom']).toBeDefined()
+      })
+
+      it('an account that arrived for this is still deleted', async () => {
+        const v = await evaluateMessage(makeInput(ad), llmSays('channel_promo', 0.9))
+        expect(raised(v, ARRIVAL_EVIDENCE_SIGNALS)).toBe(true)
+        expect(v.meta['cappedLoneWord']).toBeUndefined()
+        expect(v.action).toBe('delete')
+      })
+
+      it.each(['job_scam', 'phishing', 'crypto_scam'])('a reason that names a harm (%s) is not held', async (reasonCode) => {
+        const v = await evaluateMessage(makeInput(known), llmSays(reasonCode, 0.9))
+        expect(v.meta['cappedLoneWord']).toBeUndefined()
+        expect(isEnforcementAction(v.action)).toBe(true)
+      })
+
+      it('the same text seen again keeps the delete', async () => {
+        const v = await evaluateMessage(makeInput(known), {
+          ...llmSays('channel_promo', 0.9), velocity: { check: async () => ({ exceeded: true, singleAuthor: true }) }
+        })
+        expect(raised(v, OBSERVED_REPETITION_SIGNALS)).toBe(true)
+        expect(v.meta['cappedLoneWord']).toBeUndefined()
+        expect(isEnforcementAction(v.action)).toBe(true)
+      })
+
+      it('a classifier sure of itself is not held', async () => {
+        const v = await evaluateMessage(makeInput(known), llmSays('channel_promo', LONE_WORD_HOLD_BELOW))
+        expect(v.meta['cappedLoneWord']).toBeUndefined()
+        expect(isEnforcementAction(v.action)).toBe(true)
+      })
+
+      it('with voting off nothing would take the message down, so the delete stands', async () => {
+        const v = await evaluateMessage(makeInput({ ...known, policy: { votingEnabled: false } }), llmSays('channel_promo', 0.9))
+        expect(v.meta['cappedLoneWord']).toBeUndefined()
+        expect(v.action).not.toBe('observe')
+      })
+
+      it('whenever the hold applies it only ever leaves a question, for any reason, confidence and preset', async () => {
+        await fc.assert(fc.asyncProperty(
+          fc.constantFrom(...CHAT_RULED_REASON_CODES, 'job_scam', 'phishing'),
+          fc.double({ min: 0.5, max: 0.999, noNaN: true }),
+          fc.constantFrom('soft' as const, 'standard' as const, 'strict' as const),
+          fc.boolean(),
+          async (reasonCode, pSpam, preset, fresh) => {
+            const v = await evaluateMessage(makeInput({ ...(fresh ? ad : known), policy: { preset } }), llmSays(reasonCode, pSpam))
+            if (v.meta['cappedLoneWord'] === undefined) return
+            expect(v.action).toBe('observe')
+            expect(v.needsVote).toBe(true)
+            expect(CHAT_RULED_REASON_CODES.has(v.reasonCode)).toBe(true)
+            expect(v.pSpam).toBeLessThan(LONE_WORD_HOLD_BELOW)
+            expect(raised(v, ARRIVAL_EVIDENCE_SIGNALS) || raised(v, OUTSIDE_EVIDENCE_SIGNALS) || raised(v, OBSERVED_REPETITION_SIGNALS)).toBe(false)
+          }), { numRuns: 60 })
       })
     })
 
